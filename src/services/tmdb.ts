@@ -1,11 +1,10 @@
-const TMDB_ACCESS_TOKEN = import.meta.env.VITE_TMDB_ACCESS_TOKEN;
+const TMDB_API_KEY = import.meta.env.VITE_TMDB_API_KEY;
 const BASE_URL = 'https://api.themoviedb.org/3';
 
 const options = {
   method: 'GET',
   headers: {
-    accept: 'application/json',
-    Authorization: `Bearer ${TMDB_ACCESS_TOKEN}`
+    accept: 'application/json'
   }
 };
 
@@ -89,36 +88,36 @@ export const formatImageUrl = (path: string | null, size: string = 'w500') => {
 
 // API Calls
 export const getTrending = async (type: 'movie' | 'tv' | 'all' = 'all', timeWindow: 'day' | 'week' = 'week'): Promise<TMDBResponse> => {
-  const res = await fetch(`${BASE_URL}/trending/${type}/${timeWindow}?language=pt-BR`, options);
+  const res = await fetch(`${BASE_URL}/trending/${type}/${timeWindow}?language=pt-BR&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const getPopularMovies = async (): Promise<TMDBResponse> => {
-  const res = await fetch(`${BASE_URL}/movie/popular?language=pt-BR&page=1`, options);
+  const res = await fetch(`${BASE_URL}/movie/popular?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const getPopularSeries = async (): Promise<TMDBResponse> => {
-  const res = await fetch(`${BASE_URL}/tv/popular?language=pt-BR&page=1`, options);
+  const res = await fetch(`${BASE_URL}/tv/popular?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const getTopRated = async (type: 'movie' | 'tv'): Promise<TMDBResponse> => {
-  const res = await fetch(`${BASE_URL}/${type}/top_rated?language=pt-BR&page=1`, options);
+  const res = await fetch(`${BASE_URL}/${type}/top_rated?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const searchMulti = async (query: string): Promise<TMDBResponse> => {
-  const res = await fetch(`${BASE_URL}/search/multi?query=${encodeURIComponent(query)}&language=pt-BR&page=1`, options);
+  const res = await fetch(`${BASE_URL}/search/multi?query=${encodeURIComponent(query)}&language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
-  const res = await fetch(`${BASE_URL}/${type}/${id}?language=pt-BR`, options);
+  const res = await fetch(`${BASE_URL}/${type}/${id}?language=pt-BR&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {
-  const res = await fetch(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, options);
+  const res = await fetch(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
