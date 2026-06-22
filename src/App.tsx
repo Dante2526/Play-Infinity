@@ -264,7 +264,6 @@ function DetailsPage({ itemId, mediaType, onBack, onItemClick }: { itemId: numbe
             frameBorder="0" 
             allowFullScreen 
             loading="lazy"
-            {...(selectedPlayer === 'embedplay' ? { sandbox: "allow-scripts allow-same-origin allow-presentation" } : {})}
             className="rounded-b-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)]"
           ></iframe>
         </div>
