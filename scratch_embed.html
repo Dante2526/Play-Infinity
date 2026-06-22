@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Blog de investimentos: FIIs, ações, renda fixa, calculadora de juros compostos e rankings atualizados.">
+    <title>Investidor.blog — FIIs, Ações e Educação Financeira</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=Outfit:wght@300;400;500;600;700;800;900&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #F8F9FB;
+            --bg-white: #FFFFFF;
+            --bg-subtle: #F1F3F7;
+            --bg-hover: #EAEDF3;
+            --border: #E2E5EC;
+            --border-2: #D1D5DE;
+            --text: #0F172A;
+            --text-2: #475569;
+            --text-3: #94A3B8;
+            --accent: #2563EB;
+            --accent-h: #1D4ED8;
+            --accent-bg: #EFF6FF;
+            --accent-bg-2: #DBEAFE;
+            --green: #059669;
+            --green-l: #10B981;
+            --green-bg: #ECFDF5;
+            --green-bg-2: #D1FAE5;
+            --red: #DC2626;
+            --red-bg: #FEF2F2;
+            --red-bg-2: #FEE2E2;
+            --amber: #D97706;
+            --amber-bg: #FFFBEB;
+            --purple: #7C3AED;
+            --purple-bg: #F5F3FF;
+            --purple-bg-2: #EDE9FE;
+            --pink: #DB2777;
+            --pink-bg: #FDF2F8;
+            --shadow-sm: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06);
+            --shadow: 0 1px 3px rgba(15,23,42,0.06), 0 6px 16px rgba(15,23,42,0.06);
+            --shadow-lg: 0 4px 8px rgba(15,23,42,0.06), 0 12px 32px rgba(15,23,42,0.08);
+            --shadow-xl: 0 8px 16px rgba(15,23,42,0.08), 0 20px 48px rgba(15,23,42,0.10);
+            --radius: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --radius-2xl: 20px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'DM Sans', -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.65;
+            padding-bottom: 72px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        ::-webkit-scrollbar { width: 7px; }
+        ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+        ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+        ::selection { background: var(--accent); color: #fff; }
+
+        /* ── FONT CLASSES ── */
+        .f-heading { font-family: 'Outfit', sans-serif; }
+        .f-body { font-family: 'DM Sans', sans-serif; }
+        .f-ui { font-family: 'Plus Jakarta Sans', sans-serif; }
+        .f-mono { font-family: 'JetBrains Mono', monospace; }
+
+        /* ── TOPBAR ── */
+        .topbar {
+            background: var(--bg-white);
+            border-bottom: 1px solid var(--border);
+            padding: 7px 0;
+            font-size: .73rem;
+            color: var(--text-3);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .topbar-inner {
+            max-width: 1240px; margin: 0 auto; padding: 0 24px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .topbar-left { display: flex; align-items: center; gap: 14px; }
+        .live-dot { width: 6px; height: 6px; background: var(--green-l); border-radius: 50%; display: inline-block; animation: liveP 2s infinite; }
+        @keyframes liveP { 0%,100%{opacity:1} 50%{opacity:.25} }
+        .topbar-right { display: flex; gap: 12px; }
+        .topbar-right a { color: var(--text-3); text-decoration: none; font-size: .82rem; transition: color .2s; }
+        .topbar-right a:hover { color: var(--accent); }
+
+        /* ── NAV ── */
+        .main-nav {
+            background: rgba(255,255,255,.92);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 1050;
+            transition: box-shadow .3s;
+        }
+        .main-nav.scrolled { box-shadow: var(--shadow); }
+        .nav-inner {
+            max-width: 1240px; margin: 0 auto; padding: 0 24px;
+            display: flex; align-items: center; justify-content: space-between;
+            height: 62px;
+        }
+        .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+        .logo-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, var(--accent), #7C3AED);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .logo-icon i { color: #fff; font-size: .85rem; }
+        .logo-text {
+            font-family: 'Outfit', sans-serif; font-size: 1.35rem; font-weight: 800;
+            color: var(--text); letter-spacing: -.02em;
+        }
+        .logo-text span { color: var(--accent); }
+
+        .nav-links { display: flex; align-items: center; gap: 2px; list-style: none; }
+        .nav-links a {
+            padding: 8px 14px; color: var(--text-2); text-decoration: none;
+            font-family: 'Plus Jakarta Sans', sans-serif; font-size: .84rem; font-weight: 500;
+            border-radius: 8px; transition: all .2s; white-space: nowrap;
+        }
+        .nav-links a:hover { color: var(--text); background: var(--bg-subtle); }
+        .nav-links a.active { color: var(--accent); background: var(--accent-bg); font-weight: 600; }
+
+        .nav-btn {
+            padding: 8px 18px; border: none; border-radius: 10px;
+            background: var(--accent); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .82rem; font-weight: 600; cursor: pointer; text-decoration: none;
+            transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+        }
+        .nav-btn:hover { background: var(--accent-h); color: #fff; transform: translateY(-1px); box-shadow: var(--shadow); }
+
+        .menu-btn {
+            display: none; width: 40px; height: 40px; border: none;
+            background: var(--bg-subtle); border-radius: 10px; cursor: pointer;
+            flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+        }
+        .menu-btn span { display: block; width: 18px; height: 2px; background: var(--text-2); border-radius: 2px; transition: all .3s; }
+        .menu-btn.active span:nth-child(1) { transform: rotate(45deg) translate(5px, 5px); }
+        .menu-btn.active span:nth-child(2) { opacity: 0; }
+        .menu-btn.active span:nth-child(3) { transform: rotate(-45deg) translate(5px, -5px); }
+
+        /* ── TICKER ── */
+        .ticker {
+            background: var(--bg-white);
+            border-bottom: 1px solid var(--border);
+            overflow: hidden; padding: 9px 0;
+        }
+        .ticker-track { display: flex; gap: 22px; animation: tickerS 55s linear infinite; width: max-content; }
+        .ticker-track:hover { animation-play-state: paused; }
+        .ticker-item {
+            display: flex; align-items: center; gap: 6px;
+            font-family: 'JetBrains Mono', monospace; font-size: .73rem; white-space: nowrap;
+        }
+        .ticker-item .sym { font-weight: 600; color: var(--text); }
+        .ticker-item .val { color: var(--text-3); }
+        .ticker-item .chg { font-weight: 600; }
+        .chg.up { color: var(--green-l); }
+        .chg.down { color: var(--red); }
+        @keyframes tickerS { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+
+        /* ── BREAKING ── */
+        .breaking {
+            background: var(--red-bg);
+            border-bottom: 1px solid var(--red-bg-2);
+            padding: 8px 0;
+        }
+        .breaking-inner {
+            max-width: 1240px; margin: 0 auto; padding: 0 24px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .breaking-tag {
+            background: var(--red); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;
+            text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0;
+        }
+        .breaking p { font-size: .8rem; color: var(--text-2); font-family: 'DM Sans', sans-serif; }
+        .breaking p strong { color: var(--red); font-weight: 700; }
+
+        /* ── HERO ── */
+        .hero-section { padding: 36px 0; }
+        .hero-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+
+        .featured {
+            background: var(--bg-white); border: 1px solid var(--border);
+            border-radius: var(--radius-2xl); overflow: hidden;
+            display: grid; grid-template-columns: 1fr 1fr;
+            transition: all .3s; margin-bottom: 28px; cursor: pointer;
+        }
+        .featured:hover { box-shadow: var(--shadow-xl); border-color: var(--border-2); }
+        .featured-img {
+            background: linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #7C3AED 100%);
+            min-height: 360px; display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        .featured-img::before {
+            content: ''; position: absolute; inset: 0;
+            background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 350'%3E%3Cpath d='M0 280 Q60 260 120 275 T240 240 T360 200 T400 180' stroke='rgba(255,255,255,0.12)' fill='none' stroke-width='2'/%3E%3Cpath d='M0 300 Q80 285 160 295 T300 230 T400 200' stroke='rgba(255,255,255,0.06)' fill='none' stroke-width='2'/%3E%3Ccircle cx='300' cy='150' r='25' fill='rgba(255,255,255,0.04)'/%3E%3C/svg%3E") center/cover;
+        }
+        .featured-img i { font-size: 3.5rem; color: rgba(255,255,255,0.18); z-index: 1; }
+        .featured-body { padding: 36px 32px; display: flex; flex-direction: column; justify-content: center; }
+        .tag {
+            display: inline-flex; align-items: center; gap: 5px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .68rem; font-weight: 700; padding: 4px 10px;
+            border-radius: 6px; width: fit-content; margin-bottom: 14px;
+            text-transform: uppercase; letter-spacing: .5px;
+        }
+        .tag-blue { background: var(--accent-bg); color: var(--accent); }
+        .tag-green { background: var(--green-bg); color: var(--green); }
+        .tag-amber { background: var(--amber-bg); color: var(--amber); }
+        .tag-purple { background: var(--purple-bg); color: var(--purple); }
+        .tag-pink { background: var(--pink-bg); color: var(--pink); }
+        .tag-red { background: var(--red-bg); color: var(--red); }
+
+        .featured-body h1 {
+            font-family: 'Outfit', sans-serif; font-size: clamp(1.5rem, 3vw, 2rem);
+            font-weight: 700; line-height: 1.25; margin-bottom: 14px;
+            color: var(--text); letter-spacing: -.02em;
+        }
+        .featured-body p {
+            font-family: 'DM Sans', sans-serif; font-size: .93rem;
+            color: var(--text-2); line-height: 1.7; margin-bottom: 18px;
+        }
+        .featured-meta {
+            display: flex; align-items: center; gap: 14px;
+            font-family: 'Plus Jakarta Sans', sans-serif; font-size: .74rem;
+            color: var(--text-3); flex-wrap: wrap;
+        }
+        .featured-meta .author { color: var(--text-2); font-weight: 600; }
+        .featured-cta {
+            display: inline-flex; align-items: center; gap: 6px; margin-top: 18px;
+            padding: 10px 22px; background: var(--accent); color: #fff; border-radius: 10px;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .83rem; font-weight: 600; text-decoration: none; transition: all .2s; width: fit-content;
+        }
+        .featured-cta:hover { background: var(--accent-h); color: #fff; transform: translateY(-1px); box-shadow: var(--shadow); }
+
+        /* Side articles */
+        .side-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .side-card {
+            background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 22px; cursor: pointer; transition: all .3s;
+        }
+        .side-card:hover { box-shadow: var(--shadow); border-color: var(--border-2); transform: translateY(-2px); }
+        .side-card h3 {
+            font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600;
+            line-height: 1.35; margin-bottom: 10px; color: var(--text); letter-spacing: -.01em;
+        }
+        .side-card .meta {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .72rem; color: var(--text-3); display: flex; gap: 8px;
+        }
+
+        /* ── SECTION HEADERS ── */
+        .sec-head {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 22px; flex-wrap: wrap; gap: 10px;
+        }
+        .sec-head h2 {
+            font-family: 'Outfit', sans-serif; font-size: clamp(1.2rem, 2.5vw, 1.45rem);
+            font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;
+            letter-spacing: -.02em;
+        }
+        .sec-head h2 i { font-size: 1rem; color: var(--accent); }
+        .sec-link {
+            color: var(--accent); text-decoration: none; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .84rem; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; transition: gap .2s;
+        }
+        .sec-link:hover { gap: 8px; }
+
+        /* ── MARKET ── */
+        .market-section { padding: 36px 0; background: var(--bg-white); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .market-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .mkt-card {
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 18px; transition: all .3s;
+        }
+        .mkt-card:hover { box-shadow: var(--shadow); border-color: var(--border-2); }
+        .mkt-sym {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            font-size: .86rem; color: var(--text);
+        }
+        .mkt-name {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .68rem; color: var(--text-3); margin-top: 2px;
+        }
+        .mkt-price {
+            font-family: 'JetBrains Mono', monospace; font-size: 1.1rem;
+            font-weight: 600; margin: 8px 0 2px;
+        }
+        .mkt-chg {
+            font-family: 'JetBrains Mono', monospace; font-size: .74rem; font-weight: 600;
+        }
+        .mkt-chg.up { color: var(--green-l); }
+        .mkt-chg.down { color: var(--red); }
+        .mini-chart { display: flex; align-items: flex-end; gap: 2px; height: 30px; margin-top: 10px; }
+        .mini-bar { flex: 1; border-radius: 2px; min-height: 3px; }
+
+        /* ── CALCULATOR ── */
+        .calc-section { padding: 44px 0; }
+        .calc-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .calc-wrap {
+            background: var(--bg-white); border: 1px solid var(--border);
+            border-radius: var(--radius-2xl); overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        .calc-top {
+            padding: 28px 32px 0;
+        }
+        .calc-top h2 {
+            font-family: 'Outfit', sans-serif; font-size: clamp(1.2rem, 2.5vw, 1.5rem);
+            font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 8px;
+            letter-spacing: -.02em;
+        }
+        .calc-top h2 i { color: var(--accent); font-size: 1.1rem; }
+        .calc-top p {
+            font-family: 'DM Sans', sans-serif; font-size: .9rem; color: var(--text-2);
+            margin-top: 6px; margin-bottom: 24px;
+        }
+        .calc-body { display: grid; grid-template-columns: 1fr 1fr; }
+        .calc-form { padding: 0 32px 28px; border-right: 1px solid var(--border); }
+        .calc-results { padding: 0 32px 28px; background: var(--bg-subtle); }
+
+        .field { margin-bottom: 16px; }
+        .field label {
+            display: block; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .74rem; font-weight: 600; color: var(--text-2); margin-bottom: 6px;
+            text-transform: uppercase; letter-spacing: .5px;
+        }
+        .field-wrap { position: relative; }
+        .field-wrap .pfx, .field-wrap .sfx {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            font-family: 'JetBrains Mono', monospace; font-size: .82rem; color: var(--text-3);
+        }
+        .field-wrap .pfx { left: 14px; }
+        .field-wrap .sfx { right: 14px; }
+        .f-input {
+            width: 100%; padding: 12px 14px; border: 1.5px solid var(--border);
+            border-radius: var(--radius); background: var(--bg);
+            font-family: 'JetBrains Mono', monospace; font-size: .92rem;
+            color: var(--text); outline: none; transition: border-color .2s, box-shadow .2s;
+        }
+        .f-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+        .f-input.pfx { padding-left: 40px; }
+        .f-input.sfx { padding-right: 40px; }
+
+        .calc-action {
+            width: 100%; padding: 13px; border: none; border-radius: var(--radius);
+            background: var(--accent); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .88rem; font-weight: 600; cursor: pointer; transition: all .2s;
+        }
+        .calc-action:hover { background: var(--accent-h); transform: translateY(-1px); box-shadow: var(--shadow); }
+
+        .r-main {
+            text-align: center; padding: 22px; background: var(--bg-white);
+            border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 12px;
+        }
+        .r-main .lbl {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .7rem; color: var(--text-3); text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 4px; font-weight: 600;
+        }
+        .r-main .val {
+            font-family: 'JetBrains Mono', monospace; font-size: 1.8rem;
+            font-weight: 700; color: var(--accent);
+        }
+        .r-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .r-item {
+            text-align: center; padding: 14px; background: var(--bg-white);
+            border: 1px solid var(--border); border-radius: var(--radius);
+        }
+        .r-item .lbl {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .66rem; color: var(--text-3); text-transform: uppercase;
+            letter-spacing: .5px; margin-bottom: 4px; font-weight: 600;
+        }
+        .r-item .val {
+            font-family: 'JetBrains Mono', monospace; font-size: .95rem; font-weight: 600;
+        }
+        .r-item .val.g { color: var(--green-l); }
+        .r-item .val.b { color: var(--accent); }
+        .r-item .val.a { color: var(--amber); }
+
+        .c-wrap { margin-top: 12px; padding: 16px; background: var(--bg-white); border: 1px solid var(--border); border-radius: var(--radius); }
+        .c-bars { display: flex; align-items: flex-end; gap: 4px; height: 85px; }
+        .c-bar-g { flex: 1; display: flex; flex-direction: column; align-items: center; }
+        .c-bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 4px; transition: height .5s; }
+        .c-bar.total { background: linear-gradient(to top, var(--accent), #60A5FA); }
+        .c-bar.invested { background: linear-gradient(to top, #94A3B8, #CBD5E1); }
+        .c-lbl {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .55rem; color: var(--text-3); margin-top: 3px;
+        }
+        .c-legend { display: flex; justify-content: center; gap: 16px; margin-top: 8px; }
+        .c-legend span {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .66rem; color: var(--text-3); display: flex; align-items: center; gap: 5px;
+        }
+        .c-legend .dot { width: 8px; height: 8px; border-radius: 2px; }
+
+        /* ── RANKING ── */
+        .ranking-section { padding: 44px 0; background: var(--bg-white); border-top: 1px solid var(--border); }
+        .ranking-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .rank-wrap {
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: var(--radius-2xl); overflow: hidden;
+        }
+        .rank-tabs { display: flex; border-bottom: 1px solid var(--border); overflow-x: auto; background: var(--bg-white); }
+        .rtab {
+            padding: 13px 20px; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .82rem; font-weight: 600; color: var(--text-3);
+            background: none; border: none; cursor: pointer; white-space: nowrap;
+            transition: all .2s; border-bottom: 2px solid transparent;
+        }
+        .rtab:hover { color: var(--text-2); background: var(--bg-subtle); }
+        .rtab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-bg); }
+
+        .rtab-content { display: none; }
+        .rtab-content.active { display: block; }
+
+        .rtable { width: 100%; border-collapse: collapse; }
+        .rtable thead th {
+            padding: 12px 14px; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .68rem; font-weight: 700; color: var(--text-3);
+            text-transform: uppercase; letter-spacing: .5px; text-align: left;
+            border-bottom: 1px solid var(--border); background: var(--bg-subtle);
+        }
+        .rtable thead th:last-child { text-align: right; }
+        .rtable tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+        .rtable tbody tr:hover { background: var(--bg-white); }
+        .rtable tbody tr:last-child { border-bottom: none; }
+        .rtable td { padding: 12px 14px; font-size: .84rem; vertical-align: middle; }
+        .rtable td:last-child { text-align: right; }
+
+        .rpos {
+            width: 26px; height: 26px; border-radius: 6px; display: inline-flex;
+            align-items: center; justify-content: center;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .72rem; font-weight: 700;
+        }
+        .rpos.g { background: var(--amber-bg); color: var(--amber); }
+        .rpos.s { background: var(--bg-hover); color: var(--text-3); }
+        .rpos.b { background: #FED7AA; color: #C2410C; }
+        .rpos.d { background: var(--bg-subtle); color: var(--text-3); }
+
+        .rname {
+            font-family: 'JetBrains Mono', monospace; font-weight: 700;
+            color: var(--text); font-size: .84rem;
+        }
+        .rfull {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .7rem; color: var(--text-3); margin-top: 1px;
+        }
+        .rprice {
+            font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: .84rem;
+        }
+        .rdy {
+            font-family: 'JetBrains Mono', monospace; font-weight: 600;
+            padding: 3px 8px; border-radius: 4px; display: inline-block; font-size: .76rem;
+        }
+        .rdy.h { background: var(--green-bg-2); color: var(--green); }
+        .rdy.m { background: var(--amber-bg); color: var(--amber); }
+        .rpvp {
+            font-family: 'JetBrains Mono', monospace; color: var(--text-2); font-size: .84rem;
+        }
+
+        /* ── ARTICLES ── */
+        .articles-section { padding: 44px 0; }
+        .articles-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .art-card {
+            background: var(--bg-white); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); overflow: hidden; transition: all .3s;
+            cursor: pointer; height: 100%; display: flex; flex-direction: column;
+        }
+        .art-card:hover { box-shadow: var(--shadow-lg); border-color: var(--border-2); transform: translateY(-2px); }
+        .art-img {
+            height: 150px; display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; position: relative;
+        }
+        .art-img i { opacity: .15; }
+        .art-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
+        .art-card h3 {
+            font-family: 'Outfit', sans-serif; font-size: 1rem; font-weight: 600;
+            line-height: 1.35; margin-bottom: 8px; color: var(--text); transition: color .2s;
+            letter-spacing: -.01em;
+        }
+        .art-card:hover h3 { color: var(--accent); }
+        .art-excerpt {
+            font-family: 'DM Sans', sans-serif; font-size: .84rem; color: var(--text-2);
+            line-height: 1.6; margin-bottom: 14px; flex: 1;
+            display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .art-meta {
+            display: flex; align-items: center; justify-content: space-between;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .7rem; color: var(--text-3); padding-top: 12px; border-top: 1px solid var(--border);
+        }
+
+        /* ── EDUCATION ── */
+        .edu-section { padding: 44px 0; background: var(--bg-white); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .edu-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .edu-card {
+            background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            padding: 26px 20px; text-align: center; transition: all .3s; cursor: pointer;
+        }
+        .edu-card:hover { box-shadow: var(--shadow); transform: translateY(-2px); border-color: var(--border-2); }
+        .edu-icon {
+            width: 48px; height: 48px; border-radius: 12px; display: flex;
+            align-items: center; justify-content: center; font-size: 1.2rem; margin: 0 auto 12px;
+        }
+        .edu-card h4 {
+            font-family: 'Outfit', sans-serif; font-size: .88rem; font-weight: 700; margin-bottom: 5px;
+            letter-spacing: -.01em;
+        }
+        .edu-card p {
+            font-family: 'DM Sans', sans-serif; font-size: .74rem; color: var(--text-3);
+            line-height: 1.5; margin-bottom: 10px;
+        }
+        .edu-link {
+            color: var(--accent); font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .78rem; font-weight: 600; text-decoration: none;
+            display: inline-flex; align-items: center; gap: 4px; transition: gap .2s;
+        }
+        .edu-link:hover { gap: 7px; }
+
+        /* ── GLOSSARY ── */
+        .glossary-section { padding: 44px 0; }
+        .glossary-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .glo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; }
+        .glo-item {
+            background: var(--bg-white); border: 1px solid var(--border);
+            border-radius: var(--radius-lg); padding: 22px; transition: all .2s;
+        }
+        .glo-item:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+        .glo-item h4 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: .84rem; font-weight: 600; color: var(--accent); margin-bottom: 6px;
+        }
+        .glo-item p {
+            font-family: 'DM Sans', sans-serif; font-size: .82rem;
+            color: var(--text-2); line-height: 1.65;
+        }
+
+        /* ── NEWSLETTER ── */
+        .news-section { padding: 44px 0; background: var(--accent-bg); border-top: 1px solid var(--accent-bg-2); }
+        .news-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .news-box {
+            background: var(--bg-white); border: 1px solid var(--accent-bg-2);
+            border-radius: var(--radius-2xl); padding: 44px 40px; text-align: center;
+        }
+        .news-box h2 {
+            font-family: 'Outfit', sans-serif; font-size: clamp(1.3rem, 3vw, 1.7rem);
+            font-weight: 700; margin-bottom: 10px; letter-spacing: -.02em;
+        }
+        .news-box p {
+            font-family: 'DM Sans', sans-serif; color: var(--text-2);
+            max-width: 460px; margin: 0 auto 24px;
+        }
+        .news-form { display: flex; gap: 10px; max-width: 440px; margin: 0 auto; }
+        .news-form input {
+            flex: 1; padding: 12px 16px; border: 1.5px solid var(--border); border-radius: var(--radius);
+            background: var(--bg); font-family: 'DM Sans', sans-serif; font-size: .88rem;
+            color: var(--text); outline: none; transition: border-color .2s, box-shadow .2s;
+        }
+        .news-form input::placeholder { color: var(--text-3); }
+        .news-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+        .news-form button {
+            padding: 12px 22px; border: none; border-radius: var(--radius);
+            background: var(--accent); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .84rem; font-weight: 600; cursor: pointer; transition: all .2s; white-space: nowrap;
+        }
+        .news-form button:hover { background: var(--accent-h); }
+        .news-note {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .7rem; color: var(--text-3); margin-top: 12px; margin-bottom: 0;
+        }
+
+        /* ── FOOTER ── */
+        .site-footer { background: var(--bg-white); border-top: 1px solid var(--border); padding: 48px 0 90px; }
+        .footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 24px; }
+        .footer-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .footer-brand h3 {
+            font-family: 'Outfit', sans-serif; font-size: 1.3rem; font-weight: 800;
+            letter-spacing: -.02em;
+        }
+        .footer-brand h3 span { color: var(--accent); }
+        .footer-desc {
+            font-family: 'DM Sans', sans-serif; color: var(--text-3);
+            font-size: .84rem; line-height: 1.7; max-width: 300px; margin-bottom: 16px;
+        }
+        .footer-socials { display: flex; gap: 8px; }
+        .footer-socials a {
+            width: 36px; height: 36px; border-radius: 10px; background: var(--bg);
+            border: 1px solid var(--border); display: flex; align-items: center; justify-content: center;
+            color: var(--text-3); text-decoration: none; transition: all .2s;
+        }
+        .footer-socials a:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+        .f-col h5 {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .74rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 1px; color: var(--text-2); margin-bottom: 16px;
+        }
+        .f-col ul { list-style: none; padding: 0; }
+        .f-col ul li { margin-bottom: 8px; }
+        .f-col ul li a {
+            font-family: 'DM Sans', sans-serif; color: var(--text-3);
+            text-decoration: none; font-size: .84rem; transition: color .2s;
+        }
+        .f-col ul li a:hover { color: var(--accent); }
+        .footer-bottom {
+            margin-top: 32px; padding-top: 18px; border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;
+        }
+        .footer-bottom p {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .76rem; color: var(--text-3);
+        }
+        .footer-disc {
+            font-family: 'DM Sans', sans-serif; font-size: .68rem; color: var(--text-3);
+            max-width: 420px; text-align: right; line-height: 1.5;
+        }
+
+        /* ── BOTTOM NAV ── */
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: rgba(255,255,255,.95); backdrop-filter: blur(20px);
+            border-top: 1px solid var(--border); z-index: 1060;
+            padding: 4px 0 max(4px, env(safe-area-inset-bottom));
+        }
+        .bottom-nav ul { display: flex; list-style: none; justify-content: space-around; padding: 0; margin: 0; }
+        .bottom-nav a {
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            text-decoration: none; color: var(--text-3); font-size: .58rem; font-weight: 500;
+            padding: 4px 8px; transition: color .2s;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+        .bottom-nav a i { font-size: 1.05rem; }
+        .bottom-nav a.active, .bottom-nav a:hover { color: var(--accent); }
+
+        /* ── SIDEBAR ── */
+        .side-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 1500; display: none; }
+        .side-overlay.active { display: block; }
+        .side-menu {
+            position: fixed; top: 0; right: -280px; width: 280px; height: 100%;
+            background: var(--bg-white); border-left: 1px solid var(--border);
+            z-index: 1501; transition: right .3s ease; overflow-y: auto; padding: 20px;
+        }
+        .side-menu.active { right: 0; }
+        .side-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+        .side-close {
+            width: 32px; height: 32px; border: none; background: var(--bg-subtle);
+            border-radius: 8px; color: var(--text-2); font-size: .9rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .side-menu ul { list-style: none; padding: 0; }
+        .side-menu ul li { border-bottom: 1px solid var(--border); }
+        .side-menu ul li a {
+            display: flex; align-items: center; gap: 10px; padding: 12px 0;
+            font-family: 'Plus Jakarta Sans', sans-serif; color: var(--text-2);
+            text-decoration: none; font-size: .88rem; font-weight: 500; transition: color .2s;
+        }
+        .side-menu ul li a i { width: 18px; text-align: center; color: var(--accent); font-size: .85rem; }
+        .side-menu ul li a:hover { color: var(--text); }
+        .side-cta { margin-top: 18px; }
+        .side-cta a {
+            display: block; width: 100%; padding: 12px; border: none; border-radius: var(--radius);
+            background: var(--accent); color: #fff; font-family: 'Plus Jakarta Sans', sans-serif;
+            font-size: .84rem; font-weight: 600; text-align: center; text-decoration: none;
+        }
+
+        /* ── BTT ── */
+        .btt {
+            position: fixed; bottom: 80px; right: 16px; width: 38px; height: 38px;
+            background: var(--accent); border: none; border-radius: 10px; color: #fff;
+            font-size: .85rem; cursor: pointer; z-index: 1040; opacity: 0; visibility: hidden;
+            transform: translateY(8px); transition: all .3s; display: flex; align-items: center; justify-content: center;
+        }
+        .btt.visible { opacity: 1; visibility: visible; transform: translateY(0); }
+
+        /* ── LOADER ── */
+        .loader {
+            position: fixed; inset: 0; background: var(--bg-white); z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity .5s, visibility .5s;
+        }
+        .loader.hidden { opacity: 0; visibility: hidden; }
+        .loader-inner { text-align: center; }
+        .loader-spin {
+            width: 32px; height: 32px; border: 3px solid var(--border);
+            border-top-color: var(--accent); border-radius: 50%;
+            animation: spin .8s linear infinite; margin: 0 auto 12px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loader-text {
+            font-family: 'Outfit', sans-serif; font-size: 1.1rem; font-weight: 700;
+            color: var(--text); letter-spacing: -.02em;
+        }
+        .loader-text span { color: var(--accent); }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 992px) {
+            .nav-links, .nav-btn { display: none; }
+            .menu-btn { display: flex; }
+            .featured { grid-template-columns: 1fr; }
+            .featured-img { min-height: 200px; }
+            .topbar { display: none; }
+        }
+        @media (max-width: 768px) {
+            .side-grid { grid-template-columns: 1fr; }
+            .calc-body { grid-template-columns: 1fr; }
+            .calc-form { border-right: none; border-bottom: 1px solid var(--border); }
+            .calc-top, .calc-form, .calc-results { padding-left: 20px; padding-right: 20px; }
+            .news-box { padding: 32px 20px; }
+            .news-form { flex-direction: column; }
+            .rank-wrap { overflow-x: auto; }
+            .rtable { min-width: 560px; }
+            .glo-grid { grid-template-columns: 1fr; }
+        }
+        @media (max-width: 480px) {
+            .featured-body h1 { font-size: 1.25rem; }
+            .featured-body p { font-size: .86rem; -webkit-line-clamp: 2; }
+            .featured-body { padding: 24px 20px; }
+            .r-main .val { font-size: 1.4rem; }
+            .art-img { height: 120px; }
+        }
+    </style>
+    
+    
+    <script src="https://jsc.adskeeper.com/site/1097983.js" async> </script> 
+    
+    
+    <!-- InMobi Choice. Consent Manager Tag v3.0 (for TCF 2.3) -->
+<script type="text/javascript" async=true>
+(function() {
+  var host = "www.themoneytizer.com";
+  var element = document.createElement('script');
+  var firstScript = document.getElementsByTagName('script')[0];
+  var url = 'https://cmp.inmobi.com'
+    .concat('/choice/', '6Fv0cGNfc_bw8', '/', host, '/choice.js?tag_version=V3');
+  var uspTries = 0;
+  var uspTriesLimit = 3;
+  element.async = true;
+  element.type = 'text/javascript';
+  element.src = url;
+
+  firstScript.parentNode.insertBefore(element, firstScript);
+
+  function makeStub() {
+    var TCF_LOCATOR_NAME = '__tcfapiLocator';
+    var queue = [];
+    var win = window;
+    var cmpFrame;
+
+    function addFrame() {
+      var doc = win.document;
+      var otherCMP = !!(win.frames[TCF_LOCATOR_NAME]);
+
+      if (!otherCMP) {
+        if (doc.body) {
+          var iframe = doc.createElement('iframe');
+
+          iframe.style.cssText = 'display:none';
+          iframe.name = TCF_LOCATOR_NAME;
+          doc.body.appendChild(iframe);
+        } else {
+          setTimeout(addFrame, 5);
+        }
+      }
+      return !otherCMP;
+    }
+
+    function tcfAPIHandler() {
+      var gdprApplies;
+      var args = arguments;
+
+      if (!args.length) {
+        return queue;
+      } else if (args[0] === 'setGdprApplies') {
+        if (
+          args.length > 3 &&
+          args[2] === 2 &&
+          typeof args[3] === 'boolean'
+        ) {
+          gdprApplies = args[3];
+          if (typeof args[2] === 'function') {
+            args[2]('set', true);
+          }
+        }
+      } else if (args[0] === 'ping') {
+        var retr = {
+          gdprApplies: gdprApplies,
+          cmpLoaded: false,
+          cmpStatus: 'stub'
+        };
+
+        if (typeof args[2] === 'function') {
+          args[2](retr);
+        }
+      } else {
+        if(args[0] === 'init' && typeof args[3] === 'object') {
+          args[3] = Object.assign(args[3], { tag_version: 'V3' });
+        }
+        queue.push(args);
+      }
+    }
+
+    function postMessageEventHandler(event) {
+      var msgIsString = typeof event.data === 'string';
+      var json = {};
+
+      try {
+        if (msgIsString) {
+          json = JSON.parse(event.data);
+        } else {
+          json = event.data;
+        }
+      } catch (ignore) {}
+
+      var payload = json.__tcfapiCall;
+
+      if (payload) {
+        window.__tcfapi(
+          payload.command,
+          payload.version,
+          function(retValue, success) {
+            var returnMsg = {
+              __tcfapiReturn: {
+                returnValue: retValue,
+                success: success,
+                callId: payload.callId
+              }
+            };
+            if (msgIsString) {
+              returnMsg = JSON.stringify(returnMsg);
+            }
+            if (event && event.source && event.source.postMessage) {
+              event.source.postMessage(returnMsg, '*');
+            }
+          },
+          payload.parameter
+        );
+      }
+    }
+
+    while (win) {
+      try {
+        if (win.frames[TCF_LOCATOR_NAME]) {
+          cmpFrame = win;
+          break;
+        }
+      } catch (ignore) {}
+
+      if (win === window.top) {
+        break;
+      }
+      win = win.parent;
+    }
+    if (!cmpFrame) {
+      addFrame();
+      win.__tcfapi = tcfAPIHandler;
+      win.addEventListener('message', postMessageEventHandler, false);
+    }
+  };
+
+  makeStub();
+
+  var uspStubFunction = function() {
+    var arg = arguments;
+    if (typeof window.__uspapi !== uspStubFunction) {
+      setTimeout(function() {
+        if (typeof window.__uspapi !== 'undefined') {
+          window.__uspapi.apply(window.__uspapi, arg);
+        }
+      }, 500);
+    }
+  };
+
+  var checkIfUspIsReady = function() {
+    uspTries++;
+    if (window.__uspapi === uspStubFunction && uspTries < uspTriesLimit) {
+      console.warn('USP is not accessible');
+    } else {
+      clearInterval(uspInterval);
+    }
+  };
+
+  if (typeof window.__uspapi === 'undefined') {
+    window.__uspapi = uspStubFunction;
+    var uspInterval = setInterval(checkIfUspIsReady, 6000);
+  }
+})();
+</script>
+<!-- End InMobi Choice. Consent Manager Tag v3.0 (for TCF 2.3) -->
+ 
+</head>
+<body>
+
+<div data-type="_mgwidget" data-widget-id="2027213"> 
+ </div> 
+ <script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq"); 
+ </script> 
+ 
+ 
+ 
+
+ 
+ 
+
+    <div class="loader" id="loader">
+        <div class="loader-inner">
+            <div class="loader-spin"></div>
+            <div class="loader-text">Investidor<span>.blog</span></div>
+        </div>
+    </div>
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+        <div class="topbar-inner">
+            <div class="topbar-left">
+                <span><span class="live-dot"></span> Mercado aberto</span>
+                <span>31 de Maio, 2026</span>
+            </div>
+            <div class="topbar-right">
+                <a href="#newsletter"><i class="fab fa-instagram"></i></a>
+                <a href="#newsletter"><i class="fab fa-youtube"></i></a>
+                <a href="#newsletter"><i class="fab fa-telegram-plane"></i></a>
+                <a href="#newsletter"><i class="fab fa-x-twitter"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <!-- NAV -->
+    <nav class="main-nav" id="mainNav">
+        <div class="nav-inner">
+            <a href="#inicio" class="logo">
+                <div class="logo-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="logo-text">Investidor<span>.blog</span></div>
+            </a>
+            <ul class="nav-links">
+                <li><a href="#inicio" class="active">Início</a></li>
+                <li><a href="#mercado">Mercado</a></li>
+                <li><a href="#calculadora">Calculadora</a></li>
+                <li><a href="#ranking">Ranking</a></li>
+                <li><a href="#artigos">Artigos</a></li>
+                <li><a href="#educacao">Educação</a></li>
+                <li><a href="#glossario">Glossário</a></li>
+            </ul>
+            <div style="display:flex;align-items:center;gap:8px">
+                <a href="#calculadora" class="nav-btn"><i class="fas fa-calculator"></i> Juros Compostos</a>
+                <button class="menu-btn" id="menuBtn" aria-label="Menu"><span></span><span></span><span></span></button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- BREAKING -->
+    <div class="breaking">
+        <div class="breaking-inner">
+            <span class="breaking-tag"><i class="fas fa-bolt"></i> Urgente</span>
+            <p>Ibovespa atinge <strong>145.800 pts</strong> com corte da Selic — FIIs de papel disparam na expectativa de juros menores</p>
+        </div>
+    </div>
+
+    <!-- TICKER -->
+    <div class="ticker">
+        <div class="ticker-track">
+            <div class="ticker-item"><span class="sym">IBOV</span><span class="val">145.802</span><span class="chg up">▲ +1,24%</span></div>
+            <div class="ticker-item"><span class="sym">PETR4</span><span class="val">R$ 38,72</span><span class="chg up">▲ +2,15%</span></div>
+            <div class="ticker-item"><span class="sym">VALE3</span><span class="val">R$ 62,45</span><span class="chg down">▼ -0,87%</span></div>
+            <div class="ticker-item"><span class="sym">ITUB4</span><span class="val">R$ 34,18</span><span class="chg up">▲ +1,53%</span></div>
+            <div class="ticker-item"><span class="sym">MXRF11</span><span class="val">R$ 10,15</span><span class="chg up">▲ +0,34%</span></div>
+            <div class="ticker-item"><span class="sym">HGLG11</span><span class="val">R$ 158,90</span><span class="chg down">▼ -0,21%</span></div>
+            <div class="ticker-item"><span class="sym">BTC</span><span class="val">$ 104.2K</span><span class="chg up">▲ +4,82%</span></div>
+            <div class="ticker-item"><span class="sym">SELIC</span><span class="val">13,75%</span><span class="chg down">▼ -0,50pp</span></div>
+            <div class="ticker-item"><span class="sym">IPCA</span><span class="val">4,20%</span><span class="chg down">▼ -0,30pp</span></div>
+            <div class="ticker-item"><span class="sym">USD</span><span class="val">R$ 5,12</span><span class="chg up">▲ +0,45%</span></div>
+            <div class="ticker-item"><span class="sym">WEGE3</span><span class="val">R$ 42,30</span><span class="chg up">▲ +3,12%</span></div>
+            <div class="ticker-item"><span class="sym">BBDC4</span><span class="val">R$ 14,92</span><span class="chg up">▲ +0,95%</span></div>
+            <div class="ticker-item"><span class="sym">IBOV</span><span class="val">145.802</span><span class="chg up">▲ +1,24%</span></div>
+            <div class="ticker-item"><span class="sym">PETR4</span><span class="val">R$ 38,72</span><span class="chg up">▲ +2,15%</span></div>
+            <div class="ticker-item"><span class="sym">VALE3</span><span class="val">R$ 62,45</span><span class="chg down">▼ -0,87%</span></div>
+            <div class="ticker-item"><span class="sym">ITUB4</span><span class="val">R$ 34,18</span><span class="chg up">▲ +1,53%</span></div>
+            <div class="ticker-item"><span class="sym">MXRF11</span><span class="val">R$ 10,15</span><span class="chg up">▲ +0,34%</span></div>
+            <div class="ticker-item"><span class="sym">HGLG11</span><span class="val">R$ 158,90</span><span class="chg down">▼ -0,21%</span></div>
+            <div class="ticker-item"><span class="sym">BTC</span><span class="val">$ 104.2K</span><span class="chg up">▲ +4,82%</span></div>
+            <div class="ticker-item"><span class="sym">SELIC</span><span class="val">13,75%</span><span class="chg down">▼ -0,50pp</span></div>
+            <div class="ticker-item"><span class="sym">IPCA</span><span class="val">4,20%</span><span class="chg down">▼ -0,30pp</span></div>
+            <div class="ticker-item"><span class="sym">USD</span><span class="val">R$ 5,12</span><span class="chg up">▲ +0,45%</span></div>
+            <div class="ticker-item"><span class="sym">WEGE3</span><span class="val">R$ 42,30</span><span class="chg up">▲ +3,12%</span></div>
+            <div class="ticker-item"><span class="sym">BBDC4</span><span class="val">R$ 14,92</span><span class="chg up">▲ +0,95%</span></div>
+        </div>
+    </div>
+
+    <!-- HERO -->
+    <section class="hero-section" id="inicio">
+        <div class="hero-inner">
+            <div class="featured">
+                <div class="featured-img"><i class="fas fa-building"></i></div>
+                <div class="featured-body">
+                    <span class="tag tag-green"><i class="fas fa-fire"></i> Guia Completo 2026</span>
+                    <h1>Como Construir Renda Passiva com Fundos Imobiliários — Do Zero a R$5.000/mês</h1>
+                    <p>Descubra a estratégia que mais de 12.000 investidores usam para gerar renda mensal isenta de IR com FIIs. Conteúdo atualizado, exemplos práticos e ranking dos melhores fundos.</p>
+                    <div class="featured-meta">
+                        <span><i class="fas fa-user-circle"></i> <span class="author">Ricardo Almeida</span></span>
+                        <span><i class="far fa-calendar"></i> 31/05/2026</span>
+                        <span><i class="far fa-clock"></i> 12 min</span>
+                        <span><i class="far fa-eye"></i> 24.5K views</span>
+                    </div>
+                    <a href="#ranking" class="featured-cta"><i class="fas fa-arrow-right"></i> Ver Ranking de FIIs</a>
+                </div>
+            </div>
+            <div class="sec-head">
+                <h2><i class="fas fa-bolt"></i> Destaques da Semana</h2>
+            </div>
+            <div class="side-grid">
+                <div class="side-card">
+                    <span class="tag tag-blue"><i class="fas fa-chart-line"></i> Ações</span>
+                    <h3>PETR4: Petrobras anuncia recompra de R$15 bi — Impacto no dividendo</h3>
+                    <div class="meta"><span><i class="far fa-clock"></i> 8 min</span><span>Há 2h</span></div>
+                </div>
+                <div class="side-card">
+                    <span class="tag tag-purple"><i class="fab fa-bitcoin"></i> Cripto</span>
+                    <h3>Bitcoin supera US$ 104 mil com aprovação de novos ETFs</h3>
+                    <div class="meta"><span><i class="far fa-clock"></i> 5 min</span><span>Há 4h</span></div>
+                </div>
+                <div class="side-card">
+                    <span class="tag tag-green"><i class="fas fa-piggy-bank"></i> Renda Fixa</span>
+                    <h3>Tesouro IPCA+ 2029 rende 6,2% + inflação — Vale a pena?</h3>
+                    <div class="meta"><span><i class="far fa-clock"></i> 6 min</span><span>Há 5h</span></div>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <div data-type="_mgwidget" data-widget-id="2027274"> 
+ </div> 
+ <script>(function(w,q){w[q]=w[q]||[];w[q].push(["_mgc.load"])})(window,"_mgq"); 
+ </script> 
+
+    <!-- MARKET -->
+    <section class="market-section" id="mercado">
+        <div class="market-inner">
+            <div class="sec-head">
+                <h2><i class="fas fa-chart-area"></i> Painel de Mercado</h2>
+                <a href="#ranking" class="sec-link">Ranking completo <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">IBOV</div><div class="mkt-name">Ibovespa</div>
+                    <div class="mkt-price">145.802</div><div class="mkt-chg up">▲ +1,24%</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:30%;background:var(--green-l);opacity:.4"></div><div class="mini-bar" style="height:45%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:35%;background:var(--green-l);opacity:.4"></div><div class="mini-bar" style="height:60%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:50%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:70%;background:var(--green-l);opacity:.7"></div><div class="mini-bar" style="height:90%;background:var(--green-l);opacity:1"></div></div>
+                </div></div>
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">PETR4</div><div class="mkt-name">Petrobras PN</div>
+                    <div class="mkt-price">R$ 38,72</div><div class="mkt-chg up">▲ +2,15%</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:40%;background:var(--green-l);opacity:.4"></div><div class="mini-bar" style="height:55%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:35%;background:var(--red);opacity:.4"></div><div class="mini-bar" style="height:65%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:80%;background:var(--green-l);opacity:.8"></div><div class="mini-bar" style="height:75%;background:var(--green-l);opacity:.7"></div><div class="mini-bar" style="height:95%;background:var(--green-l);opacity:1"></div></div>
+                </div></div>
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">VALE3</div><div class="mkt-name">Vale ON</div>
+                    <div class="mkt-price">R$ 62,45</div><div class="mkt-chg down">▼ -0,87%</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:80%;background:var(--green-l);opacity:.8"></div><div class="mini-bar" style="height:70%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:55%;background:var(--red);opacity:.4"></div><div class="mini-bar" style="height:45%;background:var(--red);opacity:.4"></div><div class="mini-bar" style="height:40%;background:var(--red);opacity:.4"></div><div class="mini-bar" style="height:38%;background:var(--red);opacity:.5"></div><div class="mini-bar" style="height:35%;background:var(--red);opacity:.6"></div></div>
+                </div></div>
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">MXRF11</div><div class="mkt-name">Maxima Renda</div>
+                    <div class="mkt-price">R$ 10,15</div><div class="mkt-chg up">▲ +0,34%</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:50%;background:var(--green-l);opacity:.4"></div><div class="mini-bar" style="height:55%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:53%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:58%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:60%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:65%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:68%;background:var(--green-l);opacity:.7"></div></div>
+                </div></div>
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">BTC</div><div class="mkt-name">Bitcoin / USD</div>
+                    <div class="mkt-price">$ 104.2K</div><div class="mkt-chg up">▲ +4,82%</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:20%;background:var(--green-l);opacity:.3"></div><div class="mini-bar" style="height:40%;background:var(--green-l);opacity:.4"></div><div class="mini-bar" style="height:55%;background:var(--green-l);opacity:.5"></div><div class="mini-bar" style="height:65%;background:var(--green-l);opacity:.6"></div><div class="mini-bar" style="height:80%;background:var(--green-l);opacity:.8"></div><div class="mini-bar" style="height:85%;background:var(--green-l);opacity:.9"></div><div class="mini-bar" style="height:100%;background:var(--green-l);opacity:1"></div></div>
+                </div></div>
+                <div class="col-6 col-md-4 col-lg-2"><div class="mkt-card">
+                    <div class="mkt-sym">SELIC</div><div class="mkt-name">Taxa de Juros</div>
+                    <div class="mkt-price">13,75%</div><div class="mkt-chg down">▼ -0,50pp</div>
+                    <div class="mini-chart"><div class="mini-bar" style="height:100%;background:var(--red);opacity:1"></div><div class="mini-bar" style="height:90%;background:var(--red);opacity:.9"></div><div class="mini-bar" style="height:80%;background:var(--red);opacity:.8"></div><div class="mini-bar" style="height:72%;background:var(--red);opacity:.7"></div><div class="mini-bar" style="height:65%;background:var(--red);opacity:.6"></div><div class="mini-bar" style="height:58%;background:var(--red);opacity:.6"></div><div class="mini-bar" style="height:52%;background:var(--red);opacity:.5"></div></div>
+                </div></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CALCULATOR -->
+    <section class="calc-section" id="calculadora">
+        <div class="calc-inner">
+            <div class="calc-wrap">
+                <div class="calc-top">
+                    <h2><i class="fas fa-calculator"></i> Calculadora de Juros Compostos</h2>
+                    <p>Simule seus investimentos e descubra o poder dos juros compostos. Albert Einstein chamou de "a oitava maravilha do mundo".</p>
+                </div>
+                <div class="calc-body">
+                    <div class="calc-form">
+                        <div class="field">
+                            <label>Valor Inicial</label>
+                            <div class="field-wrap"><span class="pfx">R$</span><input type="number" class="f-input pfx" id="cIni" value="1000" min="0" step="100"></div>
+                        </div>
+                        <div class="field">
+                            <label>Aporte Mensal</label>
+                            <div class="field-wrap"><span class="pfx">R$</span><input type="number" class="f-input pfx" id="cMen" value="500" min="0" step="50"></div>
+                        </div>
+                        <div class="field">
+                            <label>Taxa de Juros (anual)</label>
+                            <div class="field-wrap"><input type="number" class="f-input sfx" id="cTaxa" value="12" min="0.1" step="0.1"><span class="sfx">% a.a.</span></div>
+                        </div>
+                        <div class="field">
+                            <label>Período</label>
+                            <div class="field-wrap"><input type="number" class="f-input sfx" id="cPer" value="10" min="1" max="50" step="1"><span class="sfx">anos</span></div>
+                        </div>
+                        <button class="calc-action" id="calcBtn" onclick="calc()"><i class="fas fa-calculator"></i> Calcular Investimento</button>
+                    </div>
+                    <div class="calc-results">
+                        <div class="r-main">
+                            <div class="lbl">Valor Total Acumulado</div>
+                            <div class="val" id="rTotal">R$ 0,00</div>
+                        </div>
+                        <div class="r-row">
+                            <div class="r-item"><div class="lbl">Total Investido</div><div class="val b" id="rInv">R$ 0,00</div></div>
+                            <div class="r-item"><div class="lbl">Rendimento</div><div class="val g" id="rJuros">R$ 0,00</div></div>
+                        </div>
+                        <div class="r-row" style="margin-top:10px">
+                            <div class="r-item"><div class="lbl">Renda Mensal (0,5%)</div><div class="val a" id="rRenda">R$ 0,00</div></div>
+                            <div class="r-item"><div class="lbl">Rentabilidade</div><div class="val g" id="rPct">0%</div></div>
+                        </div>
+                        <div class="c-wrap" id="chartWrap" style="display:none">
+                            <div class="c-bars" id="chartBars"></div>
+                            <div class="c-legend">
+                                <span><span class="dot" style="background:#94A3B8"></span> Investido</span>
+                                <span><span class="dot" style="background:var(--accent)"></span> Total</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- RANKING -->
+    <section class="ranking-section" id="ranking">
+        <div class="ranking-inner">
+            <div class="sec-head">
+                <h2><i class="fas fa-trophy"></i> Ranking de Investimentos</h2>
+            </div>
+            <div class="rank-wrap">
+                <div class="rank-tabs">
+                    <button class="rtab active" onclick="switchTab('fii-tijolo',this)"><i class="fas fa-building"></i> FIIs de Tijolo</button>
+                    <button class="rtab" onclick="switchTab('fii-papel',this)"><i class="fas fa-file-invoice-dollar"></i> FIIs de Papel</button>
+                    <button class="rtab" onclick="switchTab('acoes-div',this)"><i class="fas fa-coins"></i> Ações Dividendos</button>
+                </div>
+
+                <div class="rtab-content active" id="fii-tijolo">
+                    <table class="rtable">
+                        <thead><tr><th>#</th><th>Fundo</th><th>Preço</th><th>DY (12m)</th><th>P/VP</th><th>Setor</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="rpos g">1</span></td><td><div class="rname">HGLG11</div><div class="rfull">CSHG Logística</div></td><td class="rprice">R$ 158,90</td><td><span class="rdy h">9,2% a.a.</span></td><td class="rpvp">0,92</td><td>Logística</td></tr>
+                            <tr><td><span class="rpos s">2</span></td><td><div class="rname">XPML11</div><div class="rfull">XP Malls</div></td><td class="rprice">R$ 102,35</td><td><span class="rdy h">8,8% a.a.</span></td><td class="rpvp">0,98</td><td>Shoppings</td></tr>
+                            <tr><td><span class="rpos b">3</span></td><td><div class="rname">VILG11</div><div class="rfull">Vinci Logística</div></td><td class="rprice">R$ 112,50</td><td><span class="rdy h">9,0% a.a.</span></td><td class="rpvp">0,95</td><td>Logística</td></tr>
+                            <tr><td><span class="rpos d">4</span></td><td><div class="rname">BRCO11</div><div class="rfull">Bridge Recebíveis</div></td><td class="rprice">R$ 87,20</td><td><span class="rdy h">9,5% a.a.</span></td><td class="rpvp">0,97</td><td>Logística</td></tr>
+                            <tr><td><span class="rpos d">5</span></td><td><div class="rname">XPPR11</div><div class="rfull">XP Properties</div></td><td class="rprice">R$ 78,40</td><td><span class="rdy m">8,4% a.a.</span></td><td class="rpvp">0,90</td><td>Tijolo Diverso</td></tr>
+                            <tr><td><span class="rpos d">6</span></td><td><div class="rname">HGRE11</div><div class="rfull">HG Real Estate</div></td><td class="rprice">R$ 145,80</td><td><span class="rdy m">8,6% a.a.</span></td><td class="rpvp">0,94</td><td>Escritórios</td></tr>
+                            <tr><td><span class="rpos d">7</span></td><td><div class="rname">KNRI11</div><div class="rfull">Kinea Renda Imob.</div></td><td class="rprice">R$ 132,60</td><td><span class="rdy m">8,2% a.a.</span></td><td class="rpvp">0,96</td><td>Tijolo Diverso</td></tr>
+                            <tr><td><span class="rpos d">8</span></td><td><div class="rname">VISC11</div><div class="rfull">Vinci Shopping C.</div></td><td class="rprice">R$ 118,90</td><td><span class="rdy m">8,5% a.a.</span></td><td class="rpvp">0,93</td><td>Shoppings</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="rtab-content" id="fii-papel">
+                    <table class="rtable">
+                        <thead><tr><th>#</th><th>Fundo</th><th>Preço</th><th>DY (12m)</th><th>P/VP</th><th>Indexador</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="rpos g">1</span></td><td><div class="rname">MXRF11</div><div class="rfull">Maxima Renda</div></td><td class="rprice">R$ 10,15</td><td><span class="rdy h">12,8% a.a.</span></td><td class="rpvp">1,01</td><td>IPCA + CDI</td></tr>
+                            <tr><td><span class="rpos s">2</span></td><td><div class="rname">CPTS11</div><div class="rfull">Capitânia Securities</div></td><td class="rprice">R$ 8,92</td><td><span class="rdy h">13,2% a.a.</span></td><td class="rpvp">0,98</td><td>CDI</td></tr>
+                            <tr><td><span class="rpos b">3</span></td><td><div class="rname">KNCR11</div><div class="rfull">Kinea Rendimentos</div></td><td class="rprice">R$ 102,40</td><td><span class="rdy h">12,5% a.a.</span></td><td class="rpvp">1,00</td><td>CDI</td></tr>
+                            <tr><td><span class="rpos d">4</span></td><td><div class="rname">IRDM11</div><div class="rfull">IRIDIUM Recebíveis</div></td><td class="rprice">R$ 9,45</td><td><span class="rdy h">13,5% a.a.</span></td><td class="rpvp">0,97</td><td>IPCA</td></tr>
+                            <tr><td><span class="rpos d">5</span></td><td><div class="rname">VGIR11</div><div class="rfull">Valora RE III</div></td><td class="rprice">R$ 9,78</td><td><span class="rdy h">12,9% a.a.</span></td><td class="rpvp">0,99</td><td>IPCA</td></tr>
+                            <tr><td><span class="rpos d">6</span></td><td><div class="rname">RBRR11</div><div class="rfull">RBR Recebíveis</div></td><td class="rprice">R$ 95,60</td><td><span class="rdy m">11,8% a.a.</span></td><td class="rpvp">1,02</td><td>CDI</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="rtab-content" id="acoes-div">
+                    <table class="rtable">
+                        <thead><tr><th>#</th><th>Ação</th><th>Preço</th><th>DY (12m)</th><th>P/L</th><th>Setor</th></tr></thead>
+                        <tbody>
+                            <tr><td><span class="rpos g">1</span></td><td><div class="rname">TAEE11</div><div class="rfull">Transmissora Aliança</div></td><td class="rprice">R$ 28,45</td><td><span class="rdy h">11,2% a.a.</span></td><td class="rpvp">12,5</td><td>Energia</td></tr>
+                            <tr><td><span class="rpos s">2</span></td><td><div class="rname">BBAS3</div><div class="rfull">Banco do Brasil</div></td><td class="rprice">R$ 32,80</td><td><span class="rdy h">10,8% a.a.</span></td><td class="rpvp">5,2</td><td>Bancos</td></tr>
+                            <tr><td><span class="rpos b">3</span></td><td><div class="rname">TRPL4</div><div class="rfull">Transmissão Paulista</div></td><td class="rprice">R$ 25,90</td><td><span class="rdy h">10,5% a.a.</span></td><td class="rpvp">13,1</td><td>Energia</td></tr>
+                            <tr><td><span class="rpos d">4</span></td><td><div class="rname">ITUB4</div><div class="rfull">Itaú Unibanco</div></td><td class="rprice">R$ 34,18</td><td><span class="rdy m">7,2% a.a.</span></td><td class="rpvp">8,8</td><td>Bancos</td></tr>
+                            <tr><td><span class="rpos d">5</span></td><td><div class="rname">ENGI11</div><div class="rfull">Energisa</div></td><td class="rprice">R$ 42,60</td><td><span class="rdy m">6,8% a.a.</span></td><td class="rpvp">10,4</td><td>Energia</td></tr>
+                            <tr><td><span class="rpos d">6</span></td><td><div class="rname">PETR4</div><div class="rfull">Petrobras PN</div></td><td class="rprice">R$ 38,72</td><td><span class="rdy m">9,5% a.a.</span></td><td class="rpvp">4,1</td><td>Petróleo</td></tr>
+                            <tr><td><span class="rpos d">7</span></td><td><div class="rname">SANB11</div><div class="rfull">Santander Brasil</div></td><td class="rprice">R$ 28,90</td><td><span class="rdy m">8,1% a.a.</span></td><td class="rpvp">6,3</td><td>Bancos</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ARTICLES -->
+    <section class="articles-section" id="artigos">
+        <div class="articles-inner">
+            <div class="sec-head">
+                <h2><i class="fas fa-newspaper"></i> Últimos Artigos</h2>
+                <a href="#glossario" class="sec-link">Glossário completo <i class="fas fa-arrow-right"></i></a>
+            </div>
+            <div class="row g-4">
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card" onclick="document.getElementById('calculadora').scrollIntoView({behavior:'smooth'})">
+                        <div class="art-img" style="background:linear-gradient(135deg,#EFF6FF,#BFDBFE)"><i class="fas fa-calculator" style="color:var(--accent)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-green"><i class="fas fa-tools"></i> Ferramenta</span>
+                            <h3>Calculadora de Juros Compostos: Simule Seu Patrimônio</h3>
+                            <p class="art-excerpt">Use nossa calculadora interativa para projetar seu patrimônio futuro com aportes mensais e taxa de juros personalizada.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 30/05</span><span><i class="far fa-clock"></i> 3 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#FFFBEB,#FDE68A)"><i class="fas fa-building" style="color:var(--amber)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-amber"><i class="fas fa-building"></i> FIIs</span>
+                            <h3>5 FIIs de Tijolo para Comprar com Desconto em Junho/2026</h3>
+                            <p class="art-excerpt">Selecionamos os melhores fundos imobiliários de tijolo negociados abaixo do valor patrimonial neste mês.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 29/05</span><span><i class="far fa-clock"></i> 8 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#F5F3FF,#DDD6FE)"><i class="fas fa-coins" style="color:var(--purple)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-purple"><i class="fas fa-coins"></i> Dividendos</span>
+                            <h3>As 15 Ações Que Mais Pagaram Dividendos em 2025</h3>
+                            <p class="art-excerpt">Ranking detalhado das ações com maiores pagamentos de dividendos no último ano com análise de sustentabilidade.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 27/05</span><span><i class="far fa-clock"></i> 10 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#ECFDF5,#A7F3D0)"><i class="fas fa-landmark" style="color:var(--green)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-green"><i class="fas fa-piggy-bank"></i> RF</span>
+                            <h3>LCI vs LCA vs Tesouro Direto: Qual o Melhor em 2026?</h3>
+                            <p class="art-excerpt">Comparativo completo entre as três principais opções de renda fixa isenta de IR para diferentes perfis.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 25/05</span><span><i class="far fa-clock"></i> 9 min</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row g-4 mt-2">
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#F5F3FF,#EDE9FE)"><i class="fab fa-bitcoin" style="color:var(--purple)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-purple"><i class="fab fa-bitcoin"></i> Cripto</span>
+                            <h3>Ethereum Staking: Renda de 8% ao Ano em Dólar</h3>
+                            <p class="art-excerpt">O staking de Ethereum se consolidou como uma das melhores formas de renda passiva em cripto.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 24/05</span><span><i class="far fa-clock"></i> 7 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#EFF6FF,#DBEAFE)"><i class="fas fa-chart-pie" style="color:var(--accent)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-blue"><i class="fas fa-search-dollar"></i> Análise</span>
+                            <h3>Carteira Recomendada: 10 Ações Baratas da Bolsa</h3>
+                            <p class="art-excerpt">Análise fundamentalista das ações mais descontadas do Ibovespa com potencial de valorização acima de 30%.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 22/05</span><span><i class="far fa-clock"></i> 11 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7)"><i class="fas fa-file-invoice-dollar" style="color:var(--amber)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-amber"><i class="fas fa-file-alt"></i> IR</span>
+                            <h3>Como Declarar FIIs no Imposto de Renda 2026</h3>
+                            <p class="art-excerpt">Tutorial passo a passo para declarar seus fundos imobiliários corretamente e evitar problemas com a Receita.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 20/05</span><span><i class="far fa-clock"></i> 15 min</span></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 col-lg-3">
+                    <div class="art-card">
+                        <div class="art-img" style="background:linear-gradient(135deg,#ECFDF5,#D1FAE5)"><i class="fas fa-wallet" style="color:var(--green)"></i></div>
+                        <div class="art-body">
+                            <span class="tag tag-green"><i class="fas fa-wallet"></i> Iniciantes</span>
+                            <h3>Como Investir R$ 1.000/mês: Guia para Diversificar</h3>
+                            <p class="art-excerpt">Aprenda a montar uma carteira diversificada com apenas R$ 1.000 mensais com exemplos práticos.</p>
+                            <div class="art-meta"><span><i class="far fa-calendar"></i> 18/05</span><span><i class="far fa-clock"></i> 12 min</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- EDUCATION -->
+    <section class="edu-section" id="educacao">
+        <div class="edu-inner">
+            <div class="sec-head">
+                <h2><i class="fas fa-graduation-cap"></i> Educação Financeira</h2>
+                <span style="color:var(--text-3);font-size:.82rem;font-family:'Plus Jakarta Sans',sans-serif;font-weight:500">Conteúdo gratuito para todos os níveis</span>
+            </div>
+            <div class="row g-3">
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('glossario').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:var(--accent-bg);color:var(--accent)"><i class="fas fa-book-open"></i></div>
+                        <h4>Primeiros Passos</h4>
+                        <p>Do zero ao primeiro investimento</p>
+                        <span class="edu-link">Começar <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('ranking').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:var(--green-bg);color:var(--green-l)"><i class="fas fa-chart-line"></i></div>
+                        <h4>Ações</h4>
+                        <p>Análise e escolha de ações</p>
+                        <span class="edu-link">Ver ranking <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('ranking').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:var(--amber-bg);color:var(--amber)"><i class="fas fa-building"></i></div>
+                        <h4>FIIs</h4>
+                        <p>Fundos imobiliários</p>
+                        <span class="edu-link">Ver FIIs <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('calculadora').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:var(--purple-bg);color:var(--purple)"><i class="fas fa-shield-halved"></i></div>
+                        <h4>Renda Fixa</h4>
+                        <p>Tesouro, CDB, LCI, LCA</p>
+                        <span class="edu-link">Simular <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('calculadora').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:var(--pink-bg);color:var(--pink)"><i class="fas fa-pie-chart"></i></div>
+                        <h4>Carteiras</h4>
+                        <p>Diversificação inteligente</p>
+                        <span class="edu-link">Planejar <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+                <div class="col-6 col-md-4 col-lg-2">
+                    <div class="edu-card" onclick="document.getElementById('artigos').scrollIntoView({behavior:'smooth'})">
+                        <div class="edu-icon" style="background:rgba(99,102,246,.06);color:#6366F1"><i class="fas fa-brain"></i></div>
+                        <h4>Psicologia</h4>
+                        <p>Decisões financeiras</p>
+                        <span class="edu-link">Ler mais <i class="fas fa-arrow-right"></i></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- GLOSSARY -->
+    <section class="glossary-section" id="glossario">
+        <div class="glossary-inner">
+            <div class="sec-head">
+                <h2><i class="fas fa-book"></i> Glossário do Investidor</h2>
+            </div>
+            <div class="glo-grid">
+                <div class="glo-item"><h4>Dividend Yield (DY)</h4><p>Retorno em dividendos de uma ação ou fundo em relação ao preço. Calculado como (Dividendos anuais ÷ Preço) × 100. Um DY de 8% significa R$8 por ano a cada R$100 investidos.</p></div>
+                <div class="glo-item"><h4>P/VP</h4><p>Relação entre preço da cota e valor patrimonial. Abaixo de 1,0 = desconto. Acima de 1,0 = ágio. Indicador essencial para avaliar se um FII está barato ou caro.</p></div>
+                <div class="glo-item"><h4>FII de Tijolo</h4><p>Fundo que investe em imóveis físicos: galpões, shoppings, escritórios. Gera renda através de aluguéis e valorização patrimonial dos imóveis ao longo do tempo.</p></div>
+                <div class="glo-item"><h4>FII de Papel</h4><p>Fundo que investe em CRIs (Certificados de Recebíveis Imobiliários). Não possui imóveis físicos — recebe rendimentos dos juros desses títulos do setor imobiliário.</p></div>
+                <div class="glo-item"><h4>Juros Compostos</h4><p>Os juros gerados são reinvestidos e passam a gerar novos juros. Conceito mais poderoso dos investimentos: crescimento exponencial do patrimônio ao longo do tempo.</p></div>
+                <div class="glo-item"><h4>Taxa Selic</h4><p>Taxa básica de juros do Brasil, definida pelo Copom. Referencia todos os investimentos de renda fixa. Selic sobe → RF atrativa. Selic cai → Bolsa tende a subir.</p></div>
+                <div class="glo-item"><h4>IPCA</h4><p>Índice oficial de inflação do Brasil. Investimentos atrelados ao IPCA protegem o poder de compra, garantindo retorno real acima da inflação.</p></div>
+                <div class="glo-item"><h4>CDI</h4><p>Certificado de Depósito Interbancário. Taxa próxima da Selic que reflete os juros do mercado. Investimentos que rendem "100% do CDI" acompanham a Selic.</p></div>
+                <div class="glo-item"><h4>Proventos</h4><p>Rendimentos distribuídos por FIIs e ações: dividendos, JCP e rendimentos de fundos. Nos FIIs, proventos são isentos de IR para pessoa física.</p></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- NEWSLETTER -->
+    <section class="news-section" id="newsletter">
+        <div class="news-inner">
+            <div class="news-box">
+                <h2><i class="fas fa-envelope" style="color:var(--accent)"></i> Receba Análises no Seu E-mail</h2>
+                <p>Junte-se a mais de 45.000 investidores que recebem nosso relatório diário gratuito com oportunidades, rankings e dicas de carteira.</p>
+                <form class="news-form" onsubmit="return handleNews(event)">
+                    <input type="email" placeholder="Seu melhor e-mail" required>
+                    <button type="submit"><i class="fas fa-paper-plane"></i> Assinar Grátis</button>
+                </form>
+                <p class="news-note"><i class="fas fa-lock"></i> Sem spam. Cancele quando quiser. Seus dados protegidos pela LGPD.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer class="site-footer" id="sobre">
+        <div class="footer-inner">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="footer-brand">
+                        <div class="logo-icon" style="width:34px;height:34px"><i class="fas fa-chart-line" style="color:#fff;font-size:.85rem"></i></div>
+                        <h3>Investidor<span>.blog</span></h3>
+                    </div>
+                    <p class="footer-desc">Portal independente de educação financeira e análise de investimentos. Desde 2020 ajudando investidores a tomar melhores decisões.</p>
+                    <p class="footer-desc" style="margin-top:10px"><strong style="color:var(--text-2)">Contato:</strong><br><a href="/cdn-cgi/l/email-protection#5f3c30312b3e2b301f3631293a2c2b363b302d713d333038" style="color:var(--accent);text-decoration:none"><span class="__cf_email__" data-cfemail="cdaea2a3b9acb9a28da4a3bba8beb9a4a9a2bfe3afa1a2aa">[email&#160;protected]</span></a></p>
+                    <div class="footer-socials">
+                        <a href="#newsletter" aria-label="Instagram"><i class="fab fa-instagram"></i></a>
+                        <a href="#newsletter" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
+                        <a href="#newsletter" aria-label="Telegram"><i class="fab fa-telegram-plane"></i></a>
+                        <a href="#newsletter" aria-label="X"><i class="fab fa-x-twitter"></i></a>
+                        <a href="#newsletter" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>
+                    </div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="f-col"><h5>Investimentos</h5><ul><li><a href="#ranking">Ações</a></li><li><a href="#ranking">Fundos Imobiliários</a></li><li><a href="#ranking">Renda Fixa</a></li><li><a href="#ranking">Criptomoedas</a></li><li><a href="#ranking">ETFs</a></li></ul></div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="f-col"><h5>Ferramentas</h5><ul><li><a href="#calculadora">Juros Compostos</a></li><li><a href="#ranking">Ranking FIIs</a></li><li><a href="#ranking">Top Dividendos</a></li><li><a href="#glossario">Glossário</a></li></ul></div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="f-col"><h5>Conteúdo</h5><ul><li><a href="#artigos">Artigos</a></li><li><a href="#educacao">Educação</a></li><li><a href="#artigos">Análises</a></li><li><a href="#artigos">Notícias</a></li></ul></div>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <div class="f-col"><h5>Institucional</h5><ul><li><a href="#sobre">Sobre Nós</a></li><li><a href="#newsletter">Contato</a></li><li><a href="#sobre">Privacidade</a></li><li><a href="#sobre">Termos de Uso</a></li></ul></div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 Investidor.blog. Todos os direitos reservados. CNPJ: 00.000.000/0001-00</p>
+                <p class="footer-disc"><i class="fas fa-exclamation-triangle" style="color:var(--amber)"></i> Conteúdo informativo e educacional. Não constitui recomendação de investimento. Rentabilidade passada não garante futura. Investimentos em renda variável envolvem riscos.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- BOTTOM NAV -->
+    <nav class="bottom-nav">
+        <ul>
+            <li><a href="#inicio" class="active"><i class="fas fa-home"></i>Início</a></li>
+            <li><a href="#mercado"><i class="fas fa-chart-area"></i>Mercado</a></li>
+            <li><a href="#calculadora"><i class="fas fa-calculator"></i>Calc</a></li>
+            <li><a href="#ranking"><i class="fas fa-trophy"></i>Ranking</a></li>
+            <li><a href="#educacao"><i class="fas fa-graduation-cap"></i>Educar</a></li>
+        </ul>
+    </nav>
+
+    <!-- SIDEBAR -->
+    <div class="side-overlay" id="sideOverlay"></div>
+    <div class="side-menu" id="sideMenu">
+        <div class="side-h">
+            <a href="#inicio" style="text-decoration:none;display:flex;align-items:center;gap:8px">
+                <div class="logo-icon" style="width:28px;height:28px"><i class="fas fa-chart-line" style="color:#fff;font-size:.7rem"></i></div>
+                <span style="font-family:'Outfit',sans-serif;font-size:1rem;font-weight:800;color:var(--text);letter-spacing:-.02em">Investidor<span style="color:var(--accent)">.blog</span></span>
+            </a>
+            <button class="side-close" id="sideClose"><i class="fas fa-times"></i></button>
+        </div>
+        <ul>
+            <li><a href="#inicio"><i class="fas fa-home"></i> Início</a></li>
+            <li><a href="#mercado"><i class="fas fa-chart-area"></i> Painel de Mercado</a></li>
+            <li><a href="#calculadora"><i class="fas fa-calculator"></i> Calc. Juros Compostos</a></li>
+            <li><a href="#ranking"><i class="fas fa-trophy"></i> Ranking de FIIs</a></li>
+            <li><a href="#artigos"><i class="fas fa-newspaper"></i> Artigos Recentes</a></li>
+            <li><a href="#educacao"><i class="fas fa-graduation-cap"></i> Educação Financeira</a></li>
+            <li><a href="#glossario"><i class="fas fa-book"></i> Glossário</a></li>
+            <li><a href="#newsletter"><i class="fas fa-envelope"></i> Newsletter</a></li>
+            <li><a href="#sobre"><i class="fas fa-info-circle"></i> Sobre Nós</a></li>
+        </ul>
+        <div class="side-cta"><a href="#calculadora" onclick="closeSide()"><i class="fas fa-calculator"></i> Usar Calculadora</a></div>
+    </div>
+
+    <!-- BTT -->
+    <button class="btt" id="btt" aria-label="Voltar ao topo"><i class="fas fa-chevron-up"></i></button>
+
+    <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Loader
+        window.addEventListener('load', () => setTimeout(() => document.getElementById('loader').classList.add('hidden'), 500));
+
+        // Nav scroll
+        const nav = document.getElementById('mainNav'), btt = document.getElementById('btt');
+        window.addEventListener('scroll', () => {
+            nav.classList.toggle('scrolled', scrollY > 50);
+            btt.classList.toggle('visible', scrollY > 400);
+            trackNav();
+        });
+        btt.onclick = () => scrollTo(0, { behavior: 'smooth' });
+
+        function trackNav() {
+            const ids = ['inicio','mercado','calculadora','ranking','artigos','educacao','glossario','newsletter','sobre'];
+            let cur = '';
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (el && el.getBoundingClientRect().top <= 130) cur = id;
+            });
+            document.querySelectorAll('.nav-links a, .bottom-nav a').forEach(a => {
+                a.classList.toggle('active', a.getAttribute('href') === '#' + cur);
+            });
+        }
+
+        // Sidebar
+        const mb = document.getElementById('menuBtn'), sm = document.getElementById('sideMenu'), so = document.getElementById('sideOverlay'), sc = document.getElementById('sideClose');
+        function openS() { sm.classList.add('active'); so.classList.add('active'); mb.classList.add('active'); document.body.style.overflow = 'hidden'; }
+        function closeS() { sm.classList.remove('active'); so.classList.remove('active'); mb.classList.remove('active'); document.body.style.overflow = ''; }
+        mb.onclick = () => sm.classList.contains('active') ? closeS() : openS();
+        sc.onclick = closeS; so.onclick = closeS;
+        sm.querySelectorAll('a').forEach(l => l.onclick = closeS);
+
+        // Tabs
+        function switchTab(id, btn) {
+            document.querySelectorAll('.rtab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            btn.classList.add('active');
+        }
+
+        // Calculator
+        function fmt(v) { return 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }
+        function calc() {
+            const ini = parseFloat(document.getElementById('cIni').value) || 0;
+            const men = parseFloat(document.getElementById('cMen').value) || 0;
+            const taxa = parseFloat(document.getElementById('cTaxa').value) || 0;
+            const anos = parseInt(document.getElementById('cPer').value) || 1;
+            const tm = Math.pow(1 + taxa / 100, 1/12) - 1;
+            const m = anos * 12;
+            const fvI = ini * Math.pow(1 + tm, m);
+            const fvM = men > 0 ? men * ((Math.pow(1 + tm, m) - 1) / tm) : 0;
+            const total = fvI + fvM;
+            const inv = ini + men * m;
+            const juros = total - inv;
+            const pct = inv > 0 ? ((total - inv) / inv * 100) : 0;
+            const renda = total * 0.005;
+
+            document.getElementById('rTotal').textContent = fmt(total);
+            document.getElementById('rInv').textContent = fmt(inv);
+            document.getElementById('rJuros').textContent = fmt(juros);
+            document.getElementById('rRenda').textContent = fmt(renda);
+            document.getElementById('rPct').textContent = pct.toFixed(1) + '%';
+
+            const wrap = document.getElementById('chartWrap');
+            const bars = document.getElementById('chartBars');
+            wrap.style.display = 'block';
+            bars.innerHTML = '';
+            const nb = Math.min(anos, 15);
+            const step = Math.max(1, Math.floor(anos / nb));
+            const pts = []; let mx = 0;
+            for (let i = step; i <= anos; i += step) {
+                const mi = i * 12;
+                const fI = ini * Math.pow(1 + tm, mi);
+                const fM = men > 0 ? men * ((Math.pow(1 + tm, mi) - 1) / tm) : 0;
+                const t = fI + fM;
+                const iv = ini + men * mi;
+                pts.push({ y: i, t, iv });
+                if (t > mx) mx = t;
+            }
+            pts.forEach(p => {
+                const g = document.createElement('div');
+                g.className = 'c-bar-g';
+                g.innerHTML = `<div class="c-bar total" style="height:${(p.t/mx)*78}px"></div><div class="c-lbl">${p.y}a</div>`;
+                bars.appendChild(g);
+            });
+
+            const btn = document.getElementById('calcBtn');
+            btn.innerHTML = '<i class="fas fa-check"></i> Calculado!';
+            setTimeout(() => { btn.innerHTML = '<i class="fas fa-calculator"></i> Calcular Investimento'; }, 1500);
+        }
+        window.addEventListener('load', () => setTimeout(calc, 900));
+
+        // Newsletter
+        function handleNews(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            btn.innerHTML = '<i class="fas fa-check"></i> Inscrito!';
+            e.target.querySelector('input').value = '';
+            setTimeout(() => { btn.innerHTML = '<i class="fas fa-paper-plane"></i> Assinar Grátis'; }, 3000);
+            return false;
+        }
+
+        // Smooth scroll
+        document.querySelectorAll('a[href^="#"]').forEach(a => {
+            a.onclick = function(e) {
+                const t = document.querySelector(this.getAttribute('href'));
+                if (t) { e.preventDefault(); scrollTo(t, { behavior: 'smooth', block: 'start' }); }
+            };
+        });
+    </script>
+</body>
+</html>
