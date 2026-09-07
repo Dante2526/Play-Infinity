@@ -152,28 +152,35 @@ export function VideoPlayerModal({
       return [
         {
           key: "srv1",
-          label: "Servidor 1 (AnyEmbed Clean)",
-          badge: "Sem Popups • Rápido",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://anyembed.xyz/embed/tmdb-tv-${id}-${s}-${e}`,
-        },
-        {
-          key: "srv2",
-          label: "Servidor 2 (VidLink HD)",
-          badge: "4K / Full HD",
+          label: "Servidor 1 (VidLink PRO)",
+          badge: "Sem Popups • 4K/HD",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv3",
-          label: "Servidor 3 (SuperFlix BR)",
-          badge: "Dublado BR",
+          key: "srv2",
+          label: "Servidor 2 (SuperFlix BR)",
+          badge: "Dublado BR • Rápido",
           buildUrl: (id: string, s: number, e: number) => 
             `https://superflixapi.top/serie/${id}/${s}/${e}`,
         },
         {
+          key: "srv3",
+          label: "Servidor 3 (Embed.su)",
+          badge: "Full HD • Multi-áudio",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://embed.su/embed/tv/${id}/${s}/${e}`,
+        },
+        {
           key: "srv4",
-          label: "Servidor 4 (Videasy Multi)",
+          label: "Servidor 4 (VidSrc VIP)",
+          badge: "Ultra Rápido",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
+        },
+        {
+          key: "srv5",
+          label: "Servidor 5 (Videasy Multi)",
           badge: "Áudio & Legendas",
           buildUrl: (id: string, s: number, e: number) => 
             `https://player.videasy.to/tv/${id}/${s}/${e}`,
@@ -184,24 +191,30 @@ export function VideoPlayerModal({
         {
           key: "srv1",
           label: "Servidor 1 (WatchPlayer VIP)",
-          badge: "Dublado • Sem Anúncios",
+          badge: "Dublado • Zero Anúncios",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
         },
         {
           key: "srv2",
-          label: "Servidor 2 (AnyEmbed Clean)",
-          badge: "Sem Popups • Full HD",
-          buildUrl: (id: string) => `https://anyembed.xyz/embed/tmdb-movie-${id}`,
-        },
-        {
-          key: "srv3",
-          label: "Servidor 3 (VidLink 4K/HD)",
-          badge: "Ultra HD",
+          label: "Servidor 2 (VidLink PRO)",
+          badge: "Sem Popups • Ultra HD",
           buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
+          key: "srv3",
+          label: "Servidor 3 (SuperFlix BR)",
+          badge: "Dublado BR",
+          buildUrl: (id: string) => `https://superflixapi.top/filme/${id}`,
+        },
+        {
           key: "srv4",
-          label: "Servidor 4 (Videasy)",
+          label: "Servidor 4 (Embed.su)",
+          badge: "Full HD",
+          buildUrl: (id: string) => `https://embed.su/embed/movie/${id}`,
+        },
+        {
+          key: "srv5",
+          label: "Servidor 5 (Videasy)",
           badge: "Multi-idiomas",
           buildUrl: (id: string) => `https://player.videasy.to/movie/${id}`,
         }
@@ -219,13 +232,12 @@ export function VideoPlayerModal({
       setEpisode(targetEpisode);
       setBlockedAdsCount(0);
 
-      // Default to Servidor 1 (AnyEmbed Clean for series or WatchPlayer for movies)
-      let initial = defaultUrl || (isSeries 
-        ? `https://anyembed.xyz/embed/tmdb-tv-${resolvedId}-${targetSeason}-${targetEpisode}` 
-        : `https://v1.watchplay.shop/movie/${resolvedId}`);
-
-      if (isSeries && (initial.includes("/movie/") || initial.includes("2embed.cc") || initial.includes("myembed.biz"))) {
-        initial = `https://anyembed.xyz/embed/tmdb-tv-${resolvedId}-${targetSeason}-${targetEpisode}`;
+      // Priorizar Servidor 1 (VidLink PRO para séries e WatchPlayer para filmes)
+      let initial = defaultUrl;
+      if (!initial || initial.includes("anyembed") || initial.includes("2embed.cc") || initial.includes("myembed.biz")) {
+        initial = isSeries 
+          ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true` 
+          : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
       }
 
       setSelectedServerKey("srv1");
@@ -235,7 +247,7 @@ export function VideoPlayerModal({
       setActiveIframeUrl(null);
       setError(null);
     }
-  }, [isOpen, defaultUrl, isSeries, resolvedId]);
+  }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
   // Handler to switch episode
   const handleEpisodeChange = (newEpisode: number) => {
@@ -283,6 +295,7 @@ export function VideoPlayerModal({
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("superflixapi") || 
+      cleanUrl.includes("embed.su") || 
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(cleanUrl);
@@ -393,7 +406,7 @@ export function VideoPlayerModal({
                   }`}
                 >
                   {isActive && <Play className="w-3 h-3 fill-current" />}
-                  <span>{srv.label.split(" ")[2] || srv.label}</span>
+                  <span>{srv.label}</span>
                   <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-black/30 text-white' : 'bg-white/5 text-neutral-400'}`}>
                     {srv.badge.split("•")[0].trim()}
                   </span>
@@ -416,6 +429,22 @@ export function VideoPlayerModal({
             </div>
           </div>
         </div>
+
+        {/* Banner de Proteção / Dica quando servidor alternativo está selecionado */}
+        {selectedServerKey !== "srv1" && (
+          <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-2 text-xs text-amber-300">
+            <div className="flex items-center gap-2 truncate">
+              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+              <span className="truncate">Servidor secundário ativo. Se abrir abas ou anúncios indesejados, volte ao Servidor 1.</span>
+            </div>
+            <button
+              onClick={() => handleServerSwitch("srv1")}
+              className="shrink-0 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded font-semibold text-[11px] cursor-pointer transition-colors"
+            >
+              Mudar para Servidor 1 (Sem Anúncios)
+            </button>
+          </div>
+        )}
 
         {/* Series Controls: Season & Episode Quick Selector */}
         {isSeries && (
@@ -476,12 +505,12 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage: Blindado com sandbox seguro (sem quebrar players) e sem popups */}
+        {/* Player Video Stage: 100% Livre de restrições de Sandbox (sem erros) */}
         <div id="player-stage-container" className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-neutral-400">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-              <p className="text-sm font-medium">Iniciando stream da série e conectando reprodutor...</p>
+              <p className="text-sm font-medium">Iniciando stream e conectando reprodutor...</p>
             </div>
           ) : activeIframeUrl ? (
             <iframe
@@ -492,7 +521,6 @@ export function VideoPlayerModal({
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads allow-popups"
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
