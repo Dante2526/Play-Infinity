@@ -1,14 +1,38 @@
+export type CatalogItem = {
+  id: number;
+  tmdbId?: number;
+  imdbId?: string;
+  title: string;
+  imageUrl: string;
+  posterUrl?: string;
+  backdropUrl?: string;
+  type: 'movie' | 'series';
+  genres: string[];
+  synopsis?: string;
+  year?: number;
+  rating?: string;
+  duration?: string;
+  match?: number;
+  playerUrl?: string;
+};
+
 export const featured = {
-  title: "BEM-VINDOS A DERRY",
-  year: "2025",
-  duration: "56min",
-  rating: 4.5,
-  genres: ["Drama", "Mistério"],
+  id: 969681,
+  tmdbId: 969681,
+  imdbId: "tt22084616",
+  title: "HOMEM-ARANHA: UM NOVO DIA",
+  year: "2026",
+  duration: "2h 23min",
+  rating: 4.9,
+  genres: ["Ação", "Aventura", "Ficção científica"],
   description:
-    "Durante as férias de 1958, em uma pacata cidadezinha chamada Derry, um grupo de sete amigos começa a investigar uma série de eventos inexplicáveis e desaparecimentos...",
+    "Peter Parker enfrenta um novo capítulo em sua vida após os eventos mundiais. Sem suas antigas memórias com seus entes queridos, uma nova ameaça surge em Nova York, forçando o herói a equilibrar o fardo de sua responsabilidade com novos aliados e perigos inimagináveis.",
   imageUrl:
-    "https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=2073&auto=format&fit=crop", // Moody dramatic placeholder
-  logoText: "BEM-VINDOS A\nDERRY",
+    "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+  posterUrl:
+    "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+  logoText: "HOMEM-ARANHA\nUM NOVO DIA",
+  playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
 };
 
 export const providers = [
@@ -21,137 +45,367 @@ export const providers = [
 
 export const continueWatching = [
   {
-    id: 1,
+    id: 66732,
+    tmdbId: 66732,
+    imdbId: "tt4574334",
     title: "STRANGER THINGS",
-    episode: "S4:E3 - O Monstro e a Super-Heroína",
-    progress: 65,
+    episode: "T4:E1 - O Clube Hellfire",
+    progress: 75,
     imageUrl:
-      "https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+    playerUrl: "https://vidlink.pro/tv/66732/4/1",
   },
   {
-    id: 2,
-    title: "O PACTO",
-    episode: "S1:E1 - O Início de Tudo",
-    progress: 30,
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
+    episode: "Continuar do min 45",
+    progress: 42,
     imageUrl:
-      "https://images.unsplash.com/photo-1509281373149-e957c6296406?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/by8z9Fe8y7p4jo2YlW2SZDnptyT.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
   },
 ];
 
 export const top10 = [
   {
-    id: 1,
-    title: "DIA D",
+    id: 969681,
+    tmdbId: 969681,
+    imdbId: "tt22084616",
+    title: "HOMEM-ARANHA: UM NOVO DIA",
     imageUrl:
-      "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
   },
   {
-    id: 2,
-    title: "OBSESSÃO",
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
     imageUrl:
-      "https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
   },
   {
-    id: 3,
-    title: "O PACTO",
+    id: 693134,
+    tmdbId: 693134,
+    title: "DUNA: PARTE DOIS",
     imageUrl:
-      "https://images.unsplash.com/photo-1509281373149-e957c6296406?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/8LJJjLjAzAwXS40S5mx79PJ2jSs.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/693134",
+  },
+  {
+    id: 1022789,
+    tmdbId: 1022789,
+    title: "DIVERTIDA MENTE 2",
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/1022789",
+  },
+  {
+    id: 94997,
+    tmdbId: 94997,
+    title: "A CASA DO DRAGÃO",
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
+    playerUrl: "https://vidlink.pro/tv/94997/1/1",
   },
 ];
 
 export const releases = [
   {
-    id: 1,
-    title: "QUINZE DIAS",
+    id: 969681,
+    tmdbId: 969681,
+    title: "HOMEM-ARANHA: UM NOVO DIA",
     imageUrl:
-      "https://images.unsplash.com/photo-1543333995-a225a07204eb?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
   },
   {
-    id: 2,
-    title: "I WILL FIND YOU",
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
     imageUrl:
-      "https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
   },
   {
-    id: 3,
-    title: "FANTASIA 5",
+    id: 693134,
+    tmdbId: 693134,
+    title: "DUNA: PARTE DOIS",
     imageUrl:
-      "https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/8LJJjLjAzAwXS40S5mx79PJ2jSs.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/693134",
   },
 ];
 
 export const newest = [
   {
-    id: 1,
-    title: "PERIGO NAS ALTURAS",
+    id: 125988,
+    tmdbId: 125988,
+    title: "SILO",
     imageUrl:
-      "https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/tVR4q9FazxJuCEpaYxiCijUlvM3.jpg",
+    playerUrl: "https://vidlink.pro/tv/125988/1/1",
   },
   {
-    id: 2,
-    title: "INVESTIGAÇÃO",
+    id: 76479,
+    tmdbId: 76479,
+    title: "THE BOYS",
     imageUrl:
-      "https://images.unsplash.com/photo-1584905066893-7d5c142ba4e1?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
+    playerUrl: "https://vidlink.pro/tv/76479/1/1",
   },
   {
-    id: 3,
-    title: "MILLION DOLLAR",
+    id: 100088,
+    tmdbId: 100088,
+    title: "THE LAST OF US",
     imageUrl:
-      "https://images.unsplash.com/photo-1522869635100-9f4c5e86faa3?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
+    playerUrl: "https://vidlink.pro/tv/100088/1/1",
   },
 ];
 
 export const mostWatched = [
   {
-    id: 1,
-    title: "CAÇADOR",
+    id: 299534,
+    tmdbId: 299534,
+    title: "VINGADORES: ULTIMATO",
     imageUrl:
-      "https://images.unsplash.com/photo-1578681994506-b8f463449011?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/9fRX8UKlIW7Lb9GqNsJVakWWFCi.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/299534",
   },
   {
-    id: 2,
-    title: "ANIMAIS DA CIDADE",
+    id: 66732,
+    tmdbId: 66732,
+    title: "STRANGER THINGS",
     imageUrl:
-      "https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?q=80&w=1000&auto=format&fit=crop",
+      "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
+    playerUrl: "https://vidlink.pro/tv/66732/1/1",
   },
 ];
 
-// Mock catalogs for different providers
-export type CatalogItem = {
-  id: number;
-  title: string;
-  imageUrl: string;
-  type: 'movie' | 'series';
-  genres: string[];
-  synopsis?: string;
-  year?: number;
-  rating?: string;
-  duration?: string;
-  match?: number;
-};
-
 export const providerCatalogs: Record<string, CatalogItem[]> = {
   "NETFLIX": [
-    { id: 101, title: "O LADO OBSCURO", imageUrl: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Suspense", "Ficção Científica"], synopsis: "Em uma cidade onde o sol nunca nasce, um grupo de sobreviventes luta para descobrir a verdade por trás do céu escuro perene.", year: 2024, rating: "16", duration: "1 Temporada", match: 98 },
-    { id: 102, title: "CYBER CITY", imageUrl: "https://images.unsplash.com/photo-1605806616949-1e87b487cb2a?q=80&w=1000&auto=format&fit=crop", type: "movie", genres: ["Ação", "Ficção Científica"], synopsis: "No ano de 2088, gangues cibernéticas dominam as ruas de neon, e uma detetive implacável é forçada a se aliar ao seu maior inimigo para deter um colapso iminente.", year: 2023, rating: "18", duration: "2h 15m", match: 95 },
-    { id: 103, title: "REUNIÃO MORTAL", imageUrl: "https://images.unsplash.com/photo-1509281373149-e957c6296406?q=80&w=1000&auto=format&fit=crop", type: "movie", genres: ["Terror", "Mistério"], synopsis: "Um encontro de antigos colegas do colégio em uma cabana isolada vira um pesadelo sangrento quando segredos do passado voltam para assombrá-los.", year: 2025, rating: "16", duration: "1h 45m", match: 89 },
-    { id: 104, title: "ALÉM DO VAZIO", imageUrl: "https://images.unsplash.com/photo-1440404653325-ab127d49abc1?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Drama", "Mistério"], synopsis: "Após uma anomalia espacial afetar a Terra, investigadores tentam encontrar a origem do silêncio ensurdecedor que contaminou milhões.", year: 2022, rating: "14", duration: "3 Temporadas", match: 97 },
+    {
+      id: 66732,
+      tmdbId: 66732,
+      imdbId: "tt4574334",
+      title: "STRANGER THINGS",
+      imageUrl: "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+      type: "series",
+      genres: ["Ficção Científica", "Drama", "Mistério"],
+      synopsis: "Quando um garoto desaparece, uma pequena cidade descobre um mistério envolvendo experimentos secretos, forças sobrenaturais aterrorizantes e uma garota muito estranha com poderes telecinéticos.",
+      year: 2024,
+      rating: "16",
+      duration: "4 Temporadas",
+      match: 99,
+      playerUrl: "https://vidlink.pro/tv/66732/1/1",
+    },
+    {
+      id: 119051,
+      tmdbId: 119051,
+      title: "WANDINHA",
+      imageUrl: "https://image.tmdb.org/t/p/w500/7v4IeJj7k19b999Yp2v1XQJ6w6e.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/iHSwvRVsRyxKuOCzgEcBmILti4P.jpg",
+      type: "series",
+      genres: ["Comédia", "Fantasia", "Mistério"],
+      synopsis: "Inteligente, sarcástica e um pouco apática, Wandinha Addams investiga uma onda de assassinatos enquanto faz novos amigos — e inimigos — na Academia Nunca Mais.",
+      year: 2023,
+      rating: "14",
+      duration: "1 Temporada",
+      match: 96,
+      playerUrl: "https://vidlink.pro/tv/119051/1/1",
+    },
+    {
+      id: 93405,
+      tmdbId: 93405,
+      title: "ROUND 6 (SQUID GAME)",
+      imageUrl: "https://image.tmdb.org/t/p/w500/dDlGjoq0L7LwJ4b5W6x5928K9yA.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/qw3J9cNeLioOL0Ukb6Rw69fdKyv.jpg",
+      type: "series",
+      genres: ["Ação", "Mistério", "Drama"],
+      synopsis: "Centenas de jogadores falidos aceitam um estranho convite para competir em jogos infantis por um prêmio tentador, mas as consequências são mortais.",
+      year: 2024,
+      rating: "18",
+      duration: "2 Temporadas",
+      match: 98,
+      playerUrl: "https://vidlink.pro/tv/93405/1/1",
+    },
   ],
   "Disney+": [
-    { id: 201, title: "GALAXIA DISTANTE", imageUrl: "https://images.unsplash.com/photo-1505686994434-e3cc5abf1330?q=80&w=1000&auto=format&fit=crop", type: "movie", genres: ["Ficção Científica", "Ação"], synopsis: "Acompanhe uma equipe de piratas espaciais buscando o tesouro mais raro da galáxia enquanto fogem de um império implacável.", year: 2024, rating: "10", duration: "2h 30m", match: 92 },
-    { id: 202, title: "HERÓIS DA TERRA", imageUrl: "https://images.unsplash.com/photo-1560169897-fc0cdbdfa4d5?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Ação", "Aventura"], synopsis: "Indivíduos com habilidades extraordinárias precisam se unir para defender o planeta contra uma invasão de outra dimensão.", year: 2021, rating: "12", duration: "5 Temporadas", match: 99 },
-    { id: 203, title: "MAGIA ETERNA", imageUrl: "https://images.unsplash.com/photo-1534067783941-51c9c23ecefd?q=80&w=1000&auto=format&fit=crop", type: "movie", genres: ["Fantasia", "Animação"], synopsis: "Em um reino mágico, uma jovem aprendiz de feiticeira precisa provar seu valor para salvar a árvore da vida.", year: 2023, rating: "L", duration: "1h 50m", match: 94 },
+    {
+      id: 969681,
+      tmdbId: 969681,
+      imdbId: "tt22084616",
+      title: "HOMEM-ARANHA: UM NOVO DIA",
+      imageUrl: "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+      type: "movie",
+      genres: ["Ação", "Aventura", "Ficção científica"],
+      synopsis: "Peter Parker enfrenta um novo capítulo em sua vida após os eventos mundiais. Sem suas antigas memórias com seus entes queridos, uma nova ameaça surge em Nova York, forçando o herói a equilibrar o fardo de sua responsabilidade com novos aliados.",
+      year: 2026,
+      rating: "14",
+      duration: "2h 23m",
+      match: 99,
+      playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+    },
+    {
+      id: 533535,
+      tmdbId: 533535,
+      title: "DEADPOOL & WOLVERINE",
+      imageUrl: "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/by8z9Fe8y7p4jo2YlW2SZDnptyT.jpg",
+      type: "movie",
+      genres: ["Ação", "Comédia", "Ficção científica"],
+      synopsis: "Um apático Wade Wilson labuta na vida civil com seus dias como o mercenário moralmente flexível Deadpool para trás. Mas quando seu planeta natal enfrenta uma ameaça existencial, Wade precisa convencer um relutante Wolverine a ajudá-lo.",
+      year: 2024,
+      rating: "18",
+      duration: "2h 08m",
+      match: 97,
+      playerUrl: "https://v1.watchplay.shop/movie/533535",
+    },
+    {
+      id: 1022789,
+      tmdbId: 1022789,
+      title: "DIVERTIDA MENTE 2",
+      imageUrl: "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg",
+      type: "movie",
+      genres: ["Animação", "Família", "Aventura"],
+      synopsis: "Com a chegada da adolescência de Riley, a sala de controle mental passa por uma demolição repentina para dar espaço a algo totalmente inesperado: novas emoções! Alegria, Tristeza, Raiva, Medo e Nojinho não têm certeza de como reagir à Ansiedade.",
+      year: 2024,
+      rating: "L",
+      duration: "1h 36m",
+      match: 98,
+      playerUrl: "https://v1.watchplay.shop/movie/1022789",
+    },
+    {
+      id: 299534,
+      tmdbId: 299534,
+      title: "VINGADORES: ULTIMATO",
+      imageUrl: "https://image.tmdb.org/t/p/w500/9fRX8UKlIW7Lb9GqNsJVakWWFCi.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+      type: "movie",
+      genres: ["Ação", "Ficção científica", "Aventura"],
+      synopsis: "Após os eventos devastadores de 'Guerra Infinita', o universo está em ruínas. Com a ajuda dos aliados restantes, os Vingadores se reúnem mais uma vez para desfazer as ações de Thanos e restaurar a ordem no universo.",
+      year: 2019,
+      rating: "14",
+      duration: "3h 01m",
+      match: 99,
+      playerUrl: "https://v1.watchplay.shop/movie/299534",
+    },
   ],
   "Max": [
-    { id: 301, title: "TRONO DE SANGUE", imageUrl: "https://images.unsplash.com/photo-1578681994506-b8f463449011?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Fantasia", "Drama"], synopsis: "Nobres lutam em uma guerra épica cheia de intrigas políticas e traições implacáveis pelo poder de um reino dividido.", year: 2019, rating: "18", duration: "8 Temporadas", match: 96 },
-    { id: 302, title: "A CIDADE FRIA", imageUrl: "https://images.unsplash.com/photo-1518623489648-a173ef7824f3?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Policial", "Suspense"], synopsis: "Uma investigação sombria sobre uma série de assassinatos em uma pequena cidade isolada no Alasca, onde ninguém está a salvo.", year: 2024, rating: "16", duration: "1 Temporada", match: 91 },
+    {
+      id: 94997,
+      tmdbId: 94997,
+      title: "A CASA DO DRAGÃO",
+      imageUrl: "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/577eXC8wFQT0eUrJcgznSiFPRmk.jpg",
+      type: "series",
+      genres: ["Drama", "Ação", "Fantasia"],
+      synopsis: "Duzentos anos antes dos eventos de Game of Thrones, a dinastia Targaryen governa Westeros no auge de seu poder com mais de 15 dragões sob seu comando. Uma guerra civil implacável pela sucessão do Trono de Ferro ameaça destruir a família.",
+      year: 2024,
+      rating: "18",
+      duration: "2 Temporadas",
+      match: 98,
+      playerUrl: "https://vidlink.pro/tv/94997/1/1",
+    },
+    {
+      id: 693134,
+      tmdbId: 693134,
+      title: "DUNA: PARTE DOIS",
+      imageUrl: "https://image.tmdb.org/t/p/w500/8LJJjLjAzAwXS40S5mx79PJ2jSs.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/eZ239CUp1d6OryZEBPnO2n87gMG.jpg",
+      type: "movie",
+      genres: ["Ficção científica", "Aventura"],
+      synopsis: "Paul Atreides se une a Chani e aos Fremen enquanto busca vingança contra os conspiradores que destruíram sua família. Diante de uma escolha entre o amor de sua vida e o destino do universo conhecido, ele luta para evitar um futuro terrível que só ele pode prever.",
+      year: 2024,
+      rating: "14",
+      duration: "2h 46m",
+      match: 99,
+      playerUrl: "https://v1.watchplay.shop/movie/693134",
+    },
+    {
+      id: 100088,
+      tmdbId: 100088,
+      title: "THE LAST OF US",
+      imageUrl: "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg",
+      type: "series",
+      genres: ["Drama", "Ação", "Ficção científica"],
+      synopsis: "Vinte anos após uma pandemia de fungos destruir a civilização, Joel, um sobrevivente endurecido, é contratado para contrabandear Ellie, uma garota de 14 anos que pode ser a chave para a cura, para fora de uma zona de quarentena opressiva.",
+      year: 2023,
+      rating: "18",
+      duration: "1 Temporada",
+      match: 98,
+      playerUrl: "https://vidlink.pro/tv/100088/1/1",
+    },
   ],
   "Prime Video": [
-    { id: 401, title: "OS GAROTOS", imageUrl: "https://images.unsplash.com/photo-1626814026160-2237a95fc5a0?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Ação", "Comédia Negra"], synopsis: "Quando super-heróis abusam dos seus poderes em vez de usá-los para o bem, um grupo de vigilantes propõe deter os super-heróis corrompidos.", year: 2020, rating: "18", duration: "4 Temporadas", match: 99 },
-    { id: 402, title: "ANÉIS DE PODER", imageUrl: "https://images.unsplash.com/photo-1543333995-a225a07204eb?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Fantasia", "Aventura"], synopsis: "Ambientada milhares de anos antes da lendária jornada, acompanhamos lendas forjarem os anéis e o antigo mal renascer.", year: 2022, rating: "14", duration: "2 Temporadas", match: 86 },
+    {
+      id: 76479,
+      tmdbId: 76479,
+      title: "THE BOYS",
+      imageUrl: "https://image.tmdb.org/t/p/w500/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/n6vVs6z8obNbExdD3QHTr4Utu1Z.jpg",
+      type: "series",
+      genres: ["Ação", "Comédia", "Ficção científica"],
+      synopsis: "Uma visão divertida e irreverente sobre o que acontece quando os super-heróis — populares como celebridades e influentes como políticos — abusam de seus superpoderes em vez de usá-los para o bem. Um grupo de vigilantes se une para expor a verdade sobre Os Sete.",
+      year: 2024,
+      rating: "18",
+      duration: "4 Temporadas",
+      match: 99,
+      playerUrl: "https://vidlink.pro/tv/76479/1/1",
+    },
+    {
+      id: 84773,
+      tmdbId: 84773,
+      title: "O SENHOR DOS ANÉIS: OS ANÉIS DE PODER",
+      imageUrl: "https://image.tmdb.org/t/p/w500/mYLOqiStMxDK3fYZFsCwNm78x8f.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/s1xnjbOIQUR6m0Nf0E9xRz7yCgE.jpg",
+      type: "series",
+      genres: ["Fantasia", "Aventura", "Ação"],
+      synopsis: "Ambientada na lendária Segunda Era da Terra-média, a série acompanha um elenco de personagens que enfrentam o ressurgimento do temido mal em terras pacíficas.",
+      year: 2024,
+      rating: "14",
+      duration: "2 Temporadas",
+      match: 91,
+      playerUrl: "https://vidlink.pro/tv/84773/1/1",
+    },
   ],
   "Apple TV+": [
-    { id: 501, title: "SEPARAÇÃO", imageUrl: "https://images.unsplash.com/photo-1522869635100-9f4c5e86faa3?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Drama", "Ficção Científica"], synopsis: "Funcionários em uma empresa misteriosa têm suas memórias divididas entre trabalho e vida pessoal com resultados perturbadores.", year: 2022, rating: "16", duration: "2 Temporadas", match: 98 },
-    { id: 502, title: "A MANHÃ DEPOIS", imageUrl: "https://images.unsplash.com/photo-1584905066893-7d5c142ba4e1?q=80&w=1000&auto=format&fit=crop", type: "series", genres: ["Drama"], synopsis: "O cotidiano caótico e os dramas entre os apresentadores e a equipe de bastidores de um noticiário matinal de sucesso nacional.", year: 2019, rating: "16", duration: "3 Temporadas", match: 93 },
+    {
+      id: 125988,
+      tmdbId: 125988,
+      title: "SILO",
+      imageUrl: "https://image.tmdb.org/t/p/w500/tVR4q9FazxJuCEpaYxiCijUlvM3.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/4XccmjsOmQZw8S2iW1wvlvmb5v1.jpg",
+      type: "series",
+      genres: ["Ficção científica", "Drama", "Mistério"],
+      synopsis: "Em um futuro tóxico e em ruínas, milhares vivem em um silo subterrâneo gigante. Após o xerife quebrar uma regra fundamental e misteriosas mortes acontecerem, a engenheira Juliette começa a desvendar segredos chocantes e a verdade sobre o silo.",
+      year: 2024,
+      rating: "16",
+      duration: "2 Temporadas",
+      match: 97,
+      playerUrl: "https://vidlink.pro/tv/125988/1/1",
+    },
+    {
+      id: 93740,
+      tmdbId: 93740,
+      title: "RUPTURA (SEVERANCE)",
+      imageUrl: "https://image.tmdb.org/t/p/w500/A088Zp9n8i56kCj9mX1b8Y0Y0p1.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/5i6SNOdbMh3zWbA34B2k8d7W.jpg",
+      type: "series",
+      genres: ["Drama", "Mistério", "Ficção científica"],
+      synopsis: "Mark lidera uma equipe de funcionários de escritório cujas memórias foram cirurgicamente divididas entre a vida profissional e a pessoal. Quando um misterioso colega de trabalho aparece fora do trabalho, inicia-se uma jornada para descobrir a verdade sobre seu trabalho.",
+      year: 2025,
+      rating: "16",
+      duration: "2 Temporadas",
+      match: 99,
+      playerUrl: "https://vidlink.pro/tv/93740/1/1",
+    },
   ]
 };
+
