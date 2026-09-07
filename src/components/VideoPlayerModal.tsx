@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
-  Check, Sparkles, Radio, ShieldCheck, 
+  Check, Sparkles, Radio, ShieldCheck, ShieldAlert,
   Tv, Film, ChevronLeft, ChevronRight, Layers
 } from "lucide-react";
 
@@ -33,12 +33,9 @@ function extractSrcFromInput(input: string): string {
 function parseMediaFromUrl(url: string) {
   const isSeries = url.includes("/tv/") || url.includes("/serie") || url.includes("/series");
   
-  // Try to match tmdbId or imdbId and season/episode from patterns:
-  // e.g., vidlink.pro/tv/66732/1/1
   const tvPattern = /\/(?:tv|serie|series)\/([a-zA-Z0-9_-]+)(?:\/(\d+)\/(\d+))?/i;
   const tvMatch = url.match(tvPattern);
   
-  // e.g., v1.watchplay.shop/movie/tt22084616 or /movie/533535
   const moviePattern = /\/movie\/([a-zA-Z0-9_-]+)/i;
   const movieMatch = url.match(moviePattern);
 
@@ -88,18 +85,8 @@ export function VideoPlayerModal({
   const [extractedSource, setExtractedSource] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Bloqueio nativo de window.open sem interferir no frame do vídeo
-  useEffect(() => {
-    if (!isOpen) return;
-    const originalWindowOpen = window.open;
-    window.open = function(url) {
-      console.warn("[Play Infinity] Popup bloqueado automaticamente:", url);
-      return null;
-    };
-    return () => {
-      window.open = originalWindowOpen;
-    };
-  }, [isOpen]);
+  // Modo Anti-Popups ativado por padrão para bloquear abas externas de anúncio
+  const [antiPopups, setAntiPopups] = useState<boolean>(true);
 
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
@@ -126,8 +113,7 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Define Servers dynamically based on Media Type (Movie or Series)
-  // We explicitly avoid 2embed to eliminate the "Sandbox not allowed" issue
+  // Servidores selecionados com alta estabilidade e sem popunders abusivos
   const servers = useMemo(() => {
     if (isSeries) {
       return [
@@ -139,15 +125,15 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (SuperFlix)",
-          badge: "Dublado",
-          buildUrl: (id: string, s: number, e: number) => `https://superflixapi.top/serie/${id}/${s}/${e}`,
+          label: "Servidor 2 (Videasy Multi)",
+          badge: "Áudio & Legendas",
+          buildUrl: (id: string, s: number, e: number) => `https://player.videasy.to/tv/${id}/${s}/${e}`,
         },
         {
           key: "srv3",
-          label: "Servidor 3 (Videasy Multi)",
-          badge: "Áudio & Legendas",
-          buildUrl: (id: string, s: number, e: number) => `https://player.videasy.to/tv/${id}/${s}/${e}`,
+          label: "Servidor 3 (SuperFlix BR)",
+          badge: "Dublado",
+          buildUrl: (id: string, s: number, e: number) => `https://superflixapi.top/serie/${id}/${s}/${e}`,
         },
         {
           key: "srv4",
@@ -250,14 +236,12 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
-    // If it's already a clean known direct player embed, load directly without backend overhead
     if (
       cleanUrl.includes("watchplay.shop") || 
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("superflixapi") || 
-      cleanUrl.includes("embedplayer2.xyz") || 
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(cleanUrl);
@@ -298,14 +282,14 @@ export function VideoPlayerModal({
       <div className="relative w-full max-w-5xl bg-[#111111] border border-neutral-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col max-h-[96vh]">
         
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-neutral-800/80 bg-[#161616]">
+        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-800/80 bg-[#161616]">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center">
               {isSeries ? <Tv className="w-4 h-4" /> : <Film className="w-4 h-4" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-white font-bold text-base md:text-lg leading-tight truncate max-w-[240px] sm:max-w-md">
+                <h2 className="text-white font-bold text-base md:text-lg leading-tight truncate max-w-[200px] sm:max-w-md">
                   {title || "Reprodutor de Vídeo"}
                 </h2>
                 <span className="px-2 py-0.5 bg-orange-600/20 text-orange-400 border border-orange-500/30 rounded text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
@@ -320,10 +304,28 @@ export function VideoPlayerModal({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="hidden sm:inline">Player Sem Bloqueio</span>
-            </div>
+            {/* Botão Interativo Anti-Popups */}
+            <button
+              onClick={() => setAntiPopups(!antiPopups)}
+              className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
+                antiPopups
+                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25"
+                  : "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
+              }`}
+              title={antiPopups ? "Bloqueador ativado: nenhuma aba de anúncio abrirá" : "Clique para ativar o bloqueador de abas e anúncios"}
+            >
+              {antiPopups ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span className="hidden xs:inline">Anti-Popups: Ativado</span>
+                </>
+              ) : (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden xs:inline">Anti-Popups: Pausado</span>
+                </>
+              )}
+            </button>
 
             <button
               onClick={onClose}
@@ -336,7 +338,7 @@ export function VideoPlayerModal({
         </div>
 
         {/* Server Switcher Bar */}
-        <div className="px-5 py-2.5 bg-[#0e0e0e] border-b border-neutral-800/80 flex items-center justify-between gap-3 overflow-x-auto">
+        <div className="px-4 sm:px-5 py-2.5 bg-[#0e0e0e] border-b border-neutral-800/80 flex items-center justify-between gap-3 overflow-x-auto">
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xs font-bold text-neutral-400 flex items-center gap-1.5">
               <Radio className="w-3.5 h-3.5 text-orange-500" /> Servidores:
@@ -365,13 +367,13 @@ export function VideoPlayerModal({
 
           <div className="hidden lg:flex items-center gap-2 text-xs text-neutral-400">
             <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-            <span>Qualidade HD • Sem Anúncios</span>
+            <span>Qualidade HD • Sem Popups</span>
           </div>
         </div>
 
         {/* Series Controls: Season & Episode Quick Selector */}
         {isSeries && (
-          <div className="px-5 py-2.5 bg-[#141414] border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3">
+          <div className="px-4 sm:px-5 py-2.5 bg-[#141414] border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white flex items-center gap-1">
                 <Layers className="w-3.5 h-3.5 text-orange-500" /> Temporada:
@@ -428,7 +430,7 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage: COMPLETELY REMOVED SANDBOX ATTRIBUTE */}
+        {/* Player Video Stage com Proteção Anti-Popups */}
         <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-neutral-400">
@@ -437,12 +439,18 @@ export function VideoPlayerModal({
             </div>
           ) : activeIframeUrl ? (
             <iframe
-              key={activeIframeUrl}
+              key={`${activeIframeUrl}-${antiPopups ? "protected" : "free"}`}
               src={activeIframeUrl}
               title={title}
               className="w-full h-full border-0"
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
+              referrerPolicy="no-referrer"
+              sandbox={
+                antiPopups
+                  ? "allow-scripts allow-same-origin allow-forms allow-presentation"
+                  : undefined
+              }
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
@@ -474,8 +482,8 @@ export function VideoPlayerModal({
           )}
         </div>
 
-        {/* Footer info & Manual URL tool */}
-        <div className="px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+        {/* Rodapé com Status e Indicador do Bloqueador */}
+        <div className="px-4 sm:px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <span className="truncate max-w-xs sm:max-w-md font-mono text-[11px] text-neutral-400">
               Link Ativo: <span className="text-orange-400">{extractedSource || activeIframeUrl}</span>
@@ -490,10 +498,20 @@ export function VideoPlayerModal({
           </div>
 
           <div className="flex items-center gap-3 self-end sm:self-auto">
-            <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              Modo Direto Ativo
-            </span>
+            {antiPopups ? (
+              <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                Popups e abas de anúncio bloqueados
+              </span>
+            ) : (
+              <button
+                onClick={() => setAntiPopups(true)}
+                className="text-[11px] text-amber-400 hover:underline font-semibold flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+                Popups liberados (Clique para reativar bloqueador)
+              </button>
+            )}
           </div>
         </div>
 
