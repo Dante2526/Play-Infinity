@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
-  Link2, Check, Sparkles, Radio, ShieldCheck, ShieldAlert, 
+  Check, Sparkles, Radio, ShieldCheck, 
   Tv, Film, ChevronLeft, ChevronRight, Layers
 } from "lucide-react";
 
@@ -86,8 +86,20 @@ export function VideoPlayerModal({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extractedSource, setExtractedSource] = useState<string | null>(null);
-  const [antiPopups, setAntiPopups] = useState(true);
   const [copied, setCopied] = useState(false);
+
+  // Bloqueio nativo de window.open sem interferir no frame do vídeo
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalWindowOpen = window.open;
+    window.open = function(url) {
+      console.warn("[Play Infinity] Popup bloqueado automaticamente:", url);
+      return null;
+    };
+    return () => {
+      window.open = originalWindowOpen;
+    };
+  }, [isOpen]);
 
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
@@ -100,7 +112,8 @@ export function VideoPlayerModal({
     if (mediaType === 'movie') return false;
     const parsed = parseMediaFromUrl(urlInput);
     if (parsed.isSeries) return true;
-    if (title.toLowerCase().includes("série") || title.toLowerCase().includes("episódio") || title.toLowerCase().includes("temporada") || title.includes("T1:") || title.includes("T2:") || title.includes("T3:") || title.includes("T4:")) return true;
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes("série") || lowerTitle.includes("episódio") || lowerTitle.includes("temporada") || title.includes("T1:") || title.includes("T2:") || title.includes("T3:") || title.includes("T4:")) return true;
     return false;
   }, [mediaType, urlInput, title]);
 
@@ -114,6 +127,7 @@ export function VideoPlayerModal({
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
   // Define Servers dynamically based on Media Type (Movie or Series)
+  // We explicitly avoid 2embed to eliminate the "Sandbox not allowed" issue
   const servers = useMemo(() => {
     if (isSeries) {
       return [
@@ -125,21 +139,21 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (Videasy Multi)",
+          label: "Servidor 2 (SuperFlix)",
+          badge: "Dublado",
+          buildUrl: (id: string, s: number, e: number) => `https://superflixapi.top/serie/${id}/${s}/${e}`,
+        },
+        {
+          key: "srv3",
+          label: "Servidor 3 (Videasy Multi)",
           badge: "Áudio & Legendas",
           buildUrl: (id: string, s: number, e: number) => `https://player.videasy.to/tv/${id}/${s}/${e}`,
         },
         {
-          key: "srv3",
-          label: "Servidor 3 (VidSrc HD)",
+          key: "srv4",
+          label: "Servidor 4 (VidSrc HD)",
           badge: "Todas Temporadas",
           buildUrl: (id: string, s: number, e: number) => `https://vidsrc.to/embed/tv/${imdbId || id}/${s}/${e}`,
-        },
-        {
-          key: "srv4",
-          label: "Servidor 4 (2Embed)",
-          badge: "Backup Estável",
-          buildUrl: (id: string, s: number, e: number) => `https://www.2embed.cc/embedtv/${imdbId || id}&s=${s}&e=${e}`,
         }
       ];
     } else {
@@ -181,12 +195,13 @@ export function VideoPlayerModal({
       setSeason(targetSeason);
       setEpisode(targetEpisode);
 
-      // If initial URL is a movie URL on a series, auto-correct to a series player
+      // Default to Servidor 1 (VidLink HD for series or WatchPlayer for movies)
       let initial = defaultUrl || (isSeries ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}` : `https://v1.watchplay.shop/movie/${resolvedId}`);
-      if (isSeries && initial.includes("/movie/")) {
+      if (isSeries && (initial.includes("/movie/") || initial.includes("2embed.cc") || initial.includes("myembed.biz"))) {
         initial = `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}`;
       }
 
+      setSelectedServerKey("srv1");
       setUrlInput(initial);
       handleExtract(initial);
     } else {
@@ -241,7 +256,7 @@ export function VideoPlayerModal({
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
-      cleanUrl.includes("2embed") || 
+      cleanUrl.includes("superflixapi") || 
       cleanUrl.includes("embedplayer2.xyz") || 
       cleanUrl.endsWith(".mp4")
     ) {
@@ -259,12 +274,10 @@ export function VideoPlayerModal({
         setActiveIframeUrl(data.playerUrl);
         setExtractedSource(data.playerUrl);
       } else {
-        // Fallback: render URL directly in iframe
         setActiveIframeUrl(cleanUrl);
         setExtractedSource(cleanUrl);
       }
     } catch (err: any) {
-      // Fallback: load directly
       setActiveIframeUrl(cleanUrl);
       setExtractedSource(cleanUrl);
     } finally {
@@ -301,34 +314,16 @@ export function VideoPlayerModal({
               </div>
               <span className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mt-0.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                Servidor Ativo: {servers.find(s => s.key === selectedServerKey)?.label || "Principal"}
+                Servidor: {servers.find(s => s.key === selectedServerKey)?.label || "Principal"}
               </span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Anti-Popup / AdBlock Sandbox Toggle */}
-            <button
-              onClick={() => setAntiPopups(!antiPopups)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                antiPopups
-                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25"
-                  : "bg-amber-500/15 text-amber-300 border border-amber-500/40 hover:bg-amber-500/25"
-              }`}
-              title="O modo Anti-Popups impede anúncios abusivos de abrirem novas janelas no navegador."
-            >
-              {antiPopups ? (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden sm:inline">Anti-Popups: Ativo</span>
-                </>
-              ) : (
-                <>
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden sm:inline">Anti-Popups: Desativado</span>
-                </>
-              )}
-            </button>
+            <div className="px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 bg-emerald-500/15 text-emerald-300 border border-emerald-500/40">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden sm:inline">Player Sem Bloqueio</span>
+            </div>
 
             <button
               onClick={onClose}
@@ -370,7 +365,7 @@ export function VideoPlayerModal({
 
           <div className="hidden lg:flex items-center gap-2 text-xs text-neutral-400">
             <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-            <span>Qualidade HD • Sem travamentos</span>
+            <span>Qualidade HD • Sem Anúncios</span>
           </div>
         </div>
 
@@ -433,7 +428,7 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage */}
+        {/* Player Video Stage: COMPLETELY REMOVED SANDBOX ATTRIBUTE */}
         <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-neutral-400">
@@ -448,11 +443,6 @@ export function VideoPlayerModal({
               className="w-full h-full border-0"
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
-              sandbox={
-                antiPopups
-                  ? "allow-scripts allow-same-origin allow-forms allow-presentation"
-                  : undefined
-              }
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
@@ -502,7 +492,7 @@ export function VideoPlayerModal({
           <div className="flex items-center gap-3 self-end sm:self-auto">
             <span className="text-[10px] text-green-400 font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              {antiPopups ? "Protegido por Anti-Popups Sandbox" : "Sandbox Normal"}
+              Modo Direto Ativo
             </span>
           </div>
         </div>
