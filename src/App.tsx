@@ -624,7 +624,7 @@ function DetailsPage({
                   1
                 )}
                 className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 backdrop-blur-md shadow-lg cursor-pointer"
-                title="Reprodutor sem popups com sandbox integrado"
+                title="Reprodutor direto sem anúncios"
               >
                 <Link2 className="w-4 h-4 text-orange-400" />
                 Player Sem Anúncios
