@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
-  Check, Sparkles, Radio, ShieldCheck, ShieldAlert,
-  Tv, Film, ChevronLeft, ChevronRight, Layers
+  Check, Sparkles, Radio, ShieldCheck,
+  Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2
 } from "lucide-react";
 
 interface VideoPlayerModalProps {
@@ -17,7 +17,7 @@ interface VideoPlayerModalProps {
   initialEpisode?: number;
 }
 
-// Helper to extract src from full iframe HTML code or plain URL
+// Extrai o link src caso o usuário ou sistema tenha passado um <iframe> completo
 function extractSrcFromInput(input: string): string {
   const trimmed = input.trim();
   if (trimmed.startsWith("<iframe") || trimmed.includes("<iframe")) {
@@ -29,7 +29,7 @@ function extractSrcFromInput(input: string): string {
   return trimmed;
 }
 
-// Extract media info from URL if not explicitly provided
+// Extrai informações da mídia caso não sejam fornecidas explicitamente
 function parseMediaFromUrl(url: string) {
   const isSeries = url.includes("/tv/") || url.includes("/serie") || url.includes("/series");
   
@@ -85,13 +85,44 @@ export function VideoPlayerModal({
   const [extractedSource, setExtractedSource] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Modo Anti-Popups ativado por padrão para bloquear abas externas de anúncio
-  const [antiPopups, setAntiPopups] = useState<boolean>(true);
-
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
+
+  // Bloqueio de popups e proteção de redirecionamento nativo no nível da janela
+  useEffect(() => {
+    if (!isOpen) return;
+
+    // 1. Intercepta chamadas a window.open para impedir que popups abram
+    const originalWindowOpen = window.open;
+    window.open = function (url) {
+      console.warn("[Play Infinity] Bloqueada tentativa de abrir nova aba:", url);
+      return null;
+    };
+
+    // 2. Previne desvio da aba principal do Play Infinity
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      return (e.returnValue = "");
+    };
+
+    // 3. Recupera o foco da janela caso um popunder tente roubar o foco
+    const handleBlur = () => {
+      setTimeout(() => {
+        window.focus();
+      }, 100);
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("blur", handleBlur);
+
+    return () => {
+      window.open = originalWindowOpen;
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, [isOpen]);
 
   // Determine if content is a series
   const isSeries = useMemo(() => {
@@ -113,7 +144,7 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores selecionados com alta estabilidade e sem popunders abusivos
+  // Servidores otimizados: sem 2Embed, com os provedores mais confiáveis e rápidos
   const servers = useMemo(() => {
     if (isSeries) {
       return [
@@ -121,25 +152,29 @@ export function VideoPlayerModal({
           key: "srv1",
           label: "Servidor 1 (VidLink HD)",
           badge: "Rápido • Sem Anúncios",
-          buildUrl: (id: string, s: number, e: number) => `https://vidlink.pro/tv/${id}/${s}/${e}`,
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
           key: "srv2",
           label: "Servidor 2 (Videasy Multi)",
           badge: "Áudio & Legendas",
-          buildUrl: (id: string, s: number, e: number) => `https://player.videasy.to/tv/${id}/${s}/${e}`,
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://player.videasy.to/tv/${id}/${s}/${e}`,
         },
         {
           key: "srv3",
           label: "Servidor 3 (SuperFlix BR)",
           badge: "Dublado",
-          buildUrl: (id: string, s: number, e: number) => `https://superflixapi.top/serie/${id}/${s}/${e}`,
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://superflixapi.top/serie/${id}/${s}/${e}`,
         },
         {
           key: "srv4",
           label: "Servidor 4 (VidSrc HD)",
           badge: "Todas Temporadas",
-          buildUrl: (id: string, s: number, e: number) => `https://vidsrc.to/embed/tv/${imdbId || id}/${s}/${e}`,
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidsrc.to/embed/tv/${imdbId || id}/${s}/${e}`,
         }
       ];
     } else {
@@ -154,7 +189,7 @@ export function VideoPlayerModal({
           key: "srv2",
           label: "Servidor 2 (VidLink 4K/HD)",
           badge: "Alta Definição",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}`,
+          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
           key: "srv3",
@@ -182,9 +217,12 @@ export function VideoPlayerModal({
       setEpisode(targetEpisode);
 
       // Default to Servidor 1 (VidLink HD for series or WatchPlayer for movies)
-      let initial = defaultUrl || (isSeries ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}` : `https://v1.watchplay.shop/movie/${resolvedId}`);
+      let initial = defaultUrl || (isSeries 
+        ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true` 
+        : `https://v1.watchplay.shop/movie/${resolvedId}`);
+
       if (isSeries && (initial.includes("/movie/") || initial.includes("2embed.cc") || initial.includes("myembed.biz"))) {
-        initial = `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}`;
+        initial = `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`;
       }
 
       setSelectedServerKey("srv1");
@@ -275,6 +313,17 @@ export function VideoPlayerModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleFullScreen = () => {
+    const stage = document.getElementById("player-stage-container");
+    if (stage) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      } else {
+        stage.requestFullscreen?.().catch(() => {});
+      }
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -304,27 +353,12 @@ export function VideoPlayerModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Botão Interativo Anti-Popups */}
             <button
-              onClick={() => setAntiPopups(!antiPopups)}
-              className={`px-2.5 sm:px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer border ${
-                antiPopups
-                  ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/40 hover:bg-emerald-500/25"
-                  : "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25"
-              }`}
-              title={antiPopups ? "Bloqueador ativado: nenhuma aba de anúncio abrirá" : "Clique para ativar o bloqueador de abas e anúncios"}
+              onClick={handleFullScreen}
+              className="p-2 text-neutral-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+              title="Tela Cheia"
             >
-              {antiPopups ? (
-                <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  <span className="hidden xs:inline">Anti-Popups: Ativado</span>
-                </>
-              ) : (
-                <>
-                  <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                  <span className="hidden xs:inline">Anti-Popups: Pausado</span>
-                </>
-              )}
+              <Maximize2 className="w-4 h-4" />
             </button>
 
             <button
@@ -367,7 +401,7 @@ export function VideoPlayerModal({
 
           <div className="hidden lg:flex items-center gap-2 text-xs text-neutral-400">
             <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-            <span>Qualidade HD • Sem Popups</span>
+            <span>Qualidade HD • Sem Sandbox</span>
           </div>
         </div>
 
@@ -430,8 +464,8 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage com Proteção Anti-Popups */}
-        <div className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
+        {/* Player Video Stage: 100% LIVRE DE ATRIBUTO SANDBOX PARA NUNCA ACUSAR ERRO */}
+        <div id="player-stage-container" className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-neutral-400">
               <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
@@ -439,18 +473,13 @@ export function VideoPlayerModal({
             </div>
           ) : activeIframeUrl ? (
             <iframe
-              key={`${activeIframeUrl}-${antiPopups ? "protected" : "free"}`}
+              key={activeIframeUrl}
               src={activeIframeUrl}
               title={title}
               className="w-full h-full border-0"
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
-              sandbox={
-                antiPopups
-                  ? "allow-scripts allow-same-origin allow-forms allow-presentation"
-                  : undefined
-              }
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
@@ -482,7 +511,7 @@ export function VideoPlayerModal({
           )}
         </div>
 
-        {/* Rodapé com Status e Indicador do Bloqueador */}
+        {/* Rodapé com Link Ativo e Informações */}
         <div className="px-4 sm:px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <span className="truncate max-w-xs sm:max-w-md font-mono text-[11px] text-neutral-400">
@@ -497,21 +526,9 @@ export function VideoPlayerModal({
             </button>
           </div>
 
-          <div className="flex items-center gap-3 self-end sm:self-auto">
-            {antiPopups ? (
-              <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                Popups e abas de anúncio bloqueados
-              </span>
-            ) : (
-              <button
-                onClick={() => setAntiPopups(true)}
-                className="text-[11px] text-amber-400 hover:underline font-semibold flex items-center gap-1.5 cursor-pointer"
-              >
-                <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
-                Popups liberados (Clique para reativar bloqueador)
-              </button>
-            )}
+          <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-neutral-400">
+            <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
+            <span>Servidor 1 e WatchPlayer recomendados</span>
           </div>
         </div>
 
