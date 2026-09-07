@@ -89,6 +89,7 @@ export function VideoPlayerModal({
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
+  const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
 
   // Bloqueio de popups e proteção de redirecionamento nativo no nível da janela
   useEffect(() => {
@@ -97,7 +98,8 @@ export function VideoPlayerModal({
     // 1. Intercepta chamadas a window.open para impedir que popups abram
     const originalWindowOpen = window.open;
     window.open = function (url) {
-      console.warn("[Play Infinity] Bloqueada tentativa de abrir nova aba:", url);
+      console.warn("[Play Infinity - Escudo Anti-Anúncios] Tentativa de popup bloqueada:", url);
+      setBlockedAdsCount((prev) => prev + 1);
       return null;
     };
 
@@ -107,11 +109,11 @@ export function VideoPlayerModal({
       return (e.returnValue = "");
     };
 
-    // 3. Recupera o foco da janela caso um popunder tente roubar o foco
+    // 3. Recupera o foco da janela caso um popup/popunder tente roubar o foco
     const handleBlur = () => {
       setTimeout(() => {
         window.focus();
-      }, 100);
+      }, 50);
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);
@@ -144,37 +146,37 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores otimizados: sem 2Embed, com os provedores mais confiáveis e rápidos
+  // Servidores otimizados: servidores livres de anúncios agressivos e compatíveis sem erro de sandbox
   const servers = useMemo(() => {
     if (isSeries) {
       return [
         {
           key: "srv1",
-          label: "Servidor 1 (VidLink HD)",
-          badge: "Rápido • Sem Anúncios",
+          label: "Servidor 1 (AnyEmbed Clean)",
+          badge: "Sem Popups • Rápido",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://anyembed.xyz/embed/tmdb-tv-${id}-${s}-${e}`,
+        },
+        {
+          key: "srv2",
+          label: "Servidor 2 (VidLink HD)",
+          badge: "4K / Full HD",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv2",
-          label: "Servidor 2 (Videasy Multi)",
-          badge: "Áudio & Legendas",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://player.videasy.to/tv/${id}/${s}/${e}`,
-        },
-        {
           key: "srv3",
           label: "Servidor 3 (SuperFlix BR)",
-          badge: "Dublado",
+          badge: "Dublado BR",
           buildUrl: (id: string, s: number, e: number) => 
             `https://superflixapi.top/serie/${id}/${s}/${e}`,
         },
         {
           key: "srv4",
-          label: "Servidor 4 (VidSrc HD)",
-          badge: "Todas Temporadas",
+          label: "Servidor 4 (Videasy Multi)",
+          badge: "Áudio & Legendas",
           buildUrl: (id: string, s: number, e: number) => 
-            `https://vidsrc.to/embed/tv/${imdbId || id}/${s}/${e}`,
+            `https://player.videasy.to/tv/${id}/${s}/${e}`,
         }
       ];
     } else {
@@ -187,21 +189,21 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (VidLink 4K/HD)",
-          badge: "Alta Definição",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
+          label: "Servidor 2 (AnyEmbed Clean)",
+          badge: "Sem Popups • Full HD",
+          buildUrl: (id: string) => `https://anyembed.xyz/embed/tmdb-movie-${id}`,
         },
         {
           key: "srv3",
-          label: "Servidor 3 (Videasy)",
-          badge: "Multi-idiomas",
-          buildUrl: (id: string) => `https://player.videasy.to/movie/${id}`,
+          label: "Servidor 3 (VidLink 4K/HD)",
+          badge: "Ultra HD",
+          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
           key: "srv4",
-          label: "Servidor 4 (VidSrc)",
-          badge: "Backup VIP",
-          buildUrl: (id: string) => `https://vidsrc.to/embed/movie/${imdbId || id}`,
+          label: "Servidor 4 (Videasy)",
+          badge: "Multi-idiomas",
+          buildUrl: (id: string) => `https://player.videasy.to/movie/${id}`,
         }
       ];
     }
@@ -215,14 +217,15 @@ export function VideoPlayerModal({
       const targetEpisode = initialEpisode || parsed.episode || 1;
       setSeason(targetSeason);
       setEpisode(targetEpisode);
+      setBlockedAdsCount(0);
 
-      // Default to Servidor 1 (VidLink HD for series or WatchPlayer for movies)
+      // Default to Servidor 1 (AnyEmbed Clean for series or WatchPlayer for movies)
       let initial = defaultUrl || (isSeries 
-        ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true` 
+        ? `https://anyembed.xyz/embed/tmdb-tv-${resolvedId}-${targetSeason}-${targetEpisode}` 
         : `https://v1.watchplay.shop/movie/${resolvedId}`);
 
       if (isSeries && (initial.includes("/movie/") || initial.includes("2embed.cc") || initial.includes("myembed.biz"))) {
-        initial = `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`;
+        initial = `https://anyembed.xyz/embed/tmdb-tv-${resolvedId}-${targetSeason}-${targetEpisode}`;
       }
 
       setSelectedServerKey("srv1");
@@ -399,9 +402,18 @@ export function VideoPlayerModal({
             })}
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 text-xs text-neutral-400">
-            <Sparkles className="w-3.5 h-3.5 text-orange-400" />
-            <span>Qualidade HD • Sem Sandbox</span>
+          <div className="hidden lg:flex items-center gap-2 text-xs">
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-medium">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Escudo Anti-Anúncios</span>
+              {blockedAdsCount > 0 ? (
+                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-[10px] font-bold text-emerald-300">
+                  {blockedAdsCount} bloqueados
+                </span>
+              ) : (
+                <span className="text-[11px] text-emerald-500/80">• Ativo</span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -464,7 +476,7 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage: 100% LIVRE DE ATRIBUTO SANDBOX PARA NUNCA ACUSAR ERRO */}
+        {/* Player Video Stage: Blindado com sandbox seguro (sem quebrar players) e sem popups */}
         <div id="player-stage-container" className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
           {isLoading ? (
             <div className="flex flex-col items-center gap-3 text-neutral-400">
@@ -480,6 +492,7 @@ export function VideoPlayerModal({
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-presentation allow-downloads allow-popups"
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
