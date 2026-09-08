@@ -53,7 +53,7 @@ export const continueWatching = [
     progress: 75,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
-    playerUrl: "https://vidlink.pro/tv/66732/4/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/66732/4/1",
   },
   {
     id: 533535,
@@ -180,7 +180,7 @@ export const mostWatched = [
     title: "STRANGER THINGS",
     imageUrl:
       "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
-    playerUrl: "https://vidlink.pro/tv/66732/1/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/66732/1/1",
   },
 ];
 
@@ -200,7 +200,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "4 Temporadas",
       match: 99,
-      playerUrl: "https://vidlink.pro/tv/66732/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/66732/1/1",
     },
     {
       id: 119051,
@@ -215,7 +215,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "1 Temporada",
       match: 96,
-      playerUrl: "https://vidlink.pro/tv/119051/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/119051/1/1",
     },
     {
       id: 93405,
@@ -230,7 +230,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "18",
       duration: "2 Temporadas",
       match: 98,
-      playerUrl: "https://vidlink.pro/tv/93405/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
     },
   ],
   "Disney+": [
@@ -310,7 +310,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "18",
       duration: "2 Temporadas",
       match: 98,
-      playerUrl: "https://vidlink.pro/tv/94997/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
     },
     {
       id: 693134,
@@ -340,7 +340,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "18",
       duration: "1 Temporada",
       match: 98,
-      playerUrl: "https://vidlink.pro/tv/100088/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
     },
   ],
   "Prime Video": [
@@ -357,7 +357,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "18",
       duration: "4 Temporadas",
       match: 99,
-      playerUrl: "https://vidlink.pro/tv/76479/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/76479/1/1",
     },
     {
       id: 84773,
@@ -372,7 +372,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "2 Temporadas",
       match: 91,
-      playerUrl: "https://vidlink.pro/tv/84773/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/84773/1/1",
     },
   ],
   "Apple TV+": [
@@ -389,7 +389,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "2 Temporadas",
       match: 97,
-      playerUrl: "https://vidlink.pro/tv/125988/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/125988/1/1",
     },
     {
       id: 93740,
@@ -404,7 +404,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "2 Temporadas",
       match: 99,
-      playerUrl: "https://vidlink.pro/tv/93740/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/93740/1/1",
     },
   ]
 };
