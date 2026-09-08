@@ -516,9 +516,9 @@ function DetailsPage({
   const isSeries = item.type === 'series';
   const effectiveTmdbId = item.tmdbId || item.id;
 
-  // URL de reprodução baseada no WatchPlayer para filmes e VidLink HD para séries
+  // URL de reprodução baseada no WatchPlayer VIP para séries e filmes (Sem Anúncios)
   const targetPlayerUrl = isSeries
-    ? `https://vidlink.pro/tv/${effectiveTmdbId}/${selectedSeason}/1`
+    ? (item.playerUrl || `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/1`)
     : (item.playerUrl || `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`);
 
   const synopsis = item.synopsis || "Uma experiência cinematográfica envolvente com alta definição e elenco renomado.";
@@ -935,7 +935,7 @@ function GlobalSearchPage({
                 duration: isTv ? "Série" : "Filme",
                 match: Math.min(99, Math.max(70, Math.round((r.vote_average || 7.5) * 10))),
                 playerUrl: isTv 
-                  ? `https://myembed.biz/serie/${r.id}/1/1`
+                  ? `https://v1.watchplay.shop/tvshow/${r.id}/1/1`
                   : `https://v1.watchplay.shop/movie/${r.id}`
               };
             });

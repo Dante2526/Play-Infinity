@@ -90,6 +90,7 @@ export function VideoPlayerModal({
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
+  const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
 
   // Bloqueio de popups e proteção de redirecionamento nativo no nível da janela
   useEffect(() => {
@@ -241,7 +242,13 @@ export function VideoPlayerModal({
 
       // Priorizar Servidor 1 (WatchPlayer VIP para séries e filmes)
       let initial = defaultUrl;
-      if (!initial || initial.includes("anyembed") || initial.includes("2embed.cc")) {
+      if (
+        !initial || 
+        initial.includes("anyembed") || 
+        initial.includes("2embed.cc") || 
+        initial.includes("myembed.biz") || 
+        initial.includes("playerflix")
+      ) {
         initial = isSeries 
           ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${targetSeason}/${targetEpisode}` 
           : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
@@ -298,8 +305,6 @@ export function VideoPlayerModal({
 
     if (
       cleanUrl.includes("watchplay.shop") || 
-      cleanUrl.includes("myembed.biz") || 
-      cleanUrl.includes("playerflix") || 
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
@@ -424,18 +429,24 @@ export function VideoPlayerModal({
             })}
           </div>
 
-          <div className="hidden lg:flex items-center gap-2 text-xs">
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25 text-emerald-400 font-medium">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Escudo Anti-Anúncios</span>
-              {blockedAdsCount > 0 ? (
-                <span className="ml-1 px-1.5 py-0.2 rounded-full bg-emerald-500/30 text-[10px] font-bold text-emerald-300">
-                  {blockedAdsCount} bloqueados
+          <div className="flex items-center gap-2 text-xs shrink-0">
+            <button
+              onClick={() => setAntiAdShield(prev => !prev)}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
+                antiAdShield 
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" 
+                  : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-700"
+              }`}
+              title={antiAdShield ? "Escudo ativo: Popups e abas bloqueados ao clicar no player" : "Clique para reativar o bloqueio de anúncios"}
+            >
+              <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
+              <span>Escudo Anti-Anúncios: {antiAdShield ? "Ativo" : "Desativado"}</span>
+              {antiAdShield && (
+                <span className="hidden sm:inline text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 ml-0.5">
+                  Popups Bloqueados
                 </span>
-              ) : (
-                <span className="text-[11px] text-emerald-500/80">• Ativo</span>
               )}
-            </div>
+            </button>
           </div>
         </div>
 
@@ -530,6 +541,7 @@ export function VideoPlayerModal({
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
+              sandbox={antiAdShield ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
@@ -577,8 +589,12 @@ export function VideoPlayerModal({
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-neutral-400">
-            <ShieldCheck className="w-3.5 h-3.5 text-orange-500" />
-            <span>Servidor 1 e WatchPlayer recomendados</span>
+            <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
+            <span>
+              {antiAdShield 
+                ? "Bloqueador ativo: cliques não abrem anúncios nem novas abas" 
+                : "Servidor 1 e WatchPlayer recomendados"}
+            </span>
           </div>
         </div>
 
