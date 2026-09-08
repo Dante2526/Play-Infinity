@@ -12,6 +12,7 @@ import {
   Gauge,
   Layers,
   MessageSquareText,
+  Subtitles,
   SkipForward,
   X,
   Check,
@@ -540,9 +541,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </span>
         </div>
 
-        {/* Direita: Botão Girar Tela (90° Paisagem) + Botão Tela Cheia (Widescreen) + Botão Fechar X */}
+        {/* Direita: Botão Girar Tela (90° Paisagem - apenas em tela cheia) + Botão Tela Cheia (Widescreen) + Botão Fechar X */}
         <div className="flex items-center justify-end gap-1 sm:gap-2">
-          {onToggleRotate && (
+          {isFullscreen && onToggleRotate && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -753,41 +754,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         {/* LINHA DE AÇÕES INFERIORES: SEM BOTÃO SHARE, ESPAÇOSA E CONFORTÁVEL */}
         <div className="px-2 sm:px-6 flex items-center justify-center gap-3 xs:gap-5 sm:gap-10 md:gap-14 text-white text-xs">
           {/* 1. Velocidade */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSpeedMenu((prev) => !prev)}
-              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
-              title="Velocidade de reprodução"
-            >
-              <Gauge className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-                <span className="hidden sm:inline">Velocidade </span>({playerStatus.playbackRate}x)
-              </span>
-            </button>
-
-            {/* Menu Pop-up de Velocidade */}
-            {showSpeedMenu && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 bg-[#181818] border border-neutral-700 rounded-xl p-2 shadow-2xl flex flex-col gap-1 min-w-[130px] z-50">
-                <span className="text-[10px] uppercase font-bold text-neutral-400 px-2 py-1">
-                  Velocidade
-                </span>
-                {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
-                  <button
-                    key={rate}
-                    onClick={() => handlePlaybackRate(rate)}
-                    className={`flex items-center justify-between px-3 py-1.5 rounded-lg text-xs font-medium text-left transition-colors cursor-pointer ${
-                      playerStatus.playbackRate === rate
-                        ? "bg-[#E50914] text-white font-bold"
-                        : "text-neutral-200 hover:bg-neutral-800"
-                    }`}
-                  >
-                    <span>{rate === 1 ? "1x (Normal)" : `${rate}x`}</span>
-                    {playerStatus.playbackRate === rate && <Check className="w-3.5 h-3.5" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <button
+            onClick={() => setShowSpeedMenu(true)}
+            className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+            title="Velocidade de reprodução"
+          >
+            <Gauge className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
+            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+              <span className="hidden sm:inline">Velocidade </span>({playerStatus.playbackRate}x)
+            </span>
+          </button>
 
           {/* 2. Bloquear Tela */}
           <button
@@ -802,8 +778,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">Bloquear</span>
           </button>
 
-          {/* 3. Episódios (se for série) */}
-          {isSeries && (
+          {/* 3. Episódios (apenas para séries e em tela cheia) */}
+          {isSeries && isFullscreen && (
             <button
               onClick={() => setShowEpisodeDrawer((prev) => !prev)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
@@ -827,8 +803,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 5. Próximo Episódio (se for série) */}
-          {isSeries && onEpisodeChange && (
+          {/* 5. Próximo Episódio (apenas para séries e em tela cheia) */}
+          {isSeries && isFullscreen && onEpisodeChange && (
             <button
               onClick={() => onEpisodeChange(episode + 1)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
@@ -838,46 +814,90 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">Próximo</span>
             </button>
           )}
-
-          {/* 6. Girar Tela (90° Paisagem) */}
-          {onToggleRotate && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleRotate();
-              }}
-              className={`flex items-center gap-1.5 py-1 px-1.5 sm:px-2 transition-colors cursor-pointer group ${
-                isRotated ? "text-orange-500 font-bold" : "text-white/90 hover:text-white"
-              }`}
-              title={isRotated ? "Desvirar Tela (0° Retrato)" : "Girar Tela 90° (Widescreen Paisagem)"}
-            >
-              <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-                {isRotated ? "Desvirar" : "Girar"}
-              </span>
-            </button>
-          )}
-
-          {/* 7. Tela Cheia / Widescreen */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleFullscreen();
-            }}
-            className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
-            title={isFullscreen ? "Sair da Tela Cheia / Widescreen (Tecla F)" : "Tela Cheia Widescreen (Tecla F)"}
-          >
-            {isFullscreen ? (
-              <Minimize2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-            ) : (
-              <Maximize2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-            )}
-            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              {isFullscreen ? "Reduzir" : "Tela Cheia"}
-            </span>
-          </button>
         </div>
       </div>
+
+      {/* ========================================================
+          MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)
+          ======================================================== */}
+      {showSpeedMenu && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowSpeedMenu(false);
+          }}
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm sm:max-w-md bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-200"
+          >
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">
+                  <Gauge className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white leading-tight">Velocidade de Reprodução</h3>
+                  <p className="text-xs text-neutral-400">Ajuste o ritmo do filme ou episódio</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowSpeedMenu(false)}
+                className="p-1.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                title="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Seletor de Velocidade Estilo Régua Netflix */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-5 gap-2">
+                {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => {
+                  const isSelected = playerStatus.playbackRate === rate;
+                  return (
+                    <button
+                      key={rate}
+                      onClick={() => handlePlaybackRate(rate)}
+                      className={`flex flex-col items-center justify-center py-3 px-1 rounded-xl transition-all cursor-pointer border ${
+                        isSelected
+                          ? "bg-white text-black border-white font-bold shadow-lg shadow-white/20 scale-[1.03]"
+                          : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
+                      }`}
+                    >
+                      <span className="text-sm sm:text-base font-bold tabular-nums">
+                        {rate}x
+                      </span>
+                      <span className={`text-[10px] mt-0.5 ${isSelected ? "text-neutral-700 font-semibold" : "text-neutral-500"}`}>
+                        {rate === 1 ? "Padrão" : rate < 1 ? "Lento" : "Rápido"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Status e Descrição */}
+              <div className="px-3.5 py-2.5 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between text-xs">
+                <span className="text-neutral-400 font-medium">Velocidade Selecionada:</span>
+                <span className="font-bold text-white flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  {playerStatus.playbackRate === 1 ? "1x (Velocidade Normal)" : `${playerStatus.playbackRate}x (${playerStatus.playbackRate < 1 ? "Câmera Lenta" : "Aceleração"})`}
+                </span>
+              </div>
+            </div>
+
+            {/* Botão de Fechar / Aplicar */}
+            <button
+              onClick={() => setShowSpeedMenu(false)}
+              className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================
           DRAWER / MODAL: EPISODES (NETFLIX STYLE)
@@ -917,16 +937,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                     if (onEpisodeChange) onEpisodeChange(epNum);
                     setShowEpisodeDrawer(false);
                   }}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer ${
+                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
                     episode === epNum
-                      ? "bg-[#E50914]/20 border border-[#E50914]/50 text-white"
-                      : "bg-neutral-900/60 hover:bg-neutral-800 border border-neutral-800/80 text-neutral-300"
+                      ? "bg-white/10 border-white/30 text-white"
+                      : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <span
                       className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                        episode === epNum ? "bg-[#E50914] text-white" : "bg-neutral-800 text-neutral-400"
+                        episode === epNum ? "bg-white text-black font-bold" : "bg-neutral-800 text-neutral-400"
                       }`}
                     >
                       {epNum}
@@ -948,97 +968,120 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ======================================================== */}
       {showAudioSubtitleModal && (
         <div
-          onClick={() => setShowAudioSubtitleModal(false)}
-          className="absolute inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowAudioSubtitleModal(false);
+          }}
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-lg bg-[#181818] border border-neutral-800 rounded-2xl p-6 shadow-2xl text-white space-y-6"
+            className="w-full max-w-sm sm:max-w-md bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-200"
           >
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-4">
-              <h3 className="text-lg font-bold">Áudio e Legendas</h3>
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">
+                  <MessageSquareText className="w-4 h-4 stroke-[2]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white leading-tight">Áudio e Legendas</h3>
+                  <p className="text-xs text-neutral-400">Escolha o idioma de reprodução</p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowAudioSubtitleModal(false)}
-                className="p-1.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white cursor-pointer"
+                className="p-1.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                title="Fechar"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {/* Coluna de Áudio */}
-              <div>
-                <h4 className="text-xs uppercase font-bold text-neutral-400 mb-3 tracking-wider">
+              <div className="space-y-2">
+                <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5 px-0.5">
+                  <Volume2 className="w-3.5 h-3.5 text-neutral-400" />
                   Áudio
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <button
                     onClick={() => setSelectedAudio("pt-BR")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "pt-BR"
-                        ? "bg-[#E50914] text-white font-bold"
-                        : "text-neutral-300 hover:bg-neutral-800"
+                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
                     <span>Português [Dublado BR]</span>
-                    {selectedAudio === "pt-BR" && <Check className="w-4 h-4" />}
+                    {selectedAudio === "pt-BR" && <Check className="w-4 h-4 text-black" />}
                   </button>
 
                   <button
                     onClick={() => setSelectedAudio("en-US")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "en-US"
-                        ? "bg-[#E50914] text-white font-bold"
-                        : "text-neutral-300 hover:bg-neutral-800"
+                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
                     <span>Inglês [Original]</span>
-                    {selectedAudio === "en-US" && <Check className="w-4 h-4" />}
+                    {selectedAudio === "en-US" && <Check className="w-4 h-4 text-black" />}
                   </button>
                 </div>
               </div>
 
               {/* Coluna de Legendas */}
-              <div>
-                <h4 className="text-xs uppercase font-bold text-neutral-400 mb-3 tracking-wider">
+              <div className="space-y-2">
+                <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5 px-0.5">
+                  <Subtitles className="w-3.5 h-3.5 text-neutral-400" />
                   Legendas
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <button
                     onClick={() => setSelectedSubtitle("off")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedSubtitle === "off"
-                        ? "bg-[#E50914] text-white font-bold"
-                        : "text-neutral-300 hover:bg-neutral-800"
+                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
                     <span>Desativadas</span>
-                    {selectedSubtitle === "off" && <Check className="w-4 h-4" />}
+                    {selectedSubtitle === "off" && <Check className="w-4 h-4 text-black" />}
                   </button>
 
                   <button
                     onClick={() => setSelectedSubtitle("pt-BR")}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-sm flex items-center justify-between transition-colors cursor-pointer ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedSubtitle === "pt-BR"
-                        ? "bg-[#E50914] text-white font-bold"
-                        : "text-neutral-300 hover:bg-neutral-800"
+                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
                     <span>Português (Brasil)</span>
-                    {selectedSubtitle === "pt-BR" && <Check className="w-4 h-4" />}
+                    {selectedSubtitle === "pt-BR" && <Check className="w-4 h-4 text-black" />}
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setShowAudioSubtitleModal(false)}
-                className="px-5 py-2 rounded-xl bg-white text-black font-bold text-sm hover:bg-neutral-200 transition-colors cursor-pointer"
-              >
-                Concluído
-              </button>
+            {/* Status Informativo */}
+            <div className="px-3.5 py-2.5 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between text-xs">
+              <span className="text-neutral-400 font-medium">Configuração Ativa:</span>
+              <span className="font-bold text-white flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                {selectedAudio === "pt-BR" ? "Dublado BR" : "Inglês"} • Leg: {selectedSubtitle === "off" ? "Desativada" : "Português"}
+              </span>
             </div>
+
+            {/* Botão de Fechar / Concluir */}
+            <button
+              onClick={() => setShowAudioSubtitleModal(false)}
+              className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-700 text-white text-xs sm:text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+            >
+              Concluir
+            </button>
           </div>
         </div>
       )}
@@ -1048,21 +1091,26 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ======================================================== */}
       {showCastModal && (
         <div
-          onClick={() => setShowCastModal(false)}
-          className="absolute inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCastModal(false);
+          }}
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#181818] border border-neutral-800 rounded-2xl p-6 shadow-2xl text-white space-y-4 text-center"
+            className="w-full max-w-sm bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-4 text-center animate-in zoom-in-95 duration-200"
           >
-            <div className="w-12 h-12 rounded-full bg-[#E50914]/20 border border-[#E50914]/40 flex items-center justify-center mx-auto text-[#E50914]">
-              <Cast className="w-6 h-6" />
+            <div className="w-12 h-12 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mx-auto text-white">
+              <Cast className="w-6 h-6 stroke-[1.8]" />
             </div>
-            <h3 className="text-lg font-bold">Transmitir para Smart TV</h3>
-            <p className="text-xs text-neutral-400">
-              Conecte seu dispositivo na mesma rede Wi-Fi da sua TV ou Chromecast para transmitir instantaneamente.
-            </p>
-            <div className="p-3 bg-neutral-900 rounded-xl border border-neutral-800 text-left space-y-2">
+            <div>
+              <h3 className="text-base font-bold text-white">Transmitir para Smart TV</h3>
+              <p className="text-xs text-neutral-400 mt-1">
+                Conecte seu dispositivo na mesma rede Wi-Fi da sua TV ou Chromecast.
+              </p>
+            </div>
+            <div className="p-3 bg-neutral-900/90 rounded-xl border border-neutral-800 text-left space-y-2">
               <div className="flex items-center gap-2.5 text-xs text-neutral-300">
                 <Tv className="w-4 h-4 text-neutral-400" />
                 <span>Smart TV Sala de Estar</span>
@@ -1074,7 +1122,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </div>
             <button
               onClick={() => setShowCastModal(false)}
-              className="w-full py-2.5 rounded-xl bg-[#E50914] hover:bg-red-700 text-white font-bold text-sm transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer"
             >
               Fechar
             </button>
