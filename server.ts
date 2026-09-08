@@ -838,7 +838,7 @@ async function startServer() {
         </script>
       `;
 
-      html = html.replace("</body>", `${autoPlayInjection}</body>`);
+      html = html.replace("</head>", `${autoPlayInjection}</head>`);
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(html);

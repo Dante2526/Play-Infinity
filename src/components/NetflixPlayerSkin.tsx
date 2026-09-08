@@ -53,6 +53,7 @@ interface NetflixPlayerSkinProps {
   quality?: string;
   isRotated?: boolean;
   onToggleRotate?: () => void;
+  isExternalPlayer?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -83,6 +84,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onBrightnessChange,
   isRotated = false,
   onToggleRotate,
+  isExternalPlayer = false,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -453,36 +455,42 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       onClick={handleUserActivity}
       className={`absolute inset-0 z-30 select-none overflow-hidden transition-all duration-300 ${
         controlsVisible && !isLocked ? "cursor-default" : "cursor-none"
-      }`}
+      } ${isExternalPlayer ? "pointer-events-none" : ""}`}
     >
       {/* Camada de Ajuste de Brilho */}
-      <div
-        className="absolute inset-0 pointer-events-none z-0 transition-opacity"
-        style={{
-          backgroundColor: brightness < 1 ? `rgba(0, 0, 0, ${((1 - brightness) * 0.7).toFixed(2)})` : "transparent",
-        }}
-      />
+      {!isExternalPlayer && (
+        <div
+          className="absolute inset-0 pointer-events-none z-0 transition-opacity"
+          style={{
+            backgroundColor: brightness < 1 ? `rgba(0, 0, 0, ${((1 - brightness) * 0.7).toFixed(2)})` : "transparent",
+          }}
+        />
+      )}
 
       {/* Clique simples no fundo para Play/Pause */}
-      <div
-        className="absolute inset-0 z-0 cursor-pointer"
-        onClick={() => {
-          if (!isLocked) {
-            handleTogglePlay();
-          }
-        }}
-        onDoubleClick={onToggleFullscreen}
-      />
+      {!isExternalPlayer && (
+        <div
+          className="absolute inset-0 z-0 cursor-pointer pointer-events-auto"
+          onClick={() => {
+            if (!isLocked) {
+              handleTogglePlay();
+            }
+          }}
+          onDoubleClick={onToggleFullscreen}
+        />
+      )}
 
       {/* Gradientes Suaves de Cinema (Superior e Inferior) */}
-      <div
-        className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100" : "opacity-0"
-        }`}
-      >
-        <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
-      </div>
+      {!isExternalPlayer && (
+        <div
+          className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
+        </div>
+      )}
 
       {/* ========================================================
           MODO BLOQUEADO (LOCK MODE DA NETFLIX)
@@ -517,7 +525,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ======================================================== */}
       <div
         className={`absolute top-0 left-0 right-0 z-20 px-3 sm:px-6 pt-2.5 sm:pt-4 flex items-center justify-between gap-2 sm:gap-4 transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-4 pointer-events-none"
+          controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
         }`}
       >
         {/* Esquerda: Ícone de Transmissão (Cast/TV) */}
@@ -590,90 +598,94 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2. CONTROLE VERTICAL DE BRILHO (SOL À ESQUERDA)
           Oculto no mobile em orientação vertical para não sobrepor botões
           ======================================================== */}
-      <div
-        className={`hidden sm:flex absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-20 flex-col items-center gap-2 transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <Sun className="w-4 h-4 text-white/90 drop-shadow stroke-[1.8]" />
-
-        {/* Barra Vertical de Brilho */}
+      {!isExternalPlayer && (
         <div
-          ref={brightnessBarRef}
-          onMouseDown={handleBrightnessMouseDown}
-          className="relative w-1.5 h-24 sm:h-28 bg-neutral-600/80 rounded-full cursor-pointer overflow-hidden flex flex-col justify-end group/slider"
-          title={`Brilho: ${Math.round(brightness * 100)}%`}
+          className={`hidden sm:flex absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-20 flex-col items-center gap-2 transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+          }`}
+          onClick={(e) => e.stopPropagation()}
         >
+          <Sun className="w-4 h-4 text-white/90 drop-shadow stroke-[1.8]" />
+
+          {/* Barra Vertical de Brilho */}
           <div
-            className="w-full bg-white rounded-full transition-all duration-75"
-            style={{
-              height: `${Math.min(100, Math.max(10, ((brightness - 0.4) / 0.85) * 100))}%`,
-            }}
-          />
+            ref={brightnessBarRef}
+            onMouseDown={handleBrightnessMouseDown}
+            className="relative w-1.5 h-24 sm:h-28 bg-neutral-600/80 rounded-full cursor-pointer overflow-hidden flex flex-col justify-end group/slider"
+            title={`Brilho: ${Math.round(brightness * 100)}%`}
+          >
+            <div
+              className="w-full bg-white rounded-full transition-all duration-75"
+              style={{
+                height: `${Math.min(100, Math.max(10, ((brightness - 0.4) / 0.85) * 100))}%`,
+              }}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ========================================================
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
-        }`}
-      >
-        {/* Retroceder 10 Segundos */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSeekRelative(-10);
-          }}
-          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-          title="Voltar 10s"
+      {!isExternalPlayer && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
+          }`}
         >
-          <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-            10
-          </span>
-        </button>
+          {/* Retroceder 10 Segundos */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSeekRelative(-10);
+            }}
+            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+            title="Voltar 10s"
+          >
+            <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+              10
+            </span>
+          </button>
 
-        {/* Play / Pause Central Gigante em Branco Sólido */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleTogglePlay();
-          }}
-          className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
-          title={playerStatus.paused ? "Reproduzir" : "Pausar"}
-        >
-          {playerStatus.paused ? (
-            <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-lg" />
-          ) : (
-            <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-lg" />
-          )}
-        </button>
+          {/* Play / Pause Central Gigante em Branco Sólido */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTogglePlay();
+            }}
+            className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
+            title={playerStatus.paused ? "Reproduzir" : "Pausar"}
+          >
+            {playerStatus.paused ? (
+              <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-lg" />
+            ) : (
+              <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-lg" />
+            )}
+          </button>
 
-        {/* Avançar 10 Segundos */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSeekRelative(10);
-          }}
-          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-          title="Avançar 10s"
-        >
-          <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-            10
-          </span>
-        </button>
-      </div>
+          {/* Avançar 10 Segundos */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSeekRelative(10);
+            }}
+            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+            title="Avançar 10s"
+          >
+            <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+              10
+            </span>
+          </button>
+        </div>
+      )}
 
       {/* ========================================================
           4. BOTÃO FLUTUANTE: PULAR ABERTURA
           ======================================================== */}
-      {isSeries && (
+      {!isExternalPlayer && isSeries && (
         <div
           className={`absolute right-3 sm:right-6 bottom-16 sm:bottom-20 z-20 transition-all duration-300 ${
             (isIntroActive || controlsVisible) && !isLocked
@@ -698,12 +710,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
+      {!isExternalPlayer && (
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
         <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2.5">
           <div
@@ -816,6 +829,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ========================================================
           MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)
