@@ -243,7 +243,7 @@ async function startServer() {
   });
 
   // API 4: Proxy WatchPlay API (para obter opções de episódio e player sem bloqueio de CORS)
-  app.post("/api/watchplay-proxy-api", async (req, res) => {
+  app.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req, res) => {
     try {
       const upstreamRes = await fetch("https://v1.watchplay.shop/api", {
         method: "POST",
@@ -302,35 +302,152 @@ async function startServer() {
 
       // 1. Ativar AUTO_PLAY_ENABLED no player oficial
       html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
+      html = html.replace(/AUTO_PLAY_ENABLED && options\.length == 1/g, "true");
 
       // 2. Redirecionar requisições da API interna para o proxy local
-      html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy-api';");
+      html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy';");
+      html = html.replace(/\$\{HOME_URL\}\/api/g, "/api/watchplay-proxy-api");
 
       // 3. Remover rastreadores ou banners conhecidos
       html = html.replace(/_wau\.push\([^)]*\);?/g, "");
 
-      // 4. Injetar auto-clique instantâneo na primeira opção (Dublado) e ocultar telas intermediárias
+      // 4. Injetar auto-clique instantâneo na primeira opção (Dublado), Pular Abertura (Skip Intro) e detecção de término para passar para o próximo episódio
       const autoPlayInjection = `
         <style>
-          /* Oculta o seletor de opções para iniciar o vídeo direto */
-          .players_select_container {
+          /* Oculta o seletor de opções e botões nativos para iniciar o vídeo direto */
+          .players_select_container,
+          .players_select_btn,
+          [class*="players_select"],
+          [id*="players_select"],
+          .btn-opcoes,
+          .embedder_especial,
+          .embedder_info,
+          #_wau_container {
+            display: none !important;
             opacity: 0 !important;
-            transition: opacity 0.2s ease;
             pointer-events: none !important;
           }
           .player_container.visible {
             opacity: 1 !important;
           }
-          .embedder_especial, .embedder_info, #_wau_container {
+
+          /* Modo Skin Netflix: oculta controles nativos poluídos do Artplayer para dar lugar à nossa Skin Netflix */
+          body:not(.netflix-skin-disabled) .art-bottom,
+          body:not(.netflix-skin-disabled) .art-controls,
+          body:not(.netflix-skin-disabled) .art-top,
+          body:not(.netflix-skin-disabled) .art-control-fullscreen,
+          body:not(.netflix-skin-disabled) .art-control-volume,
+          body:not(.netflix-skin-disabled) .art-control-playAndPause,
+          body:not(.netflix-skin-disabled) .art-control-progress,
+          body:not(.netflix-skin-disabled) #pip-skip-intro-btn {
             display: none !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+          }
+
+          /* Botão Pular Abertura Flutuante (Estilo Netflix / Streaming VIP) */
+          #pip-skip-intro-btn {
+            position: fixed;
+            bottom: 76px;
+            right: 28px;
+            z-index: 2147483647;
+            display: none;
+            align-items: center;
+            gap: 9px;
+            background: rgba(15, 15, 15, 0.88);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            padding: 10px 18px;
+            border-radius: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+            user-select: none;
+            outline: none;
+          }
+          #pip-skip-intro-btn:hover {
+            background: #ea580c;
+            border-color: #f97316;
+            color: #ffffff;
+            transform: translateY(-2px) scale(1.04);
+            box-shadow: 0 14px 34px rgba(234, 88, 12, 0.45);
+          }
+          #pip-skip-intro-btn:active {
+            transform: translateY(0) scale(0.97);
+          }
+          #pip-skip-intro-btn .skip-kbd {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.18);
+            color: #ffffff;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            font-weight: 800;
+          }
+
+          /* Toast Flutuante de Confirmação */
+          #pip-skip-toast {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2147483647;
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #ea580c, #c2410c);
+            color: #ffffff;
+            padding: 8px 20px;
+            border-radius: 9999px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 13px;
+            font-weight: 700;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(234, 88, 12, 0.4);
+            pointer-events: none;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            animation: pipToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          @keyframes pipToastIn {
+            from { opacity: 0; transform: translate(-50%, -12px) scale(0.95); }
+            to { opacity: 1; transform: translate(-50%, 0) scale(1); }
           }
         </style>
+
+        <!-- Elementos UI do Skip Intro -->
+        <button id="pip-skip-intro-btn" type="button" title="Pular Abertura (Tecla S)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="5 4 15 12 5 20 5 4"></polygon>
+            <line x1="19" y1="5" x2="19" y2="19"></line>
+          </svg>
+          <span>Pular Abertura</span>
+          <span class="skip-kbd">S</span>
+        </button>
+
+        <div id="pip-skip-toast">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span id="pip-skip-toast-text">Abertura pulada (+85s)</span>
+        </div>
+
         <script>
           (function() {
             var tries = 0;
             var autoStartTimer = setInterval(function() {
               tries++;
-              var option = document.querySelector('.player_select_item');
+              // Garante que se houver seleção de idioma (Dublado/Legendado), Dublado é clicado
+              var dublado = document.querySelector('.select_language[data-target="1"]');
+              if (dublado && !dublado.classList.contains('active')) {
+                dublado.click();
+              }
+              // Clica na primeira opção disponível
+              var option = document.querySelector('.players_select_items.visible .player_select_item') || 
+                           document.querySelector('.player_select_item');
               if (option) {
                 option.click();
                 clearInterval(autoStartTimer);
@@ -343,7 +460,338 @@ async function startServer() {
                   container.style.pointerEvents = 'auto';
                 }
               }
-            }, 35);
+            }, 40);
+
+            // Variáveis de Estado para Pular Abertura Manual (Tecla S ou Botão)
+            var introSkippedForCurrentVideo = false;
+            try {
+              localStorage.removeItem("playinfinity_autoskip_intro");
+            } catch(e) {}
+            var skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+            var toastTimeout = null;
+
+            var skipBtn = document.getElementById("pip-skip-intro-btn");
+            var skipToast = document.getElementById("pip-skip-toast");
+            var skipToastText = document.getElementById("pip-skip-toast-text");
+
+            function showToast(msg) {
+              if (!skipToast || !skipToastText) return;
+              skipToastText.textContent = msg;
+              skipToast.style.display = "flex";
+              if (toastTimeout) clearTimeout(toastTimeout);
+              toastTimeout = setTimeout(function() {
+                skipToast.style.display = "none";
+              }, 3000);
+            }
+
+            function getVideoElement() {
+              if (window.artInstance && window.artInstance.video) {
+                return window.artInstance.video;
+              }
+              return document.querySelector("video");
+            }
+
+            function doSkipIntro(seconds) {
+              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 85);
+              var video = getVideoElement();
+              if (video) {
+                var current = video.currentTime || 0;
+                var duration = video.duration || 3600;
+                var targetTime = Math.max(0, Math.min(current + sec, duration - 10));
+                
+                try {
+                  video.currentTime = targetTime;
+                } catch(e) {}
+
+                if (window.artInstance) {
+                  try {
+                    window.artInstance.currentTime = targetTime;
+                  } catch(e) {}
+                }
+
+                if (sec > 0) {
+                  introSkippedForCurrentVideo = true;
+                  if (skipBtn) skipBtn.style.display = "none";
+                  showToast("Abertura pulada (+" + sec + "s)");
+                } else {
+                  showToast("Retornado (" + sec + "s)");
+                }
+
+                try {
+                  window.parent.postMessage({ 
+                    type: "WATCHPLAY_INTRO_SKIPPED", 
+                    seconds: sec, 
+                    newTime: targetTime 
+                  }, "*");
+                } catch(e) {}
+              }
+            }
+
+            if (skipBtn) {
+              skipBtn.addEventListener("click", function(e) {
+                e.stopPropagation();
+                doSkipIntro(skipDurationSeconds);
+              });
+            }
+
+            // Monitora teclado (tecla S ou s)
+            window.addEventListener("keydown", function(e) {
+              if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+              if (e.key === "s" || e.key === "S") {
+                e.preventDefault();
+                doSkipIntro(skipDurationSeconds);
+              }
+            });
+
+            // Monitora mensagens enviadas pelo aplicativo principal (Skin Netflix VIP)
+            window.addEventListener("message", function(e) {
+              if (!e.data) return;
+              var v = getVideoElement();
+
+              switch (e.data.type) {
+                case "SKIP_INTRO":
+                  doSkipIntro(e.data.seconds || skipDurationSeconds);
+                  break;
+
+                case "PLAY":
+                  if (v) {
+                    v.play().catch(function() {});
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "PAUSE":
+                  if (v) {
+                    v.pause();
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "TOGGLE_PLAY":
+                  if (v) {
+                    if (v.paused) {
+                      v.play().catch(function() {});
+                    } else {
+                      v.pause();
+                    }
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SEEK":
+                  if (v && typeof e.data.targetTime === "number" && !isNaN(e.data.targetTime)) {
+                    var maxDur = v.duration && v.duration > 0 ? v.duration : 99999;
+                    v.currentTime = Math.max(0, Math.min(e.data.targetTime, maxDur - 0.5));
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SEEK_RELATIVE":
+                  if (v && typeof e.data.seconds === "number" && !isNaN(e.data.seconds)) {
+                    var curT = v.currentTime || 0;
+                    var maxD = v.duration && v.duration > 0 ? v.duration : 99999;
+                    v.currentTime = Math.max(0, Math.min(curT + e.data.seconds, maxD - 0.5));
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_VOLUME":
+                  if (v && typeof e.data.volume === "number") {
+                    var vol = Math.max(0, Math.min(1, e.data.volume));
+                    v.volume = vol;
+                    v.muted = (vol === 0);
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_MUTED":
+                  if (v) {
+                    v.muted = !!e.data.muted;
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_PLAYBACK_RATE":
+                  if (v && typeof e.data.rate === "number") {
+                    v.playbackRate = e.data.rate;
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_SKIN_MODE":
+                  if (e.data.mode === "default") {
+                    document.body.classList.add("netflix-skin-disabled");
+                  } else {
+                    document.body.classList.remove("netflix-skin-disabled");
+                  }
+                  break;
+
+                case "SET_SKIP_DURATION":
+                  if (e.data.seconds) {
+                    skipDurationSeconds = Number(e.data.seconds);
+                    try {
+                      localStorage.setItem("playinfinity_skip_duration", String(skipDurationSeconds));
+                    } catch(err) {}
+                  }
+                  break;
+
+                case "REQUEST_STATUS":
+                  sendPlayerStatus(v);
+                  break;
+              }
+            });
+
+            // Envia telemetria de reprodução completa para a Skin Netflix do aplicativo principal
+            function sendPlayerStatus(v) {
+              if (!v) v = getVideoElement();
+              if (!v) return;
+              try {
+                var bufferedEnd = 0;
+                if (v.buffered && v.buffered.length > 0) {
+                  bufferedEnd = v.buffered.end(v.buffered.length - 1);
+                }
+                window.parent.postMessage({
+                  type: "WATCHPLAY_STATUS",
+                  currentTime: v.currentTime || 0,
+                  duration: v.duration || 0,
+                  paused: !!v.paused,
+                  muted: !!v.muted,
+                  volume: typeof v.volume === "number" ? v.volume : 1,
+                  buffered: bufferedEnd,
+                  playbackRate: v.playbackRate || 1,
+                  readyState: v.readyState || 0
+                }, "*");
+              } catch(e) {}
+            }
+
+            // Detecção do término do episódio para passar sozinho para o próximo
+            var hasNotifiedEnded = false;
+            function notifyEpisodeEnded() {
+              if (hasNotifiedEnded) return;
+              hasNotifiedEnded = true;
+              console.log("[WatchPlayer] Episódio finalizado. Notificando aplicação principal para próximo episódio...");
+              try {
+                window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+              } catch(e) {
+                console.error("Erro ao enviar mensagem:", e);
+              }
+            }
+
+            // Monitora eventos globais de término no elemento <video>
+            document.addEventListener('ended', function(e) {
+              if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
+                notifyEpisodeEnded();
+              }
+            }, true);
+
+            // Monitora a instância Artplayer criada pelo WatchPlayer
+            function requestParentFullscreen() {
+              try {
+                if (window.parent && window.parent.document) {
+                  var stage = window.parent.document.getElementById('player-stage-container');
+                  if (stage && !window.parent.document.fullscreenElement) {
+                    stage.requestFullscreen().catch(function() {});
+                  }
+                }
+              } catch(e) {}
+            }
+
+            // Sincroniza cliques no botão de tela cheia com o container principal
+            document.addEventListener('click', function(e) {
+              var fsBtn = e.target && e.target.closest && e.target.closest('.art-control-fullscreen, [data-tooltip="Fullscreen"], [data-tooltip="Tela Cheia"]');
+              if (fsBtn) {
+                requestParentFullscreen();
+              }
+            }, true);
+
+            document.addEventListener('dblclick', function(e) {
+              if (e.target && (e.target.tagName === 'VIDEO' || (e.target.closest && e.target.closest('.art-video-player')))) {
+                requestParentFullscreen();
+              }
+            }, true);
+
+            // Monitora a timeline do vídeo para exibir o botão de pular abertura e auto-pular
+            function handleVideoTimeUpdate(v) {
+              if (!v) return;
+              var cur = v.currentTime || 0;
+              var dur = v.duration || 0;
+
+              // Se o vídeo voltou ao começo (novo episódio carregado), reseta a flag de intro pulada
+              if (cur < 2 && introSkippedForCurrentVideo) {
+                introSkippedForCurrentVideo = false;
+              }
+
+              // Janela típica de abertura (entre 5s e 130s)
+              if (cur >= 5 && cur <= 130 && !introSkippedForCurrentVideo) {
+                if (skipBtn && skipBtn.style.display !== "flex") {
+                  skipBtn.style.display = "flex";
+                }
+
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: true, currentTime: cur }, "*");
+                } catch(e) {}
+              } else {
+                if (skipBtn && skipBtn.style.display === "flex") {
+                  skipBtn.style.display = "none";
+                }
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: false, currentTime: cur }, "*");
+                } catch(e) {}
+              }
+
+              // Próximo episódio automático se faltar menos de 1.5s para o fim
+              if (dur > 30 && cur >= (dur - 1.5)) {
+                notifyEpisodeEnded();
+              }
+
+              // Envia status para a Skin Netflix do aplicativo principal
+              sendPlayerStatus(v);
+            }
+
+            // Monitor de tempo regular via setInterval para garantir detecção e fluidez mesmo sem eventos nativos
+            setInterval(function() {
+              var v = getVideoElement();
+              if (v) {
+                sendPlayerStatus(v);
+                if (!v.paused) {
+                  handleVideoTimeUpdate(v);
+                }
+              }
+            }, 350);
+
+            // Ouvintes globais no documento para capturar eventos no elemento <video>
+            ['play', 'pause', 'playing', 'seeking', 'seeked', 'volumechange', 'ratechange', 'loadedmetadata', 'canplay'].forEach(function(evtName) {
+              document.addEventListener(evtName, function(e) {
+                if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
+                  sendPlayerStatus(e.target);
+                }
+              }, true);
+            });
+
+            var artCheckInterval = setInterval(function() {
+              if (window.artInstance && !window.artInstance._endedHooked) {
+                window.artInstance._endedHooked = true;
+                window.artInstance.on('video:ended', function() {
+                  notifyEpisodeEnded();
+                });
+                window.artInstance.on('video:timeupdate', function() {
+                  var v = window.artInstance.video;
+                  if (v) handleVideoTimeUpdate(v);
+                });
+                window.artInstance.on('video:play', function() {
+                  sendPlayerStatus(window.artInstance.video);
+                });
+                window.artInstance.on('video:pause', function() {
+                  sendPlayerStatus(window.artInstance.video);
+                });
+                window.artInstance.on('fullscreen', function(state) {
+                  if (state) requestParentFullscreen();
+                });
+                window.artInstance.on('fullscreenWeb', function(state) {
+                  if (state) requestParentFullscreen();
+                });
+              }
+            }, 500);
           })();
         </script>
       `;

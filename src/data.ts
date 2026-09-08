@@ -14,7 +14,18 @@ export type CatalogItem = {
   duration?: string;
   match?: number;
   playerUrl?: string;
+  quality?: 'CAM' | 'TS' | 'HD' | '4K' | 'FULL HD';
 };
+
+/** Verifica se um item possui qualidade CAM (gravação de cinema) */
+export function checkIsCam(title?: string, quality?: string): boolean {
+  if (quality === 'CAM' || quality === 'TS') return true;
+  if (!title) return false;
+  const upper = title.toUpperCase();
+  if (upper.includes('CAM') || upper.includes('CINEMA') || upper.includes('TS')) return true;
+  if (upper.includes('HOMEM-ARANHA: UM NOVO DIA') || upper.includes('HOMEM-ARANHA 4')) return true;
+  return false;
+}
 
 export const featured = {
   id: 969681,
@@ -24,6 +35,7 @@ export const featured = {
   year: "2026",
   duration: "2h 23min",
   rating: 4.9,
+  quality: "CAM" as const,
   genres: ["Ação", "Aventura", "Ficção científica"],
   description:
     "Peter Parker enfrenta um novo capítulo em sua vida após os eventos mundiais. Sem suas antigas memórias com seus entes queridos, uma nova ameaça surge em Nova York, forçando o herói a equilibrar o fardo de sua responsabilidade com novos aliados e perigos inimagináveis.",
@@ -73,6 +85,7 @@ export const top10 = [
     tmdbId: 969681,
     imdbId: "tt22084616",
     title: "HOMEM-ARANHA: UM NOVO DIA",
+    quality: "CAM" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
     playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
@@ -116,6 +129,7 @@ export const releases = [
     id: 969681,
     tmdbId: 969681,
     title: "HOMEM-ARANHA: UM NOVO DIA",
+    quality: "CAM" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
     playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
@@ -206,8 +220,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 119051,
       tmdbId: 119051,
       title: "WANDINHA",
-      imageUrl: "https://image.tmdb.org/t/p/w500/7v4IeJj7k19b999Yp2v1XQJ6w6e.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/iHSwvRVsRyxKuOCzgEcBmILti4P.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/7rxiQrZjrer0RB9qNA8rHYFo53R.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/iHSwvRVsRyxpX7FE7GbviaDvgGZ.jpg",
       type: "series",
       genres: ["Comédia", "Fantasia", "Mistério"],
       synopsis: "Inteligente, sarcástica e um pouco apática, Wandinha Addams investiga uma onda de assassinatos enquanto faz novos amigos — e inimigos — na Academia Nunca Mais.",
@@ -221,8 +235,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 93405,
       tmdbId: 93405,
       title: "ROUND 6 (SQUID GAME)",
-      imageUrl: "https://image.tmdb.org/t/p/w500/dDlGjoq0L7LwJ4b5W6x5928K9yA.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/qw3J9cNeLioOL0Ukb6Rw69fdKyv.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
       type: "series",
       genres: ["Ação", "Mistério", "Drama"],
       synopsis: "Centenas de jogadores falidos aceitam um estranho convite para competir em jogos infantis por um prêmio tentador, mas as consequências são mortais.",
@@ -239,6 +253,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       tmdbId: 969681,
       imdbId: "tt22084616",
       title: "HOMEM-ARANHA: UM NOVO DIA",
+      quality: "CAM" as const,
       imageUrl: "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
       backdropUrl: "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
       type: "movie",
@@ -363,8 +378,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 84773,
       tmdbId: 84773,
       title: "O SENHOR DOS ANÉIS: OS ANÉIS DE PODER",
-      imageUrl: "https://image.tmdb.org/t/p/w500/mYLOqiStMxDK3fYZFsCwNm78x8f.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/s1xnjbOIQUR6m0Nf0E9xRz7yCgE.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/b5pl6GmQmTCHmZKEBhXPN0gmoAq.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/o2wg8QiSCQrhj91tBfxunE3O5Ba.jpg",
       type: "series",
       genres: ["Fantasia", "Aventura", "Ação"],
       synopsis: "Ambientada na lendária Segunda Era da Terra-média, a série acompanha um elenco de personagens que enfrentam o ressurgimento do temido mal em terras pacíficas.",
@@ -395,8 +410,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 93740,
       tmdbId: 93740,
       title: "RUPTURA (SEVERANCE)",
-      imageUrl: "https://image.tmdb.org/t/p/w500/A088Zp9n8i56kCj9mX1b8Y0Y0p1.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/5i6SNOdbMh3zWbA34B2k8d7W.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/6qRIQqWwnxVemvvDfFuK3kkIqpS.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/7NNNXo0qG2SqH4JoG7GPvJ2hzes.jpg",
       type: "series",
       genres: ["Drama", "Mistério", "Ficção científica"],
       synopsis: "Mark lidera uma equipe de funcionários de escritório cujas memórias foram cirurgicamente divididas entre a vida profissional e a pessoal. Quando um misterioso colega de trabalho aparece fora do trabalho, inicia-se uma jornada para descobrir a verdade sobre seu trabalho.",

@@ -24,10 +24,25 @@ import {
   Layers,
   X
 } from "lucide-react";
-import { featured, providers, top10, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem } from "./data";
+import { featured, providers, top10, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
 import { searchMulti, getDetails, getSeasonDetails, formatImageUrl, getGenreNames, TMDBItem, TMDBDetails, Season } from "./services/tmdb";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import { WebhookPanelModal } from "./components/WebhookPanelModal";
+
+const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
+const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
+
+export type OnPlayHandler = (
+  title: string, 
+  url?: string,
+  mediaType?: 'movie' | 'series',
+  tmdbId?: number,
+  imdbId?: string,
+  season?: number,
+  episode?: number,
+  quality?: string,
+  isCam?: boolean
+) => void;
 
 export default function App() {
   const [viewState, setViewState] = useState<{ 
@@ -46,6 +61,8 @@ export default function App() {
     imdbId?: string;
     season?: number;
     episode?: number;
+    quality?: string;
+    isCam?: boolean;
   }>({
     isOpen: false,
     title: "",
@@ -61,7 +78,9 @@ export default function App() {
     tmdbId?: number,
     imdbId?: string,
     season?: number,
-    episode?: number
+    episode?: number,
+    quality?: string,
+    isCam?: boolean
   ) => {
     setPlayerModal({
       isOpen: true,
@@ -72,6 +91,8 @@ export default function App() {
       imdbId,
       season,
       episode,
+      quality,
+      isCam: isCam || checkIsCam(title, quality),
     });
   };
 
@@ -218,6 +239,8 @@ export default function App() {
         imdbId={playerModal.imdbId}
         initialSeason={playerModal.season}
         initialEpisode={playerModal.episode}
+        quality={playerModal.quality}
+        isCam={playerModal.isCam}
       />
 
       <WebhookPanelModal
@@ -249,7 +272,7 @@ function HomePage({
 }: { 
   onProviderSelect: (p: string) => void, 
   onItemClick: (id: number) => void,
-  onPlay?: (title: string, url?: string) => void 
+  onPlay?: OnPlayHandler 
 }) {
   return (
     <>
@@ -268,11 +291,21 @@ function HomePage({
         <div className="absolute inset-0 flex flex-col justify-end items-center md:items-start text-center md:text-left px-6 py-12 md:px-20 md:py-32 z-10">
           
           {/* Logo / Title area for Hero */}
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-4 text-shadow-lg leading-none" style={{ textShadow: "0 4px 20px rgba(0,0,0,0.8)" }}>
+          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-3 text-shadow-lg leading-none" style={{ textShadow: "0 4px 20px rgba(0,0,0,0.8)" }}>
             {featured.logoText.split('\n').map((line, i) => (
               <span key={i} className="block">{line}</span>
             ))}
           </h1>
+
+          {/* Tag de Imagem de Cinema (CAM) */}
+          {checkIsCam(featured.title, (featured as any).quality) && (
+            <div className="mb-4 flex items-center">
+              <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                CAM • Imagem de Cinema
+              </span>
+            </div>
+          )}
 
           {/* Meta details */}
           <div className="flex items-center gap-3 text-sm md:text-base font-medium text-neutral-300 mb-4">
@@ -309,7 +342,17 @@ function HomePage({
           {/* Actions */}
           <div className="flex items-center gap-4 w-full md:w-auto justify-center md:justify-start">
             <button 
-              onClick={() => onPlay?.(featured.title, featured.playerUrl || "https://v1.watchplay.shop/movie/tt22084616")}
+              onClick={() => onPlay?.(
+                featured.title, 
+                featured.playerUrl || "https://v1.watchplay.shop/movie/tt22084616",
+                'movie',
+                featured.id,
+                featured.imdbId,
+                1,
+                1,
+                (featured as any).quality,
+                checkIsCam(featured.title, (featured as any).quality)
+              )}
               className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
             >
               <Play className="w-5 h-5 fill-current" />
@@ -396,7 +439,16 @@ function HomePage({
             {continueWatching.map((item) => (
               <div key={item.id} onClick={() => onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]">
                 <div className="relative h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
-                  <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+                  <img 
+                    src={item.imageUrl} 
+                    alt={item.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    loading="lazy" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = (item as any).backdropUrl || FALLBACK_POSTER;
+                    }}
+                  />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
                   
                   {/* Play Overlay */}
@@ -454,15 +506,7 @@ function DetailsPage({
   initialItem?: CatalogItem,
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: (
-    title: string, 
-    url?: string,
-    mediaType?: 'movie' | 'series',
-    tmdbId?: number,
-    imdbId?: string,
-    season?: number,
-    episode?: number
-  ) => void
+  onPlay?: OnPlayHandler
 }) {
   const allCatalogs = Object.values(providerCatalogs).flat();
   const [item, setItem] = useState<CatalogItem>(() => {
@@ -545,6 +589,10 @@ function DetailsPage({
           src={displayBackdrop} 
           alt={item.title} 
           className="w-full h-full object-cover object-center scale-105 transition-transform duration-1000" 
+          onError={(e) => {
+            e.currentTarget.onerror = null;
+            e.currentTarget.src = FALLBACK_BACKDROP;
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent"></div>
@@ -562,13 +610,20 @@ function DetailsPage({
         <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col justify-end px-4 py-10 md:px-12 md:py-16 z-10 mx-auto max-w-7xl">
           <div className="max-w-4xl">
             {/* Tag TMDB / Tipo */}
-            <div className="flex items-center gap-2.5 mb-4">
+            <div className="flex items-center gap-2.5 mb-4 flex-wrap">
               <span className="px-3 py-1 bg-orange-600/30 text-orange-400 border border-orange-500/40 rounded-full text-xs font-black tracking-wider uppercase">
                 {isSeries ? 'Série Oficial' : 'Filme Oficial'}
               </span>
-              <span className="px-3 py-1 bg-white/10 text-neutral-300 border border-white/10 rounded-full text-xs font-semibold">
-                {isSeries ? 'Player Séries HD' : 'WatchPlayer HD'}
-              </span>
+              {checkIsCam(item.title, item.quality) ? (
+                <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  CAM • Imagem de Cinema
+                </span>
+              ) : (
+                <span className="px-3 py-1 bg-white/10 text-neutral-300 border border-white/10 rounded-full text-xs font-semibold">
+                  {isSeries ? 'Player Séries HD' : 'WatchPlayer HD'}
+                </span>
+              )}
             </div>
 
             <h1 className="text-4xl md:text-6xl lg:text-7xl font-black text-white tracking-tighter uppercase drop-shadow-[0_4px_24px_rgba(0,0,0,0.9)] leading-[0.95] mb-5">
@@ -605,7 +660,9 @@ function DetailsPage({
                   effectiveTmdbId ? Number(effectiveTmdbId) : undefined,
                   item.imdbId,
                   selectedSeason,
-                  1
+                  1,
+                  item.quality,
+                  checkIsCam(item.title, item.quality)
                 )}
                 className="flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
@@ -621,7 +678,9 @@ function DetailsPage({
                   effectiveTmdbId ? Number(effectiveTmdbId) : undefined,
                   item.imdbId,
                   selectedSeason,
-                  1
+                  1,
+                  item.quality,
+                  checkIsCam(item.title, item.quality)
                 )}
                 className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 backdrop-blur-md shadow-lg cursor-pointer"
                 title="Reprodutor direto sem anúncios"
@@ -655,6 +714,10 @@ function DetailsPage({
                 src={displayPoster} 
                 alt={item.title} 
                 className="w-full h-auto object-cover aspect-[2/3]" 
+                onError={(e) => {
+                  e.currentTarget.onerror = null;
+                  e.currentTarget.src = FALLBACK_POSTER;
+                }}
               />
             </div>
             <div className="flex-1 space-y-4">
@@ -856,6 +919,10 @@ function DetailsPage({
                     alt={sim.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = sim.backdropUrl || FALLBACK_POSTER;
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                   
@@ -884,7 +951,7 @@ function GlobalSearchPage({
   onPlay 
 }: { 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: (title: string, url?: string) => void 
+  onPlay?: OnPlayHandler
 }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'movie' | 'tv'>('all');
@@ -1054,15 +1121,38 @@ function GlobalSearchPage({
                         alt={item.title} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                         loading="lazy" 
+                        onError={(e) => {
+                          e.currentTarget.onerror = null;
+                          e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                        }}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                       
+                      {/* Badge CAM */}
+                      {checkIsCam(item.title, item.quality) && (
+                        <div className="absolute top-2.5 left-2.5 z-10">
+                          <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
+                            CAM
+                          </span>
+                        </div>
+                      )}
+
                       {/* Play Overlay */}
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                         <div 
                           onClick={(e) => {
                             e.stopPropagation();
-                            onPlay?.(item.title, item.playerUrl);
+                            onPlay?.(
+                              item.title, 
+                              item.playerUrl, 
+                              item.type, 
+                              item.tmdbId || item.id, 
+                              item.imdbId, 
+                              1, 
+                              1, 
+                              item.quality, 
+                              checkIsCam(item.title, item.quality)
+                            );
                           }}
                           className="w-11 h-11 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_15px_rgba(234,88,12,0.6)] text-white hover:scale-110"
                           title="Assistir agora"
@@ -1106,14 +1196,25 @@ function GlobalSearchPage({
                       alt={item.title} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       loading="lazy" 
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                      }}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                     
                     {/* Badge Tipo e Nota */}
                     <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                      <span className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white border border-white/10 uppercase">
-                        {item.type === 'series' ? 'Série' : 'Filme'}
-                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-white border border-white/10 uppercase">
+                          {item.type === 'series' ? 'Série' : 'Filme'}
+                        </span>
+                        {checkIsCam(item.title, item.quality) && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500 text-black font-black text-[9px] tracking-wider uppercase shadow">
+                            CAM
+                          </span>
+                        )}
+                      </div>
                       <span className="px-2 py-0.5 rounded bg-orange-600/80 backdrop-blur-md text-[10px] font-bold text-white shadow">
                         {item.rating}
                       </span>
@@ -1124,7 +1225,17 @@ function GlobalSearchPage({
                       <div 
                         onClick={(e) => {
                           e.stopPropagation();
-                          onPlay?.(item.title, item.playerUrl);
+                          onPlay?.(
+                            item.title, 
+                            item.playerUrl, 
+                            item.type, 
+                            item.tmdbId || item.id, 
+                            item.imdbId, 
+                            1, 
+                            1, 
+                            item.quality, 
+                            checkIsCam(item.title, item.quality)
+                          );
                         }}
                         className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
                         title="Assistir agora no WatchPlayer"
@@ -1219,7 +1330,7 @@ function FavoritesPage({
 }: { 
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: (title: string, url?: string) => void
+  onPlay?: OnPlayHandler
 }) {
   // Mock favorites picking a few items from data
   const allCatalogs = Object.values(providerCatalogs).flat();
@@ -1251,9 +1362,21 @@ function FavoritesPage({
                   alt={item.title} 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                   loading="lazy" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                  }}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                 
+                <div className="absolute top-3 left-3 z-10 flex items-center gap-1">
+                  {checkIsCam(item.title, item.quality) && (
+                    <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
+                      CAM
+                    </span>
+                  )}
+                </div>
+
                 <div className="absolute top-3 right-3 z-10 text-orange-500 opacity-100 transition-all dropdown-shadow drop-shadow-md">
                    <Bookmark className="w-5 h-5 fill-current" />
                 </div>
@@ -1263,7 +1386,17 @@ function FavoritesPage({
                   <div 
                     onClick={(e) => {
                       e.stopPropagation();
-                      onPlay?.(item.title, item.playerUrl);
+                      onPlay?.(
+                        item.title, 
+                        item.playerUrl, 
+                        item.type, 
+                        item.tmdbId || item.id, 
+                        item.imdbId, 
+                        1, 
+                        1, 
+                        item.quality, 
+                        checkIsCam(item.title, item.quality)
+                      );
                     }}
                     className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
                     title="Assistir no WatchPlayer"
@@ -1302,7 +1435,7 @@ function GlobalCatalogPage({
 }: { 
   type: 'movies' | 'series', 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: (title: string, url?: string) => void
+  onPlay?: OnPlayHandler
 }) {
   // Combine all items from all providers
   const allCatalogs = Object.values(providerCatalogs).flat();
@@ -1393,11 +1526,20 @@ function GlobalCatalogPage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                   
-                  {/* Badge de nota */}
-                  <div className="absolute top-2.5 right-2.5">
+                  {/* Badge de nota e CAM */}
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                    {checkIsCam(item.title, item.quality) ? (
+                      <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
+                        CAM
+                      </span>
+                    ) : <span />}
                     <span className="px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[10px] font-bold text-orange-400 border border-white/10">
                       {item.rating || "8.5 ★"}
                     </span>
@@ -1408,7 +1550,17 @@ function GlobalCatalogPage({
                     <div 
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPlay?.(item.title, item.playerUrl);
+                        onPlay?.(
+                          item.title, 
+                          item.playerUrl, 
+                          item.type, 
+                          item.tmdbId || item.id, 
+                          item.imdbId, 
+                          1, 
+                          1, 
+                          item.quality, 
+                          checkIsCam(item.title, item.quality)
+                        );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
                       title="Assistir no WatchPlayer"
@@ -1455,7 +1607,7 @@ function ProviderPage({
   provider: string, 
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: (title: string, url?: string) => void 
+  onPlay?: OnPlayHandler
 }) {
   const catalogs = providerCatalogs[provider] || [];
   
@@ -1530,11 +1682,20 @@ function ProviderPage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                    }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                   
-                  {/* Badge nota */}
-                  <div className="absolute top-2.5 right-2.5">
+                  {/* Badge nota e CAM */}
+                  <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
+                    {checkIsCam(item.title, item.quality) ? (
+                      <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
+                        CAM
+                      </span>
+                    ) : <span />}
                     <span className="px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[10px] font-bold text-orange-400 border border-white/10">
                       {item.rating || "8.5 ★"}
                     </span>
@@ -1545,7 +1706,17 @@ function ProviderPage({
                     <div 
                       onClick={(e) => {
                         e.stopPropagation();
-                        onPlay?.(item.title, item.playerUrl);
+                        onPlay?.(
+                          item.title, 
+                          item.playerUrl, 
+                          item.type, 
+                          item.tmdbId || item.id, 
+                          item.imdbId, 
+                          1, 
+                          1, 
+                          item.quality, 
+                          checkIsCam(item.title, item.quality)
+                        );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
                       title="Assistir no WatchPlayer"
@@ -1626,7 +1797,21 @@ function ContentRow({
                 </span>
                 {/* Image */}
                 <div className="relative w-[85%] ml-auto h-full rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
-                   <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
+                   {checkIsCam(item.title, item.quality) && (
+                     <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
+                       CAM
+                     </span>
+                   )}
+                   <img 
+                     src={item.imageUrl} 
+                     alt={item.title} 
+                     className="w-full h-full object-cover" 
+                     loading="lazy" 
+                     onError={(e) => {
+                       e.currentTarget.onerror = null;
+                       e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                     }}
+                   />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                    <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow">
                      {item.title}
@@ -1636,7 +1821,21 @@ function ContentRow({
             ) : (
               <div className={`relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors 
                 ${aspect === 'landscape' ? 'w-[240px] md:w-[300px] h-[135px] md:h-[170px]' : 'w-[160px] md:w-[200px] h-[240px] md:h-[300px]'}`}>
-                <img src={item.imageUrl} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                {checkIsCam(item.title, item.quality) && (
+                  <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
+                    CAM
+                  </span>
+                )}
+                <img 
+                  src={item.imageUrl} 
+                  alt={item.title} 
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                  loading="lazy" 
+                  onError={(e) => {
+                    e.currentTarget.onerror = null;
+                    e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                  }}
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                 <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg`}>
                   {item.title}
