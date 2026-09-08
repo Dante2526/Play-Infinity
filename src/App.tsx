@@ -716,7 +716,7 @@ function DetailsPage({
                   <div 
                     key={ep.ep}
                     onClick={() => {
-                      const epUrl = `https://vidlink.pro/tv/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                      const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
                       onPlay?.(
                         `${item.title} - ${ep.title}`, 
                         epUrl, 
