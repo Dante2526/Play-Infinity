@@ -160,24 +160,24 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (MyEmbed BR)",
-          badge: "Dublado • Multi-Players",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://myembed.biz/serie/${id}/${s}/${e}`,
-        },
-        {
-          key: "srv3",
-          label: "Servidor 3 (VidLink PRO)",
-          badge: "Sem Popups • 4K/HD",
+          label: "Servidor 2 (VidLink PRO)",
+          badge: "Player Direto • Sem Telas Intermediárias",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv4",
-          label: "Servidor 4 (SuperFlix BR)",
+          key: "srv3",
+          label: "Servidor 3 (SuperFlix BR)",
           badge: "Dublado BR • Rápido",
           buildUrl: (id: string, s: number, e: number) => 
             `https://superflixapi.top/serie/${id}/${s}/${e}`,
+        },
+        {
+          key: "srv4",
+          label: "Servidor 4 (MyEmbed BR)",
+          badge: "Dublado • Multi-Players",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://myembed.biz/serie/${id}/${s}/${e}`,
         },
         {
           key: "srv5",
@@ -204,21 +204,21 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (MyEmbed BR)",
-          badge: "Dublado • Multi-Players",
-          buildUrl: (id: string) => `https://myembed.biz/filme/${imdbId || id}`,
-        },
-        {
-          key: "srv3",
-          label: "Servidor 3 (VidLink PRO)",
-          badge: "Sem Popups • Ultra HD",
+          label: "Servidor 2 (VidLink PRO)",
+          badge: "Player Direto • Ultra HD",
           buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv4",
-          label: "Servidor 4 (SuperFlix BR)",
+          key: "srv3",
+          label: "Servidor 3 (SuperFlix BR)",
           badge: "Dublado BR",
           buildUrl: (id: string) => `https://superflixapi.top/filme/${id}`,
+        },
+        {
+          key: "srv4",
+          label: "Servidor 4 (MyEmbed BR)",
+          badge: "Dublado • Multi-Players",
+          buildUrl: (id: string) => `https://myembed.biz/filme/${imdbId || id}`,
         },
         {
           key: "srv5",
@@ -275,14 +275,6 @@ export function VideoPlayerModal({
     }
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
-  // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo
-  const resolveStreamIframeUrl = (url: string) => {
-    if (url.includes("watchplay.shop")) {
-      return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
-    }
-    return url;
-  };
-
   // Handler to switch episode
   const handleEpisodeChange = (newEpisode: number) => {
     if (newEpisode < 1) return;
@@ -290,7 +282,7 @@ export function VideoPlayerModal({
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+    setActiveIframeUrl(newUrl);
     setExtractedSource(newUrl);
   };
 
@@ -301,7 +293,7 @@ export function VideoPlayerModal({
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     setUrlInput(newUrl);
-    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+    setActiveIframeUrl(newUrl);
     setExtractedSource(newUrl);
   };
 
@@ -312,7 +304,7 @@ export function VideoPlayerModal({
     if (!srv) return;
     const newUrl = srv.buildUrl(resolvedId, season, episode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+    setActiveIframeUrl(newUrl);
     setExtractedSource(newUrl);
   };
 
@@ -323,19 +315,14 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
-    if (cleanUrl.includes("watchplay.shop")) {
-      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
-      setExtractedSource(cleanUrl);
-      setIsLoading(false);
-      return;
-    }
-
     if (
+      cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("superflixapi") || 
       cleanUrl.includes("embed.su") || 
+      cleanUrl.includes("myembed") ||
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(cleanUrl);
@@ -349,14 +336,14 @@ export function VideoPlayerModal({
       const data = await res.json();
 
       if (data.success && data.playerUrl) {
-        setActiveIframeUrl(resolveStreamIframeUrl(data.playerUrl));
+        setActiveIframeUrl(data.playerUrl);
         setExtractedSource(data.playerUrl);
       } else {
-        setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
+        setActiveIframeUrl(cleanUrl);
         setExtractedSource(cleanUrl);
       }
     } catch (err: any) {
-      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
+      setActiveIframeUrl(cleanUrl);
       setExtractedSource(cleanUrl);
     } finally {
       setIsLoading(false);
