@@ -836,24 +836,7 @@ export function VideoPlayerModal({
               </div>
             )}
 
-            {/* Player Oficial Estilo Netflix Cinematográfico */}
-            <NetflixPlayerSkin
-              title={title}
-              isSeries={isSeries}
-              season={season}
-              episode={episode}
-              totalEpisodes={24}
-              onClose={handleCloseModal}
-              onEpisodeChange={handleEpisodeChange}
-              onSkipIntro={() => handleSkipIntro()}
-              skipDurationSeconds={skipDurationSeconds}
-              isIntroActive={isIntroActive}
-              isFullscreen={isExpanded}
-              onToggleFullscreen={handleFullScreen}
-              iframeRef={iframeRef}
-              isRotated={isRotated}
-              onToggleRotate={handleToggleRotate}
-            />
+            {/* NetflixPlayerSkin movido para o final (z-40) */}
 
             {/* Indicador de Carregamento sobreposto */}
             {isLoading && (
@@ -901,6 +884,26 @@ export function VideoPlayerModal({
                 <p className="text-sm">Clique em "Reproduzir" para iniciar</p>
               </div>
             )}
+
+            {/* Player Oficial Estilo Netflix Cinematográfico */}
+            <NetflixPlayerSkin
+              title={title}
+              isSeries={isSeries}
+              season={season}
+              episode={episode}
+              totalEpisodes={24}
+              onClose={handleCloseModal}
+              onEpisodeChange={handleEpisodeChange}
+              onSkipIntro={() => handleSkipIntro()}
+              skipDurationSeconds={skipDurationSeconds}
+              isIntroActive={isIntroActive}
+              isFullscreen={isExpanded}
+              onToggleFullscreen={handleFullScreen}
+              iframeRef={iframeRef}
+              isRotated={isRotated}
+              onToggleRotate={handleToggleRotate}
+              isExternalPlayer={selectedServerKey !== "srv1"}
+            />
           </div>
         </div>
 
