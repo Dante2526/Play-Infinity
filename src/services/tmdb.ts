@@ -81,9 +81,16 @@ export const getGenreNames = (genreIds: number[]) => {
 };
 
 // Format item
-export const formatImageUrl = (path: string | null, size: string = 'w500') => {
-  if (!path) return 'https://via.placeholder.com/500x750?text=Indispon%C3%ADvel';
-  return `https://image.tmdb.org/t/p/${size}${path}`;
+export const FALLBACK_POSTER_IMAGE = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80';
+export const FALLBACK_BACKDROP_IMAGE = 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80';
+
+export const formatImageUrl = (path: string | null | undefined, size: string = 'w500') => {
+  if (!path || typeof path !== 'string' || path.trim() === '' || path === 'null' || path === 'undefined') {
+    return size === 'original' ? FALLBACK_BACKDROP_IMAGE : FALLBACK_POSTER_IMAGE;
+  }
+  if (path.startsWith('http')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `https://image.tmdb.org/t/p/${size}${cleanPath}`;
 };
 
 // API Calls
@@ -121,3 +128,78 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
   const res = await fetch(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR&api_key=${TMDB_API_KEY}`, options);
   return res.json();
 };
+
+// TMDB Network IDs & Watch Provider IDs for streaming brands:
+// Netflix: network 213, provider 8
+// Disney+: network 2739, provider 337
+// HBO / Max: network 49 / 3186, provider 1899 / 384
+// Amazon Prime: network 1024, provider 119
+// Apple TV+: network 2552, provider 350
+export const getProviderSeries = async (provider: string, page: number = 1): Promise<TMDBResponse> => {
+  let networkId = 213; // default Netflix
+  let providerId = 8;
+  const p = provider.toLowerCase();
+
+  if (p.includes('netflix')) {
+    networkId = 213;
+    providerId = 8;
+  } else if (p.includes('disney')) {
+    networkId = 2739;
+    providerId = 337;
+  } else if (p.includes('max') || p.includes('hbo')) {
+    networkId = 49;
+    providerId = 1899;
+  } else if (p.includes('prime') || p.includes('amazon')) {
+    networkId = 1024;
+    providerId = 119;
+  } else if (p.includes('apple')) {
+    networkId = 2552;
+    providerId = 350;
+  }
+
+  const res = await fetch(
+    `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_networks=${networkId}&watch_region=BR`,
+    options
+  );
+  return res.json();
+};
+
+export const getProviderMovies = async (provider: string, page: number = 1): Promise<TMDBResponse> => {
+  let providerId = 8;
+  const p = provider.toLowerCase();
+
+  if (p.includes('netflix')) providerId = 8;
+  else if (p.includes('disney')) providerId = 337;
+  else if (p.includes('max') || p.includes('hbo')) providerId = 1899;
+  else if (p.includes('prime') || p.includes('amazon')) providerId = 119;
+  else if (p.includes('apple')) providerId = 350;
+
+  const res = await fetch(
+    `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_watch_providers=${providerId}&watch_region=BR`,
+    options
+  );
+  return res.json();
+};
+
+export const discoverMovies = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
+  let url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  if (genreId) url += `&with_genres=${genreId}`;
+  if (year) url += `&primary_release_year=${year}`;
+  const res = await fetch(url, options);
+  return res.json();
+};
+
+export const discoverSeries = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
+  let url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  if (genreId) url += `&with_genres=${genreId}`;
+  if (year) url += `&first_air_date_year=${year}`;
+  const res = await fetch(url, options);
+  return res.json();
+};
+
+export const getGenreIdByName = (name: string): number | undefined => {
+  const entry = Object.entries(genreMap).find(([_, val]) => val.toLowerCase() === name.toLowerCase());
+  return entry ? parseInt(entry[0]) : undefined;
+};
+
+

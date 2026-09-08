@@ -1,15 +1,19 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Play,
   Bookmark,
+  BookmarkCheck,
   Home,
   Film,
   Tv,
+  CalendarDays,
+  Calendar,
   List as ListIcon,
   Search,
   Star,
   StarHalf,
   ArrowLeft,
+  ChevronLeft,
   ChevronRight,
   ThumbsUp,
   MessageSquare,
@@ -22,12 +26,38 @@ import {
   Sparkles,
   Clock,
   Layers,
-  X
+  X,
+  CheckCircle2
 } from "lucide-react";
 import { featured, providers, top10, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
-import { searchMulti, getDetails, getSeasonDetails, formatImageUrl, getGenreNames, TMDBItem, TMDBDetails, Season } from "./services/tmdb";
+import { 
+  searchMulti, 
+  getDetails, 
+  getSeasonDetails, 
+  formatImageUrl, 
+  getGenreNames, 
+  getProviderSeries,
+  getProviderMovies,
+  discoverMovies,
+  discoverSeries,
+  getGenreIdByName,
+  FALLBACK_POSTER_IMAGE,
+  FALLBACK_BACKDROP_IMAGE,
+  TMDBItem, 
+  TMDBDetails, 
+  Season 
+} from "./services/tmdb";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import { WebhookPanelModal } from "./components/WebhookPanelModal";
+import { ReleaseCalendarPage } from "./components/ReleaseCalendarPage";
+import {
+  getFavoriteIds,
+  toggleFavorite,
+  isItemFavorite,
+  getAllCatalogItems,
+  SERIES_EPISODE_SCHEDULE,
+  getScheduleForFavorites
+} from "./services/favorites";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
@@ -46,7 +76,7 @@ export type OnPlayHandler = (
 
 export default function App() {
   const [viewState, setViewState] = useState<{ 
-    type: 'home' | 'movies' | 'series' | 'provider' | 'search' | 'profile' | 'favorites' | 'details', 
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details', 
     id?: string,
     itemData?: CatalogItem,
     previous?: any
@@ -112,9 +142,13 @@ export default function App() {
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
         <nav className="flex items-center gap-1 bg-black/40 p-1.5 rounded-full border border-white/5">
-          <button onClick={() => setViewState({ type: 'home' })} className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
-          <button onClick={() => setViewState({ type: 'movies' })} className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
-          <button onClick={() => setViewState({ type: 'series' })} className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
+          <button onClick={() => setViewState({ type: 'home' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
+          <button onClick={() => setViewState({ type: 'movies' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
+          <button onClick={() => setViewState({ type: 'series' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
+          <button onClick={() => setViewState({ type: 'calendar' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
+            <CalendarDays className="w-3.5 h-3.5" />
+            <span>Calendário</span>
+          </button>
         </nav>
         <div className="flex items-center gap-3 shrink-0 mr-1">
           <button 
@@ -141,7 +175,7 @@ export default function App() {
           </button>
           <div 
             onClick={() => setViewState({ type: 'profile' })}
-            className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
+            className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
           >
             N
           </div>
@@ -155,12 +189,20 @@ export default function App() {
           <span className="text-white">PLAY</span>
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
-        <button
-          onClick={() => setWebhookModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30"
-        >
-          <Radio className="w-3 h-3 text-orange-500" /> Servidor
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setViewState({ type: 'calendar' })}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30"
+          >
+            <CalendarDays className="w-3 h-3 text-orange-500" /> Agenda
+          </button>
+          <button
+            onClick={() => setWebhookModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-neutral-300 border border-white/10"
+          >
+            <Radio className="w-3 h-3 text-orange-500" /> Servidor
+          </button>
+        </div>
       </div>
 
       {viewState.type === 'details' && viewState.id ? (
@@ -170,17 +212,20 @@ export default function App() {
           onBack={() => setViewState(viewState.previous || { type: 'home' })} 
           onItemClick={navigateToDetails}
           onPlay={openPlayer}
+          onNavigateToCalendar={() => setViewState({ type: 'calendar' })}
         />
       ) : viewState.type === 'provider' && viewState.id ? (
         <ProviderPage provider={viewState.id} onBack={() => setViewState({ type: 'home' })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'movies' || viewState.type === 'series' ? (
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
+      ) : viewState.type === 'calendar' ? (
+        <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => setViewState({ type: 'series' })} />
       ) : viewState.type === 'search' ? (
         <GlobalSearchPage onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'profile' ? (
-        <UserProfilePage onNavigate={(type) => setViewState({ type: type as any })} />
+        <UserProfilePage onNavigate={(type) => setViewState({ type: type as any })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'favorites' ? (
-        <FavoritesPage onBack={() => setViewState({ type: 'profile' })} onItemClick={navigateToDetails} onPlay={openPlayer} />
+        <FavoritesPage onBack={() => setViewState({ type: 'profile' })} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => setViewState({ type: 'calendar' })} />
       ) : (
         <HomePage onProviderSelect={(p) => setViewState({ type: 'provider', id: p })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       )}
@@ -197,9 +242,20 @@ export default function App() {
         </p>
 
         <div className="flex flex-wrap justify-center gap-3 mb-10">
-          {["Início", "Filmes", "Séries", "Listas", "Buscar"].map(btn => (
-             <button key={btn} className="bg-neutral-900 hover:bg-neutral-800 text-neutral-300 px-5 py-2.5 rounded-full text-sm font-medium transition-colors border border-neutral-800">
-               {btn}
+          {[
+            { label: "Início", type: "home" },
+            { label: "Filmes", type: "movies" },
+            { label: "Séries", type: "series" },
+            { label: "Calendário", type: "calendar" },
+            { label: "Favoritos", type: "favorites" },
+            { label: "Buscar", type: "search" }
+          ].map(btn => (
+             <button 
+               key={btn.label} 
+               onClick={() => setViewState({ type: btn.type as any })}
+               className="bg-neutral-900 hover:bg-neutral-800 text-neutral-300 px-5 py-2.5 rounded-full text-sm font-medium transition-colors border border-neutral-800 cursor-pointer"
+             >
+               {btn.label}
              </button>
           ))}
         </div>
@@ -211,17 +267,18 @@ export default function App() {
       </footer>
 
       {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
-      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[92%] max-w-md z-50 pointer-events-none">
-        <nav className="bg-[#111111]/80 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-2 flex justify-between items-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
+      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-md z-50 pointer-events-none">
+        <nav className="bg-[#111111]/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-1.5 flex justify-between items-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
           <div className="flex justify-around items-center flex-1">
             <NavItem onClick={() => setViewState({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
             <NavItem onClick={() => setViewState({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />
             <NavItem onClick={() => setViewState({ type: 'series' })} icon={<Tv />} label="Séries" isActive={viewState.type === 'series'} />
+            <NavItem onClick={() => setViewState({ type: 'calendar' })} icon={<CalendarDays />} label="Agenda" isActive={viewState.type === 'calendar'} />
             <NavItem onClick={() => setViewState({ type: 'search' })} icon={<Search />} label="Buscar" isActive={viewState.type === 'search'} />
           </div>
           <div 
             onClick={() => setViewState({ type: 'profile' })}
-            className={`mx-2 w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg shrink-0 pointer-events-auto cursor-pointer transition-all ${viewState.type === 'profile' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)] scale-110' : 'border-black'}`}
+            className={`mx-1.5 w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg shrink-0 pointer-events-auto cursor-pointer transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)] scale-110' : 'border-black'}`}
           >
             N
           </div>
@@ -436,8 +493,8 @@ function HomePage({
         <section>
           <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pl-2 border-l-4 border-orange-500">Continue Assistindo</h2>
           <div className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pl-2 pr-4 scrollbar-hide">
-            {continueWatching.map((item) => (
-              <div key={item.id} onClick={() => onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]">
+            {continueWatching.map((item, idx) => (
+              <div key={`cw-${item.id}-${idx}`} onClick={() => onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]">
                 <div className="relative h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
                   <img 
                     src={item.imageUrl} 
@@ -500,15 +557,25 @@ function DetailsPage({
   initialItem,
   onBack, 
   onItemClick,
-  onPlay 
+  onPlay,
+  onNavigateToCalendar
 }: { 
   itemId: number, 
   initialItem?: CatalogItem,
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: OnPlayHandler
+  onPlay?: OnPlayHandler,
+  onNavigateToCalendar?: () => void
 }) {
-  const allCatalogs = Object.values(providerCatalogs).flat();
+  const allCatalogs = React.useMemo(() => {
+    const map = new Map<number, CatalogItem>();
+    Object.values(providerCatalogs).forEach(list => {
+      list.forEach(i => {
+        if (!map.has(i.id)) map.set(i.id, i);
+      });
+    });
+    return Array.from(map.values());
+  }, []);
   const [item, setItem] = useState<CatalogItem>(() => {
     if (initialItem) return initialItem;
     return allCatalogs.find(i => i.id === itemId) || allCatalogs[0];
@@ -522,7 +589,27 @@ function DetailsPage({
     { id: 1, user: "Alex99", text: "Incrível! Qualidade impressionante sem travamentos.", likes: 24 },
     { id: 2, user: "CinefiloBr", text: "A fotografia é perfeita, cores vivas e som excelente.", likes: 12 }
   ]);
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId));
+
+  // Sincronizar estado de favoritos
+  useEffect(() => {
+    setIsFavorite(isItemFavorite(itemId));
+
+    const handleFavUpdate = (e: any) => {
+      const ids: number[] = e.detail || getFavoriteIds();
+      setIsFavorite(ids.includes(itemId));
+    };
+
+    window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    return () => {
+      window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    };
+  }, [itemId]);
+
+  const handleToggleFavorite = () => {
+    const newState = toggleFavorite(itemId);
+    setIsFavorite(newState);
+  };
 
   // Carregar dados estendidos do TMDB caso disponível
   React.useEffect(() => {
@@ -690,11 +777,11 @@ function DetailsPage({
               </button>
 
               <button 
-                onClick={() => setIsFavorite(!isFavorite)}
-                className={`w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center rounded-full transition-all border backdrop-blur-md cursor-pointer ${isFavorite ? 'bg-orange-600/20 border-orange-500/50 text-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.3)]' : 'bg-neutral-900/60 hover:bg-neutral-800 border-white/10 text-neutral-400 hover:text-white'}`}
-                title="Adicionar aos Favoritos"
+                onClick={handleToggleFavorite}
+                className={`w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center rounded-full transition-all border backdrop-blur-md cursor-pointer ${isFavorite ? 'bg-orange-600/30 border-orange-500 text-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.4)]' : 'bg-neutral-900/60 hover:bg-neutral-800 border-white/10 text-neutral-400 hover:text-white'}`}
+                title={isFavorite ? "Remover dos Favoritos / Deixar de Seguir" : "Adicionar aos Favoritos e Calendário"}
               >
-                {isFavorite ? <Check className="w-5 h-5 md:w-6 md:h-6 stroke-[3]" /> : <Bookmark className="w-5 h-5 md:w-6 md:h-6" />}
+                {isFavorite ? <BookmarkCheck className="w-5 h-5 md:w-6 md:h-6 fill-current" /> : <Bookmark className="w-5 h-5 md:w-6 md:h-6" />}
               </button>
             </div>
           </div>
@@ -706,6 +793,54 @@ function DetailsPage({
         
         {/* Coluna Esquerda: Poster oficial e detalhes completos */}
         <div className="lg:col-span-2 space-y-10">
+
+          {/* BANNER DE CRONOGRAMA DE EPISÓDIOS (Se for série com agendamento) */}
+          {isSeries && SERIES_EPISODE_SCHEDULE[item.id] && (
+            <div className="bg-gradient-to-r from-[#171412] via-[#1a1512] to-[#121212] border border-orange-500/30 rounded-2xl p-5 md:p-6 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center shrink-0 shadow-[0_0_15px_rgba(234,88,12,0.2)]">
+                  <CalendarDays className="w-6 h-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-orange-500">
+                      Agenda de Lançamentos
+                    </span>
+                    <span className="px-2 py-0.2 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold">
+                      {SERIES_EPISODE_SCHEDULE[item.id].length} episódios programados
+                    </span>
+                  </div>
+                  <h4 className="font-bold text-white text-base mt-0.5">
+                    Próximo: {SERIES_EPISODE_SCHEDULE[item.id][0]?.episodeTitle}
+                  </h4>
+                  <p className="text-xs text-neutral-400 mt-0.5">
+                    {SERIES_EPISODE_SCHEDULE[item.id][0]?.dayOfWeek} às {SERIES_EPISODE_SCHEDULE[item.id][0]?.airTime} • {isFavorite ? 'Série salva nos seus Favoritos' : 'Favorite a série para seguir'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto shrink-0">
+                {!isFavorite && (
+                  <button
+                    onClick={handleToggleFavorite}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Bookmark className="w-3.5 h-3.5" />
+                    <span>+ Seguir Série</span>
+                  </button>
+                )}
+                {onNavigateToCalendar && (
+                  <button
+                    onClick={onNavigateToCalendar}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(234,88,12,0.3)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Ver Calendário</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
           
           {/* Card com Poster e Sinopse */}
           <div className="flex flex-col sm:flex-row gap-6 items-start bg-[#121212] border border-neutral-800/80 p-6 rounded-2xl shadow-xl">
@@ -908,9 +1043,9 @@ function DetailsPage({
             <span className="text-xs text-orange-500 font-semibold">TMDB</span>
           </div>
           <div className="grid grid-cols-2 gap-4">
-             {allCatalogs.filter(i => i.id !== item.id && (i.type === item.type || i.genres.some(g => item.genres.includes(g)))).slice(0, 6).map(sim => (
+             {allCatalogs.filter(i => i.id !== item.id && (i.type === item.type || i.genres.some(g => item.genres.includes(g)))).slice(0, 6).map((sim, idx) => (
                <div 
-                 key={sim.id} 
+                 key={`sim-${sim.id}-${idx}`} 
                  onClick={() => onItemClick(sim.id, sim)} 
                  className="relative rounded-xl overflow-hidden border border-neutral-800/80 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(234,88,12,0.2)]"
                >
@@ -958,7 +1093,15 @@ function GlobalSearchPage({
   const [tmdbResults, setTmdbResults] = useState<CatalogItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const allCatalogs = Object.values(providerCatalogs).flat();
+  const allCatalogs = React.useMemo(() => {
+    const map = new Map<number, CatalogItem>();
+    Object.values(providerCatalogs).forEach(list => {
+      list.forEach(i => {
+        if (!map.has(i.id)) map.set(i.id, i);
+      });
+    });
+    return Array.from(map.values());
+  }, []);
 
   // Busca em tempo real com TMDB API
   React.useEffect(() => {
@@ -1110,9 +1253,9 @@ function GlobalSearchPage({
                   Mais Buscados no WatchPlayer
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                  {allCatalogs.slice(0, 12).map(item => (
+                  {allCatalogs.slice(0, 12).map((item, idx) => (
                     <div 
-                      key={item.id} 
+                      key={`rec-${item.id}-${idx}`} 
                       onClick={() => onItemClick(item.id, item)} 
                       className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                     >
@@ -1185,9 +1328,9 @@ function GlobalSearchPage({
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-                {displayedResults.map(item => (
+                {displayedResults.map((item, idx) => (
                   <div 
-                    key={item.id} 
+                    key={`search-${item.type || 'media'}-${item.id}-${idx}`} 
                     onClick={() => onItemClick(item.id, item)} 
                     className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 hover:shadow-[0_0_25px_rgba(234,88,12,0.25)] transition-all duration-300"
                   >
@@ -1273,48 +1416,241 @@ function GlobalSearchPage({
   );
 }
 
-function UserProfilePage({ onNavigate }: { onNavigate: (type: string) => void }) {
+function UserProfilePage({ 
+  onNavigate,
+  onItemClick,
+  onPlay
+}: { 
+  onNavigate: (type: string) => void,
+  onItemClick?: (id: number, item?: CatalogItem) => void,
+  onPlay?: OnPlayHandler
+}) {
+  const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+
+  useEffect(() => {
+    const handleFavUpdate = (e: any) => {
+      setFavoriteIds(e.detail || getFavoriteIds());
+    };
+    window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    return () => {
+      window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    };
+  }, []);
+
+  const allItems = getAllCatalogItems();
+  const favoriteItems = allItems.filter(item => favoriteIds.includes(item.id));
+  const followedSeries = favoriteItems.filter(item => item.type === 'series');
+  const scheduledEpisodes = getScheduleForFavorites(favoriteIds);
+  const thisWeekEpisodes = scheduledEpisodes.filter(e => e.airDate >= '2026-09-08' && e.airDate <= '2026-09-15');
+
   return (
-    <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-32 px-4 md:px-12 bg-[#0a0a0a]">
-      <div className="max-w-3xl mx-auto w-full">
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-12 uppercase text-center">Perfil</h1>
+    <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-28 md:pt-32 px-4 md:px-12 bg-[#0a0a0a] pb-24 text-white">
+      <div className="max-w-4xl mx-auto w-full">
+        <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter mb-8 uppercase text-center md:text-left">
+          Meu Perfil
+        </h1>
         
-        <div className="bg-[#111111] border border-white/5 rounded-3xl p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-8 shadow-xl">
-          <div className="w-32 h-32 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[4px] border-[#0a0a0a] flex items-center justify-center font-black text-5xl shadow-[0_0_30px_rgba(234,88,12,0.6)] shrink-0">
+        {/* Card do Usuário */}
+        <div className="bg-[#111111] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 shadow-xl">
+          <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[4px] border-[#0a0a0a] flex items-center justify-center font-black text-4xl md:text-5xl shadow-[0_0_30px_rgba(234,88,12,0.6)] shrink-0">
             N
           </div>
           
           <div className="flex flex-col items-center md:items-start flex-1 text-center md:text-left">
-            <h2 className="text-3xl font-bold text-white mb-2">Naylan Moreira</h2>
-            <p className="text-neutral-400 mb-6 font-medium">Assinante Premium</p>
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">Naylan Moreira</h2>
+            <p className="text-neutral-400 mb-5 font-medium text-sm">Assinante Premium • Acesso Ilimitado</p>
+            
+            {/* Badges de estatísticas */}
+            <div className="grid grid-cols-3 gap-3 w-full max-w-md mb-6">
+              <div 
+                onClick={() => onNavigate('favorites')}
+                className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3 text-center cursor-pointer transition-colors"
+              >
+                <span className="block text-xl font-black text-orange-500">{favoriteItems.length}</span>
+                <span className="text-[11px] text-neutral-400 font-medium">Favoritos</span>
+              </div>
+
+              <div 
+                onClick={() => onNavigate('calendar')}
+                className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3 text-center cursor-pointer transition-colors"
+              >
+                <span className="block text-xl font-black text-white">{followedSeries.length}</span>
+                <span className="text-[11px] text-neutral-400 font-medium">Séries Seguidas</span>
+              </div>
+
+              <div 
+                onClick={() => onNavigate('calendar')}
+                className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3 text-center cursor-pointer transition-colors"
+              >
+                <span className="block text-xl font-black text-emerald-400">{thisWeekEpisodes.length}</span>
+                <span className="text-[11px] text-neutral-400 font-medium">Lançamentos</span>
+              </div>
+            </div>
             
             <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 w-full">
-               <button className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-semibold transition-colors text-sm border border-white/10">
-                 Editar Perfil
+               <button 
+                 onClick={() => onNavigate('favorites')}
+                 className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-full font-semibold transition-all text-xs shadow-[0_0_15px_rgba(234,88,12,0.4)] cursor-pointer flex items-center gap-1.5"
+               >
+                 <Bookmark className="w-3.5 h-3.5 fill-current" />
+                 <span>Minha Lista de Favoritos ({favoriteItems.length})</span>
                </button>
-               <button className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white rounded-full font-semibold transition-colors text-sm shadow-[0_0_15px_rgba(234,88,12,0.4)]">
-                 Atualizar Plano
+
+               <button 
+                 onClick={() => onNavigate('calendar')}
+                 className="px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-full font-semibold transition-colors text-xs border border-white/10 cursor-pointer flex items-center gap-1.5"
+               >
+                 <CalendarDays className="w-3.5 h-3.5 text-orange-400" />
+                 <span>Calendário de Episódios</span>
                </button>
             </div>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <h3 className="text-xl font-bold text-white mb-4 pl-3 border-l-4 border-orange-500">Configurações</h3>
+        {/* PRÉVIA DOS FAVORITOS NO PERFIL */}
+        <div className="mb-10">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-xl font-bold text-white pl-3 border-l-4 border-orange-500 flex items-center gap-2">
+              <Bookmark className="w-4 h-4 text-orange-500" />
+              <span>Meus Favoritos</span>
+            </h3>
+            {favoriteItems.length > 0 && (
+              <button 
+                onClick={() => onNavigate('favorites')}
+                className="text-xs font-semibold text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <span>Ver todos ({favoriteItems.length})</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {favoriteItems.length > 0 ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {favoriteItems.slice(0, 4).map(item => (
+                <div 
+                  key={item.id} 
+                  onClick={() => onItemClick?.(item.id, item)} 
+                  className="relative rounded-2xl overflow-hidden bg-[#121212] border border-neutral-800 hover:border-orange-500/50 transition-all duration-300 group cursor-pointer aspect-[2/3]"
+                >
+                  <img 
+                    src={item.posterUrl || item.imageUrl} 
+                    alt={item.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    loading="lazy"
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                    }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent"></div>
+
+                  <div className="absolute top-2.5 left-2.5 z-10 px-2 py-0.5 rounded bg-black/60 backdrop-blur-md text-[10px] font-bold text-orange-400 uppercase">
+                    {item.type === 'series' ? 'Série' : 'Filme'}
+                  </div>
+
+                  {/* Play Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlay?.(
+                          item.title, 
+                          item.playerUrl, 
+                          item.type, 
+                          item.tmdbId || item.id, 
+                          item.imdbId, 
+                          1, 
+                          1, 
+                          item.quality, 
+                          checkIsCam(item.title, item.quality)
+                        );
+                      }}
+                      className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(234,88,12,0.6)] text-white hover:scale-110 transition-transform"
+                    >
+                      <Play className="w-4 h-4 fill-white ml-0.5" />
+                    </div>
+                  </div>
+
+                  <div className="absolute bottom-3 inset-x-0 px-3 text-center">
+                    <span className="block font-bold text-xs text-white truncate drop-shadow-md">
+                      {item.title}
+                    </span>
+                    <span className="block text-[10px] text-neutral-400 mt-0.5">
+                      {item.year} • {item.rating}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-[#111111] border border-white/5 rounded-2xl p-6 text-center text-neutral-500">
+              <p className="text-sm">Você ainda não possui títulos nos favoritos.</p>
+              <button 
+                onClick={() => onNavigate('home')} 
+                className="mt-3 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Explorar Catálogo
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Menu de Configurações */}
+        <div className="space-y-3">
+          <h3 className="text-xl font-bold text-white mb-4 pl-3 border-l-4 border-orange-500">
+            Navegação & Preferências
+          </h3>
           
           {[
-            { label: 'Favoritos', onClick: () => onNavigate('favorites') },
-            { label: 'Histórico de Visualização' },
-            { label: 'Configurações do Aplicativo' },
-            { label: 'Ajuda e Suporte' }
+            { 
+              label: 'Minha Lista de Favoritos', 
+              desc: `${favoriteItems.length} títulos salvos`,
+              icon: <Bookmark className="w-5 h-5 text-orange-500" />,
+              onClick: () => onNavigate('favorites') 
+            },
+            { 
+              label: 'Calendário de Lançamentos de Episódios', 
+              desc: `${followedSeries.length} séries seguidas • ${thisWeekEpisodes.length} lançamentos esta semana`,
+              icon: <CalendarDays className="w-5 h-5 text-orange-500" />,
+              onClick: () => onNavigate('calendar') 
+            },
+            { 
+              label: 'Histórico de Visualização', 
+              desc: 'Títulos assistidos recentemente',
+              icon: <Clock className="w-5 h-5 text-neutral-400" /> 
+            },
+            { 
+              label: 'Configurações do Aplicativo', 
+              desc: 'Qualidade de vídeo e preferências de reprodução',
+              icon: <Info className="w-5 h-5 text-neutral-400" /> 
+            }
           ].map((item, i) => (
-            <div key={i} onClick={item.onClick} className="bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-5 flex items-center justify-between cursor-pointer transition-colors group">
-              <span className="font-semibold text-neutral-200 group-hover:text-white transition-colors">{item.label}</span>
-              <ChevronRight className="w-5 h-5 text-neutral-500 group-hover:text-orange-500 transition-colors" />
+            <div 
+              key={i} 
+              onClick={item.onClick} 
+              className="bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-4 sm:p-5 flex items-center justify-between cursor-pointer transition-colors group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 shrink-0">
+                  {item.icon}
+                </div>
+                <div>
+                  <span className="font-semibold text-neutral-200 group-hover:text-white transition-colors block text-sm sm:text-base">
+                    {item.label}
+                  </span>
+                  {item.desc && (
+                    <span className="text-xs text-neutral-400 block mt-0.5">
+                      {item.desc}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <ChevronRight className="w-5 h-5 text-neutral-500 group-hover:text-orange-500 transition-colors shrink-0" />
             </div>
           ))}
 
-          <button className="w-full mt-8 py-5 text-center font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors border border-transparent hover:border-red-500/20">
+          <button className="w-full mt-8 py-4 text-center font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors border border-transparent hover:border-red-500/20 text-sm cursor-pointer">
             Encerrar Sessão
           </button>
         </div>
@@ -1326,101 +1662,215 @@ function UserProfilePage({ onNavigate }: { onNavigate: (type: string) => void })
 function FavoritesPage({ 
   onBack, 
   onItemClick,
-  onPlay
+  onPlay,
+  onNavigateToCalendar
 }: { 
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
-  onPlay?: OnPlayHandler
+  onPlay?: OnPlayHandler,
+  onNavigateToCalendar?: () => void
 }) {
-  // Mock favorites picking a few items from data
-  const allCatalogs = Object.values(providerCatalogs).flat();
-  const favoriteItems = allCatalogs.filter(item => [101, 201, 301, 401, 501].includes(item.id));
+  const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+  const [typeFilter, setTypeFilter] = useState<'all' | 'series' | 'movies'>('all');
+
+  useEffect(() => {
+    const handleFavUpdate = (e: any) => {
+      setFavoriteIds(e.detail || getFavoriteIds());
+    };
+    window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    return () => {
+      window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    };
+  }, []);
+
+  const allCatalogs = getAllCatalogItems();
+  const favoriteItems = allCatalogs.filter(item => favoriteIds.includes(item.id));
+
+  const filteredItems = favoriteItems.filter(item => {
+    if (typeFilter === 'series') return item.type === 'series';
+    if (typeFilter === 'movies') return item.type === 'movie';
+    return true;
+  });
+
+  const handleRemoveFavorite = (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    toggleFavorite(id);
+    setFavoriteIds(getFavoriteIds());
+  };
+
+  const seriesCount = favoriteItems.filter(i => i.type === 'series').length;
+  const movieCount = favoriteItems.filter(i => i.type === 'movie').length;
 
   return (
-    <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-32 px-4 md:px-12 bg-[#0a0a0a]">
+    <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-28 md:pt-32 px-4 md:px-12 bg-[#0a0a0a] pb-24 text-white">
       <div className="max-w-7xl mx-auto w-full">
-        <button 
-          onClick={onBack}
-          className="flex items-center gap-2 text-sm font-semibold text-neutral-400 hover:text-white px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors w-fit mb-8"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Voltar para Perfil
-        </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <button 
+            onClick={onBack}
+            className="flex items-center gap-2 text-xs sm:text-sm font-semibold text-neutral-400 hover:text-white px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors w-fit cursor-pointer border border-white/5"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Voltar para Perfil</span>
+          </button>
 
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tighter mb-12 uppercase">Favoritos</h1>
+          {onNavigateToCalendar && (
+            <button 
+              onClick={onNavigateToCalendar}
+              className="flex items-center gap-2 px-5 py-2 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(234,88,12,0.3)] transition-all cursor-pointer w-fit"
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Ver Calendário de Episódios ({seriesCount} séries)</span>
+            </button>
+          )}
+        </div>
 
-        {favoriteItems.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-            {favoriteItems.map(item => (
-              <div 
-                key={item.id} 
-                onClick={() => onItemClick(item.id, item)} 
-                className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
-              >
-                <img 
-                  src={item.posterUrl || item.imageUrl} 
-                  alt={item.title} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                  loading="lazy" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                  }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
-                
-                <div className="absolute top-3 left-3 z-10 flex items-center gap-1">
-                  {checkIsCam(item.title, item.quality) && (
-                    <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
-                      CAM
-                    </span>
-                  )}
-                </div>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 pb-6 border-b border-white/10">
+          <div>
+            <div className="flex items-center gap-2 text-orange-500 font-bold text-xs uppercase tracking-widest mb-1.5">
+              <Bookmark className="w-4 h-4 fill-current" />
+              <span>Minha Coleção Pessoal</span>
+            </div>
+            <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase">
+              Favoritos
+            </h1>
+            <p className="text-neutral-400 text-xs sm:text-sm mt-1">
+              Gerencie seus filmes e séries favoritos. Séries favoritadas alimentam seu calendário de lançamentos.
+            </p>
+          </div>
 
-                <div className="absolute top-3 right-3 z-10 text-orange-500 opacity-100 transition-all dropdown-shadow drop-shadow-md">
-                   <Bookmark className="w-5 h-5 fill-current" />
-                </div>
+          {/* Filtros de Tipo */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            <button
+              onClick={() => setTypeFilter('all')}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                typeFilter === 'all'
+                  ? 'bg-orange-600 text-white shadow-[0_0_12px_rgba(234,88,12,0.4)]'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-300'
+              }`}
+            >
+              Todos ({favoriteItems.length})
+            </button>
+            <button
+              onClick={() => setTypeFilter('series')}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                typeFilter === 'series'
+                  ? 'bg-orange-600 text-white shadow-[0_0_12px_rgba(234,88,12,0.4)]'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-300'
+              }`}
+            >
+              Séries ({seriesCount})
+            </button>
+            <button
+              onClick={() => setTypeFilter('movies')}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                typeFilter === 'movies'
+                  ? 'bg-orange-600 text-white shadow-[0_0_12px_rgba(234,88,12,0.4)]'
+                  : 'bg-white/5 hover:bg-white/10 text-neutral-300'
+              }`}
+            >
+              Filmes ({movieCount})
+            </button>
+          </div>
+        </div>
 
-                {/* Play Overlay */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onPlay?.(
-                        item.title, 
-                        item.playerUrl, 
-                        item.type, 
-                        item.tmdbId || item.id, 
-                        item.imdbId, 
-                        1, 
-                        1, 
-                        item.quality, 
-                        checkIsCam(item.title, item.quality)
-                      );
+        {filteredItems.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
+            {filteredItems.map(item => {
+              const hasSchedule = item.type === 'series' && !!SERIES_EPISODE_SCHEDULE[item.id];
+
+              return (
+                <div 
+                  key={item.id} 
+                  onClick={() => onItemClick(item.id, item)} 
+                  className="relative rounded-2xl overflow-hidden bg-[#121212] border border-neutral-800 hover:border-orange-500/50 hover:shadow-[0_0_25px_rgba(234,88,12,0.25)] transition-all duration-300 group cursor-pointer aspect-[2/3] flex flex-col justify-between"
+                >
+                  <img 
+                    src={item.posterUrl || item.imageUrl} 
+                    alt={item.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 absolute inset-0" 
+                    loading="lazy" 
+                    onError={(e) => {
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
                     }}
-                    className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
-                    title="Assistir no WatchPlayer"
-                  >
-                    <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/25 to-transparent"></div>
+                  
+                  {/* Top Badges */}
+                  <div className="relative z-10 p-3 flex items-start justify-between">
+                    <div className="flex flex-col gap-1">
+                      <span className="px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-orange-400 font-bold text-[10px] uppercase border border-white/10">
+                        {item.type === 'series' ? 'Série' : 'Filme'}
+                      </span>
+                      {hasSchedule && (
+                        <span className="px-2 py-0.5 rounded bg-orange-600 text-white font-black text-[9px] uppercase tracking-wider shadow">
+                          No Calendário
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Botão Remover dos Favoritos */}
+                    <button
+                      onClick={(e) => handleRemoveFavorite(e, item.id)}
+                      className="p-2 rounded-full bg-black/70 hover:bg-red-600/80 text-orange-500 hover:text-white backdrop-blur-md transition-all border border-white/10 shadow-md cursor-pointer"
+                      title="Remover dos favoritos"
+                    >
+                      <BookmarkCheck className="w-4 h-4 fill-current" />
+                    </button>
+                  </div>
+
+                  {/* Play Overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
+                    <div 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onPlay?.(
+                          item.title, 
+                          item.playerUrl, 
+                          item.type, 
+                          item.tmdbId || item.id, 
+                          item.imdbId, 
+                          1, 
+                          1, 
+                          item.quality, 
+                          checkIsCam(item.title, item.quality)
+                        );
+                      }}
+                      className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110 pointer-events-auto cursor-pointer"
+                      title="Assistir no WatchPlayer"
+                    >
+                      <Play className="w-5 h-5 fill-white text-white ml-0.5" />
+                    </div>
+                  </div>
+
+                  {/* Informações na base */}
+                  <div className="relative z-10 p-3.5 text-center">
+                    <span className="block font-black text-xs sm:text-sm uppercase text-white drop-shadow-lg truncate">
+                      {item.title}
+                    </span>
+                    <span className="block text-[11px] text-neutral-300 mt-0.5">
+                      {item.year} • {item.genres?.[0] || item.rating}
+                    </span>
                   </div>
                 </div>
-
-                <div className="absolute bottom-4 inset-x-0 mx-3">
-                  <span className="block text-center font-bold text-sm md:text-base uppercase text-white drop-shadow-lg truncate">
-                    {item.title}
-                  </span>
-                  <span className="block text-center text-xs text-neutral-400 mt-0.5">
-                    {item.year} • {item.rating}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
-            <Bookmark className="w-16 h-16 mb-4 opacity-50" />
-            <h3 className="text-xl font-bold text-neutral-400">Nenhum favorito salvo</h3>
-            <p className="mt-2">Filmes e séries favoritados aparecerão aqui.</p>
+          <div className="bg-[#121212] border border-white/5 rounded-3xl p-12 text-center my-6 flex flex-col items-center">
+            <Bookmark className="w-16 h-16 text-neutral-600 mb-4" />
+            <h3 className="text-xl font-bold text-white mb-2">Nenhum favorito encontrado</h3>
+            <p className="text-sm text-neutral-400 max-w-md mb-6 leading-relaxed">
+              Você ainda não adicionou títulos {typeFilter !== 'all' ? `na categoria ${typeFilter === 'series' ? 'séries' : 'filmes'}` : ''} aos seus favoritos. Ao favoritar séries, elas aparecerão automaticamente aqui e no seu calendário de novos episódios!
+            </p>
+            {onNavigateToCalendar && (
+              <button
+                onClick={onNavigateToCalendar}
+                className="px-6 py-2.5 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(234,88,12,0.3)] transition-all cursor-pointer"
+              >
+                Abrir Calendário de Episódios
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1437,98 +1887,233 @@ function GlobalCatalogPage({
   onItemClick: (id: number, item?: CatalogItem) => void,
   onPlay?: OnPlayHandler
 }) {
-  // Combine all items from all providers
-  const allCatalogs = Object.values(providerCatalogs).flat();
+  // Combine curated items from data.ts
+  const allCatalogs = React.useMemo(() => {
+    const map = new Map<number, CatalogItem>();
+    Object.values(providerCatalogs).forEach(list => {
+      list.forEach(i => {
+        if (!map.has(i.id)) map.set(i.id, i);
+      });
+    });
+    return Array.from(map.values());
+  }, []);
   const typeFilter = type === 'movies' ? 'movie' : 'series';
-  
-  // Get items matching the type
-  const typeCatalogs = allCatalogs.filter(item => item.type === typeFilter);
+  const initialLocalItems = allCatalogs.filter(item => item.type === typeFilter);
 
+  const [items, setItems] = useState<CatalogItem[]>(initialLocalItems);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(500);
+  const [totalCount, setTotalCount] = useState<number>(10000);
   const [filterGenre, setFilterGenre] = useState<string>('all');
   const [filterYear, setFilterYear] = useState<string>('all');
-  
-  // get all unique genres for this type globally
-  const availableGenres = Array.from(new Set(typeCatalogs.flatMap(item => item.genres || []))).sort();
+  const [sortBy, setSortBy] = useState<string>('popularity.desc');
+
+  const availableGenres = [
+    "Ação", "Aventura", "Animação", "Comédia", "Crime",
+    "Documentário", "Drama", "Família", "Fantasia",
+    "Ficção científica", "Mistério", "Romance", "Terror", "Thriller"
+  ];
 
   const yearRanges = [
     { label: "Todos os Anos", value: "all" },
-    { label: "2020 - 2024", min: 2020, max: 2024 },
-    { label: "2010 - 2019", min: 2010, max: 2019 },
-    { label: "2000 - 2009", min: 2000, max: 2009 },
-    { label: "Antes de 2000", min: 0, max: 1999 }
+    { label: "2026 (Lançamentos)", year: 2026 },
+    { label: "2025", year: 2025 },
+    { label: "2024", year: 2024 },
+    { label: "2023", year: 2023 },
+    { label: "2020 - 2022", year: 2022 },
+    { label: "2010 - 2019", year: 2015 },
   ];
 
-  const filteredCatalogs = typeCatalogs.filter(item => {
-    if (filterGenre !== 'all' && (!item.genres || !item.genres.includes(filterGenre))) return false;
-    
-    if (filterYear !== 'all') {
-      const range = yearRanges.find(r => r.label === filterYear);
-      if (range && range.min !== undefined && range.max !== undefined) {
-        const itemYear = item.year || 0;
-        if (itemYear < range.min || itemYear > range.max) return false;
-      }
-    }
-    return true;
-  });
+  // Fetch from TMDB Discover API
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
 
-  const pageTitle = type === 'movies' ? 'Filmes' : 'Séries';
+    const loadCatalog = async () => {
+      try {
+        const genreId = filterGenre !== 'all' ? getGenreIdByName(filterGenre) : undefined;
+        const selectedYearObj = yearRanges.find(r => r.label === filterYear);
+        const targetYear = selectedYearObj?.year;
+
+        if (type === 'movies') {
+          const res = await discoverMovies(currentPage, genreId, sortBy, targetYear);
+          if (!isMounted) return;
+
+          if (res && res.results && res.results.length > 0) {
+            const formatted: CatalogItem[] = res.results.map((m: TMDBItem) => ({
+              id: m.id,
+              tmdbId: m.id,
+              title: m.title || m.name || "Sem título",
+              imageUrl: formatImageUrl(m.poster_path, 'w500'),
+              posterUrl: formatImageUrl(m.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+              type: 'movie',
+              genres: getGenreNames(m.genre_ids || []),
+              synopsis: m.overview || "Sinopse não disponível no momento.",
+              year: parseInt(m.release_date?.substring(0, 4) || '2024'),
+              rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
+              duration: "Filme",
+              match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
+              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`,
+            }));
+            setItems(formatted);
+            setTotalPages(Math.min(res.total_pages || 1, 500));
+            setTotalCount(res.total_results || 10000);
+          } else {
+            setItems(initialLocalItems);
+            setTotalPages(1);
+          }
+        } else {
+          // Séries
+          const res = await discoverSeries(currentPage, genreId, sortBy, targetYear);
+          if (!isMounted) return;
+
+          if (res && res.results && res.results.length > 0) {
+            const formatted: CatalogItem[] = res.results.map((s: TMDBItem) => ({
+              id: s.id,
+              tmdbId: s.id,
+              title: s.name || s.title || "Sem título",
+              imageUrl: formatImageUrl(s.poster_path, 'w500'),
+              posterUrl: formatImageUrl(s.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+              type: 'series',
+              genres: getGenreNames(s.genre_ids || []),
+              synopsis: s.overview || "Sinopse não disponível no momento.",
+              year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
+              rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
+              duration: "Série",
+              match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
+              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`,
+            }));
+            setItems(formatted);
+            setTotalPages(Math.min(res.total_pages || 1, 500));
+            setTotalCount(res.total_results || 10000);
+          } else {
+            setItems(initialLocalItems);
+            setTotalPages(1);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar catálogo completo:", err);
+        if (isMounted) {
+          setItems(initialLocalItems);
+          setTotalPages(1);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadCatalog();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [type, currentPage, filterGenre, filterYear, sortBy]);
+
+  const pageTitle = type === 'movies' ? 'Catálogo Geral de Filmes' : 'Catálogo Geral de Séries';
   const pageDescription = type === 'movies' 
-    ? 'Descubra os melhores filmes em alta definição disponíveis para assistir no WatchPlayer.' 
-    : 'Acompanhe as suas séries favoritas com episódios completos sem anúncios.';
+    ? 'Acesso direto a mais de 500.000 filmes em alta definição no WatchPlayer e Player 2 (VidLink).' 
+    : 'Acesso completo a dezenas de milhares de séries, temporadas e episódios com multi-servidores.';
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen">
       {/* Global Hero Header */}
       <div className="relative pt-32 pb-8 px-6 md:px-12 bg-[#0a0a0a]">
-        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
-          {pageTitle}
-        </h1>
-        <p className="text-neutral-400 mt-4 max-w-2xl text-lg">
-          {pageDescription}
-        </p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2.5 py-1 rounded-full bg-orange-600/20 text-orange-400 border border-orange-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" /> Catálogo Aberto
+              </span>
+              <span className="text-xs text-neutral-400 font-mono">
+                {totalCount.toLocaleString()} títulos disponíveis
+              </span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
+              {pageTitle}
+            </h1>
+            <p className="text-neutral-400 mt-3 max-w-2xl text-base md:text-lg">
+              {pageDescription}
+            </p>
+          </div>
+
+          {/* Seletor de Ordenação */}
+          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 self-start md:self-auto">
+            <span className="text-xs text-neutral-400">Ordenar por:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => {
+                setSortBy(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="bg-transparent text-white text-xs font-bold focus:outline-none cursor-pointer"
+            >
+              <option value="popularity.desc" className="bg-neutral-900 text-white">Mais Populares</option>
+              <option value="vote_average.desc" className="bg-neutral-900 text-white">Melhor Avaliados</option>
+              <option value="primary_release_date.desc" className="bg-neutral-900 text-white">Lançamentos Recentes</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <main className="flex-1 px-4 md:px-12 py-6 space-y-12 bg-[#0a0a0a] animate-in fade-in duration-500">
+      <main className="flex-1 px-4 md:px-12 py-6 space-y-8 bg-[#0a0a0a] animate-in fade-in duration-500">
         {/* FILTERS */}
-        {typeCatalogs.length > 0 && availableGenres.length > 0 && (
-          <div className="space-y-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-              <FilterChip label="Todos Gêneros" active={filterGenre === 'all'} onClick={() => setFilterGenre('all')} />
-              {availableGenres.map(genre => (
-                <FilterChip key={genre} label={genre} active={filterGenre === genre} onClick={() => setFilterGenre(genre)} />
-              ))}
-            </div>
-            
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-              {yearRanges.map(range => (
-                <FilterChip 
-                  key={range.label} 
-                  label={range.label} 
-                  active={filterYear === range.label || (filterYear === 'all' && range.value === 'all')} 
-                  onClick={() => setFilterYear(range.value === 'all' ? 'all' : range.label)} 
-                />
-              ))}
-            </div>
+        <div className="space-y-4">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+            <FilterChip 
+              label="Todos Gêneros" 
+              active={filterGenre === 'all'} 
+              onClick={() => { setFilterGenre('all'); setCurrentPage(1); }} 
+            />
+            {availableGenres.map(genre => (
+              <FilterChip 
+                key={genre} 
+                label={genre} 
+                active={filterGenre === genre} 
+                onClick={() => { setFilterGenre(genre); setCurrentPage(1); }} 
+              />
+            ))}
           </div>
-        )}
+          
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+            {yearRanges.map(range => (
+              <FilterChip 
+                key={range.label} 
+                label={range.label} 
+                active={filterYear === range.label || (filterYear === 'all' && range.value === 'all')} 
+                onClick={() => { setFilterYear(range.value === 'all' ? 'all' : range.label); setCurrentPage(1); }} 
+              />
+            ))}
+          </div>
+        </div>
 
-        {filteredCatalogs.length > 0 ? (
-          <section>
+        {/* LOADING STATE */}
+        {loading ? (
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 py-4">
+            {Array.from({ length: 15 }).map((_, i) => (
+              <div key={i} className="aspect-[2/3] rounded-xl bg-neutral-900/60 animate-pulse border border-neutral-800/60" />
+            ))}
+          </div>
+        ) : items.length > 0 ? (
+          <section className="space-y-8">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-              {filteredCatalogs.map(item => (
+              {items.map((item, idx) => (
                 <div 
-                  key={item.id} 
+                  key={`cat-${item.type}-${item.id}-${idx}`} 
                   onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                 >
                   <img 
-                    src={item.posterUrl || item.imageUrl} 
+                    src={item.posterUrl || item.imageUrl || FALLBACK_POSTER_IMAGE} 
                     alt={item.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 bg-neutral-900" 
                     loading="lazy" 
                     onError={(e) => {
                       e.currentTarget.onerror = null;
-                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
+                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER_IMAGE;
                     }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
@@ -1563,7 +2148,7 @@ function GlobalCatalogPage({
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
-                      title="Assistir no WatchPlayer"
+                      title="Assistir agora"
                     >
                       <Play className="w-5 h-5 fill-white text-white ml-0.5" />
                     </div>
@@ -1574,23 +2159,68 @@ function GlobalCatalogPage({
                       {item.title}
                     </span>
                     <span className="block text-center text-xs text-neutral-400 mt-0.5">
-                      {item.year} • {item.genres?.[0]}
+                      {item.year || 2024} • {item.genres?.[0] || (type === 'movies' ? 'Filme' : 'Série')}
                     </span>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* PAGINATION CONTROLS */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-neutral-800">
+              <span className="text-xs text-neutral-400">
+                Página <strong className="text-white">{currentPage}</strong> de <strong className="text-white">{totalPages}</strong>
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Anterior
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                    let pageNum = currentPage;
+                    if (currentPage <= 3) pageNum = i + 1;
+                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                    else pageNum = currentPage - 2 + i;
+
+                    if (pageNum < 1 || pageNum > totalPages) return null;
+
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          currentPage === pageNum
+                            ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
+                            : "bg-neutral-900 text-neutral-400 hover:text-white border border-neutral-800"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
+                >
+                  Próxima <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </section>
-        ) : typeCatalogs.length > 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
-             <h3 className="text-xl font-bold text-neutral-400">Nenhum título encontrado</h3>
-             <p>Ajuste os filtros selecionados para ver mais resultados.</p>
-          </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
             <Film className="w-16 h-16 mb-4 opacity-50" />
-            <h3 className="text-xl font-bold text-neutral-400">Catálogo Vazio</h3>
-            <p>Nenhum conteúdo encontrado no momento.</p>
+            <h3 className="text-xl font-bold text-neutral-400">Nenhum título encontrado</h3>
+            <p className="text-sm mt-1">Tente trocar os filtros ou a ordenação selecionada.</p>
           </div>
         )}
       </main>
@@ -1609,71 +2239,274 @@ function ProviderPage({
   onItemClick: (id: number, item?: CatalogItem) => void,
   onPlay?: OnPlayHandler
 }) {
-  const catalogs = providerCatalogs[provider] || [];
+  const initialCatalogs = providerCatalogs[provider] || [];
   
-  const [filterType, setFilterType] = useState<'all' | 'movie' | 'series'>('all');
+  const [items, setItems] = useState<CatalogItem[]>(initialCatalogs);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [sortBy, setSortBy] = useState<'popularity.desc' | 'vote_average.desc' | 'first_air_date.desc'>('popularity.desc');
+  const [filterType, setFilterType] = useState<'all' | 'movie' | 'series'>('series');
   const [filterGenre, setFilterGenre] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [totalCount, setTotalCount] = useState<number>(0);
+
+  // Fetch from TMDB Discover API to get the real full catalog of this streaming
+  useEffect(() => {
+    let isMounted = true;
+    setLoading(true);
+
+    const loadProviderData = async () => {
+      try {
+        if (filterType === 'movie') {
+          const res = await getProviderMovies(provider, currentPage);
+          if (!isMounted) return;
+          if (res && res.results && res.results.length > 0) {
+            const formatted: CatalogItem[] = res.results.map((m: TMDBItem) => ({
+              id: m.id,
+              tmdbId: m.id,
+              title: m.title || m.name || "Sem título",
+              imageUrl: formatImageUrl(m.poster_path, 'w500'),
+              posterUrl: formatImageUrl(m.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+              type: 'movie',
+              genres: getGenreNames(m.genre_ids || []),
+              synopsis: m.overview || "Sinopse não disponível.",
+              year: parseInt(m.release_date?.substring(0, 4) || '2024'),
+              rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
+              duration: "Filme",
+              match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
+              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
+            }));
+            setItems(formatted);
+            setTotalPages(Math.min(res.total_pages || 1, 500));
+            setTotalCount(res.total_results || formatted.length);
+          } else {
+            setItems(initialCatalogs.filter(c => c.type === 'movie'));
+            setTotalPages(1);
+          }
+        } else if (filterType === 'series') {
+          const res = await getProviderSeries(provider, currentPage);
+          if (!isMounted) return;
+          if (res && res.results && res.results.length > 0) {
+            const formatted: CatalogItem[] = res.results.map((s: TMDBItem) => ({
+              id: s.id,
+              tmdbId: s.id,
+              title: s.name || s.title || "Sem título",
+              imageUrl: formatImageUrl(s.poster_path, 'w500'),
+              posterUrl: formatImageUrl(s.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+              type: 'series',
+              genres: getGenreNames(s.genre_ids || []),
+              synopsis: s.overview || "Sinopse não disponível.",
+              year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
+              rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
+              duration: "Série",
+              match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
+              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
+            }));
+            setItems(formatted);
+            setTotalPages(Math.min(res.total_pages || 1, 500));
+            setTotalCount(res.total_results || formatted.length);
+          } else {
+            setItems(initialCatalogs.filter(c => c.type === 'series'));
+            setTotalPages(1);
+          }
+        } else {
+          // Both (séries + filmes)
+          const [seriesRes, moviesRes] = await Promise.all([
+            getProviderSeries(provider, currentPage),
+            getProviderMovies(provider, currentPage)
+          ]);
+          if (!isMounted) return;
+
+          const combined: CatalogItem[] = [];
+          if (seriesRes && seriesRes.results) {
+            seriesRes.results.forEach((s: TMDBItem) => {
+              combined.push({
+                id: s.id,
+                tmdbId: s.id,
+                title: s.name || s.title || "Sem título",
+                imageUrl: formatImageUrl(s.poster_path, 'w500'),
+                posterUrl: formatImageUrl(s.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+                type: 'series',
+                genres: getGenreNames(s.genre_ids || []),
+                synopsis: s.overview || "Sinopse não disponível.",
+                year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
+                rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
+                duration: "Série",
+                match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
+                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
+              });
+            });
+          }
+
+          if (moviesRes && moviesRes.results) {
+            moviesRes.results.forEach((m: TMDBItem) => {
+              combined.push({
+                id: m.id,
+                tmdbId: m.id,
+                title: m.title || m.name || "Sem título",
+                imageUrl: formatImageUrl(m.poster_path, 'w500'),
+                posterUrl: formatImageUrl(m.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+                type: 'movie',
+                genres: getGenreNames(m.genre_ids || []),
+                synopsis: m.overview || "Sinopse não disponível.",
+                year: parseInt(m.release_date?.substring(0, 4) || '2024'),
+                rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
+                duration: "Filme",
+                match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
+                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
+              });
+            });
+          }
+
+          if (combined.length > 0) {
+            setItems(combined);
+            setTotalPages(Math.min(Math.max(seriesRes?.total_pages || 1, moviesRes?.total_pages || 1), 500));
+            setTotalCount((seriesRes?.total_results || 0) + (moviesRes?.total_results || 0));
+          } else {
+            setItems(initialCatalogs);
+            setTotalPages(1);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao buscar catálogo do streaming:", err);
+        if (isMounted) {
+          setItems(initialCatalogs);
+          setTotalPages(1);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadProviderData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [provider, filterType, currentPage]);
 
   // get all unique genres for this provider
-  const availableGenres = Array.from(new Set(catalogs.flatMap(item => item.genres || []))).sort();
+  const availableGenres = Array.from(new Set<string>(items.flatMap(item => item.genres || []))).sort();
 
-  const filteredCatalogs = catalogs.filter(item => {
-    if (filterType !== 'all' && item.type !== filterType) return false;
+  const filteredItems = items.filter(item => {
     if (filterGenre !== 'all' && (!item.genres || !item.genres.includes(filterGenre))) return false;
     return true;
   });
-  
+
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen">
       {/* Provider Hero Header */}
       <div className="relative pt-32 pb-12 px-6 md:px-12 bg-gradient-to-b from-orange-500/10 to-[#0a0a0a] border-b border-orange-500/10">
         <button 
           onClick={onBack}
-          className="flex items-center gap-2 text-sm font-semibold text-neutral-400 hover:text-white px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors w-fit mb-8"
+          className="flex items-center gap-2 text-sm font-semibold text-neutral-400 hover:text-white px-4 py-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors w-fit mb-8 cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" />
           Voltar para Início
         </button>
         
-        <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
-          {provider}
-        </h1>
-        <p className="text-neutral-400 mt-4 max-w-2xl text-lg">
-          Explore o catálogo completo de séries exclusivas, filmes e muito mais disponíveis no {provider}.
-        </p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
+                Catálogo em Tempo Real
+              </span>
+              {totalCount > 0 && (
+                <span className="text-neutral-400 text-xs font-medium">
+                  Mais de {totalCount.toLocaleString('pt-BR')} títulos disponíveis via player
+                </span>
+              )}
+            </div>
+            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
+              {provider}
+            </h1>
+            <p className="text-neutral-400 mt-3 max-w-2xl text-base md:text-lg">
+              Catálogo completo de séries, temporadas e filmes originais do streaming <span className="text-white font-semibold">{provider}</span> integrados ao nosso player.
+            </p>
+          </div>
+        </div>
       </div>
 
-      <main className="flex-1 px-4 md:px-12 py-12 space-y-12 bg-[#0a0a0a] animate-in fade-in duration-500">
+      <main className="flex-1 px-4 md:px-12 py-10 space-y-10 bg-[#0a0a0a] animate-in fade-in duration-500">
         {/* FILTERS */}
-        {catalogs.length > 0 && (
-          <div className="flex flex-col gap-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-              <FilterChip label="Tudo" active={filterType === 'all'} onClick={() => setFilterType('all')} />
-              <FilterChip label="Filmes" active={filterType === 'movie'} onClick={() => setFilterType('movie')} />
-              <FilterChip label="Séries" active={filterType === 'series'} onClick={() => setFilterType('series')} />
-            </div>
-            
-            {availableGenres.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                <FilterChip label="Todos Gêneros" active={filterGenre === 'all'} onClick={() => setFilterGenre('all')} />
-                {availableGenres.map(genre => (
-                  <FilterChip key={genre} label={genre} active={filterGenre === genre} onClick={() => setFilterGenre(genre)} />
-                ))}
-              </div>
-            )}
+        <div className="flex flex-col gap-4">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+            <FilterChip 
+              label="Todos os Títulos" 
+              active={filterType === 'all'} 
+              onClick={() => {
+                setFilterType('all');
+                setCurrentPage(1);
+              }} 
+            />
+            <FilterChip 
+              label="Todas as Séries" 
+              active={filterType === 'series'} 
+              onClick={() => {
+                setFilterType('series');
+                setCurrentPage(1);
+              }} 
+            />
+            <FilterChip 
+              label="Filmes" 
+              active={filterType === 'movie'} 
+              onClick={() => {
+                setFilterType('movie');
+                setCurrentPage(1);
+              }} 
+            />
           </div>
-        )}
-
-        {filteredCatalogs.length > 0 ? (
-          <section>
-            <div className="flex items-center gap-2 mb-8 pl-2">
-              <h2 className="text-2xl md:text-3xl font-bold text-white uppercase tracking-tight">Destaques</h2>
-              <ChevronRight className="w-6 h-6 text-orange-500" />
+          
+          {availableGenres.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+              <FilterChip 
+                label="Todos Gêneros" 
+                active={filterGenre === 'all'} 
+                onClick={() => setFilterGenre('all')} 
+              />
+              {availableGenres.map(genre => (
+                <FilterChip 
+                  key={genre} 
+                  label={genre} 
+                  active={filterGenre === genre} 
+                  onClick={() => setFilterGenre(genre)} 
+                />
+              ))}
             </div>
+          )}
+        </div>
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-28 text-neutral-400 space-y-4">
+            <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
+            <p className="text-base font-semibold">Carregando catálogo completo do {provider}...</p>
+          </div>
+        ) : filteredItems.length > 0 ? (
+          <section className="space-y-6">
+            <div className="flex items-center justify-between pb-2 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight">
+                  {filterType === 'series' ? 'Séries do Streaming' : filterType === 'movie' ? 'Filmes do Streaming' : 'Catálogo Disponível'}
+                </h2>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
+                  {filteredItems.length} nesta página
+                </span>
+              </div>
+              {totalPages > 1 && (
+                <span className="text-xs text-neutral-400 font-medium">
+                  Página {currentPage} de {totalPages}
+                </span>
+              )}
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
-              {filteredCatalogs.map(item => (
+              {filteredItems.map((item, idx) => (
                 <div 
-                  key={item.id} 
+                  key={`prov-${item.type}-${item.id}-${idx}`} 
                   onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                 >
@@ -1687,15 +2520,20 @@ function ProviderPage({
                       e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
                     }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent"></div>
                   
-                  {/* Badge nota e CAM */}
+                  {/* Badge nota, CAM e Tipo */}
                   <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between z-10">
-                    {checkIsCam(item.title, item.quality) ? (
-                      <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
-                        CAM
+                    <div className="flex items-center gap-1.5">
+                      {checkIsCam(item.title, item.quality) && (
+                        <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md">
+                          CAM
+                        </span>
+                      )}
+                      <span className="px-2 py-0.5 rounded bg-neutral-900/80 backdrop-blur-md text-[10px] font-bold text-white border border-white/10 uppercase">
+                        {item.type === 'series' ? 'Série' : 'Filme'}
                       </span>
-                    ) : <span />}
+                    </div>
                     <span className="px-2 py-0.5 rounded bg-black/70 backdrop-blur-md text-[10px] font-bold text-orange-400 border border-white/10">
                       {item.rating || "8.5 ★"}
                     </span>
@@ -1719,34 +2557,92 @@ function ProviderPage({
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
-                      title="Assistir no WatchPlayer"
+                      title="Assistir agora"
                     >
                       <Play className="w-5 h-5 fill-white text-white ml-0.5" />
                     </div>
                   </div>
 
-                  <div className="absolute bottom-4 inset-x-0 mx-3">
+                  <div className="absolute bottom-3 inset-x-0 mx-3">
                     <span className="block text-center font-bold text-sm md:text-base uppercase text-white drop-shadow-lg truncate">
                       {item.title}
                     </span>
-                    <span className="block text-center text-xs text-neutral-400 mt-0.5">
-                      {item.year} • {item.genres?.[0]}
-                    </span>
+                    <div className="flex items-center justify-center gap-1.5 text-xs text-neutral-400 mt-1">
+                      <span>{item.year}</span>
+                      <span>•</span>
+                      <span className="truncate max-w-[120px]">{item.duration || item.genres?.[0]}</span>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+
+            {/* Subpages / Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="pt-8 pb-4 flex flex-col sm:flex-row items-center justify-between gap-4 border-t border-neutral-800">
+                <div className="text-xs text-neutral-400">
+                  Página <span className="text-white font-semibold">{currentPage}</span> de <span className="text-white font-semibold">{totalPages}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setCurrentPage(prev => Math.max(1, prev - 1));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded-lg bg-neutral-900 border border-white/10 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-neutral-900 disabled:hover:text-neutral-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    title="Página Anterior"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+
+                  {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+                    let pageNum = i + 1;
+                    if (totalPages > 7) {
+                      if (currentPage > 4) {
+                        pageNum = currentPage - 3 + i;
+                        if (pageNum > totalPages) pageNum = totalPages - (6 - i);
+                      }
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => {
+                          setCurrentPage(pageNum);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        className={`w-9 h-9 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
+                          currentPage === pageNum
+                            ? 'bg-orange-600 text-white border-orange-500 shadow-[0_0_12px_rgba(234,88,12,0.4)]'
+                            : 'bg-neutral-900/80 text-neutral-400 border-white/5 hover:bg-neutral-800 hover:text-white hover:border-white/20'
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+
+                  <button
+                    onClick={() => {
+                      setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded-lg bg-neutral-900 border border-white/10 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-neutral-900 disabled:hover:text-neutral-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
+                    title="Próxima Página"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
-        ) : catalogs.length > 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
-             <h3 className="text-xl font-bold text-neutral-400">Nenhum título encontrado</h3>
-             <p>Ajuste os filtros selecionados para ver mais resultados.</p>
-          </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-neutral-500">
             <Film className="w-16 h-16 mb-4 opacity-50" />
             <h3 className="text-xl font-bold text-neutral-400">Catálogo Vazio</h3>
-            <p>Nenhum conteúdo encontrado para este provedor no momento.</p>
+            <p className="mt-1 text-sm">Nenhum conteúdo encontrado para este filtro.</p>
           </div>
         )}
       </main>
@@ -1788,7 +2684,7 @@ function ContentRow({
       <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pl-2 border-l-4 border-orange-500">{title}</h2>
       <div className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pl-2 pr-4 scrollbar-hide">
         {items.map((item, idx) => (
-          <div key={item.id} onClick={() => onItemClick && onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105">
+          <div key={`cr-${item.id || item.title}-${idx}`} onClick={() => onItemClick && onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105">
             {isTop10 ? (
               <div className="flex relative w-[280px] md:w-[320px] h-[160px] md:h-[180px]">
                 {/* Bold background number */}

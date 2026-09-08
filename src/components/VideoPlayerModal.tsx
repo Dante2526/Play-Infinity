@@ -3,7 +3,7 @@ import {
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
   Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2, Minimize2, FastForward,
-  SkipForward, RotateCcw, HelpCircle, SlidersHorizontal
+  SkipForward, RotateCcw
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { checkIsCam } from "../data";
@@ -113,8 +113,6 @@ export function VideoPlayerModal({
   const [isIntroActive, setIsIntroActive] = useState<boolean>(false);
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
   const [lastSkippedSeconds, setLastSkippedSeconds] = useState<number | null>(null);
-  const [showSkipSettings, setShowSkipSettings] = useState<boolean>(false);
-  const [showIntroHelp, setShowIntroHelp] = useState<boolean>(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Fullscreen & Widescreen state tracking
@@ -239,27 +237,80 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidor Oficial: WatchPlayer VIP Exclusivo (Autoplay imediato e avanço automático de episódios)
+  // Servidores Disponíveis (WatchPlayer, EmbedSU, VidSrc, VidLink)
   const servers = useMemo(() => {
     if (isSeries) {
       return [
         {
           key: "srv1",
-          label: "WatchPlayer VIP",
-          badge: "Dublado BR • Autoplay Contínuo",
+          label: "Servidor Principal (WatchPlayer)",
+          badge: "Alta Resolução • Autoplay Contínuo",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
+          name: "Servidor 1"
+        },
+        {
+          key: "srv2",
+          label: "Player 2 (EmbedSU)",
+          badge: "Estável • Sem Sandbox",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://embed.su/embed/tv/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("embed.su"),
+          name: "Player 2"
+        },
+        {
+          key: "srv3",
+          label: "Player 3 (VidSrc)",
+          badge: "Alternativo • Global",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
+          isMatch: (u: string) => u.includes("vidsrc"),
+          name: "Player 3"
+        },
+        {
+          key: "srv4",
+          label: "Player 4 (VidLink)",
+          badge: "Aviso: Pode bloquear dentro do Preview (Sandbox)",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidlink.pro/tv/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 4"
         },
       ];
     } else {
       return [
         {
           key: "srv1",
-          label: "WatchPlayer VIP",
-          badge: "Dublado BR • Sem Anúncios",
+          label: "Servidor Principal (WatchPlayer)",
+          badge: "Alta Resolução • Sem Anúncios",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
+          name: "Servidor 1"
+        },
+        {
+          key: "srv2",
+          label: "Player 2 (EmbedSU)",
+          badge: "Estável • Sem Sandbox",
+          buildUrl: (id: string) => `https://embed.su/embed/movie/${id}`,
+          isMatch: (u: string) => u.includes("embed.su"),
+          name: "Player 2"
+        },
+        {
+          key: "srv3",
+          label: "Player 3 (VidSrc)",
+          badge: "Alternativo • Global",
+          buildUrl: (id: string) => `https://vidsrc.xyz/embed/movie?tmdb=${id}`,
+          isMatch: (u: string) => u.includes("vidsrc"),
+          name: "Player 3"
+        },
+        {
+          key: "srv4",
+          label: "Player 4 (VidLink)",
+          badge: "Aviso: Pode bloquear dentro do Preview (Sandbox)",
+          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 4"
         },
       ];
     }
@@ -485,9 +536,23 @@ export function VideoPlayerModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCloseModal = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+      try {
+        (screen.orientation as any).unlock();
+      } catch (e) {}
+    }
+    setIsWidescreen(false);
+    setIsRotated(false);
+    onClose();
+  };
+
   const handleFullScreen = async () => {
     const stage = document.getElementById("player-stage-container");
-    const isCurrentlyFull = !!document.fullscreenElement || isWidescreen;
+    const isCurrentlyFull = isExpanded;
 
     if (isCurrentlyFull) {
       setIsWidescreen(false);
@@ -503,20 +568,22 @@ export function VideoPlayerModal({
     } else {
       setIsWidescreen(true);
 
-      // Tenta travar em orientação paisagem no mobile
+      // Se a tela do celular estiver na vertical (altura > largura), ativa imediatamente a rotação de 90°
+      const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+      if (isPortrait) {
+        setIsRotated(true);
+      } else {
+        setIsRotated(false);
+      }
+
+      // Tenta travar em orientação paisagem no mobile se suportado pelo sistema
       if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
         try {
           (screen.orientation as any).lock("landscape").catch(() => {});
         } catch (err) {}
       }
 
-      // Se a tela estiver na vertical (celular em pé), gira automaticamente em 90° para widescreen total
-      if (typeof window !== "undefined" && window.innerHeight > window.innerWidth) {
-        setIsRotated(true);
-      } else {
-        setIsRotated(false);
-      }
-
+      // Tenta tela cheia nativa do navegador
       if (stage) {
         try {
           if (stage.requestFullscreen) {
@@ -525,7 +592,7 @@ export function VideoPlayerModal({
             await (stage as any).webkitRequestFullscreen();
           }
         } catch (err) {
-          console.log("Fullscreen API nativo indisponível, ativando modo Widescreen total:", err);
+          console.log("Modo expandido CSS ativo:", err);
         }
       }
     }
@@ -569,149 +636,88 @@ export function VideoPlayerModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl animate-in fade-in duration-300">
-      <div className="relative w-full max-w-5xl bg-[#111111] border border-neutral-800 rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col max-h-[96vh]">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
+      isExpanded 
+        ? "p-0 m-0 bg-black w-screen h-screen overflow-hidden" 
+        : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
+    }`}>
+      <div className={`relative w-full bg-[#111111] overflow-hidden flex flex-col ${
+        isExpanded
+          ? "w-screen h-screen max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+          : "max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
+      }`}>
         
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-neutral-800/80 bg-[#161616]">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center">
-              {isSeries ? <Tv className="w-4 h-4" /> : <Film className="w-4 h-4" />}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-white font-bold text-base md:text-lg leading-tight truncate max-w-[180px] sm:max-w-md">
-                  {title || "Reprodutor de Vídeo"}
-                </h2>
-                <span className="px-2 py-0.5 bg-orange-600/20 text-orange-400 border border-orange-500/30 rounded text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
-                  {isSeries ? `Série • T${season}:E${episode}` : "Filme"}
+        {/* Modal Header (apenas quando não expandido em tela cheia) */}
+        {!isExpanded && (
+          <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b border-neutral-800/80 bg-[#161616] gap-2">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center shrink-0">
+                {isSeries ? <Tv className="w-4 h-4" /> : <Film className="w-4 h-4" />}
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h2 className="text-white font-bold text-sm sm:text-base leading-tight truncate max-w-[130px] xs:max-w-[200px] sm:max-w-xs md:max-w-md">
+                    {title || "Reprodutor de Vídeo"}
+                  </h2>
+                  <span className="px-1.5 py-0.5 bg-orange-600/20 text-orange-400 border border-orange-500/30 rounded text-[9px] sm:text-[10px] font-bold uppercase tracking-wider hidden xs:inline">
+                    {isSeries ? `T${season}:E${episode}` : "Filme"}
+                  </span>
+                </div>
+                <span className="text-[11px] text-neutral-400 font-medium flex items-center gap-1.5 mt-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
+                  <span className="truncate">Servidor Online</span>
                 </span>
               </div>
-              <span className="text-xs text-neutral-400 font-medium flex items-center gap-1.5 mt-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                Servidor: {servers.find(s => s.key === selectedServerKey)?.label || "Principal"}
-              </span>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="p-2 text-neutral-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-              title="Fechar (Esc)"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        {/* WatchPlayer VIP Status Bar & Auto-Next Indicator */}
-        <div className="px-4 sm:px-5 py-2.5 bg-[#0e0e0e] border-b border-neutral-800/80 flex items-center justify-between gap-3 overflow-x-auto">
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600/15 border border-orange-500/30 text-orange-400 text-xs font-semibold">
-              <Play className="w-3.5 h-3.5 fill-current" />
-              <span>WatchPlayer VIP</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-orange-600 text-white ml-1 font-bold">
-                Dublado BR
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs shrink-0">
-            {isSeries && (
-              <>
-                {/* Botão de Pular Abertura */}
-                <button
-                  onClick={() => handleSkipIntro()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-600/20 active:scale-95 cursor-pointer border border-orange-400/40"
-                  title="Pular Abertura da Série agora (Atalho: Tecla S)"
-                >
-                  <SkipForward className="w-3.5 h-3.5 fill-current" />
-                  <span>Pular Abertura</span>
-                  <span className="text-[10px] bg-black/40 px-1.5 py-0.2 rounded font-mono font-bold text-orange-200">
-                    +{skipDurationSeconds}s (S)
-                  </span>
-                </button>
-
-                {/* Seletor de Segundos de Salto */}
-                <div className="hidden sm:flex items-center bg-neutral-900 border border-neutral-800 rounded-xl p-0.5 text-[11px]">
-                  {[30, 60, 85, 90].map((sec) => (
-                    <button
-                      key={sec}
-                      onClick={() => handleChangeSkipDuration(sec)}
-                      className={`px-2 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                        skipDurationSeconds === sec
-                          ? "bg-orange-600 text-white shadow-sm"
-                          : "text-neutral-400 hover:text-white"
-                      }`}
-                      title={`Definir salto para +${sec} segundos`}
-                    >
-                      +{sec}s
-                    </button>
-                  ))}
-                </div>
-
-                {/* Botão de Ajuda / Como Funciona */}
-                <div className="relative">
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Server Switcher Tabs - Visível no mobile e desktop */}
+              <div className="flex items-center bg-black/60 p-0.5 sm:p-1 rounded-xl border border-neutral-800 gap-1">
+                {servers.map((srv) => (
                   <button
-                    onClick={() => setShowIntroHelp(prev => !prev)}
-                    className="p-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white border border-neutral-700 transition-colors cursor-pointer"
-                    title="Como funciona o pulo de aberturas?"
+                    key={srv.key}
+                    onClick={() => handleServerSwitch(srv.key)}
+                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
+                      selectedServerKey === srv.key
+                        ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
+                        : "text-neutral-400 hover:text-white hover:bg-white/5"
+                    }`}
+                    title={srv.badge}
                   >
-                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedServerKey === srv.key ? "bg-white" : "bg-neutral-500"}`} />
+                    <span>{srv.name || srv.key}</span>
                   </button>
-
-                  {/* Popover Explicativo */}
-                  {showIntroHelp && (
-                    <div className="absolute right-0 top-10 z-50 w-72 sm:w-80 p-4 rounded-2xl bg-[#161616] border border-neutral-700 shadow-2xl text-left text-xs text-neutral-200 animate-in fade-in zoom-in-95 duration-200">
-                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800">
-                        <span className="font-bold text-white flex items-center gap-1.5">
-                          <SkipForward className="w-3.5 h-3.5 text-orange-500" />
-                          Como funciona o Pular Abertura?
-                        </span>
-                        <button onClick={() => setShowIntroHelp(false)} className="text-neutral-400 hover:text-white">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <p className="text-neutral-300 leading-relaxed mb-2.5">
-                        <strong className="text-orange-400">Total controle com a Tecla S ou Botão:</strong><br />
-                        Muitas séries começam com uma cena importante antes da vinheta de abertura (o <em>Cold Open</em>). Por isso, o pulo é 100% sob seu comando para você nunca perder cenas da história por engano!
-                      </p>
-                      <p className="text-neutral-300 leading-relaxed mb-2.5">
-                        Assim que a música da vinheta começar, aperte a <strong className="text-white">Tecla S</strong> ou clique em <strong className="text-orange-400">Pular Abertura</strong>. Se avançar um pouco além, basta clicar em <strong className="text-white">Desfazer</strong>!
-                      </p>
-                      <div className="bg-neutral-900/80 p-2.5 rounded-xl border border-neutral-800 space-y-1 text-[11px]">
-                        <div><strong className="text-neutral-300">Ajuste de Tempo:</strong> Escolha entre +30s, +60s, +85s (padrão de séries) ou +90s (animes).</div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-
-            {isSeries && (
-              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-semibold">
-                <FastForward className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
-                <span>Próximo Ep: Auto</span>
+                ))}
               </div>
-            )}
-            <button
-              onClick={() => setAntiAdShield(prev => !prev)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
-                antiAdShield 
-                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" 
-                  : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-700"
-              }`}
-              title={antiAdShield ? "Escudo ativo: Popups e abas bloqueados ao clicar no player" : "Clique para reativar o bloqueio de anúncios"}
-            >
-              <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
-              <span className="hidden sm:inline">Escudo Anti-Anúncios</span>
-            </button>
-          </div>
-        </div>
 
-        {/* Series Controls: Season & Episode Quick Selector */}
-        {isSeries && (
+              {/* Escudo Anti-Anúncios */}
+              <button
+                onClick={() => setAntiAdShield(prev => !prev)}
+                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                  antiAdShield 
+                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" 
+                    : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-700"
+                }`}
+                title={antiAdShield ? "Escudo ativo: Popups e abas bloqueados ao clicar no player" : "Clique para reativar o bloqueio de anúncios"}
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span className="hidden md:inline text-[11px]">Anti-Ads</span>
+              </button>
+
+              {/* Botão Fechar Modal */}
+              <button
+                onClick={handleCloseModal}
+                className="p-1.5 sm:p-2 text-neutral-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                title="Fechar (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido) */}
+        {!isExpanded && isSeries && (
           <div className="px-4 sm:px-5 py-2.5 bg-[#141414] border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-white flex items-center gap-1">
@@ -774,149 +780,156 @@ export function VideoPlayerModal({
           id="player-stage-container" 
           onMouseMove={handleStageMouseMove}
           onMouseLeave={handleStageMouseLeave}
-          style={
-            isExpanded && isRotated
-              ? {
-                  position: "fixed",
-                  top: "50%",
-                  left: "50%",
-                  width: "100vh",
-                  height: "100vw",
-                  transform: "translate(-50%, -50%) rotate(90deg)",
-                  zIndex: 999999,
-                  maxWidth: "none",
-                  maxHeight: "none",
-                }
-              : undefined
-          }
-          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none transition-all duration-300 ${
-            isExpanded && !isRotated
-              ? "h-screen w-screen fixed inset-0 z-[99999]"
-              : isExpanded && isRotated
-              ? "shadow-2xl"
-              : "aspect-video"
+          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${
+            isExpanded ? "w-screen h-screen flex-1 fixed inset-0 z-[999999]" : "aspect-video"
           }`}
         >
-          {/* Notificação Flutuante de Avanço Automático */}
-          {autoNextNotice && (
-            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25 pointer-events-none">
-              <FastForward className="w-4 h-4 animate-pulse text-white" />
-              <span>Episódio concluído! Reproduzindo Episódio {autoNextNotice.nextEp}...</span>
-            </div>
-          )}
-
-          {/* Notificação Flutuante de Abertura Pulada */}
-          {skipNotice && (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25">
-              <div className="flex items-center gap-2">
-                <SkipForward className="w-4 h-4 fill-current text-white" />
-                <span>{skipNotice}</span>
+          {/* Inner Viewport Rotacionável para modo Paisagem (Widescreen Deitado) no Celular */}
+          <div
+            style={
+              isRotated
+                ? {
+                    position: "absolute",
+                    top: "50%",
+                    left: "50%",
+                    width: "100vh",
+                    height: "100vw",
+                    maxWidth: "100vh",
+                    maxHeight: "100vw",
+                    transform: "translate(-50%, -50%) rotate(90deg)",
+                    zIndex: 20,
+                  }
+                : {
+                    position: "relative",
+                    width: "100%",
+                    height: "100%",
+                    zIndex: 20,
+                  }
+            }
+            className="flex items-center justify-center bg-black overflow-hidden select-none"
+          >
+            {/* Notificação Flutuante de Avanço Automático */}
+            {autoNextNotice && (
+              <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25 pointer-events-none">
+                <FastForward className="w-4 h-4 animate-pulse text-white" />
+                <span>Episódio concluído! Reproduzindo Episódio {autoNextNotice.nextEp}...</span>
               </div>
-              {lastSkippedSeconds && (
-                <button
-                  onClick={handleUndoSkip}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/40 hover:bg-black/60 text-orange-200 text-xs font-semibold border border-white/20 transition-all active:scale-95 cursor-pointer ml-1"
-                  title="Desfazer e retroceder vídeo"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Desfazer</span>
-                </button>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* Player Oficial Estilo Netflix Cinematográfico */}
-          <NetflixPlayerSkin
-            title={title}
-            isSeries={isSeries}
-            season={season}
-            episode={episode}
-            totalEpisodes={24}
-            onClose={onClose}
-            onEpisodeChange={handleEpisodeChange}
-            onSkipIntro={() => handleSkipIntro()}
-            skipDurationSeconds={skipDurationSeconds}
-            isIntroActive={isIntroActive}
-            isFullscreen={isExpanded}
-            onToggleFullscreen={handleFullScreen}
-            iframeRef={iframeRef}
-            isRotated={isRotated}
-            onToggleRotate={handleToggleRotate}
-          />
+            {/* Notificação Flutuante de Abertura Pulada */}
+            {skipNotice && (
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25">
+                <div className="flex items-center gap-2">
+                  <SkipForward className="w-4 h-4 fill-current text-white" />
+                  <span>{skipNotice}</span>
+                </div>
+                {lastSkippedSeconds && (
+                  <button
+                    onClick={handleUndoSkip}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/40 hover:bg-black/60 text-orange-200 text-xs font-semibold border border-white/20 transition-all active:scale-95 cursor-pointer ml-1"
+                    title="Desfazer e retroceder vídeo"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Desfazer</span>
+                  </button>
+                )}
+              </div>
+            )}
 
-          {/* Indicador de Carregamento sobreposto (não remove o iframe da DOM, preservando tela cheia) */}
-          {isLoading && (
-            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 text-neutral-400">
-              <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-              <p className="text-sm font-medium text-white">Carregando {isSeries ? `Episódio ${episode}` : title}...</p>
-            </div>
-          )}
-
-          {activeIframeUrl ? (
-            <iframe
-              ref={iframeRef}
-              src={activeIframeUrl}
+            {/* Player Oficial Estilo Netflix Cinematográfico */}
+            <NetflixPlayerSkin
               title={title}
-              className="w-full h-full border-0"
-              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-              allowFullScreen
-              referrerPolicy="no-referrer"
-              sandbox={antiAdShield && !activeIframeUrl.includes("vidlink.pro") && !activeIframeUrl.includes("watchplayer-stream") && !activeIframeUrl.includes("watchplay.shop") ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
+              isSeries={isSeries}
+              season={season}
+              episode={episode}
+              totalEpisodes={24}
+              onClose={handleCloseModal}
+              onEpisodeChange={handleEpisodeChange}
+              onSkipIntro={() => handleSkipIntro()}
+              skipDurationSeconds={skipDurationSeconds}
+              isIntroActive={isIntroActive}
+              isFullscreen={isExpanded}
+              onToggleFullscreen={handleFullScreen}
+              iframeRef={iframeRef}
+              isRotated={isRotated}
+              onToggleRotate={handleToggleRotate}
             />
-          ) : error ? (
-            <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
-              <AlertCircle className="w-10 h-10 text-orange-500" />
-              <h3 className="font-bold text-white text-base">Falha ao carregar o player</h3>
-              <p className="text-xs text-neutral-400 leading-relaxed">{error}</p>
-              <div className="pt-2 flex gap-3 flex-wrap justify-center">
-                <button
-                  onClick={() => handleExtract(urlInput)}
-                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                </button>
-                <a
-                  href={urlInput}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
-                </a>
+
+            {/* Indicador de Carregamento sobreposto */}
+            {isLoading && (
+              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 text-neutral-400">
+                <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+                <p className="text-sm font-medium text-white">Carregando {isSeries ? `Episódio ${episode}` : title}...</p>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center text-neutral-500 space-y-2">
-              <Play className="w-12 h-12 opacity-30" />
-              <p className="text-sm">Clique em "Reproduzir" para iniciar</p>
-            </div>
-          )}
+            )}
+
+            {activeIframeUrl ? (
+              <iframe
+                ref={iframeRef}
+                src={activeIframeUrl}
+                title={title}
+                className="w-full h-full border-0"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
+                allowFullScreen
+                referrerPolicy="origin"
+              />
+            ) : error ? (
+              <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
+                <AlertCircle className="w-10 h-10 text-orange-500" />
+                <h3 className="font-bold text-white text-base">Falha ao carregar o player</h3>
+                <p className="text-xs text-neutral-400 leading-relaxed">{error}</p>
+                <div className="pt-2 flex gap-3 flex-wrap justify-center">
+                  <button
+                    onClick={() => handleExtract(urlInput)}
+                    className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                  </button>
+                  <a
+                    href={urlInput}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center text-neutral-500 space-y-2">
+                <Play className="w-12 h-12 opacity-30" />
+                <p className="text-sm">Clique em "Reproduzir" para iniciar</p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Rodapé com Link Ativo e Informações */}
-        <div className="px-4 sm:px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <span className="truncate max-w-xs sm:max-w-md font-mono text-[11px] text-neutral-400">
-              Link Ativo: <span className="text-orange-400">{extractedSource || activeIframeUrl}</span>
-            </span>
-            <button
-              onClick={() => copyUrl(extractedSource || activeIframeUrl || "")}
-              className="text-neutral-400 hover:text-white text-[11px] px-1.5 py-0.5 bg-white/5 rounded border border-white/10 cursor-pointer"
-              title="Copiar URL do player"
-            >
-              {copied ? <Check className="w-3 h-3 text-green-400" /> : "Copiar"}
-            </button>
-          </div>
+        {/* Rodapé com Link Ativo e Informações (apenas quando não expandido) */}
+        {!isExpanded && (
+          <div className="px-4 sm:px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <span className="truncate max-w-xs sm:max-w-md font-mono text-[11px] text-neutral-400">
+                Link Ativo: <span className="text-orange-400">{extractedSource || activeIframeUrl}</span>
+              </span>
+              <button
+                onClick={() => copyUrl(extractedSource || activeIframeUrl || "")}
+                className="text-neutral-400 hover:text-white text-[11px] px-1.5 py-0.5 bg-white/5 rounded border border-white/10 cursor-pointer"
+                title="Copiar URL do player"
+              >
+                {copied ? <Check className="w-3 h-3 text-green-400" /> : "Copiar"}
+              </button>
+            </div>
 
-          <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-neutral-400">
-            <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
-            <span>
-              {antiAdShield 
-                ? "Bloqueador ativo: cliques não abrem anúncios nem novas abas" 
-                : "Servidor 1 e WatchPlayer recomendados"}
-            </span>
+            <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-neutral-400">
+              <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
+              <span>
+                {antiAdShield 
+                  ? "Bloqueador ativo: cliques não abrem anúncios nem novas abas" 
+                  : "Servidor Oficial Recomendado"}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
       </div>
     </div>
