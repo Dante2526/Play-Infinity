@@ -103,53 +103,68 @@ async function startServer() {
 
       // 5. If playerUrl or targetUrl is playerflix.ink or myembed.biz, resolve the 1st direct video player
       let availablePlayers: Array<{ id: string; label: string; url: string; lang?: string }> = [];
-      const imdbMatch = (playerUrl || targetUrl).match(/(tt\d+)/i);
-      
-      if (imdbMatch && ((playerUrl && playerUrl.includes("playerflix")) || targetUrl.includes("myembed") || targetUrl.includes("playerflix"))) {
-        const imdbId = imdbMatch[1];
+      const isPlayerFlixOrMyEmbed = (playerUrl && playerUrl.includes("playerflix")) || targetUrl.includes("myembed") || targetUrl.includes("playerflix");
+
+      if (isPlayerFlixOrMyEmbed) {
+        const tvMatch = (playerUrl || targetUrl).match(/(?:serie|tv)\/([a-zA-Z0-9_-]+)\/(\d+)\/(\d+)/i);
+        const movieMatch = (playerUrl || targetUrl).match(/(?:filme|movie)\/([a-zA-Z0-9_-]+)/i) || (playerUrl || targetUrl).match(/(tt\d+)/i);
+
         try {
-          const ajaxRes = await fetch(`https://playerflix.ink/inc/Ajax.php?type=movie&id=${imdbId}`, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              "Referer": `https://playerflix.ink/filme/${imdbId}`,
-              "X-Requested-With": "XMLHttpRequest",
-            },
-          });
+          let ajaxUrl = "";
+          let refererUrl = "";
 
-          if (ajaxRes.ok) {
-            const ajaxData = await ajaxRes.json();
-            if (ajaxData?.status && Array.isArray(ajaxData?.data?.options) && ajaxData.data.options.length > 0) {
-              const options = ajaxData.data.options;
-              // Sort options to prioritize ad-free / clean players (like WatchPlayer) and pt-br dublado
-              const sortedOptions = [...options].sort((a: any, b: any) => {
-                const aIsClean = (a.embed || "").includes("watchplay") ? -1 : 0;
-                const bIsClean = (b.embed || "").includes("watchplay") ? -1 : 0;
-                if (aIsClean !== bIsClean) return aIsClean - bIsClean;
+          if (tvMatch) {
+            const [, tvId, seasonNum, epNum] = tvMatch;
+            ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=tv&id=${tvId}&season=${seasonNum}&episode=${epNum}`;
+            refererUrl = `https://playerflix.ink/serie/${tvId}/${seasonNum}/${epNum}`;
+          } else if (movieMatch) {
+            const movieId = movieMatch[1];
+            ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=movie&id=${movieId}`;
+            refererUrl = `https://playerflix.ink/filme/${movieId}`;
+          }
 
-                const aIsPt = a.lang === "pt-br" ? -1 : 1;
-                const bIsPt = b.lang === "pt-br" ? -1 : 1;
-                return aIsPt - bIsPt;
-              });
+          if (ajaxUrl) {
+            const ajaxRes = await fetch(ajaxUrl, {
+              headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Referer": refererUrl,
+                "X-Requested-With": "XMLHttpRequest",
+              },
+            });
 
-              // Map all available players with descriptive labels
-              availablePlayers = sortedOptions.map((opt: any, idx: number) => {
-                const isClean = (opt.embed || "").includes("watchplay");
-                const audioLabel = opt.lang === "pt-br" ? "Dublado" : "Legendado";
-                const cleanBadge = isClean ? " • Sem Popups" : "";
-                return {
-                  id: String(idx + 1),
-                  label: `Servidor ${idx + 1} (${opt.label || "Player"} - ${audioLabel}${cleanBadge})`,
-                  url: opt.embed,
-                  lang: opt.lang,
-                  isClean,
-                };
-              });
+            if (ajaxRes.ok) {
+              const ajaxData = await ajaxRes.json();
+              if (ajaxData?.status && Array.isArray(ajaxData?.data?.options) && ajaxData.data.options.length > 0) {
+                const options = ajaxData.data.options;
+                // Sort options to prioritize ad-free / clean players (like WatchPlayer) and pt-br dublado
+                const sortedOptions = [...options].sort((a: any, b: any) => {
+                  const aIsClean = (a.embed || "").includes("watchplay") ? -1 : 0;
+                  const bIsClean = (b.embed || "").includes("watchplay") ? -1 : 0;
+                  if (aIsClean !== bIsClean) return aIsClean - bIsClean;
 
-              // Select the cleanest, best player as default
-              const bestPlayer = sortedOptions[0];
-              if (bestPlayer?.embed) {
-                console.log(`[Extrator] Selecionado 1º player limpo sem anúncios: ${bestPlayer.embed}`);
-                playerUrl = bestPlayer.embed;
+                  const aIsPt = a.lang === "pt-br" ? -1 : 1;
+                  const bIsPt = b.lang === "pt-br" ? -1 : 1;
+                  return aIsPt - bIsPt;
+                });
+
+                availablePlayers = sortedOptions.map((opt: any, idx: number) => {
+                  const isClean = (opt.embed || "").includes("watchplay");
+                  const audioLabel = opt.lang === "pt-br" ? "Dublado" : "Legendado";
+                  const cleanBadge = isClean ? " • Sem Popups" : "";
+                  return {
+                    id: String(idx + 1),
+                    label: `Servidor ${idx + 1} (${opt.label || "Player"} - ${audioLabel}${cleanBadge})`,
+                    url: opt.embed,
+                    lang: opt.lang,
+                    isClean,
+                  };
+                });
+
+                const bestPlayer = sortedOptions[0];
+                if (bestPlayer?.embed) {
+                  console.log(`[Extrator] Selecionado 1º player: ${bestPlayer.embed}`);
+                  playerUrl = bestPlayer.embed;
+                }
               }
             }
           }

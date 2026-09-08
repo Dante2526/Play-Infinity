@@ -31,12 +31,12 @@ function extractSrcFromInput(input: string): string {
 
 // Extrai informações da mídia caso não sejam fornecidas explicitamente
 function parseMediaFromUrl(url: string) {
-  const isSeries = url.includes("/tv/") || url.includes("/serie") || url.includes("/series");
+  const isSeries = url.includes("/tv/") || url.includes("/tvshow/") || url.includes("/serie") || url.includes("/series");
   
-  const tvPattern = /\/(?:tv|serie|series)\/([a-zA-Z0-9_-]+)(?:\/(\d+)\/(\d+))?/i;
+  const tvPattern = /\/(?:tv|tvshow|serie|series)\/([a-zA-Z0-9_-]+)(?:\/(\d+)\/(\d+))?/i;
   const tvMatch = url.match(tvPattern);
   
-  const moviePattern = /\/movie\/([a-zA-Z0-9_-]+)/i;
+  const moviePattern = /\/(?:movie|filme)\/([a-zA-Z0-9_-]+)/i;
   const movieMatch = url.match(moviePattern);
 
   if (tvMatch) {
@@ -152,38 +152,45 @@ export function VideoPlayerModal({
       return [
         {
           key: "srv1",
-          label: "Servidor 1 (VidLink PRO)",
+          label: "Servidor 1 (WatchPlayer VIP)",
+          badge: "Dublado BR • Zero Anúncios",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
+        },
+        {
+          key: "srv2",
+          label: "Servidor 2 (MyEmbed BR)",
+          badge: "Dublado • Multi-Players",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://myembed.biz/serie/${id}/${s}/${e}`,
+        },
+        {
+          key: "srv3",
+          label: "Servidor 3 (VidLink PRO)",
           badge: "Sem Popups • 4K/HD",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv2",
-          label: "Servidor 2 (SuperFlix BR)",
+          key: "srv4",
+          label: "Servidor 4 (SuperFlix BR)",
           badge: "Dublado BR • Rápido",
           buildUrl: (id: string, s: number, e: number) => 
             `https://superflixapi.top/serie/${id}/${s}/${e}`,
         },
         {
-          key: "srv3",
-          label: "Servidor 3 (Embed.su)",
+          key: "srv5",
+          label: "Servidor 5 (Embed.su)",
           badge: "Full HD • Multi-áudio",
           buildUrl: (id: string, s: number, e: number) => 
             `https://embed.su/embed/tv/${id}/${s}/${e}`,
         },
         {
-          key: "srv4",
-          label: "Servidor 4 (VidSrc VIP)",
+          key: "srv6",
+          label: "Servidor 6 (VidSrc VIP)",
           badge: "Ultra Rápido",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
-        },
-        {
-          key: "srv5",
-          label: "Servidor 5 (Videasy Multi)",
-          badge: "Áudio & Legendas",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://player.videasy.to/tv/${id}/${s}/${e}`,
         }
       ];
     } else {
@@ -196,27 +203,27 @@ export function VideoPlayerModal({
         },
         {
           key: "srv2",
-          label: "Servidor 2 (VidLink PRO)",
+          label: "Servidor 2 (MyEmbed BR)",
+          badge: "Dublado • Multi-Players",
+          buildUrl: (id: string) => `https://myembed.biz/filme/${imdbId || id}`,
+        },
+        {
+          key: "srv3",
+          label: "Servidor 3 (VidLink PRO)",
           badge: "Sem Popups • Ultra HD",
           buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
         },
         {
-          key: "srv3",
-          label: "Servidor 3 (SuperFlix BR)",
+          key: "srv4",
+          label: "Servidor 4 (SuperFlix BR)",
           badge: "Dublado BR",
           buildUrl: (id: string) => `https://superflixapi.top/filme/${id}`,
         },
         {
-          key: "srv4",
-          label: "Servidor 4 (Embed.su)",
+          key: "srv5",
+          label: "Servidor 5 (Embed.su)",
           badge: "Full HD",
           buildUrl: (id: string) => `https://embed.su/embed/movie/${id}`,
-        },
-        {
-          key: "srv5",
-          label: "Servidor 5 (Videasy)",
-          badge: "Multi-idiomas",
-          buildUrl: (id: string) => `https://player.videasy.to/movie/${id}`,
         }
       ];
     }
@@ -232,11 +239,11 @@ export function VideoPlayerModal({
       setEpisode(targetEpisode);
       setBlockedAdsCount(0);
 
-      // Priorizar Servidor 1 (VidLink PRO para séries e WatchPlayer para filmes)
+      // Priorizar Servidor 1 (WatchPlayer VIP para séries e filmes)
       let initial = defaultUrl;
-      if (!initial || initial.includes("anyembed") || initial.includes("2embed.cc") || initial.includes("myembed.biz")) {
+      if (!initial || initial.includes("anyembed") || initial.includes("2embed.cc")) {
         initial = isSeries 
-          ? `https://vidlink.pro/tv/${resolvedId}/${targetSeason}/${targetEpisode}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true` 
+          ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${targetSeason}/${targetEpisode}` 
           : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
       }
 
@@ -291,6 +298,8 @@ export function VideoPlayerModal({
 
     if (
       cleanUrl.includes("watchplay.shop") || 
+      cleanUrl.includes("myembed.biz") || 
+      cleanUrl.includes("playerflix") || 
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
