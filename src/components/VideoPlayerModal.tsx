@@ -77,7 +77,7 @@ export function VideoPlayerModal({
   initialEpisode = 1,
 }: VideoPlayerModalProps) {
   const [urlInput, setUrlInput] = useState(
-    defaultUrl || "https://vidlink.pro/tv/66732/1/1"
+    defaultUrl || "https://v1.watchplay.shop/tvshow/66732/1/1"
   );
   const [activeIframeUrl, setActiveIframeUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -240,21 +240,33 @@ export function VideoPlayerModal({
       setEpisode(targetEpisode);
       setBlockedAdsCount(0);
 
-      // Priorizar Servidor 1 (WatchPlayer VIP para séries e filmes)
+      // Gerar a URL padrão do WatchPlayer VIP para séries e filmes
+      const watchPlayerUrl = isSeries 
+        ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${targetSeason}/${targetEpisode}` 
+        : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
+
       let initial = defaultUrl;
+      let targetServerKey = "srv1";
+
       if (
         !initial || 
+        initial.includes("watchplay.shop") ||
+        initial.includes("vidlink.pro") ||
         initial.includes("anyembed") || 
         initial.includes("2embed.cc") || 
         initial.includes("myembed.biz") || 
         initial.includes("playerflix")
       ) {
-        initial = isSeries 
-          ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${targetSeason}/${targetEpisode}` 
-          : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
+        initial = watchPlayerUrl;
+        targetServerKey = "srv1";
+      } else {
+        const found = servers.find(s => s.isMatch(initial));
+        if (found) {
+          targetServerKey = found.key;
+        }
       }
 
-      setSelectedServerKey("srv1");
+      setSelectedServerKey(targetServerKey);
       setUrlInput(initial);
       handleExtract(initial);
     } else {
@@ -541,7 +553,7 @@ export function VideoPlayerModal({
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
-              sandbox={antiAdShield ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
+              sandbox={antiAdShield && !activeIframeUrl.includes("vidlink.pro") ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">

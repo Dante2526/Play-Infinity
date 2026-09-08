@@ -107,7 +107,7 @@ export const top10 = [
     title: "A CASA DO DRAGÃO",
     imageUrl:
       "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
-    playerUrl: "https://vidlink.pro/tv/94997/1/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
   },
 ];
 
@@ -145,7 +145,7 @@ export const newest = [
     title: "SILO",
     imageUrl:
       "https://image.tmdb.org/t/p/w500/tVR4q9FazxJuCEpaYxiCijUlvM3.jpg",
-    playerUrl: "https://vidlink.pro/tv/125988/1/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/125988/1/1",
   },
   {
     id: 76479,
@@ -153,7 +153,7 @@ export const newest = [
     title: "THE BOYS",
     imageUrl:
       "https://image.tmdb.org/t/p/w500/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
-    playerUrl: "https://vidlink.pro/tv/76479/1/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/76479/1/1",
   },
   {
     id: 100088,
@@ -161,7 +161,7 @@ export const newest = [
     title: "THE LAST OF US",
     imageUrl:
       "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
-    playerUrl: "https://vidlink.pro/tv/100088/1/1",
+    playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
   },
 ];
 
