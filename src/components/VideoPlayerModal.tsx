@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
-  Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2
+  Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2, Minimize2, FastForward,
+  SkipForward, RotateCcw, HelpCircle, SlidersHorizontal
 } from "lucide-react";
+import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
+import { checkIsCam } from "../data";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -15,6 +18,8 @@ interface VideoPlayerModalProps {
   imdbId?: string;
   initialSeason?: number;
   initialEpisode?: number;
+  quality?: string;
+  isCam?: boolean;
 }
 
 // Extrai o link src caso o usuário ou sistema tenha passado um <iframe> completo
@@ -75,7 +80,10 @@ export function VideoPlayerModal({
   imdbId,
   initialSeason = 1,
   initialEpisode = 1,
+  quality,
+  isCam,
 }: VideoPlayerModalProps) {
+  const isCamMovie = isCam || checkIsCam(title, quality);
   const [urlInput, setUrlInput] = useState(
     defaultUrl || "https://v1.watchplay.shop/tvshow/66732/1/1"
   );
@@ -91,6 +99,90 @@ export function VideoPlayerModal({
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
+  const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
+
+  // Configuração do Salto de Abertura Manual (Tecla S ou Botão)
+  const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
+    try {
+      localStorage.removeItem("playinfinity_autoskip_intro");
+      return parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+    } catch {
+      return 85;
+    }
+  });
+  const [isIntroActive, setIsIntroActive] = useState<boolean>(false);
+  const [skipNotice, setSkipNotice] = useState<string | null>(null);
+  const [lastSkippedSeconds, setLastSkippedSeconds] = useState<number | null>(null);
+  const [showSkipSettings, setShowSkipSettings] = useState<boolean>(false);
+  const [showIntroHelp, setShowIntroHelp] = useState<boolean>(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Fullscreen & Widescreen state tracking
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isWidescreen, setIsWidescreen] = useState<boolean>(false);
+  const [isRotated, setIsRotated] = useState<boolean>(false);
+  const isExpanded = isFullscreen || isWidescreen;
+  const [showStageControls, setShowStageControls] = useState<boolean>(false);
+  const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sincroniza estado de tela cheia do navegador
+  useEffect(() => {
+    const handleFullscreenStateChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isCurrentlyFullscreen);
+      if (!isCurrentlyFullscreen) {
+        setIsWidescreen(false);
+        setIsRotated(false);
+        if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+          try {
+            (screen.orientation as any).unlock();
+          } catch (e) {}
+        }
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+    };
+  }, []);
+
+  // Detecta se o aparelho mudou fisicamente para modo paisagem (largura > altura)
+  useEffect(() => {
+    const handleOrientationOrResize = () => {
+      if (typeof window !== "undefined" && window.innerWidth > window.innerHeight) {
+        // Se a tela já está deitada fisicamente, desativa a rotação CSS forçada
+        setIsRotated(false);
+      }
+    };
+
+    window.addEventListener("resize", handleOrientationOrResize);
+    window.addEventListener("orientationchange", handleOrientationOrResize);
+    return () => {
+      window.removeEventListener("resize", handleOrientationOrResize);
+      window.removeEventListener("orientationchange", handleOrientationOrResize);
+    };
+  }, []);
+
+  // Mostra controles internos ao mover o mouse e esconde após 3.5 segundos
+  const handleStageMouseMove = () => {
+    setShowStageControls(true);
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    controlsTimeoutRef.current = setTimeout(() => {
+      setShowStageControls(false);
+    }, 3500);
+  };
+
+  const handleStageMouseLeave = () => {
+    if (!isFullscreen) {
+      setShowStageControls(false);
+    }
+  };
 
   // Bloqueio de popups e proteção de redirecionamento nativo no nível da janela
   useEffect(() => {
@@ -147,85 +239,28 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores otimizados: servidores livres de anúncios agressivos e compatíveis sem erro de sandbox
+  // Servidor Oficial: WatchPlayer VIP Exclusivo (Autoplay imediato e avanço automático de episódios)
   const servers = useMemo(() => {
     if (isSeries) {
       return [
         {
           key: "srv1",
-          label: "Servidor 1 (WatchPlayer VIP)",
-          badge: "Dublado BR • Zero Anúncios",
+          label: "WatchPlayer VIP",
+          badge: "Dublado BR • Autoplay Contínuo",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("watchplay.shop"),
         },
-        {
-          key: "srv2",
-          label: "Servidor 2 (VidLink PRO)",
-          badge: "Player Direto • Sem Telas Intermediárias",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
-        },
-        {
-          key: "srv3",
-          label: "Servidor 3 (SuperFlix BR)",
-          badge: "Dublado BR • Rápido",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://superflixapi.top/serie/${id}/${s}/${e}`,
-        },
-        {
-          key: "srv4",
-          label: "Servidor 4 (MyEmbed BR)",
-          badge: "Dublado • Multi-Players",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://myembed.biz/serie/${id}/${s}/${e}`,
-        },
-        {
-          key: "srv5",
-          label: "Servidor 5 (Embed.su)",
-          badge: "Full HD • Multi-áudio",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://embed.su/embed/tv/${id}/${s}/${e}`,
-        },
-        {
-          key: "srv6",
-          label: "Servidor 6 (VidSrc VIP)",
-          badge: "Ultra Rápido",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
-        }
       ];
     } else {
       return [
         {
           key: "srv1",
-          label: "Servidor 1 (WatchPlayer VIP)",
-          badge: "Dublado • Zero Anúncios",
+          label: "WatchPlayer VIP",
+          badge: "Dublado BR • Sem Anúncios",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
+          isMatch: (u: string) => u.includes("watchplay.shop"),
         },
-        {
-          key: "srv2",
-          label: "Servidor 2 (VidLink PRO)",
-          badge: "Player Direto • Ultra HD",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=ea580c&secondaryColor=f97316&iconColor=ffffff&title=true&poster=true`,
-        },
-        {
-          key: "srv3",
-          label: "Servidor 3 (SuperFlix BR)",
-          badge: "Dublado BR",
-          buildUrl: (id: string) => `https://superflixapi.top/filme/${id}`,
-        },
-        {
-          key: "srv4",
-          label: "Servidor 4 (MyEmbed BR)",
-          badge: "Dublado • Multi-Players",
-          buildUrl: (id: string) => `https://myembed.biz/filme/${imdbId || id}`,
-        },
-        {
-          key: "srv5",
-          label: "Servidor 5 (Embed.su)",
-          badge: "Full HD",
-          buildUrl: (id: string) => `https://embed.su/embed/movie/${id}`,
-        }
       ];
     }
   }, [isSeries, imdbId]);
@@ -275,14 +310,107 @@ export function VideoPlayerModal({
     }
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
+  // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo (sem opções intermediárias)
+  const resolveStreamIframeUrl = (url: string) => {
+    if (url.includes("watchplay.shop")) {
+      return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+
+  // Escuta postMessages emitidos pelo WatchPlayer (fim de episódio, status de abertura, etc.)
+  useEffect(() => {
+    const handlePlayerWindowMessages = (event: MessageEvent) => {
+      if (!event.data) return;
+
+      if (event.data.type === "WATCHPLAY_VIDEO_ENDED") {
+        if (isSeries) {
+          const nextEp = episode + 1;
+          console.log(`[WatchPlayer Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
+          setAutoNextNotice({ nextEp });
+
+          // Passa imediatamente para o próximo episódio e inicia sozinho
+          handleEpisodeChange(nextEp);
+
+          setTimeout(() => {
+            setAutoNextNotice(null);
+          }, 4500);
+        }
+      } else if (event.data.type === "WATCHPLAY_INTRO_ACTIVE") {
+        setIsIntroActive(!!event.data.active);
+      } else if (event.data.type === "WATCHPLAY_INTRO_SKIPPED") {
+        const sec = event.data.seconds || skipDurationSeconds;
+        setSkipNotice(`Abertura pulada (+${sec}s)`);
+        setIsIntroActive(false);
+        setTimeout(() => {
+          setSkipNotice(null);
+        }, 3200);
+      }
+    };
+
+    window.addEventListener("message", handlePlayerWindowMessages);
+    return () => window.removeEventListener("message", handlePlayerWindowMessages);
+  }, [isSeries, episode, season, resolvedId, skipDurationSeconds]);
+
+  // Função para Pular Abertura (+85 segundos ou customizado)
+  const handleSkipIntro = (customSeconds?: number) => {
+    const sec = customSeconds || skipDurationSeconds;
+    if (iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
+      } catch (e) {}
+    }
+    window.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
+
+    setLastSkippedSeconds(sec);
+    setSkipNotice(`Abertura pulada (+${sec}s)`);
+    setIsIntroActive(false);
+    setTimeout(() => {
+      setSkipNotice(null);
+    }, 4000);
+  };
+
+  // Função para desfazer o salto caso tenha passado do ponto
+  const handleUndoSkip = () => {
+    const secToRewind = -(lastSkippedSeconds || skipDurationSeconds || 85);
+    if (iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
+      } catch (e) {}
+    }
+    window.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
+    setLastSkippedSeconds(null);
+    setSkipNotice(`Retornado (${Math.abs(secToRewind)}s)`);
+    setTimeout(() => {
+      setSkipNotice(null);
+    }, 3000);
+  };
+
+  // Alterar tempo padrão do salto de abertura
+  const handleChangeSkipDuration = (newSec: number) => {
+    setSkipDurationSeconds(newSec);
+    try {
+      localStorage.setItem("playinfinity_skip_duration", String(newSec));
+    } catch (e) {}
+    if (iframeRef.current?.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage({
+          type: "SET_SKIP_DURATION",
+          seconds: newSec,
+        }, "*");
+      } catch (e) {}
+    }
+  };
+
   // Handler to switch episode
   const handleEpisodeChange = (newEpisode: number) => {
     if (newEpisode < 1) return;
     setEpisode(newEpisode);
+    setIsIntroActive(false);
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -290,10 +418,11 @@ export function VideoPlayerModal({
   const handleSeasonChange = (newSeason: number) => {
     setSeason(newSeason);
     setEpisode(1);
+    setIsIntroActive(false);
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -304,7 +433,7 @@ export function VideoPlayerModal({
     if (!srv) return;
     const newUrl = srv.buildUrl(resolvedId, season, episode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -325,7 +454,7 @@ export function VideoPlayerModal({
       cleanUrl.includes("myembed") ||
       cleanUrl.endsWith(".mp4")
     ) {
-      setActiveIframeUrl(cleanUrl);
+      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
       setExtractedSource(cleanUrl);
       setIsLoading(false);
       return;
@@ -336,14 +465,14 @@ export function VideoPlayerModal({
       const data = await res.json();
 
       if (data.success && data.playerUrl) {
-        setActiveIframeUrl(data.playerUrl);
+        setActiveIframeUrl(resolveStreamIframeUrl(data.playerUrl));
         setExtractedSource(data.playerUrl);
       } else {
-        setActiveIframeUrl(cleanUrl);
+        setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
         setExtractedSource(cleanUrl);
       }
     } catch (err: any) {
-      setActiveIframeUrl(cleanUrl);
+      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
       setExtractedSource(cleanUrl);
     } finally {
       setIsLoading(false);
@@ -356,16 +485,86 @@ export function VideoPlayerModal({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleFullScreen = () => {
+  const handleFullScreen = async () => {
     const stage = document.getElementById("player-stage-container");
-    if (stage) {
+    const isCurrentlyFull = !!document.fullscreenElement || isWidescreen;
+
+    if (isCurrentlyFull) {
+      setIsWidescreen(false);
+      setIsRotated(false);
       if (document.fullscreenElement) {
-        document.exitFullscreen();
+        document.exitFullscreen().catch(() => {});
+      }
+      if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (e) {}
+      }
+    } else {
+      setIsWidescreen(true);
+
+      // Tenta travar em orientação paisagem no mobile
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          (screen.orientation as any).lock("landscape").catch(() => {});
+        } catch (err) {}
+      }
+
+      // Se a tela estiver na vertical (celular em pé), gira automaticamente em 90° para widescreen total
+      if (typeof window !== "undefined" && window.innerHeight > window.innerWidth) {
+        setIsRotated(true);
       } else {
-        stage.requestFullscreen?.().catch(() => {});
+        setIsRotated(false);
+      }
+
+      if (stage) {
+        try {
+          if (stage.requestFullscreen) {
+            await stage.requestFullscreen();
+          } else if ((stage as any).webkitRequestFullscreen) {
+            await (stage as any).webkitRequestFullscreen();
+          }
+        } catch (err) {
+          console.log("Fullscreen API nativo indisponível, ativando modo Widescreen total:", err);
+        }
       }
     }
   };
+
+  const handleToggleRotate = () => {
+    setIsRotated((prev) => !prev);
+  };
+
+  // Atalhos de teclado para navegar pelos episódios sem sair da tela cheia
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Não intercepta se estiver digitando em campo de texto
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === "n" || e.key === "N") {
+        if (isSeries) {
+          e.preventDefault();
+          handleEpisodeChange(episode + 1);
+        }
+      } else if (e.key === "p" || e.key === "P") {
+        if (isSeries && episode > 1) {
+          e.preventDefault();
+          handleEpisodeChange(episode - 1);
+        }
+      } else if (e.key === "s" || e.key === "S") {
+        e.preventDefault();
+        handleSkipIntro();
+      } else if (e.key === "f" || e.key === "F") {
+        e.preventDefault();
+        handleFullScreen();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isSeries, episode, season, resolvedId, skipDurationSeconds]);
 
   if (!isOpen) return null;
 
@@ -380,8 +579,8 @@ export function VideoPlayerModal({
               {isSeries ? <Tv className="w-4 h-4" /> : <Film className="w-4 h-4" />}
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-white font-bold text-base md:text-lg leading-tight truncate max-w-[200px] sm:max-w-md">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-white font-bold text-base md:text-lg leading-tight truncate max-w-[180px] sm:max-w-md">
                   {title || "Reprodutor de Vídeo"}
                 </h2>
                 <span className="px-2 py-0.5 bg-orange-600/20 text-orange-400 border border-orange-500/30 rounded text-[10px] font-bold uppercase tracking-wider hidden sm:inline">
@@ -397,52 +596,105 @@ export function VideoPlayerModal({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleFullScreen}
-              className="p-2 text-neutral-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-              title="Tela Cheia"
-            >
-              <Maximize2 className="w-4 h-4" />
-            </button>
-
-            <button
               onClick={onClose}
               className="p-2 text-neutral-400 hover:text-white rounded-full bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
-              title="Fechar"
+              title="Fechar (Esc)"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Server Switcher Bar */}
+        {/* WatchPlayer VIP Status Bar & Auto-Next Indicator */}
         <div className="px-4 sm:px-5 py-2.5 bg-[#0e0e0e] border-b border-neutral-800/80 flex items-center justify-between gap-3 overflow-x-auto">
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs font-bold text-neutral-400 flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5 text-orange-500" /> Servidores:
-            </span>
-            {servers.map((srv) => {
-              const isActive = selectedServerKey === srv.key;
-              return (
-                <button
-                  key={srv.key}
-                  onClick={() => handleServerSwitch(srv.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shrink-0 flex items-center gap-1.5 cursor-pointer ${
-                    isActive
-                      ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
-                      : "bg-[#181818] text-neutral-300 hover:text-white hover:bg-[#252525] border border-white/10"
-                  }`}
-                >
-                  {isActive && <Play className="w-3 h-3 fill-current" />}
-                  <span>{srv.label}</span>
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isActive ? 'bg-black/30 text-white' : 'bg-white/5 text-neutral-400'}`}>
-                    {srv.badge.split("•")[0].trim()}
-                  </span>
-                </button>
-              );
-            })}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600/15 border border-orange-500/30 text-orange-400 text-xs font-semibold">
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>WatchPlayer VIP</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-orange-600 text-white ml-1 font-bold">
+                Dublado BR
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2 text-xs shrink-0">
+            {isSeries && (
+              <>
+                {/* Botão de Pular Abertura */}
+                <button
+                  onClick={() => handleSkipIntro()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-600/20 active:scale-95 cursor-pointer border border-orange-400/40"
+                  title="Pular Abertura da Série agora (Atalho: Tecla S)"
+                >
+                  <SkipForward className="w-3.5 h-3.5 fill-current" />
+                  <span>Pular Abertura</span>
+                  <span className="text-[10px] bg-black/40 px-1.5 py-0.2 rounded font-mono font-bold text-orange-200">
+                    +{skipDurationSeconds}s (S)
+                  </span>
+                </button>
+
+                {/* Seletor de Segundos de Salto */}
+                <div className="hidden sm:flex items-center bg-neutral-900 border border-neutral-800 rounded-xl p-0.5 text-[11px]">
+                  {[30, 60, 85, 90].map((sec) => (
+                    <button
+                      key={sec}
+                      onClick={() => handleChangeSkipDuration(sec)}
+                      className={`px-2 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                        skipDurationSeconds === sec
+                          ? "bg-orange-600 text-white shadow-sm"
+                          : "text-neutral-400 hover:text-white"
+                      }`}
+                      title={`Definir salto para +${sec} segundos`}
+                    >
+                      +{sec}s
+                    </button>
+                  ))}
+                </div>
+
+                {/* Botão de Ajuda / Como Funciona */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowIntroHelp(prev => !prev)}
+                    className="p-1.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-400 hover:text-white border border-neutral-700 transition-colors cursor-pointer"
+                    title="Como funciona o pulo de aberturas?"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Popover Explicativo */}
+                  {showIntroHelp && (
+                    <div className="absolute right-0 top-10 z-50 w-72 sm:w-80 p-4 rounded-2xl bg-[#161616] border border-neutral-700 shadow-2xl text-left text-xs text-neutral-200 animate-in fade-in zoom-in-95 duration-200">
+                      <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-800">
+                        <span className="font-bold text-white flex items-center gap-1.5">
+                          <SkipForward className="w-3.5 h-3.5 text-orange-500" />
+                          Como funciona o Pular Abertura?
+                        </span>
+                        <button onClick={() => setShowIntroHelp(false)} className="text-neutral-400 hover:text-white">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-neutral-300 leading-relaxed mb-2.5">
+                        <strong className="text-orange-400">Total controle com a Tecla S ou Botão:</strong><br />
+                        Muitas séries começam com uma cena importante antes da vinheta de abertura (o <em>Cold Open</em>). Por isso, o pulo é 100% sob seu comando para você nunca perder cenas da história por engano!
+                      </p>
+                      <p className="text-neutral-300 leading-relaxed mb-2.5">
+                        Assim que a música da vinheta começar, aperte a <strong className="text-white">Tecla S</strong> ou clique em <strong className="text-orange-400">Pular Abertura</strong>. Se avançar um pouco além, basta clicar em <strong className="text-white">Desfazer</strong>!
+                      </p>
+                      <div className="bg-neutral-900/80 p-2.5 rounded-xl border border-neutral-800 space-y-1 text-[11px]">
+                        <div><strong className="text-neutral-300">Ajuste de Tempo:</strong> Escolha entre +30s, +60s, +85s (padrão de séries) ou +90s (animes).</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {isSeries && (
+              <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-semibold">
+                <FastForward className="w-3.5 h-3.5 text-orange-400 animate-pulse" />
+                <span>Próximo Ep: Auto</span>
+              </div>
+            )}
             <button
               onClick={() => setAntiAdShield(prev => !prev)}
               className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs font-semibold transition-all cursor-pointer ${
@@ -453,31 +705,10 @@ export function VideoPlayerModal({
               title={antiAdShield ? "Escudo ativo: Popups e abas bloqueados ao clicar no player" : "Clique para reativar o bloqueio de anúncios"}
             >
               <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
-              <span>Escudo Anti-Anúncios: {antiAdShield ? "Ativo" : "Desativado"}</span>
-              {antiAdShield && (
-                <span className="hidden sm:inline text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 ml-0.5">
-                  Popups Bloqueados
-                </span>
-              )}
+              <span className="hidden sm:inline">Escudo Anti-Anúncios</span>
             </button>
           </div>
         </div>
-
-        {/* Banner de Proteção / Dica quando servidor alternativo está selecionado */}
-        {selectedServerKey !== "srv1" && (
-          <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center justify-between gap-2 text-xs text-amber-300">
-            <div className="flex items-center gap-2 truncate">
-              <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
-              <span className="truncate">Servidor secundário ativo. Se abrir abas ou anúncios indesejados, volte ao Servidor 1.</span>
-            </div>
-            <button
-              onClick={() => handleServerSwitch("srv1")}
-              className="shrink-0 px-2.5 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 rounded font-semibold text-[11px] cursor-pointer transition-colors"
-            >
-              Mudar para Servidor 1 (Sem Anúncios)
-            </button>
-          </div>
-        )}
 
         {/* Series Controls: Season & Episode Quick Selector */}
         {isSeries && (
@@ -538,23 +769,99 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Player Video Stage: 100% Livre de restrições de Sandbox (sem erros) */}
-        <div id="player-stage-container" className="relative w-full aspect-video bg-black flex items-center justify-center overflow-hidden">
-          {isLoading ? (
-            <div className="flex flex-col items-center gap-3 text-neutral-400">
-              <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-              <p className="text-sm font-medium">Iniciando stream e conectando reprodutor...</p>
+        {/* Player Video Stage: Mantém tela cheia contínua sem interrupções entre episódios */}
+        <div 
+          id="player-stage-container" 
+          onMouseMove={handleStageMouseMove}
+          onMouseLeave={handleStageMouseLeave}
+          style={
+            isExpanded && isRotated
+              ? {
+                  position: "fixed",
+                  top: "50%",
+                  left: "50%",
+                  width: "100vh",
+                  height: "100vw",
+                  transform: "translate(-50%, -50%) rotate(90deg)",
+                  zIndex: 999999,
+                  maxWidth: "none",
+                  maxHeight: "none",
+                }
+              : undefined
+          }
+          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none transition-all duration-300 ${
+            isExpanded && !isRotated
+              ? "h-screen w-screen fixed inset-0 z-[99999]"
+              : isExpanded && isRotated
+              ? "shadow-2xl"
+              : "aspect-video"
+          }`}
+        >
+          {/* Notificação Flutuante de Avanço Automático */}
+          {autoNextNotice && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25 pointer-events-none">
+              <FastForward className="w-4 h-4 animate-pulse text-white" />
+              <span>Episódio concluído! Reproduzindo Episódio {autoNextNotice.nextEp}...</span>
             </div>
-          ) : activeIframeUrl ? (
+          )}
+
+          {/* Notificação Flutuante de Abertura Pulada */}
+          {skipNotice && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25">
+              <div className="flex items-center gap-2">
+                <SkipForward className="w-4 h-4 fill-current text-white" />
+                <span>{skipNotice}</span>
+              </div>
+              {lastSkippedSeconds && (
+                <button
+                  onClick={handleUndoSkip}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/40 hover:bg-black/60 text-orange-200 text-xs font-semibold border border-white/20 transition-all active:scale-95 cursor-pointer ml-1"
+                  title="Desfazer e retroceder vídeo"
+                >
+                  <RotateCcw className="w-3 h-3" />
+                  <span>Desfazer</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Player Oficial Estilo Netflix Cinematográfico */}
+          <NetflixPlayerSkin
+            title={title}
+            isSeries={isSeries}
+            season={season}
+            episode={episode}
+            totalEpisodes={24}
+            onClose={onClose}
+            onEpisodeChange={handleEpisodeChange}
+            onSkipIntro={() => handleSkipIntro()}
+            skipDurationSeconds={skipDurationSeconds}
+            isIntroActive={isIntroActive}
+            isFullscreen={isExpanded}
+            onToggleFullscreen={handleFullScreen}
+            iframeRef={iframeRef}
+            isRotated={isRotated}
+            onToggleRotate={handleToggleRotate}
+          />
+
+          {/* Indicador de Carregamento sobreposto (não remove o iframe da DOM, preservando tela cheia) */}
+          {isLoading && (
+            <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 text-neutral-400">
+              <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+              <p className="text-sm font-medium text-white">Carregando {isSeries ? `Episódio ${episode}` : title}...</p>
+            </div>
+          )}
+
+          {activeIframeUrl ? (
             <iframe
-              key={activeIframeUrl}
+              ref={iframeRef}
               src={activeIframeUrl}
               title={title}
               className="w-full h-full border-0"
               allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
               allowFullScreen
               referrerPolicy="no-referrer"
-              sandbox={antiAdShield && !activeIframeUrl.includes("vidlink.pro") ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
+              sandbox={antiAdShield && !activeIframeUrl.includes("vidlink.pro") && !activeIframeUrl.includes("watchplayer-stream") && !activeIframeUrl.includes("watchplay.shop") ? "allow-scripts allow-same-origin allow-forms allow-presentation" : undefined}
             />
           ) : error ? (
             <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
