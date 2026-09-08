@@ -275,6 +275,14 @@ export function VideoPlayerModal({
     }
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
+  // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo
+  const resolveStreamIframeUrl = (url: string) => {
+    if (url.includes("watchplay.shop")) {
+      return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
+    }
+    return url;
+  };
+
   // Handler to switch episode
   const handleEpisodeChange = (newEpisode: number) => {
     if (newEpisode < 1) return;
@@ -282,7 +290,7 @@ export function VideoPlayerModal({
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -293,7 +301,7 @@ export function VideoPlayerModal({
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -304,7 +312,7 @@ export function VideoPlayerModal({
     if (!srv) return;
     const newUrl = srv.buildUrl(resolvedId, season, episode);
     setUrlInput(newUrl);
-    setActiveIframeUrl(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
@@ -315,8 +323,14 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
+    if (cleanUrl.includes("watchplay.shop")) {
+      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
+      setExtractedSource(cleanUrl);
+      setIsLoading(false);
+      return;
+    }
+
     if (
-      cleanUrl.includes("watchplay.shop") || 
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
@@ -335,14 +349,14 @@ export function VideoPlayerModal({
       const data = await res.json();
 
       if (data.success && data.playerUrl) {
-        setActiveIframeUrl(data.playerUrl);
+        setActiveIframeUrl(resolveStreamIframeUrl(data.playerUrl));
         setExtractedSource(data.playerUrl);
       } else {
-        setActiveIframeUrl(cleanUrl);
+        setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
         setExtractedSource(cleanUrl);
       }
     } catch (err: any) {
-      setActiveIframeUrl(cleanUrl);
+      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
       setExtractedSource(cleanUrl);
     } finally {
       setIsLoading(false);

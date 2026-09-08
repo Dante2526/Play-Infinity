@@ -22,6 +22,7 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
   app.get("/api/extract-player", async (req, res) => {
@@ -239,6 +240,122 @@ async function startServer() {
       success: true,
       items: customStreams,
     });
+  });
+
+  // API 4: Proxy WatchPlay API (para obter opções de episódio e player sem bloqueio de CORS)
+  app.post("/api/watchplay-proxy-api", async (req, res) => {
+    try {
+      const upstreamRes = await fetch("https://v1.watchplay.shop/api", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Referer": "https://v1.watchplay.shop/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        body: new URLSearchParams(req.body as Record<string, string>),
+      });
+      const data = await upstreamRes.json();
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[WatchPlay Proxy API Error]:", err.message);
+      return res.status(500).json({ errors: "1", message: err.message });
+    }
+  });
+
+  // API 5: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
+  app.get("/api/watchplayer-stream", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl) {
+        return res.status(400).send("URL parameter missing");
+      }
+
+      // Se for requisição de assinatura MD5 de stream feita pelo próprio player da página
+      if (req.query.action_secure_sign) {
+        const rawUrl = req.query.raw_url as string;
+        const signTarget = new URL(targetUrl);
+        signTarget.searchParams.set("action_secure_sign", "1");
+        if (rawUrl) signTarget.searchParams.set("raw_url", rawUrl);
+
+        const signRes = await fetch(signTarget.toString(), {
+          headers: {
+            "Referer": targetUrl,
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        });
+        const signData = await signRes.json();
+        return res.json(signData);
+      }
+
+      const upstreamRes = await fetch(targetUrl, {
+        headers: {
+          "Referer": "https://v1.watchplay.shop/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+      });
+
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).send("Erro ao carregar o player");
+      }
+
+      let html = await upstreamRes.text();
+
+      // 1. Ativar AUTO_PLAY_ENABLED no player oficial
+      html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
+
+      // 2. Redirecionar requisições da API interna para o proxy local
+      html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy-api';");
+
+      // 3. Remover rastreadores ou banners conhecidos
+      html = html.replace(/_wau\.push\([^)]*\);?/g, "");
+
+      // 4. Injetar auto-clique instantâneo na primeira opção (Dublado) e ocultar telas intermediárias
+      const autoPlayInjection = `
+        <style>
+          /* Oculta o seletor de opções para iniciar o vídeo direto */
+          .players_select_container {
+            opacity: 0 !important;
+            transition: opacity 0.2s ease;
+            pointer-events: none !important;
+          }
+          .player_container.visible {
+            opacity: 1 !important;
+          }
+          .embedder_especial, .embedder_info, #_wau_container {
+            display: none !important;
+          }
+        </style>
+        <script>
+          (function() {
+            var tries = 0;
+            var autoStartTimer = setInterval(function() {
+              tries++;
+              var option = document.querySelector('.player_select_item');
+              if (option) {
+                option.click();
+                clearInterval(autoStartTimer);
+              }
+              if (tries > 80) {
+                clearInterval(autoStartTimer);
+                var container = document.querySelector('.players_select_container');
+                if (container) {
+                  container.style.opacity = '1';
+                  container.style.pointerEvents = 'auto';
+                }
+              }
+            }, 35);
+          })();
+        </script>
+      `;
+
+      html = html.replace("</body>", `${autoPlayInjection}</body>`);
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(html);
+    } catch (err: any) {
+      console.error("[WatchPlayer Stream Error]:", err.message);
+      return res.status(500).send("Erro ao processar stream: " + err.message);
+    }
   });
 
   // Healthcheck
