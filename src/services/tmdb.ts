@@ -21,6 +21,7 @@ export interface TMDBItem {
   first_air_date?: string;
   media_type?: 'movie' | 'tv';
   genre_ids: number[];
+  popularity?: number;
 }
 
 export interface TMDBResponse {
@@ -63,6 +64,7 @@ export interface TMDBDetails {
   episode_run_time?: number[];
   genres: { id: number; name: string }[];
   seasons?: Season[];
+  imdb_id?: string;
 }
 
 // Map Genres
@@ -135,6 +137,7 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
 // HBO / Max: network 49 / 3186, provider 1899 / 384
 // Amazon Prime: network 1024, provider 119
 // Apple TV+: network 2552, provider 350
+// Globoplay: network 3290, provider 307
 export const getProviderSeries = async (provider: string, page: number = 1): Promise<TMDBResponse> => {
   let networkId = 213; // default Netflix
   let providerId = 8;
@@ -155,6 +158,9 @@ export const getProviderSeries = async (provider: string, page: number = 1): Pro
   } else if (p.includes('apple')) {
     networkId = 2552;
     providerId = 350;
+  } else if (p.includes('globo')) {
+    networkId = 3290;
+    providerId = 307;
   }
 
   const res = await fetch(
@@ -173,6 +179,7 @@ export const getProviderMovies = async (provider: string, page: number = 1): Pro
   else if (p.includes('max') || p.includes('hbo')) providerId = 1899;
   else if (p.includes('prime') || p.includes('amazon')) providerId = 119;
   else if (p.includes('apple')) providerId = 350;
+  else if (p.includes('globo')) providerId = 307;
 
   const res = await fetch(
     `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_watch_providers=${providerId}&watch_region=BR`,
@@ -201,5 +208,114 @@ export const getGenreIdByName = (name: string): number | undefined => {
   const entry = Object.entries(genreMap).find(([_, val]) => val.toLowerCase() === name.toLowerCase());
   return entry ? parseInt(entry[0]) : undefined;
 };
+
+export const getMovieReleases = async (page: number = 1): Promise<TMDBResponse> => {
+  const today = new Date().toISOString().split('T')[0];
+  const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const res = await fetch(url, options);
+  return res.json();
+};
+
+export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse> => {
+  const today = new Date().toISOString().split('T')[0];
+  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const res = await fetch(url, options);
+  return res.json();
+};
+
+export interface TrailerVideo {
+  id: string;
+  key: string; // ID do YouTube
+  name: string;
+  site: string;
+  type: string;
+  isDubbed: boolean;
+  isSubtitled: boolean;
+  language: string;
+}
+
+/**
+ * Busca o melhor trailer oficial para um filme ou série no TMDB,
+ * priorizando versões dubladas em português (PT-BR) e legendadas.
+ */
+export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<TrailerVideo | null> => {
+  if (!id || isNaN(Number(id))) return null;
+
+  try {
+    // 1. Busca vídeos em Português do Brasil (pt-BR)
+    const ptUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}&language=pt-BR`;
+    const ptRes = await fetch(ptUrl, options);
+    let ptVideos: any[] = [];
+    if (ptRes.ok) {
+      const ptData = await ptRes.json();
+      ptVideos = ptData?.results || [];
+    }
+
+    const filterYouTube = (list: any[]) => list.filter(v => v.site === 'YouTube' && v.key);
+
+    let candidates = filterYouTube(ptVideos);
+
+    // 2. Se não houver nenhum em pt-BR, busca no catálogo geral com fallback en-US
+    if (candidates.length === 0) {
+      const fallbackUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}&language=en-US`;
+      const fallbackRes = await fetch(fallbackUrl, options);
+      if (fallbackRes.ok) {
+        const fallbackData = await fallbackRes.json();
+        candidates = filterYouTube(fallbackData?.results || []);
+      }
+    }
+
+    // 3. Fallback extra sem filtro de idioma se ainda vazio
+    if (candidates.length === 0) {
+      const allUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}`;
+      const allRes = await fetch(allUrl, options);
+      if (allRes.ok) {
+        const allData = await allRes.json();
+        candidates = filterYouTube(allData?.results || []);
+      }
+    }
+
+    if (candidates.length === 0) return null;
+
+    // 4. Sistema de pontuação: Dublado > Legendado > Trailer Oficial > Outros
+    const scoreVideo = (v: any) => {
+      let score = 0;
+      const lowerName = (v.name || '').toLowerCase();
+      const isDub = lowerName.includes('dublado') || lowerName.includes('dub');
+      const isLeg = lowerName.includes('legendado') || lowerName.includes('leg');
+
+      if (isDub) score += 1000;
+      if (isLeg) score += 500;
+      if (v.type === 'Trailer') score += 100;
+      if (v.type === 'Teaser') score += 30;
+      if (v.official) score += 50;
+      if (v.iso_639_1 === 'pt') score += 200;
+
+      return score;
+    };
+
+    candidates.sort((a, b) => scoreVideo(b) - scoreVideo(a));
+    const best = candidates[0];
+
+    const lowerBestName = (best.name || '').toLowerCase();
+    const isDubbed = lowerBestName.includes('dublado') || lowerBestName.includes('dub');
+    const isSubtitled = lowerBestName.includes('legendado') || lowerBestName.includes('leg');
+
+    return {
+      id: best.id,
+      key: best.key,
+      name: best.name || 'Trailer Oficial',
+      site: best.site,
+      type: best.type || 'Trailer',
+      isDubbed,
+      isSubtitled: !isDubbed && (isSubtitled || best.iso_639_1 === 'pt'),
+      language: best.iso_639_1 || 'pt'
+    };
+  } catch (err) {
+    console.warn(`[getTrailer] Erro ao buscar trailer para ${type}/${id}:`, err);
+    return null;
+  }
+};
+
 
 

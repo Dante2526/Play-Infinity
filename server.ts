@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 
@@ -16,6 +17,179 @@ interface StreamItem {
 }
 
 const customStreams: StreamItem[] = [];
+
+// Interface e armazenamento dos Mais Assistidos pelos usuários
+interface WatchedItem {
+  id: number | string;
+  tmdbId?: number;
+  imdbId?: string;
+  title: string;
+  type: "movie" | "series";
+  imageUrl?: string;
+  backdropUrl?: string;
+  quality?: "CAM" | "TS" | "HD" | "4K" | "FULL HD";
+  playerUrl?: string;
+  views: number;
+  lastWatched: string;
+}
+
+const INITIAL_MOST_WATCHED: WatchedItem[] = [
+  {
+    id: 299534,
+    tmdbId: 299534,
+    title: "VINGADORES: ULTIMATO",
+    type: "movie",
+    imageUrl: "https://image.tmdb.org/t/p/w500/9fRX8UKlIW7Lb9GqNsJVakWWFCi.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/movie/299534",
+    views: 185,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 66732,
+    tmdbId: 66732,
+    imdbId: "tt4574334",
+    title: "STRANGER THINGS",
+    type: "series",
+    imageUrl: "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/tvshow/66732/1/1",
+    views: 172,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
+    type: "movie",
+    imageUrl: "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
+    views: 164,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 93405,
+    tmdbId: 93405,
+    title: "ROUND 6 (SQUID GAME)",
+    type: "series",
+    imageUrl: "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
+    views: 153,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 969681,
+    tmdbId: 969681,
+    imdbId: "tt22084616",
+    title: "HOMEM-ARANHA: UM NOVO DIA",
+    type: "movie",
+    imageUrl: "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+    quality: "CAM",
+    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+    views: 147,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 119051,
+    tmdbId: 119051,
+    title: "WANDINHA",
+    type: "series",
+    imageUrl: "https://image.tmdb.org/t/p/w500/7rxiQrZjrer0RB9qNA8rHYFo53R.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/iHSwvRVsRyxpX7FE7GbviaDvgGZ.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/tvshow/119051/1/1",
+    views: 138,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 157336,
+    tmdbId: 157336,
+    title: "INTERESTELAR",
+    type: "movie",
+    imageUrl: "https://image.tmdb.org/t/p/w500/gEU2QniE6EwfVDxCzsxPnZLi1ZT.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/rAiYTsqJiOkn00e21jS1vQhYyY.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/movie/157336",
+    views: 129,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 100088,
+    tmdbId: 100088,
+    title: "THE LAST OF US",
+    type: "series",
+    imageUrl: "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
+    views: 118,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 1022789,
+    tmdbId: 1022789,
+    title: "DIVERTIDA MENTE 2",
+    type: "movie",
+    imageUrl: "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/stKGOmbuwhL489ZJnZUVvA34Dt.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/movie/1022789",
+    views: 105,
+    lastWatched: new Date().toISOString()
+  },
+  {
+    id: 94997,
+    tmdbId: 94997,
+    title: "A CASA DO DRAGÃO",
+    type: "series",
+    imageUrl: "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/etjA24UepnNnLh2t9qjU2Vj2g3g.jpg",
+    quality: "HD",
+    playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
+    views: 95,
+    lastWatched: new Date().toISOString()
+  }
+];
+
+function getMostWatchedFilePath(): string {
+  return path.join(process.cwd(), "data", "most-watched.json");
+}
+
+function loadMostWatched(): WatchedItem[] {
+  try {
+    const filePath = getMostWatchedFilePath();
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.error("[MostWatched] Erro ao carregar arquivo:", err);
+  }
+  return [...INITIAL_MOST_WATCHED];
+}
+
+function saveMostWatched(items: WatchedItem[]): void {
+  try {
+    const dir = path.join(process.cwd(), "data");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const filePath = getMostWatchedFilePath();
+    fs.writeFileSync(filePath, JSON.stringify(items, null, 2), "utf-8");
+  } catch (err) {
+    console.error("[MostWatched] Erro ao salvar arquivo:", err);
+  }
+}
 
 async function startServer() {
   const app = express();
@@ -242,6 +416,82 @@ async function startServer() {
     });
   });
 
+  // API 3.5: Obter Top 10 Mais Assistidos pelos usuários
+  app.get("/api/most-watched", (_req, res) => {
+    try {
+      const items = loadMostWatched();
+      // Ordena por número de visualizações descrescente, com desempate por última visualização
+      const sorted = [...items].sort((a, b) => {
+        if (b.views !== a.views) return b.views - a.views;
+        return new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime();
+      });
+      res.json({
+        success: true,
+        items: sorted.slice(0, 10),
+      });
+    } catch (err: any) {
+      console.error("[API most-watched] Erro:", err);
+      res.status(500).json({ success: false, error: err.message, items: INITIAL_MOST_WATCHED.slice(0, 10) });
+    }
+  });
+
+  // API 3.6: Registrar reprodução de filme ou série iniciada por um usuário
+  app.post("/api/track-play", (req, res) => {
+    try {
+      const { id, tmdbId, imdbId, title, type, imageUrl, backdropUrl, quality, playerUrl } = req.body;
+
+      if (!title) {
+        return res.status(400).json({ success: false, error: "O título é obrigatório para contabilizar." });
+      }
+
+      const items = loadMostWatched();
+      const normTitle = String(title).trim().toUpperCase();
+
+      // Procura por tmdbId ou título normalizado
+      let existing = items.find(
+        (it) => (tmdbId && it.tmdbId === Number(tmdbId)) || (id && it.id === id) || it.title.toUpperCase() === normTitle
+      );
+
+      if (existing) {
+        existing.views += 1;
+        existing.lastWatched = new Date().toISOString();
+        if (playerUrl && (!existing.playerUrl || existing.playerUrl.includes("watchplay.shop"))) existing.playerUrl = playerUrl;
+        if (imageUrl && !existing.imageUrl) existing.imageUrl = imageUrl;
+        if (backdropUrl && !existing.backdropUrl) existing.backdropUrl = backdropUrl;
+        if (quality) existing.quality = quality;
+      } else {
+        const newItem: WatchedItem = {
+          id: id || tmdbId || Date.now(),
+          tmdbId: tmdbId ? Number(tmdbId) : undefined,
+          imdbId,
+          title: String(title).trim(),
+          type: type === "series" ? "series" : "movie",
+          imageUrl: imageUrl || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+          backdropUrl: backdropUrl || imageUrl,
+          quality: quality || "HD",
+          playerUrl,
+          views: 1,
+          lastWatched: new Date().toISOString(),
+        };
+        items.push(newItem);
+        existing = newItem;
+      }
+
+      saveMostWatched(items);
+
+      console.log(`[Audiência] "${existing.title}" reproduzido! Total de views: ${existing.views}`);
+
+      res.json({
+        success: true,
+        message: "Visualização registrada com sucesso",
+        item: existing,
+      });
+    } catch (err: any) {
+      console.error("[API track-play] Erro:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // API 4: Proxy WatchPlay API (para obter opções de episódio e player sem bloqueio de CORS)
   app.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req, res) => {
     try {
@@ -368,172 +618,210 @@ async function startServer() {
       html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy';");
       html = html.replace(/\$\{HOME_URL\}\/api/g, "/api/watchplay-proxy-api");
 
-      // 3. Remover rastreadores ou banners conhecidos
+      // 3. Remover rastreadores, banners conhecidos e loaders nativos
       html = html.replace(/_wau\.push\([^)]*\);?/g, "");
       html = html.replace(/<div[^>]*class=["'][^"']*changeOptions[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, "");
       html = html.replace(/Mostrar\s*Op[çc][õo]es/gi, "");
+      html = html.replace(/\$\('body'\)\.append\(`<div class="player_loading">[\s\S]*?<\/div>`\);/g, "/* player_loading bloqueado */");
+      html = html.replace(/\$\('body'\)\.append\(textoContexto\);/g, "/* notify bloqueado */");
 
-      // 4. Injetar auto-clique instantâneo na primeira opção (Dublado), Pular Abertura (Skip Intro) e detecção de término para passar para o próximo episódio
+      // 4. Inutilizar todos os controles e overlays nativos do Artplayer na própria inicialização
+      html = html.replace(/setting:\s*true,/g, "setting: false,");
+      html = html.replace(/pip:\s*true,/g, "pip: false,");
+      html = html.replace(/playbackRate:\s*true,/g, "playbackRate: false,");
+      html = html.replace(/aspectRatio:\s*true,/g, "aspectRatio: false,");
+      html = html.replace(/lock:\s*true,/g, "lock: false,");
+      html = html.replace(/fastForward:\s*true,/g, "fastForward: false,");
+      html = html.replace(/autoOrientation:\s*true,/g, "autoOrientation: false,");
+      html = html.replace(/fullscreen:\s*true,/g, "fullscreen: false,");
+      html = html.replace(/fullscreenWeb:\s*true,/g, "fullscreenWeb: false,");
+
+      html = html.replace(
+        /artInstance = new Artplayer\(\{/g,
+        `artInstance = new Artplayer({
+            controls: [],
+            hotkey: false,
+            gesture: false,
+            miniProgressBar: false,
+            backdrop: false,
+            playsInline: true,
+            icons: { state: '' },`
+      );
+
+      // 5. Ocultar seletores nativos e carrossel de episódios no HTML inicial
+      html = html.replace(
+        /<div class="players_select_container">/g,
+        '<div class="players_select_container" style="display:none !important; opacity:0 !important; visibility:hidden !important; pointer-events:none !important;">'
+      );
+      html = html.replace(
+        /<div class="player_container">/g,
+        '<div class="player_container visible" style="position:absolute !important; top:0 !important; left:0 !important; width:100% !important; height:100% !important; transition:none !important;">'
+      );
+
+      // 6. Injetar CSS de blackout absoluto e script de monitoramento no <head>
       const autoPlayInjection = `
         <style>
-          /* Oculta o seletor de opções e botões nativos para iniciar o vídeo direto */
-          .changeOptions,
-          [class*="changeOptions"],
-          [id*="changeOptions"],
+          * {
+            -webkit-tap-highlight-color: transparent !important;
+          }
+
+          html, body {
+            background: #000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+          }
+
+          /* Oculta tudo que não for o vídeo: seletores de opções, carrossel, banners, toasts e loaders nativos */
           .players_select_container,
-          .players_select_btn,
-          [class*="players_select"],
-          [id*="players_select"],
+          .seasonepisodeSelector,
+          .seasonSelector,
+          .episodeSelector,
+          .player_select_item,
+          .player_loading,
+          .changeOptions,
+          .changeEpisode,
           .btn-opcoes,
           .mostrar_opcoes,
           #mostrar_opcoes,
-          [class*="opcoes"],
-          [id*="opcoes"],
-          [class*="option"],
-          [id*="option"],
-          .btn_options,
-          .show_options,
           .embedder_especial,
           .embedder_info,
-          #_wau_container {
+          .shion_native_notify_system,
+          #_wau_container,
+          [class*="player_loading"],
+          [class*="seasonepisode"],
+          [class*="select_language"],
+          [class*="languages_selector"],
+          [class*="changeOptions"],
+          [class*="players_select"],
+          [class*="option"],
+          [id*="option"] {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
             pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            z-index: -9999 !important;
           }
-          .player_container.visible {
+
+          /* Container do player e raiz do Artplayer: SEMPRE visíveis e em tela cheia */
+          .player_container,
+          .player_container.visible,
+          .player_container .infra,
+          #artplayer-container,
+          .art-video-player {
+            display: block !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
             opacity: 1 !important;
+            visibility: visible !important;
+            transition: none !important;
+            transform: none !important;
+            background: #000 !important;
+            pointer-events: auto !important;
           }
 
-          /* Modo Skin Netflix: oculta controles nativos poluídos do Artplayer e do player iframe para dar lugar à nossa Skin Netflix */
-          body:not(.netflix-skin-disabled) .art-bottom,
-          body:not(.netflix-skin-disabled) .art-controls,
-          body:not(.netflix-skin-disabled) .art-top,
-          body:not(.netflix-skin-disabled) .art-control-lock,
-          body:not(.netflix-skin-disabled) .art-layer-lock,
-          body:not(.netflix-skin-disabled) .art-icon-lock,
-          body:not(.netflix-skin-disabled) [class*="art-lock"],
-          body:not(.netflix-skin-disabled) [class*="art-control-lock"],
-          body:not(.netflix-skin-disabled) [class*="lock-btn"],
-          body:not(.netflix-skin-disabled) [id*="lock-btn"],
-          body:not(.netflix-skin-disabled) .art-control-fullscreen,
-          body:not(.netflix-skin-disabled) .art-control-volume,
-          body:not(.netflix-skin-disabled) .art-control-playAndPause,
-          body:not(.netflix-skin-disabled) .art-control-progress,
-          body:not(.netflix-skin-disabled) .art-state,
-          body:not(.netflix-skin-disabled) .art-icon-state,
-          body:not(.netflix-skin-disabled) .art-layer-state,
-          body:not(.netflix-skin-disabled) [class*="art-state"],
-          body:not(.netflix-skin-disabled) [class*="state-icon"],
-          body:not(.netflix-skin-disabled) .art-mask,
-          body:not(.netflix-skin-disabled) #pip-skip-intro-btn {
+          /* O vídeo original é a única coisa exibida com foco total */
+          video,
+          .art-video,
+          .art-video-player video {
+            display: block !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            background: #000 !important;
+            z-index: 5 !important;
+          }
+
+          /* BLINDAGEM CIRÚRGICA DOS CONTROLES NATIVOS DO ARTPLAYER:
+             Usa seletor filho direto (>) para atingir APENAS elementos dentro
+             do container, NÃO o container raiz (art-video-player) em si.
+             O container raiz tem as classes art-mask-show e art-control-show,
+             portanto NÃO podemos usar seletores globais como [class*="art-mask"]. */
+          .art-video-player > .art-mask,
+          .art-video-player > .art-top,
+          .art-video-player > .art-bottom,
+          .art-video-player > .art-controls,
+          .art-video-player > .art-state,
+          .art-video-player > .art-loading,
+          .art-video-player > .art-notice,
+          .art-video-player > .art-settings,
+          .art-video-player > .art-contextmenu,
+          .art-video-player > .art-danmuku,
+          .art-video-player > .art-fast-forward,
+          .art-video-player > .art-lock,
+          .art-video-player > .art-poster,
+          .art-video-player > .art-layers > .art-layer:not(.art-layer-video),
+          .art-video-player .art-icon-state,
+          .art-video-player .art-layer-state,
+          .art-video-player .art-layer-auto-playback,
+          .art-video-player .art-layer-loading,
+          .art-video-player .art-notice-inner,
+          .art-video-player .art-info,
+          .art-video-player .art-info-panel,
+          .art-video-player .art-progress,
+          .art-video-player .art-control,
+          #pip-skip-intro-btn,
+          #pip-skip-toast {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
             pointer-events: none !important;
-          }
-
-          /* Botão Pular Abertura Flutuante (Estilo Netflix / Streaming VIP) */
-          #pip-skip-intro-btn {
-            position: fixed;
-            bottom: 76px;
-            right: 28px;
-            z-index: 2147483647;
-            display: none;
-            align-items: center;
-            gap: 9px;
-            background: rgba(15, 15, 15, 0.88);
-            color: #ffffff;
-            border: 1px solid rgba(255, 255, 255, 0.28);
-            backdrop-filter: blur(14px);
-            -webkit-backdrop-filter: blur(14px);
-            padding: 10px 18px;
-            border-radius: 12px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            font-size: 13px;
-            font-weight: 700;
-            cursor: pointer;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-            transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-            user-select: none;
-            outline: none;
-          }
-          #pip-skip-intro-btn:hover {
-            background: #ea580c;
-            border-color: #f97316;
-            color: #ffffff;
-            transform: translateY(-2px) scale(1.04);
-            box-shadow: 0 14px 34px rgba(234, 88, 12, 0.45);
-          }
-          #pip-skip-intro-btn:active {
-            transform: translateY(0) scale(0.97);
-          }
-          #pip-skip-intro-btn .skip-kbd {
-            font-size: 10px;
-            padding: 2px 6px;
-            border-radius: 4px;
-            background: rgba(255, 255, 255, 0.18);
-            color: #ffffff;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-weight: 800;
-          }
-
-          /* Toast Flutuante de Confirmação */
-          #pip-skip-toast {
-            position: fixed;
-            top: 24px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 2147483647;
-            display: none;
-            align-items: center;
-            gap: 8px;
-            background: linear-gradient(135deg, #ea580c, #c2410c);
-            color: #ffffff;
-            padding: 8px 20px;
-            border-radius: 9999px;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 13px;
-            font-weight: 700;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), 0 0 20px rgba(234, 88, 12, 0.4);
-            pointer-events: none;
-            border: 1px solid rgba(255, 255, 255, 0.25);
-            animation: pipToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-          }
-          @keyframes pipToastIn {
-            from { opacity: 0; transform: translate(-50%, -12px) scale(0.95); }
-            to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            animation: none !important;
           }
         </style>
 
-        <!-- Elementos UI do Skip Intro -->
-        <button id="pip-skip-intro-btn" type="button" title="Pular Abertura (Tecla S)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polygon points="5 4 15 12 5 20 5 4"></polygon>
-            <line x1="19" y1="5" x2="19" y2="19"></line>
-          </svg>
-          <span>Pular Abertura</span>
-          <span class="skip-kbd">S</span>
-        </button>
-
-        <div id="pip-skip-toast">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          <span id="pip-skip-toast-text">Abertura pulada (+85s)</span>
-        </div>
-
         <script>
           (function() {
+            // 1. MutationObserver que oculta overlays nativos adicionados dinamicamente
+            // CUIDADO: não ocultar 'art-video-player' (container raiz) nem elementos de vídeo
+            var observer = new MutationObserver(function(mutations) {
+              for (var i = 0; i < mutations.length; i++) {
+                var added = mutations[i].addedNodes;
+                for (var j = 0; j < added.length; j++) {
+                  var node = added[j];
+                  if (node.nodeType !== 1) continue;
+                  var cls = typeof node.className === 'string' ? node.className : '';
+                  var tag = (node.tagName || '').toUpperCase();
+                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo
+                  if (cls.indexOf('art-video-player') !== -1 || tag === 'VIDEO') continue;
+                  // Ocultar apenas elementos de overlay: loading, notificações nativas, etc.
+                  if (
+                    cls.indexOf('player_loading') !== -1 ||
+                    cls.indexOf('shion_native') !== -1 ||
+                    cls === 'art-state' ||
+                    cls === 'art-notice' ||
+                    cls === 'art-notice-inner' ||
+                    cls === 'art-loading'
+                  ) {
+                    node.style.setProperty('display', 'none', 'important');
+                    node.style.setProperty('opacity', '0', 'important');
+                    node.style.setProperty('visibility', 'hidden', 'important');
+                  }
+                }
+              }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+
+            // 2. Auto-Start rápido na primeira opção disponível
             var tries = 0;
             var autoStartTimer = setInterval(function() {
               tries++;
-              // Garante que se houver seleção de idioma (Dublado/Legendado), Dublado é clicado
               var dublado = document.querySelector('.select_language[data-target="1"]');
               if (dublado && !dublado.classList.contains('active')) {
                 dublado.click();
               }
-              // Clica na primeira opção disponível
               var option = document.querySelector('.players_select_items.visible .player_select_item') || 
                            document.querySelector('.player_select_item');
               if (option) {
@@ -542,49 +830,15 @@ async function startServer() {
               }
               if (tries > 80) {
                 clearInterval(autoStartTimer);
-                var container = document.querySelector('.players_select_container');
-                if (container) {
-                  container.style.opacity = '1';
-                  container.style.pointerEvents = 'auto';
-                }
               }
-            }, 40);
+            }, 30);
 
-            // Oculta qualquer botão ou texto 'Mostrar Opções' do player padrão
-            setInterval(function() {
-              var all = document.querySelectorAll('button, a, span, div, p');
-              for (var i = 0; i < all.length; i++) {
-                var txt = (all[i].textContent || '').trim().toLowerCase();
-                if (txt === 'mostrar opções' || txt === 'mostrar opcoes' || txt.indexOf('mostrar opç') !== -1) {
-                  all[i].style.setProperty('display', 'none', 'important');
-                  all[i].style.setProperty('opacity', '0', 'important');
-                  all[i].style.setProperty('visibility', 'hidden', 'important');
-                  all[i].style.setProperty('pointer-events', 'none', 'important');
-                }
-              }
-            }, 250);
-
-            // Variáveis de Estado para Pular Abertura Manual (Tecla S ou Botão)
+            // 3. Funções de controle de vídeo e telemetria para o NetflixPlayerSkin
             var introSkippedForCurrentVideo = false;
+            var skipDurationSeconds = 85;
             try {
-              localStorage.removeItem("playinfinity_autoskip_intro");
+              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
             } catch(e) {}
-            var skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
-            var toastTimeout = null;
-
-            var skipBtn = document.getElementById("pip-skip-intro-btn");
-            var skipToast = document.getElementById("pip-skip-toast");
-            var skipToastText = document.getElementById("pip-skip-toast-text");
-
-            function showToast(msg) {
-              if (!skipToast || !skipToastText) return;
-              skipToastText.textContent = msg;
-              skipToast.style.display = "flex";
-              if (toastTimeout) clearTimeout(toastTimeout);
-              toastTimeout = setTimeout(function() {
-                skipToast.style.display = "none";
-              }, 3000);
-            }
 
             function getVideoElement() {
               if (window.artInstance && window.artInstance.video) {
@@ -613,10 +867,6 @@ async function startServer() {
 
                 if (sec > 0) {
                   introSkippedForCurrentVideo = true;
-                  if (skipBtn) skipBtn.style.display = "none";
-                  showToast("Abertura pulada (+" + sec + "s)");
-                } else {
-                  showToast("Retornado (" + sec + "s)");
                 }
 
                 try {
@@ -629,14 +879,7 @@ async function startServer() {
               }
             }
 
-            if (skipBtn) {
-              skipBtn.addEventListener("click", function(e) {
-                e.stopPropagation();
-                doSkipIntro(skipDurationSeconds);
-              });
-            }
-
-            // Monitora teclado (tecla S ou s)
+            // Tecla S manual
             window.addEventListener("keydown", function(e) {
               if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
               if (e.key === "s" || e.key === "S") {
@@ -645,7 +888,7 @@ async function startServer() {
               }
             });
 
-            // Monitora mensagens enviadas pelo aplicativo principal (Skin Netflix VIP)
+            // Mensagens enviadas pela Skin Netflix VIP
             window.addEventListener("message", function(e) {
               if (!e.data) return;
               var v = getVideoElement();
@@ -681,9 +924,11 @@ async function startServer() {
                   break;
 
                 case "SEEK":
-                  if (v && typeof e.data.targetTime === "number" && !isNaN(e.data.targetTime)) {
+                case "SEEK_ABSOLUTE":
+                  var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  if (v && typeof t === "number" && !isNaN(t)) {
                     var maxDur = v.duration && v.duration > 0 ? v.duration : 99999;
-                    v.currentTime = Math.max(0, Math.min(e.data.targetTime, maxDur - 0.5));
+                    v.currentTime = Math.max(0, Math.min(t, maxDur - 0.5));
                     sendPlayerStatus(v);
                   }
                   break;
@@ -720,14 +965,6 @@ async function startServer() {
                   }
                   break;
 
-                case "SET_SKIN_MODE":
-                  if (e.data.mode === "default") {
-                    document.body.classList.add("netflix-skin-disabled");
-                  } else {
-                    document.body.classList.remove("netflix-skin-disabled");
-                  }
-                  break;
-
                 case "SET_SKIP_DURATION":
                   if (e.data.seconds) {
                     skipDurationSeconds = Number(e.data.seconds);
@@ -743,7 +980,7 @@ async function startServer() {
               }
             });
 
-            // Envia telemetria de reprodução completa para a Skin Netflix do aplicativo principal
+            // Envia telemetria limpa para a Skin Netflix do aplicativo principal
             function sendPlayerStatus(v) {
               if (!v) v = getVideoElement();
               if (!v) return;
@@ -766,91 +1003,47 @@ async function startServer() {
               } catch(e) {}
             }
 
-            // Detecção do término do episódio para passar sozinho para o próximo
             var hasNotifiedEnded = false;
             function notifyEpisodeEnded() {
               if (hasNotifiedEnded) return;
               hasNotifiedEnded = true;
-              console.log("[WatchPlayer] Episódio finalizado. Notificando aplicação principal para próximo episódio...");
               try {
                 window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
-              } catch(e) {
-                console.error("Erro ao enviar mensagem:", e);
-              }
+              } catch(e) {}
             }
 
-            // Monitora eventos globais de término no elemento <video>
             document.addEventListener('ended', function(e) {
               if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
                 notifyEpisodeEnded();
               }
             }, true);
 
-            // Monitora a instância Artplayer criada pelo WatchPlayer
-            function requestParentFullscreen() {
-              try {
-                if (window.parent && window.parent.document) {
-                  var stage = window.parent.document.getElementById('player-stage-container');
-                  if (stage && !window.parent.document.fullscreenElement) {
-                    stage.requestFullscreen().catch(function() {});
-                  }
-                }
-              } catch(e) {}
-            }
-
-            // Sincroniza cliques no botão de tela cheia com o container principal
-            document.addEventListener('click', function(e) {
-              var fsBtn = e.target && e.target.closest && e.target.closest('.art-control-fullscreen, [data-tooltip="Fullscreen"], [data-tooltip="Tela Cheia"]');
-              if (fsBtn) {
-                requestParentFullscreen();
-              }
-            }, true);
-
-            document.addEventListener('dblclick', function(e) {
-              if (e.target && (e.target.tagName === 'VIDEO' || (e.target.closest && e.target.closest('.art-video-player')))) {
-                requestParentFullscreen();
-              }
-            }, true);
-
-            // Monitora a timeline do vídeo para exibir o botão de pular abertura e auto-pular
             function handleVideoTimeUpdate(v) {
               if (!v) return;
               var cur = v.currentTime || 0;
               var dur = v.duration || 0;
 
-              // Se o vídeo voltou ao começo (novo episódio carregado), reseta a flag de intro pulada
               if (cur < 2 && introSkippedForCurrentVideo) {
                 introSkippedForCurrentVideo = false;
               }
 
-              // Janela típica de abertura (entre 5s e 130s)
               if (cur >= 5 && cur <= 130 && !introSkippedForCurrentVideo) {
-                if (skipBtn && skipBtn.style.display !== "flex") {
-                  skipBtn.style.display = "flex";
-                }
-
                 try {
                   window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: true, currentTime: cur }, "*");
                 } catch(e) {}
               } else {
-                if (skipBtn && skipBtn.style.display === "flex") {
-                  skipBtn.style.display = "none";
-                }
                 try {
                   window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: false, currentTime: cur }, "*");
                 } catch(e) {}
               }
 
-              // Próximo episódio automático se faltar menos de 1.5s para o fim
               if (dur > 30 && cur >= (dur - 1.5)) {
                 notifyEpisodeEnded();
               }
 
-              // Envia status para a Skin Netflix do aplicativo principal
               sendPlayerStatus(v);
             }
 
-            // Monitor de tempo regular via setInterval para garantir detecção e fluidez mesmo sem eventos nativos
             setInterval(function() {
               var v = getVideoElement();
               if (v) {
@@ -861,7 +1054,6 @@ async function startServer() {
               }
             }, 350);
 
-            // Ouvintes globais no documento para capturar eventos no elemento <video>
             ['play', 'pause', 'playing', 'seeking', 'seeked', 'volumechange', 'ratechange', 'loadedmetadata', 'canplay'].forEach(function(evtName) {
               document.addEventListener(evtName, function(e) {
                 if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
@@ -870,30 +1062,47 @@ async function startServer() {
               }, true);
             });
 
-            var artCheckInterval = setInterval(function() {
-              if (window.artInstance && !window.artInstance._endedHooked) {
-                window.artInstance._endedHooked = true;
-                window.artInstance.on('video:ended', function() {
-                  notifyEpisodeEnded();
-                });
-                window.artInstance.on('video:timeupdate', function() {
-                  var v = window.artInstance.video;
-                  if (v) handleVideoTimeUpdate(v);
-                });
-                window.artInstance.on('video:play', function() {
-                  sendPlayerStatus(window.artInstance.video);
-                });
-                window.artInstance.on('video:pause', function() {
-                  sendPlayerStatus(window.artInstance.video);
-                });
-                window.artInstance.on('fullscreen', function(state) {
-                  if (state) requestParentFullscreen();
-                });
-                window.artInstance.on('fullscreenWeb', function(state) {
-                  if (state) requestParentFullscreen();
-                });
+            // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
+            var cleanArtNodes = function() {
+              if (window.artInstance) {
+                try {
+                  if (window.artInstance.controls) window.artInstance.controls.show = false;
+                  if (window.artInstance.mask) window.artInstance.mask.show = false;
+                } catch(e) {}
+                // Ocultar via style apenas, sem .remove() para não quebrar referências internas do Artplayer
+                if (window.artInstance.template) {
+                  ['$state', '$bottom', '$mask', '$top', '$notice', '$loading', '$controls'].forEach(function(k) {
+                    try {
+                      var el = window.artInstance.template[k];
+                      if (el && el.style) {
+                        el.style.setProperty('display', 'none', 'important');
+                        el.style.setProperty('opacity', '0', 'important');
+                        el.style.setProperty('visibility', 'hidden', 'important');
+                        el.style.setProperty('pointer-events', 'none', 'important');
+                      }
+                    } catch(e) {}
+                  });
+                }
               }
-            }, 500);
+            };
+
+            var artCheckInterval = setInterval(function() {
+              if (window.artInstance) {
+                cleanArtNodes();
+                if (!window.artInstance._endedHooked) {
+                  window.artInstance._endedHooked = true;
+                  cleanArtNodes();
+                  window.artInstance.on('ready', cleanArtNodes);
+                  window.artInstance.on('video:play', cleanArtNodes);
+                  window.artInstance.on('video:pause', cleanArtNodes);
+                  window.artInstance.on('video:ended', notifyEpisodeEnded);
+                  window.artInstance.on('video:timeupdate', function() {
+                    var v = window.artInstance.video;
+                    if (v) handleVideoTimeUpdate(v);
+                  });
+                }
+              }
+            }, 300);
           })();
         </script>
       `;
