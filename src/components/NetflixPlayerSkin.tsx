@@ -104,8 +104,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Bloqueio de tela (Lock Mode da Netflix)
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [isLocking, setIsLocking] = useState<boolean>(false);
   const [showUnlockPrompt, setShowUnlockPrompt] = useState<boolean>(false);
   const unlockPromptTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleLockScreen = () => {
+    setIsLocking(true);
+    setTimeout(() => {
+      setIsLocked(true);
+      setIsLocking(false);
+      setControlsVisible(false);
+    }, 300);
+  };
 
   // Controle de brilho da tela (Slider vertical à esquerda)
   const [brightness, setBrightness] = useState<number>(1.0);
@@ -566,6 +576,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           onClick={(e) => {
             e.stopPropagation();
             setShowUnlockPrompt(true);
+            if (unlockPromptTimerRef.current) clearTimeout(unlockPromptTimerRef.current);
+            unlockPromptTimerRef.current = setTimeout(() => {
+              setShowUnlockPrompt(false);
+            }, 3500);
           }}
           className="absolute inset-0 z-40 flex items-end justify-center pb-16 cursor-pointer"
         >
@@ -574,11 +588,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               onClick={(e) => {
                 e.stopPropagation();
                 setIsLocked(false);
+                setShowUnlockPrompt(false);
                 setControlsVisible(true);
               }}
-              className="flex items-center gap-2.5 px-6 py-3 rounded-full bg-black/85 border border-white/30 text-white font-semibold text-sm shadow-2xl backdrop-blur-md hover:bg-neutral-900 transition-all active:scale-95 cursor-pointer animate-in fade-in zoom-in duration-200"
+              className="flex items-center gap-2.5 px-6 py-3.5 rounded-full bg-black/90 border border-white/30 text-white font-bold text-sm shadow-2xl backdrop-blur-md hover:bg-neutral-900 transition-all active:scale-95 cursor-pointer animate-in fade-in zoom-in duration-200 group"
             >
-              <Unlock className="w-5 h-5 text-[#E50914]" />
+              <Lock className="w-5 h-5 text-orange-500 group-hover:hidden transition-all animate-pulse" />
+              <Unlock className="w-5 h-5 text-emerald-400 hidden group-hover:inline transition-all" />
               <span>Tela Bloqueada. Toque para Desbloquear</span>
             </button>
           )}
@@ -587,26 +603,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
       {/* ========================================================
           1. BARRA SUPERIOR (HEADER EXATO DA NETFLIX)
-          Esquerda: Cast/Tv | Centro: Título + Badge CAM | Direita: Tela Cheia + X
+          Centro: Título + Badge CAM | Direita: Tela Cheia + X
           ======================================================== */}
       <div
         className={`absolute top-0 left-0 right-0 z-20 px-3 sm:px-6 pt-2.5 sm:pt-4 flex items-center justify-between gap-2 sm:gap-4 transition-all duration-300 ${
           controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
         }`}
       >
-        {/* Esquerda: Ícone de Transmissão (Cast/TV) */}
-        <div className="flex items-center">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowCastModal(true);
-            }}
-            className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
-            title="Transmitir para Smart TV"
-          >
-            <Cast className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
-          </button>
-        </div>
+        {/* Esquerda: Espaço de respiro para manter o título perfeitamente balanceado */}
+        <div className="w-8 sm:w-10"></div>
 
         {/* Centro: Título formatado S1:E1 "Pilot" */}
         <div className="flex-1 text-center min-w-0 px-1 flex items-center justify-center">
@@ -724,19 +729,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </span>
         </button>
 
-        {/* Play / Pause Central Gigante em Branco Sólido */}
+        {/* Play / Pause Central Gigante em Branco Sólido (Sem círculo/fundo) */}
         <button
           onClick={(e) => {
             e.stopPropagation();
             handleTogglePlay();
           }}
-          className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none shadow-none"
           title={playerStatus.paused ? "Reproduzir" : "Pausar"}
         >
           {playerStatus.paused ? (
-            <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-lg" />
+            <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]" />
           ) : (
-            <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-lg" />
+            <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]" />
           )}
         </button>
 
@@ -851,17 +856,20 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 2. Bloquear Tela */}
+          {/* 2. Bloquear Tela com Animação de Cadeado Trancando/Destravando */}
           <button
-            onClick={() => {
-              setIsLocked(true);
-              setControlsVisible(false);
-            }}
+            onClick={handleLockScreen}
             className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
             title="Bloquear controles da tela"
           >
-            <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">Bloquear</span>
+            {isLocking ? (
+              <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse" />
+            ) : (
+              <Unlock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110" />
+            )}
+            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+              {isLocking ? "Trancando..." : "Bloquear"}
+            </span>
           </button>
 
           {/* 3. Episódios (apenas para séries e em tela cheia) */}

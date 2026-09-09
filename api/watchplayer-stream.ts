@@ -39,12 +39,36 @@ export default async function handler(req: any, res: any) {
     html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy-api';");
     html = html.replace(/\$\{HOME_URL\}\/api/g, "/api/watchplay-proxy-api");
     html = html.replace(/_wau\.push\([^)]*\);?/g, "");
+    html = html.replace(/<div[^>]*class=["'][^"']*changeOptions[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, "");
+    html = html.replace(/Mostrar\s*Op[çc][õo]es/gi, "");
 
     const autoPlayInjection = `
       <style>
-        .players_select_container {
+        .changeOptions,
+        [class*="changeOptions"],
+        [id*="changeOptions"],
+        .players_select_container,
+        .players_select_btn,
+        [class*="players_select"],
+        [id*="players_select"],
+        .btn-opcoes,
+        .mostrar_opcoes,
+        #mostrar_opcoes,
+        [class*="opcoes"],
+        [id*="opcoes"],
+        [class*="option"],
+        [id*="option"],
+        .btn_options,
+        .show_options,
+        .art-state,
+        .art-icon-state,
+        .art-layer-state,
+        [class*="art-state"],
+        [class*="state-icon"],
+        .art-mask {
+          display: none !important;
           opacity: 0 !important;
-          transition: opacity 0.2s ease;
+          visibility: hidden !important;
           pointer-events: none !important;
         }
         .player_container.visible {

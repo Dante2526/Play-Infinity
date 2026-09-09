@@ -370,21 +370,35 @@ async function startServer() {
 
       // 3. Remover rastreadores ou banners conhecidos
       html = html.replace(/_wau\.push\([^)]*\);?/g, "");
+      html = html.replace(/<div[^>]*class=["'][^"']*changeOptions[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, "");
+      html = html.replace(/Mostrar\s*Op[çc][õo]es/gi, "");
 
       // 4. Injetar auto-clique instantâneo na primeira opção (Dublado), Pular Abertura (Skip Intro) e detecção de término para passar para o próximo episódio
       const autoPlayInjection = `
         <style>
           /* Oculta o seletor de opções e botões nativos para iniciar o vídeo direto */
+          .changeOptions,
+          [class*="changeOptions"],
+          [id*="changeOptions"],
           .players_select_container,
           .players_select_btn,
           [class*="players_select"],
           [id*="players_select"],
           .btn-opcoes,
+          .mostrar_opcoes,
+          #mostrar_opcoes,
+          [class*="opcoes"],
+          [id*="opcoes"],
+          [class*="option"],
+          [id*="option"],
+          .btn_options,
+          .show_options,
           .embedder_especial,
           .embedder_info,
           #_wau_container {
             display: none !important;
             opacity: 0 !important;
+            visibility: hidden !important;
             pointer-events: none !important;
           }
           .player_container.visible {
@@ -406,9 +420,16 @@ async function startServer() {
           body:not(.netflix-skin-disabled) .art-control-volume,
           body:not(.netflix-skin-disabled) .art-control-playAndPause,
           body:not(.netflix-skin-disabled) .art-control-progress,
+          body:not(.netflix-skin-disabled) .art-state,
+          body:not(.netflix-skin-disabled) .art-icon-state,
+          body:not(.netflix-skin-disabled) .art-layer-state,
+          body:not(.netflix-skin-disabled) [class*="art-state"],
+          body:not(.netflix-skin-disabled) [class*="state-icon"],
+          body:not(.netflix-skin-disabled) .art-mask,
           body:not(.netflix-skin-disabled) #pip-skip-intro-btn {
             display: none !important;
             opacity: 0 !important;
+            visibility: hidden !important;
             pointer-events: none !important;
           }
 
@@ -528,6 +549,20 @@ async function startServer() {
                 }
               }
             }, 40);
+
+            // Oculta qualquer botão ou texto 'Mostrar Opções' do player padrão
+            setInterval(function() {
+              var all = document.querySelectorAll('button, a, span, div, p');
+              for (var i = 0; i < all.length; i++) {
+                var txt = (all[i].textContent || '').trim().toLowerCase();
+                if (txt === 'mostrar opções' || txt === 'mostrar opcoes' || txt.indexOf('mostrar opç') !== -1) {
+                  all[i].style.setProperty('display', 'none', 'important');
+                  all[i].style.setProperty('opacity', '0', 'important');
+                  all[i].style.setProperty('visibility', 'hidden', 'important');
+                  all[i].style.setProperty('pointer-events', 'none', 'important');
+                }
+              }
+            }, 250);
 
             // Variáveis de Estado para Pular Abertura Manual (Tecla S ou Botão)
             var introSkippedForCurrentVideo = false;
