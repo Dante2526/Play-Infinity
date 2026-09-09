@@ -199,7 +199,7 @@ function DetailsPage({ itemId, mediaType, onBack, onItemClick }: { itemId: numbe
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [loading, setLoading] = useState(true);
   const [showPlayer, setShowPlayer] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState<'myembed' | 'superflix' | 'embedplay'>('embedplay');
+  const [selectedPlayer, setSelectedPlayer] = useState<'myembed' | 'superflix' | 'embedplay' | 'byse'>('embedplay');
 
   useEffect(() => {
     setLoading(true);
@@ -231,6 +231,9 @@ function DetailsPage({ itemId, mediaType, onBack, onItemClick }: { itemId: numbe
   const duration = mediaType === 'movie' && item.runtime ? `${Math.floor(item.runtime/60)}h ${item.runtime%60}m` : (item.seasons ? `${item.seasons.length} Temporada(s)` : '');
   
   const getEmbedUrl = () => {
+    if (selectedPlayer === 'byse') {
+      return `https://q8y5z.com/3eg6/9xnwn5ao0tr7`;
+    }
     if (selectedPlayer === 'superflix') {
       let u = mediaType === 'movie' 
         ? `https://superflixapi.cyou/filme/${itemId}//`
@@ -254,16 +257,50 @@ function DetailsPage({ itemId, mediaType, onBack, onItemClick }: { itemId: numbe
       
       {showPlayer ? (
         <div className="relative w-full h-[60vh] md:h-[80vh] bg-black pt-[15vh]">
-          <button onClick={() => setShowPlayer(false)} className="absolute top-[8vh] left-6 z-50 px-4 py-2 bg-neutral-800 text-white rounded-full flex items-center gap-2 hover:bg-neutral-700 shadow-xl border border-white/10">
-            <ArrowLeft className="w-4 h-4"/> Voltar
-          </button>
+          <div className="absolute top-[6vh] md:top-[8vh] left-4 md:left-6 right-4 md:right-6 z-50 flex items-center justify-between flex-wrap gap-2">
+            <button onClick={() => setShowPlayer(false)} className="px-4 py-2 bg-neutral-800 text-white rounded-full flex items-center gap-2 hover:bg-neutral-700 shadow-xl border border-white/10 text-sm font-semibold transition-all">
+              <ArrowLeft className="w-4 h-4"/> Voltar
+            </button>
+
+            {/* Quick Player Switcher in Active Video Mode */}
+            <div className="flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1 rounded-full border border-white/10 shadow-lg">
+              <span className="text-xs text-neutral-400 font-semibold px-2 hidden sm:inline">Servidor:</span>
+              <button 
+                onClick={() => setSelectedPlayer('embedplay')} 
+                className={`px-3 py-1 text-xs rounded-full font-bold transition-all ${selectedPlayer === 'embedplay' ? 'bg-orange-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+              >
+                EmbedPlay
+              </button>
+              <button 
+                onClick={() => setSelectedPlayer('superflix')} 
+                className={`px-3 py-1 text-xs rounded-full font-bold transition-all ${selectedPlayer === 'superflix' ? 'bg-orange-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+              >
+                SuperFlix
+              </button>
+              <button 
+                onClick={() => setSelectedPlayer('myembed')} 
+                className={`px-3 py-1 text-xs rounded-full font-bold transition-all ${selectedPlayer === 'myembed' ? 'bg-orange-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+              >
+                MyEmbed
+              </button>
+              <button 
+                onClick={() => setSelectedPlayer('byse')} 
+                className={`px-3 py-1 text-xs rounded-full font-bold transition-all ${selectedPlayer === 'byse' ? 'bg-orange-600 text-white' : 'text-neutral-400 hover:text-white'}`}
+              >
+                Byse (VOD)
+              </button>
+            </div>
+          </div>
+
           <iframe 
             src={embedUrl} 
             width="100%" 
             height="100%" 
             frameBorder="0" 
             allowFullScreen 
-            loading="lazy"
+            allow="autoplay; fullscreen; picture-in-picture"
+            loading="eager"
+            referrerPolicy="origin-when-cross-origin"
             className="rounded-b-2xl shadow-[0_0_30px_rgba(0,0,0,0.8)]"
           ></iframe>
         </div>
@@ -303,6 +340,9 @@ function DetailsPage({ itemId, mediaType, onBack, onItemClick }: { itemId: numbe
                 </button>
                 <button onClick={() => { setSelectedPlayer('myembed'); setShowPlayer(true); }} className="flex items-center justify-center gap-3 bg-neutral-800 text-white hover:bg-neutral-700 font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-xl border border-white/10">
                   <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" /> MyEmbed
+                </button>
+                <button onClick={() => { setSelectedPlayer('byse'); setShowPlayer(true); }} className="flex items-center justify-center gap-3 bg-neutral-800 text-white hover:bg-neutral-700 font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-xl border border-white/10">
+                  <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" /> Byse (VOD)
                 </button>
               </div>
             </div>
