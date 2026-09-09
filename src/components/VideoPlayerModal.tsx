@@ -106,9 +106,15 @@ export function VideoPlayerModal({
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
+  const isExternalPlayer = useMemo(() => {
+    const target = (activeIframeUrl || urlInput || "").toLowerCase();
+    return target.includes("vidlink.pro") || target.includes("vidsrc") || target.includes("videasy") || target.includes("embed.su") || target.includes("myembed");
+  }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
+  // Controle do overlay anti-flash: permanece preto até a skin estética estar pronta
+  const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
 
   // Configuração do Salto de Abertura Manual (Tecla S ou Botão)
   const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
@@ -333,6 +339,15 @@ export function VideoPlayerModal({
     return () => clearTimeout(timer);
   }, [isLoading, activeIframeUrl, handleSilentFallback]);
 
+  // Timeout de segurança do overlay anti-flash: remove após 5s mesmo sem postMessage (ex: VidLink)
+  useEffect(() => {
+    if (!activeIframeUrl || playerSkinReady) return;
+    const timer = setTimeout(() => {
+      setPlayerSkinReady(true);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [activeIframeUrl, playerSkinReady]);
+
   // Ao abrir o modal ou mudar mídia: detecta a conexão silenciosamente e inicia o melhor player
   useEffect(() => {
     if (isOpen) {
@@ -344,6 +359,7 @@ export function VideoPlayerModal({
       setBlockedAdsCount(0);
       setError(null);
       setIsLoading(true);
+      setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       fallbackAttemptsRef.current.clear();
 
       let isCancelled = false;
@@ -386,9 +402,22 @@ export function VideoPlayerModal({
   };
 
   // Escuta postMessages emitidos pelo WatchPlayer (fim de episódio, status de abertura, etc.)
+  // Também detecta o primeiro status com duration > 0 para remover overlay anti-flash
   useEffect(() => {
     const handlePlayerWindowMessages = (event: MessageEvent) => {
       if (!event.data) return;
+
+      // Remove overlay preto quando o player estiver pronto (duration > 0)
+      const msgType = event.data.type || event.data.event;
+      if (
+        (msgType === "WATCHPLAY_STATUS" || msgType === "PLAYER_STATUS" || msgType === "status" || msgType === "timeupdate") &&
+        !playerSkinReady
+      ) {
+        const data = event.data.data || event.data;
+        if (typeof data.duration === "number" && data.duration > 0) {
+          setPlayerSkinReady(true);
+        }
+      }
 
       if (event.data.type === "WATCHPLAY_VIDEO_ENDED") {
         if (isSeries) {
@@ -412,6 +441,9 @@ export function VideoPlayerModal({
         setTimeout(() => {
           setSkipNotice(null);
         }, 3200);
+      } else if (event.data.type === "WATCHPLAY_UNAVAILABLE") {
+        console.warn("[VideoPlayerModal] Servidor informou mídia indisponível ou tentativa de Superflix. Acionando fallback automático...");
+        handleSilentFallback();
       }
     };
 
@@ -478,6 +510,7 @@ export function VideoPlayerModal({
     }
     setEpisode(newEpisode);
     setIsIntroActive(false);
+    setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     fallbackAttemptsRef.current.clear();
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
@@ -521,12 +554,17 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
+    if (cleanUrl.includes("superflix")) {
+      console.warn("[VideoPlayerModal] Tentativa de carregar Superflix bloqueada. Acionando fallback.");
+      handleSilentFallback();
+      return;
+    }
+
     if (
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
-      cleanUrl.includes("superflixapi") || 
       cleanUrl.includes("embed.su") || 
       cleanUrl.includes("myembed") ||
       cleanUrl.endsWith(".mp4")
@@ -918,6 +956,16 @@ export function VideoPlayerModal({
               </div>
             )}
 
+            {/* Overlay Anti-Flash: cobre o player original até a skin estética estar pronta */}
+            {activeIframeUrl && !playerSkinReady && !isLoading && (
+              <div
+                className="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center gap-3 pointer-events-none"
+                style={{ transition: "opacity 0.4s ease", opacity: 1 }}
+              >
+                <Loader2 className="w-8 h-8 text-orange-500/70 animate-spin" />
+              </div>
+            )}
+
             {activeIframeUrl ? (
               <iframe
                 ref={iframeRef}
@@ -976,6 +1024,7 @@ export function VideoPlayerModal({
               iframeRef={iframeRef}
               isRotated={isRotated}
               onToggleRotate={handleToggleRotate}
+              isExternalPlayer={isExternalPlayer}
             />
           </div>
         </div>

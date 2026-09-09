@@ -373,23 +373,21 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Controle da Barra de Progresso (Scrubber)
   const getTimeFromEvent = (clientX: number): number => {
-    if (!progressBarRef.current) return 0;
+    if (!progressBarRef.current || playerStatus.duration <= 0) return 0;
     const rect = progressBarRef.current.getBoundingClientRect();
     const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    const duration = playerStatus.duration > 0 ? playerStatus.duration : 1;
-    return pos * duration;
+    return pos * playerStatus.duration;
   };
 
   const handleProgressBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressBarRef.current) return;
+    if (!progressBarRef.current || playerStatus.duration <= 0) return;
     const rect = progressBarRef.current.getBoundingClientRect();
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const duration = playerStatus.duration > 0 ? playerStatus.duration : 1;
     setHoverPosPercent(pos * 100);
-    setHoverTime(pos * duration);
+    setHoverTime(pos * playerStatus.duration);
 
     if (isScrubbing) {
-      setScrubTime(pos * duration);
+      setScrubTime(pos * playerStatus.duration);
     }
   };
 
@@ -523,11 +521,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   ]);
 
   // Cálculos da timeline
+  const hasValidDuration = playerStatus.duration > 0 && !isNaN(playerStatus.duration) && playerStatus.duration !== Infinity;
   const displayCurrentTime = isScrubbing ? scrubTime : playerStatus.currentTime;
-  const duration = playerStatus.duration > 0 ? playerStatus.duration : 1;
-  const remainingTime = Math.max(0, duration - displayCurrentTime);
-  const playedPercent = Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100));
-  const bufferedPercent = Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100));
+  const duration = hasValidDuration ? playerStatus.duration : 0;
+  const remainingTime = hasValidDuration ? Math.max(0, duration - displayCurrentTime) : 0;
+  const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
+  const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
 
   // Formato do título central da Netflix: S1:E1 "Pilot" ou Nome do Filme
   const topTitleText = isSeries
@@ -555,8 +554,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         }}
       />
 
-      {/* Clique simples no fundo para Play/Pause */}
-      {!isExternalPlayer && (
+      {/* Clique simples no fundo para Play/Pause (apenas se vídeo nativo estiver carregado) */}
+      {!isExternalPlayer && hasValidDuration && (
         <div
           className="absolute inset-0 z-0 cursor-pointer pointer-events-auto"
           onClick={() => {
@@ -722,11 +721,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
-        }`}
-      >
+      {!isExternalPlayer && hasValidDuration && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
+          }`}
+        >
         {/* Retroceder 10 Segundos */}
         <button
           onClick={(e) => {
@@ -773,13 +773,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </span>
         </button>
       </div>
-
-
+      )}
 
       {/* ========================================================
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
+      {!isExternalPlayer && hasValidDuration && (
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
           controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
@@ -829,7 +829,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
           {/* Tempo Restante à Direita (ex: 48:04 ou 30:05) */}
           <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow">
-            {formatTime(remainingTime)}
+            {hasValidDuration ? formatTime(remainingTime) : "--:--"}
           </span>
         </div>
 
@@ -918,6 +918,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ========================================================
           MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)

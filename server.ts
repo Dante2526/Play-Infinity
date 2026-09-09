@@ -610,6 +610,35 @@ async function startServer() {
 
       let html = await upstreamRes.text();
 
+      // 0. Bloqueio definitivo do Superflix: se o WatchPlayer não tem o vídeo nativo e tenta jogar pro Superflix, rejeitamos
+      const isFallbackMode = html.includes("superflixapi") || (html.includes("superflix") && !html.includes("superflix-ad-filter"));
+
+      if (isFallbackMode) {
+        console.warn(`[Superflix Banido]: WatchPlayer tentou redirecionar para Superflix (${targetUrl}). Bloqueando e acionando fallback.`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <style>
+              html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+            </style>
+          </head>
+          <body>
+            <script>
+              try {
+                window.parent.postMessage({ 
+                  type: "WATCHPLAY_UNAVAILABLE", 
+                  reason: "superflix_banned" 
+                }, "*");
+              } catch(e) {}
+            </script>
+          </body>
+          </html>
+        `);
+      }
+
       // 1. Ativar AUTO_PLAY_ENABLED no player oficial
       html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
       html = html.replace(/AUTO_PLAY_ENABLED && options\.length == 1/g, "true");
@@ -989,10 +1018,17 @@ async function startServer() {
                 if (v.buffered && v.buffered.length > 0) {
                   bufferedEnd = v.buffered.end(v.buffered.length - 1);
                 }
+                var dur = v.duration;
+                if ((!dur || isNaN(dur) || dur === Infinity) && window.artInstance && window.artInstance.duration) {
+                  dur = window.artInstance.duration;
+                }
+                if (!dur || isNaN(dur) || dur === Infinity) {
+                  dur = 0;
+                }
                 window.parent.postMessage({
                   type: "WATCHPLAY_STATUS",
                   currentTime: v.currentTime || 0,
-                  duration: v.duration || 0,
+                  duration: dur,
                   paused: !!v.paused,
                   muted: !!v.muted,
                   volume: typeof v.volume === "number" ? v.volume : 1,
