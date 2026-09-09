@@ -15,6 +15,7 @@ export type CatalogItem = {
   match?: number;
   playerUrl?: string;
   quality?: 'CAM' | 'TS' | 'HD' | '4K' | 'FULL HD';
+  provider?: string;
 };
 
 /** Verifica se um item possui qualidade CAM (gravação de cinema) */
@@ -53,6 +54,7 @@ export const providers = [
   "Max",
   "Prime Video",
   "Apple TV+",
+  "Globoplay",
 ];
 
 export const continueWatching = [
@@ -184,17 +186,123 @@ export const mostWatched = [
     id: 299534,
     tmdbId: 299534,
     title: "VINGADORES: ULTIMATO",
+    type: "movie" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/9fRX8UKlIW7Lb9GqNsJVakWWFCi.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
+    quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/movie/299534",
   },
   {
     id: 66732,
     tmdbId: 66732,
+    imdbId: "tt4574334",
     title: "STRANGER THINGS",
+    type: "series" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+    quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/tvshow/66732/1/1",
+  },
+  {
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
+    type: "movie" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
+  },
+  {
+    id: 93405,
+    tmdbId: 93405,
+    title: "ROUND 6 (SQUID GAME)",
+    type: "series" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
+  },
+  {
+    id: 969681,
+    tmdbId: 969681,
+    imdbId: "tt22084616",
+    title: "HOMEM-ARANHA: UM NOVO DIA",
+    type: "movie" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
+    quality: "CAM" as const,
+    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+  },
+  {
+    id: 119051,
+    tmdbId: 119051,
+    title: "WANDINHA",
+    type: "series" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/7rxiQrZjrer0RB9qNA8rHYFo53R.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/iHSwvRVsRyxpX7FE7GbviaDvgGZ.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/tvshow/119051/1/1",
+  },
+  {
+    id: 157336,
+    tmdbId: 157336,
+    title: "INTERESTELAR",
+    type: "movie" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/gEU2QniE6EwfVDxCzsxPnZLi1ZT.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/rAiYTsqJiOkn00e21jS1vQhYyY.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/movie/157336",
+  },
+  {
+    id: 100088,
+    tmdbId: 100088,
+    title: "THE LAST OF US",
+    type: "series" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
+  },
+  {
+    id: 1022789,
+    tmdbId: 1022789,
+    title: "DIVERTIDA MENTE 2",
+    type: "movie" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/stKGOmbuwhL489ZJnZUVvA34Dt.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/movie/1022789",
+  },
+  {
+    id: 94997,
+    tmdbId: 94997,
+    title: "A CASA DO DRAGÃO",
+    type: "series" as const,
+    imageUrl:
+      "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/etjA24UepnNnLh2t9qjU2Vj2g3g.jpg",
+    quality: "HD" as const,
+    playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
   },
 ];
 
@@ -720,6 +828,83 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       duration: "3 Temporadas",
       match: 93,
       playerUrl: "https://v1.watchplay.shop/tvshow/90282/1/1",
+    }
+  ],
+  "Globoplay": [
+    {
+      id: 196421,
+      tmdbId: 196421,
+      title: "OS OUTROS",
+      imageUrl: "https://image.tmdb.org/t/p/w500/qXeqUSGQi7Ld91t1xpJGy12laY7.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/lfUPe1AlBcjTLYER6bxkBOhDJ8F.jpg",
+      type: "series",
+      genres: ["Drama", "Suspense"],
+      synopsis: "Dois casais vizinhos entram em choque após a briga de seus filhos em um condomínio fechado na Barra da Tijuca, desencadeando consequências absurdas.",
+      year: 2023,
+      rating: "16",
+      duration: "2 Temporadas",
+      match: 98,
+      playerUrl: "https://v1.watchplay.shop/tvshow/196421/1/1",
+    },
+    {
+      id: 73010,
+      tmdbId: 73010,
+      title: "SOB PRESSÃO",
+      imageUrl: "https://image.tmdb.org/t/p/w500/lGWf1lqeHOhuKZX9bQPeAKttxnb.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/sql1v8szmHZNPCRfNhSwNpMqOnn.jpg",
+      type: "series",
+      genres: ["Drama", "Médico"],
+      synopsis: "A rotina de entrega, esforço e pressão pela qual os médicos de um hospital público no subúrbio passam todos os dias, arriscando tudo para salvar vidas.",
+      year: 2022,
+      rating: "16",
+      duration: "5 Temporadas",
+      match: 97,
+      playerUrl: "https://v1.watchplay.shop/tvshow/73010/1/1",
+    },
+    {
+      id: 67535,
+      tmdbId: 67535,
+      title: "JUSTIÇA",
+      imageUrl: "https://image.tmdb.org/t/p/w500/2Jit3hR4CY4LrU06fiLdF0L7SPS.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/dY24bRRqvSjOacyV127z35j2gKv.jpg",
+      type: "series",
+      genres: ["Drama", "Crime"],
+      synopsis: "Traição, desejo de vingança, assassinatos e armações são alguns dos temas de quatro histórias nas quais há sempre um dilema moral envolvido.",
+      year: 2024,
+      rating: "18",
+      duration: "2 Temporadas",
+      match: 96,
+      playerUrl: "https://v1.watchplay.shop/tvshow/67535/1/1",
+    },
+    {
+      id: 194606,
+      tmdbId: 194606,
+      title: "RENSGA HITS!",
+      imageUrl: "https://image.tmdb.org/t/p/w500/3JA7HYJ7TS9y4MY5um1cws9mzIx.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/mVMlieapNYCBCH53rM46mAi3DMR.jpg",
+      type: "series",
+      genres: ["Comédia", "Drama", "Música"],
+      synopsis: "Jovem cantora se muda para Goiânia em busca do sonho de ser uma estrela de sucesso e acaba descobrindo os bastidores da indústria sertaneja.",
+      year: 2024,
+      rating: "14",
+      duration: "2 Temporadas",
+      match: 94,
+      playerUrl: "https://v1.watchplay.shop/tvshow/194606/1/1",
+    },
+    {
+      id: 112468,
+      tmdbId: 112468,
+      title: "AS FIVE",
+      imageUrl: "https://image.tmdb.org/t/p/w500/3vWANjNHJvgkwBzE2x6kWOiKSXo.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/70adcDcYqa2EFrhoD0TfOFmqjkJ.jpg",
+      type: "series",
+      genres: ["Comédia", "Drama"],
+      synopsis: "Keyla, Ellen, Lica, Tina e Benê se reencontram após seis anos. Na transição para a vida adulta, enfrentam os desafios de suas carreiras e afetos.",
+      year: 2024,
+      rating: "16",
+      duration: "3 Temporadas",
+      match: 93,
+      playerUrl: "https://v1.watchplay.shop/tvshow/112468/1/1",
     }
   ]
 };

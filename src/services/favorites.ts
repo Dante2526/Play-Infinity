@@ -13,11 +13,14 @@ export interface SeriesScheduleEpisode {
   synopsis: string;
   airDate: string; // YYYY-MM-DD
   airTime: string; // HH:mm
-  dayOfWeek: string; // 'Segunda', 'Terça', etc.
+  dayOfWeek: string; // 'Segunda-feira', 'Terça-feira', etc.
   playerUrl?: string;
   tmdbId?: number;
   imdbId?: string;
-  status: 'released' | 'today' | 'upcoming';
+  status: 'released' | 'today' | 'upcoming' | 'season_ended' | 'series_ended';
+  seriesStatus?: 'Ended' | 'Returning Series' | 'In Production' | 'Canceled' | string;
+  nextAirDate?: string;
+  lastAirDate?: string;
 }
 
 const FAVORITES_STORAGE_KEY = "playinfinity_user_favorites";
@@ -224,7 +227,7 @@ export const SERIES_EPISODE_SCHEDULE: Record<number, Omit<SeriesScheduleEpisode,
       provider: "Prime Video",
       seasonNumber: 4,
       episodeNumber: 8,
-      episodeTitle: "Assassination Run (Season Finale)",
+      episodeTitle: "Assassination Run (Final de Temporada)",
       synopsis: "O confronto direto entre a equipe de Butcher e os Sete atinge o ponto sem retorno na Casa Branca.",
       airDate: "2026-09-17",
       airTime: "00:00",
@@ -412,9 +415,152 @@ export const SERIES_EPISODE_SCHEDULE: Record<number, Omit<SeriesScheduleEpisode,
   ]
 };
 
-// Obter todos os episódios agendados apenas para as séries favoritadas
+export const getDayOfWeekFromDate = (dateStr: string): string => {
+  const days = [
+    'Domingo',
+    'Segunda-feira',
+    'Terça-feira',
+    'Quarta-feira',
+    'Quinta-feira',
+    'Sexta-feira',
+    'Sábado'
+  ];
+  try {
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+      return days[d.getDay()] || 'Em Breve';
+    }
+    const d = new Date(dateStr + "T12:00:00");
+    return days[d.getDay()] || 'Em Breve';
+  } catch {
+    return 'Em Breve';
+  }
+};
+
+// Busca do cronograma dinâmico e status oficial via TMDB para as séries seguidas
+export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): Promise<SeriesScheduleEpisode[]> => {
+  const allCatalog = getAllCatalogItems();
+  const idsToFetch = Array.from(new Set(favoriteIds));
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  const results: SeriesScheduleEpisode[] = [];
+
+  await Promise.all(
+    idsToFetch.map(async (id) => {
+      try {
+        const localItem = allCatalog.find(i => i.id === id);
+        if (localItem && localItem.type === 'movie') return;
+
+        const tmdbId = localItem?.tmdbId || id;
+        const res = await fetch(
+          `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=e0cc43e590a5c5c0d03f920bd4fe9424&language=pt-BR`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!data || data.status_code) return;
+
+        const seriesTitle = (data.name || localItem?.title || "Série").toUpperCase();
+        const seriesPoster = data.poster_path 
+          ? `https://image.tmdb.org/t/p/w500${data.poster_path}`
+          : localItem?.imageUrl || "";
+        const seriesBackdrop = data.backdrop_path
+          ? `https://image.tmdb.org/t/p/original${data.backdrop_path}`
+          : localItem?.backdropUrl || seriesPoster;
+        const provider = localItem?.provider || (data.networks?.[0]?.name || "Streaming");
+
+        const nextEp = data.next_episode_to_air;
+        const lastEp = data.last_episode_to_air;
+
+        // Caso 1: A série tem próximo episódio oficialmente agendado no TMDB
+        if (nextEp && nextEp.air_date) {
+          const airDate = nextEp.air_date;
+          let status: 'today' | 'upcoming' | 'released' = 'upcoming';
+          if (airDate === todayStr) {
+            status = 'today';
+          } else if (airDate < todayStr) {
+            status = 'released';
+          }
+
+          results.push({
+            id: `tmdb-next-${id}-${nextEp.season_number}-${nextEp.episode_number}`,
+            seriesId: id,
+            seriesTitle,
+            seriesPoster,
+            seriesBackdrop,
+            provider,
+            seasonNumber: nextEp.season_number,
+            episodeNumber: nextEp.episode_number,
+            episodeTitle: nextEp.name || `Episódio ${nextEp.episode_number}`,
+            synopsis: nextEp.overview || "Episódio inédito com lançamento agendado oficialmente.",
+            airDate,
+            airTime: "22:00",
+            dayOfWeek: getDayOfWeekFromDate(airDate),
+            playerUrl: `https://v1.watchplay.shop/tvshow/${tmdbId}/${nextEp.season_number}/${nextEp.episode_number}`,
+            tmdbId,
+            imdbId: localItem?.imdbId,
+            status,
+            seriesStatus: data.status,
+            nextAirDate: airDate
+          });
+        } 
+        // Caso 2: Não há próximo episódio agendado (temporada finalizada ou série encerrada)
+        else if (lastEp) {
+          const isEnded = data.status === 'Ended';
+          const status = isEnded ? 'series_ended' : 'season_ended';
+          const airDate = lastEp.air_date || todayStr;
+
+          results.push({
+            id: `tmdb-last-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
+            seriesId: id,
+            seriesTitle,
+            seriesPoster,
+            seriesBackdrop,
+            provider,
+            seasonNumber: lastEp.season_number,
+            episodeNumber: lastEp.episode_number,
+            episodeTitle: isEnded 
+              ? `T${lastEp.season_number}:E${lastEp.episode_number} - ${lastEp.name || 'Episódio Final'}`
+              : `T${lastEp.season_number}:E${lastEp.episode_number} - ${lastEp.name || 'Fim de Temporada'}`,
+            synopsis: isEnded
+              ? "Todas as temporadas já foram exibidas. Esta série foi oficialmente concluída."
+              : `A Temporada ${lastEp.season_number} foi concluída. A próxima temporada está em produção e aguarda confirmação de data de estreia.`,
+            airDate,
+            airTime: "22:00",
+            dayOfWeek: getDayOfWeekFromDate(airDate),
+            playerUrl: `https://v1.watchplay.shop/tvshow/${tmdbId}/${lastEp.season_number}/${lastEp.episode_number}`,
+            tmdbId,
+            imdbId: localItem?.imdbId,
+            status,
+            seriesStatus: data.status,
+            lastAirDate: airDate
+          });
+        }
+      } catch (err) {
+        console.warn(`[CalendarService] Erro ao sincronizar série ${id}:`, err);
+      }
+    })
+  );
+
+  const statusPriority: Record<string, number> = {
+    today: 1,
+    upcoming: 2,
+    season_ended: 3,
+    released: 4,
+    series_ended: 5
+  };
+
+  return results.sort((a, b) => {
+    const pA = statusPriority[a.status] || 99;
+    const pB = statusPriority[b.status] || 99;
+    if (pA !== pB) return pA - pB;
+    return a.airDate.localeCompare(b.airDate);
+  });
+};
+
+// Obter episódios com fallback síncrono inicial
 export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEpisode[] => {
-  const todayStr = "2026-09-08"; // Data atual no ambiente
+  const todayStr = new Date().toISOString().split('T')[0];
   const episodes: SeriesScheduleEpisode[] = [];
 
   favoriteIds.forEach(id => {
@@ -436,8 +582,6 @@ export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEp
     }
   });
 
-  // Ordena por data (mais próximos primeiro)
   episodes.sort((a, b) => a.airDate.localeCompare(b.airDate) || a.airTime.localeCompare(b.airTime));
-
   return episodes;
 };

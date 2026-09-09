@@ -20,7 +20,7 @@ import {
   SeriesScheduleEpisode,
   getFavoriteIds,
   toggleFavorite,
-  getScheduleForFavorites,
+  fetchDynamicScheduleForFavorites,
   getAllCatalogItems,
   SERIES_EPISODE_SCHEDULE
 } from "../services/favorites";
@@ -46,9 +46,21 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
   onPlay,
   onNavigateToSeries
 }) => {
+  const CACHE_KEY = "playinfinity_schedule_cache_v2";
+
   const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
-  const [filterTab, setFilterTab] = useState<'all' | 'week' | 'today' | 'upcoming'>('all');
+  const [filterTab, setFilterTab] = useState<'all' | 'week' | 'today' | 'upcoming' | 'ended'>('all');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [dynamicEpisodes, setDynamicEpisodes] = useState<SeriesScheduleEpisode[]>(() => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {}
+    return [];
+  });
+  const [loadingSchedule, setLoadingSchedule] = useState<boolean>(dynamicEpisodes.length === 0);
 
   // Sincroniza estado de favoritos via evento
   useEffect(() => {
@@ -62,14 +74,52 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
     };
   }, []);
 
+  // Busca o status real oficial de cada série diretamente no TMDB
+  useEffect(() => {
+    let isMounted = true;
+    if (favoriteIds.length === 0) {
+      setDynamicEpisodes([]);
+      setLoadingSchedule(false);
+      return;
+    }
+
+    setLoadingSchedule(true);
+    fetchDynamicScheduleForFavorites(favoriteIds).then(episodes => {
+      if (isMounted) {
+        if (episodes && episodes.length > 0) {
+          setDynamicEpisodes(episodes);
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(episodes));
+          } catch (e) {}
+        }
+        setLoadingSchedule(false);
+      }
+    }).catch(err => {
+      console.warn("Erro ao sincronizar episódios reais:", err);
+      if (isMounted) setLoadingSchedule(false);
+    });
+
+    return () => { isMounted = false; };
+  }, [favoriteIds]);
+
   const allCatalog = getAllCatalogItems();
   const allSeries = allCatalog.filter(item => item.type === 'series');
   
   // Séries atualmente favoritadas pelo usuário
   const followedSeries = allSeries.filter(series => favoriteIds.includes(series.id));
   
-  // Episódios agendados apenas para as séries favoritadas
-  const scheduledEpisodes = getScheduleForFavorites(favoriteIds);
+  // Episódios com dados reais do TMDB
+  const scheduledEpisodes = dynamicEpisodes;
+
+  // Datas calculadas em tempo real (data real de hoje)
+  const todayDate = new Date();
+  const todayStr = todayDate.toISOString().split('T')[0];
+  const nextWeekDate = new Date(Date.now() + 7 * 86400000);
+  const nextWeekStr = nextWeekDate.toISOString().split('T')[0];
+
+  const daysOfWeek = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
+  const dayNamesPt = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  const todayDayName = dayNamesPt[todayDate.getDay()];
 
   // Filtragem dos episódios
   const filteredEpisodes = scheduledEpisodes.filter(ep => {
@@ -84,8 +134,10 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
       return ep.status === 'upcoming';
     }
     if (filterTab === 'week') {
-      // Episódios de hoje e dos próximos 7 dias
-      return ep.status === 'today' || (ep.airDate >= '2026-09-08' && ep.airDate <= '2026-09-15');
+      return ep.status === 'today' || (ep.airDate >= todayStr && ep.airDate <= nextWeekStr);
+    }
+    if (filterTab === 'ended') {
+      return ep.status === 'season_ended' || ep.status === 'series_ended';
     }
     return true;
   });
@@ -95,11 +147,10 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
     setFavoriteIds(getFavoriteIds());
   };
 
-  // Contadores
+  // Contadores dinâmicos
   const todayCount = scheduledEpisodes.filter(e => e.status === 'today').length;
-  const thisWeekCount = scheduledEpisodes.filter(e => e.airDate >= '2026-09-08' && e.airDate <= '2026-09-15').length;
-
-  const daysOfWeek = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo'];
+  const thisWeekCount = scheduledEpisodes.filter(e => e.status === 'today' || (e.airDate >= todayStr && e.airDate <= nextWeekStr)).length;
+  const endedCount = scheduledEpisodes.filter(e => e.status === 'season_ended' || e.status === 'series_ended').length;
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-28 md:pt-32 px-4 md:px-12 bg-[#0a0a0a] pb-28 md:pb-16 text-white">
@@ -111,6 +162,12 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
             <div className="flex items-center gap-2 text-orange-500 font-bold text-xs uppercase tracking-widest mb-2">
               <CalendarDays className="w-4 h-4" />
               <span>Agenda de Séries Seguidas</span>
+              {loadingSchedule && (
+                <span className="flex items-center gap-1.5 text-neutral-400 normal-case font-normal text-[11px] bg-white/5 px-2.5 py-0.5 rounded-full border border-white/10">
+                  <span className="w-2 h-2 rounded-full border-2 border-orange-500 border-t-transparent animate-spin"></span>
+                  Sincronizando TMDB...
+                </span>
+              )}
             </div>
             <h1 className="text-3xl md:text-5xl font-black text-white tracking-tighter uppercase">
               Calendário de Lançamentos
@@ -184,6 +241,19 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                 >
                   Próximos
                 </button>
+                {endedCount > 0 && (
+                  <button
+                    onClick={() => { setFilterTab('ended'); setSelectedDay(null); }}
+                    className={`px-5 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                      filterTab === 'ended'
+                        ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.4)]'
+                        : 'bg-white/5 hover:bg-white/10 text-neutral-300'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
+                    Temporadas Concluídas ({endedCount})
+                  </button>
+                )}
               </div>
 
               {/* Botão de Seguir mais séries */}
@@ -203,7 +273,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
               {daysOfWeek.map(day => {
                 const countForDay = scheduledEpisodes.filter(e => e.dayOfWeek === day).length;
                 const isSelected = selectedDay === day;
-                const isToday = day === 'Terça-feira'; // Terça é o dia de hoje (08/09)
+                const isToday = day === todayDayName;
 
                 return (
                   <button
@@ -250,6 +320,9 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                 {filteredEpisodes.map(ep => {
                   const isToday = ep.status === 'today';
                   const isReleased = ep.status === 'released';
+                  const isSeasonEnded = ep.status === 'season_ended';
+                  const isSeriesEnded = ep.status === 'series_ended';
+                  const isEnded = isSeasonEnded || isSeriesEnded;
 
                   return (
                     <div
@@ -257,11 +330,21 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                       className={`relative bg-[#121212] border rounded-2xl p-4 sm:p-5 transition-all flex flex-col md:flex-row gap-5 items-start md:items-center justify-between overflow-hidden group hover:border-orange-500/40 hover:shadow-[0_0_25px_rgba(234,88,12,0.15)] ${
                         isToday
                           ? 'border-emerald-500/40 bg-gradient-to-r from-[#121212] via-[#151d18] to-[#121212]'
+                          : isSeasonEnded
+                          ? 'border-indigo-500/30 bg-gradient-to-r from-[#121212] via-[#151525] to-[#121212]'
+                          : isSeriesEnded
+                          ? 'border-neutral-700/60 bg-[#121212]'
                           : 'border-white/5'
                       }`}
                     >
                       {/* Efeito Glow lateral */}
-                      <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${isToday ? 'bg-emerald-500' : isReleased ? 'bg-neutral-600' : 'bg-orange-500'}`} />
+                      <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${
+                        isToday ? 'bg-emerald-500' :
+                        isSeasonEnded ? 'bg-indigo-500' :
+                        isSeriesEnded ? 'bg-neutral-600' :
+                        isReleased ? 'bg-neutral-600' :
+                        'bg-orange-500'
+                      }`} />
 
                       {/* Lado Esquerdo: Poster + Informações */}
                       <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
@@ -288,7 +371,11 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                             <span className="px-2 py-0.5 rounded bg-white/10 text-neutral-300 text-[10px] font-bold uppercase tracking-wider">
                               {ep.provider}
                             </span>
-                            <span className="px-2 py-0.5 rounded bg-orange-600/20 text-orange-400 border border-orange-500/30 text-[10px] font-bold">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isEnded
+                                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                                : 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
+                            }`}>
                               T{ep.seasonNumber}:E{ep.episodeNumber}
                             </span>
                             
@@ -297,6 +384,16 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
                                 <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping"></span>
                                 Estreia Hoje ({ep.airTime})
+                              </span>
+                            ) : isSeasonEnded ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-indigo-400" />
+                                Temporada Concluída • Aguardando Nova Temporada
+                              </span>
+                            ) : isSeriesEnded ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-neutral-500" />
+                                Série Concluída (Finalizada)
                               </span>
                             ) : isReleased ? (
                               <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold">
@@ -328,13 +425,18 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                           <div className="flex items-center gap-3 text-xs text-neutral-400 mt-2">
                             <span className="flex items-center gap-1">
                               <CalendarIcon className="w-3.5 h-3.5 text-neutral-500" />
+                              {isEnded ? "Último exibido: " : ""}
                               {new Date(ep.airDate + "T12:00:00").toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
                             </span>
-                            <span>•</span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                              {ep.airTime} (Horário de Brasília)
-                            </span>
+                            {!isEnded && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-1">
+                                  <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                                  {ep.airTime} (Horário de Brasília)
+                                </span>
+                              </>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -357,11 +459,13 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                           className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
                             isToday
                               ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                              : isSeasonEnded
+                              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
                               : 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'
                           }`}
                         >
                           <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>Assistir Episódio</span>
+                          <span>{isEnded ? "Assistir Último Ep" : "Assistir Episódio"}</span>
                         </button>
 
                         {/* Botão Ver Série */}

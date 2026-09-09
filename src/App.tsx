@@ -21,7 +21,6 @@ import {
   Check,
   Info,
   Radio,
-  Link2,
   Loader2,
   Sparkles,
   Clock,
@@ -29,7 +28,7 @@ import {
   X,
   CheckCircle2
 } from "lucide-react";
-import { featured, providers, top10, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
+import { featured, providers, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
 import { 
   searchMulti, 
   getDetails, 
@@ -41,11 +40,16 @@ import {
   discoverMovies,
   discoverSeries,
   getGenreIdByName,
+  getMovieReleases,
+  getSeriesReleases,
   FALLBACK_POSTER_IMAGE,
   FALLBACK_BACKDROP_IMAGE,
   TMDBItem, 
   TMDBDetails, 
-  Season 
+  Season,
+  getTrending,
+  getTrailer,
+  TrailerVideo
 } from "./services/tmdb";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import { WebhookPanelModal } from "./components/WebhookPanelModal";
@@ -58,6 +62,13 @@ import {
   SERIES_EPISODE_SCHEDULE,
   getScheduleForFavorites
 } from "./services/favorites";
+import {
+  isEpisodeWatched,
+  toggleEpisodeWatched,
+  markSeasonWatched,
+  isSeasonFullyWatched,
+  getSeasonWatchedCount
+} from "./services/watchedEpisodes";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
@@ -85,12 +96,19 @@ export type OnPlayHandler = (
 ) => void;
 
 export default function App() {
-  const [viewState, setViewState] = useState<{ 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details', 
-    id?: string,
-    itemData?: CatalogItem,
-    previous?: any
-  }>({ type: 'home' });
+  type ViewState = { 
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details';
+    id?: string;
+    itemData?: CatalogItem;
+    previous?: any;
+  };
+
+  const [viewState, setViewState] = useState<ViewState>(() => {
+    if (window.history.state && window.history.state.type) {
+      return window.history.state;
+    }
+    return { type: 'home' };
+  });
 
   const [playerModal, setPlayerModal] = useState<{
     isOpen: boolean;
@@ -110,6 +128,58 @@ export default function App() {
   });
 
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
+
+  // Sincronização com o botão de voltar e avançar nativo do navegador
+  useEffect(() => {
+    if (!window.history.state) {
+      window.history.replaceState({ type: 'home' }, '');
+    }
+
+    const handlePopState = (e: PopStateEvent) => {
+      if (e.state && e.state.type) {
+        setViewState(e.state);
+      } else {
+        setViewState({ type: 'home' });
+      }
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Garante que qualquer navegação entre telas ou detalhes sempre role instantaneamente para o topo absoluto (0, 0)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [viewState.type, viewState.id]);
+
+  const navigateTo = (newState: ViewState, replace = false) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    if (replace) {
+      window.history.replaceState(newState, '');
+    } else {
+      window.history.pushState(newState, '');
+    }
+    setViewState(newState);
+  };
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      navigateTo(viewState.previous || { type: 'home' }, true);
+    }
+  };
+
+  const navigateToDetails = (id: number, itemData?: CatalogItem) => {
+    navigateTo({ type: 'details', id: id.toString(), itemData, previous: viewState });
+  };
 
   const openPlayer = (
     title: string, 
@@ -134,10 +204,24 @@ export default function App() {
       quality,
       isCam: isCam || checkIsCam(title, quality),
     });
-  };
 
-  const navigateToDetails = (id: number, itemData?: CatalogItem) => {
-    setViewState(prev => ({ type: 'details', id: id.toString(), itemData, previous: prev }));
+    // Registra reprodução para o Top 10 Mais Assistidos dos usuários
+    try {
+      fetch("/api/track-play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          type: mediaType || "movie",
+          tmdbId,
+          imdbId,
+          quality,
+          playerUrl: url
+        })
+      }).catch(err => console.warn("[TrackPlay] Falha ao registrar audiência:", err));
+    } catch (err) {
+      console.warn("[TrackPlay] Erro ao disparar registro:", err);
+    }
   };
 
   return (
@@ -146,45 +230,31 @@ export default function App() {
       <header className="hidden md:flex fixed top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-6 py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
         <div 
           className="font-black text-2xl tracking-tighter flex items-center shrink-0 ml-2 cursor-pointer"
-          onClick={() => setViewState({ type: 'home' })}
+          onClick={() => navigateTo({ type: 'home' })}
         >
           <span className="text-white">PLAY</span>
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
+
         <nav className="flex items-center gap-1 bg-black/40 p-1.5 rounded-full border border-white/5">
-          <button onClick={() => setViewState({ type: 'home' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
-          <button onClick={() => setViewState({ type: 'movies' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
-          <button onClick={() => setViewState({ type: 'series' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
-          <button onClick={() => setViewState({ type: 'calendar' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
+          <button onClick={() => navigateTo({ type: 'home' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
+          <button onClick={() => navigateTo({ type: 'movies' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
+          <button onClick={() => navigateTo({ type: 'series' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
+          <button onClick={() => navigateTo({ type: 'calendar' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 cursor-pointer ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
             <CalendarDays className="w-3.5 h-3.5" />
             <span>Calendário</span>
           </button>
         </nav>
+
         <div className="flex items-center gap-3 shrink-0 mr-1">
           <button 
-            onClick={() => setWebhookModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 transition-all shadow-[0_0_12px_rgba(234,88,12,0.15)]"
-            title="Integração de Episódios / Webhook"
-          >
-            <Radio className="w-3.5 h-3.5 text-orange-500 animate-pulse" />
-            <span className="hidden sm:inline">Servidor / Webhook</span>
-          </button>
-          <button 
-            onClick={() => openPlayer("Mayday (Dublado)", "https://v1.watchplay.shop/movie/tt22084616")}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 transition-all"
-            title="Abrir Player sem anúncios"
-          >
-            <Play className="w-3 h-3 fill-current text-orange-500" />
-            <span className="hidden sm:inline">Player Sem Anúncios</span>
-          </button>
-          <button 
-            onClick={() => setViewState({ type: 'search' })}
-            className={`transition-colors p-2.5 rounded-full border ${viewState.type === 'search' ? 'bg-orange-600/20 text-orange-500 border-orange-500/50' : 'text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'}`}
+            onClick={() => navigateTo({ type: 'search' })}
+            className={`transition-colors p-2.5 rounded-full border cursor-pointer ${viewState.type === 'search' ? 'bg-orange-600/20 text-orange-500 border-orange-500/50' : 'text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'}`}
           >
             <Search className="w-4 h-4" />
           </button>
           <div 
-            onClick={() => setViewState({ type: 'profile' })}
+            onClick={() => navigateTo({ type: 'profile' })}
             className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
           >
             N
@@ -192,23 +262,25 @@ export default function App() {
         </div>
       </header>
 
-
       {/* MOBILE BRANDING ON TOP */}
       <div className="md:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50">
-        <div className="font-black text-2xl tracking-tighter flex items-center drop-shadow-md">
+        <div 
+          className="font-black text-2xl tracking-tighter flex items-center drop-shadow-md cursor-pointer"
+          onClick={() => navigateTo({ type: 'home' })}
+        >
           <span className="text-white">PLAY</span>
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setViewState({ type: 'calendar' })}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30"
+            onClick={() => navigateTo({ type: 'calendar' })}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30 cursor-pointer"
           >
             <CalendarDays className="w-3 h-3 text-orange-500" /> Agenda
           </button>
           <button
             onClick={() => setWebhookModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-neutral-300 border border-white/10"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-neutral-300 border border-white/10 cursor-pointer"
           >
             <Radio className="w-3 h-3 text-orange-500" /> Servidor
           </button>
@@ -219,25 +291,25 @@ export default function App() {
         <DetailsPage 
           itemId={Number(viewState.id)} 
           initialItem={viewState.itemData}
-          onBack={() => setViewState(viewState.previous || { type: 'home' })} 
+          onBack={handleBack} 
           onItemClick={navigateToDetails}
           onPlay={openPlayer}
-          onNavigateToCalendar={() => setViewState({ type: 'calendar' })}
+          onNavigateToCalendar={() => navigateTo({ type: 'calendar' })}
         />
       ) : viewState.type === 'provider' && viewState.id ? (
-        <ProviderPage provider={viewState.id} onBack={() => setViewState({ type: 'home' })} onItemClick={navigateToDetails} onPlay={openPlayer} />
+        <ProviderPage provider={viewState.id} onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'movies' || viewState.type === 'series' ? (
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'calendar' ? (
-        <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => setViewState({ type: 'series' })} />
+        <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => navigateTo({ type: 'series' })} />
       ) : viewState.type === 'search' ? (
         <GlobalSearchPage onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'profile' ? (
-        <UserProfilePage onNavigate={(type) => setViewState({ type: type as any })} onItemClick={navigateToDetails} onPlay={openPlayer} />
+        <UserProfilePage onNavigate={(type) => navigateTo({ type: type as any })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'favorites' ? (
-        <FavoritesPage onBack={() => setViewState({ type: 'profile' })} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => setViewState({ type: 'calendar' })} />
+        <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
       ) : (
-        <HomePage onProviderSelect={(p) => setViewState({ type: 'provider', id: p })} onItemClick={navigateToDetails} onPlay={openPlayer} />
+        <HomePage onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       )}
 
       {/* Footer Area */}
@@ -262,7 +334,7 @@ export default function App() {
           ].map(btn => (
              <button 
                key={btn.label} 
-               onClick={() => setViewState({ type: btn.type as any })}
+               onClick={() => navigateTo({ type: btn.type as any })}
                className="bg-neutral-900 hover:bg-neutral-800 text-neutral-300 px-5 py-2.5 rounded-full text-sm font-medium transition-colors border border-neutral-800 cursor-pointer"
              >
                {btn.label}
@@ -280,14 +352,14 @@ export default function App() {
       <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-md z-50 pointer-events-none">
         <nav className="bg-[#111111]/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-1.5 flex justify-between items-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
           <div className="flex justify-around items-center flex-1">
-            <NavItem onClick={() => setViewState({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
-            <NavItem onClick={() => setViewState({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />
-            <NavItem onClick={() => setViewState({ type: 'series' })} icon={<Tv />} label="Séries" isActive={viewState.type === 'series'} />
-            <NavItem onClick={() => setViewState({ type: 'calendar' })} icon={<CalendarDays />} label="Agenda" isActive={viewState.type === 'calendar'} />
-            <NavItem onClick={() => setViewState({ type: 'search' })} icon={<Search />} label="Buscar" isActive={viewState.type === 'search'} />
+            <NavItem onClick={() => navigateTo({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
+            <NavItem onClick={() => navigateTo({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />
+            <NavItem onClick={() => navigateTo({ type: 'series' })} icon={<Tv />} label="Séries" isActive={viewState.type === 'series'} />
+            <NavItem onClick={() => navigateTo({ type: 'calendar' })} icon={<CalendarDays />} label="Agenda" isActive={viewState.type === 'calendar'} />
+            <NavItem onClick={() => navigateTo({ type: 'search' })} icon={<Search />} label="Buscar" isActive={viewState.type === 'search'} />
           </div>
           <div 
-            onClick={() => setViewState({ type: 'profile' })}
+            onClick={() => navigateTo({ type: 'profile' })}
             className={`mx-1.5 w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg shrink-0 pointer-events-auto cursor-pointer transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)] scale-110' : 'border-black'}`}
           >
             N
@@ -338,109 +410,273 @@ function HomePage({
   onPlay 
 }: { 
   onProviderSelect: (p: string) => void, 
-  onItemClick: (id: number) => void,
+  onItemClick: (id: number, item?: any) => void,
   onPlay?: OnPlayHandler 
 }) {
+  const [heroItem, setHeroItem] = useState<{
+    id: number;
+    tmdbId: number;
+    imdbId?: string;
+    title: string;
+    description: string;
+    imageUrl: string;
+    posterUrl?: string;
+    logoText: string;
+    playerUrl: string;
+    year: number;
+    duration: string;
+    rating: string;
+    genres: string[];
+    quality?: string;
+  }>(featured);
+
+  // Estados dinâmicos dos lançamentos automáticos (fallback inicial dos dados estáticos)
+  const [movieReleases, setMovieReleases] = useState<any[]>(releases);
+  const [seriesReleases, setSeriesReleases] = useState<any[]>(newest);
+  // Top 10 Mais Assistidos decidido dinamicamente pela audiência dos usuários
+  const [mostWatchedItems, setMostWatchedItems] = useState<any[]>(mostWatched);
+
+  // Busca automática do destaque e dos lançamentos recentes via TMDB
+  useEffect(() => {
+    let isMounted = true;
+    const fetchTopTrending = async () => {
+      try {
+        const trendingRes = await getTrending('movie', 'day');
+        if (!isMounted || !trendingRes?.results || trendingRes.results.length === 0) return;
+
+        // Seleciona filmes com imagem de fundo válida, ordenados por popularidade
+        const candidates = trendingRes.results
+          .filter((m: TMDBItem) => m.backdrop_path && (m.title || m.name))
+          .sort((a: TMDBItem, b: TMDBItem) => (b.popularity || 0) - (a.popularity || 0));
+
+        if (candidates.length === 0) return;
+        const top = candidates[0];
+
+        let runtime = "2h 10m";
+        let genresList = getGenreNames(top.genre_ids || []);
+        let imdbId: string | undefined = undefined;
+        let releaseYear = parseInt(top.release_date?.substring(0, 4) || "2026");
+
+        try {
+          const details = await getDetails(top.id, 'movie');
+          if (details) {
+            if (details.runtime) {
+              const h = Math.floor(details.runtime / 60);
+              const m = details.runtime % 60;
+              runtime = h > 0 ? `${h}h ${m}m` : `${m}m`;
+            }
+            if (details.genres && details.genres.length > 0) {
+              genresList = details.genres.map(g => g.name);
+            }
+            if (details.imdb_id) imdbId = details.imdb_id;
+            if (details.release_date) {
+              releaseYear = parseInt(details.release_date.substring(0, 4)) || releaseYear;
+            }
+          }
+        } catch {
+          // Mantém valores derivados da listagem em caso de falha nos detalhes
+        }
+
+        if (!isMounted) return;
+
+        const fullTitle = top.title || top.name || "Sem título";
+        let logoText = fullTitle.toUpperCase();
+        if (logoText.includes(": ")) {
+          logoText = logoText.replace(": ", "\n");
+        } else if (logoText.includes(" - ")) {
+          logoText = logoText.replace(" - ", "\n");
+        }
+
+        setHeroItem({
+          id: top.id,
+          tmdbId: top.id,
+          imdbId,
+          title: fullTitle,
+          description: top.overview || featured.description,
+          imageUrl: formatImageUrl(top.backdrop_path, 'original'),
+          posterUrl: formatImageUrl(top.poster_path, 'w500'),
+          logoText,
+          playerUrl: `https://v1.watchplay.shop/movie/${top.id}`,
+          year: releaseYear,
+          duration: runtime,
+          rating: top.vote_average ? top.vote_average.toFixed(1) : "8.0",
+          genres: genresList.length > 0 ? genresList.slice(0, 3) : ["Ação", "Aventura"],
+          quality: checkIsCam(fullTitle) ? "CAM" : "HD"
+        });
+      } catch (err) {
+        console.error("Erro ao sincronizar destaque automático com TMDB:", err);
+      }
+    };
+
+    // Sincronização automática de lançamentos reais (filmes e séries) no TMDB
+    const fetchReleases = async () => {
+      try {
+        const [moviesRes, seriesRes] = await Promise.all([
+          getMovieReleases(),
+          getSeriesReleases()
+        ]);
+
+        if (isMounted && moviesRes?.results && moviesRes.results.length > 0) {
+          const formattedMovies = moviesRes.results
+            .filter((m: TMDBItem) => m.poster_path && (m.title || m.name))
+            .slice(0, 18)
+            .map((m: TMDBItem) => ({
+              id: m.id,
+              tmdbId: m.id,
+              title: (m.title || m.name || "").toUpperCase(),
+              imageUrl: formatImageUrl(m.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+              type: 'movie' as const,
+              quality: checkIsCam(m.title || "") ? ("CAM" as const) : ("HD" as const),
+              rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
+              year: m.release_date ? m.release_date.substring(0, 4) : "2026",
+              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
+            }));
+          if (formattedMovies.length > 0) {
+            setMovieReleases(formattedMovies);
+          }
+        }
+
+        if (isMounted && seriesRes?.results && seriesRes.results.length > 0) {
+          const formattedSeries = seriesRes.results
+            .filter((s: TMDBItem) => s.poster_path && (s.name || s.title))
+            .slice(0, 18)
+            .map((s: TMDBItem) => ({
+              id: s.id,
+              tmdbId: s.id,
+              title: (s.name || s.title || "").toUpperCase(),
+              imageUrl: formatImageUrl(s.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+              type: 'series' as const,
+              quality: "HD" as const,
+              rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
+              year: s.first_air_date ? s.first_air_date.substring(0, 4) : "2026",
+              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
+            }));
+          if (formattedSeries.length > 0) {
+            setSeriesReleases(formattedSeries);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao sincronizar lançamentos automáticos com TMDB:", err);
+      }
+    };
+
+    // Busca do Top 10 Mais Assistidos da plataforma (decidido pelos usuários)
+    const fetchMostWatched = async () => {
+      try {
+        const res = await fetch("/api/most-watched");
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && data.success && Array.isArray(data.items) && data.items.length > 0) {
+            setMostWatchedItems(data.items);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar mais assistidos dos usuários:", err);
+      }
+    };
+
+    fetchTopTrending();
+    fetchReleases();
+    fetchMostWatched();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <>
       {/* FEATURED / HERO SECTION */}
-      <section className="relative w-full h-[75vh] md:h-[85vh] flex-shrink-0">
+      <section className="relative w-full min-h-[85vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end flex-shrink-0 overflow-hidden">
         {/* Background Image */}
         <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${featured.imageUrl})` }}
+          className="absolute inset-0 bg-cover bg-[center_top] md:bg-top bg-no-repeat"
+          style={{ backgroundImage: `url(${heroItem.imageUrl})` }}
         ></div>
         {/* Gradients to blend with background */}
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/80 to-transparent md:via-[#0a0a0a]/50"></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-transparent to-transparent hidden md:block"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/40 pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-[#0a0a0a]/40 to-transparent hidden md:block pointer-events-none"></div>
 
-        {/* Content */}
-        <div className="absolute inset-0 flex flex-col justify-end items-center md:items-start text-center md:text-left px-6 py-12 md:px-20 md:py-32 z-10">
-          
-          {/* Logo / Title area for Hero */}
-          <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter mb-3 text-shadow-lg leading-none" style={{ textShadow: "0 4px 20px rgba(0,0,0,0.8)" }}>
-            {featured.logoText.split('\n').map((line, i) => (
-              <span key={i} className="block">{line}</span>
-            ))}
-          </h1>
+        {/* Content (Fluxo normal relativo com mt-auto para nunca ultrapassar o topo) */}
+        <div className="relative z-10 w-full flex flex-col justify-end flex-1 px-6 md:px-20 pt-28 sm:pt-32 md:pt-36 pb-8 md:pb-12">
+          <div className="mt-auto flex flex-col items-center md:items-start text-center md:text-left">
+            {/* Logo / Title area for Hero */}
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-2.5 md:mb-3 leading-[0.95] drop-shadow-[0_4px_20px_rgba(0,0,0,0.9)]">
+              {heroItem.logoText.split('\n').map((line, i) => (
+                <span key={i} className="block">{line}</span>
+              ))}
+            </h1>
 
-          {/* Tag de Imagem de Cinema (CAM) */}
-          {checkIsCam(featured.title, (featured as any).quality) && (
-            <div className="mb-4 flex items-center">
-              <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                CAM • Imagem de Cinema
-              </span>
+            {/* Tag de Imagem de Cinema (CAM) */}
+            {checkIsCam(heroItem.title, heroItem.quality) && (
+              <div className="mb-3 flex items-center">
+                <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                  CAM • Imagem de Cinema
+                </span>
+              </div>
+            )}
+
+            {/* Meta details */}
+            <div className="flex items-center gap-3 text-sm md:text-base font-medium text-neutral-300 mb-3">
+              <span>{heroItem.year}</span>
+              <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
+              <div className="flex items-center gap-[2px]">
+                <Tv className="w-4 h-4 mr-1 opacity-70" />
+                <span>{heroItem.duration}</span>
+              </div>
+              <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
+              <div className="flex text-orange-500">
+                <Star className="w-4 h-4 fill-orange-500" />
+                <Star className="w-4 h-4 fill-orange-500" />
+                <Star className="w-4 h-4 fill-orange-500" />
+                <Star className="w-4 h-4 fill-orange-500" />
+                <StarHalf className="w-4 h-4 fill-orange-500" />
+              </div>
             </div>
-          )}
 
-          {/* Meta details */}
-          <div className="flex items-center gap-3 text-sm md:text-base font-medium text-neutral-300 mb-4">
-            <span>{featured.year}</span>
-            <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
-            <div className="flex items-center gap-[2px]">
-              <Tv className="w-4 h-4 mr-1 opacity-70" />
-              <span>{featured.duration}</span>
+            {/* Genres */}
+            <div className="flex items-center gap-2.5 sm:gap-3 mb-4 md:mb-5">
+              {heroItem.genres.map((g) => (
+                <span key={g} className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md text-xs font-semibold text-neutral-200">
+                  {g}
+                </span>
+              ))}
             </div>
-            <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
-            <div className="flex text-orange-500">
-              <Star className="w-4 h-4 fill-orange-500" />
-              <Star className="w-4 h-4 fill-orange-500" />
-              <Star className="w-4 h-4 fill-orange-500" />
-              <Star className="w-4 h-4 fill-orange-500" />
-              <StarHalf className="w-4 h-4 fill-orange-500" />
+
+            {/* Description */}
+            <p className="text-sm md:text-base lg:text-lg text-neutral-300 max-w-[90%] md:max-w-2xl leading-relaxed mb-6 md:mb-8 line-clamp-4 md:line-clamp-none">
+              {heroItem.description}
+            </p>
+
+            {/* Actions */}
+            <div className="flex items-center gap-4 w-full md:w-auto justify-center md:justify-start">
+              <button 
+                onClick={() => onPlay?.(
+                  heroItem.title, 
+                  heroItem.playerUrl || `https://v1.watchplay.shop/movie/${heroItem.id}`,
+                  'movie',
+                  heroItem.id,
+                  heroItem.imdbId,
+                  1,
+                  1,
+                  heroItem.quality,
+                  checkIsCam(heroItem.title, heroItem.quality)
+                )}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
+              >
+                <Play className="w-5 h-5 fill-current" />
+                Assistir Filme
+              </button>
+              <button 
+                onClick={() => onItemClick(heroItem.id)}
+                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer"
+              >
+                <Info className="w-5 h-5" />
+                Mais Detalhes
+              </button>
             </div>
-          </div>
-
-          {/* Genres */}
-          <div className="flex items-center gap-3 mb-6">
-            {featured.genres.map((g) => (
-              <span key={g} className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md text-xs font-semibold text-neutral-200">
-                {g}
-              </span>
-            ))}
-          </div>
-
-          {/* Description */}
-          <p className="text-sm md:text-lg text-neutral-400 max-w-[90%] md:max-w-2xl leading-relaxed mb-8 line-clamp-3 md:line-clamp-none">
-            {featured.description}
-          </p>
-
-          {/* Actions */}
-          <div className="flex items-center gap-4 w-full md:w-auto justify-center md:justify-start">
-            <button 
-              onClick={() => onPlay?.(
-                featured.title, 
-                featured.playerUrl || "https://v1.watchplay.shop/movie/tt22084616",
-                'movie',
-                featured.id,
-                featured.imdbId,
-                1,
-                1,
-                (featured as any).quality,
-                checkIsCam(featured.title, (featured as any).quality)
-              )}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
-            >
-              <Play className="w-5 h-5 fill-current" />
-              Assistir Filme
-            </button>
-            <button 
-              onClick={() => onItemClick(featured.id)}
-              className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer"
-            >
-              <Info className="w-5 h-5" />
-              Mais Detalhes
-            </button>
-          </div>
-
-          {/* Pagination dots (decorative) */}
-          <div className="flex items-center gap-2 mt-12 md:mt-16">
-            <span className="w-3 h-3 rounded-full bg-white"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
-            <span className="w-2.5 h-2.5 rounded-full bg-neutral-700"></span>
           </div>
         </div>
       </section>
@@ -448,30 +684,37 @@ function HomePage({
       {/* STRIPES / CONTENT ZONES */}
       <main className="flex-1 w-full bg-[#0a0a0a] pb-12 z-20 relative px-4 md:px-12 space-y-12">
         {/* Providers */}
-        <section>
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pt-2 pb-4 scrollbar-hide">
+        <section className="w-full flex justify-center">
+          <div 
+            className="flex gap-2.5 sm:gap-3 md:gap-3.5 overflow-x-auto snap-x snap-mandatory pt-1 pb-3 scrollbar-hide w-full justify-start md:justify-center items-center"
+            style={{ justifyContent: 'safe center' }}
+          >
             {providers.map((p) => {
               const logos: Record<string, { url: string, filter?: string, customClass?: string }> = {
-                "NETFLIX": { url: "https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg", customClass: "h-6 md:h-8" },
+                "NETFLIX": { url: "https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg", customClass: "h-5 sm:h-6 md:h-7" },
                 "Disney+": { 
                   url: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Disney%2B_logo.svg",
                   filter: "brightness(0) invert(1) opacity(0.9)",
-                  customClass: "h-12 md:h-16"
+                  customClass: "h-8 sm:h-10 md:h-12"
                 },
                 "Max": { 
                   url: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Max_logo.svg",
                   filter: "brightness(0) invert(1) opacity(0.9)",
-                  customClass: "h-5 md:h-7"
+                  customClass: "h-4 sm:h-4.5 md:h-5"
                 },
                 "Prime Video": { 
                   url: "https://upload.wikimedia.org/wikipedia/commons/1/11/Amazon_Prime_Video_logo.svg",
                   filter: "brightness(0) invert(1) opacity(0.9)",
-                  customClass: "h-6 md:h-8"
+                  customClass: "h-4.5 sm:h-5 md:h-6"
                 },
                 "Apple TV+": { 
                   url: "https://upload.wikimedia.org/wikipedia/commons/2/28/Apple_TV_Plus_Logo.svg",
                   filter: "brightness(0) invert(1) opacity(0.9)",
-                  customClass: "h-6 md:h-8"
+                  customClass: "h-5 sm:h-5.5 md:h-6.5"
+                },
+                "Globoplay": {
+                  url: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Globoplay_logo.svg",
+                  customClass: "h-5 sm:h-5.5 md:h-6.5 max-w-[90px] md:max-w-[110px]"
                 },
               };
 
@@ -481,17 +724,17 @@ function HomePage({
                 <button
                   key={p}
                   onClick={() => onProviderSelect(p)}
-                  className={`group snap-start shrink-0 h-20 md:h-28 px-8 md:px-12 backdrop-blur-md border rounded-2xl flex items-center justify-center min-w-[150px] md:min-w-[200px] transition-all bg-white/5 hover:bg-white/10 border-white/5 hover:border-orange-500/30`}
+                  className={`group snap-start shrink-0 h-14 sm:h-16 md:h-18 lg:h-20 w-[110px] sm:w-[125px] md:w-[135px] lg:w-[150px] xl:w-[160px] px-3 sm:px-4 md:px-5 backdrop-blur-md border rounded-xl sm:rounded-2xl flex items-center justify-center transition-all bg-white/5 hover:bg-white/10 border-white/5 hover:border-orange-500/30 cursor-pointer shadow-sm`}
                 >
                   {logoInfo ? (
                     <img 
                       src={logoInfo.url} 
                       alt={p} 
-                      className={`${logoInfo.customClass || "h-6 md:h-9"} object-contain transition-transform duration-300 group-hover:scale-110`}
+                      className={`${logoInfo.customClass || "h-5 md:h-7"} object-contain transition-transform duration-300 group-hover:scale-110`}
                       style={{ filter: logoInfo.filter }} 
                     />
                   ) : (
-                    <span className="font-black text-xl text-neutral-300 tracking-tight">{p}</span>
+                    <span className="font-black text-lg text-neutral-300 tracking-tight">{p}</span>
                   )}
                 </button>
               );
@@ -543,17 +786,20 @@ function HomePage({
           </div>
         </section>
 
-        {/* Top 10 Hoje */}
-        <ContentRow title="Top 10 Hoje" items={top10} isTop10 onItemClick={onItemClick} />
+        {/* 10 Mais Assistidos (Decidido pela audiência real dos usuários) */}
+        <ContentRow 
+          title="10 Mais Assistidos" 
+          items={mostWatchedItems} 
+          isTop10 
+          startNumber={1} 
+          onItemClick={onItemClick} 
+        />
 
-        {/* Lançamentos */}
-        <ContentRow title="Lançamentos" items={releases} aspect="portait" onItemClick={onItemClick} />
+        {/* Lançamentos Filmes */}
+        <ContentRow title="Lançamentos Filmes" items={movieReleases} aspect="portait" onItemClick={onItemClick} />
 
-        {/* Novidades */}
-        <ContentRow title="Novidades" items={newest} aspect="portait" onItemClick={onItemClick} />
-
-        {/* 10 Mais Assistidos */}
-        <ContentRow title="10 Mais Assistidos" items={mostWatched} isTop10 startNumber={1} onItemClick={onItemClick} />
+        {/* Lançamentos Séries */}
+        <ContentRow title="Lançamentos Séries" items={seriesReleases} aspect="portait" onItemClick={onItemClick} />
       </main>
     </>
   );
@@ -597,6 +843,25 @@ function DetailsPage({
     { id: 2, user: "CinefiloBr", text: "A fotografia é perfeita, cores vivas e som excelente.", likes: 12 }
   ]);
   const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId));
+  const [, setWatchedUpdateTick] = useState(0);
+  const [trailerVideo, setTrailerVideo] = useState<TrailerVideo | null>(null);
+  const [loadingTrailer, setLoadingTrailer] = useState<boolean>(false);
+
+  // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+  }, [itemId]);
+
+  // Sincronizar episódios assistidos
+  useEffect(() => {
+    const handleWatchedUpdate = () => setWatchedUpdateTick(t => t + 1);
+    window.addEventListener("playinfinity:watched_updated", handleWatchedUpdate);
+    return () => {
+      window.removeEventListener("playinfinity:watched_updated", handleWatchedUpdate);
+    };
+  }, []);
 
   // Sincronizar estado de favoritos
   useEffect(() => {
@@ -618,7 +883,7 @@ function DetailsPage({
     setIsFavorite(newState);
   };
 
-  // Carregar dados estendidos do TMDB caso disponível
+  // Carregar dados estendidos do TMDB e Trailer Oficial caso disponível
   React.useEffect(() => {
     let isMounted = true;
     const loadDetails = async () => {
@@ -626,7 +891,18 @@ function DetailsPage({
       if (!targetId || isNaN(Number(targetId))) return;
       try {
         setLoadingTmdb(true);
-        const details = await getDetails(Number(targetId), item.type === 'series' ? 'tv' : 'movie');
+        setLoadingTrailer(true);
+
+        const [details, trailer] = await Promise.all([
+          getDetails(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null),
+          getTrailer(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null)
+        ]);
+
+        if (isMounted) {
+          if (trailer) setTrailerVideo(trailer);
+          setLoadingTrailer(false);
+        }
+
         if (isMounted && details && !('status_code' in (details as any))) {
           setTmdbDetails(details);
           // Enriquecer item se faltar sinopse ou imagens
@@ -644,7 +920,10 @@ function DetailsPage({
       } catch (err) {
         console.warn("Erro ao buscar detalhes no TMDB:", err);
       } finally {
-        if (isMounted) setLoadingTmdb(false);
+        if (isMounted) {
+          setLoadingTmdb(false);
+          setLoadingTrailer(false);
+        }
       }
     };
     loadDetails();
@@ -694,10 +973,11 @@ function DetailsPage({
         {/* Back Button */}
         <button 
           onClick={onBack}
-          className="absolute top-8 left-4 md:top-12 md:left-12 z-50 flex items-center gap-2 text-sm font-semibold text-white/80 hover:text-white px-4 py-2 bg-black/40 backdrop-blur-md rounded-full hover:bg-black/60 transition-all border border-white/10 shadow-lg cursor-pointer"
+          className="absolute top-20 left-4 md:top-24 md:left-12 z-40 flex items-center gap-2 text-xs md:text-sm font-bold text-white px-4 py-2.5 rounded-full bg-black/70 hover:bg-orange-600 border border-white/15 hover:border-orange-500 shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer group"
+          title="Voltar para a página anterior"
         >
-          <ArrowLeft className="w-5 h-5" />
-          Voltar
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <span>Voltar</span>
         </button>
 
         {/* Informações do Filme/Série sobre o Hero */}
@@ -708,14 +988,10 @@ function DetailsPage({
               <span className="px-3 py-1 bg-orange-600/30 text-orange-400 border border-orange-500/40 rounded-full text-xs font-black tracking-wider uppercase">
                 {isSeries ? 'Série Oficial' : 'Filme Oficial'}
               </span>
-              {checkIsCam(item.title, item.quality) ? (
+              {checkIsCam(item.title, item.quality) && (
                 <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.3)]">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                   CAM • Imagem de Cinema
-                </span>
-              ) : (
-                <span className="px-3 py-1 bg-white/10 text-neutral-300 border border-white/10 rounded-full text-xs font-semibold">
-                  {isSeries ? 'Player Séries HD' : 'WatchPlayer HD'}
                 </span>
               )}
             </div>
@@ -761,27 +1037,32 @@ function DetailsPage({
                 className="flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
                 <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" />
-                {isSeries ? `Assistir Temporada ${selectedSeason} (HD)` : 'Assistir no WatchPlayer'}
+                {isSeries ? `Assistir Temporada ${selectedSeason}` : 'Assistir Filme'}
               </button>
 
-              <button 
-                onClick={() => onPlay?.(
-                  item.title, 
-                  targetPlayerUrl,
-                  item.type,
-                  effectiveTmdbId ? Number(effectiveTmdbId) : undefined,
-                  item.imdbId,
-                  selectedSeason,
-                  1,
-                  item.quality,
-                  checkIsCam(item.title, item.quality)
-                )}
-                className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-semibold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 backdrop-blur-md shadow-lg cursor-pointer"
-                title="Reprodutor direto sem anúncios"
-              >
-                <Link2 className="w-4 h-4 text-orange-400" />
-                Player Sem Anúncios
-              </button>
+              {/* Botão Assistir Trailer */}
+              {trailerVideo && (
+                <button 
+                  onClick={() => {
+                    const el = document.getElementById("trailer-section");
+                    el?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="flex items-center justify-center gap-2.5 bg-white/10 hover:bg-white/20 text-white font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 hover:border-white/40 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg"
+                  title="Ver trailer oficial"
+                >
+                  <Film className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
+                  <span>Trailer</span>
+                  {trailerVideo.isDubbed ? (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                      Dublado
+                    </span>
+                  ) : trailerVideo.isSubtitled ? (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
+                      Legendado
+                    </span>
+                  ) : null}
+                </button>
+              )}
 
               <button 
                 onClick={handleToggleFavorite}
@@ -884,27 +1165,61 @@ function DetailsPage({
           {/* Se for série: Lista de Temporadas e Episódios */}
           {isSeries && (
             <div className="bg-[#121212] border border-neutral-800/80 rounded-2xl p-6 space-y-5 shadow-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="flex items-center gap-2 shrink-0">
                   <Tv className="w-5 h-5 text-orange-500" />
                   <h3 className="text-lg font-bold text-white">Episódios & Temporadas</h3>
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-medium">
+                    {getSeasonWatchedCount(effectiveTmdbId, selectedSeason, 6)} de 6 assistidos
+                  </span>
                 </div>
                 
-                {/* Seletor de Temporadas */}
-                <div className="flex items-center gap-1.5 overflow-x-auto bg-black/40 p-1 rounded-xl border border-neutral-800">
-                  {[1, 2, 3, 4].map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setSelectedSeason(s)}
-                      className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        selectedSeason === s
-                          ? 'bg-orange-600 text-white shadow-md shadow-orange-600/30'
-                          : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      Temporada {s}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2.5 shrink-0 flex-nowrap">
+                  {/* Botão Marcar Temporada como Vista (Largura padronizada sem layout shift) */}
+                  <button
+                    onClick={() => {
+                      const fullyWatched = isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6);
+                      markSeasonWatched(effectiveTmdbId, selectedSeason, 6, !fullyWatched);
+                    }}
+                    className={`min-w-[125px] justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border backdrop-blur-sm active:scale-95 ${
+                      isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6)
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                        : "bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
+                    }`}
+                    title="Marcar ou desmarcar todos os episódios desta temporada como vistos"
+                  >
+                    <Check className={`w-3.5 h-3.5 ${isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
+                    <span>
+                      {isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6) ? `T${selectedSeason} Vista` : `Marcar T${selectedSeason}`}
+                    </span>
+                  </button>
+
+                  {/* Seletor de Temporadas */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5">
+                    {[1, 2, 3, 4].map(s => {
+                      const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, 6);
+                      const isCurrent = selectedSeason === s;
+                      return (
+                        <button
+                          key={s}
+                          onClick={() => setSelectedSeason(s)}
+                          className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            isCurrent
+                              ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold'
+                              : seasonDone
+                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
+                                : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                          }`}
+                          title={seasonDone ? `Temporada ${s} (Assistida)` : `Temporada ${s}`}
+                        >
+                          <span>T{s}</span>
+                          {seasonDone && (
+                            <Check className={`w-3 h-3 ${isCurrent ? "text-white" : "text-emerald-400"} stroke-[3]`} />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -917,84 +1232,145 @@ function DetailsPage({
                   { ep: 4, title: `T${selectedSeason}:E4 O Confronto`, duration: "58m", desc: "As peças se alinham para um clímax emocionante." },
                   { ep: 5, title: `T${selectedSeason}:E5 Consequências`, duration: "50m", desc: "As repercussões dos últimos acontecimentos afetam a todos." },
                   { ep: 6, title: `T${selectedSeason}:E6 O Desfecho`, duration: "56m", desc: "A revelação final e as conclusões decisivas." }
-                ].map(ep => (
-                  <div 
-                    key={ep.ep}
-                    onClick={() => {
-                      const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
-                      onPlay?.(
-                        `${item.title} - ${ep.title}`, 
-                        epUrl, 
-                        'series', 
-                        Number(effectiveTmdbId), 
-                        item.imdbId, 
-                        selectedSeason, 
-                        ep.ep
-                      );
-                    }}
-                    className="flex items-center justify-between p-3.5 bg-[#171717] hover:bg-[#202020] border border-neutral-800/80 hover:border-orange-500/40 rounded-xl transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-8 h-8 rounded-lg bg-orange-600/20 text-orange-500 flex items-center justify-center font-bold text-xs group-hover:bg-orange-600 group-hover:text-white transition-all">
-                        {ep.ep}
+                ].map(ep => {
+                  const watched = isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep);
+                  return (
+                    <div 
+                      key={ep.ep}
+                      className={`flex items-center justify-between p-3.5 border rounded-xl transition-all group ${
+                        watched 
+                          ? "bg-[#131914] border-emerald-500/30 hover:border-emerald-500/50" 
+                          : "bg-[#171717] hover:bg-[#202020] border-neutral-800/80 hover:border-orange-500/40"
+                      }`}
+                    >
+                      <div 
+                        className="flex items-center gap-3.5 flex-1 cursor-pointer"
+                        onClick={() => {
+                          const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                          onPlay?.(
+                            `${item.title} - ${ep.title}`, 
+                            epUrl, 
+                            'series', 
+                            Number(effectiveTmdbId), 
+                            item.imdbId, 
+                            selectedSeason, 
+                            ep.ep
+                          );
+                        }}
+                      >
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs transition-all shrink-0 border ${
+                          watched 
+                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30" 
+                            : "bg-orange-600/20 text-orange-500 border-orange-500/20 group-hover:bg-orange-600 group-hover:text-white"
+                        }`}>
+                          {ep.ep}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className={`text-sm font-bold transition-colors ${watched ? "text-neutral-300 opacity-80" : "text-white group-hover:text-orange-400"}`}>
+                              {ep.title}
+                            </h4>
+                            {watched && (
+                              <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                Assistido
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-400">{ep.desc}</p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-bold text-white group-hover:text-orange-400 transition-colors">{ep.title}</h4>
-                        <p className="text-xs text-neutral-400">{ep.desc}</p>
+
+                      <div className="flex items-center gap-2.5 shrink-0 ml-3">
+                        <span className="text-xs text-neutral-500 hidden sm:inline mr-1">{ep.duration}</span>
+                        
+                        {/* Botão de marcar/desmarcar visto (Caixinha com setinha branca) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep);
+                          }}
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer border active:scale-95 ${
+                            watched
+                              ? "bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-600/30"
+                              : "bg-white/5 hover:bg-white/15 border-white/20 hover:border-white/40 text-white"
+                          }`}
+                          title={watched ? "Desmarcar como assistido" : "Marcar como assistido"}
+                        >
+                          <Check className="w-4 h-4 stroke-[3] text-white transition-all" />
+                        </button>
+
+                        {/* Botão de Play */}
+                        <div 
+                          onClick={() => {
+                            const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                            onPlay?.(
+                              `${item.title} - ${ep.title}`, 
+                              epUrl, 
+                              'series', 
+                              Number(effectiveTmdbId), 
+                              item.imdbId, 
+                              selectedSeason, 
+                              ep.ep
+                            );
+                          }}
+                          className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                          title="Assistir este episódio"
+                        >
+                          <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-neutral-500">{ep.duration}</span>
-                      <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white group-hover:bg-orange-600 transition-all">
-                        <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Servidor / Player Iframe Card */}
-          <div className="bg-[#141414] border border-neutral-800 rounded-2xl p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-orange-600/20 text-orange-500 flex items-center justify-center border border-orange-500/30">
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                </div>
-                <div>
-                  <h3 className="text-white font-bold text-base">Servidor de Reprodução (WatchPlayer)</h3>
-                  <p className="text-xs text-neutral-400">Embed direto configurado com bloqueio de popups</p>
+          {/* Seção Dedicada: Trailer Oficial */}
+          {trailerVideo && (
+            <div id="trailer-section" className="space-y-4 pt-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-neutral-800/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-orange-600/20 text-orange-500 flex items-center justify-center border border-orange-500/30 shrink-0 shadow-[0_0_15px_rgba(234,88,12,0.15)]">
+                    <Film className="w-5 h-5 text-orange-400" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-white font-bold text-lg">Trailer Oficial</h3>
+                      {trailerVideo.isDubbed ? (
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          Dublado PT-BR
+                        </span>
+                      ) : trailerVideo.isSubtitled ? (
+                        <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
+                          Legendado (PT-BR)
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-0.5 rounded-full bg-white/10 text-neutral-300 border border-white/10 text-[10px] font-semibold">
+                          Áudio Original
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-neutral-400 truncate max-w-xl mt-0.5">
+                      {trailerVideo.name}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <span className="px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 text-[11px] font-bold">
-                Online
-              </span>
-            </div>
-            
-            <p className="text-xs text-neutral-300">
-              URL direta do player extraído pronta para reprodução em tela cheia:
-            </p>
 
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input 
-                type="text" 
-                defaultValue={targetPlayerUrl}
-                id={`player-input-${item.id}`}
-                className="flex-1 bg-[#0c0c0c] border border-neutral-800 rounded-xl px-4 py-2.5 text-xs font-mono text-neutral-300 focus:outline-none focus:border-orange-500"
-                placeholder="https://v1.watchplay.shop/movie/..."
-              />
-              <button 
-                onClick={() => {
-                  const input = document.getElementById(`player-input-${item.id}`) as HTMLInputElement;
-                  onPlay?.(item.title, input?.value || targetPlayerUrl);
-                }}
-                className="px-6 py-2.5 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-orange-600/20 shrink-0"
-              >
-                <Play className="w-3.5 h-3.5 fill-current" /> Extrair e Assistir
-              </button>
+              {/* Player 16:9 Cinematográfico do YouTube */}
+              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-neutral-800 shadow-2xl group hover:border-orange-500/40 transition-all">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${trailerVideo.key}?rel=0&modestbranding=1&autoplay=0`}
+                  title={trailerVideo.name}
+                  className="w-full h-full border-0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Comments Section */}
           <div className="space-y-6 pt-4 border-t border-neutral-800/50">
@@ -2663,14 +3039,146 @@ function ContentRow({
   isTop10?: boolean, 
   aspect?: "landscape" | "portait",
   startNumber?: number,
-  onItemClick?: (id: number) => void
+  onItemClick?: (id: number, item?: any) => void
 }) {
+  const rowRef = React.useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = React.useState(false);
+  const [canScrollRight, setCanScrollRight] = React.useState(true);
+
+  // Controle de arrastar com o mouse (Drag-to-scroll 1:1 sem resistência de snap)
+  const isMouseDownRef = React.useRef(false);
+  const startXRef = React.useRef(0);
+  const scrollLeftRef = React.useRef(0);
+  const hasDraggedRef = React.useRef(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const updateScrollButtons = React.useCallback(() => {
+    if (!rowRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = rowRef.current;
+    setCanScrollLeft(scrollLeft > 15);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 15);
+  }, []);
+
+  React.useEffect(() => {
+    updateScrollButtons();
+    const el = rowRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollButtons, { passive: true });
+    window.addEventListener("resize", updateScrollButtons);
+    return () => {
+      el.removeEventListener("scroll", updateScrollButtons);
+      window.removeEventListener("resize", updateScrollButtons);
+    };
+  }, [items, updateScrollButtons]);
+
+  const handleScroll = (direction: "left" | "right") => {
+    if (!rowRef.current) return;
+    const scrollAmount = rowRef.current.clientWidth * 0.75;
+    rowRef.current.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth"
+    });
+  };
+
+  // Arraste com o mouse com listeners no window para movimentação contínua e natural
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0 || !rowRef.current) return; // Apenas botão esquerdo
+    isMouseDownRef.current = true;
+    hasDraggedRef.current = false;
+    startXRef.current = e.clientX;
+    scrollLeftRef.current = rowRef.current.scrollLeft;
+
+    const onWindowMouseMove = (moveEvent: MouseEvent) => {
+      if (!isMouseDownRef.current || !rowRef.current) return;
+      const dx = moveEvent.clientX - startXRef.current;
+      if (Math.abs(dx) > 6) {
+        hasDraggedRef.current = true;
+        setIsDragging(true);
+      }
+      rowRef.current.scrollLeft = scrollLeftRef.current - dx;
+    };
+
+    const onWindowMouseUp = () => {
+      isMouseDownRef.current = false;
+      setIsDragging(false);
+      window.removeEventListener("mousemove", onWindowMouseMove);
+      window.removeEventListener("mouseup", onWindowMouseUp);
+      setTimeout(() => {
+        hasDraggedRef.current = false;
+      }, 100);
+    };
+
+    window.addEventListener("mousemove", onWindowMouseMove);
+    window.addEventListener("mouseup", onWindowMouseUp);
+  };
+
   return (
-    <section>
-      <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pl-2 border-l-4 border-orange-500">{title}</h2>
-      <div className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pl-2 pr-4 scrollbar-hide">
+    <section className="relative group/row">
+      {/* Cabeçalho da Seção com Título e Botões Redondos de Navegação */}
+      <div className="flex items-center justify-between mb-4 md:mb-6 pl-2 pr-4">
+        <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2 flex items-center gap-2">
+          <span>{title}</span>
+        </h2>
+
+        {/* Botões Redondinhos de Navegação no Topo Direito */}
+        <div className="hidden sm:flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleScroll("left")}
+            disabled={!canScrollLeft}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border ${
+              canScrollLeft
+                ? "bg-neutral-800/90 hover:bg-orange-600 text-white border-white/15 hover:border-orange-500 hover:scale-110 cursor-pointer shadow-lg active:scale-95"
+                : "bg-neutral-900/40 text-neutral-600 border-white/5 cursor-not-allowed opacity-30"
+            }`}
+            aria-label="Rolar para a esquerda"
+            title="Anterior"
+          >
+            <ChevronLeft className="w-5 h-5 stroke-[2.2]" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleScroll("right")}
+            disabled={!canScrollRight}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all border ${
+              canScrollRight
+                ? "bg-neutral-800/90 hover:bg-orange-600 text-white border-white/15 hover:border-orange-500 hover:scale-110 cursor-pointer shadow-lg active:scale-95"
+                : "bg-neutral-900/40 text-neutral-600 border-white/5 cursor-not-allowed opacity-30"
+            }`}
+            aria-label="Rolar para a direita"
+            title="Próximo"
+          >
+            <ChevronRight className="w-5 h-5 stroke-[2.2]" />
+          </button>
+        </div>
+      </div>
+
+      {/* Carrossel de Itens com suporte a Mouse Drag e Touch Swipe */}
+      <div 
+        ref={rowRef}
+        onMouseDown={handleMouseDown}
+        style={{
+          scrollSnapType: isDragging ? "none" : "x mandatory",
+          scrollBehavior: isDragging ? "auto" : "smooth"
+        }}
+        className={`flex gap-4 md:gap-6 overflow-x-auto pt-4 pb-6 pl-2 pr-4 scrollbar-hide select-none touch-pan-x ${
+          isDragging ? "cursor-grabbing" : "cursor-grab snap-x snap-mandatory"
+        }`}
+      >
         {items.map((item, idx) => (
-          <div key={`cr-${item.id || item.title}-${idx}`} onClick={() => onItemClick && onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105">
+          <div 
+            key={`cr-${item.id || item.title}-${idx}`} 
+            onClick={(e) => {
+              if (hasDraggedRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+              }
+              onItemClick && onItemClick(item.id, item);
+            }} 
+            className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-20"
+          >
             {isTop10 ? (
               <div className="flex relative w-[280px] md:w-[320px] h-[160px] md:h-[180px]">
                 {/* Bold background number */}
@@ -2687,12 +3195,13 @@ function ContentRow({
                    <img 
                      src={item.imageUrl} 
                      alt={item.title} 
-                     className="w-full h-full object-cover" 
+                     draggable={false}
+                     className="w-full h-full object-cover pointer-events-none" 
                      loading="lazy" 
                      onError={(e) => handlePosterError(e, item.backdropUrl)}
                    />
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-                   <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow">
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+                   <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow pointer-events-none">
                      {item.title}
                    </span>
                 </div>
@@ -2708,12 +3217,13 @@ function ContentRow({
                 <img 
                   src={item.imageUrl} 
                   alt={item.title} 
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                  draggable={false}
+                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 pointer-events-none" 
                   loading="lazy" 
                   onError={(e) => handlePosterError(e, item.backdropUrl)}
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-                <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg`}>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
+                <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg pointer-events-none`}>
                   {item.title}
                 </span>
               </div>

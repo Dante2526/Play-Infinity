@@ -14,6 +14,7 @@ import {
   MessageSquareText,
   Subtitles,
   SkipForward,
+  FastForward,
   X,
   Check,
   Volume2,
@@ -121,6 +122,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [brightness, setBrightness] = useState<number>(1.0);
   const [isDraggingBrightness, setIsDraggingBrightness] = useState<boolean>(false);
   const brightnessBarRef = useRef<HTMLDivElement>(null);
+  const brightnessTrackRef = useRef<HTMLDivElement>(null); // ref da barra interna (trilho real)
 
   // Controle de arraste da barra de progresso (scrubber)
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
@@ -138,6 +140,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // Preferências selecionadas no modal de áudio/legendas
   const [selectedAudio, setSelectedAudio] = useState<string>("pt-BR");
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
+
+  // Rastreamento se a abertura já foi pulada neste episódio
+  const [hasSkippedThisEpisode, setHasSkippedThisEpisode] = useState<boolean>(false);
+
+  useEffect(() => {
+    setHasSkippedThisEpisode(false);
+  }, [episode, season]);
 
   // Envia comandos universais para o iframe (compatível com WatchPlayer, VidLink, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
@@ -302,9 +311,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Controle de Brilho da Netflix (Sol à esquerda - Exibido apenas em Tela Cheia)
   const updateBrightnessFromY = (clientY: number) => {
-    if (!brightnessBarRef.current) return;
-    const rect = brightnessBarRef.current.getBoundingClientRect();
-    // Calcula ratio linear de 0 (base) a 1 (topo)
+    // Usa o ref da barra interna (trilho real) para cálculo preciso
+    const trackEl = brightnessTrackRef.current || brightnessBarRef.current;
+    if (!trackEl) return;
+    const rect = trackEl.getBoundingClientRect();
+    // Calcula ratio linear de 0 (base) a 1 (topo) usando as coordenadas exatas do trilho
     const rawRatio = (rect.bottom - clientY) / rect.height;
     const ratio = Math.max(0, Math.min(1, rawRatio));
     // Brilho varia de 0.2 (escuro) a 1.2 (claro), normal = 1.0 (em 80% do slider)
@@ -478,6 +489,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         case "s":
           if (isSeries) {
             e.preventDefault();
+            setHasSkippedThisEpisode(true);
             onSkipIntro();
           }
           break;
@@ -674,25 +686,26 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ref={brightnessBarRef}
           onMouseDown={handleBrightnessMouseDown}
           onTouchStart={handleBrightnessTouchStart}
-          className={`flex absolute left-3.5 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-all duration-300 touch-none cursor-pointer ${
+          className={`flex absolute left-3.5 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-[opacity,transform] duration-300 touch-none cursor-pointer w-12 sm:w-14 select-none ${
             controlsVisible && !isLocked ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 -translate-x-4 pointer-events-none"
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Indicador Numérico de Porcentagem */}
+          {/* Indicador Numérico de Porcentagem com largura e altura padronizadas */}
           <div
-            className={`px-2 py-0.5 rounded-full bg-black/85 border border-white/25 text-white font-mono font-bold text-[10px] sm:text-xs backdrop-blur-md shadow-xl transition-all duration-200 select-none ${
-              isDraggingBrightness ? "opacity-100 scale-110 border-white/50" : "opacity-85"
+            className={`w-10 sm:w-11 h-5 sm:h-6 flex items-center justify-center rounded-full bg-black/85 border text-white font-mono font-bold text-[10px] sm:text-xs backdrop-blur-md shadow-xl transition-colors duration-150 select-none tabular-nums shrink-0 ${
+              isDraggingBrightness ? "opacity-100 border-white/60 bg-black/95 text-white" : "opacity-85 border-white/25 text-white/90"
             }`}
           >
             {Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%
           </div>
 
-          <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow stroke-[2] select-none" />
+          <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow stroke-[2] select-none shrink-0" />
 
           {/* Barra Vertical de Brilho da Netflix em Branco Sólido */}
           <div
-            className="relative w-2.5 sm:w-3.5 h-32 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl"
+            ref={brightnessTrackRef}
+            className="relative w-2.5 sm:w-3.5 h-32 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
             title={`Brilho: ${Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%`}
           >
             <div
@@ -761,29 +774,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         </button>
       </div>
 
-      {/* ========================================================
-          4. BOTÃO FLUTUANTE: PULAR ABERTURA
-          ======================================================== */}
-      {isSeries && (
-        <div
-          className={`absolute right-3 sm:right-6 bottom-16 sm:bottom-20 z-20 transition-all duration-300 ${
-            (isIntroActive || controlsVisible) && !isLocked
-              ? "opacity-100 translate-y-0 pointer-events-auto"
-              : "opacity-0 translate-y-3 pointer-events-none"
-          }`}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSkipIntro();
-            }}
-            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded bg-black/80 hover:bg-neutral-900 border border-white/80 hover:border-white text-white text-xs sm:text-sm font-medium tracking-wide shadow-2xl backdrop-blur-sm transition-all hover:scale-105 active:scale-95 cursor-pointer"
-            title="Pular Abertura (+85s) - Tecla S"
-          >
-            <span>Pular Abertura</span>
-          </button>
-        </div>
-      )}
+
 
       {/* ========================================================
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
@@ -872,7 +863,24 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 3. Episódios (apenas para séries e em tela cheia) */}
+          {/* 3. Pular Abertura (apenas para séries e em tela cheia) */}
+          {isSeries && isFullscreen && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onSkipIntro();
+              }}
+              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              title="Pular Abertura (+85s) - Tecla S"
+            >
+              <FastForward className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] group-hover:text-orange-400 transition-colors" />
+              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+                Pular Abertura
+              </span>
+            </button>
+          )}
+
+          {/* 4. Episódios (apenas para séries e em tela cheia) */}
           {isSeries && isFullscreen && (
             <button
               onClick={() => setShowEpisodeDrawer((prev) => !prev)}
@@ -1022,8 +1030,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               </button>
             </div>
 
-            {/* Lista de Episódios */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {/* Lista de Episódios com Scrollbar Ultrafina e Elegante */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
               {Array.from({ length: totalEpisodes }, (_, i) => i + 1).map((epNum) => (
                 <button
                   key={epNum}

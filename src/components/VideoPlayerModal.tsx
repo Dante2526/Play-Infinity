@@ -8,6 +8,14 @@ import {
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { checkIsCam } from "../data";
 import { detectConnectionQuality } from "../services/networkQuality";
+import { 
+  isEpisodeWatched, 
+  markEpisodeWatched, 
+  toggleEpisodeWatched,
+  markSeasonWatched,
+  isSeasonFullyWatched,
+  getSeasonWatchedCount
+} from "../services/watchedEpisodes";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -123,6 +131,14 @@ export function VideoPlayerModal({
   const isExpanded = isFullscreen || isWidescreen;
   const [showStageControls, setShowStageControls] = useState<boolean>(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [, setWatchedUpdateTick] = useState(0);
+
+  // Escuta atualizações de episódios assistidos para re-renderizar em tempo real
+  useEffect(() => {
+    const handleWatchedUpdate = () => setWatchedUpdateTick(t => t + 1);
+    window.addEventListener("playinfinity:watched_updated", handleWatchedUpdate);
+    return () => window.removeEventListener("playinfinity:watched_updated", handleWatchedUpdate);
+  }, []);
 
   // Sincroniza estado de tela cheia do navegador
   useEffect(() => {
@@ -337,8 +353,8 @@ export function VideoPlayerModal({
         const quality = await detectConnectionQuality();
         if (isCancelled) return;
 
-        // Se conexão rápida -> srv1 (WatchPlayer), se lenta -> srv4 (VidLink)
-        const targetServerKey = quality === "fast" ? "srv1" : "srv4";
+        // Sempre prioriza Player 1 (WatchPlayer) com stream 1080p direto e skin limpa
+        const targetServerKey = "srv1";
         setSelectedServerKey(targetServerKey);
 
         const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
@@ -456,6 +472,10 @@ export function VideoPlayerModal({
   // Handler to switch episode
   const handleEpisodeChange = (newEpisode: number) => {
     if (newEpisode < 1) return;
+    // Marca o episódio atual como assistido ao avançar
+    if (isSeries && resolvedId) {
+      markEpisodeWatched(resolvedId, season, episode, true);
+    }
     setEpisode(newEpisode);
     setIsIntroActive(false);
     fallbackAttemptsRef.current.clear();
@@ -468,6 +488,10 @@ export function VideoPlayerModal({
 
   // Handler to switch season
   const handleSeasonChange = (newSeason: number) => {
+    // Marca o episódio atual como assistido ao mudar de temporada
+    if (isSeries && resolvedId) {
+      markEpisodeWatched(resolvedId, season, episode, true);
+    }
     setSeason(newSeason);
     setEpisode(1);
     setIsIntroActive(false);
@@ -680,58 +704,144 @@ export function VideoPlayerModal({
 
         {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido) */}
         {!isExpanded && isSeries && (
-          <div className="px-4 sm:px-5 py-2.5 bg-[#141414] border-b border-neutral-800/80 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white flex items-center gap-1">
-                <Layers className="w-3.5 h-3.5 text-orange-500" /> Temporada:
-              </span>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleSeasonChange(s)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      season === s
-                        ? "bg-orange-600 text-white"
-                        : "bg-[#202020] text-neutral-400 hover:text-white hover:bg-[#2a2a2a] border border-neutral-800"
-                    }`}
-                  >
-                    T{s}
-                  </button>
-                ))}
+          <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-[#121214] via-[#161618] to-[#121214] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 shadow-inner">
+            
+            {/* Bloco de Temporadas */}
+            <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-300">
+                <Layers className="w-3.5 h-3.5 text-orange-500" />
+                <span>Temporada:</span>
               </div>
+              
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                {[1, 2, 3, 4].map((s) => {
+                  const seasonDone = isSeasonFullyWatched(resolvedId, s, 8);
+                  const isCurrent = season === s;
+                  return (
+                    <button
+                      key={s}
+                      onClick={() => handleSeasonChange(s)}
+                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                        isCurrent
+                          ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold"
+                          : seasonDone
+                            ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50"
+                            : "text-neutral-400 hover:text-white hover:bg-white/5"
+                      }`}
+                      title={seasonDone ? `Temporada ${s} (Assistida)` : `Temporada ${s}`}
+                    >
+                      <span>T{s}</span>
+                      {seasonDone && (
+                        <Check className={`w-3 h-3 ${isCurrent ? "text-white" : "text-emerald-400"} stroke-[3]`} />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Botão de Marcar Temporada Inteira como Vista */}
+              {(() => {
+                const isCurrentSeasonDone = isSeasonFullyWatched(resolvedId, season, 8);
+                const watchedCount = getSeasonWatchedCount(resolvedId, season, 8);
+                return (
+                  <button
+                    onClick={() => markSeasonWatched(resolvedId, season, 8, !isCurrentSeasonDone)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                      isCurrentSeasonDone
+                        ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                        : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
+                    }`}
+                    title={
+                      isCurrentSeasonDone
+                        ? `Desmarcar Temporada ${season} inteira como assistida`
+                        : `Marcar Temporada ${season} inteira como assistida (${watchedCount}/8 vistos)`
+                    }
+                  >
+                    <Check className={`w-3.5 h-3.5 ${isCurrentSeasonDone ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
+                    <span className="hidden sm:inline">
+                      {isCurrentSeasonDone ? `T${season} Vista` : `Marcar T${season}`}
+                    </span>
+                    <span className="sm:hidden">
+                      {isCurrentSeasonDone ? `T${season} ✓` : `Marcar T${season}`}
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${
+                      isCurrentSeasonDone ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-neutral-400"
+                    }`}>
+                      {watchedCount}/8
+                    </span>
+                  </button>
+                );
+              })()}
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Bloco de Episódios */}
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => handleEpisodeChange(episode - 1)}
                 disabled={episode <= 1}
-                className="px-2.5 py-1 rounded-lg bg-[#202020] hover:bg-[#2a2a2a] disabled:opacity-30 disabled:hover:bg-[#202020] text-white text-xs font-semibold flex items-center gap-1 border border-neutral-800 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
               >
-                <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Anterior</span>
               </button>
 
-              <div className="flex items-center gap-1 overflow-x-auto max-w-[280px] sm:max-w-md py-0.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((ep) => (
-                  <button
-                    key={ep}
-                    onClick={() => handleEpisodeChange(ep)}
-                    className={`min-w-[28px] h-7 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                      episode === ep
-                        ? "bg-orange-600 text-white shadow-md shadow-orange-600/30 scale-105"
-                        : "bg-[#202020] text-neutral-300 hover:text-white hover:bg-[#2a2a2a] border border-neutral-800"
-                    }`}
-                  >
-                    {ep}
-                  </button>
-                ))}
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((ep) => {
+                  const watched = isEpisodeWatched(resolvedId, season, ep);
+                  const isCurrent = episode === ep;
+                  return (
+                    <button
+                      key={ep}
+                      onClick={() => handleEpisodeChange(ep)}
+                      title={watched ? `Episódio ${ep} (Assistido)` : `Episódio ${ep}`}
+                      className={`relative w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${
+                        isCurrent
+                          ? "bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-600/30 scale-105 border border-orange-400/40"
+                          : watched
+                            ? "bg-emerald-950/40 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-900/60 hover:border-emerald-400/60"
+                            : "bg-[#1a1a1d] text-neutral-300 hover:text-white hover:bg-[#25252a] border border-white/5"
+                      }`}
+                    >
+                      <span>{ep}</span>
+                      {watched && (
+                        <span 
+                          className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-md ${
+                            isCurrent ? "bg-emerald-400 text-black" : "bg-emerald-500 text-white"
+                          }`}
+                        >
+                          <Check className="w-2.5 h-2.5 stroke-[3]" />
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               <button
                 onClick={() => handleEpisodeChange(episode + 1)}
-                className="px-2.5 py-1 rounded-lg bg-[#202020] hover:bg-[#2a2a2a] text-white text-xs font-semibold flex items-center gap-1 border border-neutral-800 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
               >
-                Próximo <ChevronRight className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Próximo</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+
+              {/* Botão de Toggle Manual do Episódio Atual */}
+              <button
+                onClick={() => toggleEpisodeWatched(resolvedId, season, episode)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer backdrop-blur-sm active:scale-95 ${
+                  isEpisodeWatched(resolvedId, season, episode)
+                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                    : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
+                }`}
+                title={isEpisodeWatched(resolvedId, season, episode) ? "Clique para desmarcar como assistido" : "Clique para marcar como assistido"}
+              >
+                <Check className={`w-3.5 h-3.5 ${isEpisodeWatched(resolvedId, season, episode) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
+                <span className="hidden sm:inline">
+                  {isEpisodeWatched(resolvedId, season, episode) ? "Episódio Visto" : "Marcar Visto"}
+                </span>
+                <span className="sm:hidden">
+                  {isEpisodeWatched(resolvedId, season, episode) ? "Visto" : "Marcar"}
+                </span>
               </button>
             </div>
           </div>
