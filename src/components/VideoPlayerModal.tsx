@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { checkIsCam } from "../data";
+import { detectConnectionQuality } from "../services/networkQuality";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -237,41 +238,23 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores Disponíveis (WatchPlayer, EmbedSU, VidSrc, VidLink)
+  // Servidores Disponíveis: Player 1 (WatchPlayer) e Player 4 (VidLink)
   const servers = useMemo(() => {
     if (isSeries) {
       return [
         {
           key: "srv1",
-          label: "Servidor Principal (WatchPlayer)",
+          label: "Player 1 (WatchPlayer)",
           badge: "Alta Resolução • Autoplay Contínuo",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
-          name: "Servidor 1"
-        },
-        {
-          key: "srv2",
-          label: "Player 2 (EmbedSU)",
-          badge: "Estável • Sem Sandbox",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://embed.su/embed/tv/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("embed.su"),
-          name: "Player 2"
-        },
-        {
-          key: "srv3",
-          label: "Player 3 (VidSrc)",
-          badge: "Alternativo • Global",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://vidsrc.xyz/embed/tv?tmdb=${id}&season=${s}&episode=${e}`,
-          isMatch: (u: string) => u.includes("vidsrc"),
-          name: "Player 3"
+          name: "Player 1"
         },
         {
           key: "srv4",
           label: "Player 4 (VidLink)",
-          badge: "Aviso: Pode bloquear dentro do Preview (Sandbox)",
+          badge: "Leve • CDN Adaptativa",
           buildUrl: (id: string, s: number, e: number) => 
             `https://vidlink.pro/tv/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("vidlink.pro"),
@@ -282,32 +265,16 @@ export function VideoPlayerModal({
       return [
         {
           key: "srv1",
-          label: "Servidor Principal (WatchPlayer)",
+          label: "Player 1 (WatchPlayer)",
           badge: "Alta Resolução • Sem Anúncios",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
-          name: "Servidor 1"
-        },
-        {
-          key: "srv2",
-          label: "Player 2 (EmbedSU)",
-          badge: "Estável • Sem Sandbox",
-          buildUrl: (id: string) => `https://embed.su/embed/movie/${id}`,
-          isMatch: (u: string) => u.includes("embed.su"),
-          name: "Player 2"
-        },
-        {
-          key: "srv3",
-          label: "Player 3 (VidSrc)",
-          badge: "Alternativo • Global",
-          buildUrl: (id: string) => `https://vidsrc.xyz/embed/movie?tmdb=${id}`,
-          isMatch: (u: string) => u.includes("vidsrc"),
-          name: "Player 3"
+          name: "Player 1"
         },
         {
           key: "srv4",
           label: "Player 4 (VidLink)",
-          badge: "Aviso: Pode bloquear dentro do Preview (Sandbox)",
+          badge: "Leve • CDN Adaptativa",
           buildUrl: (id: string) => `https://vidlink.pro/movie/${id}`,
           isMatch: (u: string) => u.includes("vidlink.pro"),
           name: "Player 4"
@@ -316,7 +283,41 @@ export function VideoPlayerModal({
     }
   }, [isSeries, imdbId]);
 
-  // When modal opens or input changes, configure the player
+  // Fallback silencioso entre srv1 e srv4 em caso de erro ou lentidão
+  const fallbackAttemptsRef = useRef<Set<string>>(new Set());
+
+  const handleSilentFallback = useCallback(() => {
+    const nextKey = selectedServerKey === "srv1" ? "srv4" : "srv1";
+    if (fallbackAttemptsRef.current.has(nextKey)) {
+      setError("Não foi possível carregar o vídeo neste momento.");
+      setIsLoading(false);
+      return;
+    }
+    fallbackAttemptsRef.current.add(nextKey);
+    setSelectedServerKey(nextKey);
+
+    const srv = servers.find(s => s.key === nextKey) || servers[0];
+    const newUrl = isSeries
+      ? srv.buildUrl(resolvedId, season, episode)
+      : srv.buildUrl(resolvedId);
+
+    setUrlInput(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+    setExtractedSource(newUrl);
+  }, [selectedServerKey, servers, isSeries, resolvedId, season, episode]);
+
+  // Timeout de segurança: se o carregamento demorar mais de 9s, tenta o servidor alternativo
+  useEffect(() => {
+    if (!isLoading || !activeIframeUrl) return;
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        handleSilentFallback();
+      }
+    }, 9000);
+    return () => clearTimeout(timer);
+  }, [isLoading, activeIframeUrl, handleSilentFallback]);
+
+  // Ao abrir o modal ou mudar mídia: detecta a conexão silenciosamente e inicia o melhor player
   useEffect(() => {
     if (isOpen) {
       const parsed = parseMediaFromUrl(defaultUrl || "");
@@ -325,41 +326,39 @@ export function VideoPlayerModal({
       setSeason(targetSeason);
       setEpisode(targetEpisode);
       setBlockedAdsCount(0);
+      setError(null);
+      setIsLoading(true);
+      fallbackAttemptsRef.current.clear();
 
-      // Gerar a URL padrão do WatchPlayer VIP para séries e filmes
-      const watchPlayerUrl = isSeries 
-        ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${targetSeason}/${targetEpisode}` 
-        : `https://v1.watchplay.shop/movie/${imdbId || resolvedId}`;
+      let isCancelled = false;
 
-      let initial = defaultUrl;
-      let targetServerKey = "srv1";
+      (async () => {
+        // Detecta qualidade de rede em background (sem exibir aviso na tela)
+        const quality = await detectConnectionQuality();
+        if (isCancelled) return;
 
-      if (
-        !initial || 
-        initial.includes("watchplay.shop") ||
-        initial.includes("vidlink.pro") ||
-        initial.includes("anyembed") || 
-        initial.includes("2embed.cc") || 
-        initial.includes("myembed.biz") || 
-        initial.includes("playerflix")
-      ) {
-        initial = watchPlayerUrl;
-        targetServerKey = "srv1";
-      } else {
-        const found = servers.find(s => s.isMatch(initial));
-        if (found) {
-          targetServerKey = found.key;
-        }
-      }
+        // Se conexão rápida -> srv1 (WatchPlayer), se lenta -> srv4 (VidLink)
+        const targetServerKey = quality === "fast" ? "srv1" : "srv4";
+        setSelectedServerKey(targetServerKey);
 
-      setSelectedServerKey(targetServerKey);
-      setUrlInput(initial);
-      handleExtract(initial);
+        const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
+        const targetUrl = isSeries 
+          ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+          : targetSrv.buildUrl(resolvedId);
+
+        setUrlInput(targetUrl);
+        handleExtract(targetUrl);
+      })();
+
+      return () => {
+        isCancelled = true;
+      };
     } else {
       setActiveIframeUrl(null);
       setError(null);
+      fallbackAttemptsRef.current.clear();
     }
-  }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
+  }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId, servers]);
 
   // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo (sem opções intermediárias)
   const resolveStreamIframeUrl = (url: string) => {
@@ -459,6 +458,7 @@ export function VideoPlayerModal({
     if (newEpisode < 1) return;
     setEpisode(newEpisode);
     setIsIntroActive(false);
+    fallbackAttemptsRef.current.clear();
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     setUrlInput(newUrl);
@@ -471,6 +471,7 @@ export function VideoPlayerModal({
     setSeason(newSeason);
     setEpisode(1);
     setIsIntroActive(false);
+    fallbackAttemptsRef.current.clear();
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     setUrlInput(newUrl);
@@ -519,15 +520,12 @@ export function VideoPlayerModal({
       if (data.success && data.playerUrl) {
         setActiveIframeUrl(resolveStreamIframeUrl(data.playerUrl));
         setExtractedSource(data.playerUrl);
+        setIsLoading(false);
       } else {
-        setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
-        setExtractedSource(cleanUrl);
+        handleSilentFallback();
       }
-    } catch (err: any) {
-      setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
-      setExtractedSource(cleanUrl);
-    } finally {
-      setIsLoading(false);
+    } catch {
+      handleSilentFallback();
     }
   };
 
@@ -664,47 +662,10 @@ export function VideoPlayerModal({
                     {isSeries ? `T${season}:E${episode}` : "Filme"}
                   </span>
                 </div>
-                <span className="text-[11px] text-neutral-400 font-medium flex items-center gap-1.5 mt-0.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 shrink-0"></span>
-                  <span className="truncate">Servidor Online</span>
-                </span>
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Server Switcher Tabs - Visível no mobile e desktop */}
-              <div className="flex items-center bg-black/60 p-0.5 sm:p-1 rounded-xl border border-neutral-800 gap-1">
-                {servers.map((srv) => (
-                  <button
-                    key={srv.key}
-                    onClick={() => handleServerSwitch(srv.key)}
-                    className={`px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center gap-1 sm:gap-1.5 ${
-                      selectedServerKey === srv.key
-                        ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
-                        : "text-neutral-400 hover:text-white hover:bg-white/5"
-                    }`}
-                    title={srv.badge}
-                  >
-                    <span className={`w-1.5 h-1.5 rounded-full ${selectedServerKey === srv.key ? "bg-white" : "bg-neutral-500"}`} />
-                    <span>{srv.name || srv.key}</span>
-                  </button>
-                ))}
-              </div>
-
-              {/* Escudo Anti-Anúncios */}
-              <button
-                onClick={() => setAntiAdShield(prev => !prev)}
-                className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
-                  antiAdShield 
-                    ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20" 
-                    : "bg-neutral-800 border-neutral-700 text-neutral-400 hover:bg-neutral-700"
-                }`}
-                title={antiAdShield ? "Escudo ativo: Popups e abas bloqueados ao clicar no player" : "Clique para reativar o bloqueio de anúncios"}
-              >
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span className="hidden md:inline text-[11px]">Anti-Ads</span>
-              </button>
-
               {/* Botão Fechar Modal */}
               <button
                 onClick={handleCloseModal}
@@ -856,6 +817,8 @@ export function VideoPlayerModal({
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
                 allowFullScreen
                 referrerPolicy="origin"
+                onLoad={() => setIsLoading(false)}
+                onError={() => handleSilentFallback()}
               />
             ) : error ? (
               <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
@@ -907,32 +870,7 @@ export function VideoPlayerModal({
           </div>
         </div>
 
-        {/* Rodapé com Link Ativo e Informações (apenas quando não expandido) */}
-        {!isExpanded && (
-          <div className="px-4 sm:px-5 py-2.5 bg-[#0f0f0f] border-t border-neutral-800 text-neutral-400 text-xs flex flex-col sm:flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="truncate max-w-xs sm:max-w-md font-mono text-[11px] text-neutral-400">
-                Link Ativo: <span className="text-orange-400">{extractedSource || activeIframeUrl}</span>
-              </span>
-              <button
-                onClick={() => copyUrl(extractedSource || activeIframeUrl || "")}
-                className="text-neutral-400 hover:text-white text-[11px] px-1.5 py-0.5 bg-white/5 rounded border border-white/10 cursor-pointer"
-                title="Copiar URL do player"
-              >
-                {copied ? <Check className="w-3 h-3 text-green-400" /> : "Copiar"}
-              </button>
-            </div>
 
-            <div className="flex items-center gap-2 self-end sm:self-auto text-[11px] text-neutral-400">
-              <ShieldCheck className={`w-3.5 h-3.5 ${antiAdShield ? "text-emerald-400" : "text-neutral-400"}`} />
-              <span>
-                {antiAdShield 
-                  ? "Bloqueador ativo: cliques não abrem anúncios nem novas abas" 
-                  : "Servidor Oficial Recomendado"}
-              </span>
-            </div>
-          </div>
-        )}
 
       </div>
     </div>

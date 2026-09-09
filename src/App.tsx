@@ -62,6 +62,16 @@ import {
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
 
+const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, backdropUrl?: string) => {
+  const target = e.currentTarget;
+  if (backdropUrl && target.src !== backdropUrl) {
+    target.src = backdropUrl;
+  } else {
+    target.onerror = null;
+    target.src = FALLBACK_POSTER;
+  }
+};
+
 export type OnPlayHandler = (
   title: string, 
   url?: string,
@@ -501,10 +511,7 @@ function HomePage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = (item as any).backdropUrl || FALLBACK_POSTER;
-                    }}
+                    onError={(e) => handlePosterError(e, (item as any).backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
                   
@@ -1054,10 +1061,7 @@ function DetailsPage({
                     alt={sim.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = sim.backdropUrl || FALLBACK_POSTER;
-                    }}
+                    onError={(e) => handlePosterError(e, sim.backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                   
@@ -1264,10 +1268,7 @@ function GlobalSearchPage({
                         alt={item.title} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                         loading="lazy" 
-                        onError={(e) => {
-                          e.currentTarget.onerror = null;
-                          e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                        }}
+                        onError={(e) => handlePosterError(e, item.backdropUrl)}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                       
@@ -1339,10 +1340,7 @@ function GlobalSearchPage({
                       alt={item.title} 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                       loading="lazy" 
-                      onError={(e) => {
-                        e.currentTarget.onerror = null;
-                        e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                      }}
+                      onError={(e) => handlePosterError(e, item.backdropUrl)}
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                     
@@ -1538,10 +1536,7 @@ function UserProfilePage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                    }}
+                    onError={(e) => handlePosterError(e, item.backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent"></div>
 
@@ -1789,10 +1784,7 @@ function FavoritesPage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 absolute inset-0" 
                     loading="lazy" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                    }}
+                    onError={(e) => handlePosterError(e, item.backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/25 to-transparent"></div>
                   
@@ -2111,10 +2103,7 @@ function GlobalCatalogPage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 bg-neutral-900" 
                     loading="lazy" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER_IMAGE;
-                    }}
+                    onError={(e) => handlePosterError(e, item.backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent"></div>
                   
@@ -2515,10 +2504,7 @@ function ProviderPage({
                     alt={item.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                     loading="lazy" 
-                    onError={(e) => {
-                      e.currentTarget.onerror = null;
-                      e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                    }}
+                    onError={(e) => handlePosterError(e, item.backdropUrl)}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/30 to-transparent"></div>
                   
@@ -2703,10 +2689,7 @@ function ContentRow({
                      alt={item.title} 
                      className="w-full h-full object-cover" 
                      loading="lazy" 
-                     onError={(e) => {
-                       e.currentTarget.onerror = null;
-                       e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                     }}
+                     onError={(e) => handlePosterError(e, item.backdropUrl)}
                    />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
                    <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow">
@@ -2727,10 +2710,7 @@ function ContentRow({
                   alt={item.title} 
                   className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
                   loading="lazy" 
-                  onError={(e) => {
-                    e.currentTarget.onerror = null;
-                    e.currentTarget.src = item.backdropUrl || FALLBACK_POSTER;
-                  }}
+                  onError={(e) => handlePosterError(e, item.backdropUrl)}
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
                 <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg`}>
