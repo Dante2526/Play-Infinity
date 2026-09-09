@@ -129,12 +129,35 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [selectedAudio, setSelectedAudio] = useState<string>("pt-BR");
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
-  // Envia comando para o iframe do WatchPlayer
+  // Envia comandos universais para o iframe (compatível com WatchPlayer, VidLink, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
       if (iframeRef.current?.contentWindow) {
         try {
           iframeRef.current.contentWindow.postMessage(command, "*");
+
+          // Variantes de compatibilidade universal
+          if (command.type === "PLAY") {
+            iframeRef.current.contentWindow.postMessage({ type: "play" }, "*");
+            iframeRef.current.contentWindow.postMessage({ action: "play" }, "*");
+          } else if (command.type === "PAUSE") {
+            iframeRef.current.contentWindow.postMessage({ type: "pause" }, "*");
+            iframeRef.current.contentWindow.postMessage({ action: "pause" }, "*");
+          } else if (command.type === "TOGGLE_PLAY") {
+            iframeRef.current.contentWindow.postMessage({ type: "togglePlay" }, "*");
+            iframeRef.current.contentWindow.postMessage({ action: "togglePlay" }, "*");
+          } else if (command.type === "SEEK_ABSOLUTE" || command.type === "SEEK") {
+            const t = typeof command.time === "number" ? command.time : command.targetTime;
+            iframeRef.current.contentWindow.postMessage({ type: "SEEK", targetTime: t }, "*");
+            iframeRef.current.contentWindow.postMessage({ type: "seek", time: t }, "*");
+            iframeRef.current.contentWindow.postMessage({ action: "seek", time: t }, "*");
+          } else if (command.type === "SEEK_RELATIVE") {
+            iframeRef.current.contentWindow.postMessage({ type: "SEEK_RELATIVE", seconds: command.seconds }, "*");
+          } else if (command.type === "SET_VOLUME") {
+            iframeRef.current.contentWindow.postMessage({ type: "setVolume", volume: command.volume }, "*");
+          } else if (command.type === "SET_MUTED") {
+            iframeRef.current.contentWindow.postMessage({ type: "setMuted", muted: command.muted }, "*");
+          }
         } catch (e) {
           console.error("Erro ao enviar comando para o player:", e);
         }
@@ -144,21 +167,28 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     [iframeRef]
   );
 
-  // Escuta mensagens do WatchPlayer
+  // Escuta mensagens e atualiza o estado da Skin Netflix
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (!e.data || typeof e.data !== "object") return;
-      if (e.data.type === "WATCHPLAY_STATUS") {
+      const msgType = e.data.type || e.data.event;
+      if (
+        msgType === "WATCHPLAY_STATUS" ||
+        msgType === "PLAYER_STATUS" ||
+        msgType === "status" ||
+        msgType === "timeupdate"
+      ) {
+        const data = e.data.data || e.data;
         setPlayerStatus((prev) => ({
           ...prev,
-          currentTime: typeof e.data.currentTime === "number" ? e.data.currentTime : prev.currentTime,
-          duration: typeof e.data.duration === "number" && e.data.duration > 0 ? e.data.duration : prev.duration,
-          paused: typeof e.data.paused === "boolean" ? e.data.paused : prev.paused,
-          muted: typeof e.data.muted === "boolean" ? e.data.muted : prev.muted,
-          volume: typeof e.data.volume === "number" ? e.data.volume : prev.volume,
-          buffered: typeof e.data.buffered === "number" ? e.data.buffered : prev.buffered,
-          playbackRate: typeof e.data.playbackRate === "number" ? e.data.playbackRate : prev.playbackRate,
-          readyState: typeof e.data.readyState === "number" ? e.data.readyState : prev.readyState,
+          currentTime: typeof data.currentTime === "number" ? data.currentTime : prev.currentTime,
+          duration: typeof data.duration === "number" && data.duration > 0 ? data.duration : prev.duration,
+          paused: typeof data.paused === "boolean" ? data.paused : prev.paused,
+          muted: typeof data.muted === "boolean" ? data.muted : prev.muted,
+          volume: typeof data.volume === "number" ? data.volume : prev.volume,
+          buffered: typeof data.buffered === "number" ? data.buffered : prev.buffered,
+          playbackRate: typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate,
+          readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
         }));
       }
     };
@@ -170,6 +200,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       window.removeEventListener("message", handleMessage);
     };
   }, [sendCommand]);
+
+  // Timer local suave para avançar a barra de tempo continuamente enquanto reproduz
+  useEffect(() => {
+    if (playerStatus.paused || isScrubbing) return;
+    const interval = setInterval(() => {
+      setPlayerStatus((prev) => {
+        if (prev.paused || prev.duration <= 0) return prev;
+        const nextTime = Math.min(prev.duration, prev.currentTime + 0.25);
+        return { ...prev, currentTime: nextTime };
+      });
+    }, 250);
+    return () => clearInterval(interval);
+  }, [playerStatus.paused, isScrubbing]);
 
   // Reseta o timer de auto-hide ao mover o mouse ou tocar
   const handleUserActivity = useCallback(() => {
@@ -247,13 +290,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     handleUserActivity();
   };
 
-  // Controle de Brilho
+  // Controle de Brilho da Netflix (Sol à esquerda - Exibido apenas em Tela Cheia)
   const updateBrightnessFromY = (clientY: number) => {
     if (!brightnessBarRef.current) return;
     const rect = brightnessBarRef.current.getBoundingClientRect();
-    const ratio = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
-    // Brilho varia de 0.4 (escuro) a 1.25 (claro)
-    const val = 0.4 + ratio * 0.85;
+    // Calcula ratio linear de 0 (base) a 1 (topo)
+    const rawRatio = (rect.bottom - clientY) / rect.height;
+    const ratio = Math.max(0, Math.min(1, rawRatio));
+    // Brilho varia de 0.2 (escuro) a 1.2 (claro), normal = 1.0 (em 80% do slider)
+    const val = 0.2 + ratio * 1.0;
     setBrightness(val);
     if (onBrightnessChange) {
       onBrightnessChange(val);
@@ -266,24 +311,42 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     updateBrightnessFromY(e.clientY);
   };
 
+  const handleBrightnessTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    setIsDraggingBrightness(true);
+    if (e.touches[0]) {
+      updateBrightnessFromY(e.touches[0].clientY);
+    }
+  };
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingBrightness) {
         updateBrightnessFromY(e.clientY);
       }
     };
-    const handleMouseUp = () => {
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isDraggingBrightness && e.touches[0]) {
+        if (e.cancelable) e.preventDefault();
+        updateBrightnessFromY(e.touches[0].clientY);
+      }
+    };
+    const handleEnd = () => {
       if (isDraggingBrightness) {
         setIsDraggingBrightness(false);
       }
     };
     if (isDraggingBrightness) {
       window.addEventListener("mousemove", handleMouseMove);
-      window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("mouseup", handleEnd);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleEnd);
     }
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
     };
   }, [isDraggingBrightness]);
 
@@ -457,15 +520,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         controlsVisible && !isLocked ? "cursor-default" : "cursor-none"
       } ${isExternalPlayer ? "pointer-events-none" : ""}`}
     >
-      {/* Camada de Ajuste de Brilho */}
-      {!isExternalPlayer && (
-        <div
-          className="absolute inset-0 pointer-events-none z-0 transition-opacity"
-          style={{
-            backgroundColor: brightness < 1 ? `rgba(0, 0, 0, ${((1 - brightness) * 0.7).toFixed(2)})` : "transparent",
-          }}
-        />
-      )}
+      {/* Camada de Ajuste de Brilho Visual (Escurece ou Clareia o Vídeo com compatibilidade total) */}
+      <div
+        className="absolute inset-0 pointer-events-none z-10 transition-colors duration-75"
+        style={{
+          backgroundColor:
+            brightness < 1.0
+              ? `rgba(0, 0, 0, ${((1.0 - brightness) * 0.85).toFixed(2)})`
+              : brightness > 1.0
+              ? `rgba(255, 255, 255, ${((brightness - 1.0) * 0.45).toFixed(2)})`
+              : "transparent",
+        }}
+      />
 
       {/* Clique simples no fundo para Play/Pause */}
       {!isExternalPlayer && (
@@ -595,29 +661,39 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       </div>
 
       {/* ========================================================
-          2. CONTROLE VERTICAL DE BRILHO (SOL À ESQUERDA)
-          Oculto no mobile em orientação vertical para não sobrepor botões
+          2. CONTROLE VERTICAL DE BRILHO DA NETFLIX (SOL À ESQUERDA)
+          Exibido apenas quando estiver em TELA CHEIA (isFullscreen)
           ======================================================== */}
-      {!isExternalPlayer && (
+      {isFullscreen && (
         <div
-          className={`hidden sm:flex absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-20 flex-col items-center gap-2 transition-all duration-300 ${
-            controlsVisible && !isLocked ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4 pointer-events-none"
+          ref={brightnessBarRef}
+          onMouseDown={handleBrightnessMouseDown}
+          onTouchStart={handleBrightnessTouchStart}
+          className={`flex absolute left-3.5 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-all duration-300 touch-none cursor-pointer ${
+            controlsVisible && !isLocked ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 -translate-x-4 pointer-events-none"
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          <Sun className="w-4 h-4 text-white/90 drop-shadow stroke-[1.8]" />
-
-          {/* Barra Vertical de Brilho */}
+          {/* Indicador Numérico de Porcentagem */}
           <div
-            ref={brightnessBarRef}
-            onMouseDown={handleBrightnessMouseDown}
-            className="relative w-1.5 h-24 sm:h-28 bg-neutral-600/80 rounded-full cursor-pointer overflow-hidden flex flex-col justify-end group/slider"
-            title={`Brilho: ${Math.round(brightness * 100)}%`}
+            className={`px-2 py-0.5 rounded-full bg-black/85 border border-white/25 text-white font-mono font-bold text-[10px] sm:text-xs backdrop-blur-md shadow-xl transition-all duration-200 select-none ${
+              isDraggingBrightness ? "opacity-100 scale-110 border-white/50" : "opacity-85"
+            }`}
+          >
+            {Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%
+          </div>
+
+          <Sun className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow stroke-[2] select-none" />
+
+          {/* Barra Vertical de Brilho da Netflix em Branco Sólido */}
+          <div
+            className="relative w-2.5 sm:w-3.5 h-32 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl"
+            title={`Brilho: ${Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%`}
           >
             <div
-              className="w-full bg-white rounded-full transition-all duration-75"
+              className="w-full bg-white rounded-full transition-all duration-75 shadow-md"
               style={{
-                height: `${Math.min(100, Math.max(10, ((brightness - 0.4) / 0.85) * 100))}%`,
+                height: `${(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100).toFixed(1)}%`,
               }}
             />
           </div>
@@ -628,64 +704,62 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
-      {!isExternalPlayer && (
-        <div
-          className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-            controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
+      <div
+        className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
+          controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        }`}
+      >
+        {/* Retroceder 10 Segundos */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSeekRelative(-10);
+          }}
+          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+          title="Voltar 10s"
         >
-          {/* Retroceder 10 Segundos */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSeekRelative(-10);
-            }}
-            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-            title="Voltar 10s"
-          >
-            <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-              10
-            </span>
-          </button>
+          <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+            10
+          </span>
+        </button>
 
-          {/* Play / Pause Central Gigante em Branco Sólido */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleTogglePlay();
-            }}
-            className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
-            title={playerStatus.paused ? "Reproduzir" : "Pausar"}
-          >
-            {playerStatus.paused ? (
-              <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-lg" />
-            ) : (
-              <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-lg" />
-            )}
-          </button>
+        {/* Play / Pause Central Gigante em Branco Sólido */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleTogglePlay();
+          }}
+          className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer"
+          title={playerStatus.paused ? "Reproduzir" : "Pausar"}
+        >
+          {playerStatus.paused ? (
+            <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-lg" />
+          ) : (
+            <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-lg" />
+          )}
+        </button>
 
-          {/* Avançar 10 Segundos */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSeekRelative(10);
-            }}
-            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-            title="Avançar 10s"
-          >
-            <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-              10
-            </span>
-          </button>
-        </div>
-      )}
+        {/* Avançar 10 Segundos */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleSeekRelative(10);
+          }}
+          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+          title="Avançar 10s"
+        >
+          <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+            10
+          </span>
+        </button>
+      </div>
 
       {/* ========================================================
           4. BOTÃO FLUTUANTE: PULAR ABERTURA
           ======================================================== */}
-      {!isExternalPlayer && isSeries && (
+      {isSeries && (
         <div
           className={`absolute right-3 sm:right-6 bottom-16 sm:bottom-20 z-20 transition-all duration-300 ${
             (isIntroActive || controlsVisible) && !isLocked
@@ -710,13 +784,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      {!isExternalPlayer && (
-        <div
-          className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
-            controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
-          }`}
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div
+        className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
+          controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
         <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2.5">
           <div
@@ -829,7 +902,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           )}
         </div>
       </div>
-      )}
 
       {/* ========================================================
           MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)
