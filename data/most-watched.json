@@ -33,8 +33,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/533535",
-    "views": 164,
-    "lastWatched": "2026-09-09T14:50:47.719Z"
+    "views": 167,
+    "lastWatched": "2026-09-09T19:41:51.675Z"
   },
   {
     "id": 93405,
@@ -57,9 +57,9 @@
     "imageUrl": "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
     "backdropUrl": "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     "quality": "CAM",
-    "playerUrl": "https://v1.watchplay.shop/movie/tt22084616",
-    "views": 147,
-    "lastWatched": "2026-09-09T14:50:47.719Z"
+    "playerUrl": "https://v1.watchplay.shop/movie/969681",
+    "views": 148,
+    "lastWatched": "2026-09-09T19:22:19.207Z"
   },
   {
     "id": 119051,
@@ -140,7 +140,7 @@
     "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/1201835",
-    "views": 2,
-    "lastWatched": "2026-09-09T18:29:44.888Z"
+    "views": 9,
+    "lastWatched": "2026-09-09T19:22:01.417Z"
   }
 ]

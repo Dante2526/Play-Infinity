@@ -413,10 +413,17 @@ export default async function handler(req: any, res: any) {
               if (v.buffered && v.buffered.length > 0) {
                 bufferedEnd = v.buffered.end(v.buffered.length - 1);
               }
+              var dur = v.duration;
+              if ((!dur || isNaN(dur) || dur === Infinity) && window.artInstance && window.artInstance.duration) {
+                dur = window.artInstance.duration;
+              }
+              if (!dur || isNaN(dur) || dur === Infinity) {
+                dur = 0;
+              }
               window.parent.postMessage({
                 type: "WATCHPLAY_STATUS",
                 currentTime: v.currentTime || 0,
-                duration: v.duration || 0,
+                duration: dur,
                 paused: !!v.paused,
                 muted: !!v.muted,
                 volume: typeof v.volume === "number" ? v.volume : 1,
