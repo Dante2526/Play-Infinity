@@ -329,15 +329,33 @@ async function startServer() {
         return res.json(signData);
       }
 
+      const parsedTarget = new URL(targetUrl);
       const upstreamRes = await fetch(targetUrl, {
         headers: {
-          "Referer": "https://v1.watchplay.shop/",
+          "Referer": parsedTarget.origin + "/",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
       });
 
       if (!upstreamRes.ok) {
-        return res.status(upstreamRes.status).send("Erro ao carregar o player");
+        console.warn(`[WatchPlayer Stream Proxy Status ${upstreamRes.status}]: Revertendo para iframe direto.`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; }
+            </style>
+          </head>
+          <body>
+            <iframe src="${targetUrl}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+          </body>
+          </html>
+        `);
       }
 
       let html = await upstreamRes.text();
@@ -373,10 +391,17 @@ async function startServer() {
             opacity: 1 !important;
           }
 
-          /* Modo Skin Netflix: oculta controles nativos poluídos do Artplayer para dar lugar à nossa Skin Netflix */
+          /* Modo Skin Netflix: oculta controles nativos poluídos do Artplayer e do player iframe para dar lugar à nossa Skin Netflix */
           body:not(.netflix-skin-disabled) .art-bottom,
           body:not(.netflix-skin-disabled) .art-controls,
           body:not(.netflix-skin-disabled) .art-top,
+          body:not(.netflix-skin-disabled) .art-control-lock,
+          body:not(.netflix-skin-disabled) .art-layer-lock,
+          body:not(.netflix-skin-disabled) .art-icon-lock,
+          body:not(.netflix-skin-disabled) [class*="art-lock"],
+          body:not(.netflix-skin-disabled) [class*="art-control-lock"],
+          body:not(.netflix-skin-disabled) [class*="lock-btn"],
+          body:not(.netflix-skin-disabled) [id*="lock-btn"],
           body:not(.netflix-skin-disabled) .art-control-fullscreen,
           body:not(.netflix-skin-disabled) .art-control-volume,
           body:not(.netflix-skin-disabled) .art-control-playAndPause,
@@ -843,8 +868,25 @@ async function startServer() {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(html);
     } catch (err: any) {
-      console.error("[WatchPlayer Stream Error]:", err.message);
-      return res.status(500).send("Erro ao processar stream: " + err.message);
+      console.warn("[WatchPlayer Stream Error]:", err.message, "- Revertendo para iframe direto.");
+      const fallbackUrl = (req.query.url as string) || "";
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+            iframe { width: 100%; height: 100%; border: none; }
+          </style>
+        </head>
+        <body>
+          <iframe src="${fallbackUrl}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+        </body>
+        </html>
+      `);
     }
   });
 

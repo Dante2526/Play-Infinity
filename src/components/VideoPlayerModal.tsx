@@ -363,6 +363,7 @@ export function VideoPlayerModal({
 
   // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo (sem opções intermediárias)
   const resolveStreamIframeUrl = (url: string) => {
+    if (!url) return "";
     if (url.includes("watchplay.shop")) {
       return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
     }
@@ -902,7 +903,6 @@ export function VideoPlayerModal({
               iframeRef={iframeRef}
               isRotated={isRotated}
               onToggleRotate={handleToggleRotate}
-              isExternalPlayer={selectedServerKey !== "srv1"}
             />
           </div>
         </div>
