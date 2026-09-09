@@ -677,6 +677,25 @@ async function startServer() {
             icons: { state: '' },`
       );
 
+      // 4.1 Otimização de Buffer e ABR estilo Netflix no Hls.js
+      html = html.replace(
+        /maxBufferLength:\s*10,\s*maxMaxBufferLength:\s*20/g,
+        `enableWorker: true,
+         lowLatencyMode: false,
+         maxBufferLength: 60,
+         maxMaxBufferLength: 120,
+         maxBufferSize: 100 * 1000 * 1000,
+         maxBufferHole: 0.5,
+         backBufferLength: 90,
+         abrEwmaDefaultEstimate: 4000000,
+         abrBandWidthFactor: 0.85,
+         abrBandWidthUpFactor: 0.7,
+         fragLoadingMaxRetry: 6,
+         manifestLoadingMaxRetry: 6,
+         levelLoadingMaxRetry: 6,
+         fragLoadingRetryDelay: 500`
+      );
+
       // 5. Ocultar seletores nativos e carrossel de episódios no HTML inicial
       html = html.replace(
         /<div class="players_select_container">/g,
