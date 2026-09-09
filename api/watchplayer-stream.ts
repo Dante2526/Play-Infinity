@@ -417,6 +417,19 @@ export default async function handler(req: any, res: any) {
                 }
                 break;
 
+              case "TOGGLE_PIP":
+              case "REQUEST_PIP":
+                if (v) {
+                  try {
+                    if (document.pictureInPictureElement) {
+                      document.exitPictureInPicture().catch(function() {});
+                    } else if (v.requestPictureInPicture) {
+                      v.requestPictureInPicture().catch(function() {});
+                    }
+                  } catch(err) {}
+                }
+                break;
+
               case "REQUEST_STATUS":
                 sendPlayerStatus(v);
                 break;

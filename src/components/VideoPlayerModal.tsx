@@ -29,6 +29,22 @@ interface VideoPlayerModalProps {
   initialEpisode?: number;
   quality?: string;
   isCam?: boolean;
+  initialTime?: number;
+  autoFullscreen?: boolean;
+  imageUrl?: string;
+  backdropUrl?: string;
+  posterUrl?: string;
+}
+
+function formatTime(sec: number): string {
+  if (isNaN(sec) || sec < 0) return "00:00";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = Math.floor(sec % 60);
+  if (h > 0) {
+    return `${h}:${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
+  }
+  return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
 // Extrai o link src caso o usuário ou sistema tenha passado um <iframe> completo
@@ -91,6 +107,11 @@ export function VideoPlayerModal({
   initialEpisode = 1,
   quality,
   isCam,
+  initialTime,
+  autoFullscreen = false,
+  imageUrl,
+  backdropUrl,
+  posterUrl,
 }: VideoPlayerModalProps) {
   const isCamMovie = isCam || checkIsCam(title, quality);
   const [urlInput, setUrlInput] = useState(
@@ -138,6 +159,13 @@ export function VideoPlayerModal({
   const [showStageControls, setShowStageControls] = useState<boolean>(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [, setWatchedUpdateTick] = useState(0);
+
+  // Modo de Proporção / Aspect Ratio: Padrão (contain), Preencher / Zoom (cover), Esticar (stretch)
+  const [aspectRatio, setAspectRatio] = useState<"contain" | "cover" | "stretch">("contain");
+  const handleToggleAspectRatio = () => {
+    setAspectRatio((prev) => (prev === "contain" ? "cover" : prev === "cover" ? "stretch" : "contain"));
+  };
+  const hasSeekedInitialTimeRef = useRef<boolean>(false);
 
   // Escuta atualizações de episódios assistidos para re-renderizar em tempo real
   useEffect(() => {
@@ -361,6 +389,16 @@ export function VideoPlayerModal({
       setIsLoading(true);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       fallbackAttemptsRef.current.clear();
+      hasSeekedInitialTimeRef.current = false;
+
+      // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
+      if (autoFullscreen) {
+        setIsWidescreen(true);
+        const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+        if (isPortrait) {
+          setIsRotated(true);
+        }
+      }
 
       let isCancelled = false;
 
@@ -416,6 +454,18 @@ export function VideoPlayerModal({
         const data = event.data.data || event.data;
         if (typeof data.duration === "number" && data.duration > 0) {
           setPlayerSkinReady(true);
+
+          // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
+          if (initialTime && initialTime > 2 && !hasSeekedInitialTimeRef.current) {
+            hasSeekedInitialTimeRef.current = true;
+            try {
+              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: initialTime }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: initialTime }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: initialTime }, "*");
+              setSkipNotice(`Continuando de ${formatTime(initialTime)}`);
+              setTimeout(() => setSkipNotice(null), 3500);
+            } catch (err) {}
+          }
         }
       }
 
@@ -972,6 +1022,16 @@ export function VideoPlayerModal({
                 src={activeIframeUrl}
                 title={title}
                 className="w-full h-full border-0"
+                style={{
+                  transform:
+                    aspectRatio === "cover"
+                      ? "scale(1.35)"
+                      : aspectRatio === "stretch"
+                      ? "scale(1.0, 1.25)"
+                      : "none",
+                  transformOrigin: "center center",
+                  transition: "transform 0.3s ease",
+                }}
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
                 allowFullScreen
                 referrerPolicy="origin"
@@ -1009,6 +1069,9 @@ export function VideoPlayerModal({
 
             {/* Player Oficial Estilo Netflix Cinematográfico */}
             <NetflixPlayerSkin
+              mediaId={resolvedId}
+              tmdbId={tmdbId}
+              imdbId={imdbId}
               title={title}
               isSeries={isSeries}
               season={season}
@@ -1025,6 +1088,13 @@ export function VideoPlayerModal({
               isRotated={isRotated}
               onToggleRotate={handleToggleRotate}
               isExternalPlayer={isExternalPlayer}
+              imageUrl={imageUrl}
+              backdropUrl={backdropUrl}
+              posterUrl={posterUrl}
+              quality={quality}
+              isCam={isCamMovie}
+              aspectRatio={aspectRatio}
+              onToggleAspectRatio={handleToggleAspectRatio}
             />
           </div>
         </div>

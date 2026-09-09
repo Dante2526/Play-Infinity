@@ -22,7 +22,10 @@ import {
   Volume1,
   Maximize2,
   Minimize2,
+  PictureInPicture2,
+  Scan,
 } from "lucide-react";
+import { savePlaybackProgress } from "../services/playbackHistory";
 
 export interface NetflixPlayerStatus {
   currentTime: number;
@@ -55,6 +58,15 @@ interface NetflixPlayerSkinProps {
   isRotated?: boolean;
   onToggleRotate?: () => void;
   isExternalPlayer?: boolean;
+  mediaId?: string | number;
+  tmdbId?: number;
+  imdbId?: string;
+  imageUrl?: string;
+  backdropUrl?: string;
+  posterUrl?: string;
+  aspectRatio?: 'contain' | 'cover' | 'stretch';
+  onToggleAspectRatio?: () => void;
+  onTogglePiP?: () => void;
 }
 
 function formatTime(sec: number): string {
@@ -86,6 +98,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   isRotated = false,
   onToggleRotate,
   isExternalPlayer = false,
+  quality,
+  isCam,
+  mediaId,
+  tmdbId,
+  imdbId,
+  imageUrl,
+  backdropUrl,
+  posterUrl,
+  aspectRatio = 'contain',
+  onToggleAspectRatio,
+  onTogglePiP,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -147,6 +170,97 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   useEffect(() => {
     setHasSkippedThisEpisode(false);
   }, [episode, season]);
+
+  // Gestos Touch Mobile Verticais (Esquerda = Brilho, Direita = Volume)
+  const touchStartYRef = useRef<number | null>(null);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchModeRef = useRef<"brightness" | "volume" | null>(null);
+  const initialBrightnessRef = useRef<number>(1.0);
+  const initialVolumeRef = useRef<number>(1.0);
+  const [touchHud, setTouchHud] = useState<{ type: "brightness" | "volume"; value: number } | null>(null);
+  const touchHudTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleScreenTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length !== 1 || isLocked) return;
+    const t = e.touches[0];
+    touchStartXRef.current = t.clientX;
+    touchStartYRef.current = t.clientY;
+    initialBrightnessRef.current = brightness;
+    initialVolumeRef.current = playerStatus.volume;
+
+    const isLeft = t.clientX < (window.innerWidth || 600) / 2;
+    touchModeRef.current = isLeft ? "brightness" : "volume";
+  };
+
+  const handleScreenTouchMove = (e: React.TouchEvent) => {
+    if (!touchModeRef.current || touchStartYRef.current === null || isLocked) return;
+    const t = e.touches[0];
+    const deltaY = touchStartYRef.current - t.clientY; // Arrastar para cima = positivo
+
+    if (Math.abs(deltaY) < 8) return; // Limiar mínimo para toque simples
+
+    const screenH = window.innerHeight || 400;
+    const deltaRatio = deltaY / (screenH * 0.45);
+
+    if (touchHudTimerRef.current) clearTimeout(touchHudTimerRef.current);
+
+    if (touchModeRef.current === "brightness") {
+      const newB = Math.max(0.2, Math.min(1.2, initialBrightnessRef.current + deltaRatio * 1.0));
+      setBrightness(newB);
+      if (onBrightnessChange) onBrightnessChange(newB);
+      const pct = Math.round(Math.max(0, Math.min(1, (newB - 0.2) / 1.0)) * 100);
+      setTouchHud({ type: "brightness", value: pct });
+    } else if (touchModeRef.current === "volume") {
+      const newV = Math.max(0, Math.min(1, initialVolumeRef.current + deltaRatio));
+      sendCommand({ type: "SET_VOLUME", volume: newV });
+      setPlayerStatus((p) => ({ ...p, volume: newV, muted: newV === 0 }));
+      const pct = Math.round(newV * 100);
+      setTouchHud({ type: "volume", value: pct });
+    }
+  };
+
+  const handleScreenTouchEnd = () => {
+    touchStartYRef.current = null;
+    touchStartXRef.current = null;
+    touchModeRef.current = null;
+    if (touchHudTimerRef.current) clearTimeout(touchHudTimerRef.current);
+    touchHudTimerRef.current = setTimeout(() => {
+      setTouchHud(null);
+    }, 1200);
+  };
+
+  // Picture-in-Picture
+  const handleTogglePiP = () => {
+    sendCommand({ type: "TOGGLE_PIP" });
+    sendCommand({ type: "REQUEST_PIP" });
+    if (onTogglePiP) {
+      onTogglePiP();
+    }
+  };
+
+  // Salvamento contínuo do progresso para a fileira "Continue Assistindo"
+  const lastSavedTimeRef = useRef<number>(0);
+  useEffect(() => {
+    if (!mediaId || playerStatus.duration <= 0 || playerStatus.currentTime < 2) return;
+    if (Math.abs(playerStatus.currentTime - lastSavedTimeRef.current) >= 4) {
+      lastSavedTimeRef.current = playerStatus.currentTime;
+      savePlaybackProgress({
+        id: mediaId,
+        tmdbId,
+        imdbId,
+        title,
+        type: isSeries ? "series" : "movie",
+        season,
+        episode,
+        currentTime: playerStatus.currentTime,
+        duration: playerStatus.duration,
+        imageUrl,
+        backdropUrl,
+        posterUrl,
+        quality,
+      });
+    }
+  }, [playerStatus.currentTime, playerStatus.duration, mediaId, tmdbId, imdbId, title, isSeries, season, episode, imageUrl, backdropUrl, posterUrl, quality]);
 
   // Envia comandos universais para o iframe (compatível com WatchPlayer, VidLink, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
@@ -554,7 +668,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         }}
       />
 
-      {/* Clique simples no fundo para Play/Pause (apenas se vídeo nativo estiver carregado) */}
+      {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
       {!isExternalPlayer && hasValidDuration && (
         <div
           className="absolute inset-0 z-0 cursor-pointer pointer-events-auto"
@@ -564,7 +678,33 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             }
           }}
           onDoubleClick={onToggleFullscreen}
+          onTouchStart={handleScreenTouchStart}
+          onTouchMove={handleScreenTouchMove}
+          onTouchEnd={handleScreenTouchEnd}
         />
+      )}
+
+      {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
+      {touchHud && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 pointer-events-none bg-black/85 backdrop-blur-md border border-white/20 px-6 py-4 rounded-3xl flex flex-col items-center gap-2.5 text-white shadow-2xl animate-in zoom-in-95 fade-in duration-150">
+          {touchHud.type === "brightness" ? (
+            <Sun className="w-8 h-8 text-amber-400 stroke-[2] animate-pulse" />
+          ) : (
+            <Volume2 className="w-8 h-8 text-white stroke-[2] animate-pulse" />
+          )}
+          <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
+            {touchHud.type === "brightness" ? "Brilho" : "Volume"}
+          </span>
+          <div className="w-28 h-2 bg-white/20 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all duration-75 ${
+                touchHud.type === "brightness" ? "bg-amber-400" : "bg-orange-500"
+              }`}
+              style={{ width: `${touchHud.value}%` }}
+            />
+          </div>
+          <span className="text-xs font-black tabular-nums text-white">{touchHud.value}%</span>
+        </div>
       )}
 
       {/* Gradientes Suaves de Cinema (Superior e Inferior) */}
@@ -621,18 +761,54 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
         }`}
       >
-        {/* Esquerda: Espaço de respiro para manter o título perfeitamente balanceado */}
-        <div className="w-8 sm:w-10"></div>
+        {/* Esquerda: Espaço de respiro */}
+        <div className="w-8 sm:w-10 pointer-events-none"></div>
 
-        {/* Centro: Título formatado S1:E1 "Pilot" */}
-        <div className="flex-1 text-center min-w-0 px-1 flex items-center justify-center">
-          <span className="text-white text-xs sm:text-sm md:text-base font-medium tracking-wide drop-shadow truncate block max-w-[180px] xs:max-w-xs sm:max-w-md">
+        {/* Centro: Título formatado S1:E1 "Pilot" com Centralização Absoluta Perfeita */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-2.5 sm:top-4 bottom-0 flex items-center justify-center pointer-events-none max-w-[50%] sm:max-w-[65%] px-2 z-10">
+          <span className="text-white text-xs sm:text-sm md:text-base font-semibold tracking-wide drop-shadow truncate block text-center">
             {topTitleText}
           </span>
         </div>
 
-        {/* Direita: Botão Girar Tela (90° Paisagem - apenas em tela cheia) + Botão Tela Cheia (Widescreen) + Botão Fechar X */}
-        <div className="flex items-center justify-end gap-1 sm:gap-2">
+        {/* Direita: Botão Aspect Ratio (Apenas em Tela Cheia) + Botão PiP + Botão Girar Tela + Botão Tela Cheia + Botão Fechar X */}
+        <div className="flex items-center justify-end gap-1 sm:gap-2 ml-auto z-20">
+          {/* Botão Aspect Ratio (Zoom / Preencher / Esticar) - Exibido exclusivamente em TELA CHEIA */}
+          {isFullscreen && onToggleAspectRatio && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleAspectRatio();
+              }}
+              className={`p-1.5 sm:p-2 transition-all cursor-pointer rounded-full hover:bg-white/10 flex items-center gap-1 ${
+                aspectRatio === "cover"
+                  ? "text-orange-400 bg-orange-500/20"
+                  : aspectRatio === "stretch"
+                  ? "text-amber-400 bg-amber-500/20"
+                  : "text-white/90 hover:text-white"
+              }`}
+              title={`Proporção: ${
+                aspectRatio === "cover" ? "Preencher (Zoom)" : aspectRatio === "stretch" ? "Esticar" : "Ajustar (Padrão)"
+              }`}
+            >
+              <Scan className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
+              <span className="text-[10px] font-bold hidden sm:inline uppercase tracking-tight">
+                {aspectRatio === "cover" ? "Zoom" : aspectRatio === "stretch" ? "Esticar" : "Ajustar"}
+              </span>
+            </button>
+          )}
+
+          {/* Botão Picture-in-Picture (Janela Flutuante) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTogglePiP();
+            }}
+            className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
+            title="Janela Flutuante (Picture-in-Picture)"
+          >
+            <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
+          </button>
           {isFullscreen && onToggleRotate && (
             <button
               onClick={(e) => {

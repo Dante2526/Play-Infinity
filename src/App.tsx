@@ -69,6 +69,7 @@ import {
   isSeasonFullyWatched,
   getSeasonWatchedCount
 } from "./services/watchedEpisodes";
+import { getPlaybackHistory, PlaybackHistoryItem } from "./services/playbackHistory";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
@@ -92,7 +93,10 @@ export type OnPlayHandler = (
   season?: number,
   episode?: number,
   quality?: string,
-  isCam?: boolean
+  isCam?: boolean,
+  initialTime?: number,
+  autoFullscreen?: boolean,
+  imageUrl?: string
 ) => void;
 
 export default function App() {
@@ -121,6 +125,9 @@ export default function App() {
     episode?: number;
     quality?: string;
     isCam?: boolean;
+    initialTime?: number;
+    autoFullscreen?: boolean;
+    imageUrl?: string;
   }>({
     isOpen: false,
     title: "",
@@ -190,7 +197,10 @@ export default function App() {
     season?: number,
     episode?: number,
     quality?: string,
-    isCam?: boolean
+    isCam?: boolean,
+    initialTime?: number,
+    autoFullscreen?: boolean,
+    imageUrl?: string
   ) => {
     setPlayerModal({
       isOpen: true,
@@ -203,6 +213,9 @@ export default function App() {
       episode,
       quality,
       isCam: isCam || checkIsCam(title, quality),
+      initialTime,
+      autoFullscreen,
+      imageUrl
     });
 
     // Registra reprodução para o Top 10 Mais Assistidos dos usuários
@@ -380,6 +393,9 @@ export default function App() {
         initialEpisode={playerModal.episode}
         quality={playerModal.quality}
         isCam={playerModal.isCam}
+        initialTime={playerModal.initialTime}
+        autoFullscreen={playerModal.autoFullscreen}
+        imageUrl={playerModal.imageUrl}
       />
 
       <WebhookPanelModal
@@ -435,6 +451,65 @@ function HomePage({
   const [seriesReleases, setSeriesReleases] = useState<any[]>(newest);
   // Top 10 Mais Assistidos decidido dinamicamente pela audiência dos usuários
   const [mostWatchedItems, setMostWatchedItems] = useState<any[]>(mostWatched);
+
+  // Histórico real de reprodução do usuário com fallback para dados estáticos
+  const [continueWatchingList, setContinueWatchingList] = useState<any[]>(() => {
+    const history = getPlaybackHistory();
+    if (history.length > 0) {
+      return history.map(item => ({
+        id: item.id,
+        tmdbId: item.tmdbId,
+        imdbId: item.imdbId,
+        title: item.title,
+        episode: item.mediaType === 'series' && item.season && item.episode 
+          ? `T${item.season}:E${item.episode} - Continuar`
+          : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
+        progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
+        imageUrl: item.posterUrl || item.backdropUrl || FALLBACK_POSTER,
+        backdropUrl: item.backdropUrl,
+        playerUrl: item.playerUrl,
+        currentTime: item.currentTime,
+        duration: item.duration,
+        mediaType: item.mediaType,
+        season: item.season,
+        episodeNumber: item.episode,
+        quality: item.quality,
+        isCam: item.isCam
+      }));
+    }
+    return continueWatching;
+  });
+
+  useEffect(() => {
+    const syncHistory = () => {
+      const history = getPlaybackHistory();
+      if (history.length > 0) {
+        setContinueWatchingList(history.map(item => ({
+          id: item.id,
+          tmdbId: item.tmdbId,
+          imdbId: item.imdbId,
+          title: item.title,
+          episode: item.mediaType === 'series' && item.season && item.episode 
+            ? `T${item.season}:E${item.episode} - Continuar`
+            : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
+          progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
+          imageUrl: item.posterUrl || item.backdropUrl || FALLBACK_POSTER,
+          backdropUrl: item.backdropUrl,
+          playerUrl: item.playerUrl,
+          currentTime: item.currentTime,
+          duration: item.duration,
+          mediaType: item.mediaType,
+          season: item.season,
+          episodeNumber: item.episode,
+          quality: item.quality,
+          isCam: item.isCam
+        })));
+      }
+    };
+
+    window.addEventListener('playinfinity:history_updated', syncHistory);
+    return () => window.removeEventListener('playinfinity:history_updated', syncHistory);
+  }, []);
 
   // Busca automática do destaque e dos lançamentos recentes via TMDB
   useEffect(() => {
@@ -662,7 +737,10 @@ function HomePage({
                   1,
                   1,
                   heroItem.quality,
-                  checkIsCam(heroItem.title, heroItem.quality)
+                  checkIsCam(heroItem.title, heroItem.quality),
+                  undefined,
+                  false,
+                  heroItem.imageUrl
                 )}
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
               >
@@ -744,10 +822,52 @@ function HomePage({
 
         {/* Continue Assistindo */}
         <section>
-          <h2 className="text-xl md:text-2xl font-bold text-white mb-6 pl-2 border-l-4 border-orange-500">Continue Assistindo</h2>
+          <div className="flex items-center justify-between mb-6 pl-2">
+            <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
+            <span className="text-xs font-semibold text-neutral-400">Clique para continuar em tela cheia</span>
+          </div>
           <div className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pl-2 pr-4 scrollbar-hide">
-            {continueWatching.map((item, idx) => (
-              <div key={`cw-${item.id}-${idx}`} onClick={() => onItemClick(item.id)} className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]">
+            {continueWatchingList.map((item, idx) => (
+              <div 
+                key={`cw-${item.id}-${idx}`} 
+                onClick={() => {
+                  if (item.currentTime !== undefined && onPlay) {
+                    onPlay(
+                      item.title,
+                      item.playerUrl,
+                      item.mediaType || 'movie',
+                      item.tmdbId,
+                      item.imdbId,
+                      item.season,
+                      item.episodeNumber,
+                      item.quality,
+                      item.isCam,
+                      item.currentTime,
+                      true, // Auto-fullscreen imediato
+                      item.imageUrl
+                    );
+                  } else if (onPlay) {
+                    // Fallback estático
+                    onPlay(
+                      item.title,
+                      item.playerUrl,
+                      item.title.includes("STRANGER") ? 'series' : 'movie',
+                      item.tmdbId,
+                      item.imdbId,
+                      item.title.includes("STRANGER") ? 4 : undefined,
+                      item.title.includes("STRANGER") ? 1 : undefined,
+                      undefined,
+                      false,
+                      item.progress ? 45 * 60 : undefined,
+                      true, // Auto-fullscreen imediato
+                      item.imageUrl
+                    );
+                  } else {
+                    onItemClick(item.id);
+                  }
+                }} 
+                className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]"
+              >
                 <div className="relative h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
                   <img 
                     src={item.imageUrl} 
@@ -767,15 +887,18 @@ function HomePage({
 
                   <div className="absolute bottom-4 left-4 right-4">
                     <div className="flex justify-between items-end mb-2">
-                      <div>
-                        <h3 className="font-bold text-white text-base md:text-lg drop-shadow-md">{item.title}</h3>
-                        <p className="text-neutral-300 text-xs mt-0.5 drop-shadow-md">{item.episode}</p>
+                      <div className="truncate mr-2">
+                        <h3 className="font-bold text-white text-base md:text-lg drop-shadow-md truncate">{item.title}</h3>
+                        <p className="text-neutral-300 text-xs mt-0.5 drop-shadow-md truncate">{item.episode}</p>
                       </div>
+                      <span className="text-[11px] font-mono text-orange-400 shrink-0 font-bold">
+                        {item.progress}%
+                      </span>
                     </div>
                     {/* Progress Bar */}
-                    <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
                       <div 
-                        className="h-full bg-orange-500" 
+                        className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_8px_rgba(234,88,12,0.8)]" 
                         style={{ width: `${item.progress}%` }}
                       ></div>
                     </div>
@@ -952,6 +1075,29 @@ function DetailsPage({
     setComments([{ id: Date.now(), user: "Você", text: commentText, likes: 0 }, ...comments]);
     setCommentText("");
   };
+
+  const currentGenres: string[] = Array.isArray(item.genres) && item.genres.length > 0
+    ? item.genres
+    : Array.isArray(tmdbDetails?.genres)
+      ? tmdbDetails.genres.map(g => g.name)
+      : [];
+
+  const similarItems = React.useMemo(() => {
+    const directMatches = allCatalogs.filter(i => {
+      if (i.id === item.id) return false;
+      const iGenres = Array.isArray(i.genres) ? i.genres : [];
+      if (currentGenres.length > 0 && iGenres.some(g => currentGenres.includes(g))) {
+        return true;
+      }
+      if (i.type && item.type && i.type === item.type) return true;
+      return false;
+    });
+
+    if (directMatches.length >= 6) return directMatches.slice(0, 6);
+
+    const extra = allCatalogs.filter(i => i.id !== item.id && !directMatches.some(m => m.id === i.id));
+    return [...directMatches, ...extra].slice(0, 6);
+  }, [allCatalogs, item.id, item.type, currentGenres]);
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen bg-[#0a0a0a] animate-in fade-in duration-500">
@@ -1153,7 +1299,7 @@ function DetailsPage({
               </p>
               
               <div className="flex flex-wrap gap-2 pt-2">
-                {item.genres?.map(g => (
+                {currentGenres.map(g => (
                   <span key={g} className="px-3 py-1 bg-[#1c1c1c] border border-neutral-800 rounded-lg text-xs font-medium text-neutral-300">
                     {g}
                   </span>
@@ -1426,7 +1572,7 @@ function DetailsPage({
             <span className="text-xs text-orange-500 font-semibold">TMDB</span>
           </div>
           <div className="grid grid-cols-2 gap-4">
-             {allCatalogs.filter(i => i.id !== item.id && (i.type === item.type || i.genres.some(g => item.genres.includes(g)))).slice(0, 6).map((sim, idx) => (
+             {similarItems.map((sim, idx) => (
                <div 
                  key={`sim-${sim.id}-${idx}`} 
                  onClick={() => onItemClick(sim.id, sim)} 
