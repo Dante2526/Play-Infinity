@@ -7,6 +7,17 @@ export function isInvalidOrChairPhoto(url?: string): boolean {
   return url.includes(CHAIR_PHOTO_ID);
 }
 
+function normalizeTitle(t?: string): string {
+  if (!t) return "";
+  return t
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function resolveMediaCovers(item: {
   id: string | number;
   tmdbId?: number;
@@ -25,15 +36,30 @@ export function resolveMediaCovers(item: {
       const catalog = getAllCatalogItems();
       const numId = Number(item.id);
       const numTmdb = item.tmdbId ? Number(item.tmdbId) : undefined;
-      const cleanTitle = (item.title || "").trim().toLowerCase();
+      const normalizedItemTitle = normalizeTitle(item.title);
 
-      const found = catalog.find(c => 
+      // 1. Prioridade máxima: correspondência exata por ID numérico ou TMDB ID
+      let found = catalog.find(c => 
         (numId && c.id === numId) ||
-        (numTmdb && (c.tmdbId === numTmdb || c.id === numTmdb)) ||
-        (cleanTitle && c.title.trim().toLowerCase() === cleanTitle) ||
-        (cleanTitle && cleanTitle.includes(c.title.trim().toLowerCase())) ||
-        (cleanTitle && c.title.trim().toLowerCase().includes(cleanTitle))
+        (numTmdb && (c.tmdbId === numTmdb || c.id === numTmdb))
       );
+
+      // 2. Segunda prioridade: correspondência exata de título normalizado
+      if (!found && normalizedItemTitle) {
+        found = catalog.find(c => normalizeTitle(c.title) === normalizedItemTitle);
+      }
+
+      // 3. Terceira prioridade: se houver sufixos de áudio ("Dublado", "Legendado"),
+      // compara apenas se o título base for estritamente idêntico (evita colisões como "Alien" vs "Aliens")
+      if (!found && normalizedItemTitle) {
+        const cleanBase = normalizedItemTitle.replace(/\b(dublado|legendado|dual|audio|completo)\b/g, "").trim();
+        if (cleanBase.length >= 3) {
+          found = catalog.find(c => {
+            const cBase = normalizeTitle(c.title).replace(/\b(dublado|legendado|dual|audio|completo)\b/g, "").trim();
+            return cBase === cleanBase;
+          });
+        }
+      }
 
       if (found) {
         if (!backdrop && !isInvalidOrChairPhoto(found.backdropUrl)) {

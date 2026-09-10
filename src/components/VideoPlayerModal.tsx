@@ -1,9 +1,9 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
   Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2, Minimize2, FastForward,
-  SkipForward, RotateCcw
+  SkipForward, RotateCcw, PictureInPicture2
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { checkIsCam } from "../data";
@@ -174,6 +174,13 @@ export function VideoPlayerModal({
   const [isWidescreen, setIsWidescreen] = useState<boolean>(false);
   const [isRotated, setIsRotated] = useState<boolean>(false);
   const isExpanded = isFullscreen || isWidescreen;
+  const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
+  const [miniPosition, setMiniPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cardDimensionsRef = useRef<{ width: number; height: number }>({ width: 380, height: 260 });
+  const miniContainerRef = useRef<HTMLDivElement>(null);
+
   const [showStageControls, setShowStageControls] = useState<boolean>(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [, setWatchedUpdateTick] = useState(0);
@@ -735,7 +742,95 @@ export function VideoPlayerModal({
     }
     setIsWidescreen(false);
     setIsRotated(false);
+    setIsMiniPlayer(false);
+    setMiniPosition(null);
+    setIsDragging(false);
     onClose();
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      setIsMiniPlayer(false);
+      setMiniPosition(null);
+      setIsDragging(false);
+    }
+  }, [isOpen]);
+
+  // Mantém o mini player contido na tela se houver redimensionamento da janela
+  useEffect(() => {
+    if (!isMiniPlayer || !miniPosition || !miniContainerRef.current) return;
+
+    const handleResize = () => {
+      const rect = miniContainerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const maxX = Math.max(8, window.innerWidth - rect.width - 8);
+      const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+
+      setMiniPosition((prev) => {
+        if (!prev) return null;
+        const clampedX = Math.max(8, Math.min(maxX, prev.x));
+        const clampedY = Math.max(8, Math.min(maxY, prev.y));
+        if (clampedX === prev.x && clampedY === prev.y) return prev;
+        return { x: clampedX, y: clampedY };
+      });
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [isMiniPlayer, !miniPosition]);
+
+  const handleMiniHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Apenas botão principal (esquerdo) ou toque
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    if ((e.target as HTMLElement).closest("button")) return;
+    if (!miniContainerRef.current) return;
+
+    const rect = miniContainerRef.current.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    cardDimensionsRef.current = {
+      width: rect.width,
+      height: rect.height,
+    };
+
+    // Fixa a posição atual em pixels imediatamente para início de arraste suave sem pulos
+    setMiniPosition({ x: rect.left, y: rect.top });
+    setIsDragging(true);
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handleMiniHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+
+    const { width, height } = cardDimensionsRef.current;
+    const minX = 8;
+    const maxX = Math.max(minX, window.innerWidth - width - 8);
+    const minY = 8;
+    const maxY = Math.max(minY, window.innerHeight - height - 8);
+
+    const rawX = e.clientX - dragOffsetRef.current.x;
+    const rawY = e.clientY - dragOffsetRef.current.y;
+
+    const clampedX = Math.max(minX, Math.min(maxX, rawX));
+    const clampedY = Math.max(minY, Math.min(maxY, rawY));
+
+    setMiniPosition({ x: clampedX, y: clampedY });
+  };
+
+  const handleMiniHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
+      setIsDragging(false);
+    }
   };
 
   const handleFullScreen = async () => {
@@ -786,6 +881,33 @@ export function VideoPlayerModal({
     }
   };
 
+  const handleToggleMiniPlayer = () => {
+    if (isMiniPlayer) {
+      // Ao sair do modo mini-player para crescer de novo, vai DIRETO para tela cheia
+      setIsMiniPlayer(false);
+      handleFullScreen();
+    } else {
+      if (isExpanded) {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+        setIsWidescreen(false);
+        setIsRotated(false);
+      }
+      if (miniPosition) {
+        const width = miniContainerRef.current?.offsetWidth || 340;
+        const height = miniContainerRef.current?.offsetHeight || 220;
+        const maxX = Math.max(8, window.innerWidth - width - 8);
+        const maxY = Math.max(8, window.innerHeight - height - 8);
+        setMiniPosition({
+          x: Math.max(8, Math.min(maxX, miniPosition.x)),
+          y: Math.max(8, Math.min(maxY, miniPosition.y)),
+        });
+      }
+      setIsMiniPlayer(true);
+    }
+  };
+
   const handleToggleRotate = () => {
     setIsRotated((prev) => !prev);
   };
@@ -824,19 +946,91 @@ export function VideoPlayerModal({
   if (!isOpen) return null;
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
-      isExpanded 
-        ? "p-0 m-0 bg-black w-screen h-screen overflow-hidden" 
-        : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
-    }`}>
-      <div className={`relative w-full bg-[#111111] overflow-hidden flex flex-col ${
-        isExpanded
-          ? "w-screen h-screen max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
-          : "max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
-      }`}>
-        
-        {/* Modal Header (apenas quando não expandido em tela cheia) */}
-        {!isExpanded && (
+    <div
+      ref={miniContainerRef}
+      style={
+        isMiniPlayer && miniPosition
+          ? {
+              left: `${miniPosition.x}px`,
+              top: `${miniPosition.y}px`,
+              right: "auto",
+              bottom: "auto",
+            }
+          : undefined
+      }
+      className={
+        isMiniPlayer
+          ? `fixed z-50 pointer-events-auto select-none ${
+              !miniPosition ? "bottom-4 right-4" : ""
+            } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
+          : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
+              isExpanded 
+                ? "p-0 m-0 bg-black w-screen h-screen overflow-hidden" 
+                : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
+            }`
+      }
+    >
+      {/* Overlay global enquanto arrasta para evitar que iframes capturem o cursor */}
+      {isDragging && (
+        <div
+          className="fixed inset-0 z-[9999] cursor-grabbing select-none bg-transparent"
+          onPointerMove={handleMiniHeaderPointerMove}
+          onPointerUp={handleMiniHeaderPointerUp}
+          onPointerCancel={handleMiniHeaderPointerUp}
+        />
+      )}
+
+      <div
+        className={`relative bg-[#111111] overflow-hidden flex flex-col transition-all duration-300 ${
+          isMiniPlayer
+            ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
+            : isExpanded
+            ? "w-screen h-screen max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+            : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
+        }`}
+      >
+        {/* Header do Mini-Player Flutuante (Arrastável) */}
+        {isMiniPlayer && (
+          <div
+            onPointerDown={handleMiniHeaderPointerDown}
+            onPointerMove={handleMiniHeaderPointerMove}
+            onPointerUp={handleMiniHeaderPointerUp}
+            onPointerCancel={handleMiniHeaderPointerUp}
+            className={`flex items-center justify-between px-3 py-2 bg-[#161616] border-b border-neutral-800 text-xs select-none gap-2 touch-none ${
+              isDragging ? "cursor-grabbing bg-[#1c1c1c]" : "cursor-grab hover:bg-[#1a1a1a]"
+            } transition-colors`}
+          >
+            <div className="flex items-center gap-2 min-w-0 pointer-events-none">
+              <div className="w-5 h-5 rounded-full bg-orange-600/20 text-orange-500 flex items-center justify-center shrink-0">
+                <Play className="w-2.5 h-2.5 fill-current" />
+              </div>
+              <span className="text-white font-medium truncate text-xs">
+                {title || "Reproduzindo..."}
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleToggleMiniPlayer}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                title="Restaurar em Tela Cheia"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={handleCloseModal}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                title="Fechar Vídeo"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Header Padrão (apenas quando não expandido em tela cheia e nem mini player) */}
+        {!isExpanded && !isMiniPlayer && (
           <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b border-neutral-800/80 bg-[#161616] gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center shrink-0">
@@ -867,8 +1061,8 @@ export function VideoPlayerModal({
           </div>
         )}
 
-        {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido) */}
-        {!isExpanded && isSeries && (
+        {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido e nem mini player) */}
+        {!isExpanded && !isMiniPlayer && isSeries && (
           <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-[#121214] via-[#161618] to-[#121214] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 shadow-inner">
             
             {/* Bloco de Temporadas */}
@@ -1046,7 +1240,7 @@ export function VideoPlayerModal({
             className="flex items-center justify-center bg-black overflow-hidden select-none"
           >
             {/* Notificação Flutuante de Avanço Automático */}
-            {autoNextNotice && (
+            {autoNextNotice && !isMiniPlayer && (
               <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25 pointer-events-none">
                 <FastForward className="w-4 h-4 animate-pulse text-white" />
                 <span>Episódio concluído! Reproduzindo Episódio {autoNextNotice.nextEp}...</span>
@@ -1054,7 +1248,7 @@ export function VideoPlayerModal({
             )}
 
             {/* Notificação Flutuante de Abertura Pulada */}
-            {skipNotice && (
+            {skipNotice && !isMiniPlayer && (
               <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25">
                 <div className="flex items-center gap-2">
                   <SkipForward className="w-4 h-4 fill-current text-white" />
@@ -1182,6 +1376,8 @@ export function VideoPlayerModal({
               isCam={isCamMovie}
               aspectRatio={aspectRatio}
               onToggleAspectRatio={handleToggleAspectRatio}
+              onTogglePiP={handleToggleMiniPlayer}
+              isMiniPlayer={isMiniPlayer}
             />
           </div>
         </div>

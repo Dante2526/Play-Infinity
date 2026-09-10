@@ -3,6 +3,12 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
+import dotenv from "dotenv";
+
+if (fs.existsSync(".env.local")) {
+  dotenv.config({ path: ".env.local" });
+}
+dotenv.config();
 
 // In-memory store for episodes received via webhook/endpoint
 interface StreamItem {
@@ -181,21 +187,56 @@ function loadMostWatchedFromDisk(): WatchedItem[] {
 // Cache em RAM carregado no boot (zero I/O bloqueante durante requisições HTTP)
 const mostWatchedMemoryCache: WatchedItem[] = loadMostWatchedFromDisk();
 let saveDebounceTimer: NodeJS.Timeout | null = null;
+let isSavingMostWatched = false;
+let hasPendingMostWatchedSave = false;
 
-// Escrita assíncrona não-bloqueante no disco com Debounce de 2s
-function scheduleAsyncSaveMostWatched(): void {
-  if (saveDebounceTimer) return;
-  saveDebounceTimer = setTimeout(async () => {
-    saveDebounceTimer = null;
+// Executa gravação atômica com trava sequencial (mutex) para eliminar condições de corrida
+async function executeAtomicSaveMostWatched(): Promise<void> {
+  if (isSavingMostWatched) {
+    hasPendingMostWatchedSave = true;
+    return;
+  }
+  isSavingMostWatched = true;
+
+  try {
+    const dir = path.join(process.cwd(), "data");
+    await fs.promises.mkdir(dir, { recursive: true });
+    const filePath = getMostWatchedFilePath();
+    const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+
+    // Serializa snapshot da memória
+    const payload = JSON.stringify(mostWatchedMemoryCache, null, 2);
+
+    // 1. Grava primeiro no arquivo temporário
+    await fs.promises.writeFile(tempPath, payload, "utf-8");
+
+    // 2. Substitui o arquivo de destino de forma atômica
     try {
-      const dir = path.join(process.cwd(), "data");
-      await fs.promises.mkdir(dir, { recursive: true });
-      const filePath = getMostWatchedFilePath();
-      await fs.promises.writeFile(filePath, JSON.stringify(mostWatchedMemoryCache, null, 2), "utf-8");
-    } catch (err) {
-      console.error("[MostWatched] Falha ao persistir audiência no disco de forma assíncrona:", err);
+      await fs.promises.rename(tempPath, filePath);
+    } catch {
+      // Fallback para plataformas em que rename sobre arquivo existente requer cópia explícita
+      await fs.promises.copyFile(tempPath, filePath);
+      await fs.promises.unlink(tempPath).catch(() => {});
     }
-  }, 2000);
+  } catch (err) {
+    console.error("[MostWatched] Falha na persistência atômica da audiência:", err);
+  } finally {
+    isSavingMostWatched = false;
+    // Se novas atualizações chegaram enquanto gravava no disco, processa a fila em sequência
+    if (hasPendingMostWatchedSave) {
+      hasPendingMostWatchedSave = false;
+      executeAtomicSaveMostWatched();
+    }
+  }
+}
+
+// Escrita assíncrona com Debounce de 1.5s
+function scheduleAsyncSaveMostWatched(): void {
+  if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(() => {
+    saveDebounceTimer = null;
+    executeAtomicSaveMostWatched();
+  }, 1500);
 }
 
 /**
@@ -549,8 +590,16 @@ async function startServer() {
 
   // API 2: Endpoint para receber novos episódios instantaneamente (Webhook Autenticado e Seguro)
   app.post("/api/novo-episodio", (req, res) => {
-    // 1. Verificação de Chave de Autenticação
-    const webhookSecret = process.env.WEBHOOK_SECRET || "playinfinity_secret_webhook_2026";
+    // 1. Verificação de Chave de Autenticação (Fail-Closed)
+    const webhookSecret = process.env.WEBHOOK_SECRET?.trim();
+    if (!webhookSecret) {
+      console.warn("[Webhook Security] Tentativa de acesso a /api/novo-episodio rejeitada: WEBHOOK_SECRET não está configurado no servidor.");
+      return res.status(503).json({
+        success: false,
+        error: "Serviço de webhook temporariamente indisponível: chave WEBHOOK_SECRET não configurada no servidor.",
+      });
+    }
+
     const authHeader = req.headers["authorization"] || "";
     const customHeader = req.headers["x-webhook-secret"] || "";
 

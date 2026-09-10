@@ -67,6 +67,7 @@ interface NetflixPlayerSkinProps {
   aspectRatio?: 'contain' | 'cover' | 'stretch';
   onToggleAspectRatio?: () => void;
   onTogglePiP?: () => void;
+  isMiniPlayer?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -109,6 +110,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   aspectRatio = 'contain',
   onToggleAspectRatio,
   onTogglePiP,
+  isMiniPlayer = false,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -283,10 +285,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }, 1200);
   };
 
-  // Picture-in-Picture
+  // Picture-in-Picture (Mini-Player Flutuante In-App)
   const handleTogglePiP = () => {
-    sendCommand({ type: "TOGGLE_PIP" });
-    sendCommand({ type: "REQUEST_PIP" });
     if (onTogglePiP) {
       onTogglePiP();
     }
@@ -473,7 +473,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Timer local suave para avançar a barra de tempo continuamente enquanto reproduz.
   // Só avança enquanto a sincronização com o player real estiver "fresca" —
-  // se estiver stale (sem notícia do iframe há mais de 4s), congela em vez de
+  // se estiver stale (sem notícia do iframe há mais de 10s), congela em vez de
   // fingir que o vídeo continua andando.
   useEffect(() => {
     if (playerStatus.paused || isScrubbing || isSyncStale) return;
@@ -925,11 +925,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           1. BARRA SUPERIOR (HEADER EXATO DA NETFLIX)
           Centro: Título + Badge CAM | Direita: Tela Cheia + X
           ======================================================== */}
-      <div
-        className={`absolute top-0 left-0 right-0 z-20 px-3 sm:px-6 pt-2.5 sm:pt-4 flex items-center justify-between gap-2 sm:gap-4 transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
-        }`}
-      >
+      {!isMiniPlayer && (
+        <div
+          className={`absolute top-0 left-0 right-0 z-20 px-3 sm:px-6 pt-2.5 sm:pt-4 flex items-center justify-between gap-2 sm:gap-4 transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
+          }`}
+        >
         {/* Esquerda: Espaço de respiro */}
         <div className="w-8 sm:w-10 pointer-events-none"></div>
 
@@ -967,14 +968,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* Botão Picture-in-Picture (Janela Flutuante) */}
+          {/* Botão Picture-in-Picture (Mini-Player Flutuante) */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               handleTogglePiP();
             }}
-            className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
-            title="Janela Flutuante (Picture-in-Picture)"
+            className={`p-1.5 sm:p-2 transition-colors cursor-pointer rounded-full hover:bg-white/10 ${
+              isMiniPlayer ? "text-orange-400 bg-orange-500/20" : "text-white/90 hover:text-white"
+            }`}
+            title={isMiniPlayer ? "Restaurar Player Normal" : "Mini-Player Flutuante (Picture-in-Picture)"}
           >
             <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
           </button>
@@ -1020,6 +1023,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* ========================================================
           2. CONTROLE VERTICAL DE BRILHO DA NETFLIX (SOL À ESQUERDA)
@@ -1073,22 +1077,24 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
-        {/* Retroceder 10 Segundos */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSeekRelative(-10);
-          }}
-          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-          title="Voltar 10s"
-        >
-          <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-            10
-          </span>
-        </button>
+        {/* Retroceder 10 Segundos (oculto no modo mini-player) */}
+        {!isMiniPlayer && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSeekRelative(-10);
+            }}
+            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+            title="Voltar 10s"
+          >
+            <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+              10
+            </span>
+          </button>
+        )}
 
-        {/* Play / Pause Central Gigante em Branco Sólido (Sem círculo/fundo) */}
+        {/* Play / Pause Central */}
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1098,38 +1104,41 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           title={playerStatus.paused ? "Reproduzir" : "Pausar"}
         >
           {playerStatus.paused ? (
-            <Play className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]" />
+            <Play className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
           ) : (
-            <Pause className="w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20 fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]" />
+            <Pause className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
           )}
         </button>
 
-        {/* Avançar 10 Segundos */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleSeekRelative(10);
-          }}
-          className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-          title="Avançar 10s"
-        >
-          <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-          <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-            10
-          </span>
-        </button>
+        {/* Avançar 10 Segundos (oculto no modo mini-player) */}
+        {!isMiniPlayer && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSeekRelative(10);
+            }}
+            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
+            title="Avançar 10s"
+          >
+            <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+              10
+            </span>
+          </button>
+        )}
       </div>
 
       {/* ========================================================
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      <div
-        className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
-        }`}
-        onClick={(e) => e.stopPropagation()}
-      >
+      {!isMiniPlayer && (
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
+            controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
         <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2.5">
           <div
@@ -1268,6 +1277,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* ========================================================
           MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)
