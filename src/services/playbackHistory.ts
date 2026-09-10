@@ -87,9 +87,6 @@ const STORAGE_KEY = "playinfinity_playback_history";
 const MAX_HISTORY_ITEMS = 25;
 
 function makeHistoryKey(id: string | number, type: 'movie' | 'series', season?: number, episode?: number): string {
-  if (type === 'series') {
-    return `${id}_s${season || 1}_e${episode || 1}`;
-  }
   return String(id);
 }
 
@@ -203,7 +200,7 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
   const store = getStore();
   let updated = false;
 
-  const items = Object.values(store).map(item => {
+  const rawItems = Object.values(store).map(item => {
     if (isInvalidOrChairPhoto(item.imageUrl) || isInvalidOrChairPhoto(item.backdropUrl) || !item.imageUrl) {
       const fixed = resolveMediaCovers(item);
       if (fixed.imageUrl && fixed.imageUrl !== item.imageUrl) {
@@ -217,9 +214,26 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
     return item;
   });
 
-  if (updated) {
+  // Deduplica por ID da mídia, mantendo apenas o registro mais recente (último episódio assistido)
+  const uniqueItemsMap = new Map<string, PlaybackHistoryItem>();
+  for (const item of rawItems) {
+    const key = String(item.id);
+    const existing = uniqueItemsMap.get(key);
+    if (!existing || item.updatedAt > existing.updatedAt) {
+      uniqueItemsMap.set(key, item);
+    }
+  }
+
+  const items = Array.from(uniqueItemsMap.values());
+
+  // Se havia duplicatas (chaves antigas com S e E) ou atualizou imagens, limpa o store e salva limpo
+  if (updated || items.length < rawItems.length) {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+      const cleanStore: Record<string, PlaybackHistoryItem> = {};
+      items.forEach(item => {
+        cleanStore[String(item.id)] = item;
+      });
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanStore));
     } catch {}
   }
 
@@ -239,12 +253,21 @@ export function getItemPlayback(id: string | number, type: 'movie' | 'series', s
 /**
  * Remove um item do histórico
  */
-export function removePlaybackItem(id: string | number, type: 'movie' | 'series', season?: number, episode?: number): void {
+export function removePlaybackItem(id: string | number, type?: 'movie' | 'series', season?: number, episode?: number): void {
   if (!id) return;
   const store = getStore();
-  const key = makeHistoryKey(id, type, season, episode);
-  if (store[key]) {
-    delete store[key];
+  const targetIdStr = String(id);
+  let changed = false;
+
+  for (const key of Object.keys(store)) {
+    if (key === targetIdStr || store[key]?.id?.toString() === targetIdStr) {
+      delete store[key];
+      changed = true;
+    }
+  }
+
+  if (changed) {
     saveStore(store);
   }
 }
+

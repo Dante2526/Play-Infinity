@@ -537,6 +537,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
   }, [playerStatus.paused, handleUserActivity]);
 
+  useEffect(() => {
+    const handleWindowMouseMove = () => {
+      handleUserActivity();
+    };
+    window.addEventListener("mousemove", handleWindowMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+    };
+  }, [handleUserActivity]);
+
   // Play / Pause
   // Atualiza o estado local de forma otimista (resposta instantânea na UI),
   // mas isso é só um "palpite" até o iframe confirmar via postMessage.
@@ -812,7 +822,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     <div
       onMouseMove={handleUserActivity}
       onClick={handleUserActivity}
-      className={`absolute inset-0 z-30 select-none overflow-hidden transition-all duration-300 ${
+      className={`absolute inset-0 z-30 select-none overflow-hidden transition-all duration-300 pointer-events-none ${
         controlsVisible && !isLocked ? "cursor-default" : "cursor-none"
       }`}
     >
@@ -831,16 +841,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
       {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
       <div
-        className="absolute inset-0 z-0 cursor-pointer pointer-events-auto touch-none"
+        className={`absolute inset-0 z-0 touch-none ${
+          isExternalPlayer ? "pointer-events-none" : "cursor-pointer pointer-events-auto"
+        }`}
         onClick={() => {
-          if (!isLocked) {
+          if (!isLocked && !isExternalPlayer) {
             handleTogglePlay();
           }
         }}
-        onDoubleClick={onToggleFullscreen}
-        onTouchStart={handleScreenTouchStart}
-        onTouchMove={handleScreenTouchMove}
-        onTouchEnd={handleScreenTouchEnd}
+        onDoubleClick={isExternalPlayer ? undefined : onToggleFullscreen}
+        onTouchStart={isExternalPlayer ? undefined : handleScreenTouchStart}
+        onTouchMove={isExternalPlayer ? undefined : handleScreenTouchMove}
+        onTouchEnd={isExternalPlayer ? undefined : handleScreenTouchEnd}
       />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
@@ -1056,7 +1068,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ======================================================== */}
       <div
         className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
+          controlsVisible && !isLocked && !isExternalPlayer
+            ? "opacity-100 scale-100"
+            : "opacity-0 scale-95 pointer-events-none"
         }`}
       >
         {/* Retroceder 10 Segundos */}
@@ -1112,7 +1126,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ======================================================== */}
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
-          controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
+          controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
         }`}
         onClick={(e) => e.stopPropagation()}
       >
