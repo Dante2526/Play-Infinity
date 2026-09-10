@@ -72,7 +72,7 @@ import {
   isSeasonFullyWatched,
   getSeasonWatchedCount
 } from "./services/watchedEpisodes";
-import { getPlaybackHistory, PlaybackHistoryItem } from "./services/playbackHistory";
+import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "./services/playbackHistory";
 import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "./services/comments";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
@@ -102,7 +102,8 @@ export type OnPlayHandler = (
   autoFullscreen?: boolean,
   imageUrl?: string,
   backdropUrl?: string,
-  posterUrl?: string
+  posterUrl?: string,
+  isAnime?: boolean
 ) => void;
 
 export default function App() {
@@ -131,6 +132,7 @@ export default function App() {
     episode?: number;
     quality?: string;
     isCam?: boolean;
+    isAnime?: boolean;
     initialTime?: number;
     autoFullscreen?: boolean;
     imageUrl?: string;
@@ -210,7 +212,8 @@ export default function App() {
     autoFullscreen?: boolean,
     imageUrl?: string,
     backdropUrl?: string,
-    posterUrl?: string
+    posterUrl?: string,
+    isAnime?: boolean
   ) => {
     setPlayerModal({
       isOpen: true,
@@ -223,6 +226,7 @@ export default function App() {
       episode,
       quality,
       isCam: isCam || checkIsCam(title, quality),
+      isAnime,
       initialTime,
       autoFullscreen,
       imageUrl,
@@ -409,6 +413,7 @@ export default function App() {
             initialEpisode={playerModal.episode}
             quality={playerModal.quality}
             isCam={playerModal.isCam}
+            isAnime={playerModal.isAnime}
             initialTime={playerModal.initialTime}
             autoFullscreen={playerModal.autoFullscreen}
             imageUrl={playerModal.imageUrl}
@@ -519,13 +524,25 @@ function HomePage({
     if (history.length > 0) {
       return history.map(formatHistoryItem);
     }
+    const hasHistoryEverBeenSaved = localStorage.getItem("playinfinity_playback_history");
+    if (hasHistoryEverBeenSaved !== null) {
+      return [];
+    }
     return continueWatching;
   });
+
+  const handleRemoveHistoryItem = (e: React.MouseEvent, item: any) => {
+    e.stopPropagation();
+    e.preventDefault();
+    removePlaybackItem(item.id, item.mediaType || item.type, item.season, item.episodeNumber);
+    setContinueWatchingList(prev => prev.filter(i => String(i.id) !== String(item.id)));
+  };
 
   useEffect(() => {
     const syncHistory = () => {
       const history = getPlaybackHistory();
-      if (history.length > 0) {
+      const hasSaved = localStorage.getItem("playinfinity_playback_history");
+      if (hasSaved !== null || history.length > 0) {
         setContinueWatchingList(history.map(formatHistoryItem));
       }
     };
@@ -670,9 +687,10 @@ function HomePage({
               backdropUrl: formatImageUrl(a.backdrop_path, 'original'),
               type: 'series' as const,
               quality: "HD" as const,
+              isAnime: true,
               rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
               year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
-              playerUrl: `https://v1.watchplay.shop/tvshow/${a.id}/1/1`
+              playerUrl: `https://vidsrc.to/embed/tv/${a.id}/1/1`
             }));
           if (formattedAnimes.length > 0) {
             setAnimeReleases(formattedAnimes);
@@ -892,94 +910,108 @@ function HomePage({
         </section>
 
         {/* Continue Assistindo */}
-        <section>
-          <div className="flex items-center mb-6 pl-2">
-            <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
-          </div>
-          <div className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-2 pb-6 pl-2 pr-4 scrollbar-hide">
-            {continueWatchingList.map((item, idx) => (
-              <div 
-                key={`cw-${item.id}-${idx}`} 
-                onClick={() => {
-                  if (item.currentTime !== undefined && onPlay) {
-                    onPlay(
-                      item.title,
-                      item.playerUrl,
-                      item.mediaType || 'movie',
-                      item.tmdbId,
-                      item.imdbId,
-                      item.season,
-                      item.episodeNumber,
-                      item.quality,
-                      item.isCam,
-                      item.currentTime,
-                      true, // Auto-fullscreen imediato
-                      item.imageUrl,
-                      item.backdropUrl,
-                      item.posterUrl
-                    );
-                  } else if (onPlay) {
-                    // Fallback estático
-                    onPlay(
-                      item.title,
-                      item.playerUrl,
-                      item.title.includes("STRANGER") ? 'series' : 'movie',
-                      item.tmdbId,
-                      item.imdbId,
-                      item.title.includes("STRANGER") ? 4 : undefined,
-                      item.title.includes("STRANGER") ? 1 : undefined,
-                      undefined,
-                      false,
-                      item.progress ? 45 * 60 : undefined,
-                      true, // Auto-fullscreen imediato
-                      item.imageUrl
-                    );
-                  } else {
-                    onItemClick(item.id);
-                  }
-                }} 
-                className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]"
-              >
-                <div className="relative h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
-                  <img 
-                    src={item.imageUrl} 
-                    alt={item.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                    loading="lazy" 
-                    onError={(e) => handlePosterError(e, (item as any).backdropUrl)}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                  
-                  {/* Play Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                    <div className="w-12 h-12 bg-orange-600/90 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_15px_rgba(234,88,12,0.5)]">
-                      <Play className="w-5 h-5 fill-white text-white ml-1" />
-                    </div>
-                  </div>
+        {continueWatchingList.length > 0 && (
+          <section>
+            <div className="flex items-center mb-6 pl-2">
+              <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
+            </div>
+            <div className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-2 pb-6 pl-2 pr-4 scrollbar-hide">
+              {continueWatchingList.map((item, idx) => (
+                <div 
+                  key={`cw-${item.id}-${idx}`} 
+                  onClick={() => {
+                    if (item.currentTime !== undefined && onPlay) {
+                      onPlay(
+                        item.title,
+                        item.playerUrl,
+                        item.mediaType || 'movie',
+                        item.tmdbId,
+                        item.imdbId,
+                        item.season,
+                        item.episodeNumber,
+                        item.quality,
+                        item.isCam,
+                        item.currentTime,
+                        true, // Auto-fullscreen imediato
+                        item.imageUrl,
+                        item.backdropUrl,
+                        item.posterUrl
+                      );
+                    } else if (onPlay) {
+                      // Fallback estático
+                      onPlay(
+                        item.title,
+                        item.playerUrl,
+                        item.title.includes("STRANGER") ? 'series' : 'movie',
+                        item.tmdbId,
+                        item.imdbId,
+                        item.title.includes("STRANGER") ? 4 : undefined,
+                        item.title.includes("STRANGER") ? 1 : undefined,
+                        undefined,
+                        false,
+                        item.progress ? 45 * 60 : undefined,
+                        true, // Auto-fullscreen imediato
+                        item.imageUrl
+                      );
+                    } else {
+                      onItemClick(item.id);
+                    }
+                  }} 
+                  className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px]"
+                >
+                  <div className="relative h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
+                    <img 
+                      src={item.imageUrl} 
+                      alt={item.title} 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                      loading="lazy" 
+                      onError={(e) => handlePosterError(e, (item as any).backdropUrl)}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"></div>
 
-                  <div className="absolute bottom-4 left-4 right-4">
-                    <div className="flex justify-between items-end mb-2">
-                      <div className="truncate mr-2">
-                        <h3 className="font-bold text-white text-base md:text-lg drop-shadow-md truncate">{item.title}</h3>
-                        <p className="text-neutral-300 text-xs mt-0.5 drop-shadow-md truncate">{item.episode}</p>
+                    {/* Botão X para remover do Continue Assistindo */}
+                    <button
+                      type="button"
+                      onClick={(e) => handleRemoveHistoryItem(e, item)}
+                      title="Remover do Continue Assistindo"
+                      aria-label="Remover do Continue Assistindo"
+                      className="absolute top-2.5 right-2.5 z-30 w-7 h-7 md:w-8 md:h-8 rounded-full bg-black/60 hover:bg-red-600/90 text-white/80 hover:text-white flex items-center justify-center backdrop-blur-md border border-white/10 hover:border-red-500/50 transition-all duration-200 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 shadow-lg cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    </button>
+                    
+                    {/* Play Overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 pointer-events-none">
+                      <div className="w-12 h-12 bg-orange-600/90 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_15px_rgba(234,88,12,0.5)]">
+                        <Play className="w-5 h-5 fill-white text-white ml-1" />
                       </div>
-                      <span className="text-[11px] font-mono text-orange-400 shrink-0 font-bold">
-                        {item.progress}%
-                      </span>
                     </div>
-                    {/* Progress Bar */}
-                    <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_8px_rgba(234,88,12,0.8)]" 
-                        style={{ width: `${item.progress}%` }}
-                      ></div>
+
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <div className="flex justify-between items-end mb-2">
+                        <div className="truncate mr-2">
+                          <h3 className="font-bold text-white text-base md:text-lg drop-shadow-md truncate">{item.title}</h3>
+                          <p className="text-neutral-300 text-xs mt-0.5 drop-shadow-md truncate">{item.episode}</p>
+                        </div>
+                        <span className="text-[11px] font-mono text-orange-400 shrink-0 font-bold">
+                          {item.progress}%
+                        </span>
+                      </div>
+                      {/* Progress Bar */}
+                      <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_8px_rgba(234,88,12,0.8)]" 
+                          style={{ width: `${item.progress}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
+          </section>
+        )}
+
 
         {/* 10 Mais Assistidos (Decidido pela audiência real dos usuários) */}
         <ContentRow 
@@ -1117,7 +1149,13 @@ function DetailsPage({
             posterUrl: details.poster_path ? formatImageUrl(details.poster_path, 'w500') : prev.posterUrl,
             year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
             rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
-            genres: details.genres ? details.genres.map(g => g.name) : prev.genres
+            genres: details.genres ? details.genres.map(g => g.name) : prev.genres,
+            isAnime: Boolean(
+              prev.isAnime || 
+              initialItem?.isAnime || 
+              (details.genres?.some((g: any) => g.id === 16 || g.name?.toLowerCase().includes("anima")) && 
+               (details.origin_country?.includes("JP") || details.original_language === "ja"))
+            )
           }));
         }
       } catch (err) {
@@ -1135,11 +1173,16 @@ function DetailsPage({
 
   const isSeries = item.type === 'series';
   const effectiveTmdbId = item.tmdbId || item.id;
+  const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
 
-  // URL de reprodução baseada no WatchPlayer VIP para séries e filmes (Sem Anúncios)
-  const targetPlayerUrl = isSeries
-    ? (item.playerUrl || `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/1`)
-    : (item.playerUrl || `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`);
+  // URL de reprodução: Anime usa vidsrc.to direto, séries/filmes usam WatchPlayer
+  const targetPlayerUrl = isAnimeItem
+    ? (isSeries 
+        ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/1`
+        : `https://vidsrc.to/embed/movie/${effectiveTmdbId}`)
+    : isSeries
+      ? (item.playerUrl || `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/1`)
+      : (item.playerUrl || `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`);
 
   const synopsis = item.synopsis || "Uma experiência cinematográfica envolvente com alta definição e elenco renomado.";
   const year = item.year || 2024;
@@ -1272,7 +1315,8 @@ function DetailsPage({
                   false,
                   item.imageUrl || displayPoster,
                   item.backdropUrl || displayBackdrop,
-                  item.posterUrl || displayPoster
+                  item.posterUrl || displayPoster,
+                  isAnimeItem
                 )}
                 className="flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
@@ -1488,7 +1532,9 @@ function DetailsPage({
                       <div 
                         className="flex items-center gap-3.5 flex-1 cursor-pointer"
                         onClick={() => {
-                          const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                          const epUrl = isAnimeItem 
+                            ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
+                            : `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
                           onPlay?.(
                             `${item.title} - ${ep.title}`, 
                             epUrl, 
@@ -1503,7 +1549,8 @@ function DetailsPage({
                             false,
                             item.imageUrl || displayPoster,
                             item.backdropUrl || displayBackdrop,
-                            item.posterUrl || displayPoster
+                            item.posterUrl || displayPoster,
+                            isAnimeItem
                           );
                         }}
                       >
@@ -1551,7 +1598,9 @@ function DetailsPage({
                         {/* Botão de Play */}
                         <div 
                           onClick={() => {
-                            const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                            const epUrl = isAnimeItem 
+                              ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
+                              : `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
                             onPlay?.(
                               `${item.title} - ${ep.title}`, 
                               epUrl, 
@@ -1566,7 +1615,8 @@ function DetailsPage({
                               false,
                               item.imageUrl || displayPoster,
                               item.backdropUrl || displayBackdrop,
-                              item.posterUrl || displayPoster
+                              item.posterUrl || displayPoster,
+                              isAnimeItem
                             );
                           }}
                           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"

@@ -782,7 +782,69 @@ async function startServer() {
     }
   });
 
-  // API 5: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
+  // API 5: Proxy genérico para servidores de Anime (AnFire / Consumet)
+  app.get("/api/anime-stream", async (req, res) => {
+    const { provider, id, s = "1", e = "1", title = "" } = req.query;
+    
+    // HTML Base injetando o nosso CSS "Skin Netflix" 
+    const baseHtml = `
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+        <style>
+          /* CSS da Skin Netflix (Remoção de anúncios e estética limpa) */
+          body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
+          iframe { width: 100vw; height: 100vh; border: none; }
+          #artplayer-app { width: 100vw; height: 100vh; }
+          
+          /* Esconder elementos indesejados dos embeds padrão */
+          .jw-controls, .art-controls, .vjs-control-bar { opacity: 0.9 !important; }
+        </style>
+      </head>
+      <body>
+    `;
+
+    try {
+      if (provider === "consumet") {
+        // multiembed.mov — player leve e multi-fonte (substitui Consumet)
+        const embedSrc = `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`;
+        return res.send(`
+          ${baseHtml}
+          <iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="${embedSrc}" allowfullscreen></iframe>
+          <script>
+            setTimeout(() => {
+              window.parent.postMessage({ type: 'WATCHPLAY_STATUS', data: { duration: 1200 } }, '*');
+            }, 3500);
+          </script>
+          </body></html>
+        `);
+      }
+      
+      if (provider === "anfire") {
+        // vidsrc.to — player multi-fonte com suporte a anime e PT-BR (substitui AnFire)
+        const embedSrc = `https://vidsrc.to/embed/tv/${id}/${s}/${e}`;
+        return res.send(`
+          ${baseHtml}
+          <iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="${embedSrc}" allowfullscreen></iframe>
+          <script>
+            setTimeout(() => {
+              window.parent.postMessage({ type: 'WATCHPLAY_STATUS', data: { duration: 1200 } }, '*');
+            }, 3000);
+          </script>
+          </body></html>
+        `);
+      }
+
+      return res.status(404).send("Provedor de anime não encontrado.");
+    } catch (err) {
+      console.error("[Anime Stream Error]:", err);
+      return res.send(`${baseHtml}<iframe src="https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&e=${e}" allowfullscreen></iframe></body></html>`);
+    }
+  });
+
+  // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   app.get("/api/watchplayer-stream", async (req, res) => {
     try {
       const targetUrl = req.query.url as string;

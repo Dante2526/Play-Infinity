@@ -29,6 +29,7 @@ interface VideoPlayerModalProps {
   initialEpisode?: number;
   quality?: string;
   isCam?: boolean;
+  isAnime?: boolean;
   initialTime?: number;
   autoFullscreen?: boolean;
   imageUrl?: string;
@@ -114,6 +115,7 @@ export function VideoPlayerModal({
   initialEpisode = 1,
   quality,
   isCam,
+  isAnime,
   initialTime,
   autoFullscreen = false,
   imageUrl,
@@ -136,8 +138,15 @@ export function VideoPlayerModal({
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
-    return target.includes("vidlink.pro") || target.includes("vidsrc") || target.includes("videasy") || target.includes("embed.su") || target.includes("myembed");
-  }, [activeIframeUrl, urlInput]);
+    return Boolean(isAnime) || 
+      target.includes("/api/anime-stream") || 
+      target.includes("vidlink.pro") || 
+      target.includes("vidsrc") || 
+      target.includes("multiembed") || 
+      target.includes("videasy") || 
+      target.includes("embed.su") || 
+      target.includes("myembed");
+  }, [activeIframeUrl, urlInput, isAnime]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
@@ -297,9 +306,30 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores Disponíveis: Player 1 (WatchPlayer) e Player 4 (VidLink)
+  // Servidores para Animes vs Filmes/Séries
   const servers = useMemo(() => {
-    if (isSeries) {
+    if (isAnime) {
+      return [
+        {
+          key: "srv_anfire",
+          label: "Player Anime (Principal)",
+          badge: "Alta Qualidade",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("vidsrc.to"),
+          name: "VidSrc"
+        },
+        {
+          key: "srv_consumet",
+          label: "Player Anime (Leve)",
+          badge: "Carregamento Rápido",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
+          isMatch: (u: string) => u.includes("multiembed.mov"),
+          name: "MultiEmbed"
+        }
+      ];
+    } else if (isSeries) {
       return [
         {
           key: "srv1",
@@ -309,16 +339,7 @@ export function VideoPlayerModal({
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
           name: "Player 1"
-        },
-        {
-          key: "srv4",
-          label: "Player 4 (VidLink)",
-          badge: "Leve • CDN Adaptativa",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://vidlink.pro/tv/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 4"
-        },
+        }
       ];
     } else {
       return [
@@ -329,73 +350,34 @@ export function VideoPlayerModal({
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop"),
           name: "Player 1"
-        },
-        {
-          key: "srv4",
-          label: "Player 4 (VidLink)",
-          badge: "Leve • CDN Adaptativa",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 4"
-        },
+        }
       ];
     }
-  }, [isSeries, imdbId]);
+  }, [isAnime, isSeries, imdbId, title]);
 
-  // Fallback silencioso entre srv1 e srv4 em caso de erro ou lentidão
+  // Fallback silencioso abortado (sem servidores extras)
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
 
   const handleSilentFallback = useCallback(() => {
-    const nextKey = selectedServerKey === "srv1" ? "srv4" : "srv1";
-    if (fallbackAttemptsRef.current.has(nextKey)) {
-      setError("Não foi possível carregar o vídeo neste momento.");
-      setIsLoading(false);
-      return;
-    }
-    fallbackAttemptsRef.current.add(nextKey);
-    setSelectedServerKey(nextKey);
-    setIsLoading(true);
-    setPlayerSkinReady(false);
-    setError(null);
-    transitionEpochRef.current = Date.now();
-
-    const srv = servers.find(s => s.key === nextKey) || servers[0];
-    const newUrl = isSeries
-      ? srv.buildUrl(resolvedId, season, episode)
-      : srv.buildUrl(resolvedId);
-
-    setUrlInput(newUrl);
-    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
-    setExtractedSource(newUrl);
-  }, [selectedServerKey, servers, isSeries, resolvedId, season, episode]);
+    setError("Não foi possível carregar o vídeo neste momento. Tente novamente mais tarde.");
+    setIsLoading(false);
+  }, []);
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
   // Watchdog de segurança do Player 1: se demorar mais de 15s sem emitir stream pronto,
-  // aciona automaticamente fallback para Player 4 (VidLink)
+  // aciona aviso de erro.
   useEffect(() => {
     if (!activeIframeUrl || selectedServerKey !== "srv1" || playerSkinReady) return;
     const timer = setTimeout(() => {
       if (!playerSkinReady && selectedServerKey === "srv1") {
-        console.warn("[VideoPlayerModal] Player 1 demorou mais de 15s sem emitir stream pronto. Acionando fallback para Player 4.");
+        console.warn("[VideoPlayerModal] Player 1 demorou mais de 15s sem emitir stream pronto. Exibindo erro.");
         handleSilentFallback();
       }
     }, 15000);
     return () => clearTimeout(timer);
   }, [activeIframeUrl, selectedServerKey, playerSkinReady, handleSilentFallback]);
-
-  // Watchdog de segurança do overlay para servidores externos (ex: VidLink)
-  useEffect(() => {
-    if (!activeIframeUrl || playerSkinReady) return;
-    if (selectedServerKey === "srv4") {
-      const timer = setTimeout(() => {
-        setPlayerSkinReady(true);
-        setIsLoading(false);
-      }, 3500);
-      return () => clearTimeout(timer);
-    }
-  }, [activeIframeUrl, playerSkinReady, selectedServerKey]);
 
   // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
@@ -421,17 +403,37 @@ export function VideoPlayerModal({
         }
       }
 
-      // Prioriza sempre o Player 1 (WatchPlayer 1080p integrado à skin Netflix)
-      const targetServerKey = "srv1";
-      setSelectedServerKey(targetServerKey);
+      // Detecção de rede para Animes e configuração do servidor inicial
+      const setupInitialServer = async () => {
+        let targetServerKey = "srv1";
+        
+        const isActuallyAnime = isAnime || (title && (
+          title.toLowerCase().includes('anime') || 
+          title.toLowerCase().includes('jujutsu') || 
+          title.toLowerCase().includes('piece') || 
+          title.toLowerCase().includes('naruto') ||
+          title.toLowerCase().includes('titan') ||
+          title.toLowerCase().includes('slayer')
+        ));
 
-      const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
-      const targetUrl = isSeries 
-        ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
-        : targetSrv.buildUrl(resolvedId);
+        if (isActuallyAnime) {
+          // Avalia a internet de forma ultra rápida e silenciosa (sem notificações)
+          const connTier = await detectConnectionQuality(false);
+          targetServerKey = connTier === 'fast' ? "srv_anfire" : "srv_consumet";
+        }
 
-      setUrlInput(targetUrl);
-      handleExtract(targetUrl);
+        setSelectedServerKey(targetServerKey);
+
+        const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
+        const targetUrl = isSeries 
+          ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+          : targetSrv.buildUrl(resolvedId);
+
+        setUrlInput(targetUrl);
+        handleExtract(targetUrl);
+      };
+
+      setupInitialServer();
     } else {
       setActiveIframeUrl(null);
       setError(null);
@@ -685,9 +687,11 @@ export function VideoPlayerModal({
 
     if (
       cleanUrl.includes("watchplay.shop") ||
+      cleanUrl.includes("/api/anime-stream") ||
       cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
+      cleanUrl.includes("multiembed") ||
       cleanUrl.includes("embed.su") || 
       cleanUrl.includes("myembed") ||
       cleanUrl.endsWith(".mp4")
@@ -1105,7 +1109,20 @@ export function VideoPlayerModal({
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
                 allowFullScreen
                 referrerPolicy="origin"
-                onLoad={() => setIsLoading(false)}
+                onLoad={() => {
+                  setIsLoading(false);
+                  // Para iframes de embeds externos (anime, vidsrc, multiembed, etc),
+                  // não espera postMessage — libera o overlay assim que o HTML carregar
+                  if (
+                    isAnime ||
+                    activeIframeUrl?.includes('/api/anime-stream') || 
+                    activeIframeUrl?.includes('/api/watchplayer-stream') ||
+                    activeIframeUrl?.includes('vidsrc.to') ||
+                    activeIframeUrl?.includes('multiembed')
+                  ) {
+                    setTimeout(() => setPlayerSkinReady(true), 600);
+                  }
+                }}
                 onError={() => handleSilentFallback()}
               />
             ) : error ? (

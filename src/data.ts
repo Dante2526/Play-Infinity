@@ -16,6 +16,7 @@ export type CatalogItem = {
   playerUrl?: string;
   quality?: 'CAM' | 'TS' | 'HD' | '4K' | 'FULL HD';
   provider?: string;
+  isAnime?: boolean;
 };
 
 /** Verifica se um item possui qualidade CAM (gravação de cinema) */
@@ -196,6 +197,7 @@ export const animes = [
     title: "ATTACK ON TITAN",
     type: "series" as const,
     quality: "HD" as const,
+    isAnime: true,
     imageUrl: "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/71FiW6q1Qf22OQj2b8P1gM1VqG1.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/1429/1/1",
@@ -206,6 +208,7 @@ export const animes = [
     title: "DEMON SLAYER",
     type: "series" as const,
     quality: "HD" as const,
+    isAnime: true,
     imageUrl: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/nTvM4mhqZlHIvUkI1gVnWumrSlp.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/85937/1/1",
@@ -216,6 +219,7 @@ export const animes = [
     title: "SOLO LEVELING",
     type: "series" as const,
     quality: "HD" as const,
+    isAnime: true,
     imageUrl: "https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuPxJ8ZXq5.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2UMOPX96D.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/209867/1/1",
@@ -226,6 +230,7 @@ export const animes = [
     title: "DEATH NOTE",
     type: "series" as const,
     quality: "HD" as const,
+    isAnime: true,
     imageUrl: "https://image.tmdb.org/t/p/w500/iigTJJskR1PcjjUq59Hq526fZ1g.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/gmp3Q91H84VvBqf5u65iVv7QWff.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/1399/1/1",
