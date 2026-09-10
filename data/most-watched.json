@@ -21,8 +21,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/66732/4/1",
-    "views": 176,
-    "lastWatched": "2026-09-09T20:44:14.765Z"
+    "views": 179,
+    "lastWatched": "2026-09-09T23:47:50.455Z"
   },
   {
     "id": 533535,
@@ -58,8 +58,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     "quality": "CAM",
     "playerUrl": "https://v1.watchplay.shop/movie/969681",
-    "views": 155,
-    "lastWatched": "2026-09-09T20:36:38.486Z"
+    "views": 158,
+    "lastWatched": "2026-09-10T11:11:06.805Z"
   },
   {
     "id": 119051,
@@ -142,5 +142,73 @@
     "playerUrl": "https://v1.watchplay.shop/movie/1201835",
     "views": 9,
     "lastWatched": "2026-09-09T19:22:01.417Z"
+  },
+  {
+    "id": 1788996035317,
+    "title": "alert('hack')O Senhor dos Anéis VIP",
+    "type": "movie",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "4K",
+    "views": 1,
+    "lastWatched": "2026-09-09T23:20:35.317Z"
+  },
+  {
+    "id": 1788996035332,
+    "title": "Filme Teste Anti Flood",
+    "type": "movie",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "views": 1,
+    "lastWatched": "2026-09-09T23:20:35.349Z"
+  },
+  {
+    "id": 306956,
+    "tmdbId": 306956,
+    "title": "Quem Ama Cuida",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/306956/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-09T23:57:18.109Z"
+  },
+  {
+    "id": 30984,
+    "tmdbId": 30984,
+    "title": "Bleach",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/30984/1/1",
+    "views": 9,
+    "lastWatched": "2026-09-10T11:12:26.255Z"
+  },
+  {
+    "id": 94664,
+    "tmdbId": 94664,
+    "title": "Mushoku Tensei: Jobless Reincarnation",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/94664/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-10T01:44:28.702Z"
+  },
+  {
+    "id": 30801,
+    "tmdbId": 30801,
+    "title": "2 Days & 1 Night",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/30801/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-10T01:44:48.668Z"
   }
 ]

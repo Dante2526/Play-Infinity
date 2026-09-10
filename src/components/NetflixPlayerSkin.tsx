@@ -167,9 +167,60 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // Rastreamento se a abertura já foi pulada neste episódio
   const [hasSkippedThisEpisode, setHasSkippedThisEpisode] = useState<boolean>(false);
 
+  // ---------------------------------------------------------------------
+  // Confiabilidade da sincronização com o player real (dentro do iframe)
+  // ---------------------------------------------------------------------
+  // A skin não tem acesso direto ao <video>: tudo que ela "sabe" vem de
+  // postMessage. Esses controles evitam que a UI minta sobre o estado real
+  // quando o iframe para de reportar (buffer, provider que não implementa
+  // o protocolo, aba em segundo plano, etc.)
+  const lastRealStatusAtRef = useRef<number>(Date.now()); // timestamp da última mensagem de status válida e confiável
+  const firstSyncAtRef = useRef<number>(0); // timestamp do primeiro sync real recebido
+  const [hasEverSynced, setHasEverSynced] = useState<boolean>(false); // já recebemos ao menos 1 status real?
+  const [isSyncStale, setIsSyncStale] = useState<boolean>(false); // já sincronizou, mas parou de reportar
+
+  // Valida se a mensagem recebida vem de uma origem em que confiamos
+  // (o próprio app, ou o domínio que nós mesmos carregamos no iframe).
+  // Evita que scripts/anúncios de terceiros dentro do embed falsifiquem status.
+  const isTrustedMessageOrigin = useCallback(
+    (origin: string) => {
+      if (!origin || origin === "null") return false;
+      if (origin === window.location.origin) return true;
+      if (
+        origin === "https://vidlink.pro" ||
+        origin === "https://v1.watchplay.shop" ||
+        origin === "https://watchplay.shop"
+      ) {
+        return true;
+      }
+      try {
+        const iframeSrc = iframeRef.current?.src;
+        if (iframeSrc && new URL(iframeSrc, window.location.href).origin === origin) return true;
+      } catch {
+        // ignora URL inválida
+      }
+      return false;
+    },
+    [iframeRef]
+  );
+
   useEffect(() => {
     setHasSkippedThisEpisode(false);
-  }, [episode, season]);
+    setPlayerStatus({
+      currentTime: 0,
+      duration: 0,
+      paused: false,
+      muted: false,
+      volume: 1,
+      buffered: 0,
+      playbackRate: 1,
+      readyState: 0,
+    });
+    setIsSyncStale(false);
+    setHasEverSynced(false);
+    firstSyncAtRef.current = 0;
+    lastRealStatusAtRef.current = Date.now();
+  }, [episode, season, mediaId]);
 
   // Gestos Touch Mobile Verticais (Esquerda = Brilho, Direita = Volume)
   const touchStartYRef = useRef<number | null>(null);
@@ -194,12 +245,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   const handleScreenTouchMove = (e: React.TouchEvent) => {
     if (!touchModeRef.current || touchStartYRef.current === null || isLocked) return;
+    if (e.cancelable) e.preventDefault();
     const t = e.touches[0];
-    const deltaY = touchStartYRef.current - t.clientY; // Arrastar para cima = positivo
+    const deltaY = isRotated && touchStartXRef.current !== null
+      ? t.clientX - touchStartXRef.current
+      : touchStartYRef.current - t.clientY; // Arrastar para cima = positivo
 
     if (Math.abs(deltaY) < 8) return; // Limiar mínimo para toque simples
 
-    const screenH = window.innerHeight || 400;
+    const screenH = isRotated ? (window.innerWidth || 600) : (window.innerHeight || 400);
     const deltaRatio = deltaY / (screenH * 0.45);
 
     if (touchHudTimerRef.current) clearTimeout(touchHudTimerRef.current);
@@ -304,25 +358,79 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (!e.data || typeof e.data !== "object") return;
+      if (!isTrustedMessageOrigin(e.origin)) return; // ignora mensagens de origens não confiáveis
       const msgType = e.data.type || e.data.event;
       if (
         msgType === "WATCHPLAY_STATUS" ||
         msgType === "PLAYER_STATUS" ||
         msgType === "status" ||
-        msgType === "timeupdate"
+        msgType === "timeupdate" ||
+        msgType === "PLAYER_EVENT"
       ) {
-        const data = e.data.data || e.data;
-        setPlayerStatus((prev) => ({
-          ...prev,
-          currentTime: typeof data.currentTime === "number" ? data.currentTime : prev.currentTime,
-          duration: typeof data.duration === "number" && data.duration > 0 ? data.duration : prev.duration,
-          paused: typeof data.paused === "boolean" ? data.paused : prev.paused,
-          muted: typeof data.muted === "boolean" ? data.muted : prev.muted,
-          volume: typeof data.volume === "number" ? data.volume : prev.volume,
-          buffered: typeof data.buffered === "number" ? data.buffered : prev.buffered,
-          playbackRate: typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate,
-          readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
-        }));
+        const data = (msgType === "PLAYER_EVENT" && e.data.data) ? e.data.data : (e.data.data || e.data);
+
+        // Se for PLAYER_EVENT do VidLink:
+        const isVidLinkEvent = msgType === "PLAYER_EVENT";
+        const isVidLinkPlay = isVidLinkEvent && data.event === "play";
+        const isVidLinkPause = isVidLinkEvent && data.event === "pause";
+        const isVidLinkEnded = isVidLinkEvent && data.event === "ended";
+
+        if (isVidLinkEnded && isSeries && onEpisodeChange) {
+          onEpisodeChange(episode + 1);
+        }
+
+        // Sinal real do player
+        const hasRealSignal =
+          typeof data.currentTime === "number" ||
+          typeof data.duration === "number" ||
+          typeof data.paused === "boolean" ||
+          isVidLinkPlay ||
+          isVidLinkPause;
+
+        if (hasRealSignal) {
+          lastRealStatusAtRef.current = Date.now();
+          if (firstSyncAtRef.current === 0) {
+            firstSyncAtRef.current = Date.now();
+          }
+          setIsSyncStale(false);
+          setHasEverSynced((prev) => (prev ? prev : true));
+        }
+
+        const incomingTime = typeof data.currentTime === "number" ? data.currentTime : null;
+
+        setPlayerStatus((prev) => {
+          let updatedTime = prev.currentTime;
+          if (incomingTime !== null) {
+            const diff = incomingTime - prev.currentTime;
+            // Seek ou salto relevante (> 1.2s): sincroniza direto
+            // Ajuste sutil: reconciliação suave sem solavanco visual
+            if (Math.abs(diff) > 1.2) {
+              updatedTime = incomingTime;
+            } else if (Math.abs(diff) > 0.15) {
+              updatedTime = prev.currentTime + (diff * 0.5);
+            }
+          }
+
+          const resolvedPaused = isVidLinkPlay
+            ? false
+            : isVidLinkPause
+            ? true
+            : typeof data.paused === "boolean"
+            ? data.paused
+            : prev.paused;
+
+          return {
+            ...prev,
+            currentTime: updatedTime,
+            duration: typeof data.duration === "number" && data.duration > 0 ? data.duration : prev.duration,
+            paused: resolvedPaused,
+            muted: typeof data.muted === "boolean" ? data.muted : prev.muted,
+            volume: typeof data.volume === "number" ? data.volume : prev.volume,
+            buffered: typeof data.buffered === "number" ? data.buffered : prev.buffered,
+            playbackRate: typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate,
+            readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
+          };
+        });
       }
     };
 
@@ -332,20 +440,54 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [sendCommand]);
+  }, [sendCommand, isTrustedMessageOrigin]);
 
-  // Timer local suave para avançar a barra de tempo continuamente enquanto reproduz
+  // Sincronização periódica ativa com o iframe a cada 2.5s para manter o relógio fiel ao vídeo real
   useEffect(() => {
-    if (playerStatus.paused || isScrubbing) return;
+    if (playerStatus.paused) return;
+    const syncInterval = setInterval(() => {
+      sendCommand({ type: "REQUEST_STATUS" });
+    }, 2500);
+    return () => clearInterval(syncInterval);
+  }, [playerStatus.paused, sendCommand]);
+
+  // Vigia (watchdog): se já sincronizamos alguma vez e o player real parou
+  // de reportar por mais de 10s enquanto deveria estar tocando, assumimos que
+  // ele travou/deu buffer.
+  // Grace period de 6s após o primeiro sync evita falsos positivos no
+  // carregamento inicial (especialmente em localhost com HMR/devserver).
+  useEffect(() => {
+    if (!hasEverSynced) return;
+    const watchdog = setInterval(() => {
+      const now = Date.now();
+      const gracePeriodActive = firstSyncAtRef.current > 0 && now - firstSyncAtRef.current < 6000;
+      if (gracePeriodActive) {
+        setIsSyncStale(false);
+        return;
+      }
+      const stale = !playerStatus.paused && now - lastRealStatusAtRef.current > 10000;
+      setIsSyncStale(stale);
+    }, 1500);
+    return () => clearInterval(watchdog);
+  }, [hasEverSynced, playerStatus.paused]);
+
+  // Timer local suave para avançar a barra de tempo continuamente enquanto reproduz.
+  // Só avança enquanto a sincronização com o player real estiver "fresca" —
+  // se estiver stale (sem notícia do iframe há mais de 4s), congela em vez de
+  // fingir que o vídeo continua andando.
+  useEffect(() => {
+    if (playerStatus.paused || isScrubbing || isSyncStale) return;
     const interval = setInterval(() => {
       setPlayerStatus((prev) => {
         if (prev.paused || prev.duration <= 0) return prev;
+        // Não extrapola o final artificialmente quando faltar menos de 1s
+        if (prev.duration - prev.currentTime <= 1.0) return prev;
         const nextTime = Math.min(prev.duration, prev.currentTime + 0.25);
         return { ...prev, currentTime: nextTime };
       });
     }, 250);
     return () => clearInterval(interval);
-  }, [playerStatus.paused, isScrubbing]);
+  }, [playerStatus.paused, isScrubbing, isSyncStale]);
 
   // Reseta o timer de auto-hide ao mover o mouse ou tocar
   const handleUserActivity = useCallback(() => {
@@ -396,6 +538,24 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   }, [playerStatus.paused, handleUserActivity]);
 
   // Play / Pause
+  // Atualiza o estado local de forma otimista (resposta instantânea na UI),
+  // mas isso é só um "palpite" até o iframe confirmar via postMessage.
+  // Se o real player não confirmar em ~1.2s, mostramos um aviso sutil de
+  // que aquela ação pode não ter chegado ao vídeo de fato — em vez de fingir
+  // pra sempre que está tudo sincronizado.
+  const actionUnconfirmedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const requestActionConfirmation = useCallback(() => {
+    const statusAtRequest = lastRealStatusAtRef.current;
+    if (actionUnconfirmedTimerRef.current) clearTimeout(actionUnconfirmedTimerRef.current);
+    actionUnconfirmedTimerRef.current = setTimeout(() => {
+      // Se nenhum status novo chegou desde que a ação foi disparada, o comando
+      // provavelmente não foi reconhecido por esse player específico.
+      if (lastRealStatusAtRef.current === statusAtRequest) {
+        setIsSyncStale(true);
+      }
+    }, 1200);
+  }, []);
+
   const handleTogglePlay = () => {
     if (isLocked) return;
     if (playerStatus.paused) {
@@ -405,6 +565,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       sendCommand({ type: "PAUSE" });
       setPlayerStatus((p) => ({ ...p, paused: true }));
     }
+    if (hasEverSynced) requestActionConfirmation();
     handleUserActivity();
   };
 
@@ -425,14 +586,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Controle de Brilho da Netflix (Sol à esquerda - Exibido apenas em Tela Cheia)
   const updateBrightnessFromY = (clientY: number) => {
-    // Usa o ref da barra interna (trilho real) para cálculo preciso
     const trackEl = brightnessTrackRef.current || brightnessBarRef.current;
     if (!trackEl) return;
     const rect = trackEl.getBoundingClientRect();
-    // Calcula ratio linear de 0 (base) a 1 (topo) usando as coordenadas exatas do trilho
     const rawRatio = (rect.bottom - clientY) / rect.height;
     const ratio = Math.max(0, Math.min(1, rawRatio));
-    // Brilho varia de 0.2 (escuro) a 1.2 (claro), normal = 1.0 (em 80% do slider)
     const val = 0.2 + ratio * 1.0;
     setBrightness(val);
     if (onBrightnessChange) {
@@ -647,13 +805,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     ? `S${season}:E${episode} "${title || "Episódio " + episode}"`
     : `"${title || "Filme"}"`;
 
+  // Ocultar controles nativos em players externos é resolvido bloqueando eventos de ponteiro no iframe,
+  // permitindo que a Skin Netflix seja a única UI interativa (z-index superior).
+
   return (
     <div
       onMouseMove={handleUserActivity}
       onClick={handleUserActivity}
       className={`absolute inset-0 z-30 select-none overflow-hidden transition-all duration-300 ${
         controlsVisible && !isLocked ? "cursor-default" : "cursor-none"
-      } ${isExternalPlayer ? "pointer-events-none" : ""}`}
+      }`}
     >
       {/* Camada de Ajuste de Brilho Visual (Escurece ou Clareia o Vídeo com compatibilidade total) */}
       <div
@@ -669,20 +830,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       />
 
       {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
-      {!isExternalPlayer && hasValidDuration && (
-        <div
-          className="absolute inset-0 z-0 cursor-pointer pointer-events-auto"
-          onClick={() => {
-            if (!isLocked) {
-              handleTogglePlay();
-            }
-          }}
-          onDoubleClick={onToggleFullscreen}
-          onTouchStart={handleScreenTouchStart}
-          onTouchMove={handleScreenTouchMove}
-          onTouchEnd={handleScreenTouchEnd}
-        />
-      )}
+      <div
+        className="absolute inset-0 z-0 cursor-pointer pointer-events-auto touch-none"
+        onClick={() => {
+          if (!isLocked) {
+            handleTogglePlay();
+          }
+        }}
+        onDoubleClick={onToggleFullscreen}
+        onTouchStart={handleScreenTouchStart}
+        onTouchMove={handleScreenTouchMove}
+        onTouchEnd={handleScreenTouchEnd}
+      />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
       {touchHud && (
@@ -708,16 +867,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       )}
 
       {/* Gradientes Suaves de Cinema (Superior e Inferior) */}
-      {!isExternalPlayer && (
-        <div
-          className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
-            controlsVisible && !isLocked ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
-          <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
-        </div>
-      )}
+      <div
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-300 ${
+          controlsVisible && !isLocked ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
+        <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
+      </div>
 
       {/* ========================================================
           MODO BLOQUEADO (LOCK MODE DA NETFLIX)
@@ -866,7 +1023,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           }`}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Indicador Numérico de Porcentagem com largura e altura padronizadas */}
+          {/* Indicador Numérico de Porcentagem */}
           <div
             className={`w-10 sm:w-11 h-5 sm:h-6 flex items-center justify-center rounded-full bg-black/85 border text-white font-mono font-bold text-[10px] sm:text-xs backdrop-blur-md shadow-xl transition-colors duration-150 select-none tabular-nums shrink-0 ${
               isDraggingBrightness ? "opacity-100 border-white/60 bg-black/95 text-white" : "opacity-85 border-white/25 text-white/90"
@@ -897,12 +1054,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
-      {!isExternalPlayer && hasValidDuration && (
-        <div
-          className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-            controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
-          }`}
-        >
+      <div
+        className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
+          controlsVisible && !isLocked ? "opacity-100 scale-100" : "opacity-0 scale-95"
+        }`}
+      >
         {/* Retroceder 10 Segundos */}
         <button
           onClick={(e) => {
@@ -949,13 +1105,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </span>
         </button>
       </div>
-      )}
 
       {/* ========================================================
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      {!isExternalPlayer && hasValidDuration && (
       <div
         className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
           controlsVisible && !isLocked ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4 pointer-events-none"
@@ -1004,8 +1158,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </div>
 
           {/* Tempo Restante à Direita (ex: 48:04 ou 30:05) */}
-          <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow">
+          <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5">
             {hasValidDuration ? formatTime(remainingTime) : "--:--"}
+            {isSyncStale && (
+              <span
+                className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"
+                title="Sincronização com o player pode estar atrasada (buffer ou provedor sem confirmação)"
+              />
+            )}
           </span>
         </div>
 
@@ -1094,7 +1254,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           )}
         </div>
       </div>
-      )}
 
       {/* ========================================================
           MODAL: VELOCIDADE DE REPRODUÇÃO (ESTÉTICA OFICIAL NETFLIX)

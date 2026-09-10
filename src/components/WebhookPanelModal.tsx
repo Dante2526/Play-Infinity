@@ -55,7 +55,10 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
     try {
       const res = await fetch("/api/novo-episodio", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-webhook-secret": "playinfinity_secret_webhook_2026"
+        },
         body: JSON.stringify({
           title: testTitle,
           season: Number(testSeason),
@@ -82,6 +85,7 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
   const endpointUrl = typeof window !== "undefined" ? `${window.location.origin}/api/novo-episodio` : "/api/novo-episodio";
   const curlExample = `curl -X POST ${endpointUrl} \\
   -H "Content-Type: application/json" \\
+  -H "x-webhook-secret: playinfinity_secret_webhook_2026" \\
   -d '{
     "title": "Mayday Dublado",
     "season": 1,

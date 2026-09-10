@@ -162,7 +162,7 @@ function getMostWatchedFilePath(): string {
   return path.join(process.cwd(), "data", "most-watched.json");
 }
 
-function loadMostWatched(): WatchedItem[] {
+function loadMostWatchedFromDisk(): WatchedItem[] {
   try {
     const filePath = getMostWatchedFilePath();
     if (fs.existsSync(filePath)) {
@@ -173,22 +173,193 @@ function loadMostWatched(): WatchedItem[] {
       }
     }
   } catch (err) {
-    console.error("[MostWatched] Erro ao carregar arquivo:", err);
+    console.error("[MostWatched] Erro ao carregar arquivo na inicialização:", err);
   }
   return [...INITIAL_MOST_WATCHED];
 }
 
-function saveMostWatched(items: WatchedItem[]): void {
-  try {
-    const dir = path.join(process.cwd(), "data");
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+// Cache em RAM carregado no boot (zero I/O bloqueante durante requisições HTTP)
+const mostWatchedMemoryCache: WatchedItem[] = loadMostWatchedFromDisk();
+let saveDebounceTimer: NodeJS.Timeout | null = null;
+
+// Escrita assíncrona não-bloqueante no disco com Debounce de 2s
+function scheduleAsyncSaveMostWatched(): void {
+  if (saveDebounceTimer) return;
+  saveDebounceTimer = setTimeout(async () => {
+    saveDebounceTimer = null;
+    try {
+      const dir = path.join(process.cwd(), "data");
+      await fs.promises.mkdir(dir, { recursive: true });
+      const filePath = getMostWatchedFilePath();
+      await fs.promises.writeFile(filePath, JSON.stringify(mostWatchedMemoryCache, null, 2), "utf-8");
+    } catch (err) {
+      console.error("[MostWatched] Falha ao persistir audiência no disco de forma assíncrona:", err);
     }
-    const filePath = getMostWatchedFilePath();
-    fs.writeFileSync(filePath, JSON.stringify(items, null, 2), "utf-8");
-  } catch (err) {
-    console.error("[MostWatched] Erro ao salvar arquivo:", err);
+  }, 2000);
+}
+
+/**
+ * Utilitário de sanitização para strings de entrada da API
+ */
+function sanitizeString(val: any, maxLength = 100): string {
+  if (typeof val !== "string") return "";
+  return val
+    .replace(/<[^>]*>?/gm, "")
+    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
+    .trim()
+    .slice(0, maxLength);
+}
+
+// Rate-limit e proteção contra inflação de views no /api/track-play:
+// IP -> { timestamps: number[], titleCooldown: Map<string, number> }
+const trackPlayRateLimits = new Map<string, { timestamps: number[]; titleCooldown: Map<string, number> }>();
+
+function checkTrackPlayRateLimit(ip: string, titleKey: string): { allowed: boolean; shouldIncrement: boolean; error?: string } {
+  const now = Date.now();
+  let record = trackPlayRateLimits.get(ip);
+  if (!record) {
+    record = { timestamps: [], titleCooldown: new Map() };
+    trackPlayRateLimits.set(ip, record);
   }
+
+  // 1. Limpa timestamps com mais de 60 segundos
+  record.timestamps = record.timestamps.filter(ts => now - ts < 60000);
+
+  // 2. Limite global por IP: máx 15 requisições por minuto
+  if (record.timestamps.length >= 15) {
+    return { allowed: false, shouldIncrement: false, error: "Muitas requisições de reprodução. Aguarde um momento." };
+  }
+
+  record.timestamps.push(now);
+
+  // 3. Debounce por título: mesmo IP só incrementa views para o mesmo título a cada 45 segundos
+  const lastPlayForTitle = record.titleCooldown.get(titleKey) || 0;
+  if (now - lastPlayForTitle < 45000) {
+    return { allowed: true, shouldIncrement: false }; // Aceita a request, mas não infla o contador de views
+  }
+
+  record.titleCooldown.set(titleKey, now);
+
+  // Limpeza de cooldowns expirados se a lista crescer
+  if (record.titleCooldown.size > 100) {
+    for (const [key, ts] of record.titleCooldown.entries()) {
+      if (now - ts > 120000) record.titleCooldown.delete(key);
+    }
+  }
+
+  return { allowed: true, shouldIncrement: true };
+}
+
+/**
+ * Heurística robusta anti-Superflix:
+ * Detecta qualquer tentativa de redirecionamento para o ecossistema Superflix
+ * através de regex multi-domínio, meta refreshes, scripts e URLs de iframe.
+ */
+function isSuperflixDetected(content: string, url: string = ""): boolean {
+  if (!content && !url) return false;
+  
+  // 1. Regex de domínios conhecidos e variações TLD
+  const superflixDomainRegex = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
+  
+  if (url && superflixDomainRegex.test(url)) return true;
+  if (superflixDomainRegex.test(content)) return true;
+
+  // 2. Palavras-chave no HTML/JS excluindo o comentário do nosso próprio filtro
+  const lower = content.toLowerCase();
+  const keywords = ["superflixapi", "superflix", "sfapi", "super-flix", "superflix.player"];
+  for (const kw of keywords) {
+    if (lower.includes(kw) && !lower.includes("superflix-ad-filter")) {
+      return true;
+    }
+  }
+
+  // 3. Meta refreshes ou scripts de redirecionamento
+  const metaRefresh = content.match(/<meta\s+http-equiv=["']refresh["']\s+content=["'][^"']*url=([^"']+)["']/i);
+  if (metaRefresh && metaRefresh[1]) {
+    const target = metaRefresh[1].toLowerCase();
+    if (target.includes("superflix") || superflixDomainRegex.test(target)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * ========================================================
+ * PROTEÇÃO ANTI-SSRF (SERVER-SIDE REQUEST FORGERY)
+ * ========================================================
+ * Bloqueia estritamente requisições a redes locais/privadas,
+ * metadados de nuvem e domínios fora da allowlist autorizada.
+ */
+const ALLOWED_STREAMING_DOMAINS = [
+  "watchplay.shop",
+  "v1.watchplay.shop",
+  "vidlink.pro",
+  "superflixapi.top",
+  "embedder.net",
+  "warezcdn.net",
+  "warezcdn.com",
+  "encontrei.info",
+  "themoviedb.org",
+  "tmdb.org",
+  "youtube.com",
+  "youtu.be",
+  "unsplash.com",
+  "image.tmdb.org"
+];
+
+function isPrivateOrLocalIp(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "0.0.0.0"
+  ) {
+    return true;
+  }
+  // RFC 1918 Private IPv4 Ranges & Cloud Metadata
+  if (/^10\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^169\.254\./.test(host)) return true; // AWS/GCP/Azure link-local metadata (169.254.169.254)
+  if (!host.includes(".")) return true; // Hosts locais sem domínio público
+  if (/\.(local|internal|lan|corp|home)$/i.test(host)) return true;
+  return false;
+}
+
+function validateSafeUrl(rawUrl: string, customAllowed = ALLOWED_STREAMING_DOMAINS): { valid: boolean; error?: string; parsedUrl?: URL } {
+  if (!rawUrl || typeof rawUrl !== "string") {
+    return { valid: false, error: "A URL é obrigatória e deve ser uma string." };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    return { valid: false, error: "Formato de URL inválido." };
+  }
+
+  // Permitir estritamente apenas HTTP e HTTPS
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { valid: false, error: `Protocolo '${parsed.protocol}' não permitido por segurança. Apenas HTTP e HTTPS são aceitos.` };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  // Bloqueio rigoroso de redes locais e metadados de nuvem (Anti-SSRF)
+  if (isPrivateOrLocalIp(hostname)) {
+    return { valid: false, error: "Acesso a endereços locais ou redes internas bloqueado pelo firewall anti-SSRF." };
+  }
+
+  // Verificação de allowlist
+  const isAllowed = customAllowed.some((domain) => hostname === domain || hostname.endsWith("." + domain));
+  if (!isAllowed) {
+    return { valid: false, error: `Domínio '${hostname}' não autorizado pela política de segurança.` };
+  }
+
+  return { valid: true, parsedUrl: parsed };
 }
 
 async function startServer() {
@@ -202,8 +373,9 @@ async function startServer() {
   app.get("/api/extract-player", async (req, res) => {
     const targetUrl = req.query.url as string;
 
-    if (!targetUrl) {
-      return res.status(400).json({ success: false, error: "A URL é obrigatória." });
+    const validation = validateSafeUrl(targetUrl);
+    if (!validation.valid) {
+      return res.status(403).json({ success: false, error: validation.error });
     }
 
     try {
@@ -375,8 +547,25 @@ async function startServer() {
     }
   });
 
-  // API 2: Endpoint para receber novos episódios instantaneamente (Webhook)
+  // API 2: Endpoint para receber novos episódios instantaneamente (Webhook Autenticado e Seguro)
   app.post("/api/novo-episodio", (req, res) => {
+    // 1. Verificação de Chave de Autenticação
+    const webhookSecret = process.env.WEBHOOK_SECRET || "playinfinity_secret_webhook_2026";
+    const authHeader = req.headers["authorization"] || "";
+    const customHeader = req.headers["x-webhook-secret"] || "";
+
+    const bearerToken = typeof authHeader === "string" && authHeader.startsWith("Bearer ")
+      ? authHeader.slice(7).trim()
+      : "";
+    const providedKey = (typeof customHeader === "string" ? customHeader.trim() : "") || bearerToken;
+
+    if (!providedKey || providedKey !== webhookSecret) {
+      return res.status(401).json({
+        success: false,
+        error: "Acesso não autorizado. Chave do webhook inválida ou ausente (informe via header x-webhook-secret ou Authorization: Bearer).",
+      });
+    }
+
     const { title, type = "series", season, episode, playerUrl, imageUrl } = req.body;
 
     if (!title || !playerUrl) {
@@ -386,20 +575,29 @@ async function startServer() {
       });
     }
 
+    // 2. Sanitização da URL do player para evitar injeções maliciosas ou SSRF
+    const urlValidation = validateSafeUrl(playerUrl);
+    if (!urlValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        error: `URL do player inválida ou não autorizada: ${urlValidation.error}`,
+      });
+    }
+
     const newItem: StreamItem = {
       id: "custom-" + Date.now(),
-      title,
+      title: String(title).slice(0, 150),
       type: type === "movie" ? "movie" : "series",
       season: season ? Number(season) : undefined,
       episode: episode ? Number(episode) : undefined,
-      playerUrl,
+      playerUrl: urlValidation.parsedUrl!.toString(),
       imageUrl: imageUrl || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
       createdAt: new Date().toISOString(),
     };
 
     customStreams.unshift(newItem);
 
-    console.log(`[Webhook] Novo item recebido: ${newItem.title} (${newItem.type})`);
+    console.log(`[Webhook] Novo item recebido com sucesso: ${newItem.title} (${newItem.type})`);
 
     return res.status(201).json({
       success: true,
@@ -416,12 +614,11 @@ async function startServer() {
     });
   });
 
-  // API 3.5: Obter Top 10 Mais Assistidos pelos usuários
+  // API 3.5: Obter Top 10 Mais Assistidos pelos usuários (Leitura instantânea de RAM O(1))
   app.get("/api/most-watched", (_req, res) => {
     try {
-      const items = loadMostWatched();
       // Ordena por número de visualizações descrescente, com desempate por última visualização
-      const sorted = [...items].sort((a, b) => {
+      const sorted = [...mostWatchedMemoryCache].sort((a, b) => {
         if (b.views !== a.views) return b.views - a.views;
         return new Date(b.lastWatched).getTime() - new Date(a.lastWatched).getTime();
       });
@@ -435,55 +632,81 @@ async function startServer() {
     }
   });
 
-  // API 3.6: Registrar reprodução de filme ou série iniciada por um usuário
+  // API 3.6: Registrar reprodução iniciada por um usuário (Protegido por rate-limit e sanitização)
   app.post("/api/track-play", (req, res) => {
     try {
+      const clientIp = ((req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim()) || req.socket.remoteAddress || "127.0.0.1";
       const { id, tmdbId, imdbId, title, type, imageUrl, backdropUrl, quality, playerUrl } = req.body;
 
-      if (!title) {
-        return res.status(400).json({ success: false, error: "O título é obrigatório para contabilizar." });
+      // 1. Sanitização e validação de título
+      const cleanTitle = sanitizeString(title, 100);
+      if (!cleanTitle || cleanTitle.length < 1) {
+        return res.status(400).json({ success: false, error: "Título inválido ou não fornecido." });
       }
 
-      const items = loadMostWatched();
-      const normTitle = String(title).trim().toUpperCase();
+      // Chave de desduplicação por título normalizado
+      const normTitle = cleanTitle.toUpperCase();
+      const dedupeKey = tmdbId ? `tmdb:${tmdbId}` : `title:${normTitle}`;
 
-      // Procura por tmdbId ou título normalizado
-      let existing = items.find(
+      // 2. Verificação de rate-limit e anti-inflação de views por IP
+      const rateCheck = checkTrackPlayRateLimit(clientIp, dedupeKey);
+      if (!rateCheck.allowed) {
+        return res.status(429).json({ success: false, error: rateCheck.error || "Muitas requisições. Aguarde um momento." });
+      }
+
+      // Validação estrita de campos
+      const safeType = type === "series" ? "series" : "movie";
+      const allowedQualities = ["HD", "FHD", "4K", "CAM", "SD"];
+      const safeQuality = allowedQualities.includes(quality) ? quality : "HD";
+      const safeImageUrl = sanitizeString(imageUrl, 500) || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80";
+      const safeBackdropUrl = sanitizeString(backdropUrl, 500) || safeImageUrl;
+      const safePlayerUrl = sanitizeString(playerUrl, 500);
+
+      // Procura por tmdbId ou título normalizado diretamente na RAM
+      let existing = mostWatchedMemoryCache.find(
         (it) => (tmdbId && it.tmdbId === Number(tmdbId)) || (id && it.id === id) || it.title.toUpperCase() === normTitle
       );
 
       if (existing) {
-        existing.views += 1;
+        // Incrementa view apenas se passou da janela de cooldown do IP (anti-flood)
+        if (rateCheck.shouldIncrement) {
+          existing.views += 1;
+        }
         existing.lastWatched = new Date().toISOString();
-        if (playerUrl && (!existing.playerUrl || existing.playerUrl.includes("watchplay.shop"))) existing.playerUrl = playerUrl;
-        if (imageUrl && !existing.imageUrl) existing.imageUrl = imageUrl;
-        if (backdropUrl && !existing.backdropUrl) existing.backdropUrl = backdropUrl;
-        if (quality) existing.quality = quality;
+        if (safePlayerUrl && (!existing.playerUrl || existing.playerUrl.includes("watchplay.shop"))) existing.playerUrl = safePlayerUrl;
+        if (safeImageUrl && !existing.imageUrl) existing.imageUrl = safeImageUrl;
+        if (safeBackdropUrl && !existing.backdropUrl) existing.backdropUrl = safeBackdropUrl;
+        existing.quality = safeQuality;
       } else {
         const newItem: WatchedItem = {
-          id: id || tmdbId || Date.now(),
+          id: id || (tmdbId ? Number(tmdbId) : Date.now()),
           tmdbId: tmdbId ? Number(tmdbId) : undefined,
-          imdbId,
-          title: String(title).trim(),
-          type: type === "series" ? "series" : "movie",
-          imageUrl: imageUrl || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
-          backdropUrl: backdropUrl || imageUrl,
-          quality: quality || "HD",
-          playerUrl,
+          imdbId: sanitizeString(imdbId, 20) || undefined,
+          title: cleanTitle,
+          type: safeType,
+          imageUrl: safeImageUrl,
+          backdropUrl: safeBackdropUrl,
+          quality: safeQuality,
+          playerUrl: safePlayerUrl || undefined,
           views: 1,
           lastWatched: new Date().toISOString(),
         };
-        items.push(newItem);
+        mostWatchedMemoryCache.push(newItem);
         existing = newItem;
+
+        // Limite máximo de 100 títulos no cache em RAM para evitar estouro de memória
+        if (mostWatchedMemoryCache.length > 100) {
+          mostWatchedMemoryCache.sort((a, b) => b.views - a.views);
+          mostWatchedMemoryCache.splice(100);
+        }
       }
 
-      saveMostWatched(items);
-
-      console.log(`[Audiência] "${existing.title}" reproduzido! Total de views: ${existing.views}`);
+      // Persistência assíncrona não-bloqueante no disco com debounce
+      scheduleAsyncSaveMostWatched();
 
       res.json({
         success: true,
-        message: "Visualização registrada com sucesso",
+        message: rateCheck.shouldIncrement ? "Visualização registrada com sucesso" : "Reprodução já contabilizada recentemente",
         item: existing,
       });
     } catch (err: any) {
@@ -515,6 +738,11 @@ async function startServer() {
   // API 4.5: Player Diagnostics Test (Automated sandbox, anti-popup and CORS verification)
   app.get("/api/player-diagnostics", async (req, res) => {
     const testUrl = (req.query.url as string) || "https://vidlink.pro/tv/66732/1/1";
+    const validation = validateSafeUrl(testUrl);
+    if (!validation.valid) {
+      return res.status(403).json({ success: false, url: testUrl, error: validation.error });
+    }
+
     try {
       const startTime = Date.now();
       const headRes = await fetch(testUrl, {
@@ -558,8 +786,9 @@ async function startServer() {
   app.get("/api/watchplayer-stream", async (req, res) => {
     try {
       const targetUrl = req.query.url as string;
-      if (!targetUrl) {
-        return res.status(400).send("URL parameter missing");
+      const validation = validateSafeUrl(targetUrl);
+      if (!validation.valid) {
+        return res.status(403).send(`Acesso bloqueado por segurança: ${validation.error}`);
       }
 
       // Se for requisição de assinatura MD5 de stream feita pelo próprio player da página
@@ -588,21 +817,26 @@ async function startServer() {
       });
 
       if (!upstreamRes.ok) {
-        console.warn(`[WatchPlayer Stream Proxy Status ${upstreamRes.status}]: Revertendo para iframe direto.`);
+        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado no WatchPlayer (${targetUrl}). Acionando fallback.`);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
-        return res.send(`
+        return res.status(404).send(`
           <!DOCTYPE html>
           <html lang="pt-BR">
           <head>
             <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
               html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-              iframe { width: 100%; height: 100%; border: none; }
             </style>
           </head>
           <body>
-            <iframe src="${targetUrl}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+            <script>
+              try {
+                window.parent.postMessage({ 
+                  type: "WATCHPLAY_UNAVAILABLE", 
+                  reason: "upstream_status_" + ${upstreamRes.status}
+                }, "*");
+              } catch(e) {}
+            </script>
           </body>
           </html>
         `);
@@ -610,8 +844,8 @@ async function startServer() {
 
       let html = await upstreamRes.text();
 
-      // 0. Bloqueio definitivo do Superflix: se o WatchPlayer não tem o vídeo nativo e tenta jogar pro Superflix, rejeitamos
-      const isFallbackMode = html.includes("superflixapi") || (html.includes("superflix") && !html.includes("superflix-ad-filter"));
+      // 0. Bloqueio definitivo do Superflix via heurística robusta (regex multi-domínio, meta refresh, scripts e redirects)
+      const isFallbackMode = isSuperflixDetected(html, targetUrl) || (upstreamRes.url ? isSuperflixDetected("", upstreamRes.url) : false);
 
       if (isFallbackMode) {
         console.warn(`[Superflix Banido]: WatchPlayer tentou redirecionar para Superflix (${targetUrl}). Bloqueando e acionando fallback.`);
@@ -638,6 +872,11 @@ async function startServer() {
           </html>
         `);
       }
+
+      // 0.1 Remoção do devtools detector e scripts que redirecionam para tela preta/404
+      html = html.replace(/<script[^>]*devtools[^>]*><\/script>/gi, "");
+      html = html.replace(/<script[^>]*analytics\.js[^>]*><\/script>/gi, "");
+      html = html.replace(/<script[^>]*>[\s\S]*?devtoolsDetector[\s\S]*?<\/script>/gi, "");
 
       // 1. Ativar AUTO_PLAY_ENABLED no player oficial
       html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
@@ -792,34 +1031,38 @@ async function startServer() {
             z-index: 5 !important;
           }
 
-          /* BLINDAGEM CIRÚRGICA DOS CONTROLES NATIVOS DO ARTPLAYER:
-             Usa seletor filho direto (>) para atingir APENAS elementos dentro
-             do container, NÃO o container raiz (art-video-player) em si.
-             O container raiz tem as classes art-mask-show e art-control-show,
-             portanto NÃO podemos usar seletores globais como [class*="art-mask"]. */
-          .art-video-player > .art-mask,
-          .art-video-player > .art-top,
-          .art-video-player > .art-bottom,
-          .art-video-player > .art-controls,
-          .art-video-player > .art-state,
-          .art-video-player > .art-loading,
-          .art-video-player > .art-notice,
-          .art-video-player > .art-settings,
-          .art-video-player > .art-contextmenu,
-          .art-video-player > .art-danmuku,
-          .art-video-player > .art-fast-forward,
-          .art-video-player > .art-lock,
-          .art-video-player > .art-poster,
-          .art-video-player > .art-layers > .art-layer:not(.art-layer-video),
-          .art-video-player .art-icon-state,
-          .art-video-player .art-layer-state,
-          .art-video-player .art-layer-auto-playback,
-          .art-video-player .art-layer-loading,
-          .art-video-player .art-notice-inner,
-          .art-video-player .art-info,
-          .art-video-player .art-info-panel,
-          .art-video-player .art-progress,
-          .art-video-player .art-control,
+          /* BLINDAGEM COMPLETA DOS CONTROLES NATIVOS DO ARTPLAYER:
+             Usa seletores exatos das classes para garantir que a UI nativa 
+             seja ocultada independente de qual seja a classe raiz. */
+          .art-mask,
+          .art-top,
+          .art-bottom,
+          .art-controls,
+          .art-controls-left,
+          .art-controls-center,
+          .art-controls-right,
+          .art-state,
+          .art-loading,
+          .art-notice,
+          .art-settings,
+          .art-setting,
+          .art-subtitle-setting,
+          .art-contextmenu,
+          .art-danmuku,
+          .art-fast-forward,
+          .art-lock,
+          .art-poster,
+          .art-layers > .art-layer:not(.art-layer-video),
+          .art-icon-state,
+          .art-layer-state,
+          .art-layer-auto-playback,
+          .art-layer-loading,
+          .art-notice-inner,
+          .art-info,
+          .art-info-panel,
+          .art-progress,
+          .art-control,
+          .art-volume-panel,
           #pip-skip-intro-btn,
           #pip-skip-toast {
             display: none !important;
@@ -862,24 +1105,53 @@ async function startServer() {
             });
             observer.observe(document.documentElement, { childList: true, subtree: true });
 
-            // 2. Auto-Start rápido na primeira opção disponível
+            // 2. Auto-Start rápido e resiliente para filmes e séries
             var tries = 0;
+            var optionClicked = false;
             var autoStartTimer = setInterval(function() {
               tries++;
+
+              // A) Séries: aciona getepi imediatamente no episódio selecionado sem esperar dezenas de miniaturas
+              var ep = document.querySelector('.episodeOption.active') || document.querySelector('.episodeOption');
+              if (ep && window.$ && typeof window.getepi === 'function' && !window._epAutoTriggered) {
+                window._epAutoTriggered = true;
+                window.$(ep).removeClass('active');
+                window.getepi(window.$(ep));
+              }
+
+              // B) Seletor de áudio (Dublado preferencialmente)
               var dublado = document.querySelector('.select_language[data-target="1"]');
               if (dublado && !dublado.classList.contains('active')) {
                 dublado.click();
               }
-              var option = document.querySelector('.players_select_items.visible .player_select_item') || 
-                           document.querySelector('.player_select_item');
-              if (option) {
-                option.click();
-                clearInterval(autoStartTimer);
+
+              // C) Clica na opção de player assim que surgir
+              if (!optionClicked) {
+                var option = document.querySelector('.players_select_items.visible .player_select_item') || 
+                             document.querySelector('.player_select_item');
+                if (option) {
+                  optionClicked = true;
+                  option.click();
+                }
               }
-              if (tries > 80) {
+
+              // D) Se o vídeo já possui duração válida e está pronto, finaliza monitoramento com sucesso
+              var v = getVideoElement();
+              if (v && v.duration > 0 && !isNaN(v.duration)) {
                 clearInterval(autoStartTimer);
+                return;
               }
-            }, 30);
+
+              // Timeout após 100 ticks (6.0 segundos sem stream válido)
+              if (tries > 100) {
+                clearInterval(autoStartTimer);
+                if (!v || !v.duration || v.duration === 0) {
+                  try {
+                    window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "timeout_no_stream" }, "*");
+                  } catch(e) {}
+                }
+              }
+            }, 60);
 
             // 3. Funções de controle de vídeo e telemetria para o NetflixPlayerSkin
             var introSkippedForCurrentVideo = false;

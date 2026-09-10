@@ -59,6 +59,13 @@ function extractSrcFromInput(input: string): string {
   return trimmed;
 }
 
+const SUPERFLIX_REGEX = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
+export function isSuperflixUrl(url: string): boolean {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  return SUPERFLIX_REGEX.test(url) || lower.includes("superflix") || lower.includes("sfapi");
+}
+
 // Extrai informações da mídia caso não sejam fornecidas explicitamente
 function parseMediaFromUrl(url: string) {
   const isSeries = url.includes("/tv/") || url.includes("/tvshow/") || url.includes("/serie") || url.includes("/series");
@@ -136,6 +143,8 @@ export function VideoPlayerModal({
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
   // Controle do overlay anti-flash: permanece preto até a skin estética estar pronta
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
+  // Marca o timestamp da última troca de mídia/episódio para descartar mensagens residuais
+  const transitionEpochRef = useRef<number>(0);
 
   // Configuração do Salto de Abertura Manual (Tecla S ou Botão)
   const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
@@ -345,6 +354,10 @@ export function VideoPlayerModal({
     }
     fallbackAttemptsRef.current.add(nextKey);
     setSelectedServerKey(nextKey);
+    setIsLoading(true);
+    setPlayerSkinReady(false);
+    setError(null);
+    transitionEpochRef.current = Date.now();
 
     const srv = servers.find(s => s.key === nextKey) || servers[0];
     const newUrl = isSeries
@@ -356,27 +369,35 @@ export function VideoPlayerModal({
     setExtractedSource(newUrl);
   }, [selectedServerKey, servers, isSeries, resolvedId, season, episode]);
 
-  // Timeout de segurança: se o carregamento demorar mais de 9s, tenta o servidor alternativo
+  const silentFallbackRef = useRef(handleSilentFallback);
+  silentFallbackRef.current = handleSilentFallback;
+
+  // Watchdog de segurança do Player 1: se demorar mais de 15s sem emitir stream pronto,
+  // aciona automaticamente fallback para Player 4 (VidLink)
   useEffect(() => {
-    if (!isLoading || !activeIframeUrl) return;
+    if (!activeIframeUrl || selectedServerKey !== "srv1" || playerSkinReady) return;
     const timer = setTimeout(() => {
-      if (isLoading) {
+      if (!playerSkinReady && selectedServerKey === "srv1") {
+        console.warn("[VideoPlayerModal] Player 1 demorou mais de 15s sem emitir stream pronto. Acionando fallback para Player 4.");
         handleSilentFallback();
       }
-    }, 9000);
+    }, 15000);
     return () => clearTimeout(timer);
-  }, [isLoading, activeIframeUrl, handleSilentFallback]);
+  }, [activeIframeUrl, selectedServerKey, playerSkinReady, handleSilentFallback]);
 
-  // Timeout de segurança do overlay anti-flash: remove após 5s mesmo sem postMessage (ex: VidLink)
+  // Watchdog de segurança do overlay para servidores externos (ex: VidLink)
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady) return;
-    const timer = setTimeout(() => {
-      setPlayerSkinReady(true);
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [activeIframeUrl, playerSkinReady]);
+    if (selectedServerKey === "srv4") {
+      const timer = setTimeout(() => {
+        setPlayerSkinReady(true);
+        setIsLoading(false);
+      }, 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeIframeUrl, playerSkinReady, selectedServerKey]);
 
-  // Ao abrir o modal ou mudar mídia: detecta a conexão silenciosamente e inicia o melhor player
+  // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
     if (isOpen) {
       const parsed = parseMediaFromUrl(defaultUrl || "");
@@ -400,29 +421,17 @@ export function VideoPlayerModal({
         }
       }
 
-      let isCancelled = false;
+      // Prioriza sempre o Player 1 (WatchPlayer 1080p integrado à skin Netflix)
+      const targetServerKey = "srv1";
+      setSelectedServerKey(targetServerKey);
 
-      (async () => {
-        // Detecta qualidade de rede em background (sem exibir aviso na tela)
-        const quality = await detectConnectionQuality();
-        if (isCancelled) return;
+      const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
+      const targetUrl = isSeries 
+        ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+        : targetSrv.buildUrl(resolvedId);
 
-        // Sempre prioriza Player 1 (WatchPlayer) com stream 1080p direto e skin limpa
-        const targetServerKey = "srv1";
-        setSelectedServerKey(targetServerKey);
-
-        const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
-        const targetUrl = isSeries 
-          ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
-          : targetSrv.buildUrl(resolvedId);
-
-        setUrlInput(targetUrl);
-        handleExtract(targetUrl);
-      })();
-
-      return () => {
-        isCancelled = true;
-      };
+      setUrlInput(targetUrl);
+      handleExtract(targetUrl);
     } else {
       setActiveIframeUrl(null);
       setError(null);
@@ -439,20 +448,63 @@ export function VideoPlayerModal({
     return url;
   };
 
-  // Escuta postMessages emitidos pelo WatchPlayer (fim de episódio, status de abertura, etc.)
-  // Também detecta o primeiro status com duration > 0 para remover overlay anti-flash
+  // Origens confiáveis para recepção de eventos do player
+  const isTrustedPlayerEvent = (event: MessageEvent): boolean => {
+    // 1. Só aceita mensagens vindas do iframe do player ou da própria janela da aplicação
+    if (iframeRef.current?.contentWindow && event.source !== iframeRef.current.contentWindow && event.source !== window) {
+      return false;
+    }
+    // 2. Valida origem da mensagem
+    if (!event.origin) return false;
+    const allowedOrigins = [
+      window.location.origin,
+      "https://v1.watchplay.shop",
+      "https://watchplay.shop",
+      "https://vidlink.pro",
+      "https://superflixapi.top",
+    ];
+    if (allowedOrigins.includes(event.origin)) return true;
+    if (iframeRef.current?.src) {
+      try {
+        const parsed = new URL(iframeRef.current.src, window.location.origin);
+        if (parsed.origin === event.origin) return true;
+      } catch {}
+    }
+    return false;
+  };
+
+  // Escuta postMessages emitidos pelo WatchPlayer com validação de segurança
   useEffect(() => {
     const handlePlayerWindowMessages = (event: MessageEvent) => {
+      if (!isTrustedPlayerEvent(event)) return;
       if (!event.data) return;
 
       // Remove overlay preto quando o player estiver pronto (duration > 0)
       const msgType = event.data.type || event.data.event;
       if (
-        (msgType === "WATCHPLAY_STATUS" || msgType === "PLAYER_STATUS" || msgType === "status" || msgType === "timeupdate") &&
+        (msgType === "WATCHPLAY_STATUS" ||
+          msgType === "PLAYER_STATUS" ||
+          msgType === "status" ||
+          msgType === "timeupdate" ||
+          msgType === "PLAYER_EVENT") &&
         !playerSkinReady
       ) {
-        const data = event.data.data || event.data;
+        const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
+        const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
+        const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
+
+        // Se acabamos de trocar de episódio/temporada, descarta mensagens residuais
+        // do vídeo anterior que ainda estavam na fila com posição adiantada (> 4s)
+        if (isRecentTransition && incomingTime > 4) {
+          return;
+        }
+
         if (typeof data.duration === "number" && data.duration > 0) {
+          // Se for transição recente (< 800ms), aguarda estabilização do novo frame
+          if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
+            return;
+          }
+
           setPlayerSkinReady(true);
 
           // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
@@ -469,10 +521,13 @@ export function VideoPlayerModal({
         }
       }
 
-      if (event.data.type === "WATCHPLAY_VIDEO_ENDED") {
+      const isEnded = event.data.type === "WATCHPLAY_VIDEO_ENDED" ||
+        (event.data.type === "PLAYER_EVENT" && event.data.data?.event === "ended");
+
+      if (isEnded) {
         if (isSeries) {
           const nextEp = episode + 1;
-          console.log(`[WatchPlayer Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
+          console.log(`[Player Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
           setAutoNextNotice({ nextEp });
 
           // Passa imediatamente para o próximo episódio e inicia sozinho
@@ -493,7 +548,7 @@ export function VideoPlayerModal({
         }, 3200);
       } else if (event.data.type === "WATCHPLAY_UNAVAILABLE") {
         console.warn("[VideoPlayerModal] Servidor informou mídia indisponível ou tentativa de Superflix. Acionando fallback automático...");
-        handleSilentFallback();
+        silentFallbackRef.current();
       }
     };
 
@@ -558,6 +613,12 @@ export function VideoPlayerModal({
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
     }
+    // Pausa imediatamente o áudio do player anterior para evitar ruído residual
+    try {
+      iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
+    } catch {}
+
+    transitionEpochRef.current = Date.now();
     setEpisode(newEpisode);
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
@@ -575,9 +636,15 @@ export function VideoPlayerModal({
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
     }
+    try {
+      iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
+    } catch {}
+
+    transitionEpochRef.current = Date.now();
     setSeason(newSeason);
     setEpisode(1);
     setIsIntroActive(false);
+    setPlayerSkinReady(false);
     fallbackAttemptsRef.current.clear();
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
@@ -591,7 +658,13 @@ export function VideoPlayerModal({
     setSelectedServerKey(serverKey);
     const srv = servers.find(s => s.key === serverKey);
     if (!srv) return;
-    const newUrl = srv.buildUrl(resolvedId, season, episode);
+    transitionEpochRef.current = Date.now();
+    setIsLoading(true);
+    setPlayerSkinReady(false);
+    setError(null);
+    const newUrl = isSeries
+      ? srv.buildUrl(resolvedId, season, episode)
+      : srv.buildUrl(resolvedId);
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -604,8 +677,8 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
-    if (cleanUrl.includes("superflix")) {
-      console.warn("[VideoPlayerModal] Tentativa de carregar Superflix bloqueada. Acionando fallback.");
+    if (isSuperflixUrl(cleanUrl)) {
+      console.warn("[VideoPlayerModal] Tentativa de carregar Superflix bloqueada por heurística anti-redirecionamento. Acionando fallback.");
       handleSilentFallback();
       return;
     }
@@ -998,31 +1071,28 @@ export function VideoPlayerModal({
 
             {/* NetflixPlayerSkin movido para o final (z-40) */}
 
-            {/* Indicador de Carregamento sobreposto */}
-            {isLoading && (
-              <div className="absolute inset-0 bg-black/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3 text-neutral-400">
-                <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
-                <p className="text-sm font-medium text-white">Carregando {isSeries ? `Episódio ${episode}` : title}...</p>
-              </div>
-            )}
-
-            {/* Overlay Anti-Flash: cobre o player original até a skin estética estar pronta */}
-            {activeIframeUrl && !playerSkinReady && !isLoading && (
+            {/* Overlay Anti-Flash e Carregamento Contínuo: cobre a transição inteira até a mídia estar realmente pronta */}
+            {activeIframeUrl && (!playerSkinReady || isLoading) && (
               <div
-                className="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center gap-3 pointer-events-none"
-                style={{ transition: "opacity 0.4s ease", opacity: 1 }}
+                className="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center gap-3.5 pointer-events-none select-none"
+                style={{ transition: "opacity 0.3s ease" }}
               >
-                <Loader2 className="w-8 h-8 text-orange-500/70 animate-spin" />
+                <Loader2 className="w-9 h-9 text-orange-500 animate-spin" />
+                <p className="text-sm font-semibold text-white tracking-wide">
+                  {isSeries ? `Carregando Episódio ${episode}...` : `Carregando ${title || "Vídeo"}...`}
+                </p>
               </div>
             )}
 
             {activeIframeUrl ? (
               <iframe
+                key={activeIframeUrl}
                 ref={iframeRef}
                 src={activeIframeUrl}
                 title={title}
-                className="w-full h-full border-0"
+                className="w-full h-full border-0 bg-black"
                 style={{
+                  backgroundColor: "#000000",
                   transform:
                     aspectRatio === "cover"
                       ? "scale(1.35)"

@@ -1,7 +1,66 @@
-/**
- * Serviço de Histórico e Progresso de Reprodução (Continuar Assistindo)
- * Armazena localmente o tempo exato onde o usuário parou em filmes e episódios de séries.
- */
+import { getAllCatalogItems } from "./favorites";
+
+const CHAIR_PHOTO_ID = "photo-1489599849927-2ee91cede3ba";
+
+export function isInvalidOrChairPhoto(url?: string): boolean {
+  if (!url || typeof url !== "string") return true;
+  return url.includes(CHAIR_PHOTO_ID);
+}
+
+export function resolveMediaCovers(item: {
+  id: string | number;
+  tmdbId?: number;
+  title?: string;
+  imageUrl?: string;
+  backdropUrl?: string;
+  posterUrl?: string;
+}): { imageUrl?: string; backdropUrl?: string; posterUrl?: string } {
+  let img = !isInvalidOrChairPhoto(item.imageUrl) ? item.imageUrl : undefined;
+  let backdrop = !isInvalidOrChairPhoto(item.backdropUrl) ? item.backdropUrl : undefined;
+  let poster = !isInvalidOrChairPhoto(item.posterUrl) ? item.posterUrl : undefined;
+
+  // Se estiver faltando backdrop ou imagem de capa, resolve via catálogo global
+  if (!img || !backdrop || !poster) {
+    try {
+      const catalog = getAllCatalogItems();
+      const numId = Number(item.id);
+      const numTmdb = item.tmdbId ? Number(item.tmdbId) : undefined;
+      const cleanTitle = (item.title || "").trim().toLowerCase();
+
+      const found = catalog.find(c => 
+        (numId && c.id === numId) ||
+        (numTmdb && (c.tmdbId === numTmdb || c.id === numTmdb)) ||
+        (cleanTitle && c.title.trim().toLowerCase() === cleanTitle) ||
+        (cleanTitle && cleanTitle.includes(c.title.trim().toLowerCase())) ||
+        (cleanTitle && c.title.trim().toLowerCase().includes(cleanTitle))
+      );
+
+      if (found) {
+        if (!backdrop && !isInvalidOrChairPhoto(found.backdropUrl)) {
+          backdrop = found.backdropUrl;
+        }
+        if (!poster && !isInvalidOrChairPhoto(found.posterUrl)) {
+          poster = found.posterUrl;
+        }
+        if (!img) {
+          img = backdrop || poster || found.imageUrl;
+        }
+      }
+    } catch {}
+  }
+
+  if (!img) {
+    img = backdrop || poster;
+  }
+  if (!backdrop && img) {
+    backdrop = img;
+  }
+  if (!poster && img) {
+    poster = img;
+  }
+
+  return { imageUrl: img, backdropUrl: backdrop, posterUrl: poster };
+}
 
 export interface PlaybackHistoryItem {
   id: string | number;
@@ -92,6 +151,14 @@ export function savePlaybackProgress(item: {
   }
 
   const existing = store[key];
+  const resolvedCovers = resolveMediaCovers({
+    id: item.id,
+    tmdbId: item.tmdbId ?? existing?.tmdbId,
+    title: item.title,
+    imageUrl: item.imageUrl || existing?.imageUrl,
+    backdropUrl: item.backdropUrl || existing?.backdropUrl,
+    posterUrl: item.posterUrl || existing?.posterUrl,
+  });
 
   store[key] = {
     id: item.id,
@@ -105,9 +172,9 @@ export function savePlaybackProgress(item: {
     currentTime: Math.round(item.currentTime),
     duration: Math.round(item.duration),
     progressPercent,
-    imageUrl: item.imageUrl || existing?.imageUrl || item.backdropUrl || item.posterUrl,
-    backdropUrl: item.backdropUrl || existing?.backdropUrl,
-    posterUrl: item.posterUrl || existing?.posterUrl,
+    imageUrl: resolvedCovers.imageUrl || existing?.imageUrl,
+    backdropUrl: resolvedCovers.backdropUrl || existing?.backdropUrl,
+    posterUrl: resolvedCovers.posterUrl || existing?.posterUrl,
     playerUrl: item.playerUrl || existing?.playerUrl,
     quality: item.quality || existing?.quality,
     isCam: item.isCam ?? existing?.isCam,
@@ -134,7 +201,29 @@ export function savePlaybackProgress(item: {
  */
 export function getPlaybackHistory(): PlaybackHistoryItem[] {
   const store = getStore();
-  return Object.values(store).sort((a, b) => b.updatedAt - a.updatedAt);
+  let updated = false;
+
+  const items = Object.values(store).map(item => {
+    if (isInvalidOrChairPhoto(item.imageUrl) || isInvalidOrChairPhoto(item.backdropUrl) || !item.imageUrl) {
+      const fixed = resolveMediaCovers(item);
+      if (fixed.imageUrl && fixed.imageUrl !== item.imageUrl) {
+        item.imageUrl = fixed.imageUrl;
+        item.backdropUrl = fixed.backdropUrl || item.backdropUrl;
+        item.posterUrl = fixed.posterUrl || item.posterUrl;
+        store[makeHistoryKey(item.id, item.type, item.season, item.episode)] = item;
+        updated = true;
+      }
+    }
+    return item;
+  });
+
+  if (updated) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    } catch {}
+  }
+
+  return items.sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
 /**
