@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Copy, Check, Terminal, Radio, Play, Plus, RefreshCw } from "lucide-react";
+import { X, Copy, Check, Terminal, Radio, Play, Plus, RefreshCw, Key } from "lucide-react";
 
 interface WebhookPanelModalProps {
   isOpen: boolean;
@@ -11,6 +11,8 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
   const [copied, setCopied] = useState<string | null>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [adminKey, setAdminKey] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Form for testing adding an episode manually
   const [testTitle, setTestTitle] = useState("Mayday (Dublado)");
@@ -49,6 +51,13 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
 
   const handleTestPost = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitError(null);
+
+    if (!adminKey.trim()) {
+      setSubmitError("Informe a Chave Secreta do Webhook para autenticar o teste.");
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitSuccess(false);
 
@@ -57,7 +66,7 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "x-webhook-secret": "playinfinity_secret_webhook_2026"
+          "x-webhook-secret": adminKey.trim()
         },
         body: JSON.stringify({
           title: testTitle,
@@ -72,9 +81,12 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
         setSubmitSuccess(true);
         fetchItems();
         setTimeout(() => setSubmitSuccess(false), 3000);
+      } else {
+        setSubmitError(data.error || "Erro de autenticação ou processamento no webhook.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setSubmitError("Erro de conexão ao enviar para o webhook.");
     } finally {
       setIsSubmitting(false);
     }
@@ -83,9 +95,10 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
   if (!isOpen) return null;
 
   const endpointUrl = typeof window !== "undefined" ? `${window.location.origin}/api/novo-episodio` : "/api/novo-episodio";
+  const displaySecret = adminKey.trim() ? adminKey.trim() : "SUA_CHAVE_SECRETA_DO_WEBHOOK";
   const curlExample = `curl -X POST ${endpointUrl} \\
   -H "Content-Type: application/json" \\
-  -H "x-webhook-secret: playinfinity_secret_webhook_2026" \\
+  -H "x-webhook-secret: ${displaySecret}" \\
   -d '{
     "title": "Mayday Dublado",
     "season": 1,
@@ -165,7 +178,27 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
               <Plus className="w-4 h-4 text-orange-500" /> Simular Recebimento Instantâneo
             </h3>
 
-            <form onSubmit={handleTestPost} className="space-y-3">
+            <form onSubmit={handleTestPost} className="space-y-4">
+              <div>
+                <label className="block text-xs text-neutral-400 mb-1 flex items-center gap-1.5 font-medium">
+                  <Key className="w-3.5 h-3.5 text-orange-400" /> Chave Secreta de Autenticação (WEBHOOK_SECRET)
+                </label>
+                <input
+                  type="password"
+                  value={adminKey}
+                  onChange={(e) => {
+                    setAdminKey(e.target.value);
+                    if (submitError) setSubmitError(null);
+                  }}
+                  placeholder="Cole aqui a sua chave secreta para autorizar o teste..."
+                  className="w-full bg-[#0d0d0d] border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 font-mono placeholder:text-neutral-600"
+                  required
+                />
+                <p className="text-[11px] text-neutral-500 mt-1">
+                  A chave nunca é exposta para outros visitantes e não fica gravada no código público da aplicação.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs text-neutral-400 mb-1">Título do Filme / Série</label>
@@ -189,17 +222,22 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2"
+                  className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition-all flex items-center gap-2 cursor-pointer"
                 >
                   {isSubmitting ? "Enviando..." : "Testar Envio do Episódio"}
                 </button>
                 {submitSuccess && (
                   <span className="text-xs text-green-400 font-medium flex items-center gap-1">
                     <Check className="w-4 h-4" /> Episódio recebido e publicado!
+                  </span>
+                )}
+                {submitError && (
+                  <span className="text-xs text-red-400 font-medium flex items-center gap-1">
+                    <X className="w-4 h-4" /> {submitError}
                   </span>
                 )}
               </div>
