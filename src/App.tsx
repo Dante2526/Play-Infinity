@@ -28,7 +28,7 @@ import {
   X,
   CheckCircle2
 } from "lucide-react";
-import { featured, providers, releases, newest, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
 import { 
   searchMulti, 
   getDetails, 
@@ -42,6 +42,8 @@ import {
   getGenreIdByName,
   getMovieReleases,
   getSeriesReleases,
+  getAnimes,
+  getDoramas,
   FALLBACK_POSTER_IMAGE,
   FALLBACK_BACKDROP_IMAGE,
   TMDBItem, 
@@ -51,9 +53,10 @@ import {
   getTrailer,
   TrailerVideo
 } from "./services/tmdb";
-import { VideoPlayerModal } from "./components/VideoPlayerModal";
-import { WebhookPanelModal } from "./components/WebhookPanelModal";
-import { ReleaseCalendarPage } from "./components/ReleaseCalendarPage";
+// Componentes carregados dinamicamente sob demanda (Code Splitting)
+const VideoPlayerModal = React.lazy(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })));
+const WebhookPanelModal = React.lazy(() => import("./components/WebhookPanelModal").then(m => ({ default: m.WebhookPanelModal })));
+const ReleaseCalendarPage = React.lazy(() => import("./components/ReleaseCalendarPage").then(m => ({ default: m.ReleaseCalendarPage })));
 import {
   getFavoriteIds,
   toggleFavorite,
@@ -70,8 +73,9 @@ import {
   getSeasonWatchedCount
 } from "./services/watchedEpisodes";
 import { getPlaybackHistory, PlaybackHistoryItem } from "./services/playbackHistory";
+import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "./services/comments";
 
-const FALLBACK_POSTER = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
+const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
 
 const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, backdropUrl?: string) => {
@@ -96,7 +100,9 @@ export type OnPlayHandler = (
   isCam?: boolean,
   initialTime?: number,
   autoFullscreen?: boolean,
-  imageUrl?: string
+  imageUrl?: string,
+  backdropUrl?: string,
+  posterUrl?: string
 ) => void;
 
 export default function App() {
@@ -128,6 +134,8 @@ export default function App() {
     initialTime?: number;
     autoFullscreen?: boolean;
     imageUrl?: string;
+    backdropUrl?: string;
+    posterUrl?: string;
   }>({
     isOpen: false,
     title: "",
@@ -200,7 +208,9 @@ export default function App() {
     isCam?: boolean,
     initialTime?: number,
     autoFullscreen?: boolean,
-    imageUrl?: string
+    imageUrl?: string,
+    backdropUrl?: string,
+    posterUrl?: string
   ) => {
     setPlayerModal({
       isOpen: true,
@@ -215,7 +225,9 @@ export default function App() {
       isCam: isCam || checkIsCam(title, quality),
       initialTime,
       autoFullscreen,
-      imageUrl
+      imageUrl,
+      backdropUrl,
+      posterUrl
     });
 
     // Registra reprodução para o Top 10 Mais Assistidos dos usuários
@@ -314,7 +326,9 @@ export default function App() {
       ) : viewState.type === 'movies' || viewState.type === 'series' ? (
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'calendar' ? (
-        <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => navigateTo({ type: 'series' })} />
+        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+          <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => navigateTo({ type: 'series' })} />
+        </React.Suspense>
       ) : viewState.type === 'search' ? (
         <GlobalSearchPage onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'profile' ? (
@@ -380,29 +394,37 @@ export default function App() {
         </nav>
       </div>
 
-      {/* Modals */}
-      <VideoPlayerModal
-        isOpen={playerModal.isOpen}
-        onClose={() => setPlayerModal(prev => ({ ...prev, isOpen: false }))}
-        title={playerModal.title}
-        defaultUrl={playerModal.url}
-        mediaType={playerModal.mediaType}
-        tmdbId={playerModal.tmdbId}
-        imdbId={playerModal.imdbId}
-        initialSeason={playerModal.season}
-        initialEpisode={playerModal.episode}
-        quality={playerModal.quality}
-        isCam={playerModal.isCam}
-        initialTime={playerModal.initialTime}
-        autoFullscreen={playerModal.autoFullscreen}
-        imageUrl={playerModal.imageUrl}
-      />
+      {/* Modals Carregados Sob Demanda (Code Splitting) */}
+      <React.Suspense fallback={null}>
+        {playerModal.isOpen && (
+          <VideoPlayerModal
+            isOpen={playerModal.isOpen}
+            onClose={() => setPlayerModal(prev => ({ ...prev, isOpen: false }))}
+            title={playerModal.title}
+            defaultUrl={playerModal.url}
+            mediaType={playerModal.mediaType}
+            tmdbId={playerModal.tmdbId}
+            imdbId={playerModal.imdbId}
+            initialSeason={playerModal.season}
+            initialEpisode={playerModal.episode}
+            quality={playerModal.quality}
+            isCam={playerModal.isCam}
+            initialTime={playerModal.initialTime}
+            autoFullscreen={playerModal.autoFullscreen}
+            imageUrl={playerModal.imageUrl}
+            backdropUrl={playerModal.backdropUrl}
+            posterUrl={playerModal.posterUrl}
+          />
+        )}
 
-      <WebhookPanelModal
-        isOpen={webhookModalOpen}
-        onClose={() => setWebhookModalOpen(false)}
-        onPlayItem={(title, url) => openPlayer(title, url)}
-      />
+        {webhookModalOpen && (
+          <WebhookPanelModal
+            isOpen={webhookModalOpen}
+            onClose={() => setWebhookModalOpen(false)}
+            onPlayItem={(title, url) => openPlayer(title, url)}
+          />
+        )}
+      </React.Suspense>
 
       {/* CSS Utility for hiding scrollbar while keeping functionality */}
       <style>{`
@@ -451,31 +473,51 @@ function HomePage({
   const [seriesReleases, setSeriesReleases] = useState<any[]>(newest);
   // Top 10 Mais Assistidos decidido dinamicamente pela audiência dos usuários
   const [mostWatchedItems, setMostWatchedItems] = useState<any[]>(mostWatched);
+  // Seções especiais de Animes e Doramas
+  const [animeReleases, setAnimeReleases] = useState<any[]>(animes);
+  const [doramaReleases, setDoramaReleases] = useState<any[]>(doramas);
+
+  // Função auxiliar para mapear itens do histórico garantindo a capa/backdrop real
+  const formatHistoryItem = (item: PlaybackHistoryItem) => {
+    const catalog = getAllCatalogItems();
+    const catalogItem = catalog.find(c => 
+      (item.id && c.id === Number(item.id)) || 
+      (item.tmdbId && (c.tmdbId === Number(item.tmdbId) || c.id === Number(item.tmdbId))) || 
+      (item.title && c.title.trim().toLowerCase() === item.title.trim().toLowerCase())
+    );
+    const isChair = (url?: string) => !url || url.includes("photo-1489599849927-2ee91cede3ba");
+    const resolvedBackdrop = !isChair(item.backdropUrl) ? item.backdropUrl : (!isChair(catalogItem?.backdropUrl) ? catalogItem?.backdropUrl : undefined);
+    const resolvedPoster = !isChair(item.imageUrl) ? item.imageUrl : (!isChair(item.posterUrl) ? item.posterUrl : (!isChair(catalogItem?.imageUrl) ? catalogItem?.imageUrl : catalogItem?.posterUrl));
+    const finalImage = resolvedBackdrop || resolvedPoster || catalogItem?.backdropUrl || catalogItem?.imageUrl || FALLBACK_BACKDROP;
+
+    return {
+      id: item.id,
+      tmdbId: item.tmdbId || catalogItem?.tmdbId,
+      imdbId: item.imdbId || catalogItem?.imdbId,
+      title: item.title,
+      episode: item.mediaType === 'series' && item.season && item.episode 
+        ? `T${item.season}:E${item.episode} - Continuar`
+        : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
+      progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
+      imageUrl: finalImage,
+      backdropUrl: resolvedBackdrop || catalogItem?.backdropUrl,
+      posterUrl: resolvedPoster || catalogItem?.posterUrl,
+      playerUrl: item.playerUrl || catalogItem?.playerUrl,
+      currentTime: item.currentTime,
+      duration: item.duration,
+      mediaType: item.mediaType || catalogItem?.type || 'movie',
+      season: item.season,
+      episodeNumber: item.episode,
+      quality: item.quality || catalogItem?.quality,
+      isCam: item.isCam || catalogItem?.quality === 'CAM'
+    };
+  };
 
   // Histórico real de reprodução do usuário com fallback para dados estáticos
   const [continueWatchingList, setContinueWatchingList] = useState<any[]>(() => {
     const history = getPlaybackHistory();
     if (history.length > 0) {
-      return history.map(item => ({
-        id: item.id,
-        tmdbId: item.tmdbId,
-        imdbId: item.imdbId,
-        title: item.title,
-        episode: item.mediaType === 'series' && item.season && item.episode 
-          ? `T${item.season}:E${item.episode} - Continuar`
-          : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
-        progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
-        imageUrl: item.posterUrl || item.backdropUrl || FALLBACK_POSTER,
-        backdropUrl: item.backdropUrl,
-        playerUrl: item.playerUrl,
-        currentTime: item.currentTime,
-        duration: item.duration,
-        mediaType: item.mediaType,
-        season: item.season,
-        episodeNumber: item.episode,
-        quality: item.quality,
-        isCam: item.isCam
-      }));
+      return history.map(formatHistoryItem);
     }
     return continueWatching;
   });
@@ -484,26 +526,7 @@ function HomePage({
     const syncHistory = () => {
       const history = getPlaybackHistory();
       if (history.length > 0) {
-        setContinueWatchingList(history.map(item => ({
-          id: item.id,
-          tmdbId: item.tmdbId,
-          imdbId: item.imdbId,
-          title: item.title,
-          episode: item.mediaType === 'series' && item.season && item.episode 
-            ? `T${item.season}:E${item.episode} - Continuar`
-            : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
-          progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
-          imageUrl: item.posterUrl || item.backdropUrl || FALLBACK_POSTER,
-          backdropUrl: item.backdropUrl,
-          playerUrl: item.playerUrl,
-          currentTime: item.currentTime,
-          duration: item.duration,
-          mediaType: item.mediaType,
-          season: item.season,
-          episodeNumber: item.episode,
-          quality: item.quality,
-          isCam: item.isCam
-        })));
+        setContinueWatchingList(history.map(formatHistoryItem));
       }
     };
 
@@ -583,12 +606,14 @@ function HomePage({
       }
     };
 
-    // Sincronização automática de lançamentos reais (filmes e séries) no TMDB
+    // Sincronização automática de lançamentos reais (filmes, séries, animes e doramas) no TMDB
     const fetchReleases = async () => {
       try {
-        const [moviesRes, seriesRes] = await Promise.all([
+        const [moviesRes, seriesRes, animesRes, doramasRes] = await Promise.all([
           getMovieReleases(),
-          getSeriesReleases()
+          getSeriesReleases(),
+          getAnimes(),
+          getDoramas()
         ]);
 
         if (isMounted && moviesRes?.results && moviesRes.results.length > 0) {
@@ -630,6 +655,48 @@ function HomePage({
             }));
           if (formattedSeries.length > 0) {
             setSeriesReleases(formattedSeries);
+          }
+        }
+
+        if (isMounted && animesRes?.results && animesRes.results.length > 0) {
+          const formattedAnimes = animesRes.results
+            .filter((a: TMDBItem) => a.poster_path && (a.name || a.title))
+            .slice(0, 18)
+            .map((a: TMDBItem) => ({
+              id: a.id,
+              tmdbId: a.id,
+              title: (a.name || a.title || "").toUpperCase(),
+              imageUrl: formatImageUrl(a.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(a.backdrop_path, 'original'),
+              type: 'series' as const,
+              quality: "HD" as const,
+              rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
+              year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
+              playerUrl: `https://v1.watchplay.shop/tvshow/${a.id}/1/1`
+            }));
+          if (formattedAnimes.length > 0) {
+            setAnimeReleases(formattedAnimes);
+          }
+        }
+
+        if (isMounted && doramasRes?.results && doramasRes.results.length > 0) {
+          const formattedDoramas = doramasRes.results
+            .filter((d: TMDBItem) => d.poster_path && (d.name || d.title))
+            .slice(0, 18)
+            .map((d: TMDBItem) => ({
+              id: d.id,
+              tmdbId: d.id,
+              title: (d.name || d.title || "").toUpperCase(),
+              imageUrl: formatImageUrl(d.poster_path, 'w500'),
+              backdropUrl: formatImageUrl(d.backdrop_path, 'original'),
+              type: 'series' as const,
+              quality: "HD" as const,
+              rating: d.vote_average ? d.vote_average.toFixed(1) : undefined,
+              year: d.first_air_date ? d.first_air_date.substring(0, 4) : "2026",
+              playerUrl: `https://v1.watchplay.shop/tvshow/${d.id}/1/1`
+            }));
+          if (formattedDoramas.length > 0) {
+            setDoramaReleases(formattedDoramas);
           }
         }
       } catch (err) {
@@ -740,7 +807,9 @@ function HomePage({
                   checkIsCam(heroItem.title, heroItem.quality),
                   undefined,
                   false,
-                  heroItem.imageUrl
+                  heroItem.imageUrl,
+                  heroItem.imageUrl,
+                  heroItem.posterUrl
                 )}
                 className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
               >
@@ -808,6 +877,8 @@ function HomePage({
                     <img 
                       src={logoInfo.url} 
                       alt={p} 
+                      loading="lazy"
+                      decoding="async"
                       className={`${logoInfo.customClass || "h-5 md:h-7"} object-contain transition-transform duration-300 group-hover:scale-110`}
                       style={{ filter: logoInfo.filter }} 
                     />
@@ -822,11 +893,10 @@ function HomePage({
 
         {/* Continue Assistindo */}
         <section>
-          <div className="flex items-center justify-between mb-6 pl-2">
+          <div className="flex items-center mb-6 pl-2">
             <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
-            <span className="text-xs font-semibold text-neutral-400">Clique para continuar em tela cheia</span>
           </div>
-          <div className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pl-2 pr-4 scrollbar-hide">
+          <div className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-2 pb-6 pl-2 pr-4 scrollbar-hide">
             {continueWatchingList.map((item, idx) => (
               <div 
                 key={`cw-${item.id}-${idx}`} 
@@ -844,7 +914,9 @@ function HomePage({
                       item.isCam,
                       item.currentTime,
                       true, // Auto-fullscreen imediato
-                      item.imageUrl
+                      item.imageUrl,
+                      item.backdropUrl,
+                      item.posterUrl
                     );
                   } else if (onPlay) {
                     // Fallback estático
@@ -923,6 +995,12 @@ function HomePage({
 
         {/* Lançamentos Séries */}
         <ContentRow title="Lançamentos Séries" items={seriesReleases} aspect="portait" onItemClick={onItemClick} />
+
+        {/* Animes */}
+        <ContentRow title="Animes" items={animeReleases} aspect="portait" onItemClick={onItemClick} />
+
+        {/* Doramas */}
+        <ContentRow title="Doramas" items={doramaReleases} aspect="portait" onItemClick={onItemClick} />
       </main>
     </>
   );
@@ -960,11 +1038,13 @@ function DetailsPage({
   const [tmdbDetails, setTmdbDetails] = useState<TMDBDetails | null>(null);
   const [loadingTmdb, setLoadingTmdb] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const commentTargetId = item.tmdbId || item.id || itemId;
   const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState<{ id: number, user: string, text: string, likes: number }[]>([
-    { id: 1, user: "Alex99", text: "Incrível! Qualidade impressionante sem travamentos.", likes: 24 },
-    { id: 2, user: "CinefiloBr", text: "A fotografia é perfeita, cores vivas e som excelente.", likes: 12 }
-  ]);
+  const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
+
+  useEffect(() => {
+    setComments(getCommentsForItem(commentTargetId));
+  }, [commentTargetId]);
   const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId));
   const [, setWatchedUpdateTick] = useState(0);
   const [trailerVideo, setTrailerVideo] = useState<TrailerVideo | null>(null);
@@ -1072,8 +1152,16 @@ function DetailsPage({
   const handleCommentSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!commentText.trim()) return;
-    setComments([{ id: Date.now(), user: "Você", text: commentText, likes: 0 }, ...comments]);
-    setCommentText("");
+    const added = addComment(commentTargetId, commentText, "Você");
+    if (added) {
+      setComments(getCommentsForItem(commentTargetId));
+      setCommentText("");
+    }
+  };
+
+  const handleToggleLike = (commentId: string | number) => {
+    const updated = toggleCommentLike(commentTargetId, commentId);
+    setComments(updated);
   };
 
   const currentGenres: string[] = Array.isArray(item.genres) && item.genres.length > 0
@@ -1107,6 +1195,7 @@ function DetailsPage({
         <img 
           src={displayBackdrop} 
           alt={item.title} 
+          decoding="async"
           className="w-full h-full object-cover object-center scale-105 transition-transform duration-1000" 
           onError={(e) => {
             e.currentTarget.onerror = null;
@@ -1178,7 +1267,12 @@ function DetailsPage({
                   selectedSeason,
                   1,
                   item.quality,
-                  checkIsCam(item.title, item.quality)
+                  checkIsCam(item.title, item.quality),
+                  undefined,
+                  false,
+                  item.imageUrl || displayPoster,
+                  item.backdropUrl || displayBackdrop,
+                  item.posterUrl || displayPoster
                 )}
                 className="flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
@@ -1282,6 +1376,8 @@ function DetailsPage({
               <img 
                 src={displayPoster} 
                 alt={item.title} 
+                loading="lazy"
+                decoding="async"
                 className="w-full h-auto object-cover aspect-[2/3]" 
                 onError={(e) => {
                   e.currentTarget.onerror = null;
@@ -1400,7 +1496,14 @@ function DetailsPage({
                             Number(effectiveTmdbId), 
                             item.imdbId, 
                             selectedSeason, 
-                            ep.ep
+                            ep.ep,
+                            item.quality,
+                            checkIsCam(item.title, item.quality),
+                            undefined,
+                            false,
+                            item.imageUrl || displayPoster,
+                            item.backdropUrl || displayBackdrop,
+                            item.posterUrl || displayPoster
                           );
                         }}
                       >
@@ -1456,7 +1559,14 @@ function DetailsPage({
                               Number(effectiveTmdbId), 
                               item.imdbId, 
                               selectedSeason, 
-                              ep.ep
+                              ep.ep,
+                              item.quality,
+                              checkIsCam(item.title, item.quality),
+                              undefined,
+                              false,
+                              item.imageUrl || displayPoster,
+                              item.backdropUrl || displayBackdrop,
+                              item.posterUrl || displayPoster
                             );
                           }}
                           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"
@@ -1548,16 +1658,31 @@ function DetailsPage({
 
             <div className="space-y-4 pt-2">
               {comments.map(c => (
-                <div key={c.id} className="flex gap-4 p-4 rounded-xl bg-[#121212] border border-neutral-800/60">
-                  <div className="w-9 h-9 rounded-full bg-[#1c1c1c] flex items-center justify-center font-bold text-neutral-400 shrink-0 text-sm border border-neutral-800">
-                    {c.user.charAt(0)}
+                <div key={c.id} className="flex gap-4 p-4 rounded-xl bg-[#121212] border border-neutral-800/60 hover:border-neutral-700/80 transition-all group">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600/30 to-amber-600/20 text-orange-400 flex items-center justify-center font-bold shrink-0 text-sm border border-orange-500/30 shadow-inner">
+                    {c.avatarLetter || c.user.charAt(0).toUpperCase()}
                   </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-bold text-white text-sm">{c.user}</span>
-                      <span className="text-xs text-neutral-500">recentemente</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-sm">{c.user}</span>
+                        <span className="text-xs text-neutral-500">{c.timeAgo || "recentemente"}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleLike(c.id)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          c.likedByUser 
+                            ? "text-orange-500 bg-orange-600/15 border border-orange-500/30" 
+                            : "text-neutral-500 hover:text-neutral-300 hover:bg-white/5 border border-transparent"
+                        }`}
+                        title={c.likedByUser ? "Descurtir" : "Curtir este comentário"}
+                      >
+                        <ThumbsUp className={`w-3.5 h-3.5 ${c.likedByUser ? "fill-current text-orange-500" : ""}`} />
+                        <span>{c.likes > 0 ? c.likes : ""}</span>
+                      </button>
                     </div>
-                    <p className="text-neutral-300 text-sm font-normal leading-relaxed">{c.text}</p>
+                    <p className="text-neutral-300 text-sm font-normal leading-relaxed break-words">{c.text}</p>
                   </div>
                 </div>
               ))}
@@ -1817,7 +1942,12 @@ function GlobalSearchPage({
                               1, 
                               1, 
                               item.quality, 
-                              checkIsCam(item.title, item.quality)
+                              checkIsCam(item.title, item.quality),
+                              undefined,
+                              false,
+                              item.imageUrl,
+                              item.backdropUrl,
+                              item.posterUrl
                             );
                           }}
                           className="w-11 h-11 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_15px_rgba(234,88,12,0.6)] text-white hover:scale-110"
@@ -1897,7 +2027,12 @@ function GlobalSearchPage({
                             1, 
                             1, 
                             item.quality, 
-                            checkIsCam(item.title, item.quality)
+                            checkIsCam(item.title, item.quality),
+                            undefined,
+                            false,
+                            item.imageUrl,
+                            item.backdropUrl,
+                            item.posterUrl
                           );
                         }}
                         className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
@@ -2080,7 +2215,12 @@ function UserProfilePage({
                           1, 
                           1, 
                           item.quality, 
-                          checkIsCam(item.title, item.quality)
+                          checkIsCam(item.title, item.quality),
+                          undefined,
+                          false,
+                          item.imageUrl,
+                          item.backdropUrl,
+                          item.posterUrl
                         );
                       }}
                       className="w-10 h-10 bg-orange-600 rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(234,88,12,0.6)] text-white hover:scale-110 transition-transform"
@@ -2347,7 +2487,12 @@ function FavoritesPage({
                           1, 
                           1, 
                           item.quality, 
-                          checkIsCam(item.title, item.quality)
+                          checkIsCam(item.title, item.quality),
+                          undefined,
+                          false,
+                          item.imageUrl,
+                          item.backdropUrl,
+                          item.posterUrl
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110 pointer-events-auto cursor-pointer"
@@ -2655,7 +2800,12 @@ function GlobalCatalogPage({
                           1, 
                           1, 
                           item.quality, 
-                          checkIsCam(item.title, item.quality)
+                          checkIsCam(item.title, item.quality),
+                          undefined,
+                          false,
+                          item.imageUrl,
+                          item.backdropUrl,
+                          item.posterUrl
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
@@ -3061,7 +3211,12 @@ function ProviderPage({
                           1, 
                           1, 
                           item.quality, 
-                          checkIsCam(item.title, item.quality)
+                          checkIsCam(item.title, item.quality),
+                          undefined,
+                          false,
+                          item.imageUrl,
+                          item.backdropUrl,
+                          item.posterUrl
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
@@ -3308,7 +3463,11 @@ function ContentRow({
           scrollSnapType: isDragging ? "none" : "x mandatory",
           scrollBehavior: isDragging ? "auto" : "smooth"
         }}
-        className={`flex gap-4 md:gap-6 overflow-x-auto pt-4 pb-6 pl-2 pr-4 scrollbar-hide select-none touch-pan-x ${
+        className={`flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden scrollbar-hide select-none touch-pan-x ${
+          isTop10 
+            ? "pt-4 pb-8 md:pt-6 md:pb-10 pl-6 md:pl-8 pr-6 md:pr-8" 
+            : "pt-4 pb-6 pl-2 pr-4"
+        } ${
           isDragging ? "cursor-grabbing" : "cursor-grab snap-x snap-mandatory"
         }`}
       >
@@ -3323,16 +3482,16 @@ function ContentRow({
               }
               onItemClick && onItemClick(item.id, item);
             }} 
-            className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-20"
+            className="snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-20 origin-bottom transform-gpu"
           >
             {isTop10 ? (
-              <div className="flex relative w-[280px] md:w-[320px] h-[160px] md:h-[180px]">
+              <div className="flex relative items-end w-[280px] md:w-[320px] h-[160px] md:h-[180px]">
                 {/* Bold background number */}
-                <span className="absolute -left-6 bottom-[-25px] text-[150px] leading-none font-black text-neutral-800 -z-10 tracking-tighter drop-shadow-md select-none group-hover:text-orange-950 transition-colors">
+                <span className="absolute left-1 bottom-0 text-[80px] md:text-[100px] leading-none font-black text-neutral-600/80 group-hover:text-orange-500/90 z-0 tracking-tighter drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] select-none transition-colors duration-300">
                   {idx + startNumber}
                 </span>
                 {/* Image */}
-                <div className="relative w-[85%] ml-auto h-full rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors">
+                <div className="relative w-[78%] md:w-[80%] ml-auto h-full rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors z-10">
                    {checkIsCam(item.title, item.quality) && (
                      <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
                        CAM

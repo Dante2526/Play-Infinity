@@ -25,8 +25,15 @@ export interface SeriesScheduleEpisode {
 
 const FAVORITES_STORAGE_KEY = "playinfinity_user_favorites";
 
-// Catálogo completo inicial para busca de itens por ID
+// Cache singleton para evitar reconstrução desnecessária do Map a cada verificação
+let cachedCatalogItems: CatalogItem[] | null = null;
+
+// Catálogo completo inicial para busca de itens por ID (Memoizado O(1))
 export const getAllCatalogItems = (): CatalogItem[] => {
+  if (cachedCatalogItems) {
+    return cachedCatalogItems;
+  }
+
   const map = new Map<number, CatalogItem>();
   
   if (featured) {
@@ -54,7 +61,8 @@ export const getAllCatalogItems = (): CatalogItem[] => {
     });
   });
 
-  return Array.from(map.values());
+  cachedCatalogItems = Array.from(map.values());
+  return cachedCatalogItems;
 };
 
 // Obter IDs padrão iniciais se for primeira visita

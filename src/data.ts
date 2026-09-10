@@ -66,7 +66,11 @@ export const continueWatching = [
     episode: "T4:E1 - O Clube Hellfire",
     progress: 75,
     imageUrl:
-      "https://image.tmdb.org/t/p/w500/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+      "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
+    posterUrl:
+      "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/66732/4/1",
   },
   {
@@ -76,7 +80,11 @@ export const continueWatching = [
     episode: "Continuar do min 45",
     progress: 42,
     imageUrl:
-      "https://image.tmdb.org/t/p/w500/by8z9Fe8y7p4jo2YlW2SZDnptyT.jpg",
+      "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    backdropUrl:
+      "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    posterUrl:
+      "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
     playerUrl: "https://v1.watchplay.shop/movie/533535",
   },
 ];
@@ -179,6 +187,92 @@ export const newest = [
       "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
   },
+];
+
+export const animes = [
+  {
+    id: 1429,
+    tmdbId: 1429,
+    title: "ATTACK ON TITAN",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/71FiW6q1Qf22OQj2b8P1gM1VqG1.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/1429/1/1",
+  },
+  {
+    id: 85937,
+    tmdbId: 85937,
+    title: "DEMON SLAYER",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/nTvM4mhqZlHIvUkI1gVnWumrSlp.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/85937/1/1",
+  },
+  {
+    id: 209867,
+    tmdbId: 209867,
+    title: "SOLO LEVELING",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuPxJ8ZXq5.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2UMOPX96D.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/209867/1/1",
+  },
+  {
+    id: 1399,
+    tmdbId: 1399,
+    title: "DEATH NOTE",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/iigTJJskR1PcjjUq59Hq526fZ1g.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/gmp3Q91H84VvBqf5u65iVv7QWff.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/1399/1/1",
+  }
+];
+
+export const doramas = [
+  {
+    id: 93405,
+    tmdbId: 93405,
+    title: "ROUND 6",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
+  },
+  {
+    id: 103768,
+    tmdbId: 103768,
+    title: "TUDO BEM NÃO SER NORMAL",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/1eT6E7P30pG0q04v2eNnQd9sE7P.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/zN23c1k8d6F5l09d7q5u8W0f5s2.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/103768/1/1",
+  },
+  {
+    id: 94796,
+    tmdbId: 94796,
+    title: "POUSANDO NO AMOR",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/q2b7F6i60O8f8r1R5FvG0wD8q0x.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/a0V40Dk8W2q6c2j5S1w1h8f7b7f.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/94796/1/1",
+  },
+  {
+    id: 197067,
+    tmdbId: 197067,
+    title: "UMA ADVOGADA EXTRAORDINÁRIA",
+    type: "series" as const,
+    quality: "HD" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/bC4wV4c0x9x8r5f8e5n0q5b8c5k.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/c5y2K7e7f6x5v3q9y0a5z8x2w3e.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/197067/1/1",
+  }
 ];
 
 export const mostWatched = [

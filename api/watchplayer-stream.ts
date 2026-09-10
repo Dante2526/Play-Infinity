@@ -1,8 +1,75 @@
+const ALLOWED_STREAMING_DOMAINS = [
+  "watchplay.shop",
+  "v1.watchplay.shop",
+  "vidlink.pro",
+  "superflixapi.top",
+  "embedder.net",
+  "warezcdn.net",
+  "warezcdn.com",
+  "encontrei.info",
+  "themoviedb.org",
+  "tmdb.org",
+  "youtube.com",
+  "youtu.be",
+  "unsplash.com",
+  "image.tmdb.org"
+];
+
+function isPrivateOrLocalIp(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host === "::1" ||
+    host === "0.0.0.0"
+  ) {
+    return true;
+  }
+  if (/^10\./.test(host)) return true;
+  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true;
+  if (/^192\.168\./.test(host)) return true;
+  if (/^169\.254\./.test(host)) return true;
+  if (!host.includes(".")) return true;
+  if (/\.(local|internal|lan|corp|home)$/i.test(host)) return true;
+  return false;
+}
+
+function validateSafeUrl(rawUrl: string): { valid: boolean; error?: string; parsedUrl?: URL } {
+  if (!rawUrl || typeof rawUrl !== "string") {
+    return { valid: false, error: "A URL é obrigatória." };
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl.trim());
+  } catch {
+    return { valid: false, error: "Formato de URL inválido." };
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { valid: false, error: `Protocolo '${parsed.protocol}' não permitido por segurança.` };
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+
+  if (isPrivateOrLocalIp(hostname)) {
+    return { valid: false, error: "Endereços locais ou redes privadas são bloqueados por segurança." };
+  }
+
+  const isAllowed = ALLOWED_STREAMING_DOMAINS.some((d) => hostname === d || hostname.endsWith("." + d));
+  if (!isAllowed) {
+    return { valid: false, error: `Domínio '${hostname}' não autorizado.` };
+  }
+
+  return { valid: true, parsedUrl: parsed };
+}
+
 export default async function handler(req: any, res: any) {
   try {
     const targetUrl = (req.query?.url || req.body?.url) as string;
-    if (!targetUrl) {
-      return res.status(400).send("URL parameter missing");
+    const validation = validateSafeUrl(targetUrl);
+    if (!validation.valid) {
+      return res.status(403).send(`Acesso bloqueado: ${validation.error}`);
     }
 
     if (req.query?.action_secure_sign) {
@@ -33,6 +100,11 @@ export default async function handler(req: any, res: any) {
     }
 
     let html = await upstreamRes.text();
+
+    // 0.1 Remoção do devtools detector e scripts de bloqueio
+    html = html.replace(/<script[^>]*devtools[^>]*><\/script>/gi, "");
+    html = html.replace(/<script[^>]*analytics\.js[^>]*><\/script>/gi, "");
+    html = html.replace(/<script[^>]*>[\s\S]*?devtoolsDetector[\s\S]*?<\/script>/gi, "");
 
     // 1. Ativar AUTO_PLAY_ENABLED no player oficial
     html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
@@ -257,24 +329,53 @@ export default async function handler(req: any, res: any) {
           });
           observer.observe(document.documentElement, { childList: true, subtree: true });
 
-          // 2. Auto-Start rápido na primeira opção disponível
+          // 2. Auto-Start rápido e resiliente para filmes e séries
           var tries = 0;
+          var optionClicked = false;
           var autoStartTimer = setInterval(function() {
             tries++;
+
+            // A) Séries: aciona getepi imediatamente no episódio selecionado sem esperar dezenas de miniaturas
+            var ep = document.querySelector('.episodeOption.active') || document.querySelector('.episodeOption');
+            if (ep && window.$ && typeof window.getepi === 'function' && !window._epAutoTriggered) {
+              window._epAutoTriggered = true;
+              window.$(ep).removeClass('active');
+              window.getepi(window.$(ep));
+            }
+
+            // B) Seletor de áudio (Dublado preferencialmente)
             var dublado = document.querySelector('.select_language[data-target="1"]');
             if (dublado && !dublado.classList.contains('active')) {
               dublado.click();
             }
-            var option = document.querySelector('.players_select_items.visible .player_select_item') || 
-                         document.querySelector('.player_select_item');
-            if (option) {
-              option.click();
-              clearInterval(autoStartTimer);
+
+            // C) Clica na opção de player assim que surgir
+            if (!optionClicked) {
+              var option = document.querySelector('.players_select_items.visible .player_select_item') || 
+                           document.querySelector('.player_select_item');
+              if (option) {
+                optionClicked = true;
+                option.click();
+              }
             }
-            if (tries > 80) {
+
+            // D) Se o vídeo já possui duração válida e está pronto, finaliza monitoramento com sucesso
+            var v = getVideoElement();
+            if (v && v.duration > 0 && !isNaN(v.duration)) {
               clearInterval(autoStartTimer);
+              return;
             }
-          }, 30);
+
+            // Timeout após 100 ticks (6.0 segundos sem stream válido)
+            if (tries > 100) {
+              clearInterval(autoStartTimer);
+              if (!v || !v.duration || v.duration === 0) {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "timeout_no_stream" }, "*");
+                } catch(e) {}
+              }
+            }
+          }, 60);
 
           // 3. Funções de controle de vídeo e telemetria para o NetflixPlayerSkin
           var introSkippedForCurrentVideo = false;

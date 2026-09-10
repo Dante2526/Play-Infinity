@@ -360,7 +360,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                             loading="lazy"
                             onError={(e) => {
                               e.currentTarget.onerror = null;
-                              e.currentTarget.src = ep.seriesBackdrop || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
+                              e.currentTarget.src = ep.seriesBackdrop || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
                             }}
                           />
                         </div>
@@ -453,7 +453,14 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                               ep.tmdbId,
                               ep.imdbId,
                               ep.seasonNumber,
-                              ep.episodeNumber
+                              ep.episodeNumber,
+                              undefined,
+                              false,
+                              undefined,
+                              false,
+                              ep.seriesBackdrop || ep.seriesPoster,
+                              ep.seriesBackdrop,
+                              ep.seriesPoster
                             );
                           }}
                           className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
@@ -567,7 +574,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                           loading="lazy"
                           onError={(e) => {
                             e.currentTarget.onerror = null;
-                            e.currentTarget.src = series.backdropUrl || "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=500&q=80";
+                            e.currentTarget.src = series.backdropUrl || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
                           }}
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
