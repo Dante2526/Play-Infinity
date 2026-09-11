@@ -1034,7 +1034,18 @@ async function startServer() {
 
       if (!optionId) {
         const idMatch = html.match(/player_select_item["'][^>]*data-id=["'](\d+)["']/i);
-        if (idMatch) optionId = idMatch[1];
+        
+         const regexOptions = /player_select_item["'][^>]*data-id=["'](\d+)["'][^>]*>[\s\S]*?<div[^>]*player_select_name[^>]*>([^<]+)<\/div>/gi;
+         let match;
+         const options = [];
+         while ((match = regexOptions.exec(html)) !== null) {
+            options.push({ id: match[1], name: match[2].trim() });
+         }
+         if (options.length > 0) {
+            const upnsOpt = options.find(o => o.name.includes("UPNS"));
+            optionId = upnsOpt ? upnsOpt.id : options[0].id;
+         }
+
       }
 
       if (!optionId) {
@@ -2639,6 +2650,196 @@ async function startServer() {
   });
 
   // Vite middleware for development
+  
+  // API: Extrator Direto da EmbedPlayAPI (Bypassa o Menu)
+  app.get("/api/embedplay-direct", async (req, res) => {
+    try {
+      const { tmdb, s, e, type } = req.query;
+      const isMovie = type === "movie";
+      const pageUrl = isMovie 
+        ? `https://www.embedplay.one/filme/${tmdb}`
+        : `https://www.embedplay.one/serie/${tmdb}/${s}/${e}`;
+        
+      const pageRes = await fetch(pageUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
+      const html = await pageRes.text();
+      
+      let optionId = null;
+      let contentId = null;
+
+      if (isMovie) {
+         const regexOptions = /player_select_item["'][^>]*data-id=["'](\d+)["'][^>]*>[\s\S]*?<div[^>]*player_select_name[^>]*>([^<]+)<\/div>/gi;
+         let match;
+         const options = [];
+         while ((match = regexOptions.exec(html)) !== null) {
+            options.push({ id: match[1], name: match[2].trim() });
+         }
+         if (options.length > 0) {
+            const upnsOpt = options.find(o => o.name.includes("UPNS"));
+            optionId = upnsOpt ? upnsOpt.id : options[0].id;
+         }
+      } else {
+         const activeMatch = html.match(/class=["'][^"']*episodeOption\s+active[^"']*["'][^>]*data-contentid=["'](\d+)["']/i) || 
+                             html.match(/data-contentid=["'](\d+)["'][^>]*data-epi-num=["']${e}["']/i);
+                             
+         if (activeMatch) contentId = activeMatch[1];
+         
+         if (contentId) {
+            const optRes = await fetch("https://www.embedplay.one/api", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "User-Agent": "Mozilla/5.0",
+                "Referer": pageUrl,
+                "X-Requested-With": "XMLHttpRequest"
+              },
+              body: `action=getOptions&contentid=${contentId}`
+            });
+            const optJson = await optRes.json().catch(()=>null);
+            if (optJson?.data?.options?.length > 0) {
+               const dubOptions = optJson.data.options.filter((o:any) => String(o.target) === "1" || /dub/i.test(o.type || ""));
+               const availableOpts = dubOptions.length > 0 ? dubOptions : optJson.data.options;
+               const upnsOpt = availableOpts.find((o:any) => (o.server || "").includes("UPNS") || (o.name || "").includes("UPNS"));
+               optionId = String((upnsOpt || availableOpts[0]).ID);
+            }
+         }
+      }
+
+      if (!optionId) {
+        // Fallback to autoembed
+        return res.redirect(isMovie ? `https://player.autoembed.cc/embed/movie/${tmdb}` : `https://player.autoembed.cc/embed/tv/${tmdb}/${s}/${e}`);
+      }
+      
+      const playerRes = await fetch("https://www.embedplay.one/api", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "User-Agent": "Mozilla/5.0",
+          "Referer": pageUrl,
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: `action=getPlayer&video_id=${optionId}`
+      });
+      const playerJson = await playerRes.json().catch(()=>null);
+      const finalUrl = playerJson?.data?.video_url;
+      
+      if (finalUrl) {
+         return res.redirect(finalUrl);
+      } else {
+         return res.redirect(isMovie ? `https://player.autoembed.cc/embed/movie/${tmdb}` : `https://player.autoembed.cc/embed/tv/${tmdb}/${s}/${e}`);
+      }
+    } catch (err) {
+       console.error("[EmbedPlay Direct Error]:", err);
+       return res.status(500).send("Erro interno");
+    }
+  });
+
+  // API: Resolver do BYSE Player (Streamberry PT-BR)
+  app.get("/api/byse-stream", async (req, res) => {
+    try {
+      const { title, tmdb, s, e, type } = req.query;
+      const isMovie = type === "movie";
+      const season = parseInt(String(s || "1"), 10) || 1;
+      const episode = parseInt(String(e || "1"), 10) || 1;
+      const cleanTitle = String(title || "").trim();
+
+      if (cleanTitle) {
+        const slug = cleanTitle
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        let targetPage = isMovie
+          ? `https://streamberry.com.br/filme/${slug}/`
+          : `https://streamberry.com.br/episodios/${slug}-${season}x${episode}/`;
+
+        let epRes = await fetch(targetPage, {
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+        });
+
+        let epHtml = await epRes.text();
+
+        if (
+          epRes.status === 404 ||
+          (!epHtml.includes("data-post") && !epHtml.includes("comment_post_ID"))
+        ) {
+          const searchUrl = `https://streamberry.com.br/?s=${encodeURIComponent(cleanTitle)}`;
+          const searchRes = await fetch(searchUrl, {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+          });
+          const searchHtml = await searchRes.text();
+
+          const linkMatch = searchHtml.match(
+            /href=["'](https:\/\/streamberry\.com\.br\/(?:series|filme|filmes)\/[^"']+)["']/i
+          );
+          if (linkMatch) {
+            const seriesUrl = linkMatch[1];
+            if (!isMovie) {
+              const matchSlug = seriesUrl.match(/\/(?:series|filme|filmes)\/([^/]+)/);
+              if (matchSlug) {
+                targetPage = `https://streamberry.com.br/episodios/${matchSlug[1]}-${season}x${episode}/`;
+                epRes = await fetch(targetPage, {
+                  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+                });
+                epHtml = await epRes.text();
+              }
+            } else {
+              targetPage = seriesUrl;
+              epRes = await fetch(targetPage, {
+                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+              });
+              epHtml = await epRes.text();
+            }
+          }
+        }
+
+        const postMatch =
+          epHtml.match(/data-post=["'](\d+)["']/i) ||
+          epHtml.match(/id=["']comment_post_ID["']\s+value=["'](\d+)["']/i);
+
+        if (postMatch) {
+          const postId = postMatch[1];
+          const form = new URLSearchParams();
+          form.append("action", "doo_player_ajax");
+          form.append("post", postId);
+          form.append("type", isMovie ? "movie" : "tv");
+          form.append("nume", "1");
+
+          const ajaxRes = await fetch("https://streamberry.com.br/wp-admin/admin-ajax.php", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+              "X-Requested-With": "XMLHttpRequest",
+              "Referer": targetPage
+            },
+            body: form.toString()
+          });
+
+          const ajaxJson = await ajaxRes.json().catch(() => null);
+          if (ajaxJson?.embed_url) {
+            return res.redirect(ajaxJson.embed_url);
+          }
+        }
+      }
+
+      // Fallback para EmbedPlay se Byse não estiver disponível
+      const fallbackUrl = tmdb
+        ? `/api/embedplay-direct?tmdb=${tmdb}&s=${season}&e=${episode}&type=${type || "movie"}`
+        : `https://player.autoembed.cc/embed/${isMovie ? "movie" : "tv"}/${tmdb || "1"}${!isMovie ? `/${season}/${episode}` : ""}`;
+
+      return res.redirect(fallbackUrl);
+    } catch (err) {
+      console.error("[BYSE Stream Error]:", err);
+      const { tmdb, s, e, type } = req.query;
+      const fallbackUrl = tmdb
+        ? `/api/embedplay-direct?tmdb=${tmdb}&s=${s || 1}&e=${e || 1}&type=${type || "movie"}`
+        : "https://player.autoembed.cc";
+      return res.redirect(fallbackUrl);
+    }
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

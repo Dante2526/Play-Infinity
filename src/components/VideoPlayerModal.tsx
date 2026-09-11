@@ -158,24 +158,16 @@ export function VideoPlayerModal({
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [selectedServerKey, setSelectedServerKey] = useState<string>(
-    isAnimeMedia ? "srv_consumet" : "srv_watchplay"
+    isAnimeMedia ? "srv_consumet" : "srv_byse"
   );
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
-    if (
-      target.includes("/api/watchplayer-stream") || 
-      target.includes("watchplay.shop") ||
+    const isNativeStream =
+      target.includes("/api/watchplayer-stream") ||
       target.includes("/api/anime-stream") ||
-      target.includes("/api/vixsrc-stream")
-    ) {
-      return false;
-    }
-    return target.includes("autoembed") || target.includes("vidlink") ||
-      target.includes("videasy") ||
-      target.includes("vidsrc") || 
-      target.includes("multiembed") || 
-      target.includes("2embed") ||
-      target.includes("myembed");
+      target.includes("/api/vixsrc-stream");
+
+    return !isNativeStream;
   }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
@@ -349,21 +341,21 @@ export function VideoPlayerModal({
       return [
         {
           key: "srv_consumet",
-          label: "Player 1 (Dublado PT-BR)",
+          label: "Player 2 (Dublado PT-BR)",
           badge: "Stream Dublado em Português (Brasil) • Sem Anúncios",
           buildUrl: (id: string, s: number, e: number) =>
             `/api/anime-stream?provider=consumet&id=${id}&s=${s}&e=${e}&title=${encodeURIComponent(title || "")}`,
           isMatch: (u: string) => u.includes("provider=consumet") || u.includes("anime-stream"),
-          name: "Player 1 (Dublado PT-BR)"
+          name: "Player 2 (Dublado PT-BR)"
         },
         {
           key: "srv_watchplay_stream",
-          label: "Player 2 (Nativo PT-BR)",
+          label: "Player 3 (Nativo PT-BR)",
           badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
           buildUrl: (id: string, s: number, e: number) => 
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 2 (Nativo PT-BR)"
+          name: "Player 3 (Nativo PT-BR)"
         },
         {
           key: "srv_watchplay",
@@ -376,103 +368,137 @@ export function VideoPlayerModal({
         },
         {
           key: "srv_vidlink",
-          label: "Player 4 (VidLink HD)",
+          label: "Player 5 (VidLink HD)",
           badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
           buildUrl: (id: string, s: number, e: number) =>
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
           isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 4 (VidLink HD)"
+          name: "Player 5 (VidLink HD)"
         }
       ];
     } else if (isSeries) {
       return [
         {
+          key: "srv_byse",
+          label: "Player 1 (BYSE Player PT-BR)",
+          badge: "BYSE Player Oficial • Dublado PT-BR Alta Velocidade",
+          buildUrl: (id: string, s: number, e: number) =>
+            `/api/byse-stream?title=${encodeURIComponent(title || "")}&tmdb=${id}&s=${s}&e=${e}&type=series`,
+          isMatch: (u: string) => u.includes("byse-stream") || u.includes("byse"),
+          name: "Player 1 (BYSE Player PT-BR)"
+        },
+        {
+          key: "srv_embedplay",
+          label: "Player 2 (EmbedPlay)",
+          badge: "Stream Nativo EmbedPlay • Dublado PT-BR Direto",
+          buildUrl: (id: string, s: number, e: number) => `/api/embedplay-direct?tmdb=${id}&s=${s}&e=${e}&type=series`,
+          isMatch: (u: string) => u.includes("embedplay-direct"),
+          name: "Player 2 (EmbedPlay)"
+        },
+        {
           key: "srv_watchplay",
-          label: "Player 1 (Dublado PT-BR)",
+          label: "Player 3 (Dublado PT-BR)",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "Player 1 (Dublado PT-BR)"
+          name: "Player 3 (Dublado PT-BR)"
         },
         {
           key: "srv_watchplay_stream",
-          label: "Player 2 (Nativo PT-BR)",
+          label: "Player 4 (Nativo PT-BR)",
           badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
           buildUrl: (id: string, s: number, e: number) => 
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 2 (Nativo PT-BR)"
+          name: "Player 4 (Nativo PT-BR)"
         },
         {
           key: "srv_videasy",
-          label: "Player 3 (Videasy Multi)",
+          label: "Player 5 (Videasy Multi)",
           badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
           buildUrl: (id: string, s: number, e: number) =>
             `https://player.videasy.net/tv/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 3 (Videasy Multi)"
+          name: "Player 5 (Videasy Multi)"
         },
         {
           key: "srv_vidlink",
-          label: "Player 4 (VidLink HD)",
+          label: "Player 6 (VidLink HD)",
           badge: "VidLink Multi-Stream • Legendas PT-BR",
           buildUrl: (id: string, s: number, e: number) =>
             `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
           isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 4 (VidLink HD)"
+          name: "Player 6 (VidLink HD)"
         },
         {
           key: "srv_autoembed",
-          label: "Player 5 (AutoEmbed)",
+          label: "Player 7 (AutoEmbed)",
           badge: "AutoEmbed • Servidor Global",
           buildUrl: (id: string, s: number, e: number) =>
             `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("autoembed"),
-          name: "Player 5 (AutoEmbed)"
+          name: "Player 7 (AutoEmbed)"
         }
       ];
     } else {
       return [
         {
+          key: "srv_byse",
+          label: "Player 1 (BYSE Player PT-BR)",
+          badge: "BYSE Player Oficial • Dublado PT-BR Alta Velocidade",
+          buildUrl: (id: string) =>
+            `/api/byse-stream?title=${encodeURIComponent(title || "")}&tmdb=${id}&type=movie`,
+          isMatch: (u: string) => u.includes("byse-stream") || u.includes("byse"),
+          name: "Player 1 (BYSE Player PT-BR)"
+        },
+        {
+          key: "srv_embedplay",
+          label: "Player 2 (EmbedPlay)",
+          badge: "Stream Nativo EmbedPlay • Dublado PT-BR Direto",
+          buildUrl: (id: string) => `/api/embedplay-direct?tmdb=${id}&type=movie`,
+          isMatch: (u: string) => u.includes("embedplay-direct"),
+          name: "Player 2 (EmbedPlay)"
+        },
+        {
           key: "srv_watchplay",
-          label: "Player 1 (Dublado PT-BR)",
+          label: "Player 3 (Dublado PT-BR)",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "Player 1 (Dublado PT-BR)"
+          name: "Player 3 (Dublado PT-BR)"
         },
         {
           key: "srv_watchplay_stream",
-          label: "Player 2 (Nativo PT-BR)",
+          label: "Player 4 (Nativo PT-BR)",
           badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
           buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 2 (Nativo PT-BR)"
+          name: "Player 4 (Nativo PT-BR)"
         },
         {
           key: "srv_videasy",
-          label: "Player 3 (Videasy Multi)",
+          label: "Player 5 (Videasy Multi)",
           badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
           buildUrl: (id: string) => `https://player.videasy.net/movie/${id}`,
           isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 3 (Videasy Multi)"
+          name: "Player 5 (Videasy Multi)"
         },
         {
           key: "srv_vidlink",
-          label: "Player 4 (VidLink HD)",
+          label: "Player 6 (VidLink HD)",
           badge: "VidLink Multi-Stream • Legendas PT-BR",
           buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&sub=pt`,
           isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 4 (VidLink HD)"
+          name: "Player 6 (VidLink HD)"
         },
         {
           key: "srv_autoembed",
-          label: "Player 5 (AutoEmbed)",
+          label: "Player 7 (AutoEmbed)",
           badge: "AutoEmbed • Servidor Global",
           buildUrl: (id: string) => `https://player.autoembed.cc/embed/movie/${id}`,
           isMatch: (u: string) => u.includes("autoembed"),
-          name: "Player 5 (AutoEmbed)"
+          name: "Player 6 (AutoEmbed)"
         }
       ];
     }
@@ -1121,9 +1147,9 @@ export function VideoPlayerModal({
                 Players bloqueados na pré-visualização.
               </span>
             </span>
-            <button onClick={() => window.open(window.location.href, '_blank')} className="bg-white/20 hover:bg-white/30 px-2 py-1 sm:px-3 sm:py-1 rounded transition-colors whitespace-nowrap ml-2 cursor-pointer flex items-center gap-1.5">
+            <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="bg-white/20 hover:bg-white/30 px-2 py-1 sm:px-3 sm:py-1 rounded transition-colors whitespace-nowrap ml-2 cursor-pointer flex items-center gap-1.5">
               <ExternalLink className="w-3.5 h-3.5 hidden sm:block" /> Abrir App
-            </button>
+            </a>
           </div>
         )}
         {/* Header do Mini-Player Flutuante (Arrastável) */}

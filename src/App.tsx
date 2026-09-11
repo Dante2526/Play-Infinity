@@ -53,11 +53,30 @@ import {
   getTrailer,
   TrailerVideo
 } from "./services/tmdb";
-// Componentes carregados dinamicamente sob demanda (Code Splitting)
-const VideoPlayerModal = React.lazy(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })));
-const WebhookPanelModal = React.lazy(() => import("./components/WebhookPanelModal").then(m => ({ default: m.WebhookPanelModal })));
-const ReleaseCalendarPage = React.lazy(() => import("./components/ReleaseCalendarPage").then(m => ({ default: m.ReleaseCalendarPage })));
-const LiveTvPage = React.lazy(() => import("./components/LiveTvPage").then(m => ({ default: m.LiveTvPage })));
+import { VideoPlayerModal } from "./components/VideoPlayerModal";
+
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  componentImport: () => Promise<any>
+) {
+  return React.lazy(async () => {
+    try {
+      const module = await componentImport();
+      return { default: module.default || Object.values(module)[0] };
+    } catch (error) {
+      console.warn("[LazyRetry] Dynamic import failed, reloading page...", error);
+      const hasReloaded = sessionStorage.getItem("lazy-reload");
+      if (!hasReloaded) {
+        sessionStorage.setItem("lazy-reload", "true");
+        window.location.reload();
+      }
+      throw error;
+    }
+  });
+}
+
+const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
+const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
+const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
 import {
   getFavoriteIds,
   toggleFavorite,
