@@ -690,7 +690,7 @@ function HomePage({
               isAnime: true,
               rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
               year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
-              playerUrl: `https://vidsrc.to/embed/tv/${a.id}/1/1`
+              playerUrl: `/api/anime-stream?provider=consumet&id=${a.id}&s=1&e=1&title=${encodeURIComponent(a.name || a.title || "")}`
             }));
           if (formattedAnimes.length > 0) {
             setAnimeReleases(formattedAnimes);
@@ -1175,14 +1175,10 @@ function DetailsPage({
   const effectiveTmdbId = item.tmdbId || item.id;
   const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
 
-  // URL de reprodução: Anime usa vidsrc.to direto, séries/filmes usam WatchPlayer
-  const targetPlayerUrl = isAnimeItem
-    ? (isSeries 
-        ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/1`
-        : `https://vidsrc.to/embed/movie/${effectiveTmdbId}`)
-    : isSeries
-      ? (item.playerUrl || `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/1`)
-      : (item.playerUrl || `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`);
+  // URL de reprodução: Aponta para WatchPlayer com skin Netflix e autoplay
+  const targetPlayerUrl = isSeries
+    ? (item.playerUrl || `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/1`)
+    : (item.playerUrl || `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`);
 
   const synopsis = item.synopsis || "Uma experiência cinematográfica envolvente com alta definição e elenco renomado.";
   const year = item.year || 2024;
@@ -1532,9 +1528,9 @@ function DetailsPage({
                       <div 
                         className="flex items-center gap-3.5 flex-1 cursor-pointer"
                         onClick={() => {
-                          const epUrl = isAnimeItem 
-                            ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
-                            : `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                          const epUrl = isSeries 
+                            ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
+                            : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
                           onPlay?.(
                             `${item.title} - ${ep.title}`, 
                             epUrl, 
@@ -1598,9 +1594,9 @@ function DetailsPage({
                         {/* Botão de Play */}
                         <div 
                           onClick={() => {
-                            const epUrl = isAnimeItem 
-                              ? `https://vidsrc.to/embed/tv/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
-                              : `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                            const epUrl = isSeries 
+                              ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
+                              : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
                             onPlay?.(
                               `${item.title} - ${ep.title}`, 
                               epUrl, 
@@ -2724,7 +2720,7 @@ function GlobalCatalogPage({
 
   const pageTitle = type === 'movies' ? 'Catálogo Geral de Filmes' : 'Catálogo Geral de Séries';
   const pageDescription = type === 'movies' 
-    ? 'Acesso direto a mais de 500.000 filmes em alta definição no WatchPlayer e Player 2 (VidLink).' 
+    ? 'Acesso direto a mais de 500.000 filmes em alta definição no WatchPlayer.' 
     : 'Acesso completo a dezenas de milhares de séries, temporadas e episódios com multi-servidores.';
 
   return (

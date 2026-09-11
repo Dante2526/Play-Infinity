@@ -11,7 +11,7 @@ const CACHE_DURATION_MS = 25000; // 25 segundos de cache para trocas rápidas de
 /**
  * Detecta a qualidade da conexão do usuário de forma ultra rápida e silenciosa.
  * Retorna 'fast' para conexões adequadas a Full HD (WatchPlayer)
- * ou 'slow' para conexões instáveis/lentas que demandam CDN adaptativa (VidLink).
+ * ou 'slow' para conexões instáveis/lentas que demandam stream adaptativo.
  */
 export async function detectConnectionQuality(forceRefresh = false): Promise<ConnectionTier> {
   const now = Date.now();

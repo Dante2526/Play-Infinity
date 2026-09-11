@@ -1,7 +1,6 @@
 const ALLOWED_STREAMING_DOMAINS = [
   "watchplay.shop",
   "v1.watchplay.shop",
-  "vidlink.pro",
   "superflixapi.top",
   "embedder.net",
   "warezcdn.net",

@@ -67,8 +67,23 @@ export function isSuperflixUrl(url: string): boolean {
   return SUPERFLIX_REGEX.test(url) || lower.includes("superflix") || lower.includes("sfapi");
 }
 
-// Extrai informações da mídia caso não sejam fornecidas explicitamente
 function parseMediaFromUrl(url: string) {
+  if (url.includes("/api/anime-stream")) {
+    try {
+      const parsed = new URL(url, "http://localhost");
+      const type = parsed.searchParams.get("type");
+      const id = parsed.searchParams.get("id") || "";
+      const season = parseInt(parsed.searchParams.get("s") || "1", 10);
+      const episode = parseInt(parsed.searchParams.get("e") || "1", 10);
+      return {
+        isSeries: type !== "movie",
+        id,
+        season: isNaN(season) ? 1 : season,
+        episode: isNaN(episode) ? 1 : episode,
+      };
+    } catch {}
+  }
+
   const isSeries = url.includes("/tv/") || url.includes("/tvshow/") || url.includes("/serie") || url.includes("/series");
   
   const tvPattern = /\/(?:tv|tvshow|serie|series)\/([a-zA-Z0-9_-]+)(?:\/(\d+)\/(\d+))?/i;
@@ -123,6 +138,10 @@ export function VideoPlayerModal({
   posterUrl,
 }: VideoPlayerModalProps) {
   const isCamMovie = isCam || checkIsCam(title, quality);
+  const isAnimeMedia = Boolean(
+    isAnime ||
+    (title && /anime|naruto|dragon ball|one piece|bleach|attack on titan|jujutsu|demon slayer|death note|boruto|hunter x hunter|solo leveling/i.test(title))
+  );
   const [urlInput, setUrlInput] = useState(
     defaultUrl || "https://v1.watchplay.shop/tvshow/66732/1/1"
   );
@@ -135,18 +154,23 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>("srv1");
+  const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
-    return Boolean(isAnime) || 
-      target.includes("/api/anime-stream") || 
-      target.includes("vidlink.pro") || 
-      target.includes("vidsrc") || 
+    if (
+      target.includes("/api/watchplayer-stream") || 
+      target.includes("watchplay.shop") ||
+      target.includes("/api/anime-stream") ||
+      target.includes("/api/vixsrc-stream")
+    ) {
+      return false;
+    }
+    return target.includes("vidsrc") || 
       target.includes("multiembed") || 
       target.includes("videasy") || 
       target.includes("embed.su") || 
       target.includes("myembed");
-  }, [activeIframeUrl, urlInput, isAnime]);
+  }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
@@ -313,78 +337,124 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores para Animes vs Filmes/Séries
+  // Servidores para Animes vs Filmes/Séries (Estritamente conteúdo Dublado em Português do Brasil - PT-BR)
   const servers = useMemo(() => {
-    if (isAnime) {
+    if (isAnimeMedia) {
       return [
         {
-          key: "srv_anfire",
-          label: "Player Anime (Principal)",
-          badge: "Alta Qualidade",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://vidsrc.to/embed/tv/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("vidsrc.to"),
-          name: "VidSrc"
+          key: "srv_consumet",
+          label: "Player 1 (Dublado PT-BR)",
+          badge: "Stream Dublado em Português (Brasil) • Sem Anúncios",
+          buildUrl: (id: string, s: number, e: number) =>
+            `/api/anime-stream?provider=consumet&id=${id}&s=${s}&e=${e}&title=${encodeURIComponent(title || "")}`,
+          isMatch: (u: string) => u.includes("provider=consumet") || u.includes("anime-stream"),
+          name: "Player 1 (Dublado PT-BR)"
         },
         {
-          key: "srv_consumet",
-          label: "Player Anime (Leve)",
-          badge: "Carregamento Rápido",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`,
-          isMatch: (u: string) => u.includes("multiembed.mov"),
-          name: "MultiEmbed"
+          key: "srv_watchplay",
+          label: "Player 2 (WatchPlayer Dublado)",
+          badge: "WatchPlayer Oficial • Dublado PT-BR",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("watchplay.shop"),
+          name: "Player 2 (WatchPlayer Dublado)"
         }
       ];
     } else if (isSeries) {
       return [
         {
-          key: "srv1",
-          label: "Player 1 (WatchPlayer)",
-          badge: "Alta Resolução • Autoplay Contínuo",
+          key: "srv_watchplay",
+          label: "Player 1 (Dublado PT-BR)",
+          badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("watchplay.shop"),
-          name: "Player 1"
+          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
+          name: "Player 1 (Dublado PT-BR)"
+        },
+        {
+          key: "srv_watchplay_stream",
+          label: "Player 2 (Nativo PT-BR)",
+          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
+          buildUrl: (id: string, s: number, e: number) => 
+            `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
+          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
+          name: "Player 2 (Nativo PT-BR)"
         }
       ];
     } else {
       return [
         {
-          key: "srv1",
-          label: "Player 1 (WatchPlayer)",
-          badge: "Alta Resolução • Sem Anúncios",
+          key: "srv_watchplay",
+          label: "Player 1 (Dublado PT-BR)",
+          badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
-          isMatch: (u: string) => u.includes("watchplay.shop"),
-          name: "Player 1"
+          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
+          name: "Player 1 (Dublado PT-BR)"
+        },
+        {
+          key: "srv_watchplay_stream",
+          label: "Player 2 (Nativo PT-BR)",
+          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
+          buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
+          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
+          name: "Player 2 (Nativo PT-BR)"
         }
       ];
     }
-  }, [isAnime, isSeries, imdbId, title]);
+  }, [isAnimeMedia, isSeries, imdbId, title]);
 
-  // Fallback silencioso abortado (sem servidores extras)
+  // Handler para troca de servidor de forma transparente e silenciosa
+  const handleServerSwitch = useCallback((serverKey: string) => {
+    setSelectedServerKey(serverKey);
+    const srv = servers.find(s => s.key === serverKey);
+    if (!srv) return;
+    transitionEpochRef.current = Date.now();
+    setIsLoading(true);
+    setPlayerSkinReady(false);
+    setError(null);
+    const newUrl = isSeries
+      ? srv.buildUrl(resolvedId, season, episode)
+      : srv.buildUrl(resolvedId);
+    setUrlInput(newUrl);
+    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+    setExtractedSource(newUrl);
+  }, [servers, isSeries, resolvedId, season, episode]);
+
+  // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
 
   const handleSilentFallback = useCallback(() => {
+    fallbackAttemptsRef.current.add(selectedServerKey);
+    // Identifica próximo servidor ainda não tentado
+    const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey);
+    if (nextServer) {
+      console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
+      handleServerSwitch(nextServer.key);
+      return;
+    }
+
+    console.error("[VideoPlayerModal] Todos os servidores disponíveis falharam.");
     setError("Não foi possível carregar o vídeo neste momento. Tente novamente mais tarde.");
     setIsLoading(false);
-  }, []);
+  }, [servers, selectedServerKey, handleServerSwitch]);
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  // Watchdog de segurança do Player 1: se demorar mais de 15s sem emitir stream pronto,
-  // aciona aviso de erro.
+  // Watchdog inteligente de segurança: se o player demorar mais de 15s (animes) ou 10s (filmes/séries) sem iniciar,
+  // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência
   useEffect(() => {
-    if (!activeIframeUrl || selectedServerKey !== "srv1" || playerSkinReady) return;
+    if (!activeIframeUrl || playerSkinReady || error) return;
+    if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
+    const timeoutDuration = isAnime ? 15000 : 10000;
     const timer = setTimeout(() => {
-      if (!playerSkinReady && selectedServerKey === "srv1") {
-        console.warn("[VideoPlayerModal] Player 1 demorou mais de 15s sem emitir stream pronto. Exibindo erro.");
+      if (!playerSkinReady && !error) {
+        console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
         handleSilentFallback();
       }
-    }, 15000);
+    }, timeoutDuration);
     return () => clearTimeout(timer);
-  }, [activeIframeUrl, selectedServerKey, playerSkinReady, handleSilentFallback]);
+  }, [activeIframeUrl, selectedServerKey, playerSkinReady, error, isAnime, handleSilentFallback]);
 
   // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
@@ -412,22 +482,7 @@ export function VideoPlayerModal({
 
       // Detecção de rede para Animes e configuração do servidor inicial
       const setupInitialServer = async () => {
-        let targetServerKey = "srv1";
-        
-        const isActuallyAnime = isAnime || (title && (
-          title.toLowerCase().includes('anime') || 
-          title.toLowerCase().includes('jujutsu') || 
-          title.toLowerCase().includes('piece') || 
-          title.toLowerCase().includes('naruto') ||
-          title.toLowerCase().includes('titan') ||
-          title.toLowerCase().includes('slayer')
-        ));
-
-        if (isActuallyAnime) {
-          // Avalia a internet de forma ultra rápida e silenciosa (sem notificações)
-          const connTier = await detectConnectionQuality(false);
-          targetServerKey = connTier === 'fast' ? "srv_anfire" : "srv_consumet";
-        }
+        let targetServerKey = isAnimeMedia ? "srv_consumet" : "srv_watchplay";
 
         setSelectedServerKey(targetServerKey);
 
@@ -469,7 +524,8 @@ export function VideoPlayerModal({
       window.location.origin,
       "https://v1.watchplay.shop",
       "https://watchplay.shop",
-      "https://vidlink.pro",
+      "https://player.videasy.to",
+      "https://videasy.to",
       "https://superflixapi.top",
     ];
     if (allowedOrigins.includes(event.origin)) return true;
@@ -662,23 +718,6 @@ export function VideoPlayerModal({
     setExtractedSource(newUrl);
   };
 
-  // Handler to switch server
-  const handleServerSwitch = (serverKey: string) => {
-    setSelectedServerKey(serverKey);
-    const srv = servers.find(s => s.key === serverKey);
-    if (!srv) return;
-    transitionEpochRef.current = Date.now();
-    setIsLoading(true);
-    setPlayerSkinReady(false);
-    setError(null);
-    const newUrl = isSeries
-      ? srv.buildUrl(resolvedId, season, episode)
-      : srv.buildUrl(resolvedId);
-    setUrlInput(newUrl);
-    setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
-    setExtractedSource(newUrl);
-  };
-
   const handleExtract = async (rawInput: string) => {
     const cleanUrl = extractSrcFromInput(rawInput);
     if (!cleanUrl) return;
@@ -695,7 +734,6 @@ export function VideoPlayerModal({
     if (
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("/api/anime-stream") ||
-      cleanUrl.includes("vidlink.pro") || 
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("multiembed") ||
@@ -1305,16 +1343,15 @@ export function VideoPlayerModal({
                 referrerPolicy="origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  // Para iframes de embeds externos (anime, vidsrc, multiembed, etc),
-                  // não espera postMessage — libera o overlay assim que o HTML carregar
                   if (
-                    isAnime ||
+                    isAnimeMedia ||
                     activeIframeUrl?.includes('/api/anime-stream') || 
+                    activeIframeUrl?.includes('/api/vixsrc-stream') ||
                     activeIframeUrl?.includes('/api/watchplayer-stream') ||
-                    activeIframeUrl?.includes('vidsrc.to') ||
-                    activeIframeUrl?.includes('multiembed')
+                    activeIframeUrl?.includes('videasy') ||
+                    activeIframeUrl?.includes('vidsrc.to')
                   ) {
-                    setTimeout(() => setPlayerSkinReady(true), 600);
+                    setTimeout(() => setPlayerSkinReady(true), 150);
                   }
                 }}
                 onError={() => handleSilentFallback()}
@@ -1378,6 +1415,7 @@ export function VideoPlayerModal({
               onToggleAspectRatio={handleToggleAspectRatio}
               onTogglePiP={handleToggleMiniPlayer}
               isMiniPlayer={isMiniPlayer}
+              passThroughClicks={Boolean(isAnimeMedia || activeIframeUrl?.includes('/api/anime-stream'))}
             />
           </div>
         </div>
