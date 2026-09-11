@@ -336,7 +336,6 @@ function isSuperflixDetected(content: string, url: string = ""): boolean {
 const ALLOWED_STREAMING_DOMAINS = [
   "watchplay.shop",
   "v1.watchplay.shop",
-  "vidlink.pro",
   "superflixapi.top",
   "embedder.net",
   "warezcdn.net",
@@ -347,7 +346,14 @@ const ALLOWED_STREAMING_DOMAINS = [
   "youtube.com",
   "youtu.be",
   "unsplash.com",
-  "image.tmdb.org"
+  "image.tmdb.org",
+  "vixsrc.to",
+  "vix-content.net",
+  "videasy.to",
+  "videasy.net",
+  "speedracelight.com",
+  "animesonlinecc.to",
+  "blogger.com"
 ];
 
 function isPrivateOrLocalIp(hostname: string): boolean {
@@ -786,7 +792,7 @@ async function startServer() {
 
   // API 4.5: Player Diagnostics Test (Automated sandbox, anti-popup and CORS verification)
   app.get("/api/player-diagnostics", async (req, res) => {
-    const testUrl = (req.query.url as string) || "https://vidlink.pro/tv/66732/1/1";
+    const testUrl = (req.query.url as string) || "https://v1.watchplay.shop/tvshow/66732/1/1";
     const validation = validateSafeUrl(testUrl);
     if (!validation.valid) {
       return res.status(403).json({ success: false, url: testUrl, error: validation.error });
@@ -831,65 +837,978 @@ async function startServer() {
     }
   });
 
-  // API 5: Proxy genérico para servidores de Anime (AnFire / Consumet)
-  app.get("/api/anime-stream", async (req, res) => {
-    const { provider, id, s = "1", e = "1", title = "" } = req.query;
-    
-    // HTML Base injetando o nosso CSS "Skin Netflix" 
-    const baseHtml = `
-      <!DOCTYPE html>
-      <html lang="pt-BR">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <style>
-          /* CSS da Skin Netflix (Remoção de anúncios e estética limpa) */
-          body { margin: 0; padding: 0; background-color: #000; overflow: hidden; }
-          iframe { width: 100vw; height: 100vh; border: none; }
-          #artplayer-app { width: 100vw; height: 100vh; }
-          
-          /* Esconder elementos indesejados dos embeds padrão */
-          .jw-controls, .art-controls, .vjs-control-bar { opacity: 0.9 !important; }
-        </style>
-      </head>
-      <body>
-    `;
+  // Cache de URLs diretas e assinadas para episódios de animes
+  interface AnimeDirectStreamItem {
+    streamUrl: string;
+    subtitleUrl?: string;
+    isBlogger?: boolean;
+    timestamp: number;
+  }
+  const animeDirectStreamCache = new Map<string, AnimeDirectStreamItem>();
+
+  async function resolveAnimesOnline(title: string, episode: string | number = 1): Promise<string | null> {
+    if (!title) return null;
+    try {
+      // Normaliza o título base (remove " - T1:E1...", dublagem, parênteses)
+      let baseTitle = title.split(" - ")[0].replace(/\(.*?\)/g, "").trim();
+      baseTitle = baseTitle.replace(/dublado/i, "").replace(/legendado/i, "").trim();
+      const cleanTitle = baseTitle.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+      if (!cleanTitle) return null;
+
+      const searchSlug = encodeURIComponent(cleanTitle.replace(/\s+/g, "+"));
+      const searchUrl = `https://animesonlinecc.to/search/${searchSlug}`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      const searchRes = await fetch(searchUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Referer": "https://animesonlinecc.to/"
+        }
+      });
+      clearTimeout(timeout);
+      if (!searchRes.ok) return null;
+      const searchHtml = await searchRes.text();
+
+      const animeMatches = [...searchHtml.matchAll(/href=["'](https:\/\/animesonlinecc\.to\/anime\/[^"']+)["']/g)].map(m => m[1]);
+      const uniqueAnimes = [...new Set(animeMatches)];
+      if (uniqueAnimes.length === 0) return null;
+
+      // Prioriza estritamente versões DUBLADO PT-BR (Brasil)
+      const dubladoMatches = uniqueAnimes.filter(u => u.includes("dublado"));
+      let targetAnime = dubladoMatches.length > 0 ? dubladoMatches[0] : uniqueAnimes[0];
+
+      if (cleanTitle === "naruto") {
+        const exact = uniqueAnimes.find(u => u.includes("naruto-dublado") || u.endsWith("/anime/naruto/"));
+        if (exact) targetAnime = exact;
+      } else if (cleanTitle.includes("shippuden")) {
+        const exact = uniqueAnimes.find(u => u.includes("naruto-shippuden-dublado") || u.includes("naruto-shippuden"));
+        if (exact) targetAnime = exact;
+      } else if (cleanTitle === "dragon ball") {
+        const exact = uniqueAnimes.find(u => u.includes("dragon-ball-dublado") || u.endsWith("/anime/dragon-ball/"));
+        if (exact) targetAnime = exact;
+      } else if (cleanTitle.includes("dragon ball z")) {
+        const exact = uniqueAnimes.find(u => u.includes("dragon-ball-z-dublado") || u.includes("dragon-ball-z"));
+        if (exact) targetAnime = exact;
+      } else if (cleanTitle.includes("dragon ball super")) {
+        const exact = uniqueAnimes.find(u => u.includes("dragon-ball-super-dublado") || u.includes("dragon-ball-super"));
+        if (exact) targetAnime = exact;
+      }
+
+      const animePageRes = await fetch(targetAnime, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Referer": "https://animesonlinecc.to/"
+        }
+      });
+      if (!animePageRes.ok) return null;
+      const animeHtml = await animePageRes.text();
+
+      const epMatches = [...animeHtml.matchAll(/href=["'](https:\/\/animesonlinecc\.to\/episodio\/[^"']+)["']/g)].map(m => m[1]);
+      const uniqueEps = [...new Set(epMatches)];
+      if (uniqueEps.length === 0) return null;
+
+      const epNum = Number(episode) || 1;
+      const targetEp = uniqueEps.find(u => 
+        u.includes(`-episodio-${epNum}/`) || 
+        u.includes(`-ep-${epNum}/`) || 
+        u.endsWith(`-${epNum}/`) ||
+        u.endsWith(`/${epNum}/`)
+      ) || uniqueEps[0];
+
+      const epPageRes = await fetch(targetEp, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Referer": targetAnime
+        }
+      });
+      if (!epPageRes.ok) return null;
+      const epHtml = await epPageRes.text();
+
+      const iframeMatch = epHtml.match(/<iframe[^>]*src=["'](https:\/\/www\.blogger\.com\/video\.g\?token=[^"']+)["']/i);
+      if (iframeMatch) {
+        return iframeMatch[1];
+      }
+      return null;
+    } catch (err: any) {
+      console.warn("[AnimesOnline Resolver] Falha na busca alternativa:", err.message);
+      return null;
+    }
+  }
+
+  async function resolveDirectAnimeStream(
+    tmdbId: string | number,
+    season: string | number,
+    episode: string | number,
+    isMovie: boolean = false,
+    animeTitle: string = ""
+  ): Promise<{ streamUrl: string; subtitleUrl?: string; isBlogger?: boolean } | null> {
+    const cacheKey = `${tmdbId}:${season}:${episode}:${isMovie}:${animeTitle}`;
+    const cached = animeDirectStreamCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 10 * 60 * 1000) {
+      return { streamUrl: cached.streamUrl, subtitleUrl: cached.subtitleUrl, isBlogger: cached.isBlogger };
+    }
 
     try {
-      if (provider === "consumet") {
-        // multiembed.mov — player leve e multi-fonte (substitui Consumet)
-        const embedSrc = `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`;
-        return res.send(`
-          ${baseHtml}
-          <iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="${embedSrc}" allowfullscreen></iframe>
-          <script>
-            setTimeout(() => {
-              window.parent.postMessage({ type: 'WATCHPLAY_STATUS', data: { duration: 1200 } }, '*');
-            }, 3500);
-          </script>
-          </body></html>
-        `);
-      }
+      const pageUrl = isMovie
+        ? `https://v1.watchplay.shop/movie/${tmdbId}`
+        : `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/${episode}`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4500);
+
+      const pageRes = await fetch(pageUrl, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Referer": "https://v1.watchplay.shop/"
+        }
+      });
+      clearTimeout(timeout);
       
-      if (provider === "anfire") {
-        // vidsrc.to — player multi-fonte com suporte a anime e PT-BR (substitui AnFire)
-        const embedSrc = `https://vidsrc.to/embed/tv/${id}/${s}/${e}`;
+      // Se o WatchPlayer redirecionar para 404 (ex: Naruto clássico, Dragon Ball clássico)
+      if (!pageRes.ok || pageRes.url.includes("404")) {
+        if (animeTitle) {
+          const bloggerUrl = await resolveAnimesOnline(animeTitle, episode);
+          if (bloggerUrl) {
+            const resBlogger = { streamUrl: bloggerUrl, isBlogger: true };
+            animeDirectStreamCache.set(cacheKey, { ...resBlogger, timestamp: Date.now() });
+            return resBlogger;
+          }
+        }
+        return null;
+      }
+
+      const html = await pageRes.text();
+
+      if (isSuperflixDetected(html, pageUrl)) return null;
+
+      let contentId: string | null = null;
+      if (isMovie) {
+        const match = html.match(/data-contentid=["'](\d+)["']/i) || html.match(/contentid\s*:\s*['"]?(\d+)['"]?/i);
+        if (match) contentId = match[1];
+      } else {
+        const regex = new RegExp(`class=["'][^"']*episodeOption[^"']*["'][^>]*data-contentid=["'](\\d+)["'][^>]*data-season=["']${season}["'][^>]*data-episode=["']${episode}["']`, 'i');
+        const match = html.match(regex) || html.match(new RegExp(`data-season=["']${season}["'][^>]*data-episode=["']${episode}["'][^>]*data-contentid=["'](\\d+)["']`, 'i'));
+        if (match) {
+          contentId = match[1];
+        } else {
+          const activeMatch = html.match(/class=["'][^"']*episodeOption\\s+active[^"']*["'][^>]*data-contentid=["'](\\d+)["']/i);
+          if (activeMatch) contentId = activeMatch[1];
+        }
+      }
+
+      // Se não encontrou contentId no WatchPlayer, tenta AnimesOnline
+      if (!contentId && animeTitle) {
+        const bloggerUrl = await resolveAnimesOnline(animeTitle, episode);
+        if (bloggerUrl) {
+          const resBlogger = { streamUrl: bloggerUrl, isBlogger: true };
+          animeDirectStreamCache.set(cacheKey, { ...resBlogger, timestamp: Date.now() });
+          return resBlogger;
+        }
+      }
+
+      let optionId: string | null = null;
+      if (contentId) {
+        const optRes = await fetch("https://v1.watchplay.shop/api", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": pageUrl,
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: new URLSearchParams({ action: "getOptions", contentid: contentId }).toString()
+        });
+        const optJson: any = await optRes.json().catch(() => null);
+        if (optJson?.data?.options?.length > 0) {
+          const dubOpt = optJson.data.options.find((o: any) => String(o.target) === "1" || /dub/i.test(o.type || ""));
+          optionId = String((dubOpt || optJson.data.options[0]).ID);
+        }
+      }
+
+      if (!optionId) {
+        const idMatch = html.match(/player_select_item["'][^>]*data-id=["'](\d+)["']/i);
+        if (idMatch) optionId = idMatch[1];
+      }
+
+      if (!optionId) {
+        if (animeTitle) {
+          const bloggerUrl = await resolveAnimesOnline(animeTitle, episode);
+          if (bloggerUrl) {
+            const resBlogger = { streamUrl: bloggerUrl, isBlogger: true };
+            animeDirectStreamCache.set(cacheKey, { ...resBlogger, timestamp: Date.now() });
+            return resBlogger;
+          }
+        }
+        return null;
+      }
+
+      const playerRes = await fetch("https://v1.watchplay.shop/api", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "Referer": pageUrl,
+          "X-Requested-With": "XMLHttpRequest"
+        },
+        body: new URLSearchParams({ action: "getPlayer", video_id: optionId }).toString()
+      });
+      const playerJson: any = await playerRes.json().catch(() => null);
+      const rawVideoUrl: string = playerJson?.data?.video_url;
+      if (!rawVideoUrl) return null;
+
+      let finalStreamUrl = rawVideoUrl;
+      if (rawVideoUrl.includes("vid7102402.hclod.qzz.io") && !rawVideoUrl.includes("md5=")) {
+        const signTarget = new URL(pageUrl);
+        signTarget.searchParams.set("action_secure_sign", "1");
+        signTarget.searchParams.set("raw_url", rawVideoUrl);
+        const signRes = await fetch(signTarget.toString(), {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": pageUrl,
+            "X-Requested-With": "XMLHttpRequest"
+          }
+        });
+        const signJson: any = await signRes.json().catch(() => null);
+        if (signJson?.signed_url) {
+          finalStreamUrl = signJson.signed_url;
+        }
+      }
+
+      let subtitleUrl = playerJson?.data?.video_caption_url;
+      if (!subtitleUrl && !isMovie) {
+        subtitleUrl = `https://v1.watchplay.shop/app/caption/tvshow/${tmdbId}/leg/s${season}e${episode}.vtt`;
+      }
+
+      const result = { streamUrl: finalStreamUrl, subtitleUrl, isBlogger: false };
+      animeDirectStreamCache.set(cacheKey, { ...result, timestamp: Date.now() });
+      return result;
+    } catch (err: any) {
+      console.warn("[Anime Resolver] Falha ao extrair stream direto:", err.message);
+      if (animeTitle) {
+        const bloggerUrl = await resolveAnimesOnline(animeTitle, episode);
+        if (bloggerUrl) {
+          const resBlogger = { streamUrl: bloggerUrl, isBlogger: true };
+          animeDirectStreamCache.set(cacheKey, { ...resBlogger, timestamp: Date.now() });
+          return resBlogger;
+        }
+      }
+      return null;
+    }
+  }
+
+  // Cache para extração de master playlists do Vixsrc
+  const vixsrcStreamCache = new Map<string, { masterUrl: string; embedUrl: string; timestamp: number }>();
+
+  async function resolveVixsrcStream(tmdbId: string | number, type: 'movie' | 'tv', season: number = 1, episode: number = 1) {
+    const cacheKey = `${tmdbId}:${type}:${season}:${episode}`;
+    const cached = vixsrcStreamCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) {
+      return cached;
+    }
+
+    try {
+      const BASE_URL = 'https://vixsrc.to';
+      const VIXSRC_HEADERS = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150 Safari/537.36',
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'Referer': BASE_URL,
+        'Origin': BASE_URL
+      };
+
+      const apiUrl = type === 'movie' 
+        ? `${BASE_URL}/api/movie/${tmdbId}`
+        : `${BASE_URL}/api/tv/${tmdbId}/${season}/${episode}`;
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 6000);
+
+      const apiRes = await fetch(apiUrl, {
+        headers: VIXSRC_HEADERS,
+        signal: controller.signal
+      });
+      clearTimeout(timeout);
+
+      if (!apiRes.ok) return null;
+      const apiData: any = await apiRes.json().catch(() => null);
+      if (!apiData?.src) return null;
+
+      const embedPageRes = await fetch(BASE_URL + apiData.src, {
+        headers: { ...VIXSRC_HEADERS, Accept: 'text/html' }
+      });
+      if (!embedPageRes.ok) return null;
+      const html = await embedPageRes.text();
+
+      const token = html.match(/token["']\s*:\s*["']([^"']+)/)?.[1];
+      const expires = html.match(/expires["']\s*:\s*["']([^"']+)/)?.[1];
+      const playlist = html.match(/url\s*:\s*["']([^"']+)/)?.[1];
+
+      if (!token || !expires || !playlist) return null;
+
+      const sep = playlist.includes('?') ? '&' : '?';
+      const masterUrl = `${playlist}${sep}token=${token}&expires=${expires}&h=1`;
+      const result = { masterUrl, embedUrl: BASE_URL + apiData.src, timestamp: Date.now() };
+      vixsrcStreamCache.set(cacheKey, result);
+      return result;
+    } catch (err: any) {
+      console.warn(`[Vixsrc] Resolver warning: ${err.message}`);
+      return null;
+    }
+  }
+
+  // API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
+  app.get("/api/anime/hls-proxy", async (req, res) => {
+    try {
+      const rawUrl = req.query.url as string;
+      if (!rawUrl) return res.status(400).send("URL ausente");
+
+      const validation = validateSafeUrl(rawUrl);
+      if (
+        !validation.valid && 
+        !rawUrl.includes("hclod.qzz.io") && 
+        !rawUrl.includes("watchplay.shop") &&
+        !rawUrl.includes("vixsrc") &&
+        !rawUrl.includes("vix-content")
+      ) {
+        return res.status(403).send("URL não permitida");
+      }
+
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+
+      if (req.method === "OPTIONS") {
+        return res.status(204).end();
+      }
+
+      const referer = (req.query.referer as string) || (rawUrl.includes("vixsrc") || rawUrl.includes("vix-content") ? "https://vixsrc.to/" : "https://v1.watchplay.shop/");
+      let originHeader = "https://v1.watchplay.shop";
+      try {
+        if (referer.startsWith("http")) originHeader = new URL(referer).origin;
+      } catch {}
+
+      const upstreamRes = await fetch(rawUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Referer": referer,
+          "Origin": originHeader
+        }
+      });
+
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
+      }
+
+      const contentType = upstreamRes.headers.get("content-type") || "";
+      const isM3U8 = rawUrl.includes(".m3u8") || contentType.includes("mpegurl") || contentType.includes("application/x-mpegURL");
+
+      if (isM3U8) {
+        const text = await upstreamRes.text();
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        const basePath = rawUrl.substring(0, rawUrl.lastIndexOf("/") + 1);
+
+        const rewritten = text.split("\n").map(line => {
+          const trimmed = line.trim();
+          if (!trimmed) return line;
+          if (trimmed.includes('URI="')) {
+            return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
+              const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
+              return `URI="/api/anime/hls-proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}"`;
+            });
+          }
+          if (trimmed.startsWith("#")) return trimmed;
+          const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
+          return `/api/anime/hls-proxy?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}`;
+        }).join("\n");
+
+        return res.send(rewritten);
+      }
+
+      if (contentType) res.setHeader("Content-Type", contentType);
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[HLS Proxy Error]:", err.message);
+      return res.status(500).send("Proxy error");
+    }
+  });
+
+  // API 4.8: Servidor Nativo Vixsrc com Stream Direto HLS em Artplayer com Skin Netflix
+  app.get("/api/vixsrc-stream", async (req, res) => {
+    const { id, type = "movie", s = "1", e = "1" } = req.query;
+    const tmdbId = String(id || "");
+    const mediaType = type === "tv" ? "tv" : "movie";
+    const seasonNum = parseInt(String(s || "1"), 10) || 1;
+    const episodeNum = parseInt(String(e || "1"), 10) || 1;
+
+    const wpTarget = mediaType === "tv"
+      ? `https://v1.watchplay.shop/tvshow/${tmdbId}/${seasonNum}/${episodeNum}`
+      : `https://v1.watchplay.shop/movie/${tmdbId}`;
+
+    try {
+      const vixData = await resolveVixsrcStream(tmdbId, mediaType, seasonNum, episodeNum);
+      if (vixData?.masterUrl) {
+        const proxiedStreamUrl = `/api/anime/hls-proxy?url=${encodeURIComponent(vixData.masterUrl)}&referer=${encodeURIComponent(vixData.embedUrl)}`;
+
         return res.send(`
-          ${baseHtml}
-          <iframe sandbox="allow-same-origin allow-scripts allow-forms allow-popups" src="${embedSrc}" allowfullscreen></iframe>
-          <script>
-            setTimeout(() => {
-              window.parent.postMessage({ type: 'WATCHPLAY_STATUS', data: { duration: 1200 } }, '*');
-            }, 3000);
-          </script>
-          </body></html>
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <style>
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+                overflow: hidden;
+              }
+              #artplayer-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: #000;
+              }
+              video {
+                object-fit: contain !important;
+                width: 100% !important;
+                height: 100% !important;
+              }
+              .art-mask,
+              .art-top,
+              .art-bottom,
+              .art-controls,
+              .art-controls-left,
+              .art-controls-center,
+              .art-controls-right,
+              .art-state,
+              .art-loading,
+              .art-notice,
+              .art-settings,
+              .art-contextmenu,
+              .art-progress {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+              }
+            </style>
+            <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+            <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+          </head>
+          <body>
+            <div id="artplayer-container"></div>
+            <script>
+              (function() {
+                var hlsUrl = "${proxiedStreamUrl}";
+
+                var art = new Artplayer({
+                  container: "#artplayer-container",
+                  url: hlsUrl,
+                  type: "m3u8",
+                  customType: {
+                    m3u8: function(video, url, artInstance) {
+                      if (Hls.isSupported()) {
+                        if (artInstance.hls) artInstance.hls.destroy();
+                        var hls = new Hls({
+                          enableWorker: true,
+                          maxBufferLength: 60,
+                          maxMaxBufferLength: 120,
+                          backBufferLength: 90
+                        });
+                        hls.loadSource(url);
+                        hls.attachMedia(video);
+                        artInstance.hls = hls;
+                      } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+                        video.src = url;
+                      }
+                    }
+                  },
+                  autoplay: true,
+                  muted: false,
+                  playsInline: true,
+                  controls: [],
+                  theme: "#e50914"
+                });
+
+                window.artInstance = art;
+
+                function sendStatus() {
+                  var v = art.video || document.querySelector("video");
+                  if (!v) return;
+                  var dur = v.duration || art.duration || 0;
+                  var cur = v.currentTime || 0;
+                  var bufferedEnd = 0;
+                  if (v.buffered && v.buffered.length > 0) {
+                    bufferedEnd = v.buffered.end(v.buffered.length - 1);
+                  }
+
+                  try {
+                    window.parent.postMessage({
+                      type: "WATCHPLAY_STATUS",
+                      currentTime: cur,
+                      duration: dur,
+                      paused: !!v.paused,
+                      muted: !!v.muted,
+                      volume: typeof v.volume === "number" ? v.volume : 1,
+                      buffered: bufferedEnd,
+                      playbackRate: v.playbackRate || 1,
+                      readyState: v.readyState || 0
+                    }, "*");
+                  } catch(e) {}
+                }
+
+                function notifyEnded() {
+                  try {
+                    window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+                  } catch(e) {}
+                }
+
+                setInterval(sendStatus, 300);
+
+                window.addEventListener("message", function(e) {
+                  if (!e.data) return;
+                  var v = art.video || document.querySelector("video");
+
+                  switch (e.data.type) {
+                    case "PLAY":
+                      if (art) art.play().catch(function() {});
+                      else if (v) v.play().catch(function() {});
+                      sendStatus();
+                      break;
+                    case "PAUSE":
+                      if (art) art.pause();
+                      else if (v) v.pause();
+                      sendStatus();
+                      break;
+                    case "TOGGLE_PLAY":
+                      if (art) art.toggle();
+                      else if (v) { v.paused ? v.play().catch(function() {}) : v.pause(); }
+                      sendStatus();
+                      break;
+                    case "SEEK":
+                    case "SEEK_ABSOLUTE":
+                      var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                      if (typeof t === "number" && !isNaN(t)) {
+                        if (art) art.currentTime = t;
+                        else if (v) v.currentTime = t;
+                        sendStatus();
+                      }
+                      break;
+                    case "SKIP_INTRO":
+                      var sec = Number(e.data.seconds) || 85;
+                      var cur = (v ? v.currentTime : 0) || 0;
+                      var maxD = (v && v.duration > 0 ? v.duration : 99999);
+                      var target = Math.max(0, Math.min(cur + sec, maxD - 5));
+                      if (art) art.currentTime = target;
+                      else if (v) v.currentTime = target;
+                      sendStatus();
+                      break;
+                    case "SET_VOLUME":
+                      if (typeof e.data.volume === "number") {
+                        if (art) art.volume = e.data.volume;
+                        else if (v) v.volume = e.data.volume;
+                        sendStatus();
+                      }
+                      break;
+                    case "SET_MUTED":
+                      if (art) art.muted = !e.data.muted;
+                      else if (v) v.muted = !e.data.muted;
+                      sendStatus();
+                      break;
+                    case "REQUEST_STATUS":
+                      sendStatus();
+                      break;
+                  }
+                });
+
+                art.on("video:ended", notifyEnded);
+              })();
+            </script>
+          </body>
+          </html>
         `);
       }
 
-      return res.status(404).send("Provedor de anime não encontrado.");
-    } catch (err) {
-      console.error("[Anime Stream Error]:", err);
-      return res.send(`${baseHtml}<iframe src="https://vidsrc.me/embed/tv?tmdb=${id}&season=${s}&e=${e}" allowfullscreen></iframe></body></html>`);
+      // Se Vixsrc não tiver o stream, comuta para o WatchPlayer
+      return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+    } catch (err: any) {
+      console.error("[Vixsrc Stream Route Error]:", err.message);
+      return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+    }
+  });
+
+  // API 5: Servidor Nativo de Anime e Alternativas
+  app.get("/api/anime-stream", async (req, res) => {
+    const { provider = "consumet", id, s = "1", e = "1", title = "", type = "tv" } = req.query;
+    const isMovie = type === "movie";
+    const tmdbId = String(id || "");
+    let animeTitle = String(title || "");
+    if (!animeTitle) {
+      if (tmdbId === "46260") animeTitle = "Naruto";
+      else if (tmdbId === "31910") animeTitle = "Naruto Shippuden";
+      else if (tmdbId === "12971") animeTitle = "Dragon Ball";
+      else if (tmdbId === "12609") animeTitle = "Dragon Ball Z";
+      else if (tmdbId === "60625") animeTitle = "Dragon Ball Super";
+    }
+
+    const wpTarget = isMovie
+      ? `https://v1.watchplay.shop/movie/${tmdbId}`
+      : `https://v1.watchplay.shop/tvshow/${tmdbId}/${s}/${e}`;
+
+    try {
+      // 1. Provedor Principal Nativo: Stream HLS .m3u8 em Artplayer Próprio ou Blogger
+      if (provider === "consumet" || provider === "native") {
+        const directStream = await resolveDirectAnimeStream(tmdbId, s as string, e as string, isMovie, animeTitle);
+
+        if (directStream?.isBlogger) {
+          return res.send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                * { box-sizing: border-box; }
+                html, body {
+                  margin: 0;
+                  padding: 0;
+                  background: #000;
+                  overflow: hidden;
+                  width: 100vw;
+                  height: 100vh;
+                  position: relative;
+                }
+                #blogger-container {
+                  position: absolute;
+                  inset: 0;
+                  width: 100%;
+                  height: 100%;
+                  overflow: hidden;
+                  background: #000;
+                }
+                iframe {
+                  position: absolute;
+                  top: -2px;
+                  left: 0;
+                  width: 100%;
+                  height: calc(100% + 50px);
+                  border: none;
+                  display: block;
+                }
+              </style>
+            </head>
+            <body>
+              <div id="blogger-container">
+                <iframe id="blogger-frame" src="${directStream.streamUrl}" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen></iframe>
+              </div>
+              <script>
+                (function() {
+                  var curTime = 0;
+                  var isPaused = true;
+                  var dur = 1440; // 24 minutos (duração de episódio padrão)
+                  var frame = document.getElementById("blogger-frame");
+
+                  function sendStatus() {
+                    try {
+                      window.parent.postMessage({
+                        type: "WATCHPLAY_STATUS",
+                        currentTime: curTime,
+                        duration: dur,
+                        paused: isPaused,
+                        muted: false,
+                        volume: 1,
+                        buffered: curTime + 60,
+                        playbackRate: 1,
+                        readyState: 4
+                      }, "*");
+                    } catch(e) {}
+                  }
+
+                  // Detecta quando o usuário clica diretamente no player do iframe
+                  window.addEventListener("blur", function() {
+                    if (isPaused) {
+                      isPaused = false;
+                      sendStatus();
+                    }
+                  });
+
+                  // Incrementa o tempo segundo a segundo quando não pausado
+                  setInterval(function() {
+                    if (!isPaused && curTime < dur) {
+                      curTime += 1;
+                    }
+                    sendStatus();
+                  }, 1000);
+
+                  setTimeout(sendStatus, 100);
+                  setTimeout(sendStatus, 400);
+
+                  // Escuta comandos vindos da Skin Netflix
+                  window.addEventListener("message", function(e) {
+                    if (!e.data) return;
+                    switch(e.data.type) {
+                      case "PLAY":
+                        isPaused = false;
+                        sendStatus();
+                        break;
+                      case "PAUSE":
+                        isPaused = true;
+                        sendStatus();
+                        break;
+                      case "TOGGLE_PLAY":
+                        isPaused = !isPaused;
+                        sendStatus();
+                        break;
+                      case "SEEK":
+                      case "SEEK_ABSOLUTE":
+                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                        if (typeof t === "number" && !isNaN(t)) {
+                          curTime = Math.max(0, Math.min(t, dur));
+                          sendStatus();
+                        }
+                        break;
+                      case "SKIP_INTRO":
+                        curTime = Math.min(curTime + 85, dur - 5);
+                        sendStatus();
+                        break;
+                      case "REQUEST_STATUS":
+                        sendStatus();
+                        break;
+                    }
+                  });
+                })();
+              </script>
+            </body>
+            </html>
+          `);
+        }
+
+        if (directStream?.streamUrl) {
+          const proxiedStreamUrl = `/api/anime/hls-proxy?url=${encodeURIComponent(directStream.streamUrl)}`;
+          const proxiedSubUrl = directStream.subtitleUrl
+            ? `/api/anime/hls-proxy?url=${encodeURIComponent(directStream.subtitleUrl)}`
+            : "";
+
+          return res.send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+              <style>
+                html, body {
+                  margin: 0;
+                  padding: 0;
+                  width: 100%;
+                  height: 100%;
+                  background: #000;
+                  overflow: hidden;
+                }
+                #artplayer-container {
+                  position: absolute;
+                  top: 0;
+                  left: 0;
+                  width: 100%;
+                  height: 100%;
+                  background: #000;
+                }
+                video {
+                  object-fit: contain !important;
+                  width: 100% !important;
+                  height: 100% !important;
+                }
+                .art-mask,
+                .art-top,
+                .art-bottom,
+                .art-controls,
+                .art-controls-left,
+                .art-controls-center,
+                .art-controls-right,
+                .art-state,
+                .art-loading,
+                .art-notice,
+                .art-settings,
+                .art-contextmenu,
+                .art-progress {
+                  display: none !important;
+                  opacity: 0 !important;
+                  visibility: hidden !important;
+                  pointer-events: none !important;
+                }
+              </style>
+              <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+              <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+            </head>
+            <body>
+              <div id="artplayer-container"></div>
+              <script>
+                (function() {
+                  var hlsUrl = "${proxiedStreamUrl}";
+                  var subUrl = "${proxiedSubUrl}";
+                  
+                  var subtitles = [];
+                  if (subUrl) {
+                    subtitles.push({
+                      url: subUrl,
+                      name: "Português",
+                      default: true,
+                      type: "vtt"
+                    });
+                  }
+
+                  var art = new Artplayer({
+                    container: "#artplayer-container",
+                    url: hlsUrl,
+                    type: "m3u8",
+                    customType: {
+                      m3u8: function(video, url, artInstance) {
+                        if (Hls.isSupported()) {
+                          if (artInstance.hls) artInstance.hls.destroy();
+                          var hls = new Hls({
+                            enableWorker: true,
+                            maxBufferLength: 60,
+                            maxMaxBufferLength: 120,
+                            backBufferLength: 90
+                          });
+                          hls.loadSource(url);
+                          hls.attachMedia(video);
+                          artInstance.hls = hls;
+                        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+                          video.src = url;
+                        }
+                      }
+                    },
+                    autoplay: true,
+                    muted: false,
+                    playsInline: true,
+                    controls: [],
+                    subtitle: subtitles.length > 0 ? subtitles[0] : undefined,
+                    theme: "#e50914"
+                  });
+
+                  window.artInstance = art;
+
+                  function sendStatus() {
+                    var v = art.video || document.querySelector("video");
+                    if (!v) return;
+                    var dur = v.duration || art.duration || 0;
+                    var cur = v.currentTime || 0;
+                    var bufferedEnd = 0;
+                    if (v.buffered && v.buffered.length > 0) {
+                      bufferedEnd = v.buffered.end(v.buffered.length - 1);
+                    }
+
+                    try {
+                      window.parent.postMessage({
+                        type: "WATCHPLAY_STATUS",
+                        currentTime: cur,
+                        duration: dur,
+                        paused: !!v.paused,
+                        muted: !!v.muted,
+                        volume: typeof v.volume === "number" ? v.volume : 1,
+                        buffered: bufferedEnd,
+                        playbackRate: v.playbackRate || 1,
+                        readyState: v.readyState || 0
+                      }, "*");
+                    } catch(e) {}
+                  }
+
+                  function notifyEnded() {
+                    try {
+                      window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+                    } catch(e) {}
+                  }
+
+                  setInterval(sendStatus, 300);
+
+                  window.addEventListener("message", function(e) {
+                    if (!e.data) return;
+                    var v = art.video || document.querySelector("video");
+
+                    switch (e.data.type) {
+                      case "PLAY":
+                        if (art) art.play().catch(function() {});
+                        else if (v) v.play().catch(function() {});
+                        sendStatus();
+                        break;
+                      case "PAUSE":
+                        if (art) art.pause();
+                        else if (v) v.pause();
+                        sendStatus();
+                        break;
+                      case "TOGGLE_PLAY":
+                        if (art) art.toggle();
+                        else if (v) { v.paused ? v.play().catch(function() {}) : v.pause(); }
+                        sendStatus();
+                        break;
+                      case "SEEK":
+                      case "SEEK_ABSOLUTE":
+                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                        if (typeof t === "number" && !isNaN(t)) {
+                          if (art) art.currentTime = t;
+                          else if (v) v.currentTime = t;
+                          sendStatus();
+                        }
+                        break;
+                      case "SKIP_INTRO":
+                        var sec = Number(e.data.seconds) || 85;
+                        var cur = (v ? v.currentTime : 0) || 0;
+                        var maxD = (v && v.duration > 0 ? v.duration : 99999);
+                        var target = Math.max(0, Math.min(cur + sec, maxD - 5));
+                        if (art) art.currentTime = target;
+                        else if (v) v.currentTime = target;
+                        sendStatus();
+                        break;
+                      case "SET_VOLUME":
+                        if (typeof e.data.volume === "number") {
+                          if (art) art.volume = e.data.volume;
+                          else if (v) v.volume = e.data.volume;
+                          sendStatus();
+                        }
+                        break;
+                      case "SET_MUTED":
+                        if (art) art.muted = !!e.data.muted;
+                        else if (v) v.muted = !!e.data.muted;
+                        sendStatus();
+                        break;
+                      case "SET_PLAYBACK_RATE":
+                        if (typeof e.data.rate === "number") {
+                          if (art) art.playbackRate = e.data.rate;
+                          else if (v) v.playbackRate = e.data.rate;
+                          sendStatus();
+                        }
+                        break;
+                      case "REQUEST_STATUS":
+                        sendStatus();
+                        break;
+                    }
+                  });
+
+                  art.on("video:ended", notifyEnded);
+                })();
+              </script>
+            </body>
+            </html>
+          `);
+        }
+
+        // Fallback silencioso automático para o WatchPlayer oficial caso a extração direta falhe
+        return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+      }
+
+      // Fallback padrão
+      return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+    } catch (err: any) {
+      console.error("[Anime Stream Error]:", err.message);
+      return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
     }
   });
 

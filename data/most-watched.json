@@ -21,8 +21,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/66732/1/1",
-    "views": 180,
-    "lastWatched": "2026-09-10T11:18:44.392Z"
+    "views": 183,
+    "lastWatched": "2026-09-11T01:15:49.975Z"
   },
   {
     "id": 533535,
@@ -58,8 +58,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     "quality": "CAM",
     "playerUrl": "https://v1.watchplay.shop/movie/969681",
-    "views": 163,
-    "lastWatched": "2026-09-10T17:11:39.974Z"
+    "views": 165,
+    "lastWatched": "2026-09-11T01:04:35.013Z"
   },
   {
     "id": 119051,
@@ -183,9 +183,9 @@
     "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
-    "playerUrl": "https://vidsrc.to/embed/tv/30984/1/1",
-    "views": 12,
-    "lastWatched": "2026-09-10T17:13:05.787Z"
+    "playerUrl": "/api/anime-stream?provider=anfire&type=tv&id=30984&s=1&e=1",
+    "views": 21,
+    "lastWatched": "2026-09-11T01:17:32.619Z"
   },
   {
     "id": 94664,
@@ -232,8 +232,8 @@
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/46260/1/1",
-    "views": 2,
-    "lastWatched": "2026-09-10T14:15:23.243Z"
+    "views": 23,
+    "lastWatched": "2026-09-11T01:21:01.523Z"
   },
   {
     "id": 45857,
@@ -243,8 +243,44 @@
     "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
-    "playerUrl": "https://vidsrc.to/embed/tv/45857/1/1",
+    "playerUrl": "/api/anime-stream?provider=anfire&type=tv&id=45857&s=1&e=1",
     "views": 8,
     "lastWatched": "2026-09-10T15:20:21.445Z"
+  },
+  {
+    "id": 31910,
+    "tmdbId": 31910,
+    "title": "Naruto Shippuden - T1:E1 O Início",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/31910/1/2",
+    "views": 1,
+    "lastWatched": "2026-09-10T20:43:09.537Z"
+  },
+  {
+    "id": 62715,
+    "tmdbId": 62715,
+    "title": "Dragon Ball Super",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/62715/1/1",
+    "views": 2,
+    "lastWatched": "2026-09-10T20:52:45.911Z"
+  },
+  {
+    "id": 37606,
+    "tmdbId": 37606,
+    "title": "O Incrível Mundo de Gumball",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/37606/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-10T22:37:08.404Z"
   }
 ]

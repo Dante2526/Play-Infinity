@@ -68,6 +68,7 @@ interface NetflixPlayerSkinProps {
   onToggleAspectRatio?: () => void;
   onTogglePiP?: () => void;
   isMiniPlayer?: boolean;
+  passThroughClicks?: boolean;
 }
 
 function formatTime(sec: number): string {
@@ -111,6 +112,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onToggleAspectRatio,
   onTogglePiP,
   isMiniPlayer = false,
+  passThroughClicks = false,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -189,7 +191,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       if (!origin || origin === "null") return false;
       if (origin === window.location.origin) return true;
       if (
-        origin === "https://vidlink.pro" ||
         origin === "https://v1.watchplay.shop" ||
         origin === "https://watchplay.shop"
       ) {
@@ -316,7 +317,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
   }, [playerStatus.currentTime, playerStatus.duration, mediaId, tmdbId, imdbId, title, isSeries, season, episode, imageUrl, backdropUrl, posterUrl, quality]);
 
-  // Envia comandos universais para o iframe (compatível com WatchPlayer, VidLink, EmbedSU, VidSrc e players HTML5)
+  // Envia comandos universais para o iframe (compatível com WatchPlayer, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
       if (iframeRef.current?.contentWindow) {
@@ -364,28 +365,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         msgType === "WATCHPLAY_STATUS" ||
         msgType === "PLAYER_STATUS" ||
         msgType === "status" ||
-        msgType === "timeupdate" ||
-        msgType === "PLAYER_EVENT"
+        msgType === "timeupdate"
       ) {
-        const data = (msgType === "PLAYER_EVENT" && e.data.data) ? e.data.data : (e.data.data || e.data);
-
-        // Se for PLAYER_EVENT do VidLink:
-        const isVidLinkEvent = msgType === "PLAYER_EVENT";
-        const isVidLinkPlay = isVidLinkEvent && data.event === "play";
-        const isVidLinkPause = isVidLinkEvent && data.event === "pause";
-        const isVidLinkEnded = isVidLinkEvent && data.event === "ended";
-
-        if (isVidLinkEnded && isSeries && onEpisodeChange) {
-          onEpisodeChange(episode + 1);
-        }
+        const data = e.data.data || e.data;
 
         // Sinal real do player
         const hasRealSignal =
           typeof data.currentTime === "number" ||
           typeof data.duration === "number" ||
-          typeof data.paused === "boolean" ||
-          isVidLinkPlay ||
-          isVidLinkPause;
+          typeof data.paused === "boolean";
 
         if (hasRealSignal) {
           lastRealStatusAtRef.current = Date.now();
@@ -402,8 +390,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           let updatedTime = prev.currentTime;
           if (incomingTime !== null) {
             const diff = incomingTime - prev.currentTime;
-            // Seek ou salto relevante (> 1.2s): sincroniza direto
-            // Ajuste sutil: reconciliação suave sem solavanco visual
             if (Math.abs(diff) > 1.2) {
               updatedTime = incomingTime;
             } else if (Math.abs(diff) > 0.15) {
@@ -411,11 +397,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             }
           }
 
-          const resolvedPaused = isVidLinkPlay
-            ? false
-            : isVidLinkPause
-            ? true
-            : typeof data.paused === "boolean"
+          const resolvedPaused = typeof data.paused === "boolean"
             ? data.paused
             : prev.paused;
 
@@ -842,17 +824,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
       <div
         className={`absolute inset-0 z-0 touch-none ${
-          isExternalPlayer ? "pointer-events-none" : "cursor-pointer pointer-events-auto"
+          isExternalPlayer || passThroughClicks ? "pointer-events-none" : "cursor-pointer pointer-events-auto"
         }`}
         onClick={() => {
-          if (!isLocked && !isExternalPlayer) {
+          if (!isLocked && !isExternalPlayer && !passThroughClicks) {
             handleTogglePlay();
           }
         }}
-        onDoubleClick={isExternalPlayer ? undefined : onToggleFullscreen}
-        onTouchStart={isExternalPlayer ? undefined : handleScreenTouchStart}
-        onTouchMove={isExternalPlayer ? undefined : handleScreenTouchMove}
-        onTouchEnd={isExternalPlayer ? undefined : handleScreenTouchEnd}
+        onDoubleClick={isExternalPlayer || passThroughClicks ? undefined : onToggleFullscreen}
+        onTouchStart={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchStart}
+        onTouchMove={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchMove}
+        onTouchEnd={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchEnd}
       />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
@@ -885,7 +867,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         }`}
       >
         <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
+        {!isExternalPlayer && (
+          <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
+        )}
       </div>
 
       {/* ========================================================
@@ -901,7 +885,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               setShowUnlockPrompt(false);
             }, 3500);
           }}
-          className="absolute inset-0 z-40 flex items-end justify-center pb-16 cursor-pointer"
+          className="absolute inset-0 z-40 flex items-end justify-center pb-16 cursor-pointer pointer-events-auto"
         >
           {showUnlockPrompt && (
             <button
@@ -1029,7 +1013,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2. CONTROLE VERTICAL DE BRILHO DA NETFLIX (SOL À ESQUERDA)
           Exibido apenas quando estiver em TELA CHEIA (isFullscreen)
           ======================================================== */}
-      {isFullscreen && (
+      {isFullscreen && !isExternalPlayer && (
         <div
           ref={brightnessBarRef}
           onMouseDown={handleBrightnessMouseDown}
@@ -1070,69 +1054,77 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
-      <div
-        className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-          controlsVisible && !isLocked && !isExternalPlayer
-            ? "opacity-100 scale-100"
-            : "opacity-0 scale-95 pointer-events-none"
-        }`}
-      >
-        {/* Retroceder 10 Segundos (oculto no modo mini-player) */}
-        {!isMiniPlayer && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSeekRelative(-10);
-            }}
-            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-            title="Voltar 10s"
-          >
-            <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-              10
-            </span>
-          </button>
-        )}
-
-        {/* Play / Pause Central */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleTogglePlay();
-          }}
-          className="pointer-events-auto p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none shadow-none"
-          title={playerStatus.paused ? "Reproduzir" : "Pausar"}
+      {!passThroughClicks && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
+            controlsVisible && !isLocked && !isExternalPlayer
+              ? "opacity-100 scale-100"
+              : "opacity-0 scale-95 pointer-events-none"
+          }`}
         >
-          {playerStatus.paused ? (
-            <Play className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
-          ) : (
-            <Pause className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
+          {/* Retroceder 10 Segundos (oculto no modo mini-player) */}
+          {!isMiniPlayer && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSeekRelative(-10);
+              }}
+              className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
+                controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+              }`}
+              title="Voltar 10s"
+            >
+              <RotateCcw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+              <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+                10
+              </span>
+            </button>
           )}
-        </button>
 
-        {/* Avançar 10 Segundos (oculto no modo mini-player) */}
-        {!isMiniPlayer && (
+          {/* Play / Pause Central */}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              handleSeekRelative(10);
+              handleTogglePlay();
             }}
-            className="relative pointer-events-auto p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group"
-            title="Avançar 10s"
+            className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none shadow-none ${
+              controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+            }`}
+            title={playerStatus.paused ? "Reproduzir" : "Pausar"}
           >
-            <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
-            <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
-              10
-            </span>
+            {playerStatus.paused ? (
+              <Play className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
+            ) : (
+              <Pause className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
+            )}
           </button>
-        )}
-      </div>
+
+          {/* Avançar 10 Segundos (oculto no modo mini-player) */}
+          {!isMiniPlayer && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSeekRelative(10);
+              }}
+              className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
+                controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+              }`}
+              title="Avançar 10s"
+            >
+              <RotateCw className="w-8 h-8 sm:w-11 sm:h-11 md:w-13 md:h-13 stroke-[1.6]" />
+              <span className="absolute inset-0 flex items-center justify-center text-[9px] sm:text-[11px] md:text-xs font-black pt-0.5 sm:pt-1 pointer-events-none">
+                10
+              </span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* ========================================================
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      {!isMiniPlayer && (
+      {!isMiniPlayer && !isExternalPlayer && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
@@ -1288,7 +1280,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             e.stopPropagation();
             setShowSpeedMenu(false);
           }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -1370,11 +1362,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             e.stopPropagation();
             setShowEpisodeDrawer(false);
           }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200"
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200 pointer-events-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:w-96 h-full bg-[#141414] border-l border-neutral-800 flex flex-col shadow-2xl animate-in slide-in-from-right duration-250"
+            className="w-full sm:w-96 h-full bg-[#141414] border-l border-neutral-800 flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 pointer-events-auto"
           >
             {/* Cabeçalho do Drawer */}
             <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between">
@@ -1434,11 +1426,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             e.stopPropagation();
             setShowAudioSubtitleModal(false);
           }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm sm:max-w-md bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-200"
+            className="w-full max-w-sm sm:max-w-md bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-200 pointer-events-auto"
           >
             {/* Cabeçalho */}
             <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
@@ -1557,11 +1549,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             e.stopPropagation();
             setShowCastModal(false);
           }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-4 text-center animate-in zoom-in-95 duration-200"
+            className="w-full max-w-sm bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-4 text-center animate-in zoom-in-95 duration-200 pointer-events-auto"
           >
             <div className="w-12 h-12 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mx-auto text-white">
               <Cast className="w-6 h-6 stroke-[1.8]" />
