@@ -370,13 +370,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Jornalismo de credibilidade, reality shows e os maiores campeonatos de futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Record News)',
-        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
-        isProxy: false
+        name: 'Servidor 1 (Record Satélite Direto)',
+        url: 'https://media.cdntvms.com.br/record_nacional_sat/index.m3u8',
+        isProxy: true
       },
       {
-        name: 'Servidor 2 (Proxy HLS)',
-        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
+        name: 'Servidor 2 (Record News 720p)',
+        url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Record Transmissão BR)',
+        url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
         isProxy: true
       }
     ]
@@ -414,13 +419,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'A primeira TV de notícias em canal aberto do Brasil com cobertura 24 horas.',
     servers: [
       {
-        name: 'Servidor Oficial Direto',
-        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
-        isProxy: false
+        name: 'Servidor 1 (Record News HD 720p)',
+        url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
+        isProxy: true
       },
       {
-        name: 'Servidor Proxy Play Infinity',
-        url: 'https://jmp2.uk/plu-6102e04e9ab1db0007a980a1.m3u8',
+        name: 'Servidor 2 (Transmissão Ao Vivo)',
+        url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Record Satélite)',
+        url: 'https://media.cdntvms.com.br/record_nacional_sat/index.m3u8',
         isProxy: true
       }
     ]

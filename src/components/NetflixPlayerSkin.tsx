@@ -118,7 +118,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
     currentTime: 0,
     duration: 0,
-    paused: false,
+    paused: true,
     muted: false,
     volume: 1,
     buffered: 0,
@@ -150,6 +150,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [isDraggingBrightness, setIsDraggingBrightness] = useState<boolean>(false);
   const brightnessBarRef = useRef<HTMLDivElement>(null);
   const brightnessTrackRef = useRef<HTMLDivElement>(null); // ref da barra interna (trilho real)
+
+  // Controle de som da tela (Slider vertical à direita, simétrico ao de brilho)
+  const [isDraggingVolume, setIsDraggingVolume] = useState<boolean>(false);
+  const volumeBarRef = useRef<HTMLDivElement>(null);
+  const volumeTrackRef = useRef<HTMLDivElement>(null); // ref da barra interna de volume
 
   // Controle de arraste da barra de progresso (scrubber)
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
@@ -212,7 +217,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     setPlayerStatus({
       currentTime: 0,
       duration: 0,
-      paused: false,
+      paused: true,
       muted: false,
       volume: 1,
       buffered: 0,
@@ -242,37 +247,85 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     initialBrightnessRef.current = brightness;
     initialVolumeRef.current = playerStatus.volume;
 
-    const isLeft = t.clientX < (window.innerWidth || 600) / 2;
-    touchModeRef.current = isLeft ? "brightness" : "volume";
+    // Detecta o lado esquerdo visual da tela:
+    // Se isRotated = true, o lado esquerdo visual do vídeo corresponde à metade superior do celular físico
+    const isBrightnessZone = isRotated
+      ? t.clientY < (window.innerHeight || 600) / 2
+      : t.clientX < (window.innerWidth || 600) / 2;
+
+    touchModeRef.current = isBrightnessZone ? "brightness" : "volume";
   };
 
   const handleScreenTouchMove = (e: React.TouchEvent) => {
     if (!touchModeRef.current || touchStartYRef.current === null || isLocked) return;
     if (e.cancelable) e.preventDefault();
     const t = e.touches[0];
-    const deltaY = isRotated && touchStartXRef.current !== null
-      ? t.clientX - touchStartXRef.current
-      : touchStartYRef.current - t.clientY; // Arrastar para cima = positivo
 
-    if (Math.abs(deltaY) < 8) return; // Limiar mínimo para toque simples
+    // Deslocamento vertical físico: positivo = dedo movendo PARA CIMA na tela do celular
+    const dy = touchStartYRef.current - t.clientY;
+    // Deslocamento horizontal físico: positivo = dedo movendo PARA A DIREITA na tela do celular
+    const dx = t.clientX - (touchStartXRef.current ?? t.clientX);
 
-    const screenH = isRotated ? (window.innerWidth || 600) : (window.innerHeight || 400);
-    const deltaRatio = deltaY / (screenH * 0.45);
+    let delta = 0;
+    if (isRotated) {
+      // Quando o vídeo está rotacionado por software em 90°:
+      // Se o usuário estiver segurando o aparelho na horizontal virado na mão, o movimento principal é em X:
+      if (Math.abs(dx) > Math.abs(dy)) {
+        delta = dx;
+      } else {
+        // Se estiver segurando o celular na vertical física normal, mover para cima é no eixo Y:
+        delta = dy;
+      }
+    } else {
+      // Orientação normal (seja celular em pé ou deitado nativamente em paisagem):
+      // Mover o dedo PARA CIMA na tela física SEMPRE tem dy > 0 e AUMENTA o brilho
+      delta = dy;
+    }
+
+    if (Math.abs(delta) < 4) return; // Sensibilidade ágil (limiar mínimo de 4px)
+
+    const screenDimension = isRotated ? (window.innerWidth || 600) : (window.innerHeight || 400);
+    const effectiveSpan = Math.max(220, screenDimension * 0.45);
+    const deltaRatio = delta / effectiveSpan;
 
     if (touchHudTimerRef.current) clearTimeout(touchHudTimerRef.current);
 
     if (touchModeRef.current === "brightness") {
-      const newB = Math.max(0.2, Math.min(1.2, initialBrightnessRef.current + deltaRatio * 1.0));
+      const rawB = initialBrightnessRef.current + deltaRatio * 1.0;
+      const newB = Math.max(0.2, Math.min(1.2, rawB));
       setBrightness(newB);
       if (onBrightnessChange) onBrightnessChange(newB);
       const pct = Math.round(Math.max(0, Math.min(1, (newB - 0.2) / 1.0)) * 100);
       setTouchHud({ type: "brightness", value: pct });
+
+      // Ancoragem dinâmica sem zona morta: ao atingir 0% ou 100%, reancora
+      // para que qualquer movimento na direção oposta responda imediatamente
+      if (rawB > 1.2) {
+        initialBrightnessRef.current = 1.2;
+        touchStartYRef.current = t.clientY;
+        touchStartXRef.current = t.clientX;
+      } else if (rawB < 0.2) {
+        initialBrightnessRef.current = 0.2;
+        touchStartYRef.current = t.clientY;
+        touchStartXRef.current = t.clientX;
+      }
     } else if (touchModeRef.current === "volume") {
-      const newV = Math.max(0, Math.min(1, initialVolumeRef.current + deltaRatio));
+      const rawV = initialVolumeRef.current + deltaRatio;
+      const newV = Math.max(0, Math.min(1, rawV));
       sendCommand({ type: "SET_VOLUME", volume: newV });
       setPlayerStatus((p) => ({ ...p, volume: newV, muted: newV === 0 }));
       const pct = Math.round(newV * 100);
       setTouchHud({ type: "volume", value: pct });
+
+      if (rawV > 1) {
+        initialVolumeRef.current = 1;
+        touchStartYRef.current = t.clientY;
+        touchStartXRef.current = t.clientX;
+      } else if (rawV < 0) {
+        initialVolumeRef.current = 0;
+        touchStartYRef.current = t.clientY;
+        touchStartXRef.current = t.clientX;
+      }
     }
   };
 
@@ -492,6 +545,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       !playerStatus.paused &&
       !isScrubbing &&
       !isDraggingBrightness &&
+      !isDraggingVolume &&
       !showSpeedMenu &&
       !showEpisodeDrawer &&
       !showAudioSubtitleModal
@@ -505,6 +559,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     playerStatus.paused,
     isScrubbing,
     isDraggingBrightness,
+    isDraggingVolume,
     showSpeedMenu,
     showEpisodeDrawer,
     showAudioSubtitleModal,
@@ -577,43 +632,56 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   };
 
   // Controle de Brilho da Netflix (Sol à esquerda - Exibido apenas em Tela Cheia)
-  const updateBrightnessFromY = (clientY: number) => {
-    const trackEl = brightnessTrackRef.current || brightnessBarRef.current;
-    if (!trackEl) return;
-    const rect = trackEl.getBoundingClientRect();
-    const rawRatio = (rect.bottom - clientY) / rect.height;
-    const ratio = Math.max(0, Math.min(1, rawRatio));
-    const val = 0.2 + ratio * 1.0;
-    setBrightness(val);
-    if (onBrightnessChange) {
-      onBrightnessChange(val);
-    }
-  };
+  const updateBrightnessFromPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const trackEl = brightnessTrackRef.current || brightnessBarRef.current;
+      if (!trackEl) return;
+      const rect = trackEl.getBoundingClientRect();
+      let ratio: number;
+
+      if (rect.width > rect.height) {
+        // Barra orientada horizontalmente no ecrã (ex: quando o player está sob rotação de 90°)
+        // No sentido de rotação de 90° horário: rect.left é o mínimo (0%) e rect.right é o máximo (100%)
+        ratio = (clientX - rect.left) / Math.max(1, rect.width);
+      } else {
+        // Barra vertical padrão: rect.bottom é o mínimo (0%) e rect.top é o máximo (100%)
+        ratio = (rect.bottom - clientY) / Math.max(1, rect.height);
+      }
+
+      const clampedRatio = Math.max(0, Math.min(1, ratio));
+      const val = 0.2 + clampedRatio * 1.0;
+      setBrightness(val);
+      if (onBrightnessChange) {
+        onBrightnessChange(val);
+      }
+    },
+    [onBrightnessChange]
+  );
 
   const handleBrightnessMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsDraggingBrightness(true);
-    updateBrightnessFromY(e.clientY);
+    updateBrightnessFromPoint(e.clientX, e.clientY);
   };
 
   const handleBrightnessTouchStart = (e: React.TouchEvent) => {
     e.stopPropagation();
     setIsDraggingBrightness(true);
     if (e.touches[0]) {
-      updateBrightnessFromY(e.touches[0].clientY);
+      updateBrightnessFromPoint(e.touches[0].clientX, e.touches[0].clientY);
     }
   };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDraggingBrightness) {
-        updateBrightnessFromY(e.clientY);
+        updateBrightnessFromPoint(e.clientX, e.clientY);
       }
     };
     const handleTouchMove = (e: TouchEvent) => {
       if (isDraggingBrightness && e.touches[0]) {
         if (e.cancelable) e.preventDefault();
-        updateBrightnessFromY(e.touches[0].clientY);
+        updateBrightnessFromPoint(e.touches[0].clientX, e.touches[0].clientY);
       }
     };
     const handleEnd = () => {
@@ -626,14 +694,93 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       window.addEventListener("mouseup", handleEnd);
       window.addEventListener("touchmove", handleTouchMove, { passive: false });
       window.addEventListener("touchend", handleEnd);
+      window.addEventListener("touchcancel", handleEnd);
     }
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleEnd);
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleEnd);
+      window.removeEventListener("touchcancel", handleEnd);
     };
-  }, [isDraggingBrightness]);
+  }, [isDraggingBrightness, updateBrightnessFromPoint]);
+
+  // Controle de Volume da Netflix (Alto-falante à direita - Exibido apenas em Tela Cheia, simétrico ao Brilho)
+  const updateVolumeFromPoint = useCallback(
+    (clientX: number, clientY: number) => {
+      const trackEl = volumeTrackRef.current || volumeBarRef.current;
+      if (!trackEl) return;
+      const rect = trackEl.getBoundingClientRect();
+      let ratio: number;
+
+      if (rect.width > rect.height) {
+        // Barra horizontalizada sob rotação de 90°
+        ratio = (clientX - rect.left) / Math.max(1, rect.width);
+      } else {
+        // Barra vertical padrão
+        ratio = (rect.bottom - clientY) / Math.max(1, rect.height);
+      }
+
+      const clampedRatio = Math.max(0, Math.min(1, ratio));
+      sendCommand({ type: "SET_VOLUME", volume: clampedRatio });
+      if (clampedRatio > 0 && playerStatus.muted) {
+        sendCommand({ type: "SET_MUTED", muted: false });
+      }
+      setPlayerStatus((p) => ({
+        ...p,
+        volume: clampedRatio,
+        muted: clampedRatio === 0 ? true : p.muted && clampedRatio === 0,
+      }));
+    },
+    [sendCommand, playerStatus.muted]
+  );
+
+  const handleVolumeMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsDraggingVolume(true);
+    updateVolumeFromPoint(e.clientX, e.clientY);
+  };
+
+  const handleVolumeTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation();
+    setIsDraggingVolume(true);
+    if (e.touches[0]) {
+      updateVolumeFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDraggingVolume) {
+        updateVolumeFromPoint(e.clientX, e.clientY);
+      }
+    };
+    const handleTouchMove = (e: TouchEvent) => {
+      if (isDraggingVolume && e.touches[0]) {
+        if (e.cancelable) e.preventDefault();
+        updateVolumeFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+      }
+    };
+    const handleEnd = () => {
+      if (isDraggingVolume) {
+        setIsDraggingVolume(false);
+      }
+    };
+    if (isDraggingVolume) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleEnd);
+      window.addEventListener("touchmove", handleTouchMove, { passive: false });
+      window.addEventListener("touchend", handleEnd);
+      window.addEventListener("touchcancel", handleEnd);
+    }
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleEnd);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleEnd);
+      window.removeEventListener("touchcancel", handleEnd);
+    };
+  }, [isDraggingVolume, updateVolumeFromPoint]);
 
   // Controle da Barra de Progresso (Scrubber)
   const getTimeFromEvent = (clientX: number): number => {
@@ -810,7 +957,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     >
       {/* Camada de Ajuste de Brilho Visual (Escurece ou Clareia o Vídeo com compatibilidade total) */}
       <div
-        className="absolute inset-0 pointer-events-none z-10 transition-colors duration-75"
+        className={`absolute inset-0 pointer-events-none z-10 ${
+          isDraggingBrightness || touchHud?.type === "brightness" ? "transition-none" : "transition-colors duration-75"
+        }`}
         style={{
           backgroundColor:
             brightness < 1.0
@@ -1018,7 +1167,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           ref={brightnessBarRef}
           onMouseDown={handleBrightnessMouseDown}
           onTouchStart={handleBrightnessTouchStart}
-          className={`flex absolute left-3.5 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-[opacity,transform] duration-300 touch-none cursor-pointer w-12 sm:w-14 select-none ${
+          onTouchMove={(e) => {
+            if (e.touches[0]) {
+              if (e.cancelable) e.preventDefault();
+              updateBrightnessFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+            }
+          }}
+          className={`flex absolute left-3 sm:left-6 md:left-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-[opacity,transform] duration-300 touch-none cursor-pointer w-12 sm:w-14 select-none ${
             controlsVisible && !isLocked ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 -translate-x-4 pointer-events-none"
           }`}
           onClick={(e) => e.stopPropagation()}
@@ -1037,13 +1192,83 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {/* Barra Vertical de Brilho da Netflix em Branco Sólido */}
           <div
             ref={brightnessTrackRef}
-            className="relative w-2.5 sm:w-3.5 h-32 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
+            className="relative w-3 sm:w-3.5 h-36 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
             title={`Brilho: ${Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%`}
           >
             <div
-              className="w-full bg-white rounded-full transition-all duration-75 shadow-md"
+              className={`w-full bg-white rounded-full shadow-md ${
+                isDraggingBrightness || touchHud?.type === "brightness" ? "transition-none" : "transition-all duration-75"
+              }`}
               style={{
                 height: `${(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100).toFixed(1)}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          2.1 CONTROLE VERTICAL DE SOM DA NETFLIX (LADO OPOSTO - DIREITA)
+          Exibido apenas quando estiver em TELA CHEIA (isFullscreen), idêntico ao Brilho
+          ======================================================== */}
+      {isFullscreen && !isExternalPlayer && (
+        <div
+          ref={volumeBarRef}
+          onMouseDown={handleVolumeMouseDown}
+          onTouchStart={handleVolumeTouchStart}
+          onTouchMove={(e) => {
+            if (e.touches[0]) {
+              if (e.cancelable) e.preventDefault();
+              updateVolumeFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+            }
+          }}
+          className={`flex absolute right-3 sm:right-6 md:right-8 top-1/2 -translate-y-1/2 z-30 flex-col items-center gap-2.5 p-2 rounded-2xl transition-[opacity,transform] duration-300 touch-none cursor-pointer w-12 sm:w-14 select-none ${
+            controlsVisible && !isLocked ? "opacity-100 translate-x-0 pointer-events-auto" : "opacity-0 translate-x-4 pointer-events-none"
+          }`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Indicador Numérico de Porcentagem */}
+          <div
+            className={`w-10 sm:w-11 h-5 sm:h-6 flex items-center justify-center rounded-full bg-black/85 border text-white font-mono font-bold text-[10px] sm:text-xs backdrop-blur-md shadow-xl transition-colors duration-150 select-none tabular-nums shrink-0 ${
+              isDraggingVolume ? "opacity-100 border-white/60 bg-black/95 text-white" : "opacity-85 border-white/25 text-white/90"
+            }`}
+          >
+            {playerStatus.muted ? 0 : Math.round(playerStatus.volume * 100)}%
+          </div>
+
+          {/* Ícone de Som com Toggle Rápido de Mudo */}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              const newMuted = !playerStatus.muted;
+              sendCommand({ type: "SET_MUTED", muted: newMuted });
+              setPlayerStatus((p) => ({ ...p, muted: newMuted }));
+            }}
+            className="text-white hover:scale-110 active:scale-95 transition-transform cursor-pointer p-0.5"
+            title={playerStatus.muted ? "Desmutar áudio" : "Mutar áudio"}
+          >
+            {playerStatus.muted || playerStatus.volume === 0 ? (
+              <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-red-400 drop-shadow stroke-[2] select-none shrink-0" />
+            ) : playerStatus.volume < 0.5 ? (
+              <Volume1 className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow stroke-[2] select-none shrink-0" />
+            ) : (
+              <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-white drop-shadow stroke-[2] select-none shrink-0" />
+            )}
+          </button>
+
+          {/* Barra Vertical de Som da Netflix em Branco Sólido */}
+          <div
+            ref={volumeTrackRef}
+            className="relative w-3 sm:w-3.5 h-36 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
+            title={`Volume: ${playerStatus.muted ? 0 : Math.round(playerStatus.volume * 100)}%`}
+          >
+            <div
+              className={`w-full bg-white rounded-full shadow-md ${
+                isDraggingVolume || touchHud?.type === "volume" ? "transition-none" : "transition-all duration-75"
+              }`}
+              style={{
+                height: `${(playerStatus.muted ? 0 : Math.min(100, Math.max(0, playerStatus.volume * 100))).toFixed(1)}%`,
               }}
             />
           </div>

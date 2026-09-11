@@ -1,4 +1,7 @@
-const TMDB_API_KEY = (import.meta as any).env?.VITE_TMDB_API_KEY || '';
+const RAW_ENV_KEY = (import.meta as any).env?.VITE_TMDB_API_KEY;
+const TMDB_API_KEY = (RAW_ENV_KEY && RAW_ENV_KEY !== 'seu_tmdb_api_key_aqui' && typeof RAW_ENV_KEY === 'string' && RAW_ENV_KEY.trim() !== '')
+  ? RAW_ENV_KEY
+  : 'e0cc43e590a5c5c0d03f920bd4fe9424';
 
 if (!TMDB_API_KEY && typeof window !== "undefined") {
   console.warn("[TMDB Service] VITE_TMDB_API_KEY não configurada. Defina no arquivo .env.local para carregar dados do TMDB.");
@@ -260,8 +263,17 @@ export const getAnimes = async (page: number = 1): Promise<TMDBResponse> => {
 };
 
 export const getDoramas = async (page: number = 1): Promise<TMDBResponse> => {
-  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&vote_count.gte=5&include_adult=false`;
-  return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  // Streaming providers no Brasil: Netflix (8), Prime Video (119), Disney+ (337), Max (1899), Rakuten Viki (344), Apple TV+ (350), Globoplay (307), Paramount+ (531)
+  const streamingProvidersBR = '8|119|337|1899|344|350|307|531|619';
+  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_watch_providers=${streamingProvidersBR}&watch_region=BR&with_watch_monetization_types=flatrate|free|ads&vote_count.gte=5&include_adult=false`;
+  const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  
+  // Fallback se a consulta com watch_providers retornar poucos itens
+  if (!res.results || res.results.length === 0) {
+    const fallbackUrl = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_genres=18&vote_count.gte=20&include_adult=false`;
+    return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
+  }
+  return res;
 };
 
 export interface TrailerVideo {

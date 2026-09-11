@@ -1,5 +1,46 @@
 @import "tailwindcss";
 
+/* Prevenção de overflow horizontal indesejado mantendo scroll vertical livre e fluido */
+html {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  overflow-x: clip;
+  overflow-y: auto;
+  min-height: 100%;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
+}
+
+body {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y pinch-zoom;
+}
+
+#root {
+  background-color: #0a0a0a;
+  color: #ffffff;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 /* Scrollbar ultrafina e premium estilo streaming escuro (elimina barra cinza clássica do Windows) */
 ::-webkit-scrollbar {
   width: 5px;

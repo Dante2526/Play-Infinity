@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Play,
   Bookmark,
@@ -28,7 +28,7 @@ import {
   X,
   CheckCircle2
 } from "lucide-react";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam } from "./data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./data";
 import { 
   searchMulti, 
   getDetails, 
@@ -91,7 +91,7 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 export type OnPlayHandler = (
   title: string, 
-  url?: string,
+  url?: string, 
   mediaType?: 'movie' | 'series',
   tmdbId?: number,
   imdbId?: string,
@@ -195,6 +195,18 @@ export default function App() {
     }
   };
 
+  const handleToggleProfile = () => {
+    if (viewState.type === 'profile' || viewState.type === 'favorites') {
+      if (viewState.previous && viewState.previous.type !== 'profile' && viewState.previous.type !== 'favorites') {
+        navigateTo(viewState.previous);
+      } else {
+        navigateTo({ type: 'home' });
+      }
+    } else {
+      navigateTo({ type: 'profile', previous: viewState });
+    }
+  };
+
   const navigateToDetails = (id: number, itemData?: CatalogItem) => {
     navigateTo({ type: 'details', id: id.toString(), itemData, previous: viewState });
   };
@@ -255,7 +267,7 @@ export default function App() {
   };
 
   return (
-    <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col md:pb-0">
+    <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col md:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
       {/* HEADER DESKTOP */}
       <header className="hidden md:flex fixed top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-6 py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
         <div 
@@ -291,8 +303,9 @@ export default function App() {
             <Search className="w-4 h-4" />
           </button>
           <div 
-            onClick={() => navigateTo({ type: 'profile' })}
+            onClick={handleToggleProfile}
             className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
+            title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
             N
           </div>
@@ -300,38 +313,28 @@ export default function App() {
       </header>
 
       {/* MOBILE BRANDING ON TOP */}
-      <div className="md:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50">
+      <div className="md:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full">
         <div 
-          className="font-black text-2xl tracking-tighter flex items-center drop-shadow-md cursor-pointer"
+          className="font-black text-xl tracking-tighter flex items-center drop-shadow-md cursor-pointer pointer-events-auto shrink-0 select-none"
           onClick={() => navigateTo({ type: 'home' })}
         >
           <span className="text-white">PLAY</span>
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigateTo({ type: 'live-tv' })}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-              viewState.type === 'live-tv'
-                ? 'bg-orange-600 text-white shadow-[0_0_12px_rgba(234,88,12,0.8)]'
-                : 'bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30'
+        
+        {/* ÍCONE DO USUÁRIO NO CANTO SUPERIOR DIREITO */}
+        <div className="pointer-events-auto shrink-0">
+          <div 
+            onClick={handleToggleProfile}
+            className={`w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg cursor-pointer transition-all active:scale-95 ${
+              viewState.type === 'profile' || viewState.type === 'favorites' 
+                ? 'border-white ring-2 ring-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.8)] scale-105' 
+                : 'border-white/20 hover:border-orange-500'
             }`}
+            title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
-            TV Ao Vivo
-          </button>
-          <button
-            onClick={() => navigateTo({ type: 'calendar' })}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30 cursor-pointer"
-          >
-            <CalendarDays className="w-3 h-3 text-orange-500" /> Agenda
-          </button>
-          <button
-            onClick={() => setWebhookModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-neutral-300 border border-white/10 cursor-pointer"
-          >
-            <Radio className="w-3 h-3 text-orange-500" /> Servidor
-          </button>
+            N
+          </div>
         </div>
       </div>
 
@@ -409,21 +412,15 @@ export default function App() {
       </footer>
 
       {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
-      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-md z-50 pointer-events-none">
-        <nav className="bg-[#111111]/90 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-1.5 flex justify-between items-center shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
-          <div className="flex justify-around items-center flex-1">
+      <div className="md:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
+        <nav className="bg-[#111111]/95 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1 flex items-center justify-around shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
+          <div className="flex items-center justify-between w-full">
             <NavItem onClick={() => navigateTo({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
             <NavItem onClick={() => navigateTo({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />
             <NavItem onClick={() => navigateTo({ type: 'series' })} icon={<Tv />} label="Séries" isActive={viewState.type === 'series'} />
             <NavItem onClick={() => navigateTo({ type: 'live-tv' })} icon={<Radio />} label="TV" isActive={viewState.type === 'live-tv'} />
             <NavItem onClick={() => navigateTo({ type: 'calendar' })} icon={<CalendarDays />} label="Agenda" isActive={viewState.type === 'calendar'} />
             <NavItem onClick={() => navigateTo({ type: 'search' })} icon={<Search />} label="Buscar" isActive={viewState.type === 'search'} />
-          </div>
-          <div 
-            onClick={() => navigateTo({ type: 'profile' })}
-            className={`mx-1.5 w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg shrink-0 pointer-events-auto cursor-pointer transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)] scale-110' : 'border-black'}`}
-          >
-            N
           </div>
         </nav>
       </div>
@@ -488,22 +485,55 @@ function HomePage({
   onPlay?: OnPlayHandler,
   onNavigateToLiveTv?: () => void
 }) {
-  const [heroItem, setHeroItem] = useState<{
-    id: number;
-    tmdbId: number;
-    imdbId?: string;
-    title: string;
-    description: string;
-    imageUrl: string;
-    posterUrl?: string;
-    logoText: string;
-    playerUrl: string;
-    year: number;
-    duration: string;
-    rating: string;
-    genres: string[];
-    quality?: string;
-  }>(featured);
+  const [heroItems, setHeroItems] = useState<any[]>([featured]);
+  const [heroIndex, setHeroIndex] = useState<number>(0);
+  const heroItem = heroItems[heroIndex] || featured;
+
+  // Gestos touch e drag no Banner Destaque Principal
+  const heroTouchStartXRef = useRef(0);
+  const heroTouchStartYRef = useRef(0);
+  const heroTouchEndXRef = useRef(0);
+  const heroIsSwipingRef = useRef(false);
+
+  const handleHeroTouchStart = (e: React.TouchEvent) => {
+    heroTouchStartXRef.current = e.touches[0].clientX;
+    heroTouchStartYRef.current = e.touches[0].clientY;
+    heroTouchEndXRef.current = e.touches[0].clientX;
+    heroIsSwipingRef.current = false;
+  };
+
+  const handleHeroTouchMove = (e: React.TouchEvent) => {
+    heroTouchEndXRef.current = e.touches[0].clientX;
+    const dx = Math.abs(heroTouchEndXRef.current - heroTouchStartXRef.current);
+    const dy = Math.abs(e.touches[0].clientY - heroTouchStartYRef.current);
+    if (dx > 12 && dx > dy) {
+      heroIsSwipingRef.current = true;
+    }
+  };
+
+  const handleHeroTouchEnd = () => {
+    if (!heroIsSwipingRef.current) return;
+    const diffX = heroTouchStartXRef.current - heroTouchEndXRef.current;
+    if (Math.abs(diffX) > 40) {
+      if (diffX > 0) {
+        // Swipe left -> Próximo destaque
+        setHeroIndex(prev => (prev + 1) % heroItems.length);
+      } else {
+        // Swipe right -> Destaque anterior
+        setHeroIndex(prev => (prev - 1 + heroItems.length) % heroItems.length);
+      }
+    }
+    heroIsSwipingRef.current = false;
+  };
+
+  // Rotação suave automática do banner de destaque a cada 8 segundos
+  useEffect(() => {
+    if (heroItems.length <= 1) return;
+    const timer = setInterval(() => {
+      setHeroIndex(prev => (prev + 1) % heroItems.length);
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [heroItems.length]);
 
   // Estados dinâmicos dos lançamentos automáticos (fallback inicial dos dados estáticos)
   const [movieReleases, setMovieReleases] = useState<any[]>(releases);
@@ -591,65 +621,45 @@ function HomePage({
         const trendingRes = await getTrending('movie', 'day');
         if (!isMounted || !trendingRes?.results || trendingRes.results.length === 0) return;
 
-        // Seleciona filmes com imagem de fundo válida, ordenados por popularidade
+        // Seleciona os melhores filmes com imagem de fundo válida
         const candidates = trendingRes.results
           .filter((m: TMDBItem) => m.backdrop_path && (m.title || m.name))
-          .sort((a: TMDBItem, b: TMDBItem) => (b.popularity || 0) - (a.popularity || 0));
+          .sort((a: TMDBItem, b: TMDBItem) => (b.popularity || 0) - (a.popularity || 0))
+          .slice(0, 5);
 
         if (candidates.length === 0) return;
-        const top = candidates[0];
 
-        let runtime = "2h 10m";
-        let genresList = getGenreNames(top.genre_ids || []);
-        let imdbId: string | undefined = undefined;
-        let releaseYear = parseInt(top.release_date?.substring(0, 4) || "2026");
-
-        try {
-          const details = await getDetails(top.id, 'movie');
-          if (details) {
-            if (details.runtime) {
-              const h = Math.floor(details.runtime / 60);
-              const m = details.runtime % 60;
-              runtime = h > 0 ? `${h}h ${m}m` : `${m}m`;
-            }
-            if (details.genres && details.genres.length > 0) {
-              genresList = details.genres.map(g => g.name);
-            }
-            if (details.imdb_id) imdbId = details.imdb_id;
-            if (details.release_date) {
-              releaseYear = parseInt(details.release_date.substring(0, 4)) || releaseYear;
-            }
+        const formattedHeroItems = candidates.map((item: TMDBItem) => {
+          const fullTitle = item.title || item.name || "Sem título";
+          let logoText = fullTitle.toUpperCase();
+          if (logoText.includes(": ")) {
+            logoText = logoText.replace(": ", "\n");
+          } else if (logoText.includes(" - ")) {
+            logoText = logoText.replace(" - ", "\n");
           }
-        } catch {
-          // Mantém valores derivados da listagem em caso de falha nos detalhes
-        }
+
+          const genresList = getGenreNames(item.genre_ids || []);
+          const releaseYear = parseInt(item.release_date?.substring(0, 4) || "2026");
+
+          return {
+            id: item.id,
+            tmdbId: item.id,
+            title: fullTitle,
+            description: item.overview || featured.description,
+            imageUrl: formatImageUrl(item.backdrop_path, 'original'),
+            posterUrl: formatImageUrl(item.poster_path, 'w500'),
+            logoText,
+            playerUrl: `https://v1.watchplay.shop/movie/${item.id}`,
+            year: releaseYear,
+            duration: "2h 10m",
+            rating: item.vote_average ? item.vote_average.toFixed(1) : "8.0",
+            genres: genresList.length > 0 ? genresList.slice(0, 3) : ["Ação", "Aventura"],
+            quality: checkIsCam(fullTitle) ? "CAM" : "HD"
+          };
+        });
 
         if (!isMounted) return;
-
-        const fullTitle = top.title || top.name || "Sem título";
-        let logoText = fullTitle.toUpperCase();
-        if (logoText.includes(": ")) {
-          logoText = logoText.replace(": ", "\n");
-        } else if (logoText.includes(" - ")) {
-          logoText = logoText.replace(" - ", "\n");
-        }
-
-        setHeroItem({
-          id: top.id,
-          tmdbId: top.id,
-          imdbId,
-          title: fullTitle,
-          description: top.overview || featured.description,
-          imageUrl: formatImageUrl(top.backdrop_path, 'original'),
-          posterUrl: formatImageUrl(top.poster_path, 'w500'),
-          logoText,
-          playerUrl: `https://v1.watchplay.shop/movie/${top.id}`,
-          year: releaseYear,
-          duration: runtime,
-          rating: top.vote_average ? top.vote_average.toFixed(1) : "8.0",
-          genres: genresList.length > 0 ? genresList.slice(0, 3) : ["Ação", "Aventura"],
-          quality: checkIsCam(fullTitle) ? "CAM" : "HD"
-        });
+        setHeroItems(formattedHeroItems);
       } catch (err) {
         console.error("Erro ao sincronizar destaque automático com TMDB:", err);
       }
@@ -729,24 +739,39 @@ function HomePage({
           }
         }
 
-        if (isMounted && doramasRes?.results && doramasRes.results.length > 0) {
-          const formattedDoramas = doramasRes.results
-            .filter((d: TMDBItem) => d.poster_path && (d.name || d.title))
-            .slice(0, 18)
-            .map((d: TMDBItem) => ({
-              id: d.id,
-              tmdbId: d.id,
-              title: (d.name || d.title || "").toUpperCase(),
-              imageUrl: formatImageUrl(d.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(d.backdrop_path, 'original'),
-              type: 'series' as const,
-              quality: "HD" as const,
-              rating: d.vote_average ? d.vote_average.toFixed(1) : undefined,
-              year: d.first_air_date ? d.first_air_date.substring(0, 4) : "2026",
-              playerUrl: `https://v1.watchplay.shop/tvshow/${d.id}/1/1`
-            }));
-          if (formattedDoramas.length > 0) {
-            setDoramaReleases(formattedDoramas);
+        if (isMounted) {
+          // Apenas os doramas confirmados como disponíveis no Watchplay
+          let availableDoramas = [...doramas];
+
+          if (doramasRes?.results && doramasRes.results.length > 0) {
+            const tmdbFiltered = doramasRes.results
+              .filter((d: TMDBItem) => d.poster_path && (d.name || d.title) && WATCHPLAY_DORAMA_IDS.includes(d.id))
+              .map((d: TMDBItem) => ({
+                id: d.id,
+                tmdbId: d.id,
+                title: (d.name || d.title || "").toUpperCase(),
+                imageUrl: formatImageUrl(d.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(d.backdrop_path, 'original'),
+                type: 'series' as const,
+                quality: "HD" as const,
+                isDorama: true,
+                rating: d.vote_average ? d.vote_average.toFixed(1) : undefined,
+                year: d.first_air_date ? d.first_air_date.substring(0, 4) : "2026",
+                playerUrl: `https://v1.watchplay.shop/tvshow/${d.id}/1/1`
+              }));
+
+            if (tmdbFiltered.length > 0) {
+              const combinedMap = new Map<number, any>();
+              // Carrega a base padrão de doramas confirmados do Watchplay
+              doramas.forEach(d => combinedMap.set(d.id, d));
+              // Atualiza com metadados frescos do TMDB quando disponíveis
+              tmdbFiltered.forEach(d => combinedMap.set(d.id, d));
+              availableDoramas = Array.from(combinedMap.values()).filter(d => WATCHPLAY_DORAMA_IDS.includes(d.id));
+            }
+          }
+
+          if (availableDoramas.length > 0) {
+            setDoramaReleases(availableDoramas);
           }
         }
       } catch (err) {
@@ -780,22 +805,48 @@ function HomePage({
   return (
     <>
       {/* FEATURED / HERO SECTION */}
-      <section className="relative w-full min-h-[85vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end flex-shrink-0 overflow-hidden">
-        {/* Background Image */}
+      <section 
+        onTouchStart={handleHeroTouchStart}
+        onTouchMove={handleHeroTouchMove}
+        onTouchEnd={handleHeroTouchEnd}
+        className="relative w-full min-h-[85vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end flex-shrink-0 select-none group/hero touch-pan-y"
+      >
+        {/* Background Image with smooth transition */}
         <div
-          className="absolute inset-0 bg-cover bg-[center_top] md:bg-top bg-no-repeat"
+          key={heroItem.id}
+          className="absolute inset-0 bg-cover bg-[center_top] md:bg-top bg-no-repeat transition-all duration-700 ease-out"
           style={{ backgroundImage: `url(${heroItem.imageUrl})` }}
         ></div>
         {/* Gradients to blend with background */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/40 pointer-events-none"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-[#0a0a0a]/40 to-transparent hidden md:block pointer-events-none"></div>
 
+        {/* Botões Laterais de Navegação do Destaque (Desktop & Tablet) */}
+        {heroItems.length > 1 && (
+          <>
+            <button
+              onClick={() => setHeroIndex(prev => (prev - 1 + heroItems.length) % heroItems.length)}
+              className="hidden md:flex absolute left-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/60 hover:bg-orange-600 text-white items-center justify-center backdrop-blur-md border border-white/10 opacity-0 group-hover/hero:opacity-100 transition-all cursor-pointer hover:scale-110 shadow-xl"
+              aria-label="Destaque anterior"
+            >
+              <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
+            </button>
+            <button
+              onClick={() => setHeroIndex(prev => (prev + 1) % heroItems.length)}
+              className="hidden md:flex absolute right-4 top-1/2 -translate-y-1/2 z-30 w-11 h-11 rounded-full bg-black/60 hover:bg-orange-600 text-white items-center justify-center backdrop-blur-md border border-white/10 opacity-0 group-hover/hero:opacity-100 transition-all cursor-pointer hover:scale-110 shadow-xl"
+              aria-label="Próximo destaque"
+            >
+              <ChevronRight className="w-6 h-6 stroke-[2.5]" />
+            </button>
+          </>
+        )}
+
         {/* Content (Fluxo normal relativo com mt-auto para nunca ultrapassar o topo) */}
         <div className="relative z-10 w-full flex flex-col justify-end flex-1 px-6 md:px-20 pt-28 sm:pt-32 md:pt-36 pb-8 md:pb-12">
           <div className="mt-auto flex flex-col items-center md:items-start text-center md:text-left">
             {/* Logo / Title area for Hero */}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-2.5 md:mb-3 leading-[0.95] drop-shadow-[0_4px_20px_rgba(0,0,0,0.9)]">
-              {heroItem.logoText.split('\n').map((line, i) => (
+              {heroItem.logoText.split('\n').map((line: string, i: number) => (
                 <span key={i} className="block">{line}</span>
               ))}
             </h1>
@@ -811,7 +862,7 @@ function HomePage({
             )}
 
             {/* Meta details */}
-            <div className="flex items-center gap-3 text-sm md:text-base font-medium text-neutral-300 mb-3">
+            <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm md:text-base font-medium text-neutral-300 mb-3 flex-wrap justify-center md:justify-start">
               <span>{heroItem.year}</span>
               <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
               <div className="flex items-center gap-[2px]">
@@ -829,9 +880,9 @@ function HomePage({
             </div>
 
             {/* Genres */}
-            <div className="flex items-center gap-2.5 sm:gap-3 mb-4 md:mb-5">
-              {heroItem.genres.map((g) => (
-                <span key={g} className="px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md text-xs font-semibold text-neutral-200">
+            <div className="flex items-center gap-2 sm:gap-2.5 mb-4 md:mb-5 flex-wrap justify-center md:justify-start">
+              {heroItem.genres.map((g: string) => (
+                <span key={g} className="px-2.5 sm:px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md text-xs font-semibold text-neutral-200">
                   {g}
                 </span>
               ))}
@@ -842,49 +893,69 @@ function HomePage({
               {heroItem.description}
             </p>
 
-            {/* Actions */}
-            <div className="flex items-center gap-4 w-full md:w-auto justify-center md:justify-start">
-              <button 
-                onClick={() => onPlay?.(
-                  heroItem.title, 
-                  heroItem.playerUrl || `https://v1.watchplay.shop/movie/${heroItem.id}`,
-                  'movie',
-                  heroItem.id,
-                  heroItem.imdbId,
-                  1,
-                  1,
-                  heroItem.quality,
-                  checkIsCam(heroItem.title, heroItem.quality),
-                  undefined,
-                  false,
-                  heroItem.imageUrl,
-                  heroItem.imageUrl,
-                  heroItem.posterUrl
-                )}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer"
-              >
-                <Play className="w-5 h-5 fill-current" />
-                Assistir Filme
-              </button>
-              <button 
-                onClick={() => onItemClick(heroItem.id)}
-                className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-6 md:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer"
-              >
-                <Info className="w-5 h-5" />
-                Mais Detalhes
-              </button>
+            {/* Actions & Carousel Indicators */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 w-full">
+              <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto justify-center md:justify-start max-w-full">
+                <button 
+                  onClick={() => onPlay?.(
+                    heroItem.title, 
+                    heroItem.playerUrl || `https://v1.watchplay.shop/movie/${heroItem.id}`,
+                    'movie',
+                    heroItem.id,
+                    heroItem.imdbId,
+                    1,
+                    1,
+                    heroItem.quality,
+                    checkIsCam(heroItem.title, heroItem.quality),
+                    undefined,
+                    false,
+                    heroItem.imageUrl,
+                    heroItem.imageUrl,
+                    heroItem.posterUrl
+                  )}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-5 sm:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer text-sm md:text-base whitespace-nowrap active:scale-95"
+                >
+                  <Play className="w-5 h-5 fill-current shrink-0" />
+                  <span>Assistir Filme</span>
+                </button>
+                <button 
+                  onClick={() => onItemClick(heroItem.id)}
+                  className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-5 sm:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer text-sm md:text-base whitespace-nowrap active:scale-95"
+                >
+                  <Info className="w-5 h-5 shrink-0" />
+                  <span>Mais Detalhes</span>
+                </button>
+              </div>
+
+              {/* Indicadores de Destaques / Capas do Carrossel Hero */}
+              {heroItems.length > 1 && (
+                <div className="flex items-center gap-2 pt-2 md:pt-0">
+                  {heroItems.map((item, idx) => (
+                    <button
+                      key={`hero-ind-${item.id || idx}`}
+                      onClick={() => setHeroIndex(idx)}
+                      className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${
+                        idx === heroIndex 
+                          ? "w-8 bg-orange-500 shadow-lg shadow-orange-500/50" 
+                          : "w-2 bg-white/30 hover:bg-white/60"
+                      }`}
+                      aria-label={`Ir para destaque ${idx + 1}`}
+                      title={item.title}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
 
       {/* STRIPES / CONTENT ZONES */}
-      <main className="flex-1 w-full bg-[#0a0a0a] pb-12 z-20 relative px-4 md:px-12 space-y-12">
+      <main className="flex-1 w-full bg-[#0a0a0a] pb-24 md:pb-12 z-20 relative px-3 sm:px-4 md:px-12 space-y-10 md:space-y-12">
         {/* Providers */}
-        <section className="w-full flex justify-center">
+        <section className="w-full max-w-full flex justify-center">
           <div 
-            className="flex gap-2.5 sm:gap-3 md:gap-3.5 overflow-x-auto snap-x snap-mandatory pt-1 pb-3 scrollbar-hide w-full justify-start md:justify-center items-center"
-            style={{ justifyContent: 'safe center' }}
+            className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-wrap md:justify-center gap-2.5 sm:gap-3 md:gap-3.5 w-full items-center"
           >
             {providers.map((p) => {
               const logos: Record<string, { url: string, filter?: string, customClass?: string }> = {
@@ -909,10 +980,6 @@ function HomePage({
                   filter: "brightness(0) invert(1) opacity(0.9)",
                   customClass: "h-5 sm:h-5.5 md:h-6.5"
                 },
-                "Globoplay": {
-                  url: "https://upload.wikimedia.org/wikipedia/commons/f/fe/Globoplay_logo.svg",
-                  customClass: "h-5 sm:h-5.5 md:h-6.5 max-w-[90px] md:max-w-[110px]"
-                },
               };
 
               const logoInfo = logos[p];
@@ -921,7 +988,7 @@ function HomePage({
                 <button
                   key={p}
                   onClick={() => onProviderSelect(p)}
-                  className={`group snap-start shrink-0 h-14 sm:h-16 md:h-18 lg:h-20 w-[110px] sm:w-[125px] md:w-[135px] lg:w-[150px] xl:w-[160px] px-3 sm:px-4 md:px-5 backdrop-blur-md border rounded-xl sm:rounded-2xl flex items-center justify-center transition-all bg-white/5 hover:bg-white/10 border-white/5 hover:border-orange-500/30 cursor-pointer shadow-sm`}
+                  className={`group w-full md:w-[135px] lg:w-[150px] xl:w-[160px] h-14 sm:h-16 md:h-18 lg:h-20 px-3 sm:px-4 md:px-5 backdrop-blur-md border rounded-xl sm:rounded-2xl flex items-center justify-center transition-all bg-white/5 hover:bg-white/10 border-white/5 hover:border-orange-500/30 cursor-pointer shadow-sm active:scale-95`}
                 >
                   {logoInfo ? (
                     <img 
@@ -987,7 +1054,10 @@ function HomePage({
             <div className="flex items-center mb-6 pl-2">
               <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
             </div>
-            <div className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-2 pb-6 pl-2 pr-4 scrollbar-hide">
+            <div 
+              style={{ touchAction: "pan-y pan-x pinch-zoom" }}
+              className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-2 pb-6 pl-2 pr-4 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+            >
               {continueWatchingList.map((item, idx) => (
                 <div 
                   key={`cw-${item.id}-${idx}`} 
@@ -1125,15 +1195,7 @@ function DetailsPage({
   onPlay?: OnPlayHandler,
   onNavigateToCalendar?: () => void
 }) {
-  const allCatalogs = React.useMemo(() => {
-    const map = new Map<number, CatalogItem>();
-    Object.values(providerCatalogs).forEach(list => {
-      list.forEach(i => {
-        if (!map.has(i.id)) map.set(i.id, i);
-      });
-    });
-    return Array.from(map.values());
-  }, []);
+  const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
   const [item, setItem] = useState<CatalogItem>(() => {
     if (initialItem) return initialItem;
     return allCatalogs.find(i => i.id === itemId) || allCatalogs[0];
@@ -1246,6 +1308,7 @@ function DetailsPage({
   const isSeries = item.type === 'series';
   const effectiveTmdbId = item.tmdbId || item.id;
   const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
+  const isDoramaItem = Boolean(item.isDorama || initialItem?.isDorama);
 
   // URL de reprodução: Aponta para WatchPlayer com skin Netflix e autoplay
   const targetPlayerUrl = isSeries
@@ -1334,6 +1397,11 @@ function DetailsPage({
               <span className="px-3 py-1 bg-orange-600/30 text-orange-400 border border-orange-500/40 rounded-full text-xs font-black tracking-wider uppercase">
                 {isSeries ? 'Série Oficial' : 'Filme Oficial'}
               </span>
+              {isDoramaItem && (
+                <span className="px-3 py-1 bg-pink-600/30 text-pink-400 border border-pink-500/40 rounded-full text-xs font-black tracking-wider uppercase">
+                  Dorama Coreano
+                </span>
+              )}
               {checkIsCam(item.title, item.quality) && (
                 <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_12px_rgba(245,158,11,0.3)]">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -1862,15 +1930,7 @@ function GlobalSearchPage({
   const [tmdbResults, setTmdbResults] = useState<CatalogItem[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
-  const allCatalogs = React.useMemo(() => {
-    const map = new Map<number, CatalogItem>();
-    Object.values(providerCatalogs).forEach(list => {
-      list.forEach(i => {
-        if (!map.has(i.id)) map.set(i.id, i);
-      });
-    });
-    return Array.from(map.values());
-  }, []);
+  const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
 
   // Busca em tempo real com TMDB API
   React.useEffect(() => {
@@ -2665,15 +2725,7 @@ function GlobalCatalogPage({
   onPlay?: OnPlayHandler
 }) {
   // Combine curated items from data.ts
-  const allCatalogs = React.useMemo(() => {
-    const map = new Map<number, CatalogItem>();
-    Object.values(providerCatalogs).forEach(list => {
-      list.forEach(i => {
-        if (!map.has(i.id)) map.set(i.id, i);
-      });
-    });
-    return Array.from(map.values());
-  }, []);
+  const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
   const typeFilter = type === 'movies' ? 'movie' : 'series';
   const initialLocalItems = allCatalogs.filter(item => item.type === typeFilter);
 
@@ -2685,6 +2737,20 @@ function GlobalCatalogPage({
   const [filterGenre, setFilterGenre] = useState<string>('all');
   const [filterYear, setFilterYear] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('popularity.desc');
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef<boolean>(true);
+
+  const scrollToGrid = () => {
+    if (gridSectionRef.current) {
+      const navOffset = 65;
+      const elementPosition = gridSectionRef.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - navOffset;
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const availableGenres = [
     "Ação", "Aventura", "Animação", "Comédia", "Crime",
@@ -2783,14 +2849,16 @@ function GlobalCatalogPage({
     };
 
     loadCatalog();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (currentPage > 1) {
+      scrollToGrid();
+    }
 
     return () => {
       isMounted = false;
     };
   }, [type, currentPage, filterGenre, filterYear, sortBy]);
 
-  const pageTitle = type === 'movies' ? 'Catálogo Geral de Filmes' : 'Catálogo Geral de Séries';
+  const pageTitle = type === 'movies' ? 'Catálogo de Filmes' : 'Catálogo de Séries';
   const pageDescription = type === 'movies' 
     ? 'Acesso direto a mais de 500.000 filmes em alta definição no WatchPlayer.' 
     : 'Acesso completo a dezenas de milhares de séries, temporadas e episódios com multi-servidores.';
@@ -2798,27 +2866,19 @@ function GlobalCatalogPage({
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen">
       {/* Global Hero Header */}
-      <div className="relative pt-32 pb-8 px-6 md:px-12 bg-[#0a0a0a]">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+      <div className="relative pt-24 md:pt-32 pb-4 md:pb-8 px-4 md:px-12 bg-[#0a0a0a]">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 md:gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="px-2.5 py-1 rounded-full bg-orange-600/20 text-orange-400 border border-orange-500/30 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5" /> Catálogo Aberto
-              </span>
-              <span className="text-xs text-neutral-400 font-mono">
-                {totalCount.toLocaleString()} títulos disponíveis
-              </span>
-            </div>
-            <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
+            <h1 className="text-3xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-tight uppercase">
               {pageTitle}
             </h1>
-            <p className="text-neutral-400 mt-3 max-w-2xl text-base md:text-lg">
+            <p className="text-neutral-400 mt-1 md:mt-2 max-w-2xl text-xs md:text-base">
               {pageDescription}
             </p>
           </div>
 
           {/* Seletor de Ordenação */}
-          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 self-start md:self-auto">
+          <div className="flex items-center gap-2 bg-neutral-900 border border-neutral-800 rounded-xl px-3 py-1.5 self-start md:self-auto shrink-0">
             <span className="text-xs text-neutral-400">Ordenar por:</span>
             <select
               value={sortBy}
@@ -2836,46 +2896,58 @@ function GlobalCatalogPage({
         </div>
       </div>
 
-      <main className="flex-1 px-4 md:px-12 py-6 space-y-8 bg-[#0a0a0a] animate-in fade-in duration-500">
+      <main className="flex-1 px-4 md:px-12 py-4 md:py-6 space-y-6 md:space-y-8 bg-[#0a0a0a] animate-in fade-in duration-500">
         {/* FILTERS */}
-        <div className="space-y-4">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-            <FilterChip 
-              label="Todos Gêneros" 
-              active={filterGenre === 'all'} 
-              onClick={() => { setFilterGenre('all'); setCurrentPage(1); }} 
-            />
-            {availableGenres.map(genre => (
+        <div className="space-y-4 bg-neutral-950/60 p-3.5 md:p-5 rounded-2xl border border-neutral-800/80 text-center">
+          {/* Gêneros */}
+          <div>
+            <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-2 text-center">
+              Gênero
+            </span>
+            <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2">
               <FilterChip 
-                key={genre} 
-                label={genre} 
-                active={filterGenre === genre} 
-                onClick={() => { setFilterGenre(genre); setCurrentPage(1); }} 
+                label="Todos Gêneros" 
+                active={filterGenre === 'all'} 
+                onClick={() => { setFilterGenre('all'); setCurrentPage(1); }} 
               />
-            ))}
+              {availableGenres.map(genre => (
+                <FilterChip 
+                  key={genre} 
+                  label={genre} 
+                  active={filterGenre === genre} 
+                  onClick={() => { setFilterGenre(genre); setCurrentPage(1); }} 
+                />
+              ))}
+            </div>
           </div>
           
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-            {yearRanges.map(range => (
-              <FilterChip 
-                key={range.label} 
-                label={range.label} 
-                active={filterYear === range.label || (filterYear === 'all' && range.value === 'all')} 
-                onClick={() => { setFilterYear(range.value === 'all' ? 'all' : range.label); setCurrentPage(1); }} 
-              />
-            ))}
+          {/* Anos */}
+          <div>
+            <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-2 text-center">
+              Ano de Lançamento
+            </span>
+            <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2">
+              {yearRanges.map(range => (
+                <FilterChip 
+                  key={range.label} 
+                  label={range.label} 
+                  active={filterYear === range.label || (filterYear === 'all' && range.value === 'all')} 
+                  onClick={() => { setFilterYear(range.value === 'all' ? 'all' : range.label); setCurrentPage(1); }} 
+                />
+              ))}
+            </div>
           </div>
         </div>
 
         {/* LOADING STATE */}
         {loading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 py-4">
+          <div ref={gridSectionRef} className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6 py-4 scroll-mt-20">
             {Array.from({ length: 15 }).map((_, i) => (
               <div key={i} className="aspect-[2/3] rounded-xl bg-neutral-900/60 animate-pulse border border-neutral-800/60" />
             ))}
           </div>
         ) : items.length > 0 ? (
-          <section className="space-y-8">
+          <section ref={gridSectionRef} className="space-y-8 scroll-mt-20">
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
               {items.map((item, idx) => (
                 <div 
@@ -2953,7 +3025,10 @@ function GlobalCatalogPage({
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  onClick={() => {
+                    setCurrentPage(p => Math.max(1, p - 1));
+                    scrollToGrid();
+                  }}
                   disabled={currentPage <= 1}
                   className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
                 >
@@ -2972,7 +3047,10 @@ function GlobalCatalogPage({
                     return (
                       <button
                         key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
+                        onClick={() => {
+                          setCurrentPage(pageNum);
+                          scrollToGrid();
+                        }}
                         className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           currentPage === pageNum
                             ? "bg-orange-600 text-white shadow-md shadow-orange-600/30"
@@ -2986,7 +3064,10 @@ function GlobalCatalogPage({
                 </div>
 
                 <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => {
+                    setCurrentPage(p => Math.min(totalPages, p + 1));
+                    scrollToGrid();
+                  }}
                   disabled={currentPage >= totalPages}
                   className="px-3 py-1.5 rounded-xl bg-neutral-900 border border-neutral-800 text-white text-xs font-bold hover:bg-neutral-800 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1 cursor-pointer"
                 >
@@ -3028,6 +3109,20 @@ function ProviderPage({
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const gridSectionRef = useRef<HTMLDivElement>(null);
+  const isInitialMount = useRef<boolean>(true);
+
+  const scrollToGrid = () => {
+    if (gridSectionRef.current) {
+      const navOffset = 65;
+      const elementPosition = gridSectionRef.current.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - navOffset;
+      window.scrollTo({
+        top: Math.max(0, offsetPosition),
+        behavior: 'smooth'
+      });
+    }
+  };
 
   // Fetch from TMDB Discover API to get the real full catalog of this streaming
   useEffect(() => {
@@ -3162,6 +3257,9 @@ function ProviderPage({
     };
 
     loadProviderData();
+    if (currentPage > 1) {
+      scrollToGrid();
+    }
 
     return () => {
       isMounted = false;
@@ -3190,16 +3288,6 @@ function ProviderPage({
         
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-bold uppercase tracking-wider">
-                Catálogo em Tempo Real
-              </span>
-              {totalCount > 0 && (
-                <span className="text-neutral-400 text-xs font-medium">
-                  Mais de {totalCount.toLocaleString('pt-BR')} títulos disponíveis via player
-                </span>
-              )}
-            </div>
             <h1 className="text-4xl md:text-6xl font-black text-white tracking-tighter drop-shadow-lg leading-none uppercase">
               {provider}
             </h1>
@@ -3210,73 +3298,79 @@ function ProviderPage({
         </div>
       </div>
 
-      <main className="flex-1 px-4 md:px-12 py-10 space-y-10 bg-[#0a0a0a] animate-in fade-in duration-500">
+      <main className="flex-1 px-4 md:px-12 py-6 md:py-10 space-y-6 md:space-y-10 bg-[#0a0a0a] animate-in fade-in duration-500">
         {/* FILTERS */}
-        <div className="flex flex-col gap-4">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-            <FilterChip 
-              label="Todos os Títulos" 
-              active={filterType === 'all'} 
-              onClick={() => {
-                setFilterType('all');
-                setCurrentPage(1);
-              }} 
-            />
-            <FilterChip 
-              label="Todas as Séries" 
-              active={filterType === 'series'} 
-              onClick={() => {
-                setFilterType('series');
-                setCurrentPage(1);
-              }} 
-            />
-            <FilterChip 
-              label="Filmes" 
-              active={filterType === 'movie'} 
-              onClick={() => {
-                setFilterType('movie');
-                setCurrentPage(1);
-              }} 
-            />
+        <div className="space-y-4 bg-neutral-950/60 p-3.5 md:p-5 rounded-2xl border border-neutral-800/80 text-center">
+          {/* Tipo de Conteúdo */}
+          <div>
+            <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-2 text-center">
+              Tipo
+            </span>
+            <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2">
+              <FilterChip 
+                label="Todos os Títulos" 
+                active={filterType === 'all'} 
+                onClick={() => {
+                  setFilterType('all');
+                  setCurrentPage(1);
+                }} 
+              />
+              <FilterChip 
+                label="Todas as Séries" 
+                active={filterType === 'series'} 
+                onClick={() => {
+                  setFilterType('series');
+                  setCurrentPage(1);
+                }} 
+              />
+              <FilterChip 
+                label="Filmes" 
+                active={filterType === 'movie'} 
+                onClick={() => {
+                  setFilterType('movie');
+                  setCurrentPage(1);
+                }} 
+              />
+            </div>
           </div>
           
           {availableGenres.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-              <FilterChip 
-                label="Todos Gêneros" 
-                active={filterGenre === 'all'} 
-                onClick={() => setFilterGenre('all')} 
-              />
-              {availableGenres.map(genre => (
+            <div>
+              <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-2 text-center">
+                Gênero
+              </span>
+              <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2">
                 <FilterChip 
-                  key={genre} 
-                  label={genre} 
-                  active={filterGenre === genre} 
-                  onClick={() => setFilterGenre(genre)} 
+                  label="Todos Gêneros" 
+                  active={filterGenre === 'all'} 
+                  onClick={() => setFilterGenre('all')} 
                 />
-              ))}
+                {availableGenres.map(genre => (
+                  <FilterChip 
+                    key={genre} 
+                    label={genre} 
+                    active={filterGenre === genre} 
+                    onClick={() => setFilterGenre(genre)} 
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-28 text-neutral-400 space-y-4">
+          <div ref={gridSectionRef} className="flex flex-col items-center justify-center py-28 text-neutral-400 space-y-4 scroll-mt-20">
             <Loader2 className="w-10 h-10 animate-spin text-orange-500" />
             <p className="text-base font-semibold">Carregando catálogo completo do {provider}...</p>
           </div>
         ) : filteredItems.length > 0 ? (
-          <section className="space-y-6">
-            <div className="flex items-center justify-between pb-2 border-b border-white/5">
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl md:text-2xl font-bold text-white uppercase tracking-tight">
-                  {filterType === 'series' ? 'Séries do Streaming' : filterType === 'movie' ? 'Filmes do Streaming' : 'Catálogo Disponível'}
-                </h2>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20">
-                  {filteredItems.length} nesta página
-                </span>
-              </div>
+          <section ref={gridSectionRef} className="space-y-6 scroll-mt-20">
+            <div className="flex items-center justify-between gap-4 pb-2 border-b border-white/5">
+              <h2 className="text-lg md:text-2xl font-bold text-white uppercase tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                {filterType === 'series' ? 'Séries do Streaming' : filterType === 'movie' ? 'Filmes do Streaming' : 'Catálogo Disponível'}
+              </h2>
               {totalPages > 1 && (
-                <span className="text-xs text-neutral-400 font-medium">
+                <span className="text-xs text-neutral-400 font-medium whitespace-nowrap shrink-0">
                   Página {currentPage} de {totalPages}
                 </span>
               )}
@@ -3369,7 +3463,7 @@ function ProviderPage({
                   <button
                     onClick={() => {
                       setCurrentPage(prev => Math.max(1, prev - 1));
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      scrollToGrid();
                     }}
                     disabled={currentPage === 1}
                     className="p-2 rounded-lg bg-neutral-900 border border-white/10 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-neutral-900 disabled:hover:text-neutral-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
@@ -3391,7 +3485,7 @@ function ProviderPage({
                         key={pageNum}
                         onClick={() => {
                           setCurrentPage(pageNum);
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                          scrollToGrid();
                         }}
                         className={`w-9 h-9 rounded-lg font-bold text-xs transition-all cursor-pointer border ${
                           currentPage === pageNum
@@ -3407,7 +3501,7 @@ function ProviderPage({
                   <button
                     onClick={() => {
                       setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                      scrollToGrid();
                     }}
                     disabled={currentPage === totalPages}
                     className="p-2 rounded-lg bg-neutral-900 border border-white/10 text-neutral-300 hover:text-white hover:bg-neutral-800 disabled:opacity-30 disabled:hover:bg-neutral-900 disabled:hover:text-neutral-300 transition-colors cursor-pointer disabled:cursor-not-allowed"
@@ -3435,10 +3529,10 @@ function FilterChip({ label, active, onClick }: { label: string, active: boolean
   return (
     <button
       onClick={onClick}
-      className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-semibold transition-all shrink-0 border 
+      className={`px-3 py-1.5 md:px-4 md:py-2 rounded-lg md:rounded-xl whitespace-nowrap text-xs md:text-sm font-medium transition-all shrink-0 border select-none active:scale-95
         ${active 
-          ? 'bg-orange-500 text-white border-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.4)]' 
-          : 'bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10 hover:border-white/20'}`}
+          ? 'bg-orange-500 text-white border-orange-500 shadow-[0_0_12px_rgba(234,88,12,0.35)] font-semibold' 
+          : 'bg-[#141414] text-neutral-300 border-neutral-800 hover:bg-neutral-800 hover:text-white hover:border-neutral-700'}`}
     >
       {label}
     </button>
@@ -3464,12 +3558,40 @@ function ContentRow({
   const [canScrollLeft, setCanScrollLeft] = React.useState(false);
   const [canScrollRight, setCanScrollRight] = React.useState(true);
 
-  // Controle de arrastar com o mouse (Drag-to-scroll 1:1 sem resistência de snap)
+  // Controle de arrastar com mouse e touch (Drag-to-scroll 1:1 sem resistência de snap)
   const isMouseDownRef = React.useRef(false);
   const startXRef = React.useRef(0);
   const scrollLeftRef = React.useRef(0);
   const hasDraggedRef = React.useRef(false);
   const [isDragging, setIsDragging] = React.useState(false);
+
+  // Touch handlers para mobile
+  const touchStartXRef = React.useRef(0);
+  const touchStartYRef = React.useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartXRef.current = e.touches[0].clientX;
+    touchStartYRef.current = e.touches[0].clientY;
+    hasDraggedRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const dx = Math.abs(e.touches[0].clientX - touchStartXRef.current);
+    const dy = Math.abs(e.touches[0].clientY - touchStartYRef.current);
+    // Se o movimento for predominantemente horizontal, marcamos como drag
+    if (dx > 8 && dx > dy) {
+      hasDraggedRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (hasDraggedRef.current) {
+      // Bloqueia o evento de click sintético que o navegador mobile dispara logo após o touch
+      setTimeout(() => {
+        hasDraggedRef.current = false;
+      }, 150);
+    }
+  };
 
   const updateScrollButtons = React.useCallback(() => {
     if (!rowRef.current) return;
@@ -3577,11 +3699,16 @@ function ContentRow({
       <div 
         ref={rowRef}
         onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         style={{
           scrollSnapType: isDragging ? "none" : "x mandatory",
-          scrollBehavior: isDragging ? "auto" : "smooth"
+          scrollBehavior: isDragging ? "auto" : "smooth",
+          touchAction: "pan-y pan-x pinch-zoom"
         }}
-        className={`flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden scrollbar-hide select-none touch-pan-x ${
+        className={`flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden scrollbar-hide select-none ${
           isTop10 
             ? "pt-4 pb-8 md:pt-6 md:pb-10 pl-6 md:pl-8 pr-6 md:pr-8" 
             : "pt-4 pb-6 pl-2 pr-4"
@@ -3632,6 +3759,11 @@ function ContentRow({
             ) : (
               <div className={`relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors 
                 ${aspect === 'landscape' ? 'w-[240px] md:w-[300px] h-[135px] md:h-[170px]' : 'w-[160px] md:w-[200px] h-[240px] md:h-[300px]'}`}>
+                {item.provider && (
+                  <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-neutral-200 font-bold text-[9px] tracking-wider uppercase border border-white/10 shadow-md">
+                    {item.provider}
+                  </span>
+                )}
                 {checkIsCam(item.title, item.quality) && (
                   <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
                     CAM
@@ -3662,15 +3794,27 @@ function NavItem({ icon, label, isActive = false, onClick }: { icon: React.React
   return (
     <button 
       onClick={onClick}
-      className={`relative flex flex-col items-center justify-center w-14 h-14 rounded-[1.5rem] transition-all duration-500 overflow-hidden ${isActive ? 'text-orange-500' : 'text-neutral-500 hover:text-neutral-200 hover:bg-white/5'}`}
+      className={`relative flex-1 min-w-0 h-12 flex flex-col items-center justify-center rounded-2xl transition-all duration-300 overflow-hidden cursor-pointer ${
+        isActive 
+          ? 'text-orange-500 font-bold' 
+          : 'text-neutral-400 hover:text-neutral-200 active:bg-white/5'
+      }`}
     >
       {isActive && (
-        <div className="absolute inset-0 bg-orange-500/10 rounded-[1.5rem]"></div>
+        <div className="absolute inset-0 bg-orange-500/15 rounded-2xl"></div>
       )}
-      <div className={`relative w-[22px] h-[22px] transition-all duration-300 [&>svg]:w-full [&>svg]:h-full ${isActive ? 'translate-y-[-8px] drop-shadow-[0_0_8px_rgba(234,88,12,0.8)] scale-110' : ''}`}>
+      <div className={`relative w-5 h-5 transition-all duration-200 [&>svg]:w-full [&>svg]:h-full ${
+        isActive 
+          ? 'translate-y-[-5px] drop-shadow-[0_0_8px_rgba(234,88,12,0.8)] scale-110' 
+          : ''
+      }`}>
         {icon}
       </div>
-      <span className={`absolute bottom-2 text-[10px] font-bold tracking-wide transition-all duration-300 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+      <span className={`absolute bottom-1 text-[9px] font-bold tracking-tight transition-all duration-200 truncate max-w-full px-0.5 ${
+        isActive 
+          ? 'opacity-100 translate-y-0 text-orange-500' 
+          : 'opacity-0 translate-y-2'
+      }`}>
         {label}
       </span>
     </button>

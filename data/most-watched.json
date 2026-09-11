@@ -45,8 +45,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/93405/1/1",
-    "views": 153,
-    "lastWatched": "2026-09-09T14:50:47.719Z"
+    "views": 154,
+    "lastWatched": "2026-09-11T15:33:00.629Z"
   },
   {
     "id": 969681,
@@ -78,8 +78,8 @@
     "tmdbId": 157336,
     "title": "INTERESTELAR",
     "type": "movie",
-    "imageUrl": "https://image.tmdb.org/t/p/w500/gEU2QniE6EwfVDxCzsxPnZLi1ZT.jpg",
-    "backdropUrl": "https://image.tmdb.org/t/p/original/rAiYTsqJiOkn00e21jS1vQhYyY.jpg",
+    "imageUrl": "https://image.tmdb.org/t/p/w500/6ricSDD83BClJsFdGB6x7cM0MFQ.jpg",
+    "backdropUrl": "https://image.tmdb.org/t/p/original/5XNQBqnBwPA9yT0jZ0p3s8bbLh0.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/157336",
     "views": 129,
@@ -90,8 +90,8 @@
     "tmdbId": 100088,
     "title": "THE LAST OF US",
     "type": "series",
-    "imageUrl": "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
-    "backdropUrl": "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+    "imageUrl": "https://image.tmdb.org/t/p/w500/ieMLFFCwdep90d67kOT0oFtv2yX.jpg",
+    "backdropUrl": "https://image.tmdb.org/t/p/original/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/100088/1/1",
     "views": 118,
@@ -103,7 +103,7 @@
     "title": "DIVERTIDA MENTE 2",
     "type": "movie",
     "imageUrl": "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
-    "backdropUrl": "https://image.tmdb.org/t/p/original/stKGOmbuwhL489ZJnZUVvA34Dt.jpg",
+    "backdropUrl": "https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/1022789",
     "views": 105,
@@ -115,7 +115,7 @@
     "title": "A CASA DO DRAGÃO",
     "type": "series",
     "imageUrl": "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
-    "backdropUrl": "https://image.tmdb.org/t/p/original/etjA24UepnNnLh2t9qjU2Vj2g3g.jpg",
+    "backdropUrl": "https://image.tmdb.org/t/p/original/577eXC8wFQT0eUrJcgznSiFPRmk.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/94997/1/1",
     "views": 95,
@@ -184,8 +184,8 @@
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
     "playerUrl": "/api/anime-stream?provider=anfire&type=tv&id=30984&s=1&e=1",
-    "views": 21,
-    "lastWatched": "2026-09-11T01:17:32.619Z"
+    "views": 22,
+    "lastWatched": "2026-09-11T15:56:53.266Z"
   },
   {
     "id": 94664,
@@ -255,9 +255,9 @@
     "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
-    "playerUrl": "https://v1.watchplay.shop/tvshow/31910/1/2",
-    "views": 1,
-    "lastWatched": "2026-09-10T20:43:09.537Z"
+    "playerUrl": "/api/anime-stream?provider=consumet&id=31910&s=1&e=1&title=Naruto%20Shippuden",
+    "views": 5,
+    "lastWatched": "2026-09-11T17:23:11.947Z"
   },
   {
     "id": 62715,
@@ -294,5 +294,29 @@
     "playerUrl": "https://v1.watchplay.shop/tvshow/314478/1/1",
     "views": 1,
     "lastWatched": "2026-09-11T01:52:46.133Z"
+  },
+  {
+    "id": 46298,
+    "tmdbId": 46298,
+    "title": "Hunter x Hunter",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "/api/anime-stream?provider=consumet&id=46298&s=1&e=1&title=Hunter%20x%20Hunter",
+    "views": 2,
+    "lastWatched": "2026-09-11T16:25:48.532Z"
+  },
+  {
+    "id": 1522689,
+    "tmdbId": 1522689,
+    "title": "Por Que Eu Me Casei de Novo?",
+    "type": "movie",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/movie/1522689",
+    "views": 1,
+    "lastWatched": "2026-09-11T16:27:25.374Z"
   }
 ]
