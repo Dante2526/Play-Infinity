@@ -8,8 +8,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/299534",
-    "views": 185,
-    "lastWatched": "2026-09-09T14:50:47.719Z"
+    "views": 186,
+    "lastWatched": "2026-09-11T02:00:59.609Z"
   },
   {
     "id": 66732,
@@ -58,8 +58,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     "quality": "CAM",
     "playerUrl": "https://v1.watchplay.shop/movie/969681",
-    "views": 165,
-    "lastWatched": "2026-09-11T01:04:35.013Z"
+    "views": 166,
+    "lastWatched": "2026-09-11T01:52:01.828Z"
   },
   {
     "id": 119051,
@@ -232,8 +232,8 @@
     "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/tvshow/46260/1/1",
-    "views": 23,
-    "lastWatched": "2026-09-11T01:21:01.523Z"
+    "views": 24,
+    "lastWatched": "2026-09-11T01:51:49.384Z"
   },
   {
     "id": 45857,
@@ -282,5 +282,17 @@
     "playerUrl": "https://v1.watchplay.shop/tvshow/37606/1/1",
     "views": 1,
     "lastWatched": "2026-09-10T22:37:08.404Z"
+  },
+  {
+    "id": 314478,
+    "tmdbId": 314478,
+    "title": "DANG! - T1:E1 O Início",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/314478/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-11T01:52:46.133Z"
   }
 ]
