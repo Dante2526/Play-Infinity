@@ -1284,10 +1284,11 @@ function DetailsPage({
             year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
             rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
             genres: details.genres ? details.genres.map(g => g.name) : prev.genres,
+            imdbId: details.imdb_id || prev.imdbId,
             isAnime: Boolean(
               prev.isAnime || 
               initialItem?.isAnime || 
-              (details.genres?.some((g: any) => g.id === 16 || g.name?.toLowerCase().includes("anima")) && 
+              (details.genres?.some((g: any) => g.id === 16 || g.name?.toLowerCase().includes("anima")) &&
                (details.origin_country?.includes("JP") || details.original_language === "ja"))
             )
           }));

@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Vingadores: Ultimato (2019) - WatchPlayer</title>
+<meta name="robots" content="noindex">
+<link rel="stylesheet" href="https://v1.watchplay.shop/css/player.css?v=1.0">
+<link rel="stylesheet" href="https://v1.watchplay.shop/css/lancaster_io.css?v=1.0">
+<link rel="stylesheet" href="https://v1.watchplay.shop/css/remixicon.css?v=1.0">
+<script src="https://v1.watchplay.shop/js/jquery.min.js?v=1.0"></script>
+
+<!-- Bibliotecas do ArtPlayer e HLS.js -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+
+<style>
+<style>
+.player_container .infra {
+    position: relative !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#artplayer-container {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+/* Customização de Cores */
+.artplayer-theme-red {
+    --art-theme: #e50914 !important;
+}
+
+/* Fundo da Máscara */
+.art-video-player .art-mask {
+    background: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Sombreamento Superior e Inferior elegante */
+.art-video-player .art-top {
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75), transparent) !important;
+}
+
+.art-video-player .art-bottom {
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent) !important;
+    padding-bottom: 5px;
+}
+
+/* Design do Botão Central (Play/Pause Grande) */
+.art-video-player .art-state {
+    width: 75px !important;
+    height: 75px !important;
+    border-radius: 50% !important;
+    background: rgba(20, 20, 20, 0.6) !important;
+    backdrop-filter: blur(10px) !important;
+    -webkit-backdrop-filter: blur(10px) !important;
+    border: 1.5px solid rgba(255, 255, 255, 0.2) !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37) !important;
+    transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), background 0.2s ease, border-color 0.2s ease !important;
+}
+
+/* Animação do Botão Central no Hover */
+.art-video-player .art-state:hover {
+    transform: scale(1.12) !important;
+    background: rgba(229, 9, 20, 0.85) !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.art-video-player .art-state .art-icon-state {
+    width: 35px !important;
+    height: 35px !important;
+}
+
+.art-video-player .art-state .art-icon-state svg {
+    fill: #ffffff !important;
+    filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Estilização das Menus de Configuração (Popups) */
+.art-video-player .art-setting, 
+.art-video-player .art-subtitle-setting {
+    background: rgba(18, 18, 18, 0.9) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+.art-video-player .art-setting-item:hover {
+    background: rgba(229, 9, 20, 0.2) !important;
+    border-radius: 6px;
+}
+
+/* Trimming da Barra de Progresso */
+.art-video-player .art-progress {
+    height: 4px !important;
+    transition: height 0.15s ease !important;
+}
+
+.art-video-player .art-progress:hover {
+    height: 7px !important;
+}
+
+/* Modos de Fallback */
+.player_container.fallback-mode {
+    position: relative !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 500px !important;
+    top: 0 !important;
+    left: 0 !important;
+}
+
+.player_container.fallback-mode .infra {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 500px !important;
+}
+
+.player_container.fallback-mode .infra iframe {
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 500px !important;
+    border: none !important;
+}
+</style>
+</style>
+
+
+        <style>
+          * {
+            -webkit-tap-highlight-color: transparent !important;
+          }
+
+          html, body {
+            background: #000 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            overflow: hidden !important;
+          }
+
+          /* Oculta tudo que não for o vídeo: seletores de opções, carrossel, banners, toasts e loaders nativos */
+          .players_select_container,
+          .seasonepisodeSelector,
+          .seasonSelector,
+          .episodeSelector,
+          .player_select_item,
+          .player_loading,
+          .changeOptions,
+          .changeEpisode,
+          .btn-opcoes,
+          .mostrar_opcoes,
+          #mostrar_opcoes,
+          .embedder_especial,
+          .embedder_info,
+          .shion_native_notify_system,
+          #_wau_container,
+          [class*="player_loading"],
+          [class*="seasonepisode"],
+          [class*="select_language"],
+          [class*="languages_selector"],
+          [class*="changeOptions"],
+          [class*="players_select"],
+          [class*="option"],
+          [id*="option"] {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            width: 0 !important;
+            height: 0 !important;
+            z-index: -9999 !important;
+          }
+
+          /* Container do player e raiz do Artplayer: SEMPRE visíveis e em tela cheia */
+          .player_container,
+          .player_container.visible,
+          .player_container .infra,
+          #artplayer-container,
+          .art-video-player {
+            display: block !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            transition: none !important;
+            transform: none !important;
+            background: #000 !important;
+            pointer-events: auto !important;
+          }
+
+          /* O vídeo original é a única coisa exibida com foco total */
+          video,
+          .art-video,
+          .art-video-player video {
+            display: block !important;
+            position: absolute !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+            background: #000 !important;
+            z-index: 5 !important;
+          }
+
+          /* BLINDAGEM COMPLETA DOS CONTROLES NATIVOS DO ARTPLAYER:
+             Usa seletores exatos das classes para garantir que a UI nativa 
+             seja ocultada independente de qual seja a classe raiz. */
+          .art-mask,
+          .art-top,
+          .art-bottom,
+          .art-controls,
+          .art-controls-left,
+          .art-controls-center,
+          .art-controls-right,
+          .art-state,
+          .art-loading,
+          .art-notice,
+          .art-settings,
+          .art-setting,
+          .art-subtitle-setting,
+          .art-contextmenu,
+          .art-danmuku,
+          .art-fast-forward,
+          .art-lock,
+          .art-poster,
+          .art-layers > .art-layer:not(.art-layer-video),
+          .art-icon-state,
+          .art-layer-state,
+          .art-layer-auto-playback,
+          .art-layer-loading,
+          .art-notice-inner,
+          .art-info,
+          .art-info-panel,
+          .art-progress,
+          .art-control,
+          .art-volume-panel,
+          #pip-skip-intro-btn,
+          #pip-skip-toast {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            animation: none !important;
+          }
+        </style>
+
+        <script>
+          (function() {
+            // 1. MutationObserver que oculta overlays nativos adicionados dinamicamente
+            // CUIDADO: não ocultar 'art-video-player' (container raiz) nem elementos de vídeo
+            var observer = new MutationObserver(function(mutations) {
+              for (var i = 0; i < mutations.length; i++) {
+                var added = mutations[i].addedNodes;
+                for (var j = 0; j < added.length; j++) {
+                  var node = added[j];
+                  if (node.nodeType !== 1) continue;
+                  var cls = typeof node.className === 'string' ? node.className : '';
+                  var tag = (node.tagName || '').toUpperCase();
+                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo
+                  if (cls.indexOf('art-video-player') !== -1 || tag === 'VIDEO') continue;
+                  // Ocultar apenas elementos de overlay: loading, notificações nativas, etc.
+                  if (
+                    cls.indexOf('player_loading') !== -1 ||
+                    cls.indexOf('shion_native') !== -1 ||
+                    cls === 'art-state' ||
+                    cls === 'art-notice' ||
+                    cls === 'art-notice-inner' ||
+                    cls === 'art-loading'
+                  ) {
+                    node.style.setProperty('display', 'none', 'important');
+                    node.style.setProperty('opacity', '0', 'important');
+                    node.style.setProperty('visibility', 'hidden', 'important');
+                  }
+                }
+              }
+            });
+            observer.observe(document.documentElement, { childList: true, subtree: true });
+
+            // 2. Auto-Start rápido e resiliente para filmes e séries
+            var tries = 0;
+            var optionClicked = false;
+            var autoStartTimer = setInterval(function() {
+              tries++;
+
+              // A) Séries: aciona getepi imediatamente no episódio selecionado sem esperar dezenas de miniaturas
+              var ep = document.querySelector('.episodeOption.active') || document.querySelector('.episodeOption');
+              if (ep && window.$ && typeof window.getepi === 'function' && !window._epAutoTriggered) {
+                window._epAutoTriggered = true;
+                window.$(ep).removeClass('active');
+                window.getepi(window.$(ep));
+              }
+
+              // B) Seletor de áudio (Dublado preferencialmente)
+              var dublado = document.querySelector('.select_language[data-target="1"]');
+              if (dublado && !dublado.classList.contains('active')) {
+                dublado.click();
+              }
+
+              // C) Clica na opção de player assim que surgir
+              if (!optionClicked) {
+                var option = document.querySelector('.players_select_items.visible .player_select_item') || 
+                             document.querySelector('.player_select_item');
+                if (option) {
+                  optionClicked = true;
+                  option.click();
+                }
+              }
+
+              // D) Se o vídeo já possui duração válida e está pronto, finaliza monitoramento com sucesso
+              var v = getVideoElement();
+              if (v && v.duration > 0 && !isNaN(v.duration)) {
+                clearInterval(autoStartTimer);
+                return;
+              }
+
+              // Timeout após 100 ticks (6.0 segundos sem stream válido)
+              if (tries > 100) {
+                clearInterval(autoStartTimer);
+                if (!v || !v.duration || v.duration === 0) {
+                  try {
+                    window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "timeout_no_stream" }, "*");
+                  } catch(e) {}
+                }
+              }
+            }, 60);
+
+            // 3. Funções de controle de vídeo e telemetria para o NetflixPlayerSkin
+            var introSkippedForCurrentVideo = false;
+            var skipDurationSeconds = 85;
+            try {
+              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+            } catch(e) {}
+
+            function getVideoElement() {
+              if (window.artInstance && window.artInstance.video) {
+                return window.artInstance.video;
+              }
+              return document.querySelector("video");
+            }
+
+            function doSkipIntro(seconds) {
+              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 85);
+              var video = getVideoElement();
+              if (video) {
+                var current = video.currentTime || 0;
+                var duration = video.duration || 3600;
+                var targetTime = Math.max(0, Math.min(current + sec, duration - 10));
+                
+                try {
+                  video.currentTime = targetTime;
+                } catch(e) {}
+
+                if (window.artInstance) {
+                  try {
+                    window.artInstance.currentTime = targetTime;
+                  } catch(e) {}
+                }
+
+                if (sec > 0) {
+                  introSkippedForCurrentVideo = true;
+                }
+
+                try {
+                  window.parent.postMessage({ 
+                    type: "WATCHPLAY_INTRO_SKIPPED", 
+                    seconds: sec, 
+                    newTime: targetTime 
+                  }, "*");
+                } catch(e) {}
+              }
+            }
+
+            // Tecla S manual
+            window.addEventListener("keydown", function(e) {
+              if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+              if (e.key === "s" || e.key === "S") {
+                e.preventDefault();
+                doSkipIntro(skipDurationSeconds);
+              }
+            });
+
+            // Mensagens enviadas pela Skin Netflix VIP
+            window.addEventListener("message", function(e) {
+              if (!e.data) return;
+              var v = getVideoElement();
+
+              switch (e.data.type) {
+                case "SKIP_INTRO":
+                  doSkipIntro(e.data.seconds || skipDurationSeconds);
+                  break;
+
+                case "PLAY":
+                  if (v) {
+                    v.play().catch(function() {});
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "PAUSE":
+                  if (v) {
+                    v.pause();
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "TOGGLE_PLAY":
+                  if (v) {
+                    if (v.paused) {
+                      v.play().catch(function() {});
+                    } else {
+                      v.pause();
+                    }
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SEEK":
+                case "SEEK_ABSOLUTE":
+                  var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  if (v && typeof t === "number" && !isNaN(t)) {
+                    var maxDur = v.duration && v.duration > 0 ? v.duration : 99999;
+                    v.currentTime = Math.max(0, Math.min(t, maxDur - 0.5));
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SEEK_RELATIVE":
+                  if (v && typeof e.data.seconds === "number" && !isNaN(e.data.seconds)) {
+                    var curT = v.currentTime || 0;
+                    var maxD = v.duration && v.duration > 0 ? v.duration : 99999;
+                    v.currentTime = Math.max(0, Math.min(curT + e.data.seconds, maxD - 0.5));
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_VOLUME":
+                  if (v && typeof e.data.volume === "number") {
+                    var vol = Math.max(0, Math.min(1, e.data.volume));
+                    v.volume = vol;
+                    v.muted = (vol === 0);
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_MUTED":
+                  if (v) {
+                    v.muted = !!e.data.muted;
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_PLAYBACK_RATE":
+                  if (v && typeof e.data.rate === "number") {
+                    v.playbackRate = e.data.rate;
+                    sendPlayerStatus(v);
+                  }
+                  break;
+
+                case "SET_SKIP_DURATION":
+                  if (e.data.seconds) {
+                    skipDurationSeconds = Number(e.data.seconds);
+                    try {
+                      localStorage.setItem("playinfinity_skip_duration", String(skipDurationSeconds));
+                    } catch(err) {}
+                  }
+                  break;
+
+                case "TOGGLE_PIP":
+                case "REQUEST_PIP":
+                  if (v) {
+                    try {
+                      if (document.pictureInPictureElement) {
+                        document.exitPictureInPicture().catch(function() {});
+                      } else if (v.requestPictureInPicture) {
+                        v.requestPictureInPicture().catch(function() {});
+                      }
+                    } catch(err) {}
+                  }
+                  break;
+
+                case "REQUEST_STATUS":
+                  sendPlayerStatus(v);
+                  break;
+              }
+            });
+
+            // Envia telemetria limpa para a Skin Netflix do aplicativo principal
+            function sendPlayerStatus(v) {
+              if (!v) v = getVideoElement();
+              if (!v) return;
+              try {
+                var bufferedEnd = 0;
+                if (v.buffered && v.buffered.length > 0) {
+                  bufferedEnd = v.buffered.end(v.buffered.length - 1);
+                }
+                var dur = v.duration;
+                if ((!dur || isNaN(dur) || dur === Infinity) && window.artInstance && window.artInstance.duration) {
+                  dur = window.artInstance.duration;
+                }
+                if (!dur || isNaN(dur) || dur === Infinity) {
+                  dur = 0;
+                }
+                window.parent.postMessage({
+                  type: "WATCHPLAY_STATUS",
+                  currentTime: v.currentTime || 0,
+                  duration: dur,
+                  paused: !!v.paused,
+                  muted: !!v.muted,
+                  volume: typeof v.volume === "number" ? v.volume : 1,
+                  buffered: bufferedEnd,
+                  playbackRate: v.playbackRate || 1,
+                  readyState: v.readyState || 0
+                }, "*");
+              } catch(e) {}
+            }
+
+            var hasNotifiedEnded = false;
+            function notifyEpisodeEnded() {
+              if (hasNotifiedEnded) return;
+              hasNotifiedEnded = true;
+              try {
+                window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+              } catch(e) {}
+            }
+
+            document.addEventListener('ended', function(e) {
+              if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
+                notifyEpisodeEnded();
+              }
+            }, true);
+
+            function handleVideoTimeUpdate(v) {
+              if (!v) return;
+              var cur = v.currentTime || 0;
+              var dur = v.duration || 0;
+
+              if (cur < 2 && introSkippedForCurrentVideo) {
+                introSkippedForCurrentVideo = false;
+              }
+
+              if (cur >= 5 && cur <= 130 && !introSkippedForCurrentVideo) {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: true, currentTime: cur }, "*");
+                } catch(e) {}
+              } else {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_INTRO_ACTIVE", active: false, currentTime: cur }, "*");
+                } catch(e) {}
+              }
+
+              if (dur > 30 && cur >= (dur - 1.5)) {
+                notifyEpisodeEnded();
+              }
+
+              sendPlayerStatus(v);
+            }
+
+            setInterval(function() {
+              var v = getVideoElement();
+              if (v) {
+                sendPlayerStatus(v);
+                if (!v.paused) {
+                  handleVideoTimeUpdate(v);
+                }
+              }
+            }, 350);
+
+            ['play', 'pause', 'playing', 'seeking', 'seeked', 'volumechange', 'ratechange', 'loadedmetadata', 'canplay'].forEach(function(evtName) {
+              document.addEventListener(evtName, function(e) {
+                if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
+                  sendPlayerStatus(e.target);
+                }
+              }, true);
+            });
+
+            // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
+            var cleanArtNodes = function() {
+              if (window.artInstance) {
+                try {
+                  if (window.artInstance.controls) window.artInstance.controls.show = false;
+                  if (window.artInstance.mask) window.artInstance.mask.show = false;
+                } catch(e) {}
+                // Ocultar via style apenas, sem .remove() para não quebrar referências internas do Artplayer
+                if (window.artInstance.template) {
+                  ['$state', '$bottom', '$mask', '$top', '$notice', '$loading', '$controls'].forEach(function(k) {
+                    try {
+                      var el = window.artInstance.template[k];
+                      if (el && el.style) {
+                        el.style.setProperty('display', 'none', 'important');
+                        el.style.setProperty('opacity', '0', 'important');
+                        el.style.setProperty('visibility', 'hidden', 'important');
+                        el.style.setProperty('pointer-events', 'none', 'important');
+                      }
+                    } catch(e) {}
+                  });
+                }
+              }
+            };
+
+            var artCheckInterval = setInterval(function() {
+              if (window.artInstance) {
+                cleanArtNodes();
+                if (!window.artInstance._endedHooked) {
+                  window.artInstance._endedHooked = true;
+                  cleanArtNodes();
+                  window.artInstance.on('ready', cleanArtNodes);
+                  window.artInstance.on('video:play', cleanArtNodes);
+                  window.artInstance.on('video:pause', cleanArtNodes);
+                  window.artInstance.on('video:ended', notifyEpisodeEnded);
+                  window.artInstance.on('video:timeupdate', function() {
+                    var v = window.artInstance.video;
+                    if (v) handleVideoTimeUpdate(v);
+                  });
+                }
+              }
+            }, 300);
+          })();
+        </script>
+      </head>
+<body>
+
+
+<div class="player_screen">
+
+<div class="without_players_warning">
+    <div class="warning_title">
+        <i class="ri-error-warning-line"></i>
+        <span>Aguarde</span>
+    </div>
+    <div class="warning_msg">
+        <p>Estamos adicionando vídeos à esse filme.</p>
+        <p>Em alguns minutos, atualize a página.</p>
+    </div>
+</div>
+</div>
+
+<script>
+var AUTO_PLAY_ENABLED = true;
+var HOME_URL = '/api/watchplay-proxy';
+var VIDEO_HASH = '8de10983a25b51e2a5936d1d6e31e28c';
+var artInstance = null;
+
+function loadArtPlayer(videoUrl, captionUrl) {
+    if (artInstance) {
+        artInstance.destroy(true);
+        artInstance = null;
+    }
+
+    if (videoUrl.includes('.m3u8') || videoUrl.includes('/hls/')) {
+        $(".player_container .infra").html(`<div id="artplayer-container" class="artplayer-theme-red"></div>`);
+
+        let subtitles = [];
+        if (captionUrl != null) {
+            let caption = captionUrl;
+            if (caption == '299534') {
+                caption = '/app/caption/movie/' + caption + '.vtt';
+            }
+            subtitles.push({
+                url: caption,
+                name: 'Português',
+                default: true
+            });
+        }
+
+        artInstance = new Artplayer({
+            controls: [],
+            hotkey: false,
+            gesture: false,
+            miniProgressBar: false,
+            backdrop: false,
+            playsInline: true,
+            autoPlayback: false,
+            icons: { state: '' },
+            container: '#artplayer-container',
+            url: videoUrl,
+            type: 'm3u8',
+            theme: '#e50914',
+            lang: 'pt-br',
+            i18n: {
+                'pt-br': {
+                    'Play': 'Play',
+                    'Pause': 'Pausar',
+                    'Volume': 'Volume',
+                    'Mute': 'Mudar som',
+                    'Unmute': 'Ativar som',
+                    'Video Speed': 'Velocidade',
+                    'Aspect Ratio': 'Proporção da Tela',
+                    'Default': 'Padrão',
+                    'Normal': 'Normal',
+                    'Picture in Picture': 'Minipleyer (PiP)',
+                    'Fullscreen': 'Tela Cheia',
+                    'Exit Fullscreen': 'Sair da Tela Cheia',
+                    'Web Fullscreen': 'Tela Cheia no Navegador',
+                    'Exit Web Fullscreen': 'Sair da Tela Cheia',
+                    'Lock Control': 'Bloquear Tela',
+                    'Unlock Control': 'Desbloquear Tela',
+                    'Screenshot': 'Capturar Tela',
+                    'Subtitle': 'Legendas',
+                    'Show Subtitle': 'Exibir Legendas',
+                    'Hide Subtitle': 'Ocultar Legendas',
+                    'Subtitle Offset': 'Sincronizar Legenda',
+                    'Flip': 'Girar Vídeo',
+                    'Horizontal': 'Horizontal',
+                    'Vertical': 'Vertical',
+                    'Reconnect': 'Reconectar',
+                    'Auto': 'Automático'
+                }
+            },
+            autoplay: true,
+            muted: false,
+            autoSize: false,
+            fullscreen: false,
+            fullscreenWeb: false,
+            setting: false,
+            pip: false,
+            playbackRate: false,
+            aspectRatio: false,
+            lock: false,
+            fastForward: false,
+            autoOrientation: false,
+            subtitle: subtitles.length > 0 ? subtitles[0] : null,
+            customType: {
+                m3u8: function (video, url) {
+                    if (Hls.isSupported()) {
+                        const hls = new Hls({
+                            enableWorker: true,
+                            lowLatencyMode: false,
+                            enableWorker: true,
+         lowLatencyMode: false,
+         maxBufferLength: 60,
+         maxMaxBufferLength: 120,
+         maxBufferSize: 100 * 1000 * 1000,
+         maxBufferHole: 0.5,
+         backBufferLength: 90,
+         abrEwmaDefaultEstimate: 4000000,
+         abrBandWidthFactor: 0.85,
+         abrBandWidthUpFactor: 0.7,
+         fragLoadingMaxRetry: 6,
+         manifestLoadingMaxRetry: 6,
+         levelLoadingMaxRetry: 6,
+         fragLoadingRetryDelay: 500
+                        });
+                        hls.loadSource(url);
+                        hls.attachMedia(video);
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = url;
+                    }
+                }
+            }
+        });
+
+        artInstance.on('ready', () => {
+            artInstance.play().catch(e => console.log('Autoplay bloqueado:', e));
+        });
+
+    } else if (videoUrl.includes('.mp4')) {
+        $(".player_container .infra").html(`<div id="artplayer-container" class="artplayer-theme-red"></div>`);
+
+        artInstance = new Artplayer({
+            controls: [],
+            hotkey: false,
+            gesture: false,
+            miniProgressBar: false,
+            backdrop: false,
+            playsInline: true,
+            autoPlayback: false,
+            icons: { state: '' },
+            container: '#artplayer-container',
+            url: videoUrl,
+            theme: '#e50914',
+            lang: 'pt-br',
+            i18n: {
+                'pt-br': {
+                    'Play': 'Play',
+                    'Pause': 'Pausar',
+                    'Volume': 'Volume',
+                    'Mute': 'Mudar som',
+                    'Unmute': 'Ativar som',
+                    'Video Speed': 'Velocidade',
+                    'Aspect Ratio': 'Proporção da Tela',
+                    'Default': 'Padrão',
+                    'Normal': 'Normal',
+                    'Picture in Picture': 'Minipleyer (PiP)',
+                    'Fullscreen': 'Tela Cheia',
+                    'Exit Fullscreen': 'Sair da Tela Cheia',
+                    'Web Fullscreen': 'Tela Cheia no Navegador',
+                    'Exit Web Fullscreen': 'Sair da Tela Cheia',
+                    'Lock Control': 'Bloquear Tela',
+                    'Unlock Control': 'Desbloquear Tela',
+                    'Subtitle': 'Legendas'
+                }
+            },
+            autoplay: true,
+            muted: false,
+            fullscreen: false,
+            fullscreenWeb: false,
+            setting: false,
+            pip: false,
+            playbackRate: false,
+            aspectRatio: true
+        });
+
+        artInstance.on('ready', () => {
+            artInstance.play().catch(e => console.log('Autoplay bloqueado:', e));
+        });
+
+    } else {
+        $(".player_container .infra").html(`<iframe allowfullscreen="true" webkitallowfullscreen="true" mozallowfullscreen="true" allow="autoplay; fullscreen; encrypted-media" frameborder="0" src="${videoUrl}" style="width:100%; height:100%;"></iframe>`);
+    }
+}
+</script>
+<script src="https://v1.watchplay.shop/js/rteam_native_notify.js?v=1.0"></script>
+<script>
+// Select Option
+$('.select_language').on('click', function() {
+    let target = $(this).data('target');
+
+    if ( !$(this).hasClass('active') ) {
+        $('.select_language').removeClass('active');
+        $(this).addClass('active');
+
+        $('.players_select_items').removeClass('visible');
+        $('.players_select_items[data-target="'+target+'"]').addClass('visible');
+    }
+});
+
+// Select Video
+$('.player_select_item').on('click', function(){
+    /* player_loading bloqueado */
+    let video_id = $(this).data('id');
+    
+    $.ajax({
+        url: `/api/watchplay-proxy-api`,
+        method: 'POST',
+        data: {
+            action  : 'getPlayer',
+            video_id
+        },
+        success: function(msg) {
+            $('.player_loading').remove();
+            $('.players_select_container').addClass('hidden');
+            $('.player_container').addClass('visible');
+
+            var rawVideoUrl = msg.data.video_url;
+
+            // Assina a URL com MD5 se for do seu servidor HLS e não contiver o token
+            if (rawVideoUrl.includes('vid7102402.hclod.qzz.io') && !rawVideoUrl.includes('md5=')) {
+                $.ajax({
+                    url: window.location.href,
+                    method: 'GET',
+                    data: {
+                        action_secure_sign: 1,
+                        raw_url: rawVideoUrl
+                    },
+                    success: function(secureRes) {
+                        loadArtPlayer(secureRes.signed_url, msg.data.video_caption_url);
+                    },
+                    error: function() {
+                        loadArtPlayer(rawVideoUrl, msg.data.video_caption_url);
+                    }
+                });
+            } else {
+                loadArtPlayer(rawVideoUrl, msg.data.video_caption_url);
+            }
+        },
+        error: function(msg) {
+            $('.player_loading').remove();
+            if ( msg.responseJSON && "data" in msg.responseJSON ) {
+                produce_native_notify(msg.responseJSON.data.errors, 'error');
+            } else {
+                produce_native_notify('Houve um erro inesperado.', 'error');
+            }
+        }
+    });
+});
+
+// Interceptador Tela Cheia Mobile
+$(document).on('click touchstart', '[data-fullscreen]', function(e) {
+    var isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+        var video = document.querySelector('video');
+        if (video) {
+            if (video.webkitEnterFullscreen) {
+                video.webkitEnterFullscreen();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (video.requestFullscreen) {
+                video.requestFullscreen();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        }
+    }
+});
+
+// Auto-play
+$(window).on('load', function() {
+    if (AUTO_PLAY_ENABLED) {
+        setTimeout(function() {
+            var $firstItem = $('.players_select_items.visible .player_select_item').first();
+            
+            if (!$firstItem.length) {
+                $firstItem = $('.player_select_item').first();
+            }
+
+            if ($firstItem.length) {
+                $firstItem.click();
+            }
+        }, 100);
+    }
+});
+
+// Change Options
+$('.changeOptions').on('click', function(){
+    $('.players_select_container').removeClass('hidden');
+    $('.player_container').removeClass('visible');
+    setTimeout(() => {
+        if (artInstance) {
+            artInstance.destroy(true);
+            artInstance = null;
+        }
+        $('.player_container .infra').html('');
+    }, 300);
+});
+
+// Banner
+$(document).ready(function() {
+    if ( $('.embedder_especial').length > 0 ) {
+        $('.embedder_especial').css({'display': 'flex'});
+    }
+});
+
+$(document).on('click', '.embedder_especial_close', function() {
+    $('.embedder_especial').hide();
+});
+
+// Embedder Info
+$(document).on('click', '.embedder_info', function() {
+    $('body').append(`
+        <div class="embedder_especial embedder_info_msg" style="display: flex">
+            <div class="embedder_especial_content" style="padding: 30px 20px;">
+                <div class="embedder_especial_close2"><i class="ri-close-line"></i></div>
+                Acesse watchplayer.net            </div>
+        </div>
+    `);
+});
+
+$(document).on('click', '.embedder_especial_close2', function() {
+    $('.embedder_especial.embedder_info_msg').remove();
+});
+</script>
+<div style="display:none"><script id="_wauloh" src="data:text/javascript;base64,dmFyIF93YXUgPSBfd2F1IHx8IFtdOyBfd2F1LnB1c2goWyJjbGFzc2ljIiwgIndzdHJlYW0iLCAibG9oIl0pOw=="></script></div></body>
+</html>

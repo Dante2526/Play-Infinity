@@ -353,6 +353,8 @@ const ALLOWED_STREAMING_DOMAINS = [
   "videasy.net",
   "vidlink.pro",
   "2embed.cc",
+  "autoembed.cc",
+  "player.autoembed.cc",
   "speedracelight.com",
   "animesonlinecc.to",
   "blogger.com"
@@ -2164,7 +2166,7 @@ async function startServer() {
                              document.querySelector('.player_select_item');
                 if (option) {
                   optionClicked = true;
-                  option.click();
+                  option.click(); } else if (tries > 15 && document.querySelectorAll(".player_select_item").length === 0) { clearInterval(autoStartTimer); try { window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "no_sources" }, "*"); } catch(e){} return;
                 }
               }
 

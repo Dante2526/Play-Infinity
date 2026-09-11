@@ -148,6 +148,9 @@ export function VideoPlayerModal({
   const [activeIframeUrl, setActiveIframeUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isInIframe] = useState(() => {
+    try { return window.self !== window.top; } catch (e) { return true; }
+  });
   const [extractedSource, setExtractedSource] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -167,7 +170,7 @@ export function VideoPlayerModal({
     ) {
       return false;
     }
-    return target.includes("vidlink") ||
+    return target.includes("autoembed") || target.includes("vidlink") ||
       target.includes("videasy") ||
       target.includes("vidsrc") || 
       target.includes("multiembed") || 
@@ -402,22 +405,31 @@ export function VideoPlayerModal({
           name: "Player 2 (Nativo PT-BR)"
         },
         {
-          key: "srv_vidlink",
-          label: "Player 3 (VidLink HD)",
-          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 3 (VidLink HD)"
-        },
-        {
           key: "srv_videasy",
-          label: "Player 4 (Videasy Multi)",
-          badge: "Videasy CDN • Alta Velocidade",
+          label: "Player 3 (Videasy Multi)",
+          badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
           buildUrl: (id: string, s: number, e: number) =>
             `https://player.videasy.net/tv/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 4 (Videasy Multi)"
+          name: "Player 3 (Videasy Multi)"
+        },
+        {
+          key: "srv_vidlink",
+          label: "Player 4 (VidLink HD)",
+          badge: "VidLink Multi-Stream • Legendas PT-BR",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 4 (VidLink HD)"
+        },
+        {
+          key: "srv_autoembed",
+          label: "Player 5 (AutoEmbed)",
+          badge: "AutoEmbed • Servidor Global",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("autoembed"),
+          name: "Player 5 (AutoEmbed)"
         }
       ];
     } else {
@@ -439,20 +451,28 @@ export function VideoPlayerModal({
           name: "Player 2 (Nativo PT-BR)"
         },
         {
-          key: "srv_vidlink",
-          label: "Player 3 (VidLink HD)",
-          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&sub=pt`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 3 (VidLink HD)"
-        },
-        {
           key: "srv_videasy",
-          label: "Player 4 (Videasy Multi)",
-          badge: "Videasy CDN • Alta Velocidade",
+          label: "Player 3 (Videasy Multi)",
+          badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
           buildUrl: (id: string) => `https://player.videasy.net/movie/${id}`,
           isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 4 (Videasy Multi)"
+          name: "Player 3 (Videasy Multi)"
+        },
+        {
+          key: "srv_vidlink",
+          label: "Player 4 (VidLink HD)",
+          badge: "VidLink Multi-Stream • Legendas PT-BR",
+          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&sub=pt`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 4 (VidLink HD)"
+        },
+        {
+          key: "srv_autoembed",
+          label: "Player 5 (AutoEmbed)",
+          badge: "AutoEmbed • Servidor Global",
+          buildUrl: (id: string) => `https://player.autoembed.cc/embed/movie/${id}`,
+          isMatch: (u: string) => u.includes("autoembed"),
+          name: "Player 5 (AutoEmbed)"
         }
       ];
     }
@@ -1089,6 +1109,23 @@ export function VideoPlayerModal({
             : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
         }`}
       >
+        {/* Alerta Sandbox */}
+        {!isMiniPlayer && (() => { try { return window.self !== window.top; } catch(e){ return true; } })() && (
+          <div className="bg-orange-600 text-white text-[11px] sm:text-xs font-semibold px-3 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between shrink-0">
+            <span className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">
+                <strong>Aviso de Ambiente:</strong> Alguns players bloqueiam a reprodução dentro da pré-visualização. Se encontrar erro, abra o aplicativo em uma nova guia.
+              </span>
+              <span className="sm:hidden">
+                Players bloqueados na pré-visualização.
+              </span>
+            </span>
+            <button onClick={() => window.open(window.location.href, '_blank')} className="bg-white/20 hover:bg-white/30 px-2 py-1 sm:px-3 sm:py-1 rounded transition-colors whitespace-nowrap ml-2 cursor-pointer flex items-center gap-1.5">
+              <ExternalLink className="w-3.5 h-3.5 hidden sm:block" /> Abrir App
+            </button>
+          </div>
+        )}
         {/* Header do Mini-Player Flutuante (Arrastável) */}
         {isMiniPlayer && (
           <div
