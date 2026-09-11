@@ -138,25 +138,42 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }
         });
 
+        let networkErrorCount = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!isMounted) return;
           if (data.fatal) {
             console.warn('[LivePlayer HLS Fatal Error]:', data.type, data.details);
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
-                console.log('Recuperando erro de rede HLS silenciosamente...');
-                hls.startLoad();
+                networkErrorCount += 1;
+                if (networkErrorCount <= 2) {
+                  console.log('Recuperando erro de rede HLS silenciosamente...');
+                  hls.startLoad();
+                } else if (channel.servers.length > 1) {
+                  console.log('Servidor instável, alternando automaticamente para próximo servidor...');
+                  setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+                } else {
+                  hls.destroy();
+                  setHasError(true);
+                  setStreamHealth('error');
+                  setIsLoading(false);
+                  setErrorMessage('Falha ao sincronizar fluxo ao vivo. Tente recarregar.');
+                }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 console.log('Recuperando erro de mídia HLS silenciosamente...');
                 hls.recoverMediaError();
                 break;
               default:
-                hls.destroy();
-                setHasError(true);
-                setStreamHealth('error');
-                setIsLoading(false);
-                setErrorMessage('Falha ao sincronizar fluxo ao vivo. Tente outro servidor ou recarregue.');
+                if (channel.servers.length > 1) {
+                  setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+                } else {
+                  hls.destroy();
+                  setHasError(true);
+                  setStreamHealth('error');
+                  setIsLoading(false);
+                  setErrorMessage('Falha ao sincronizar fluxo ao vivo. Tente outro servidor ou recarregue.');
+                }
                 break;
             }
           }
@@ -173,10 +190,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
         video.addEventListener('error', () => {
           if (!isMounted) return;
-          setHasError(true);
-          setStreamHealth('error');
-          setIsLoading(false);
-          setErrorMessage('Erro ao reproduzir fluxo nativo. Alterne de servidor.');
+          if (channel.servers.length > 1) {
+            setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+          } else {
+            setHasError(true);
+            setStreamHealth('error');
+            setIsLoading(false);
+            setErrorMessage('Erro ao reproduzir fluxo nativo. Alterne de servidor.');
+          }
         });
       } else {
         setIsLoading(false);
@@ -189,9 +210,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     startHls();
 
     // Detecção automática de travamentos (Buffer Stalls) em redes móveis/instáveis
-    // O ajuste do modo estável é acionado SILENCIOSAMENTE em segundo plano (sem nenhum aviso na tela)
+    let bufferStallTimer: NodeJS.Timeout | null = null;
     const handleWaiting = () => {
       setIsBuffering(true);
+      if (bufferStallTimer) clearTimeout(bufferStallTimer);
+
+      // Se ficar congelado no buffering por mais de 7s, tenta recuperar ou alternar servidor automaticamente
+      bufferStallTimer = setTimeout(() => {
+        if (!isMounted) return;
+        if (channel.servers.length > 1) {
+          console.log('[LivePlayer] Buffering prolongado detectado. Alternando automaticamente de servidor...');
+          setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+        }
+      }, 7000);
+
       const now = Date.now();
       if (now - lastStallTimeRef.current < 20000) {
         stallCountRef.current += 1;
@@ -209,6 +241,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
 
     const handlePlaying = () => {
+      if (bufferStallTimer) clearTimeout(bufferStallTimer);
       setIsBuffering(false);
       setIsPlaying(true);
     };
@@ -218,6 +251,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     return () => {
       isMounted = false;
+      if (bufferStallTimer) clearTimeout(bufferStallTimer);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
       if (hlsRef.current) {
@@ -447,13 +481,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-white font-bold text-base md:text-lg drop-shadow">{channel.name}</h2>
-              <span className="flex items-center gap-1 text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-[0_0_12px_rgba(220,38,38,0.8)]">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-                AO VIVO
-              </span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                {activeResolutionLabel !== 'Auto' ? activeResolutionLabel : 'Auto'}
-              </span>
             </div>
             {channel.currentProgram && (
               <p className="text-xs text-neutral-300 line-clamp-1 max-w-md drop-shadow">
@@ -649,19 +676,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                       {selectedServerIndex === idx && <CheckCircle2 className="w-3.5 h-3.5 text-orange-500" />}
                     </button>
                   ))}
-
-                  {onEditChannel && (
-                    <button
-                      onClick={() => {
-                        setShowServerMenu(false);
-                        onEditChannel(channel);
-                      }}
-                      className="w-full flex items-center gap-2 p-2 mt-1 rounded-xl text-left text-xs text-orange-400 hover:bg-orange-500/10 transition-all border-t border-white/5 cursor-pointer font-medium"
-                    >
-                      <Settings className="w-3.5 h-3.5" />
-                      <span>Configurar / Adicionar URL</span>
-                    </button>
-                  )}
                 </div>
               )}
             </div>

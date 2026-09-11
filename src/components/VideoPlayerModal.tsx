@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
-  Tv, Film, ChevronLeft, ChevronRight, Layers, Maximize2, Minimize2, FastForward,
+  Tv, Film, ChevronLeft, ChevronRight, ChevronDown, Layers, Maximize2, Minimize2, FastForward,
   SkipForward, RotateCcw, PictureInPicture2
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
@@ -154,7 +154,9 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
+  const [selectedServerKey, setSelectedServerKey] = useState<string>(
+    isAnimeMedia ? "srv_consumet" : "srv_watchplay"
+  );
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
     if (
@@ -168,7 +170,6 @@ export function VideoPlayerModal({
     return target.includes("vidsrc") || 
       target.includes("multiembed") || 
       target.includes("videasy") || 
-      target.includes("embed.su") || 
       target.includes("myembed");
   }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
@@ -351,13 +352,22 @@ export function VideoPlayerModal({
           name: "Player 1 (Dublado PT-BR)"
         },
         {
+          key: "srv_watchplay_stream",
+          label: "Player 2 (Nativo PT-BR)",
+          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
+          buildUrl: (id: string, s: number, e: number) => 
+            `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
+          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
+          name: "Player 2 (Nativo PT-BR)"
+        },
+        {
           key: "srv_watchplay",
-          label: "Player 2 (WatchPlayer Dublado)",
+          label: "Player 3 (WatchPlayer Oficial)",
           badge: "WatchPlayer Oficial • Dublado PT-BR",
           buildUrl: (id: string, s: number, e: number) =>
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("watchplay.shop"),
-          name: "Player 2 (WatchPlayer Dublado)"
+          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
+          name: "Player 3 (WatchPlayer Oficial)"
         }
       ];
     } else if (isSeries) {
@@ -379,15 +389,6 @@ export function VideoPlayerModal({
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
-        },
-        {
-          key: "srv_encontrei",
-          label: "Player 3 (Encontrei Dublado)",
-          badge: "Encontrei.info • Alta Qualidade Dublado PT-BR",
-          buildUrl: (id: string, s: number, e: number) => 
-            `/api/encontrei-stream?action=embed&type=tv&title=${encodeURIComponent(title || "")}&tmdbId=${id}&season=${s}&episode=${e}`,
-          isMatch: (u: string) => u.includes("/api/encontrei-stream"),
-          name: "Player 3 (Encontrei Dublado)"
         }
       ];
     } else {
@@ -407,14 +408,6 @@ export function VideoPlayerModal({
           buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
-        },
-        {
-          key: "srv_encontrei",
-          label: "Player 3 (Encontrei Dublado)",
-          badge: "Encontrei.info • Alta Qualidade Dublado PT-BR",
-          buildUrl: (id: string) => `/api/encontrei-stream?action=embed&type=movie&title=${encodeURIComponent(title || "")}&tmdbId=${id}`,
-          isMatch: (u: string) => u.includes("/api/encontrei-stream"),
-          name: "Player 3 (Encontrei Dublado)"
         }
       ];
     }
@@ -435,6 +428,7 @@ export function VideoPlayerModal({
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
+    setIsLoading(false);
   }, [servers, isSeries, resolvedId, season, episode]);
 
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
@@ -462,8 +456,11 @@ export function VideoPlayerModal({
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady || error) return;
-    if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = isAnime ? 15000 : 10000;
+    if (
+      selectedServerKey === 'srv_consumet' || 
+      activeIframeUrl.includes('anime-stream')
+    ) return;
+    const timeoutDuration = isAnimeMedia ? 15000 : 10000;
     const timer = setTimeout(() => {
       if (!playerSkinReady && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -471,7 +468,7 @@ export function VideoPlayerModal({
       }
     }, timeoutDuration);
     return () => clearTimeout(timer);
-  }, [activeIframeUrl, selectedServerKey, playerSkinReady, error, isAnime, handleSilentFallback]);
+  }, [activeIframeUrl, selectedServerKey, playerSkinReady, error, isAnimeMedia, handleSilentFallback]);
 
   // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
@@ -499,7 +496,9 @@ export function VideoPlayerModal({
 
       // Detecção de rede para Animes e configuração do servidor inicial
       const setupInitialServer = async () => {
-        let targetServerKey = isAnimeMedia ? "srv_consumet" : "srv_watchplay";
+        let targetServerKey = isAnimeMedia 
+          ? "srv_consumet" 
+          : "srv_watchplay";
 
         setSelectedServerKey(targetServerKey);
 
@@ -596,8 +595,6 @@ export function VideoPlayerModal({
               iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: initialTime }, "*");
               iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: initialTime }, "*");
               iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: initialTime }, "*");
-              setSkipNotice(`Continuando de ${formatTime(initialTime)}`);
-              setTimeout(() => setSkipNotice(null), 3500);
             } catch (err) {}
           }
         }
@@ -749,8 +746,10 @@ export function VideoPlayerModal({
     }
 
     if (
-      cleanUrl.includes("watchplay.shop") ||
+      cleanUrl.startsWith("/api/") ||
       cleanUrl.includes("/api/anime-stream") ||
+      cleanUrl.includes("/api/watchplayer-stream") ||
+      cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("multiembed") ||
@@ -1104,6 +1103,27 @@ export function VideoPlayerModal({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              {/* Seletor Rápido de Servidor / Opção de Áudio e Legenda */}
+              {servers.length > 1 && (
+                <div className="relative">
+                  <select
+                    value={selectedServerKey}
+                    onChange={(e) => handleServerSwitch(e.target.value)}
+                    className="bg-neutral-900/90 text-neutral-200 hover:text-white border border-white/10 hover:border-orange-500/50 rounded-lg text-xs font-semibold px-2 py-1.5 pr-6 appearance-none cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-orange-500 max-w-[140px] sm:max-w-[200px] truncate"
+                    title="Trocar Servidor / Legendas"
+                  >
+                    {servers.map((srv) => (
+                      <option key={srv.key} value={srv.key} className="bg-neutral-900 text-neutral-200">
+                        {srv.label}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-neutral-400">
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+              )}
+
               {/* Botão Fechar Modal */}
               <button
                 onClick={handleCloseModal}
@@ -1360,17 +1380,7 @@ export function VideoPlayerModal({
                 referrerPolicy="origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  if (
-                    isAnimeMedia ||
-                    activeIframeUrl?.includes('/api/anime-stream') || 
-                    activeIframeUrl?.includes('/api/vixsrc-stream') ||
-                    activeIframeUrl?.includes('/api/watchplayer-stream') ||
-                    activeIframeUrl?.includes('/api/encontrei-stream') ||
-                    activeIframeUrl?.includes('videasy') ||
-                    activeIframeUrl?.includes('vidsrc.to')
-                  ) {
-                    setTimeout(() => setPlayerSkinReady(true), 150);
-                  }
+                  setTimeout(() => setPlayerSkinReady(true), 200);
                 }}
                 onError={() => handleSilentFallback()}
               />
@@ -1381,7 +1391,17 @@ export function VideoPlayerModal({
                 <p className="text-xs text-neutral-400 leading-relaxed">{error}</p>
                 <div className="pt-2 flex gap-3 flex-wrap justify-center">
                   <button
-                    onClick={() => handleExtract(urlInput)}
+                    onClick={() => {
+                      fallbackAttemptsRef.current.clear();
+                      setError(null);
+                      setIsLoading(true);
+                      const srv = servers[0];
+                      if (srv) {
+                        handleServerSwitch(srv.key);
+                      } else {
+                        handleExtract(urlInput);
+                      }
+                    }}
                     className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
@@ -1433,7 +1453,7 @@ export function VideoPlayerModal({
               onToggleAspectRatio={handleToggleAspectRatio}
               onTogglePiP={handleToggleMiniPlayer}
               isMiniPlayer={isMiniPlayer}
-              passThroughClicks={Boolean(isAnimeMedia || activeIframeUrl?.includes('/api/anime-stream'))}
+              passThroughClicks={false}
             />
           </div>
         </div>

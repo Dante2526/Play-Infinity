@@ -221,7 +221,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-16 sm:pt-20 pb-32 md:pb-16 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-[#0a0a0a] text-white pt-14 sm:pt-20 pb-28 md:pb-16 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto w-full overflow-x-hidden">
       {/* BANNER PRINCIPAL HERO: AO VIVO */}
       {heroChannel && (
         <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 mb-6 sm:mb-10 shadow-[0_15px_35px_rgba(0,0,0,0.8)] bg-neutral-950">
@@ -236,7 +236,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
           />
 
           <div className="relative z-20 p-4 sm:p-6 md:p-12 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
-            <div className="max-w-2xl">
+            <div className="max-w-2xl w-full">
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-3 sm:mb-4">
                 <span className="flex items-center gap-1.5 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.8)]">
                   <span className="w-1.5 sm:w-2 h-1.5 sm:h-2 rounded-full bg-white animate-ping"></span>
@@ -250,9 +250,18 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                 </span>
               </div>
 
-              <h1 className="text-2xl sm:text-3xl md:text-5xl font-black tracking-tight text-white mb-2 sm:mb-3 drop-shadow-md leading-tight">
-                {heroChannel.name}
-              </h1>
+              <div className="flex items-center gap-3 mb-2 sm:mb-3">
+                <div className="flex lg:hidden items-center justify-center w-12 h-10 sm:w-16 sm:h-12 rounded-xl bg-black/75 p-1.5 border border-white/10 shrink-0">
+                  <ChannelLogo
+                    channel={heroChannel}
+                    size="sm"
+                    className="w-full h-full"
+                  />
+                </div>
+                <h1 className="text-xl sm:text-3xl md:text-5xl font-black tracking-tight text-white drop-shadow-md leading-tight truncate">
+                  {heroChannel.name}
+                </h1>
+              </div>
 
               <p className="text-neutral-300 text-xs sm:text-sm md:text-base leading-relaxed mb-4 sm:mb-6 line-clamp-2 sm:line-clamp-3 drop-shadow">
                 {heroChannel.currentProgram || heroChannel.description || 'Transmissão contínua em tempo real com qualidade HD e múltiplos servidores.'}
@@ -265,14 +274,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                 >
                   <Play className="w-5 h-5 fill-white" />
                   <span>Sintonizar Canal</span>
-                </button>
-
-                <button
-                  onClick={() => openAddModal()}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-neutral-200 font-semibold text-xs sm:text-sm transition-all border border-white/10 cursor-pointer backdrop-blur-md min-h-[44px]"
-                >
-                  <Plus className="w-4 h-4 text-orange-500" />
-                  <span>Adicionar Meu Canal / M3U</span>
                 </button>
               </div>
             </div>
@@ -339,15 +340,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
           </div>
 
           <button
-            onClick={() => openAddModal()}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 font-semibold text-xs transition-all cursor-pointer shadow-sm min-h-[44px]"
-          >
-            <Plus className="w-4 h-4 shrink-0" />
-            <span className="sm:hidden">Adicionar</span>
-            <span className="hidden sm:inline">Adicionar Canal / Lista</span>
-          </button>
-
-          <button
             onClick={refreshChannels}
             className="p-2.5 sm:p-3 rounded-xl sm:rounded-2xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 hover:text-white border border-white/10 transition-all cursor-pointer min-h-[44px] min-w-[44px] flex items-center justify-center shrink-0"
             title="Atualizar lista de canais"
@@ -393,14 +385,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
           <p className="text-neutral-400 text-xs sm:text-sm max-w-md mb-6 leading-relaxed">
             {selectedCategory === 'Favoritos' 
               ? 'Você ainda não adicionou nenhum canal aos seus favoritos. Clique na estrela em qualquer canal para salvar!'
-              : 'Tente buscar com outro termo ou adicione uma lista M3U / canal personalizado.'}
+              : 'Tente buscar com outro termo ou selecione uma categoria diferente.'}
           </p>
           <button
-            onClick={() => openAddModal()}
+            onClick={() => {
+              setSearchQuery('');
+              setSelectedCategory('Todos');
+            }}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs transition-all cursor-pointer min-h-[44px]"
           >
-            <Plus className="w-4 h-4" />
-            <span>Adicionar Canal de TV</span>
+            <RefreshCw className="w-4 h-4" />
+            <span>Ver Todos os Canais</span>
           </button>
         </div>
       ) : viewMode === 'list' ? (

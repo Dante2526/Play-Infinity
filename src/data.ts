@@ -17,6 +17,7 @@ export type CatalogItem = {
   quality?: 'CAM' | 'TS' | 'HD' | '4K' | 'FULL HD';
   provider?: string;
   isAnime?: boolean;
+  isDorama?: boolean;
 };
 
 /** Verifica se um item possui qualidade CAM (gravação de cinema) */
@@ -55,7 +56,6 @@ export const providers = [
   "Max",
   "Prime Video",
   "Apple TV+",
-  "Globoplay",
 ];
 
 export const continueWatching = [
@@ -237,6 +237,23 @@ export const animes = [
   }
 ];
 
+export const WATCHPLAY_DORAMA_IDS = [
+  93405,  // Round 6
+  127529, // Cães de Caça (Bloodhounds)
+  230777, // The Trunk
+  233742, // Newtopia
+  231280, // Um Bom Garoto (Good Boy)
+  239385, // O Manipulado (The Manipulated)
+  291496, // Um Grude de Amor
+  276161, // Aprendendo a Lição (Study Group)
+  296206, // Agente Kim: Reativado
+  285838, // Se Desejos Matassem...
+  279323, // A Leste do Palácio
+  259710, // A Rainha dos Golpes
+  271885, // Você Estava Lá
+  245079  // Traição e Redenção
+];
+
 export const doramas = [
   {
     id: 93405,
@@ -244,39 +261,209 @@ export const doramas = [
     title: "ROUND 6",
     type: "series" as const,
     quality: "HD" as const,
+    provider: "Netflix",
     imageUrl: "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
+    isDorama: true,
+    rating: "7.9",
+    year: "2021",
+    overview: "Centenas de jogadores falidos aceitam um estranho convite para um jogo de sobrevivência. Um prêmio milionário aguarda, mas as apostas são altas e mortais."
   },
   {
-    id: 103768,
-    tmdbId: 103768,
-    title: "TUDO BEM NÃO SER NORMAL",
+    id: 127529,
+    tmdbId: 127529,
+    title: "CÃES DE CAÇA",
     type: "series" as const,
     quality: "HD" as const,
-    imageUrl: "https://image.tmdb.org/t/p/w500/1eT6E7P30pG0q04v2eNnQd9sE7P.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/zN23c1k8d6F5l09d7q5u8W0f5s2.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/103768/1/1",
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/uFNHrunRIlyzRlRS7c9InUVgFDa.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/zhsEnDNCQX5dlI2wbKzV90pV0B9.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/127529/1/1",
+    isDorama: true,
+    rating: "8.5",
+    year: "2023",
+    overview: "Dois jovens boxeadores unem forças para enfrentar inimigos impiedosos com sede de sangue, arriscando as próprias vidas para fazer justiça e proteger as pessoas que amam."
   },
   {
-    id: 94796,
-    tmdbId: 94796,
-    title: "POUSANDO NO AMOR",
+    id: 230777,
+    tmdbId: 230777,
+    title: "THE TRUNK",
     type: "series" as const,
     quality: "HD" as const,
-    imageUrl: "https://image.tmdb.org/t/p/w500/q2b7F6i60O8f8r1R5FvG0wD8q0x.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/a0V40Dk8W2q6c2j5S1w1h8f7b7f.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/94796/1/1",
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/s0hxhkL7zet7yAIdnqglbITiB86.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/79DCyZhUcFsiGfyjNlFH1lS1t4c.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/230777/1/1",
+    isDorama: true,
+    rating: "7.0",
+    year: "2024",
+    overview: "Um objeto misterioso aparece no litoral, revelando uma empresa secreta de casamentos e a estranha relação de um casal."
   },
   {
-    id: 197067,
-    tmdbId: 197067,
-    title: "UMA ADVOGADA EXTRAORDINÁRIA",
+    id: 233742,
+    tmdbId: 233742,
+    title: "NEWTOPIA",
     type: "series" as const,
     quality: "HD" as const,
-    imageUrl: "https://image.tmdb.org/t/p/w500/bC4wV4c0x9x8r5f8e5n0q5b8c5k.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/c5y2K7e7f6x5v3q9y0a5z8x2w3e.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/197067/1/1",
+    provider: "Prime Video",
+    imageUrl: "https://image.tmdb.org/t/p/w500/58nXDbMVYpsNQ1POP5ZxbSMaqFb.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/olRPEYjyjzoMAODjOMjF2K1VlzO.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/233742/1/1",
+    isDorama: true,
+    rating: "8.0",
+    year: "2025",
+    overview: "Jae-yoon, militar, e sua namorada, Young-joo, terminam por ligação devido a vários mal-entendidos. Só que um surto de zumbis assola o mundo. Jae-yoon e sua unidade ficam presos no topo de um arranha-céu em Seul enquanto Young-joo enfrenta as ruas cheias de perigos."
+  },
+  {
+    id: 231280,
+    tmdbId: 231280,
+    title: "UM BOM GAROTO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/wtp8g9VuTHi3w7aNrarYGyphLcU.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/8l1BN0IIjHmRyW0oDfUfs3F6F4N.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/231280/1/1",
+    isDorama: true,
+    rating: "8.6",
+    year: "2025",
+    overview: "Onze anos depois, a polícia retoma o recrutamento de ex-atletas para uma força-tarefa especial que enfrenta crimes brutais usando sua garra e espírito de luta."
+  },
+  {
+    id: 239385,
+    tmdbId: 239385,
+    title: "O MANIPULADO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Disney+",
+    imageUrl: "https://image.tmdb.org/t/p/w500/oNm1NVRYDxuIDv61oTbFKR8ZKSn.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/ngP3rIU1KY7ek0r6hSJFnVsrh9g.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/239385/1/1",
+    isDorama: true,
+    rating: "8.4",
+    year: "2025",
+    overview: "A vida de Taejoong vira de cabeça para baixo quando ele é preso injustamente por um crime brutal. Ao descobrir que tudo foi orquestrado, ele busca vingança nessa trama cheia de ação."
+  },
+  {
+    id: 291496,
+    tmdbId: 291496,
+    title: "UM GRUDE DE AMOR",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/qITVjM7ETkIH0l8WoIApSrzDjgu.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/mp2AFsWsuyxCzenJh3DTKw7z4jG.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/291496/1/1",
+    isDorama: true,
+    rating: "8.7",
+    year: "2026",
+    overview: "Após perder a memória, uma promotora vai morar com o suposto namorado, um treinador de boxe. Resta saber se esse grude vai se transformar em amor verdadeiro."
+  },
+  {
+    id: 276161,
+    tmdbId: 276161,
+    title: "APRENDENDO A LIÇÃO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/oXjXhXUzwlRevYcFapt1Q2R9WRF.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/vyG93jhmPL7tBIhRtCLa5mdBKob.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/276161/1/1",
+    isDorama: true,
+    rating: "9.4",
+    year: "2026",
+    overview: "O respeito foi pelo ralo dentro das escolas. É aí que entra uma unidade especial para ensinar lições pragmáticas e mordazes que não estão nos livros didáticos."
+  },
+  {
+    id: 296206,
+    tmdbId: 296206,
+    title: "AGENTE KIM: REATIVADO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/2fWPaP8xplaAv2YxUoXccfsP72S.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/g1LJLlmWP74zv9yXKEXm7g9p10O.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/296206/1/1",
+    isDorama: true,
+    rating: "8.5",
+    year: "2026",
+    overview: "Um pai que leva uma vida comum desenterra as habilidades do passado como agente especial para procurar a filha desaparecida. Mas acaba atraindo uma atenção indesejada."
+  },
+  {
+    id: 285838,
+    tmdbId: 285838,
+    title: "SE DESEJOS MATASSEM...",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/l7Yqgal5v7qa7DTfPpsLTYlehXc.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/zV9WYOfFr4MAnzXXD8PR5J6JnN3.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/285838/1/1",
+    isDorama: true,
+    rating: "8.1",
+    year: "2026",
+    overview: "Um aplicativo misterioso promete realizar desejos, mas faz uma contagem para a morte. Quando um grupo de jovens o baixa, tem que quebrar este ciclo fatal para sobreviver."
+  },
+  {
+    id: 279323,
+    tmdbId: 279323,
+    title: "A LESTE DO PALÁCIO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/qxn0dgt6k0yOH3CIFqmGRwSBZYO.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/8PHBAdPyfIwS5W6cfKLhItEb875.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/279323/1/1",
+    isDorama: true,
+    rating: "8.2",
+    year: "2026",
+    overview: "O rei convoca um homem com acesso ao mundo espiritual e uma dama capaz de ouvir os mortos. Será que eles conseguem desvendar os segredos sombrios do palácio?"
+  },
+  {
+    id: 259710,
+    tmdbId: 259710,
+    title: "A RAINHA DOS GOLPES",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/k37EEdNrXAWZzjQtT2NcS2Gm0dv.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/brugu6L6cGP7I0G1EH7id46brj2.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/259710/1/1",
+    isDorama: true,
+    rating: "7.6",
+    year: "2025",
+    overview: "Eles só tomam dos perversos e nunca buscam vingança. Bem-vindos ao mundo da Rainha dos Golpes. Conheça Yi-rang, a líder charmosa, James, o profissional experiente, e Gu-ho."
+  },
+  {
+    id: 271885,
+    tmdbId: 271885,
+    title: "VOCÊ ESTAVA LÁ",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Netflix",
+    imageUrl: "https://image.tmdb.org/t/p/w500/utrGFclbnCqELR7GS34B4NMQkzo.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/7uVNWsjnmkvqpeqWHq5qpLBv3wd.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/271885/1/1",
+    isDorama: true,
+    rating: "8.3",
+    year: "2025",
+    overview: "Duas mulheres decidem cometer um assassinato para acabar com um casamento abusivo. Até que uma visita inesperada ameaça tudo o que elas planejaram."
+  },
+  {
+    id: 245079,
+    tmdbId: 245079,
+    title: "TRAIÇÃO E REDENÇÃO",
+    type: "series" as const,
+    quality: "HD" as const,
+    provider: "Disney+",
+    imageUrl: "https://image.tmdb.org/t/p/w500/py1HcJi82NwTAOkNPcNX6kw8DZ4.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/gd6er39HiIfVQIDKhZdMz7FVIw.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/245079/1/1",
+    isDorama: true,
+    rating: "7.8",
+    year: "2025",
+    overview: "Seok, uma neurocirurgiã ambiciosa e genial, reencontra o mentor que destruiu sua vida no passado. Agora, tomada pelo desejo de vingança, uma intensa disputa médica e psicológica se inicia."
   }
 ];
 
@@ -361,9 +548,9 @@ export const mostWatched = [
     title: "INTERESTELAR",
     type: "movie" as const,
     imageUrl:
-      "https://image.tmdb.org/t/p/w500/gEU2QniE6EwfVDxCzsxPnZLi1ZT.jpg",
+      "https://image.tmdb.org/t/p/w500/6ricSDD83BClJsFdGB6x7cM0MFQ.jpg",
     backdropUrl:
-      "https://image.tmdb.org/t/p/original/rAiYTsqJiOkn00e21jS1vQhYyY.jpg",
+      "https://image.tmdb.org/t/p/original/5XNQBqnBwPA9yT0jZ0p3s8bbLh0.jpg",
     quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/movie/157336",
   },
@@ -373,9 +560,9 @@ export const mostWatched = [
     title: "THE LAST OF US",
     type: "series" as const,
     imageUrl:
-      "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
+      "https://image.tmdb.org/t/p/w500/ieMLFFCwdep90d67kOT0oFtv2yX.jpg",
     backdropUrl:
-      "https://image.tmdb.org/t/p/original/uDgy6hyPd82kOHh6I95FLtLnj6p.jpg",
+      "https://image.tmdb.org/t/p/original/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg",
     quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
   },
@@ -387,7 +574,7 @@ export const mostWatched = [
     imageUrl:
       "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
     backdropUrl:
-      "https://image.tmdb.org/t/p/original/stKGOmbuwhL489ZJnZUVvA34Dt.jpg",
+      "https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg",
     quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/movie/1022789",
   },
@@ -399,7 +586,7 @@ export const mostWatched = [
     imageUrl:
       "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
     backdropUrl:
-      "https://image.tmdb.org/t/p/original/etjA24UepnNnLh2t9qjU2Vj2g3g.jpg",
+      "https://image.tmdb.org/t/p/original/577eXC8wFQT0eUrJcgznSiFPRmk.jpg",
     quality: "HD" as const,
     playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
   },

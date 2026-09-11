@@ -64,10 +64,19 @@ export function deleteCustomChannel(channelId: string): void {
 
 export function getAllChannels(): LiveChannel[] {
   const custom = getCustomChannels();
-  // Se algum custom tiver o mesmo id que o inicial, o custom sobrescreve
-  const customIds = new Set(custom.map(c => c.id));
+  // Se o usuário tiver um canal customizado antigo com url descontinuada da Pluto, descarta para usar a lista oficial atualizada
+  const initialMap = new Map(INITIAL_LIVE_CHANNELS.map(c => [c.id, c]));
+  const validCustom = custom.filter(c => {
+    const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1'));
+    if (hasBrokenUrl && initialMap.has(c.id)) {
+      return false;
+    }
+    return true;
+  });
+
+  const customIds = new Set(validCustom.map(c => c.id));
   const initialFiltered = INITIAL_LIVE_CHANNELS.filter(c => !customIds.has(c.id));
-  const combined = [...custom, ...initialFiltered];
+  const combined = [...validCustom, ...initialFiltered];
 
   // Garante que todo canal tenha logo válido e sem links quebrados
   return combined.map(channel => ({
