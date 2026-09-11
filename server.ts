@@ -351,6 +351,8 @@ const ALLOWED_STREAMING_DOMAINS = [
   "vix-content.net",
   "videasy.to",
   "videasy.net",
+  "vidlink.pro",
+  "2embed.cc",
   "speedracelight.com",
   "animesonlinecc.to",
   "blogger.com"
