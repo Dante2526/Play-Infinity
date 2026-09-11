@@ -167,9 +167,11 @@ export function VideoPlayerModal({
     ) {
       return false;
     }
-    return target.includes("vidsrc") || 
+    return target.includes("vidlink") ||
+      target.includes("videasy") ||
+      target.includes("vidsrc") || 
       target.includes("multiembed") || 
-      target.includes("videasy") || 
+      target.includes("2embed") ||
       target.includes("myembed");
   }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
@@ -368,6 +370,15 @@ export function VideoPlayerModal({
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "Player 3 (WatchPlayer Oficial)"
+        },
+        {
+          key: "srv_vidlink",
+          label: "Player 4 (VidLink HD)",
+          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 4 (VidLink HD)"
         }
       ];
     } else if (isSeries) {
@@ -389,6 +400,24 @@ export function VideoPlayerModal({
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
+        },
+        {
+          key: "srv_vidlink",
+          label: "Player 3 (VidLink HD)",
+          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 3 (VidLink HD)"
+        },
+        {
+          key: "srv_videasy",
+          label: "Player 4 (Videasy Multi)",
+          badge: "Videasy CDN • Alta Velocidade",
+          buildUrl: (id: string, s: number, e: number) =>
+            `https://player.videasy.net/tv/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("videasy.net"),
+          name: "Player 4 (Videasy Multi)"
         }
       ];
     } else {
@@ -408,6 +437,22 @@ export function VideoPlayerModal({
           buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
+        },
+        {
+          key: "srv_vidlink",
+          label: "Player 3 (VidLink HD)",
+          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
+          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&sub=pt`,
+          isMatch: (u: string) => u.includes("vidlink.pro"),
+          name: "Player 3 (VidLink HD)"
+        },
+        {
+          key: "srv_videasy",
+          label: "Player 4 (Videasy Multi)",
+          badge: "Videasy CDN • Alta Velocidade",
+          buildUrl: (id: string) => `https://player.videasy.net/movie/${id}`,
+          isMatch: (u: string) => u.includes("videasy.net"),
+          name: "Player 4 (Videasy Multi)"
         }
       ];
     }
@@ -750,6 +795,7 @@ export function VideoPlayerModal({
       cleanUrl.includes("/api/anime-stream") ||
       cleanUrl.includes("/api/watchplayer-stream") ||
       cleanUrl.includes("watchplay.shop") ||
+      cleanUrl.includes("vidlink") ||
       cleanUrl.includes("videasy") || 
       cleanUrl.includes("vidsrc") || 
       cleanUrl.includes("multiembed") ||
