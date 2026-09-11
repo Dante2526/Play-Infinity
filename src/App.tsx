@@ -57,6 +57,7 @@ import {
 const VideoPlayerModal = React.lazy(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })));
 const WebhookPanelModal = React.lazy(() => import("./components/WebhookPanelModal").then(m => ({ default: m.WebhookPanelModal })));
 const ReleaseCalendarPage = React.lazy(() => import("./components/ReleaseCalendarPage").then(m => ({ default: m.ReleaseCalendarPage })));
+const LiveTvPage = React.lazy(() => import("./components/LiveTvPage").then(m => ({ default: m.LiveTvPage })));
 import {
   getFavoriteIds,
   toggleFavorite,
@@ -108,7 +109,7 @@ export type OnPlayHandler = (
 
 export default function App() {
   type ViewState = { 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details';
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details' | 'live-tv';
     id?: string;
     itemData?: CatalogItem;
     previous?: any;
@@ -269,6 +270,13 @@ export default function App() {
           <button onClick={() => navigateTo({ type: 'home' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
           <button onClick={() => navigateTo({ type: 'movies' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
           <button onClick={() => navigateTo({ type: 'series' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
+          <button onClick={() => navigateTo({ type: 'live-tv' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 cursor-pointer ${viewState.type === 'live-tv' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span>TV Ao Vivo</span>
+            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-red-600 text-white tracking-wider">
+              LIVE
+            </span>
+          </button>
           <button onClick={() => navigateTo({ type: 'calendar' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 cursor-pointer ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
             <CalendarDays className="w-3.5 h-3.5" />
             <span>Calendário</span>
@@ -302,6 +310,17 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => navigateTo({ type: 'live-tv' })}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+              viewState.type === 'live-tv'
+                ? 'bg-orange-600 text-white shadow-[0_0_12px_rgba(234,88,12,0.8)]'
+                : 'bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span>
+            TV Ao Vivo
+          </button>
+          <button
             onClick={() => navigateTo({ type: 'calendar' })}
             className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-black/60 backdrop-blur-md text-orange-400 border border-orange-500/30 cursor-pointer"
           >
@@ -329,6 +348,10 @@ export default function App() {
         <ProviderPage provider={viewState.id} onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'movies' || viewState.type === 'series' ? (
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
+      ) : viewState.type === 'live-tv' ? (
+        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+          <LiveTvPage onBack={handleBack} />
+        </React.Suspense>
       ) : viewState.type === 'calendar' ? (
         <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
           <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => navigateTo({ type: 'series' })} />
@@ -340,7 +363,12 @@ export default function App() {
       ) : viewState.type === 'favorites' ? (
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
       ) : (
-        <HomePage onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} onItemClick={navigateToDetails} onPlay={openPlayer} />
+        <HomePage 
+          onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} 
+          onItemClick={navigateToDetails} 
+          onPlay={openPlayer} 
+          onNavigateToLiveTv={() => navigateTo({ type: 'live-tv' })}
+        />
       )}
 
       {/* Footer Area */}
@@ -359,6 +387,7 @@ export default function App() {
             { label: "Início", type: "home" },
             { label: "Filmes", type: "movies" },
             { label: "Séries", type: "series" },
+            { label: "TV Ao Vivo", type: "live-tv" },
             { label: "Calendário", type: "calendar" },
             { label: "Favoritos", type: "favorites" },
             { label: "Buscar", type: "search" }
@@ -386,6 +415,7 @@ export default function App() {
             <NavItem onClick={() => navigateTo({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
             <NavItem onClick={() => navigateTo({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />
             <NavItem onClick={() => navigateTo({ type: 'series' })} icon={<Tv />} label="Séries" isActive={viewState.type === 'series'} />
+            <NavItem onClick={() => navigateTo({ type: 'live-tv' })} icon={<Radio />} label="TV" isActive={viewState.type === 'live-tv'} />
             <NavItem onClick={() => navigateTo({ type: 'calendar' })} icon={<CalendarDays />} label="Agenda" isActive={viewState.type === 'calendar'} />
             <NavItem onClick={() => navigateTo({ type: 'search' })} icon={<Search />} label="Buscar" isActive={viewState.type === 'search'} />
           </div>
@@ -450,11 +480,13 @@ export default function App() {
 function HomePage({ 
   onProviderSelect, 
   onItemClick, 
-  onPlay 
+  onPlay,
+  onNavigateToLiveTv
 }: { 
   onProviderSelect: (p: string) => void, 
   onItemClick: (id: number, item?: any) => void,
-  onPlay?: OnPlayHandler 
+  onPlay?: OnPlayHandler,
+  onNavigateToLiveTv?: () => void
 }) {
   const [heroItem, setHeroItem] = useState<{
     id: number;
@@ -908,6 +940,46 @@ function HomePage({
             })}
           </div>
         </section>
+
+        {/* Destaque TV Ao Vivo & Futebol */}
+        {onNavigateToLiveTv && (
+          <section className="relative rounded-3xl overflow-hidden border border-orange-500/25 bg-gradient-to-r from-neutral-950 via-neutral-900 to-orange-950/40 p-6 md:p-8 shadow-2xl group">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
+              <div className="flex items-center gap-4 md:gap-5">
+                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-600/20 border border-orange-500/40 flex items-center justify-center text-orange-500 shrink-0 shadow-lg shadow-orange-600/20 group-hover:scale-105 transition-transform">
+                  <Radio className="w-7 h-7 text-red-500 animate-pulse" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                    <span className="flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                      AO VIVO
+                    </span>
+                    <h3 className="text-white font-black text-lg md:text-xl tracking-tight">
+                      TV Ao Vivo & Esportes
+                    </h3>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                      Premiere • SporTV • CazéTV
+                    </span>
+                  </div>
+                  <p className="text-xs md:text-sm text-neutral-400 max-w-xl leading-relaxed">
+                    Acompanhe partidas de futebol ao vivo, transmissões do Brasileirão, canais abertos, notícias e programação 24h com múltiplos servidores de alta performance.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 w-full md:w-auto">
+                <button
+                  onClick={onNavigateToLiveTv}
+                  className="flex-1 md:flex-initial flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs md:text-sm transition-all shadow-lg shadow-orange-600/30 hover:scale-105 cursor-pointer"
+                >
+                  <Play className="w-4 h-4 fill-white" />
+                  Assistir TV Ao Vivo
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Continue Assistindo */}
         {continueWatchingList.length > 0 && (
