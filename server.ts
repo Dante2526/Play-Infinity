@@ -2801,6 +2801,130 @@ async function startServer() {
     }
   });
 
+  // ========================================================
+  // API TV AO VIVO: PROXY HLS ANTI-CORS & CATÁLOGO DE CANAIS
+  // ========================================================
+  // Cache em memória de alta performance para chunks (.ts) de TV ao vivo (TTL de 15 segundos)
+  const liveChunkCache = new Map<string, { buffer: Buffer; contentType: string; expires: number }>();
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, val] of liveChunkCache.entries()) {
+      if (val.expires < now) liveChunkCache.delete(key);
+    }
+  }, 10000);
+
+  app.get("/api/live-stream-proxy", async (req, res) => {
+    try {
+      const rawUrl = req.query.url as string;
+      if (!rawUrl) return res.status(400).send("URL ausente");
+
+      let parsed: URL;
+      try {
+        parsed = new URL(rawUrl.trim());
+      } catch {
+        return res.status(400).send("Formato de URL inválido");
+      }
+
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+        return res.status(403).send("Protocolo inválido.");
+      }
+
+      if (isPrivateOrLocalIp(parsed.hostname)) {
+        return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
+      }
+
+      // Headers CORS universais para execução contínua no player
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+
+      if (req.method === "OPTIONS") {
+        return res.status(204).end();
+      }
+
+      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.)
+      const isSegment = rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
+      const cached = isSegment ? liveChunkCache.get(rawUrl) : null;
+      if (cached && cached.expires > Date.now()) {
+        res.setHeader("Content-Type", cached.contentType);
+        res.setHeader("Cache-Control", "public, max-age=15, immutable");
+        res.setHeader("X-Cache-Status", "HIT-MEMORY");
+        return res.send(cached.buffer);
+      }
+
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+      };
+
+      if (req.query.referer) {
+        headers["Referer"] = req.query.referer as string;
+      }
+
+      const upstreamRes = await fetch(rawUrl, {
+        headers,
+        redirect: "follow"
+      });
+
+      if (!upstreamRes.ok) {
+        return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
+      }
+
+      const contentType = upstreamRes.headers.get("content-type") || "";
+      const isM3U8 = rawUrl.includes(".m3u8") || 
+                     contentType.includes("mpegurl") || 
+                     contentType.includes("application/x-mpegURL") ||
+                     contentType.includes("vnd.apple.mpegurl");
+
+      if (isM3U8) {
+        const text = await upstreamRes.text();
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+
+        const basePath = rawUrl.substring(0, rawUrl.lastIndexOf("/") + 1);
+
+        const rewritten = text.split("\n").map(line => {
+          const trimmed = line.trim();
+          if (!trimmed) return line;
+
+          if (trimmed.includes('URI="')) {
+            return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
+              const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
+              return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}"`;
+            });
+          }
+
+          if (trimmed.startsWith("#")) return trimmed;
+
+          const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
+          return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}`;
+        }).join("\n");
+
+        return res.send(rewritten);
+      }
+
+      const finalContentType = contentType || "video/MP2T";
+      res.setHeader("Content-Type", finalContentType);
+      res.setHeader("Cache-Control", "public, max-age=15");
+
+      const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+
+      // Salva no cache em memória se for segmento de mídia
+      if (isSegment && buffer.length > 0 && buffer.length < 8 * 1024 * 1024) {
+        liveChunkCache.set(rawUrl, {
+          buffer,
+          contentType: finalContentType,
+          expires: Date.now() + 15000 // 15 segundos
+        });
+      }
+
+      return res.send(buffer);
+    } catch (err: any) {
+      console.error("[Live Stream Proxy Error]:", err.message);
+      return res.status(500).send("Proxy error");
+    }
+  });
+
   // Healthcheck
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
