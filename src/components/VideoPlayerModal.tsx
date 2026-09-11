@@ -379,6 +379,15 @@ export function VideoPlayerModal({
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
+        },
+        {
+          key: "srv_encontrei",
+          label: "Player 3 (Encontrei Dublado)",
+          badge: "Encontrei.info • Alta Qualidade Dublado PT-BR",
+          buildUrl: (id: string, s: number, e: number) => 
+            `/api/encontrei-stream?action=embed&type=tv&title=${encodeURIComponent(title || "")}&tmdbId=${id}&season=${s}&episode=${e}`,
+          isMatch: (u: string) => u.includes("/api/encontrei-stream"),
+          name: "Player 3 (Encontrei Dublado)"
         }
       ];
     } else {
@@ -398,6 +407,14 @@ export function VideoPlayerModal({
           buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
           name: "Player 2 (Nativo PT-BR)"
+        },
+        {
+          key: "srv_encontrei",
+          label: "Player 3 (Encontrei Dublado)",
+          badge: "Encontrei.info • Alta Qualidade Dublado PT-BR",
+          buildUrl: (id: string) => `/api/encontrei-stream?action=embed&type=movie&title=${encodeURIComponent(title || "")}&tmdbId=${id}`,
+          isMatch: (u: string) => u.includes("/api/encontrei-stream"),
+          name: "Player 3 (Encontrei Dublado)"
         }
       ];
     }
@@ -1348,6 +1365,7 @@ export function VideoPlayerModal({
                     activeIframeUrl?.includes('/api/anime-stream') || 
                     activeIframeUrl?.includes('/api/vixsrc-stream') ||
                     activeIframeUrl?.includes('/api/watchplayer-stream') ||
+                    activeIframeUrl?.includes('/api/encontrei-stream') ||
                     activeIframeUrl?.includes('videasy') ||
                     activeIframeUrl?.includes('vidsrc.to')
                   ) {

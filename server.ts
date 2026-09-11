@@ -2504,6 +2504,303 @@ async function startServer() {
     }
   });
 
+  // ==========================================
+  // Provedor Encontrei.info (Filmes & Séries Dublados PT-BR)
+  // ==========================================
+  let encontreiCookies: Record<string, string> = {};
+  let encontreiLastLogin = 0;
+
+  function parseEncontreiCookies(setCookieHeaders: string[] | undefined, existingCookies: Record<string, string> = {}) {
+    const cookies: Record<string, string> = { ...existingCookies };
+    if (!setCookieHeaders) return cookies;
+    for (const c of setCookieHeaders) {
+      const parts = c.split(";")[0].split("=");
+      const name = parts[0]?.trim();
+      const val = parts.slice(1).join("=").trim();
+      if (name) cookies[name] = val;
+    }
+    return cookies;
+  }
+
+  function stringifyEncontreiCookies(cookieMap: Record<string, string>) {
+    return Object.entries(cookieMap).map(([k, v]) => `${k}=${v}`).join("; ");
+  }
+
+  async function getEncontreiCookieHeader(): Promise<string> {
+    const now = Date.now();
+    if (Object.keys(encontreiCookies).length > 0 && now - encontreiLastLogin < 4 * 3600 * 1000) {
+      return stringifyEncontreiCookies(encontreiCookies);
+    }
+
+    try {
+      const initRes = await fetch("https://encontrei.info/login/", {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+      });
+      const initRawCookies = (initRes.headers as any).getSetCookie ? (initRes.headers as any).getSetCookie() : [initRes.headers.get("set-cookie") || ""];
+      let cookies = parseEncontreiCookies(initRawCookies);
+
+      const initHtml = await initRes.text();
+      const csrfMatch = initHtml.match(/name=["']csrfKey["']\s*value=["']([^"']+)["']/i);
+      const csrf = csrfMatch ? csrfMatch[1] : "";
+
+      const body = new URLSearchParams({
+        csrfKey: csrf,
+        auth: "Dante15",
+        password: "Dante2020",
+        remember_me: "1",
+        _processLogin: "usernamepassword"
+      }).toString();
+
+      const loginRes = await fetch("https://encontrei.info/login/", {
+        method: "POST",
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Length": String(Buffer.byteLength(body)),
+          "Cookie": stringifyEncontreiCookies(cookies),
+          "Referer": "https://encontrei.info/login/"
+        },
+        body,
+        redirect: "manual"
+      });
+
+      const loginRawCookies = (loginRes.headers as any).getSetCookie ? (loginRes.headers as any).getSetCookie() : [loginRes.headers.get("set-cookie") || ""];
+      cookies = parseEncontreiCookies(loginRawCookies, cookies);
+
+      const redirLoc = loginRes.headers.get("location");
+      if (redirLoc) {
+        const redirUrl = redirLoc.startsWith("http") ? redirLoc : `https://encontrei.info${redirLoc}`;
+        const redirRes = await fetch(redirUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+            "Cookie": stringifyEncontreiCookies(cookies)
+          },
+          redirect: "manual"
+        });
+        const redirRawCookies = (redirRes.headers as any).getSetCookie ? (redirRes.headers as any).getSetCookie() : [redirRes.headers.get("set-cookie") || ""];
+        cookies = parseEncontreiCookies(redirRawCookies, cookies);
+      }
+
+      encontreiCookies = cookies;
+      encontreiLastLogin = Date.now();
+      return stringifyEncontreiCookies(encontreiCookies);
+    } catch (err: any) {
+      console.error("[Encontrei Login Error]:", err?.message);
+      return stringifyEncontreiCookies(encontreiCookies);
+    }
+  }
+
+  function parseServersDub(raw: string | undefined): Record<string, string> {
+    if (!raw) return {};
+    const cleaned = String(raw).replace(/&amp;/g, "&");
+    const params = new URLSearchParams(cleaned);
+    const out: Record<string, string> = {};
+    params.forEach((v, k) => {
+      if (v) out[k.toLowerCase().trim()] = v.trim();
+    });
+    return out;
+  }
+
+  async function resolveEncontreiStream(params: {
+    type?: string;
+    title?: string;
+    tmdbId?: string | number;
+    season?: number;
+    episode?: number;
+  }) {
+    const { type, title, season = 1, episode = 1 } = params;
+    const cookieHeader = await getEncontreiCookieHeader();
+    const cleanTitle = (title || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (!cleanTitle) {
+      return { ok: false, error: "Título não informado para o Encontrei.info" };
+    }
+
+    const searchUrl = `https://encontrei.info/?app=videobox&module=video&controller=index&do=buscarContent&q=${encodeURIComponent(cleanTitle)}`;
+    const searchRes = await fetch(searchUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Cookie": cookieHeader,
+        "Referer": "https://encontrei.info/buscar/",
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    });
+
+    const parsedSearch: any = await searchRes.json().catch(() => ({}));
+    const html: string = parsedSearch.html || "";
+
+    const isSeries = type === "tv" || type === "series";
+    const prefix = isSeries ? "/series/online/" : "/filmes/online/";
+
+    const linkRegex = new RegExp(`href=["'](https?:\\/\\/encontrei\\.info${prefix}[^"']+)["']`, "gi");
+    let match: RegExpExecArray | null;
+    const foundLinks: string[] = [];
+    while ((match = linkRegex.exec(html)) !== null) {
+      foundLinks.push(match[1]);
+    }
+
+    if (foundLinks.length === 0) {
+      const anyLinkRegex = /href=["'](https?:\/\/encontrei\.info\/(?:filmes|series)\/online\/[^"']+)["']/gi;
+      while ((match = anyLinkRegex.exec(html)) !== null) {
+        foundLinks.push(match[1]);
+      }
+    }
+
+    if (foundLinks.length === 0) {
+      return { ok: false, error: "Nenhum resultado encontrado no Encontrei.info" };
+    }
+
+    const selectedLink = foundLinks[0];
+    const videoIdMatch = selectedLink.match(/-(\d+)\/?$/);
+    if (!videoIdMatch) {
+      return { ok: false, error: `ID do vídeo não localizado no link: ${selectedLink}` };
+    }
+    const rootVideoId = videoIdMatch[1];
+    let targetVideoId = rootVideoId;
+
+    if (isSeries) {
+      const epListUrl = `https://encontrei.info/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${rootVideoId}&season=${season}&audio=Dublado`;
+      const epListRes = await fetch(epListUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+          "Cookie": cookieHeader,
+          "Referer": selectedLink,
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+
+      const epData: any = await epListRes.json().catch(() => ({}));
+      const episodes: any[] = epData.episodes || [];
+      const matchedEp = episodes.find((e) => String(e.number) === String(episode));
+
+      if (matchedEp && matchedEp.url) {
+        const epIdMatch = matchedEp.url.match(/-(\d+)\/?$/);
+        if (epIdMatch) {
+          targetVideoId = epIdMatch[1];
+        }
+      }
+    }
+
+    const playerDataUrl = `https://encontrei.info/index.php?app=videobox&module=video&controller=view&do=playerData&id=${targetVideoId}`;
+    const playerDataRes = await fetch(playerDataUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+        "Cookie": cookieHeader,
+        "Referer": selectedLink,
+        "X-Requested-With": "XMLHttpRequest"
+      }
+    });
+
+    const playerData: any = await playerDataRes.json().catch(() => ({}));
+    const dubServers = parseServersDub(playerData.servers_dub);
+    const players: any[] = playerData.players || [];
+
+    const getPlayerUrl = (srvKey: string) => {
+      const id = dubServers[srvKey];
+      if (!id) return null;
+      const playerObj = players.find((p) => p.label?.toLowerCase().includes(srvKey));
+      if (!playerObj || !playerObj.url) return null;
+      return playerObj.url + id;
+    };
+
+    const byseUrl = getPlayerUrl("byse");
+    const streamtapeUrl = getPlayerUrl("streamtape");
+    const mixdropUrl = getPlayerUrl("mixdrop");
+    const doodUrl = getPlayerUrl("doodstream");
+
+    let chosenUrl = "";
+    let fallbackUrl = "";
+    let serverName = "";
+
+    if (byseUrl) {
+      chosenUrl = byseUrl;
+      serverName = "Byse";
+      fallbackUrl = streamtapeUrl || mixdropUrl || "";
+    } else if (streamtapeUrl) {
+      chosenUrl = streamtapeUrl;
+      serverName = "Streamtape";
+      fallbackUrl = mixdropUrl || doodUrl || "";
+    } else if (mixdropUrl) {
+      chosenUrl = mixdropUrl;
+      serverName = "MixDrop";
+    } else if (doodUrl) {
+      chosenUrl = doodUrl;
+      serverName = "DoodStream";
+    }
+
+    if (!chosenUrl) {
+      return { ok: false, error: "Nenhum servidor dublado disponível no Encontrei.info" };
+    }
+
+    return {
+      ok: true,
+      provider: "encontrei",
+      title,
+      server: serverName,
+      embedUrl: chosenUrl,
+      fallbackUrl,
+      audio: "Dublado PT-BR",
+      isSeries,
+      season: isSeries ? season : undefined,
+      episode: isSeries ? episode : undefined
+    };
+  }
+
+  // Rota HTTP para o Provedor Encontrei.info
+  app.get("/api/encontrei-stream", async (req, res) => {
+    try {
+      const type = (req.query.type as string) || "movie";
+      const title = (req.query.title as string) || "";
+      const tmdbId = (req.query.tmdbId as string) || "";
+      const season = parseInt(req.query.season as string, 10) || 1;
+      const episode = parseInt(req.query.episode as string, 10) || 1;
+      const action = req.query.action as string;
+
+      const result = await resolveEncontreiStream({ type, title, tmdbId, season, episode });
+
+      if (action === "embed") {
+        if (!result.ok || !result.embedUrl) {
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          return res.status(404).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head><meta charset="utf-8"><style>body{background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;}</style></head>
+            <body><p>${result.error || "Conteúdo não disponível no momento."}</p></body>
+            </html>
+          `);
+        }
+
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+              iframe { width: 100%; height: 100%; border: none; }
+            </style>
+          </head>
+          <body>
+            <iframe src="${result.embedUrl}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+          </body>
+          </html>
+        `);
+      }
+
+      return res.json(result);
+    } catch (err: any) {
+      console.error("[Encontrei Stream Route Error]:", err.message);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   // Healthcheck
   app.get("/api/health", (_req, res) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
