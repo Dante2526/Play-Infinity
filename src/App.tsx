@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { AnimatePresence } from "motion/react";
 import {
   Play,
   Bookmark,
@@ -26,7 +27,10 @@ import {
   Clock,
   Layers,
   X,
-  CheckCircle2
+  CheckCircle2,
+  ShieldCheck,
+  FileText,
+  Bell
 } from "lucide-react";
 import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./data";
 import { 
@@ -77,6 +81,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
 const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
+const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import {
   getFavoriteIds,
   toggleFavorite,
@@ -85,6 +90,10 @@ import {
   SERIES_EPISODE_SCHEDULE,
   getScheduleForFavorites
 } from "./services/favorites";
+import {
+  getFavoriteEpisodeNotifications,
+  getReadNotificationIds
+} from "./services/notifications";
 import {
   isEpisodeWatched,
   toggleEpisodeWatched,
@@ -165,6 +174,34 @@ export default function App() {
   });
 
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
+  const [notificationModalOpen, setNotificationModalOpen] = useState(false);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+
+  // Carrega e atualiza a contagem de episódios novos das séries favoritas
+  useEffect(() => {
+    const updateUnread = () => {
+      try {
+        const favIds = getFavoriteIds();
+        const notifs = getFavoriteEpisodeNotifications(favIds);
+        const unread = notifs.filter(n => n.isNew).length;
+        setUnreadNotificationsCount(unread);
+      } catch (err) {
+        console.error("Erro ao atualizar contagem de notificações:", err);
+      }
+    };
+
+    updateUnread();
+
+    window.addEventListener("playinfinity:notifications_updated", updateUnread);
+    window.addEventListener("playinfinity:favorites_updated", updateUnread);
+    window.addEventListener("playinfinity:watched_updated", updateUnread);
+
+    return () => {
+      window.removeEventListener("playinfinity:notifications_updated", updateUnread);
+      window.removeEventListener("playinfinity:favorites_updated", updateUnread);
+      window.removeEventListener("playinfinity:watched_updated", updateUnread);
+    };
+  }, []);
 
   // Sincronização com o botão de voltar e avançar nativo do navegador
   useEffect(() => {
@@ -318,9 +355,25 @@ export default function App() {
           <button 
             onClick={() => navigateTo({ type: 'search' })}
             className={`transition-colors p-2.5 rounded-full border cursor-pointer ${viewState.type === 'search' ? 'bg-orange-600/20 text-orange-500 border-orange-500/50' : 'text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'}`}
+            title="Buscar"
           >
             <Search className="w-4 h-4" />
           </button>
+
+          {/* BOTÃO DE NOTIFICAÇÕES (DESKTOP) */}
+          <button 
+            onClick={() => setNotificationModalOpen(true)}
+            className="relative transition-colors p-2.5 rounded-full border cursor-pointer text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-500/40"
+            title="Notificações de Episódios"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-orange-600 text-[10px] font-black text-white shadow-lg animate-pulse">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
           <div 
             onClick={handleToggleProfile}
             className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
@@ -341,8 +394,22 @@ export default function App() {
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
         
-        {/* ÍCONE DO USUÁRIO NO CANTO SUPERIOR DIREITO */}
-        <div className="pointer-events-auto shrink-0">
+        {/* AÇÕES NO CANTO SUPERIOR DIREITO (MOBILE) */}
+        <div className="pointer-events-auto shrink-0 flex items-center gap-2">
+          {/* BOTÃO DE NOTIFICAÇÕES (MOBILE) */}
+          <button 
+            onClick={() => setNotificationModalOpen(true)}
+            className="relative p-2 rounded-full bg-[#161616]/90 backdrop-blur-md border border-white/10 text-neutral-300 hover:text-white active:scale-95 transition-all shadow-md cursor-pointer"
+            title="Notificações de Episódios"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-orange-600 text-[10px] font-black text-white shadow-lg animate-pulse">
+                {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
           <div 
             onClick={handleToggleProfile}
             className={`w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg cursor-pointer transition-all active:scale-95 ${
@@ -424,10 +491,56 @@ export default function App() {
           ))}
         </div>
 
-        <p className="text-neutral-600 text-xs px-6 max-w-2xl mx-auto leading-relaxed">
-          <span className="text-orange-500 font-bold uppercase block mb-2">Aviso Legal</span>
-          Este é um aplicativo fictício criado apenas para fins de design e interface do usuário responsiva, focado na experiência de plataformas de streaming com a cor laranja predominante e o modo escuro.
-        </p>
+        {/* AVISO LEGAL & COMPLIANCE DMCA */}
+        <div className="w-full max-w-4xl mx-auto px-4 mt-2">
+          <div className="bg-[#121212] border border-neutral-800/80 rounded-2xl p-5 sm:p-7 text-center shadow-xl">
+            <div className="flex flex-col items-center justify-center mb-4 border-b border-neutral-800/80 pb-3">
+              <ShieldCheck className="w-6 h-6 text-orange-500 mb-2" />
+              <h3 className="text-orange-500 font-bold text-sm tracking-wide uppercase text-center max-w-xl">
+                Aviso Legal & Termos de Isenção de Responsabilidade
+              </h3>
+              <span className="block text-xs text-orange-400/90 font-semibold mt-1 normal-case tracking-normal text-center">
+                (DMCA Compliance)
+              </span>
+            </div>
+
+            <div className="text-neutral-400 text-xs sm:text-[13px] leading-relaxed space-y-3 font-normal text-center">
+              <p className="max-w-3xl mx-auto">
+                O <strong className="text-neutral-200">Play Infinity</strong> funciona de maneira 100% equivalente a mecanismos de busca da internet (tais como Google, Bing ou DuckDuckGo). Nós <strong className="text-neutral-200">NÃO hospedamos, NÃO transmitimos, NÃO realizamos upload e NÃO armazenamos</strong> nenhum arquivo de vídeo, filme, série, transmissão de TV, áudio ou qualquer mídia protegida por direitos autorais em servidores próprios.
+              </p>
+              
+              <p className="max-w-3xl mx-auto">
+                Todo e qualquer conteúdo audiovisual apresentado, reproduzido ou referenciado nesta aplicação é disponibilizado, gerido e hospedado exclusivamente por provedores e servidores terceiros, publicamente acessíveis na rede mundial de computadores, de forma totalmente independente e fora do nosso alcance ou controle técnico.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1.5 pb-1 max-w-3xl mx-auto">
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-neutral-200 font-semibold text-xs mb-1">
+                    <FileText className="w-4 h-4 text-orange-400" />
+                    <span>Mera Indexação Pública</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-normal">
+                    Nossa plataforma opera exclusivamente como um agregador e indexador de metadados e links públicos disponibilizados pela própria web aberta.
+                  </p>
+                </div>
+
+                <div className="bg-neutral-900/90 border border-neutral-800 rounded-xl p-3 text-center">
+                  <div className="flex items-center justify-center gap-2 text-neutral-200 font-semibold text-xs mb-1">
+                    <ShieldCheck className="w-4 h-4 text-orange-400" />
+                    <span>Conformidade com a DMCA</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 leading-normal">
+                    Respeitamos integralmente os direitos de propriedade intelectual e atuamos de boa-fé em estrita conformidade com a legislação de direitos autorais.
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-neutral-500 text-[11px] leading-relaxed pt-1 max-w-3xl mx-auto">
+                Se você é detentor dos direitos autorais de qualquer obra ou representante legal e identifica alguma irregularidade, solicitamos que entre em contato diretamente com o serviço de hospedagem terceiro responsável pela guarda física do arquivo em questão para a sua efetiva remoção da rede. Para solicitações de desindexação de metadados em nosso catálogo, consulte os canais oficiais de contato.
+              </p>
+            </div>
+          </div>
+        </div>
       </footer>
 
       {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
@@ -475,6 +588,25 @@ export default function App() {
             onPlayItem={(title, url) => openPlayer(title, url)}
           />
         )}
+
+        <AnimatePresence mode="wait">
+          {notificationModalOpen && (
+            <NotificationModal
+              key="notification-modal"
+              isOpen={true}
+              onClose={() => setNotificationModalOpen(false)}
+              onPlayEpisode={(title, url, mediaType, tmdbId, imdbId, season, episode, quality, isCam, initialTime, autoFullscreen, imageUrl, backdropUrl, posterUrl, isAnime) => {
+                openPlayer(title, url, mediaType, tmdbId, imdbId, season, episode, quality, isCam, initialTime, autoFullscreen, imageUrl, backdropUrl, posterUrl, isAnime);
+              }}
+              onNavigateToSeries={(seriesId) => {
+                navigateToDetails(seriesId);
+              }}
+              onNavigateToCalendar={() => {
+                navigateTo({ type: 'calendar' });
+              }}
+            />
+          )}
+        </AnimatePresence>
       </React.Suspense>
 
       {/* CSS Utility for hiding scrollbar while keeping functionality */}
@@ -2036,7 +2168,7 @@ function GlobalSearchPage({
             Buscar no <span className="text-orange-500">Catálogo</span>
           </h1>
           <p className="text-neutral-400 mt-2 text-sm md:text-base">
-            Pesquise por qualquer filme ou série com capas oficiais e assista no WatchPlayer
+            Pesquise por qualquer filme, série, anime ou dorama do catálogo
           </p>
         </div>
         
@@ -2099,7 +2231,7 @@ function GlobalSearchPage({
               <div>
                 <h2 className="text-xl font-bold mb-6 text-white border-l-4 border-orange-500 pl-3 flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-orange-500" />
-                  Mais Buscados no WatchPlayer
+                  Mais Buscados
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {allCatalogs.slice(0, 12).map((item, idx) => (
@@ -2234,7 +2366,7 @@ function GlobalSearchPage({
                           );
                         }}
                         className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110"
-                        title="Assistir agora no WatchPlayer"
+                        title="Assistir agora"
                       >
                         <Play className="w-5 h-5 fill-current ml-0.5" />
                       </div>
@@ -2694,7 +2826,7 @@ function FavoritesPage({
                         );
                       }}
                       className="w-12 h-12 bg-orange-600 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_20px_rgba(234,88,12,0.6)] text-white hover:scale-110 pointer-events-auto cursor-pointer"
-                      title="Assistir no WatchPlayer"
+                      title="Assistir agora"
                     >
                       <Play className="w-5 h-5 fill-white text-white ml-0.5" />
                     </div>
@@ -2880,7 +3012,7 @@ function GlobalCatalogPage({
 
   const pageTitle = type === 'movies' ? 'Catálogo de Filmes' : 'Catálogo de Séries';
   const pageDescription = type === 'movies' 
-    ? 'Acesso direto a mais de 500.000 filmes em alta definição no WatchPlayer.' 
+    ? 'Acesso direto a mais de 500.000 filmes em alta definição.' 
     : 'Acesso completo a dezenas de milhares de séries, temporadas e episódios com multi-servidores.';
 
   return (

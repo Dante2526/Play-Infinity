@@ -17,7 +17,10 @@ import {
   RefreshCw,
   Trophy,
   LayoutGrid,
-  List
+  List,
+  Upload,
+  FileUp,
+  FolderOpen
 } from 'lucide-react';
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
@@ -25,6 +28,7 @@ import {
   getAllChannels, 
   saveCustomChannel, 
   deleteCustomChannel, 
+  clearAllCustomChannels,
   getFavoriteChannelIds, 
   toggleFavoriteChannel,
   parseM3UPlaylist,
@@ -74,7 +78,23 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
   const [formQuality, setFormQuality] = useState<'1080p' | '720p' | 'HD'>('1080p');
   const [m3uText, setM3uText] = useState<string>('');
+  const [m3uUrl, setM3uUrl] = useState<string>('');
+  const [m3uInputType, setM3uInputType] = useState<'url' | 'text' | 'file'>('url');
+  const [selectedFileName, setSelectedFileName] = useState<string>('');
+  const [validateStreamsCheck, setValidateStreamsCheck] = useState<boolean>(true);
+  const [isAnalyzingM3u, setIsAnalyzingM3u] = useState<boolean>(false);
+  const [m3uFilterView, setM3uFilterView] = useState<'online' | 'all' | 'offline'>('online');
+  const [m3uAnalysisResult, setM3uAnalysisResult] = useState<{
+    total: number;
+    onlineCount: number;
+    offlineCount: number;
+    validated: boolean;
+    categories: Record<string, number>;
+    channels: (LiveChannel & { isOnline?: boolean; status?: string; responseTimeMs?: number; error?: string })[];
+    sample: LiveChannel[];
+  } | null>(null);
   const [importSuccessMsg, setImportSuccessMsg] = useState<string>('');
+  const [importErrorMsg, setImportErrorMsg] = useState<string>('');
 
   // Carrega canais e favoritos ao montar
   const refreshChannels = () => {
@@ -151,6 +171,8 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       setModalTab('single');
     }
     setImportSuccessMsg('');
+    setImportErrorMsg('');
+    setM3uAnalysisResult(null);
     setIsAddModalOpen(true);
   };
 
@@ -191,37 +213,130 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     }
   };
 
-  const handleImportM3U = () => {
-    if (!m3uText.trim()) return;
-    const parsed = parseM3UPlaylist(m3uText);
-    if (parsed.length === 0) {
-      setImportSuccessMsg('Nenhum canal válido encontrado no texto. Verifique o formato M3U.');
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setSelectedFileName(file.name);
+    setImportErrorMsg('');
+    setImportSuccessMsg('');
+    setM3uAnalysisResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        setM3uText(content);
+      }
+    };
+    reader.onerror = () => {
+      setImportErrorMsg('Erro ao ler o arquivo anexado.');
+    };
+    reader.readAsText(file);
+  };
+
+  const handleAnalyzeM3U = async () => {
+    setImportErrorMsg('');
+    setImportSuccessMsg('');
+    setM3uAnalysisResult(null);
+
+    const isUrl = m3uInputType === 'url';
+    const payload = isUrl 
+      ? { url: m3uUrl.trim(), validateStreams: validateStreamsCheck } 
+      : { content: m3uText.trim(), validateStreams: validateStreamsCheck };
+
+    if (isUrl && !m3uUrl.trim()) {
+      setImportErrorMsg('Por favor, insira o link da playlist M3U.');
+      return;
+    }
+    if (!isUrl && !m3uText.trim()) {
+      setImportErrorMsg(m3uInputType === 'file' ? 'Por favor, selecione um arquivo de lista M3U.' : 'Por favor, cole o texto da playlist M3U.');
       return;
     }
 
-    parsed.forEach(c => saveCustomChannel(c));
+    setIsAnalyzingM3u(true);
+    try {
+      const res = await fetch('/api/parse-m3u-playlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Erro ao analisar a lista M3U');
+      }
+
+      if (data.total === 0) {
+        setImportErrorMsg('Nenhum canal com link de stream válido foi encontrado nessa lista.');
+      } else {
+        setM3uAnalysisResult(data);
+        setM3uFilterView(data.onlineCount > 0 ? 'online' : 'all');
+      }
+    } catch (err: any) {
+      setImportErrorMsg(err.message || 'Falha de conexão ao processar lista M3U.');
+    } finally {
+      setIsAnalyzingM3u(false);
+    }
+  };
+
+  const handleImportParsedChannels = (onlyOnline: boolean = false) => {
+    if (!m3uAnalysisResult || m3uAnalysisResult.channels.length === 0) return;
+
+    const channelsToSave = onlyOnline 
+      ? m3uAnalysisResult.channels.filter(c => c.isOnline)
+      : m3uAnalysisResult.channels;
+
+    if (channelsToSave.length === 0) {
+      setImportErrorMsg('Nenhum canal selecionado para importação.');
+      return;
+    }
+
+    channelsToSave.forEach(c => saveCustomChannel(c));
     refreshChannels();
-    setImportSuccessMsg(`${parsed.length} canais importados com sucesso!`);
+    setImportSuccessMsg(`${channelsToSave.length} canais adicionados com sucesso ao seu catálogo!`);
     setTimeout(() => {
       setIsAddModalOpen(false);
       setM3uText('');
+      setM3uUrl('');
+      setM3uAnalysisResult(null);
       setImportSuccessMsg('');
     }, 1500);
   };
 
+  const [toastMsg, setToastMsg] = useState<string>('');
+
+  const customChannelsCount = useMemo(() => {
+    return channels.filter(c => c.isCustom).length;
+  }, [channels]);
+
+  const handleClearAllCustom = () => {
+    clearAllCustomChannels();
+    refreshChannels();
+    setToastMsg('Todos os canais personalizados foram removidos!');
+    setTimeout(() => setToastMsg(''), 3000);
+  };
+
   const handleDeleteChannel = (channelId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Deseja realmente remover este canal personalizado?')) {
-      deleteCustomChannel(channelId);
-      refreshChannels();
-      if (activeChannel?.id === channelId) {
-        setActiveChannel(null);
-      }
+    e.preventDefault();
+    deleteCustomChannel(channelId);
+    refreshChannels();
+    if (activeChannel?.id === channelId) {
+      setActiveChannel(null);
     }
+    setToastMsg('Canal removido com sucesso!');
+    setTimeout(() => setToastMsg(''), 2500);
   };
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pt-14 sm:pt-20 pb-28 md:pb-16 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto w-full overflow-x-hidden">
+      {/* Toast de Notificação / Feedback de Ação */}
+      {toastMsg && (
+        <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600/95 text-white px-4 py-2 rounded-full shadow-2xl border border-emerald-400/40 flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-3 duration-200">
+          <Check className="w-3.5 h-3.5" />
+          <span>{toastMsg}</span>
+        </div>
+      )}
       {/* BANNER PRINCIPAL HERO: AO VIVO */}
       {heroChannel && (
         <div className="relative rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 mb-6 sm:mb-10 shadow-[0_15px_35px_rgba(0,0,0,0.8)] bg-neutral-950">
@@ -275,6 +390,14 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   <Play className="w-5 h-5 fill-white" />
                   <span>Sintonizar Canal</span>
                 </button>
+
+                <button
+                  onClick={() => openAddModal()}
+                  className="flex items-center justify-center gap-2 px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm border border-white/15 transition-all cursor-pointer min-h-[44px]"
+                >
+                  <Plus className="w-4 h-4 text-orange-400" />
+                  <span>Importar Lista M3U</span>
+                </button>
               </div>
             </div>
 
@@ -313,6 +436,16 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão Principal de Adicionar / Importar Lista M3U */}
+          <button
+            onClick={() => openAddModal()}
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-orange-600/30 active:scale-95 cursor-pointer min-h-[44px] shrink-0"
+            title="Importar lista M3U ou adicionar canal"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Importar M3U</span>
+          </button>
+
           {/* Seletor de Modo de Visualização (Grade / Lista - perfeito para celular) */}
           <div className="flex items-center bg-neutral-900/90 border border-white/10 rounded-xl sm:rounded-2xl p-0.5 shrink-0">
             <button
@@ -351,6 +484,26 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
       {/* CHIPS DE CATEGORIAS (Scroll fluido com bleed no mobile) */}
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-3 mb-6 sm:mb-8 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
+        <button
+          onClick={() => openAddModal()}
+          className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 shadow-sm"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>+ Importar Lista M3U</span>
+        </button>
+
+        {customChannelsCount > 0 && (
+          <button
+            type="button"
+            onClick={handleClearAllCustom}
+            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shadow-sm active:scale-95"
+            title="Remover todos os canais que você importou"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Limpar Importados ({customChannelsCount})</span>
+          </button>
+        )}
+
         {categories.map((cat) => {
           const isActive = selectedCategory === cat.id;
           return (
@@ -469,11 +622,12 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
                   {channel.isCustom && (
                     <button
+                      type="button"
                       onClick={(e) => handleDeleteChannel(channel.id, e)}
-                      className="p-2 rounded-lg sm:rounded-xl text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center"
+                      className="p-2 rounded-lg sm:rounded-xl bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
                       title="Excluir canal"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4 text-red-400" />
                     </button>
                   )}
 
@@ -534,11 +688,12 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
                       {channel.isCustom && (
                         <button
+                          type="button"
                           onClick={(e) => handleDeleteChannel(channel.id, e)}
-                          className="p-1 sm:p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer min-w-[28px] min-h-[28px] flex items-center justify-center"
-                          title="Excluir canal personalizado"
+                          className="p-1.5 sm:p-2 rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[30px] min-h-[30px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
+                          title="Excluir canal"
                         >
-                          <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
                         </button>
                       )}
                     </div>
@@ -742,21 +897,340 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                 </form>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                      Cole o conteúdo da Lista M3U / M3U8
-                    </label>
-                    <textarea
-                      rows={5}
-                      placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="..." group-title="Esportes",Premiere 1 HD\nhttp://exemplo.com/premiere.m3u8`}
-                      value={m3uText}
-                      onChange={(e) => setM3uText(e.target.value)}
-                      className="w-full p-3 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-orange-500 custom-scrollbar"
-                    />
-                    <p className="text-[11px] text-neutral-400 mt-1">
-                      Os canais serão processados, categorizados e salvos automaticamente no catálogo local da sua TV.
-                    </p>
+                  {/* Tipo de Entrada: Link URL vs Anexar Arquivo vs Texto */}
+                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/50 rounded-xl border border-white/5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setM3uInputType('url');
+                        setImportErrorMsg('');
+                      }}
+                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
+                        m3uInputType === 'url' ? 'bg-white/15 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      Link / URL
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setM3uInputType('file');
+                        setImportErrorMsg('');
+                      }}
+                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 truncate ${
+                        m3uInputType === 'file' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      <Upload className="w-3.5 h-3.5 shrink-0" />
+                      <span>Anexar Arquivo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setM3uInputType('text');
+                        setImportErrorMsg('');
+                      }}
+                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
+                        m3uInputType === 'text' ? 'bg-white/15 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                      }`}
+                    >
+                      Colar Texto
+                    </button>
                   </div>
+
+                  {/* Toggle para Testar Links em Tempo Real */}
+                  <div className="flex items-center justify-between p-2.5 bg-black/40 border border-white/10 rounded-xl">
+                    <div className="space-y-0.5">
+                      <span className="text-xs font-semibold text-white block">
+                        Testar Links e Conectividade
+                      </span>
+                      <p className="text-[10px] text-neutral-400">
+                        Verifica automaticamente em tempo real quais transmissões estão online e sem travas.
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={validateStreamsCheck}
+                        onChange={(e) => setValidateStreamsCheck(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-600"></div>
+                    </label>
+                  </div>
+
+                  {m3uInputType === 'url' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                        Link público da lista (.m3u, .m3u8 ou raw GitHub)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="url"
+                          placeholder="https://exemplo.com/minha-lista.m3u"
+                          value={m3uUrl}
+                          onChange={(e) => setM3uUrl(e.target.value)}
+                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-orange-500"
+                        />
+                        <button
+                          type="button"
+                          disabled={isAnalyzingM3u || !m3uUrl.trim()}
+                          onClick={handleAnalyzeM3U}
+                          className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-md shadow-orange-600/30"
+                        >
+                          {isAnalyzingM3u ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testando links...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-3.5 h-3.5" />
+                              <span>Analisar e Testar</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-neutral-400 mt-1.5">
+                        O sistema baixa a lista, faz o teste de conexão de cada canal e categoriza tudo.
+                      </p>
+                    </div>
+                  )}
+
+                  {m3uInputType === 'file' && (
+                    <div className="space-y-3">
+                      <label className="block text-xs font-semibold text-neutral-300 mb-1">
+                        Selecione o arquivo da sua Lista (.m3u, .m3u8, .txt)
+                      </label>
+                      <div 
+                        onClick={() => document.getElementById('m3u-file-upload-input')?.click()}
+                        className="border-2 border-dashed border-white/20 hover:border-orange-500/60 rounded-2xl p-5 sm:p-6 text-center bg-black/30 hover:bg-orange-500/5 transition-all cursor-pointer flex flex-col items-center justify-center gap-2.5 group"
+                      >
+                        <input
+                          id="m3u-file-upload-input"
+                          type="file"
+                          accept=".m3u,.m3u8,.txt,text/plain"
+                          onChange={handleFileUpload}
+                          className="hidden"
+                        />
+                        <div className="w-12 h-12 rounded-full bg-orange-500/20 group-hover:bg-orange-500/30 text-orange-400 flex items-center justify-center transition-all">
+                          <FileUp className="w-6 h-6" />
+                        </div>
+                        <div className="space-y-1">
+                          <p className="text-xs sm:text-sm font-bold text-white">
+                            {selectedFileName ? selectedFileName : 'Toque aqui para anexar seu arquivo M3U'}
+                          </p>
+                          <p className="text-[11px] text-neutral-400">
+                            Suporta arquivos baixados .m3u, .m3u8 e listas em texto (.txt)
+                          </p>
+                        </div>
+                        {selectedFileName && (
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
+                            <Check className="w-3.5 h-3.5" /> Arquivo Carregado ({m3uText.length > 0 ? `${(m3uText.length / 1024).toFixed(1)} KB` : 'Pronto'})
+                          </span>
+                        )}
+                      </div>
+
+                      {m3uText.trim() && (
+                        <button
+                          type="button"
+                          disabled={isAnalyzingM3u}
+                          onClick={handleAnalyzeM3U}
+                          className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30"
+                        >
+                          {isAnalyzingM3u ? (
+                            <>
+                              <RefreshCw className="w-4 h-4 animate-spin" />
+                              <span>Testando links do arquivo anexado...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-4 h-4" />
+                              <span>Analisar e Testar Canais do Arquivo</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {m3uInputType === 'text' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                        Cole o conteúdo da Lista M3U / M3U8
+                      </label>
+                      <textarea
+                        rows={4}
+                        placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="..." group-title="Esportes",Premiere 1 HD\nhttp://exemplo.com/premiere.m3u8`}
+                        value={m3uText}
+                        onChange={(e) => setM3uText(e.target.value)}
+                        className="w-full p-3 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-orange-500 custom-scrollbar"
+                      />
+                      <div className="flex justify-end mt-2">
+                        <button
+                          type="button"
+                          disabled={isAnalyzingM3u || !m3uText.trim()}
+                          onClick={handleAnalyzeM3U}
+                          className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                        >
+                          {isAnalyzingM3u ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              <span>Testando links...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Search className="w-3.5 h-3.5" />
+                              <span>Analisar e Testar Texto</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Mensagens de Erro */}
+                  {importErrorMsg && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+                      <X className="w-4 h-4 text-red-500 shrink-0" />
+                      <span>{importErrorMsg}</span>
+                    </div>
+                  )}
+
+                  {/* Resumo da Análise e Diagnóstico dos Canais */}
+                  {m3uAnalysisResult && (
+                    <div className="bg-black/60 border border-white/10 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-200">
+                      {/* Placar de Saúde dos Links */}
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-2">
+                          <span className="text-[10px] text-neutral-400 block font-semibold">Total</span>
+                          <span className="text-sm sm:text-base font-black text-white">{m3uAnalysisResult.total}</span>
+                        </div>
+                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2">
+                          <span className="text-[10px] text-emerald-400 block font-semibold flex items-center justify-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Online
+                          </span>
+                          <span className="text-sm sm:text-base font-black text-emerald-400">{m3uAnalysisResult.onlineCount}</span>
+                        </div>
+                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2">
+                          <span className="text-[10px] text-red-400 block font-semibold">Inativos</span>
+                          <span className="text-sm sm:text-base font-black text-red-400">{m3uAnalysisResult.offlineCount}</span>
+                        </div>
+                      </div>
+
+                      {/* Categorias Detectadas */}
+                      <div>
+                        <span className="text-[10px] text-neutral-400 block mb-1.5 font-semibold uppercase tracking-wider">
+                          Categorias Detectadas:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(m3uAnalysisResult.categories).map(([cat, count]) => (
+                            <span key={cat} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-neutral-300">
+                              <strong className="text-white">{cat}:</strong> {count}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Filtro da Prévia */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
+                            Lista de Canais:
+                          </span>
+                          <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5">
+                            <button
+                              type="button"
+                              onClick={() => setM3uFilterView('online')}
+                              className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                                m3uFilterView === 'online' ? 'bg-emerald-600 text-white' : 'text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              Online ({m3uAnalysisResult.onlineCount})
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setM3uFilterView('all')}
+                              className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                                m3uFilterView === 'all' ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
+                              }`}
+                            >
+                              Todos ({m3uAnalysisResult.total})
+                            </button>
+                            {m3uAnalysisResult.offlineCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setM3uFilterView('offline')}
+                                className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
+                                  m3uFilterView === 'offline' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
+                                }`}
+                              >
+                                Inativos ({m3uAnalysisResult.offlineCount})
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Lista de Canais com Status Badge */}
+                        <div className="max-h-36 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-xs">
+                          {m3uAnalysisResult.channels
+                            .filter(ch => {
+                              if (m3uFilterView === 'online') return ch.isOnline;
+                              if (m3uFilterView === 'offline') return !ch.isOnline;
+                              return true;
+                            })
+                            .slice(0, 15)
+                            .map((ch, idx) => (
+                              <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-white/5 text-[11px] gap-2">
+                                <span className="font-semibold text-white truncate max-w-[170px] sm:max-w-[220px]">
+                                  {ch.name}
+                                </span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-[9px] text-neutral-400">{ch.category}</span>
+                                  {ch.isOnline ? (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                      <span className="w-1 h-1 rounded-full bg-emerald-400"></span>
+                                      {ch.responseTimeMs ? `${ch.responseTimeMs}ms` : 'Online'}
+                                    </span>
+                                  ) : (
+                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
+                                      Offline
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+
+                      {/* Botões de Ação para Importar */}
+                      <div className="space-y-2 pt-1">
+                        {m3uAnalysisResult.onlineCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleImportParsedChannels(true)}
+                            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/30 cursor-pointer flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>Adicionar Apenas os {m3uAnalysisResult.onlineCount} Canais Online (Recomendado)</span>
+                          </button>
+                        ) : (
+                          <p className="text-xs text-red-400 text-center py-1">
+                            Nenhum canal respondeu ao teste de stream nesta lista no momento.
+                          </p>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleImportParsedChannels(false)}
+                          className="w-full py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-semibold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white/10"
+                        >
+                          <span>Importar Todos os {m3uAnalysisResult.total} Canais Mesmo Assim</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {importSuccessMsg && (
                     <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs flex items-center gap-2">
@@ -765,20 +1239,26 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                     </div>
                   )}
 
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
+                    {customChannelsCount > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          handleClearAllCustom();
+                          setIsAddModalOpen(false);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-xs font-semibold cursor-pointer min-h-[42px]"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Remover Todos os {customChannelsCount} Manuais</span>
+                      </button>
+                    ) : <div />}
                     <button
                       type="button"
                       onClick={() => setIsAddModalOpen(false)}
                       className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer min-h-[42px]"
                     >
                       Fechar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleImportM3U}
-                      className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-600/30 cursor-pointer min-h-[42px]"
-                    >
-                      Importar Lista
                     </button>
                   </div>
                 </div>

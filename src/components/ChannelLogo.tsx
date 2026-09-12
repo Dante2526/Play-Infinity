@@ -55,7 +55,7 @@ export const ChannelLogo: React.FC<ChannelLogoProps> = ({
           src={resolvedSrc}
           alt={channel.name}
           referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
+          crossOrigin={resolvedSrc.startsWith('data:') ? undefined : "anonymous"}
           className={`max-h-full max-w-full object-contain filter drop-shadow-md transition-all duration-300 ${imageClassName}`}
           onError={() => {
             // Se falhou o src atual e não era o fallback resolvido, tenta resolver novamente
