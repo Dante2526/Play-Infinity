@@ -16,6 +16,7 @@ import {
   isSeasonFullyWatched,
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
+import { isServerBlacklisted } from "../data/serverBlacklist";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -157,9 +158,7 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>(
-    isAnimeMedia ? "srv_consumet" : "srv_byse"
-  );
+  const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
     const isNativeStream =
@@ -292,25 +291,17 @@ export function VideoPlayerModal({
       return null;
     };
 
-    // 2. Previne desvio da aba principal do Play Infinity
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault();
-      return (e.returnValue = "");
-    };
-
-    // 3. Recupera o foco da janela caso um popup/popunder tente roubar o foco
+    // 2. Recupera o foco da janela caso um popup/popunder tente roubar o foco
     const handleBlur = () => {
       setTimeout(() => {
         window.focus();
       }, 50);
     };
 
-    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("blur", handleBlur);
 
     return () => {
       window.open = originalWindowOpen;
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("blur", handleBlur);
     };
   }, [isOpen]);
@@ -335,174 +326,68 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
-  // Servidores para Animes vs Filmes/Séries (Estritamente conteúdo Dublado em Português do Brasil - PT-BR)
+  // Servidores oficiais homologados: WatchPlayer Oficial e VIP Player (Dublado PT-BR)
   const servers = useMemo(() => {
-    if (isAnimeMedia) {
+    if (isSeries) {
       return [
         {
-          key: "srv_consumet",
-          label: "Player 2 (Dublado PT-BR)",
-          badge: "Stream Dublado em Português (Brasil) • Sem Anúncios",
-          buildUrl: (id: string, s: number, e: number) =>
-            `/api/anime-stream?provider=consumet&id=${id}&s=${s}&e=${e}&title=${encodeURIComponent(title || "")}`,
-          isMatch: (u: string) => u.includes("provider=consumet") || u.includes("anime-stream"),
-          name: "Player 2 (Dublado PT-BR)"
-        },
-        {
-          key: "srv_watchplay_stream",
-          label: "Player 3 (Nativo PT-BR)",
-          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
-          buildUrl: (id: string, s: number, e: number) => 
-            `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
-          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 3 (Nativo PT-BR)"
-        },
-        {
           key: "srv_watchplay",
-          label: "Player 3 (WatchPlayer Oficial)",
-          badge: "WatchPlayer Oficial • Dublado PT-BR",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "Player 3 (WatchPlayer Oficial)"
-        },
-        {
-          key: "srv_vidlink",
-          label: "Player 5 (VidLink HD)",
-          badge: "VidLink Multi-Stream • Legendas / Áudio PT-BR",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 5 (VidLink HD)"
-        }
-      ];
-    } else if (isSeries) {
-      return [
-        {
-          key: "srv_byse",
-          label: "Player 1 (BYSE Player PT-BR)",
-          badge: "BYSE Player Oficial • Dublado PT-BR Alta Velocidade",
-          buildUrl: (id: string, s: number, e: number) =>
-            `/api/byse-stream?title=${encodeURIComponent(title || "")}&tmdb=${id}&s=${s}&e=${e}&type=series`,
-          isMatch: (u: string) => u.includes("byse-stream") || u.includes("byse"),
-          name: "Player 1 (BYSE Player PT-BR)"
-        },
-        {
-          key: "srv_embedplay",
-          label: "Player 2 (EmbedPlay)",
-          badge: "Stream Nativo EmbedPlay • Dublado PT-BR Direto",
-          buildUrl: (id: string, s: number, e: number) => `/api/embedplay-direct?tmdb=${id}&s=${s}&e=${e}&type=series`,
-          isMatch: (u: string) => u.includes("embedplay-direct"),
-          name: "Player 2 (EmbedPlay)"
-        },
-        {
-          key: "srv_watchplay",
-          label: "Player 3 (Dublado PT-BR)",
+          label: "WatchPlayer Oficial",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s: number, e: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "Player 3 (Dublado PT-BR)"
+          name: "WatchPlayer Oficial"
+        },
+        {
+          key: "srv_vip",
+          label: "VIP Player (Dublado PT-BR)",
+          badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://myembed.biz/serie/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
+          name: "VIP Player (Dublado PT-BR)"
         },
         {
           key: "srv_watchplay_stream",
-          label: "Player 4 (Nativo PT-BR)",
+          label: "WatchPlayer Nativo PT-BR",
           badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
           buildUrl: (id: string, s: number, e: number) => 
             `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 4 (Nativo PT-BR)"
-        },
-        {
-          key: "srv_videasy",
-          label: "Player 5 (Videasy Multi)",
-          badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://player.videasy.net/tv/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 5 (Videasy Multi)"
-        },
-        {
-          key: "srv_vidlink",
-          label: "Player 6 (VidLink HD)",
-          badge: "VidLink Multi-Stream • Legendas PT-BR",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://vidlink.pro/tv/${id}/${s}/${e}?primaryColor=e50914&sub=pt`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 6 (VidLink HD)"
-        },
-        {
-          key: "srv_autoembed",
-          label: "Player 7 (AutoEmbed)",
-          badge: "AutoEmbed • Servidor Global",
-          buildUrl: (id: string, s: number, e: number) =>
-            `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("autoembed"),
-          name: "Player 7 (AutoEmbed)"
+          name: "WatchPlayer Nativo PT-BR"
         }
       ];
     } else {
       return [
         {
-          key: "srv_byse",
-          label: "Player 1 (BYSE Player PT-BR)",
-          badge: "BYSE Player Oficial • Dublado PT-BR Alta Velocidade",
-          buildUrl: (id: string) =>
-            `/api/byse-stream?title=${encodeURIComponent(title || "")}&tmdb=${id}&type=movie`,
-          isMatch: (u: string) => u.includes("byse-stream") || u.includes("byse"),
-          name: "Player 1 (BYSE Player PT-BR)"
-        },
-        {
-          key: "srv_embedplay",
-          label: "Player 2 (EmbedPlay)",
-          badge: "Stream Nativo EmbedPlay • Dublado PT-BR Direto",
-          buildUrl: (id: string) => `/api/embedplay-direct?tmdb=${id}&type=movie`,
-          isMatch: (u: string) => u.includes("embedplay-direct"),
-          name: "Player 2 (EmbedPlay)"
-        },
-        {
           key: "srv_watchplay",
-          label: "Player 3 (Dublado PT-BR)",
+          label: "WatchPlayer Oficial",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "Player 3 (Dublado PT-BR)"
+          name: "WatchPlayer Oficial"
+        },
+        {
+          key: "srv_vip",
+          label: "VIP Player (Dublado PT-BR)",
+          badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
+          buildUrl: (id: string) => 
+            `https://myembed.biz/filme/${imdbId || id}`,
+          isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
+          name: "VIP Player (Dublado PT-BR)"
         },
         {
           key: "srv_watchplay_stream",
-          label: "Player 4 (Nativo PT-BR)",
+          label: "WatchPlayer Nativo PT-BR",
           badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
           buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
           isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "Player 4 (Nativo PT-BR)"
-        },
-        {
-          key: "srv_videasy",
-          label: "Player 5 (Videasy Multi)",
-          badge: "Videasy CDN • Múltiplos Idiomas / Alta Velocidade",
-          buildUrl: (id: string) => `https://player.videasy.net/movie/${id}`,
-          isMatch: (u: string) => u.includes("videasy.net"),
-          name: "Player 5 (Videasy Multi)"
-        },
-        {
-          key: "srv_vidlink",
-          label: "Player 6 (VidLink HD)",
-          badge: "VidLink Multi-Stream • Legendas PT-BR",
-          buildUrl: (id: string) => `https://vidlink.pro/movie/${id}?primaryColor=e50914&sub=pt`,
-          isMatch: (u: string) => u.includes("vidlink.pro"),
-          name: "Player 6 (VidLink HD)"
-        },
-        {
-          key: "srv_autoembed",
-          label: "Player 7 (AutoEmbed)",
-          badge: "AutoEmbed • Servidor Global",
-          buildUrl: (id: string) => `https://player.autoembed.cc/embed/movie/${id}`,
-          isMatch: (u: string) => u.includes("autoembed"),
-          name: "Player 6 (AutoEmbed)"
+          name: "WatchPlayer Nativo PT-BR"
         }
       ];
     }
-  }, [isAnimeMedia, isSeries, imdbId, title]);
+  }, [isSeries, imdbId]);
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback((serverKey: string) => {
@@ -511,7 +396,8 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
-    setPlayerSkinReady(false);
+    // Para o VIP Player, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
+    setPlayerSkinReady(serverKey === "srv_vip");
     setError(null);
     const newUrl = isSeries
       ? srv.buildUrl(resolvedId, season, episode)
@@ -528,15 +414,15 @@ export function VideoPlayerModal({
   const handleSilentFallback = useCallback(() => {
     fallbackAttemptsRef.current.add(selectedServerKey);
     // Identifica próximo servidor ainda não tentado
-    const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey);
+    const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
     if (nextServer) {
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
       handleServerSwitch(nextServer.key);
       return;
     }
 
-    console.error("[VideoPlayerModal] Todos os servidores disponíveis falharam.");
-    setError("Não foi possível carregar o vídeo neste momento. Tente novamente mais tarde.");
+    console.error("[VideoPlayerModal] Servidor WatchPlayer indisponível no momento.");
+    setError("O player oficial está instável no momento. Tente novamente em instantes.");
     setIsLoading(false);
   }, [servers, selectedServerKey, handleServerSwitch]);
 
@@ -548,7 +434,10 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady || error) return;
     if (
+      selectedServerKey === 'srv_vip' ||
       selectedServerKey === 'srv_consumet' || 
+      activeIframeUrl.includes('myembed') ||
+      activeIframeUrl.includes('playerflix') ||
       activeIframeUrl.includes('anime-stream')
     ) return;
     const timeoutDuration = isAnimeMedia ? 15000 : 10000;
@@ -585,12 +474,9 @@ export function VideoPlayerModal({
         }
       }
 
-      // Detecção de rede para Animes e configuração do servidor inicial
+      // Inicialização do servidor estritamente com o WatchPlayer
       const setupInitialServer = async () => {
-        let targetServerKey = isAnimeMedia 
-          ? "srv_consumet" 
-          : "srv_watchplay";
-
+        const targetServerKey = "srv_watchplay";
         setSelectedServerKey(targetServerKey);
 
         const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
@@ -830,23 +716,18 @@ export function VideoPlayerModal({
     setError(null);
     setIsLoading(true);
 
-    if (isSuperflixUrl(cleanUrl)) {
-      console.warn("[VideoPlayerModal] Tentativa de carregar Superflix bloqueada por heurística anti-redirecionamento. Acionando fallback.");
+    if (isServerBlacklisted(cleanUrl) || isSuperflixUrl(cleanUrl)) {
+      console.warn("[VideoPlayerModal] Tentativa de carregar servidor na blacklist bloqueada:", cleanUrl);
       handleSilentFallback();
       return;
     }
 
     if (
-      cleanUrl.startsWith("/api/") ||
-      cleanUrl.includes("/api/anime-stream") ||
-      cleanUrl.includes("/api/watchplayer-stream") ||
+      cleanUrl.startsWith("/api/watchplayer-stream") ||
+      cleanUrl.startsWith("/api/myembed-stream") ||
       cleanUrl.includes("watchplay.shop") ||
-      cleanUrl.includes("vidlink") ||
-      cleanUrl.includes("videasy") || 
-      cleanUrl.includes("vidsrc") || 
-      cleanUrl.includes("multiembed") ||
-      cleanUrl.includes("embed.su") || 
-      cleanUrl.includes("myembed") ||
+      cleanUrl.includes("myembed.biz") ||
+      cleanUrl.includes("playerflix.ink") ||
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
