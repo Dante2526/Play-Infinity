@@ -344,7 +344,7 @@ export function VideoPlayerModal({
           label: "VIP Player (Dublado PT-BR)",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string, s: number, e: number) => 
-            `https://myembed.biz/serie/${id}/${s}/${e}`,
+            `/api/myembed-stream?id=${id}&type=tv&s=${s}&e=${e}&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
         },
@@ -373,7 +373,7 @@ export function VideoPlayerModal({
           label: "VIP Player (Dublado PT-BR)",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string) => 
-            `https://myembed.biz/filme/${imdbId || id}`,
+            `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
         },
@@ -501,6 +501,12 @@ export function VideoPlayerModal({
     if (!url) return "";
     if (url.includes("watchplay.shop")) {
       return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
+    }
+    if (url.includes("myembed.biz") || url.includes("playerflix.ink")) {
+      const parsed = parseMediaFromUrl(url);
+      const targetId = parsed.id || imdbId || resolvedId;
+      const targetType = parsed.isSeries ? "tv" : "movie";
+      return `/api/myembed-stream?id=${targetId}&type=${targetType}&s=${parsed.season || season}&e=${parsed.episode || episode}&cb=${Date.now()}`;
     }
     return url;
   };

@@ -2663,7 +2663,90 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // API: MyEmbed / Playerflix VIP Player com Escudo Anti-Popups
+  // Suporte a navegação interna do Playerflix (troca de episódios)
+  app.get(["/serie/:id/:season/:episode", "/filme/:id"], async (req, res) => {
+    const { id, season, episode } = req.params;
+    const type = req.path.startsWith("/serie") ? "tv" : "movie";
+    return res.redirect(`/api/myembed-stream?id=${id}&type=${type}&s=${season || 1}&e=${episode || 1}`);
+  });
+
+  // API: Proxy de Dados do Playerflix / VIP Player
+  app.get(["/inc/Ajax.php", "/api/playerflix-ajax"], async (req, res) => {
+    try {
+      const queryParams = new URLSearchParams(req.query as any).toString();
+      const targetUrl = `https://playerflix.ink/inc/Ajax.php?${queryParams}`;
+      const ajaxRes = await fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://playerflix.ink/",
+          "X-Requested-With": "XMLHttpRequest"
+        }
+      });
+      const data = await ajaxRes.json();
+
+      // Sanitiza opções para garantir apenas servidores permitidos
+      if (data && data.data && Array.isArray(data.data.options)) {
+        data.data.options = data.data.options.filter((opt: any) => {
+          const embedUrl = (opt.embed || "").toLowerCase();
+          return !embedUrl.includes("superflix") && !embedUrl.includes("sfapi") && !embedUrl.includes("byse");
+        }).map((opt: any) => {
+          if (opt.embed && (opt.embed.includes("embedplayer2.xyz") || opt.embed.includes("embedplayer1.xyz"))) {
+            // Repassa o embed real para o nosso proxy limpo
+            const localOrigin = req.protocol + "://" + req.get("host");
+            opt.embed = `${localOrigin}/api/embedplayer-proxy?url=${encodeURIComponent(opt.embed)}`;
+          }
+          return opt;
+        });
+      }
+
+      res.setHeader("Content-Type", "application/json");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      return res.json(data);
+    } catch (err: any) {
+      console.error("[VIP Player Ajax Proxy Error]:", err);
+      return res.status(500).json({ status: false, error: "Erro ao buscar opções do player VIP" });
+    }
+  });
+
+  // API: Proxy para Embedplayer (remove VAST ads problemáticos)
+  app.get("/api/embedplayer-proxy", async (req, res) => {
+    try {
+      const targetUrl = req.query.url as string;
+      if (!targetUrl || !targetUrl.includes("embedplayer")) {
+        return res.status(400).send("Invalid URL");
+      }
+      const response = await fetch(targetUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "https://playerflix.ink/"
+        }
+      });
+      let html = await response.text();
+      
+      // Remove VAST ads and popups from FirePlayer JS configuration
+      html = html.replace(/"advertising":\{.*?\},"p2p"/g, '"advertising":{},"p2p"');
+      html = html.replace(/"popactive":true/g, '"popactive":false');
+      html = html.replace(/https:\/\/embedplayer1\.xyz\/player\/assets\/jwplayer\/netflix1\.css/g, '');
+      
+      // Inject fallback for broken CSS
+      const fallbackCss = `<style>
+      .play-button-outer { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 999997; width: 6em; height: 6em; background-color: rgba(0,0,0,0.7); border-radius: 50%; cursor: pointer; border: 2px solid white; display: flex; align-items: center; justify-content: center; }
+      .play-button-outer::after { content: ''; display: block; border-style: solid; border-width: 1em 0 1em 1.5em; border-color: transparent transparent transparent white; margin-left: 0.5em; }
+      .play-button-outer:hover { background-color: rgba(229, 9, 20, 0.9); border-color: transparent; }
+      </style>`;
+      html = html.replace('</head>', fallbackCss + '</head>');
+      
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+      return res.send(html);
+    } catch (err: any) {
+      console.error("[EmbedPlayer Proxy Error]:", err);
+      return res.status(500).send("Erro ao carregar o player secundário.");
+    }
+  });
+
+  // API: MyEmbed / Playerflix VIP Player com Escudo Anti-Popups e Anti-VAST
   app.get("/api/myembed-stream", async (req, res) => {
     try {
       const rawId = (req.query.id as string) || (req.query.url as string) || "tt22084616";
@@ -2674,24 +2757,58 @@ async function startServer() {
       const episode = req.query.e ? String(req.query.e) : "1";
 
       const targetUrl = (type === "tv" || type === "series")
-        ? `https://myembed.biz/serie/${id}/${season}/${episode}`
-        : `https://myembed.biz/filme/${id}`;
+        ? `https://playerflix.ink/serie/${id}/${season}/${episode}`
+        : `https://playerflix.ink/filme/${id}`;
 
-      const myembedRes = await fetch(targetUrl, {
+      let myembedRes = await fetch(targetUrl, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": "http://localhost:3000/",
-          "Sec-Fetch-Dest": "iframe",
-          "Sec-Fetch-Mode": "navigate",
-          "Sec-Fetch-Site": "cross-site"
+          "Referer": "https://myembed.biz/",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
         }
       });
 
+      if (myembedRes.status !== 200) {
+        // Fallback to myembed.biz if playerflix direct returns non-200
+        const fallbackUrl = (type === "tv" || type === "series")
+          ? `https://myembed.biz/serie/${id}/${season}/${episode}`
+          : `https://myembed.biz/filme/${id}`;
+        myembedRes = await fetch(fallbackUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://myembed.biz/"
+          }
+        });
+      }
+
       let playerHtml = await myembedRes.text();
 
-      // Blindagem Anti-Popup e Injeção de Base Href
+      // Strips ad network script tags
+      playerHtml = playerHtml.replace(/<script[^>]*src=[\"'][^\"']*(?:mypopads|developersonne|googlesyndication|inmobi|themoneytizer|waust|beacon)[^\"']*[\"'][^>]*><\/script>/gi, '');
+
+      // Remove obfuscated popups script strings
+      playerHtml = playerHtml.replace(/aHR0cHM6Ly9kZXZlbG9wZXJzb25lLmNvbS5ici9sb2FkLnBocD9yPXBvcA==/g, '');
+      playerHtml = playerHtml.replace(/aHR0cHM6Ly9teXBvcGFkcy5jb20vcmVxdWVzdHMvZGlzcGxheS5waHA/g, '');
+
+      // Força o Ajax a bater no nosso proxy local usando a raiz atual (vazio)
+      playerHtml = playerHtml.replace(/BASE_URL:\s*['"]https:\/\/(playerflix\.ink|myembed\.biz)['"]/gi, `BASE_URL: ''`);
+
+      // Blindagem Anti-Popup e Anti-VAST Ads
       const shieldScript = `
-        <base href="https://myembed.biz/" />
+        <style>
+          /* Esconde qualquer overlay de propaganda, VAST, Banners e Popups */
+          .vast-ad-container, .vast-blocker, [class*="vast"], [id*="vast"],
+          [class*="popad"], [id*="popad"], .ad-overlay, .ad-banner, .advertisement,
+          div[style*="z-index: 2147483647"], div[style*="z-index: 999999"],
+          iframe[src*="pop"], iframe[src*="ad"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            width: 0px !important;
+            height: 0px !important;
+          }
+        </style>
         <script>
           window.open = function() {
             console.warn('[Play Infinity Anti-Popup] Popup bloqueado com sucesso.');
@@ -2700,12 +2817,30 @@ async function startServer() {
           window.alert = function() {};
           window.confirm = function() { return false; };
           window.onbeforeunload = null;
+
+          // Destruidor automático de VAST Ads e botões de pular anúncio
+          setInterval(function() {
+            try {
+              // 1. Tenta clicar em botões de "Skip", "Pular Anúncio" ou "Fechar"
+              const skipButtons = document.querySelectorAll('.skip-button, .vast-skip-button, [class*="skip"], [id*="skip"], [class*="close-ad"]');
+              skipButtons.forEach(function(btn) { if (typeof btn.click === 'function') btn.click(); });
+
+              // 2. Remove do DOM qualquer elemento VAST/ad que apareça sobre o player
+              const adElements = document.querySelectorAll('.vast-ad-container, .vast-blocker, [class*="vast-ad"], [id*="vast-ad"]');
+              adElements.forEach(function(el) { el.remove(); });
+            } catch(e) {}
+          }, 250);
         </script>
       `;
 
-      playerHtml = playerHtml.replace("<head>", "<head>" + shieldScript);
+      if (playerHtml.includes("<head>")) {
+        playerHtml = playerHtml.replace("<head>", "<head>" + shieldScript);
+      } else {
+        playerHtml = shieldScript + playerHtml;
+      }
 
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       return res.send(playerHtml);
     } catch (err: any) {
       console.error("[MyEmbed Stream Proxy Error]:", err);
