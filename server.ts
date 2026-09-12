@@ -779,6 +779,199 @@ async function startServer() {
     }
   });
 
+  // API: Analisador e Importador Inteligente de Listas M3U (URLs ou Texto)
+  app.post("/api/parse-m3u-playlist", async (req, res) => {
+    try {
+      let { url, content } = req.body || {};
+      if (!url && !content) {
+        return res.status(400).json({ success: false, error: "Informe a URL ou o texto da lista M3U." });
+      }
+
+      let m3uText = content || "";
+
+      if (url) {
+        let fetchUrl = String(url).trim();
+        // Converte links do GitHub blob para raw automaticamente
+        if (fetchUrl.includes("github.com") && fetchUrl.includes("/blob/")) {
+          fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+        const resp = await fetch(fetchUrl, {
+          signal: controller.signal,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "*/*"
+          }
+        });
+        clearTimeout(timeout);
+
+        if (!resp.ok) {
+          return res.status(resp.status).json({ success: false, error: `Falha ao carregar a URL (${resp.status} ${resp.statusText})` });
+        }
+        m3uText = await resp.text();
+      }
+
+      if (!m3uText || typeof m3uText !== "string") {
+        return res.status(400).json({ success: false, error: "Conteúdo da lista vazio ou inválido." });
+      }
+
+      // Parser robusto de M3U
+      const lines = m3uText.split(/\r?\n/);
+      const parsedChannels: any[] = [];
+      let currentInfo: any = null;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        if (line.startsWith("#EXTINF:")) {
+          const nameMatch = line.match(/,(.+)$/);
+          const name = nameMatch ? nameMatch[1].trim() : "Canal " + (parsedChannels.length + 1);
+          const logoMatch = line.match(/tvg-logo="([^"]+)"/);
+          const groupMatch = line.match(/group-title="([^"]+)"/);
+
+          const group = (groupMatch ? groupMatch[1] : "").toLowerCase();
+          const nameLower = name.toLowerCase();
+
+          // Determina categoria inteligente
+          let category = "Variedades";
+          if (group.includes("sport") || group.includes("esporte") || nameLower.includes("premiere") || nameLower.includes("sport") || nameLower.includes("espn") || nameLower.includes("futebol") || nameLower.includes("combate") || nameLower.includes("dazn")) {
+            category = "Esportes";
+          } else if (group.includes("aberta") || group.includes("aberto") || nameLower.includes("globo") || nameLower.includes("sbt") || nameLower.includes("record") || nameLower.includes("band") || nameLower.includes("redetv") || nameLower.includes("cultura")) {
+            category = "TV Aberta";
+          } else if (group.includes("news") || group.includes("noticia") || nameLower.includes("jornal") || nameLower.includes("cnn") || nameLower.includes("globonews") || nameLower.includes("record news")) {
+            category = "Notícias";
+          } else if (group.includes("filme") || group.includes("cinema") || group.includes("serie") || nameLower.includes("telecine") || nameLower.includes("hbo") || nameLower.includes("megapix") || nameLower.includes("warner") || nameLower.includes("paramount") || nameLower.includes("universal")) {
+            category = "Filmes & Séries";
+          } else if (group.includes("infantil") || group.includes("kids") || group.includes("anime") || group.includes("desenho") || nameLower.includes("cartoon") || nameLower.includes("disney") || nameLower.includes("nickelodeon") || nameLower.includes("gloob")) {
+            category = "Infantil";
+          }
+
+          currentInfo = {
+            name,
+            category,
+            logo: logoMatch ? logoMatch[1] : "",
+            quality: nameLower.includes("1080") || nameLower.includes("fhd") ? "1080p" : (nameLower.includes("720") || nameLower.includes("hd") ? "720p" : "HD")
+          };
+        } else if ((line.startsWith("http://") || line.startsWith("https://")) && currentInfo) {
+          const id = "custom-" + Math.random().toString(36).substring(2, 9) + "-" + Date.now().toString(36);
+          parsedChannels.push({
+            id,
+            name: currentInfo.name,
+            category: currentInfo.category,
+            quality: currentInfo.quality,
+            logo: currentInfo.logo || "https://images.unsplash.com/photo-1593784991095-a205069470b6?w=320&auto=format&fit=crop&q=80",
+            currentProgram: "Transmissão Ao Vivo • " + currentInfo.name,
+            isCustom: true,
+            servers: [
+              {
+                name: "Servidor Proxy Play Infinity (Recomendado)",
+                url: line,
+                isProxy: true
+              },
+              {
+                name: "Servidor Direto",
+                url: line,
+                isProxy: false
+              }
+            ]
+          });
+          currentInfo = null;
+        }
+      }
+
+      // Estatísticas das categorias
+      const categoryCounts: Record<string, number> = {};
+      parsedChannels.forEach(c => {
+        categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1;
+      });
+
+      // Se solicitado teste de funcionamento ativo dos links (validateStreams = true)
+      const validateStreams = req.body?.validateStreams !== false; // padrão: true
+      let onlineCount = 0;
+      let offlineCount = 0;
+
+      if (validateStreams && parsedChannels.length > 0) {
+        // Testa canais em lotes paralelos para rapidez
+        const BATCH_SIZE = 12;
+        for (let i = 0; i < parsedChannels.length; i += BATCH_SIZE) {
+          const batch = parsedChannels.slice(i, i + BATCH_SIZE);
+          await Promise.all(batch.map(async (channel) => {
+            const streamUrl = channel.servers?.[0]?.url;
+            if (!streamUrl) {
+              channel.isOnline = false;
+              channel.status = "offline";
+              offlineCount++;
+              return;
+            }
+
+            const startTime = Date.now();
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 3500);
+
+              const checkRes = await fetch(streamUrl, {
+                method: "GET",
+                signal: controller.signal,
+                headers: {
+                  "Range": "bytes=0-1024",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                  "Accept": "*/*"
+                }
+              });
+              clearTimeout(timeout);
+              const elapsed = Date.now() - startTime;
+
+              // Considera ativo se respondeu 2xx ou 3xx ou se o content-type for mpegurl/video
+              const contentType = checkRes.headers.get("content-type") || "";
+              const isOk = (checkRes.status >= 200 && checkRes.status < 400) || contentType.includes("mpeg") || contentType.includes("video");
+
+              if (isOk) {
+                channel.isOnline = true;
+                channel.status = "online";
+                channel.responseTimeMs = elapsed;
+                onlineCount++;
+              } else {
+                channel.isOnline = false;
+                channel.status = "offline";
+                channel.statusCode = checkRes.status;
+                offlineCount++;
+              }
+            } catch (err: any) {
+              channel.isOnline = false;
+              channel.status = "offline";
+              channel.error = err.name === "AbortError" ? "Tempo limite esgotado (timeout)" : "Link inacessível";
+              offlineCount++;
+            }
+          }));
+        }
+      } else {
+        // Se validação estiver desativada
+        parsedChannels.forEach(c => {
+          c.isOnline = true;
+          c.status = "untested";
+        });
+        onlineCount = parsedChannels.length;
+      }
+
+      return res.json({
+        success: true,
+        total: parsedChannels.length,
+        onlineCount,
+        offlineCount,
+        validated: validateStreams,
+        categories: categoryCounts,
+        channels: parsedChannels,
+        sample: parsedChannels.slice(0, 10)
+      });
+    } catch (err: any) {
+      console.error("[M3U Parser API Error]:", err.message);
+      return res.status(500).json({ success: false, error: err.message || "Erro ao processar lista M3U" });
+    }
+  });
+
   // API 4: Proxy WatchPlay API (para obter opções de episódio e player sem bloqueio de CORS)
   app.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req, res) => {
     try {
@@ -799,7 +992,28 @@ async function startServer() {
     }
   });
 
-  // API 4.5: Player Diagnostics Test (Automated sandbox, anti-popup and CORS verification)
+  // Proxy de assets estáticos do WatchPlayer (/assets/artplayer.js, /assets/hls.min.js, /assets/myplayer.js, etc.)
+  app.get("/assets/:file", async (req, res, next) => {
+    const file = req.params.file;
+    if (file && (file.endsWith(".js") || file.endsWith(".css") || file.endsWith(".svg") || file.endsWith(".png"))) {
+      try {
+        const upstreamRes = await fetch(`https://v1.watchplay.shop/assets/${file}`, {
+          headers: {
+            "Referer": "https://v1.watchplay.shop/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          },
+        });
+        if (upstreamRes.ok) {
+          const contentType = upstreamRes.headers.get("content-type") || (file.endsWith(".css") ? "text/css" : "text/javascript");
+          res.setHeader("Content-Type", contentType);
+          res.setHeader("Cache-Control", "public, max-age=86400");
+          const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+          return res.send(buffer);
+        }
+      } catch (e) {}
+    }
+    return next();
+  });
   app.get("/api/player-diagnostics", async (req, res) => {
     const testUrl = (req.query.url as string) || "https://v1.watchplay.shop/tvshow/66732/1/1";
     const validation = validateSafeUrl(testUrl);
@@ -1859,15 +2073,47 @@ async function startServer() {
       }
 
       const parsedTarget = new URL(targetUrl);
-      const upstreamRes = await fetch(targetUrl, {
+      let effectiveTargetUrl = targetUrl;
+      let upstreamRes = await fetch(effectiveTargetUrl, {
         headers: {
           "Referer": parsedTarget.origin + "/",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
       });
 
+      // Se a rota padrão falhou (ex: 404), tenta alternar automaticamente entre /tvshow/ e /series/
       if (!upstreamRes.ok) {
-        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado no WatchPlayer (${targetUrl}). Acionando fallback.`);
+        const alternateVariants: string[] = [];
+        if (effectiveTargetUrl.includes("/tvshow/")) {
+          alternateVariants.push(effectiveTargetUrl.replace("/tvshow/", "/series/"));
+          alternateVariants.push(effectiveTargetUrl.replace("/tvshow/", "/serie/"));
+        } else if (effectiveTargetUrl.includes("/series/")) {
+          alternateVariants.push(effectiveTargetUrl.replace("/series/", "/tvshow/"));
+          alternateVariants.push(effectiveTargetUrl.replace("/series/", "/serie/"));
+        } else if (effectiveTargetUrl.includes("/serie/")) {
+          alternateVariants.push(effectiveTargetUrl.replace("/serie/", "/series/"));
+          alternateVariants.push(effectiveTargetUrl.replace("/serie/", "/tvshow/"));
+        }
+
+        for (const altUrl of alternateVariants) {
+          try {
+            const altRes = await fetch(altUrl, {
+              headers: {
+                "Referer": new URL(altUrl).origin + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+            });
+            if (altRes.ok) {
+              effectiveTargetUrl = altUrl;
+              upstreamRes = altRes;
+              break;
+            }
+          } catch (e) {}
+        }
+      }
+
+      if (!upstreamRes.ok) {
+        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado no WatchPlayer (${effectiveTargetUrl}). Acionando fallback.`);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(404).send(`
           <!DOCTYPE html>
@@ -1895,10 +2141,10 @@ async function startServer() {
       let html = await upstreamRes.text();
 
       // 0. Bloqueio definitivo do Superflix via heurística robusta (regex multi-domínio, meta refresh, scripts e redirects)
-      const isFallbackMode = isSuperflixDetected(html, targetUrl) || (upstreamRes.url ? isSuperflixDetected("", upstreamRes.url) : false);
+      const isFallbackMode = isSuperflixDetected(html, effectiveTargetUrl) || (upstreamRes.url ? isSuperflixDetected("", upstreamRes.url) : false);
 
       if (isFallbackMode) {
-        console.warn(`[Superflix Banido]: WatchPlayer tentou redirecionar para Superflix (${targetUrl}). Bloqueando e acionando fallback.`);
+        console.warn(`[Superflix Banido]: WatchPlayer tentou redirecionar para Superflix (${effectiveTargetUrl}). Bloqueando e acionando fallback.`);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(404).send(`
           <!DOCTYPE html>
@@ -1932,9 +2178,11 @@ async function startServer() {
       html = html.replace(/var AUTO_PLAY_ENABLED = false;/g, "var AUTO_PLAY_ENABLED = true;");
       html = html.replace(/AUTO_PLAY_ENABLED && options\.length == 1/g, "true");
 
-      // 2. Redirecionar requisições da API interna para o proxy local
+      // 2. Redirecionar requisições da API interna para o proxy local e garantir carregamento dos assets
       html = html.replace(/var HOME_URL = ['"]https:\/\/v1\.watchplay\.shop['"];/g, "var HOME_URL = '/api/watchplay-proxy';");
       html = html.replace(/\$\{HOME_URL\}\/api/g, "/api/watchplay-proxy-api");
+      html = html.replace(/src=["']\/assets\//g, 'src="https://v1.watchplay.shop/assets/');
+      html = html.replace(/href=["']\/assets\//g, 'href="https://v1.watchplay.shop/assets/');
 
       // 3. Remover rastreadores, banners conhecidos e loaders nativos
       html = html.replace(/_wau\.push\([^)]*\);?/g, "");
@@ -1953,6 +2201,10 @@ async function startServer() {
       html = html.replace(/autoOrientation:\s*true,/g, "autoOrientation: false,");
       html = html.replace(/fullscreen:\s*true,/g, "fullscreen: false,");
       html = html.replace(/fullscreenWeb:\s*true,/g, "fullscreenWeb: false,");
+
+      // 4.0 Suporte robusto a filmes diretos com createMyPlayer e Artplayer
+      html = html.replace(/createMyPlayer\(\s*\{/g, "window.artInstance = createMyPlayer({ autoplay: true, ");
+      html = html.replace(/autoplay:\s*false/g, "autoplay: true");
 
       html = html.replace(
         /artInstance = new Artplayer\(\{/g,
@@ -2050,6 +2302,7 @@ async function startServer() {
           .player_container.visible,
           .player_container .infra,
           #artplayer-container,
+          #tv-player,
           .art-video-player {
             display: block !important;
             position: absolute !important;
@@ -2162,6 +2415,26 @@ async function startServer() {
             var autoStartTimer = setInterval(function() {
               tries++;
 
+              // D) Detecção proativa do vídeo (Filmes via #tv-player e Séries)
+              var v = getVideoElement();
+              if (v) {
+                // Se o vídeo estiver pausado mas já com metadados ou pronto, tenta dar play
+                if (v.paused && (v.readyState >= 1 || v.currentTime > 0)) {
+                  v.play().catch(function() {
+                    v.muted = true;
+                    v.play().catch(function() {});
+                  });
+                }
+                // Se já possui duração válida ou está reproduzindo, envia status e estabiliza
+                if ((v.duration > 0 && !isNaN(v.duration)) || v.currentTime > 0 || !v.paused) {
+                  sendPlayerStatus(v);
+                  if (!v.paused) {
+                    clearInterval(autoStartTimer);
+                    return;
+                  }
+                }
+              }
+
               // A) Séries: aciona getepi imediatamente no episódio selecionado sem esperar dezenas de miniaturas
               var ep = document.querySelector('.episodeOption.active') || document.querySelector('.episodeOption');
               if (ep && window.$ && typeof window.getepi === 'function' && !window._epAutoTriggered) {
@@ -2176,27 +2449,27 @@ async function startServer() {
                 dublado.click();
               }
 
-              // C) Clica na opção de player assim que surgir
+              // C) Clica na opção de player assim que surgir (apenas para páginas com opções de servidores)
               if (!optionClicked) {
                 var option = document.querySelector('.players_select_items.visible .player_select_item') || 
                              document.querySelector('.player_select_item');
                 if (option) {
                   optionClicked = true;
-                  option.click(); } else if (tries > 15 && document.querySelectorAll(".player_select_item").length === 0) { clearInterval(autoStartTimer); try { window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "no_sources" }, "*"); } catch(e){} return;
+                  option.click();
+                } else if (!document.querySelector('#tv-player') && !document.querySelector('video') && !window.artInstance) {
+                  // Só aciona indisponibilidade se NÃO for um player direto de filme (#tv-player) e não houver vídeo após tempo razoável
+                  if (tries > 40 && document.querySelectorAll(".player_select_item").length === 0) {
+                    clearInterval(autoStartTimer);
+                    try { window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "no_sources" }, "*"); } catch(e){}
+                    return;
+                  }
                 }
-              }
-
-              // D) Se o vídeo já possui duração válida e está pronto, finaliza monitoramento com sucesso
-              var v = getVideoElement();
-              if (v && v.duration > 0 && !isNaN(v.duration)) {
-                clearInterval(autoStartTimer);
-                return;
               }
 
               // Timeout após 100 ticks (6.0 segundos sem stream válido)
               if (tries > 100) {
                 clearInterval(autoStartTimer);
-                if (!v || !v.duration || v.duration === 0) {
+                if (!v || (!v.duration && v.currentTime === 0 && v.paused)) {
                   try {
                     window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "timeout_no_stream" }, "*");
                   } catch(e) {}
@@ -2453,6 +2726,21 @@ async function startServer() {
               }, true);
             });
 
+            // Detecção de erros no stream de vídeo ou perda de conexão para acionar fallback automático
+            document.addEventListener('error', function(e) {
+              if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "video_playback_error" }, "*");
+                } catch(err) {}
+              }
+            }, true);
+
+            window.addEventListener('offline', function() {
+              try {
+                window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "network_offline" }, "*");
+              } catch(err) {}
+            });
+
             // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
             var cleanArtNodes = function() {
               if (window.artInstance) {
@@ -2702,7 +2990,7 @@ async function startServer() {
     }
   });
 
-  // API: MyEmbed / Playerflix VIP Player com Escudo Anti-Popups e Anti-VAST
+  // API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
   app.get("/api/myembed-stream", async (req, res) => {
     try {
       const rawId = (req.query.id as string) || (req.query.url as string) || "tt22084616";
@@ -2712,9 +3000,409 @@ async function startServer() {
       const season = req.query.s ? String(req.query.s) : "1";
       const episode = req.query.e ? String(req.query.e) : "1";
 
+      // Para séries e filmes, se o id for IMDb (tt...), converte para TMDB numérico para compatibilidade total com o Ajax
+      let resolvedId = id;
+      if (id.startsWith("tt")) {
+        try {
+          const findRes = await fetch(
+            `https://api.themoviedb.org/3/find/${id}?api_key=e0cc43e590a5c5c0d03f920bd4fe9424&external_source=imdb_id`
+          );
+          if (findRes.ok) {
+            const findData = await findRes.json();
+            if ((type === "tv" || type === "series") && findData.tv_results?.[0]?.id) {
+              resolvedId = String(findData.tv_results[0].id);
+            } else if (type === "movie" && findData.movie_results?.[0]?.id) {
+              resolvedId = String(findData.movie_results[0].id);
+            }
+          }
+        } catch (findErr) {
+          console.warn("[VIP Player TMDB Find Warning]:", findErr);
+        }
+      }
+
+      // 1. TENTATIVA DIRETA DE EXTRAÇÃO (Sem telas de 'Carregando', sem popups e sem anúncios)
+      let ajaxHadValidSources = false;
+      try {
+        const ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=${type}&id=${resolvedId}&season=${season}&episode=${episode}`;
+        const ajaxRes = await fetch(ajaxUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://playerflix.ink/",
+            "X-Requested-With": "XMLHttpRequest",
+          },
+        });
+
+        if (ajaxRes.ok) {
+          const ajaxData = await ajaxRes.json();
+          if (ajaxData && ajaxData.status && Array.isArray(ajaxData.data?.options)) {
+            // Regra Estrita: descarta servidores na lista negra (Superflix, sfapi, byse, streamberry)
+            // e prioriza opções com dublagem brasileira (Dublado PT-BR)
+            const validOptions = ajaxData.data.options
+              .filter((opt: any) => {
+                const u = (opt.embed || "").toLowerCase();
+                return !u.includes("superflix") && !u.includes("sfapi") && !u.includes("byse") && !u.includes("streamberry");
+              })
+              .sort((a: any, b: any) => {
+                const aLang = (a.lang || "").toLowerCase();
+                const bLang = (b.lang || "").toLowerCase();
+                const aDub = aLang.includes("pt") || aLang.includes("br") || aLang.includes("dub");
+                const bDub = bLang.includes("pt") || bLang.includes("br") || bLang.includes("dub");
+                if (aDub && !bDub) return -1;
+                if (!aDub && bDub) return 1;
+                return 0;
+              });
+
+            if (validOptions.length > 0) {
+              ajaxHadValidSources = true;
+            }
+
+            for (const vipOption of validOptions) {
+              if (!vipOption || !vipOption.embed) continue;
+              try {
+                const embedUrl = new URL(vipOption.embed);
+                const hash = embedUrl.pathname.split("/").filter(Boolean).pop();
+                const host = embedUrl.host;
+
+                if (!hash || !host) continue;
+
+                const getVidRes = await fetch(`https://${host}/player/index.php?data=${hash}&do=getVideo`, {
+                  method: "POST",
+                  headers: {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    "Referer": vipOption.embed,
+                    "Origin": `https://${host}`,
+                    "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                    "X-Requested-With": "XMLHttpRequest",
+                  },
+                  body: `hash=${hash}&r=${encodeURIComponent("https://playerflix.ink/")}`,
+                });
+
+                if (!getVidRes.ok) continue;
+                const vidText = await getVidRes.text();
+                if (!vidText.startsWith("{")) continue;
+
+                const vidData = JSON.parse(vidText);
+                const m3u8Source = vidData.securedLink || vidData.videoSource;
+                if (!m3u8Source || typeof m3u8Source !== "string" || !m3u8Source.startsWith("http")) continue;
+
+                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
+
+                res.setHeader("Content-Type", "text/html; charset=utf-8");
+                res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+                return res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VIP Player - ${ajaxData.data?.title || "Play Infinity"}</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    #artplayer-container {
+      width: 100%;
+      height: 100%;
+    }
+    /* Oculta totalmente qualquer elemento de interface nativa do Artplayer para dar lugar exclusivo à Skin Netflix */
+    .art-video-player .art-bottom,
+    .art-video-player .art-mask,
+    .art-video-player .art-state,
+    .art-video-player .art-contextmenus,
+    .art-video-player .art-loading,
+    .art-video-player .art-notice,
+    .art-video-player .art-controls,
+    .art-video-player .art-layer-state,
+    .art-video-player .art-progress,
+    .art-video-player .art-control,
+    .art-video-player .art-backdrop,
+    .art-video-player .art-layers {
+      display: none !important;
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+</head>
+<body>
+  <div id="artplayer-container"></div>
+  <script>
+    (function() {
+      // Neutraliza popups e janelas secundárias
+      window.open = function() { return null; };
+      window.alert = function() {};
+      window.confirm = function() { return false; };
+
+      var hlsUrl = "${proxiedStreamUrl}";
+
+      var art = new Artplayer({
+        container: "#artplayer-container",
+        url: hlsUrl,
+        type: "m3u8",
+        customType: {
+          m3u8: function(video, url, artInstance) {
+            if (Hls.isSupported()) {
+              if (artInstance.hls) artInstance.hls.destroy();
+              var hls = new Hls({
+                enableWorker: true,
+                maxBufferLength: 60,
+                maxMaxBufferLength: 120,
+                backBufferLength: 90
+              });
+              hls.loadSource(url);
+              hls.attachMedia(video);
+              hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                // Seleciona áudio Dublado / Português automaticamente se disponível
+                if (hls.audioTracks && hls.audioTracks.length > 1) {
+                  for (var i = 0; i < hls.audioTracks.length; i++) {
+                    var track = hls.audioTracks[i];
+                    var lang = (track.lang || track.name || "").toLowerCase();
+                    if (lang.includes("pt") || lang.includes("por") || lang.includes("dub")) {
+                      hls.audioTrack = i;
+                      break;
+                    }
+                  }
+                }
+              });
+              hls.on(Hls.Events.LEVEL_LOADED, function(event, data) {
+                if (data && data.details && data.details.totalduration) {
+                  window.__streamDuration = data.details.totalduration;
+                  sendStatus();
+                }
+              });
+              hls.on(Hls.Events.ERROR, function(event, data) {
+                if (data && data.fatal) {
+                  switch (data.type) {
+                    case Hls.ErrorTypes.NETWORK_ERROR:
+                      hls.startLoad();
+                      break;
+                    case Hls.ErrorTypes.MEDIA_ERROR:
+                      hls.recoverMediaError();
+                      break;
+                    default:
+                      hls.destroy();
+                      try {
+                        window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_hls_fatal" }, "*");
+                      } catch(e) {}
+                      break;
+                  }
+                }
+              });
+              artInstance.hls = hls;
+            } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+              video.src = url;
+              video.addEventListener("error", function() {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_video_error" }, "*");
+                } catch(e) {}
+              });
+            }
+          }
+        },
+        autoplay: true,
+        muted: false,
+        playsInline: true,
+        hotkey: false,
+        gesture: false,
+        miniProgressBar: false,
+        backdrop: false,
+        controls: [],
+        icons: { state: '' },
+        theme: "#e50914"
+      });
+
+      window.artInstance = art;
+
+      function sendStatus() {
+        var v = art.video || document.querySelector("video");
+        if (!v) return;
+        var dur = v.duration || art.duration || window.__streamDuration || 0;
+        if ((!dur || isNaN(dur) || dur === Infinity) && window.__streamDuration) {
+          dur = window.__streamDuration;
+        }
+        if (!dur || isNaN(dur) || dur === Infinity) {
+          dur = 0;
+        }
+        var cur = v.currentTime || 0;
+        var bufferedEnd = 0;
+        if (v.buffered && v.buffered.length > 0) {
+          bufferedEnd = v.buffered.end(v.buffered.length - 1);
+        }
+
+        try {
+          window.parent.postMessage({
+            type: "WATCHPLAY_STATUS",
+            currentTime: cur,
+            duration: dur,
+            paused: !!v.paused,
+            muted: !!v.muted,
+            volume: typeof v.volume === "number" ? v.volume : 1,
+            buffered: bufferedEnd,
+            playbackRate: v.playbackRate || 1,
+            readyState: v.readyState || 0
+          }, "*");
+        } catch(e) {}
+      }
+
+      function notifyEnded() {
+        try {
+          window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+        } catch(e) {}
+      }
+
+      art.on("video:timeupdate", sendStatus);
+      art.on("video:loadedmetadata", sendStatus);
+      art.on("video:play", sendStatus);
+      art.on("video:pause", sendStatus);
+      art.on("video:playing", sendStatus);
+      art.on("video:progress", sendStatus);
+      art.on("video:ended", notifyEnded);
+
+      setInterval(sendStatus, 250);
+
+      // Ponte de comandos completos para a Skin Netflix
+      window.addEventListener("message", function(e) {
+        if (!e.data) return;
+        var v = art.video || document.querySelector("video");
+        var msgType = e.data.type || e.data.action;
+
+        switch (msgType) {
+          case "PLAY":
+          case "play":
+            if (art) art.play().catch(function() {});
+            else if (v) v.play().catch(function() {});
+            sendStatus();
+            break;
+          case "PAUSE":
+          case "pause":
+            if (art) art.pause();
+            else if (v) v.pause();
+            sendStatus();
+            break;
+          case "TOGGLE_PLAY":
+          case "togglePlay":
+            if (art) art.toggle();
+            else if (v) { v.paused ? v.play().catch(function() {}) : v.pause(); }
+            sendStatus();
+            break;
+          case "SEEK":
+          case "seek":
+          case "SEEK_ABSOLUTE":
+            var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+            if (typeof t === "number" && !isNaN(t)) {
+              if (art) art.currentTime = t;
+              else if (v) v.currentTime = t;
+              sendStatus();
+            }
+            break;
+          case "SEEK_RELATIVE":
+            var delta = Number(e.data.seconds) || 0;
+            var curTime = (v ? v.currentTime : (art ? art.currentTime : 0)) || 0;
+            var maxDur = (v && v.duration > 0 ? v.duration : (window.__streamDuration || 99999));
+            var newTarget = Math.max(0, Math.min(curTime + delta, maxDur));
+            if (art) art.currentTime = newTarget;
+            else if (v) v.currentTime = newTarget;
+            sendStatus();
+            break;
+          case "SET_PLAYBACK_RATE":
+          case "setPlaybackRate":
+            var rate = Number(e.data.rate) || 1;
+            if (art) art.playbackRate = rate;
+            if (v) v.playbackRate = rate;
+            sendStatus();
+            break;
+          case "SKIP_INTRO":
+            var sec = Number(e.data.seconds) || 85;
+            var curIntro = (v ? v.currentTime : (art ? art.currentTime : 0)) || 0;
+            var maxD = (v && v.duration > 0 ? v.duration : (window.__streamDuration || 99999));
+            var targetIntro = Math.max(0, Math.min(curIntro + sec, maxD - 5));
+            if (art) art.currentTime = targetIntro;
+            else if (v) v.currentTime = targetIntro;
+            sendStatus();
+            break;
+          case "SET_VOLUME":
+          case "setVolume":
+            if (typeof e.data.volume === "number") {
+              if (art) art.volume = e.data.volume;
+              if (v) v.volume = e.data.volume;
+              sendStatus();
+            }
+            break;
+          case "SET_MUTED":
+          case "setMuted":
+            var shouldMute = !!e.data.muted;
+            if (art) art.muted = shouldMute;
+            if (v) v.muted = shouldMute;
+            sendStatus();
+            break;
+          case "REQUEST_STATUS":
+          case "requestStatus":
+            sendStatus();
+            break;
+        }
+      });
+
+      window.addEventListener('offline', function() {
+        try {
+          window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_network_offline" }, "*");
+        } catch(e) {}
+      });
+
+      art.on("video:ended", notifyEnded);
+    })();
+  </script>
+</body>
+</html>`);
+              } catch (optErr) {
+                console.warn("[VIP Option Error]:", optErr);
+              }
+            }
+          }
+        }
+      } catch (directExtractErr) {
+        console.warn("[VIP Direct Stream Extraction Error]:", directExtractErr);
+      }
+
+      // Se o playerflix não retornou opções válidas ou está sem fontes seguras para esta mídia, comuta direto para o WatchPlayer Oficial
+      if (!ajaxHadValidSources) {
+        console.warn(`[VIP Player]: Provedor sem fontes válidas para ${resolvedId}. Redirecionando transparentemente para o WatchPlayer Oficial...`);
+        const wpTarget = (type === "tv" || type === "series")
+          ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
+          : `https://v1.watchplay.shop/movie/${resolvedId}`;
+        return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+      }
+
+      // 2. FALLBACK SEGURO VIA PROXY DE HTML COM AUTO-DESTRUIÇÃO DE LOADER E ANTI-POPUP
       const targetUrl = (type === "tv" || type === "series")
-        ? `https://playerflix.ink/serie/${id}/${season}/${episode}`
-        : `https://playerflix.ink/filme/${id}`;
+        ? `https://playerflix.ink/serie/${resolvedId}/${season}/${episode}`
+        : `https://playerflix.ink/filme/${resolvedId}`;
+
+      const looksBlocked = (html: string, status: number): boolean => {
+        if (status === 403 || status === 503) return true;
+        const lower = (html || "").toLowerCase();
+        if (
+          lower.includes("cf-error-details") ||
+          lower.includes("attention required") ||
+          lower.includes("checking your browser") ||
+          lower.includes("just a moment") ||
+          lower.includes("cf-browser-verification") ||
+          lower.includes("ray id") ||
+          (lower.includes("error code") && lower.includes("cloudflare"))
+        ) {
+          return true;
+        }
+        if (!lower.includes("base_config")) {
+          return true;
+        }
+        return false;
+      };
 
       let myembedRes = await fetch(targetUrl, {
         headers: {
@@ -2724,42 +3412,54 @@ async function startServer() {
         }
       });
 
-      if (myembedRes.status !== 200) {
-        // Fallback to myembed.biz if playerflix direct returns non-200
-        const fallbackUrl = (type === "tv" || type === "series")
-          ? `https://myembed.biz/serie/${id}/${season}/${episode}`
-          : `https://myembed.biz/filme/${id}`;
-        myembedRes = await fetch(fallbackUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://myembed.biz/"
-          }
-        });
-      }
-
       let playerHtml = await myembedRes.text();
 
-      // Strips ad network script tags
-      playerHtml = playerHtml.replace(/<script[^>]*src=[\"'][^\"']*(?:mypopads|developersonne|googlesyndication|inmobi|themoneytizer|waust|beacon)[^\"']*[\"'][^>]*><\/script>/gi, '');
+      if (looksBlocked(playerHtml, myembedRes.status)) {
+        console.warn(`[MyEmbed Stream] playerflix.ink bloqueado. Tentando myembed.biz...`);
+        const fallbackUrl = (type === "tv" || type === "series")
+          ? `https://myembed.biz/serie/${resolvedId}/${season}/${episode}`
+          : `https://myembed.biz/filme/${resolvedId}`;
 
-      // Remove obfuscated popups script strings
+        const fallbackRes = await fetch(fallbackUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://myembed.biz/",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+          }
+        });
+
+        const fallbackHtml = await fallbackRes.text();
+
+        if (looksBlocked(fallbackHtml, fallbackRes.status)) {
+          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo. Redirecionando transparentemente para o WatchPlayer Oficial...`);
+          const wpTarget = (type === "tv" || type === "series")
+            ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
+            : `https://v1.watchplay.shop/movie/${resolvedId}`;
+          return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+        }
+
+        playerHtml = fallbackHtml;
+      }
+
+      // Remove disable-devtool e scripts que forçam tela preta
+      playerHtml = playerHtml.replace(/<script[^>]*disable-devtool[^>]*><\/script>/gi, '');
+      playerHtml = playerHtml.replace(/<script[^>]*src=[\"'][^\"']*(?:mypopads|developersonne|googlesyndication|inmobi|themoneytizer|waust|beacon)[^\"']*[\"'][^>]*><\/script>/gi, '');
       playerHtml = playerHtml.replace(/aHR0cHM6Ly9kZXZlbG9wZXJzb25lLmNvbS5ici9sb2FkLnBocD9yPXBvcA==/g, '');
       playerHtml = playerHtml.replace(/aHR0cHM6Ly9teXBvcGFkcy5jb20vcmVxdWVzdHMvZGlzcGxheS5waHA/g, '');
 
-      // Força o Ajax a bater no nosso proxy local usando a raiz atual (vazio)
+      // Redireciona Ajax para proxy local
       playerHtml = playerHtml.replace(/BASE_URL:\s*['"]https:\/\/(playerflix\.ink|myembed\.biz)['"]/gi, `BASE_URL: ''`);
-
-      // Sandboxing the iframe inside the player to prevent popups directly from the player layer
       playerHtml = playerHtml.replace(/<iframe(.*?)>/i, '<iframe$1 sandbox="allow-scripts allow-same-origin allow-presentation">');
 
-      // Blindagem Anti-Popup e Anti-VAST Ads
+      // Escudo Anti-Popup e Destruidor de 'Carregando'
       const shieldScript = `
         <style>
-          /* Esconde qualquer overlay de propaganda, VAST, Banners e Popups */
           .vast-ad-container, .vast-blocker, [class*="vast"], [id*="vast"],
           [class*="popad"], [id*="popad"], .ad-overlay, .ad-banner, .advertisement,
           div[style*="z-index: 2147483647"], div[style*="z-index: 999999"],
-          iframe[src*="pop"], iframe[src*="ad"] {
+          iframe[src*="pop"], iframe[src*="ad"],
+          #options, .options, .seasonepisodeSelector, .btn-opcoes, .mostrar_opcoes,
+          .player_select_item, .changeOptions, #header, header {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -2770,31 +3470,105 @@ async function startServer() {
         </style>
         <script>
           window.open = function() {
-            console.warn('[Play Infinity Anti-Popup] Popup bloqueado com sucesso.');
+            console.warn('[Play Infinity Anti-Popup] Popup bloqueado.');
             return null;
           };
           window.alert = function() {};
           window.confirm = function() { return false; };
           window.onbeforeunload = null;
 
-          // Destruidor automático de VAST Ads e botões de pular anúncio
+          function sendStatus() {
+            var v = document.querySelector('video');
+            if (!v) return;
+            var dur = v.duration || 0;
+            var cur = v.currentTime || 0;
+            var buf = (v.buffered && v.buffered.length > 0) ? v.buffered.end(v.buffered.length - 1) : 0;
+            try {
+              window.parent.postMessage({
+                type: 'WATCHPLAY_STATUS',
+                currentTime: cur,
+                duration: dur,
+                paused: !!v.paused,
+                muted: !!v.muted,
+                volume: typeof v.volume === 'number' ? v.volume : 1,
+                buffered: buf,
+                playbackRate: v.playbackRate || 1,
+                readyState: v.readyState || 0
+              }, '*');
+            } catch(e) {}
+          }
+
+          // Auto-elimina overlay de "Carregando" e seleciona a opção automaticamente
+          setTimeout(function() {
+            try {
+              var loader = document.getElementById('playerLoader') || document.querySelector('.pro-loader');
+              if (loader) {
+                loader.style.opacity = '0';
+                loader.style.pointerEvents = 'none';
+                setTimeout(function() { if (loader) loader.remove(); }, 300);
+              }
+              var opt = document.querySelector('.option');
+              if (opt && typeof opt.click === 'function') {
+                opt.click();
+              }
+            } catch(e) {}
+          }, 800);
+
           setInterval(function() {
             try {
-              // 1. Tenta clicar em botões de "Skip", "Pular Anúncio" ou "Fechar"
               const skipButtons = document.querySelectorAll('.skip-button, .vast-skip-button, [class*="skip"], [id*="skip"], [class*="close-ad"]');
               skipButtons.forEach(function(btn) { if (typeof btn.click === 'function') btn.click(); });
 
-              // 2. Remove do DOM qualquer elemento VAST/ad que apareça sobre o player
               const adElements = document.querySelectorAll('.vast-ad-container, .vast-blocker, [class*="vast-ad"], [id*="vast-ad"]');
               adElements.forEach(function(el) { el.remove(); });
               
-              // 3. Garante que qualquer iframe criado dinamicamente ganhe sandbox
               const iframes = document.querySelectorAll('iframe:not([sandbox])');
               iframes.forEach(function(ifr) {
                 ifr.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
               });
             } catch(e) {}
+            sendStatus();
           }, 250);
+
+          window.addEventListener('message', function(e) {
+            if (!e.data) return;
+            var v = document.querySelector('video');
+            if (!v) return;
+            var msgType = e.data.type || e.data.action;
+            switch(msgType) {
+              case 'PLAY': case 'play': v.play().catch(function(){}); sendStatus(); break;
+              case 'PAUSE': case 'pause': v.pause(); sendStatus(); break;
+              case 'TOGGLE_PLAY': case 'togglePlay': v.paused ? v.play().catch(function(){}) : v.pause(); sendStatus(); break;
+              case 'SEEK': case 'seek': case 'SEEK_ABSOLUTE':
+                var t = typeof e.data.time === 'number' ? e.data.time : e.data.targetTime;
+                if (typeof t === 'number' && !isNaN(t)) { v.currentTime = t; sendStatus(); }
+                break;
+              case 'SEEK_RELATIVE':
+                var delta = Number(e.data.seconds) || 0;
+                v.currentTime = Math.max(0, Math.min(v.currentTime + delta, (v.duration || 99999)));
+                sendStatus();
+                break;
+              case 'SET_PLAYBACK_RATE': case 'setPlaybackRate':
+                v.playbackRate = Number(e.data.rate) || 1;
+                sendStatus();
+                break;
+              case 'SKIP_INTRO':
+                var sec = Number(e.data.seconds) || 85;
+                v.currentTime = Math.max(0, Math.min(v.currentTime + sec, (v.duration || 99999) - 5));
+                sendStatus();
+                break;
+              case 'SET_VOLUME': case 'setVolume':
+                if (typeof e.data.volume === 'number') { v.volume = e.data.volume; sendStatus(); }
+                break;
+              case 'SET_MUTED': case 'setMuted':
+                v.muted = !!e.data.muted;
+                sendStatus();
+                break;
+              case 'REQUEST_STATUS': case 'requestStatus':
+                sendStatus();
+                break;
+            }
+          });
         </script>
       `;
 

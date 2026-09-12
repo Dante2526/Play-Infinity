@@ -62,11 +62,22 @@ export function deleteCustomChannel(channelId: string): void {
   }
 }
 
+export function clearAllCustomChannels(): void {
+  try {
+    localStorage.removeItem(CUSTOM_CHANNELS_KEY);
+  } catch (err) {
+    console.warn('Erro ao limpar canais customizados:', err);
+  }
+}
+
 export function getAllChannels(): LiveChannel[] {
   const custom = getCustomChannels();
   // Se o usuário tiver um canal customizado antigo com url descontinuada da Pluto, descarta para usar a lista oficial atualizada
   const initialMap = new Map(INITIAL_LIVE_CHANNELS.map(c => [c.id, c]));
   const validCustom = custom.filter(c => {
+    if (c.id === 'canal-adulto-1' || c.id === 'canal-adulto-2' || (c as any).category === '+18') {
+      return false;
+    }
     const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1'));
     // Se o canal estiver no catálogo oficial e tiver apenas 1 servidor antigo ou url problemática, prioriza o catálogo oficial atualizado
     if (initialMap.has(c.id) && (hasBrokenUrl || (c.servers && c.servers.length <= 1))) {

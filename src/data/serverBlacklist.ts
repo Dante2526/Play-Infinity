@@ -18,6 +18,7 @@
  *    - VIP PLAYER (Secundário / Sanitizado via /api/myembed-stream)
  * 2. NUNCA reintroduza, desfaça o bloqueio ou adicione fallbacks para qualquer
  *    dos domínios, chaves ou serviços listados nesta blacklist.
+ * 3. PRIORIZAR SEMPRE fontes e fluxos com áudio em Português do Brasil (Dublado PT-BR / Nacional).
  * ============================================================================
  */
 

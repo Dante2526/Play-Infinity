@@ -5,7 +5,7 @@ const CAZETV_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/s
 
 const FIFA_PLUS_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100"><rect width="240" height="100" rx="16" fill="%230B1426"/><text x="96" y="62" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="42" fill="%23FFFFFF" text-anchor="middle" letter-spacing="2">FIFA</text><text x="170" y="64" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="52" fill="%2300FF87" text-anchor="middle">+</text></svg>`;
 
-const BMC_NEWS_SVG = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100"><rect width="240" height="100" rx="16" fill="%2308182B"/><text x="120" y="50" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="34" fill="%23FFFFFF" text-anchor="middle" letter-spacing="1">BM%26C</text><rect x="65" y="62" width="110" height="22" rx="4" fill="%23EA580C"/><text x="120" y="77" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="14" fill="%23FFFFFF" text-anchor="middle" letter-spacing="4">NEWS</text></svg>`;
+const BMC_NEWS_LOGO = 'https://images.pluto.tv/channels/666c9c60a7efd40008f552f0/colorLogoPNG.png';
 
 // Mapas de logotipos confiáveis (GitHub tv-logos raw com CORS liberado ou fontes oficiais diretas)
 const RELIABLE_CHANNEL_LOGOS: Record<string, string> = {
@@ -56,7 +56,7 @@ const RELIABLE_CHANNEL_LOGOS: Record<string, string> = {
 
   // Notícias
   'record-news': 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/record-news-br.png',
-  'bmc-news': BMC_NEWS_SVG,
+  'bmc-news': BMC_NEWS_LOGO,
   'cnn-brasil': 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/cnn-brasil-br.png',
   'globo-news': 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/globo-news-br.png',
   'jovem-pan-news': 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/jovem-pan-news-br.png',
@@ -140,7 +140,7 @@ export function resolveChannelLogo(channel: { id?: string; name: string; logo?: 
     return RELIABLE_CHANNEL_LOGOS['globo'];
   }
   if (nameNorm.includes('bm&c') || nameNorm.includes('bmc')) {
-    return BMC_NEWS_SVG;
+    return BMC_NEWS_LOGO;
   }
   if (nameNorm.includes('comedy central')) {
     return RELIABLE_CHANNEL_LOGOS['comedy-central'];

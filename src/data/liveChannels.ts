@@ -469,7 +469,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     id: 'bmc-news',
     name: 'BM&C News',
     category: 'Notícias',
-    logo: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 100" width="240" height="100"><rect width="240" height="100" rx="16" fill="%2308182B"/><text x="120" y="50" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="34" fill="%23FFFFFF" text-anchor="middle" letter-spacing="1">BM%26C</text><rect x="65" y="62" width="110" height="22" rx="4" fill="%23EA580C"/><text x="120" y="77" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" font-weight="900" font-size="14" fill="%23FFFFFF" text-anchor="middle" letter-spacing="4">NEWS</text></svg>',
+    logo: 'https://images.pluto.tv/channels/666c9c60a7efd40008f552f0/colorLogoPNG.png',
     currentProgram: 'Mercado Financeiro, Economia e Negócios Ao Vivo',
     quality: '720p',
     description: 'Canal especializado em finanças, cotações da bolsa, dólar e investimentos.',

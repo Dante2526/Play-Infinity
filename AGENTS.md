@@ -31,6 +31,11 @@
 3. **Seletor de Servidores Homologados**
    - O seletor de servidores no reprodutor deve conter exclusivamente os provedores homologados: `WatchPlayer Oficial` e `VIP Player (Dublado PT-BR)`.
 
+4. **Prioridade Mandatória para Conteúdo em Português (Dublado PT-BR / Nacional):**
+   - Toda lógica de extração, seleção de servidores, resolução de opções e fallbacks de áudio deve priorizar estritamente opções em **Português do Brasil (Dublado PT-BR)** ou conteúdos nacionais.
+   - Opções com áudio original/legendado só devem ser utilizadas caso não exista nenhuma fonte dublada PT-BR disponível nos provedores homologados.
+   - Qualquer provedor ou fonte que forneça apenas áudio estrangeiro sem versão em português deve receber a menor prioridade ou ser descartado em favor de fontes com dublagem PT-BR.
+
 ---
 
 ## 2. Estabilidade do Localhost e Observador de Arquivos (Vite)

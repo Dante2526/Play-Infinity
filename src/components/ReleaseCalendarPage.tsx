@@ -381,26 +381,28 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                             
                             {/* Tag de Status */}
                             {isToday ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm">
-                                <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping"></span>
+                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm whitespace-nowrap shrink-0">
+                                <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping shrink-0"></span>
                                 Estreia Hoje ({ep.airTime})
                               </span>
                             ) : isSeasonEnded ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3 text-indigo-400" />
-                                Temporada Concluída • Aguardando Nova Temporada
+                              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
+                                <span>Temporada Concluída</span>
+                                <span className="hidden sm:inline">• Aguardando Nova Temporada</span>
                               </span>
                             ) : isSeriesEnded ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1">
-                                <CheckCircle2 className="w-3 h-3 text-neutral-500" />
-                                Série Concluída (Finalizada)
+                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                <CheckCircle2 className="w-3 h-3 text-neutral-500 shrink-0" />
+                                <span>Série Concluída</span>
+                                <span className="hidden sm:inline">(Finalizada)</span>
                               </span>
                             ) : isReleased ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold">
+                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold whitespace-nowrap shrink-0">
                                 Já Lançado
                               </span>
                             ) : (
-                              <span className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold">
+                              <span className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold whitespace-nowrap shrink-0">
                                 {ep.dayOfWeek} às {ep.airTime}
                               </span>
                             )}

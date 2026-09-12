@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
 import { 
   X, 
@@ -63,6 +63,62 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const stallCountRef = useRef<number>(0);
   const lastStallTimeRef = useRef<number>(0);
+  const failedServersRef = useRef<Set<number>>(new Set());
+
+  // Limpa histórico de falhas ao trocar de canal
+  useEffect(() => {
+    failedServersRef.current.clear();
+  }, [channel.id]);
+
+  // Função centralizada para alternar de servidor automaticamente em caso de queda ou erro
+  const switchToNextServer = useCallback((reason?: string) => {
+    if (channel.servers.length <= 1) {
+      setHasError(true);
+      setStreamHealth('error');
+      setIsLoading(false);
+      setErrorMessage('Transmissão ao vivo temporariamente indisponível.');
+      return;
+    }
+
+    failedServersRef.current.add(selectedServerIndex);
+
+    // Se todos os servidores deste canal já falharam, para de alternar e mostra mensagem clara com botão de recarregar
+    if (failedServersRef.current.size >= channel.servers.length) {
+      console.warn(`[LivePlayer] Todos os ${channel.servers.length} servidores do canal falharam.`);
+      setHasError(true);
+      setStreamHealth('error');
+      setIsLoading(false);
+      setErrorMessage('Todos os servidores disponíveis para esta emissora estão temporariamente fora do ar. Tente novamente em instantes.');
+      return;
+    }
+
+    // Busca próximo servidor que ainda não falhou
+    let nextIdx = (selectedServerIndex + 1) % channel.servers.length;
+    for (let i = 0; i < channel.servers.length; i++) {
+      const candidate = (selectedServerIndex + 1 + i) % channel.servers.length;
+      if (!failedServersRef.current.has(candidate)) {
+        nextIdx = candidate;
+        break;
+      }
+    }
+
+    console.log(`[LivePlayer] Alternando automaticamente de servidor (${channel.servers[selectedServerIndex]?.name} -> ${channel.servers[nextIdx]?.name}). Motivo: ${reason || 'queda ou erro'}`);
+    setSelectedServerIndex(nextIdx);
+  }, [channel.servers, selectedServerIndex]);
+
+  // Recuperação automática em caso de queda e retorno de conexão com a internet
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[LivePlayer] Conexão restaurada. Tentando reconectar transmissão...');
+      failedServersRef.current.clear();
+      setHasError(false);
+      setIsLoading(true);
+      setSelectedServerIndex(0);
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, []);
 
   // Determina a URL atual baseada no servidor selecionado
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
@@ -115,6 +171,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (!isMounted) return;
+          failedServersRef.current.clear(); // Conexão bem-sucedida, reseta falhas prévias
           setIsLoading(false);
           setIsBuffering(false);
           setStreamHealth('online');
@@ -147,15 +204,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 if (networkErrorCount <= 2) {
                   console.log('Recuperando erro de rede HLS silenciosamente...');
                   hls.startLoad();
-                } else if (channel.servers.length > 1) {
-                  console.log('Servidor instável, alternando automaticamente para próximo servidor...');
-                  setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
                 } else {
-                  hls.destroy();
-                  setHasError(true);
-                  setStreamHealth('error');
-                  setIsLoading(false);
-                  setErrorMessage('Falha ao sincronizar fluxo ao vivo. Tente recarregar.');
+                  console.log('Servidor instável ou desconectado, alternando automaticamente para próximo servidor...');
+                  switchToNextServer('erro de rede hls');
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
@@ -163,15 +214,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 hls.recoverMediaError();
                 break;
               default:
-                if (channel.servers.length > 1) {
-                  setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
-                } else {
-                  hls.destroy();
-                  setHasError(true);
-                  setStreamHealth('error');
-                  setIsLoading(false);
-                  setErrorMessage('Falha ao sincronizar fluxo ao vivo. Tente outro servidor ou recarregue.');
-                }
+                switchToNextServer('erro fatal hls');
                 break;
             }
           }
@@ -181,6 +224,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         video.src = streamUrl;
         video.addEventListener('loadedmetadata', () => {
           if (!isMounted) return;
+          failedServersRef.current.clear();
           setIsLoading(false);
           setIsBuffering(false);
           setStreamHealth('online');
@@ -188,14 +232,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
         video.addEventListener('error', () => {
           if (!isMounted) return;
-          if (channel.servers.length > 1) {
-            setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
-          } else {
-            setHasError(true);
-            setStreamHealth('error');
-            setIsLoading(false);
-            setErrorMessage('Erro ao reproduzir fluxo nativo. Alterne de servidor.');
-          }
+          switchToNextServer('erro nativo video');
         });
       } else {
         setIsLoading(false);
@@ -216,10 +253,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       // Se ficar congelado no buffering por mais de 7s, tenta recuperar ou alternar servidor automaticamente
       bufferStallTimer = setTimeout(() => {
         if (!isMounted) return;
-        if (channel.servers.length > 1) {
-          console.log('[LivePlayer] Buffering prolongado detectado. Alternando automaticamente de servidor...');
-          setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
-        }
+        console.log('[LivePlayer] Buffering prolongado detectado. Alternando automaticamente de servidor...');
+        switchToNextServer('buffering prolongado');
       }, 7000);
 
       const now = Date.now();

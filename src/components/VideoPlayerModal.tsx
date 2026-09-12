@@ -161,12 +161,17 @@ export function VideoPlayerModal({
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
-    const isNativeStream =
+    const isIntegrated =
+      target.includes("watchplay") ||
+      target.includes("myembed") ||
+      target.includes("playerflix") ||
       target.includes("/api/watchplayer-stream") ||
+      target.includes("/api/myembed-stream") ||
       target.includes("/api/anime-stream") ||
-      target.includes("/api/vixsrc-stream");
+      target.includes("/api/vixsrc-stream") ||
+      target.includes("/api/live-stream-proxy");
 
-    return !isNativeStream;
+    return !isIntegrated;
   }, [activeIframeUrl, urlInput]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
@@ -347,15 +352,6 @@ export function VideoPlayerModal({
             `/api/myembed-stream?id=${id}&type=tv&s=${s}&e=${e}&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
-        },
-        {
-          key: "srv_watchplay_stream",
-          label: "WatchPlayer Nativo PT-BR",
-          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
-          buildUrl: (id: string, s: number, e: number) => 
-            `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`)}`,
-          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "WatchPlayer Nativo PT-BR"
         }
       ];
     } else {
@@ -376,14 +372,6 @@ export function VideoPlayerModal({
             `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
-        },
-        {
-          key: "srv_watchplay_stream",
-          label: "WatchPlayer Nativo PT-BR",
-          badge: "Stream Direto Nativo • Áudio Dublado PT-BR",
-          buildUrl: (id: string) => `/api/watchplayer-stream?url=${encodeURIComponent(`https://v1.watchplay.shop/movie/${imdbId || id}`)}`,
-          isMatch: (u: string) => u.includes("/api/watchplayer-stream"),
-          name: "WatchPlayer Nativo PT-BR"
         }
       ];
     }
@@ -429,18 +417,12 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  // Watchdog inteligente de segurança: se o player demorar mais de 15s (animes) ou 10s (filmes/séries) sem iniciar,
+  // Watchdog inteligente de segurança: se o player demorar mais de 15s sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady || error) return;
-    if (
-      selectedServerKey === 'srv_vip' ||
-      selectedServerKey === 'srv_consumet' || 
-      activeIframeUrl.includes('myembed') ||
-      activeIframeUrl.includes('playerflix') ||
-      activeIframeUrl.includes('anime-stream')
-    ) return;
-    const timeoutDuration = isAnimeMedia ? 15000 : 10000;
+    if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
+    const timeoutDuration = isAnimeMedia ? 15000 : (selectedServerKey === 'srv_vip' ? 14000 : 10000);
     const timer = setTimeout(() => {
       if (!playerSkinReady && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -563,7 +545,12 @@ export function VideoPlayerModal({
           return;
         }
 
-        if (typeof data.duration === "number" && data.duration > 0) {
+        if (
+          (typeof data.duration === "number" && data.duration > 0) ||
+          (typeof data.currentTime === "number" && data.currentTime > 0) ||
+          data.paused === false ||
+          (typeof data.readyState === "number" && data.readyState >= 1)
+        ) {
           // Se for transição recente (< 800ms), aguarda estabilização do novo frame
           if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
             return;
@@ -608,8 +595,14 @@ export function VideoPlayerModal({
         setTimeout(() => {
           setSkipNotice(null);
         }, 3200);
-      } else if (event.data.type === "WATCHPLAY_UNAVAILABLE") {
-        console.warn("[VideoPlayerModal] Servidor informou mídia indisponível ou tentativa de Superflix. Acionando fallback automático...");
+      } else if (
+        event.data.type === "WATCHPLAY_UNAVAILABLE" ||
+        event.data.type === "WATCHPLAY_ERROR" ||
+        event.data.type === "PLAYER_ERROR" ||
+        event.data.type === "VIP_UNAVAILABLE" ||
+        event.data.type === "STREAM_DISCONNECTED"
+      ) {
+        console.warn(`[VideoPlayerModal] Servidor informou erro/indisponibilidade (${event.data.reason || event.data.type}). Acionando fallback automático para próximo servidor homologado...`);
         silentFallbackRef.current();
       }
     };
@@ -617,6 +610,25 @@ export function VideoPlayerModal({
     window.addEventListener("message", handlePlayerWindowMessages);
     return () => window.removeEventListener("message", handlePlayerWindowMessages);
   }, [isSeries, episode, season, resolvedId, skipDurationSeconds]);
+
+  // Recuperação automática em caso de queda e retorno de conexão com a internet
+  useEffect(() => {
+    const handleOnline = () => {
+      if (error) {
+        console.log("[VideoPlayerModal] Conexão restaurada. Tentando reconectar servidor automaticamente...");
+        fallbackAttemptsRef.current.clear();
+        setError(null);
+        setIsLoading(true);
+        const srv = servers[0];
+        if (srv) {
+          handleServerSwitch(srv.key);
+        }
+      }
+    };
+
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [error, servers, handleServerSwitch]);
 
   // Função para Pular Abertura (+85 segundos ou customizado)
   const handleSkipIntro = (customSeconds?: number) => {
@@ -1099,27 +1111,6 @@ export function VideoPlayerModal({
             </div>
 
             <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-              {/* Seletor Rápido de Servidor / Opção de Áudio e Legenda */}
-              {servers.length > 1 && (
-                <div className="relative">
-                  <select
-                    value={selectedServerKey}
-                    onChange={(e) => handleServerSwitch(e.target.value)}
-                    className="bg-neutral-900/90 text-neutral-200 hover:text-white border border-white/10 hover:border-orange-500/50 rounded-lg text-xs font-semibold px-2 py-1.5 pr-6 appearance-none cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-orange-500 max-w-[140px] sm:max-w-[200px] truncate"
-                    title="Trocar Servidor / Legendas"
-                  >
-                    {servers.map((srv) => (
-                      <option key={srv.key} value={srv.key} className="bg-neutral-900 text-neutral-200">
-                        {srv.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-1.5 text-neutral-400">
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </div>
-                </div>
-              )}
-
               {/* Botão Fechar Modal */}
               <button
                 onClick={handleCloseModal}

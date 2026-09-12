@@ -64,6 +64,7 @@ export const continueWatching = [
     tmdbId: 66732,
     imdbId: "tt4574334",
     title: "STRANGER THINGS",
+    type: "series" as const,
     episode: "T4:E1 - O Clube Hellfire",
     progress: 75,
     imageUrl:
@@ -129,9 +130,10 @@ export const top10 = [
     id: 94997,
     tmdbId: 94997,
     title: "A CASA DO DRAGÃO",
+    type: "series" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
+    playerUrl: "https://v1.watchplay.shop/series/94997/1/1",
   },
 ];
 
@@ -168,25 +170,28 @@ export const newest = [
     id: 125988,
     tmdbId: 125988,
     title: "SILO",
+    type: "series" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/tVR4q9FazxJuCEpaYxiCijUlvM3.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/125988/1/1",
+    playerUrl: "https://v1.watchplay.shop/series/125988/1/1",
   },
   {
     id: 76479,
     tmdbId: 76479,
     title: "THE BOYS",
+    type: "series" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/in1R2dDc421JxsoRWaIIAqVI2KE.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/76479/1/1",
+    playerUrl: "https://v1.watchplay.shop/series/76479/1/1",
   },
   {
     id: 100088,
     tmdbId: 100088,
     title: "THE LAST OF US",
+    type: "series" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
+    playerUrl: "https://v1.watchplay.shop/series/100088/1/1",
   },
 ];
 
@@ -198,8 +203,8 @@ export const animes = [
     type: "series" as const,
     quality: "HD" as const,
     isAnime: true,
-    imageUrl: "https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/71FiW6q1Qf22OQj2b8P1gM1VqG1.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/8aMqmB5xSblsZc7bLMEhE28yHa2.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/rqbCbjB19amtOtFQbb3K2lgm2zv.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/1429/1/1",
   },
   {
@@ -209,8 +214,8 @@ export const animes = [
     type: "series" as const,
     quality: "HD" as const,
     isAnime: true,
-    imageUrl: "https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/nTvM4mhqZlHIvUkI1gVnWumrSlp.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/7Uj6vqmznWQ3w3hpQ1eIY9mMyMw.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/3GQKYh6Trm8pxd2AypovoYQf4Ay.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/85937/1/1",
   },
   {
@@ -220,20 +225,20 @@ export const animes = [
     type: "series" as const,
     quality: "HD" as const,
     isAnime: true,
-    imageUrl: "https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuPxJ8ZXq5.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/4HodYYKEIsGOdinkGi2UMOPX96D.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/qykTIEJQF8cunKD0CKOqab15wns.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/rBOnrVlck7BIlGeWVlzYiZeg4l2.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/209867/1/1",
   },
   {
-    id: 1399,
-    tmdbId: 1399,
+    id: 13916,
+    tmdbId: 13916,
     title: "DEATH NOTE",
     type: "series" as const,
     quality: "HD" as const,
     isAnime: true,
-    imageUrl: "https://image.tmdb.org/t/p/w500/iigTJJskR1PcjjUq59Hq526fZ1g.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/gmp3Q91H84VvBqf5u65iVv7QWff.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/1399/1/1",
+    imageUrl: "https://image.tmdb.org/t/p/w500/chnG4pYo89weaBjXHJWvW68E35B.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/z8IPicmEKXUO4I2UDdMEqw7RqOE.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/13916/1/1",
   }
 ];
 
@@ -653,7 +658,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "5 Temporadas",
       match: 97,
-      playerUrl: "https://v1.watchplay.shop/tvshow/71446/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/71446/1/1",
     },
     {
       id: 94605,
@@ -683,7 +688,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "Minissérie",
       match: 98,
-      playerUrl: "https://v1.watchplay.shop/tvshow/87739/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/87739/1/1",
     },
     {
       id: 60574,
@@ -728,7 +733,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "6 Temporadas",
       match: 96,
-      playerUrl: "https://v1.watchplay.shop/tvshow/65495/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/65495/1/1",
     },
     {
       id: 108978,
@@ -790,7 +795,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "1 Temporada",
       match: 95,
-      playerUrl: "https://v1.watchplay.shop/tvshow/85271/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/85271/1/1",
     },
     {
       id: 92782,
@@ -820,7 +825,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "1 Temporada",
       match: 92,
-      playerUrl: "https://v1.watchplay.shop/tvshow/88396/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/88396/1/1",
     },
     {
       id: 969681,
@@ -1098,7 +1103,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "2 Temporadas",
       match: 94,
-      playerUrl: "https://v1.watchplay.shop/tvshow/93741/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/93741/1/1",
     },
     {
       id: 90282,
@@ -1113,7 +1118,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "3 Temporadas",
       match: 93,
-      playerUrl: "https://v1.watchplay.shop/tvshow/90282/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/90282/1/1",
     }
   ],
   "Globoplay": [
@@ -1145,7 +1150,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "5 Temporadas",
       match: 97,
-      playerUrl: "https://v1.watchplay.shop/tvshow/73010/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/73010/1/1",
     },
     {
       id: 67535,
@@ -1160,7 +1165,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "18",
       duration: "2 Temporadas",
       match: 96,
-      playerUrl: "https://v1.watchplay.shop/tvshow/67535/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/67535/1/1",
     },
     {
       id: 194606,
@@ -1175,7 +1180,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "2 Temporadas",
       match: 94,
-      playerUrl: "https://v1.watchplay.shop/tvshow/194606/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/194606/1/1",
     },
     {
       id: 112468,
@@ -1190,7 +1195,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "16",
       duration: "3 Temporadas",
       match: 93,
-      playerUrl: "https://v1.watchplay.shop/tvshow/112468/1/1",
+      playerUrl: "https://v1.watchplay.shop/series/112468/1/1",
     }
   ]
 };

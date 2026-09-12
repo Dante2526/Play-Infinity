@@ -192,12 +192,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // (o próprio app, ou o domínio que nós mesmos carregamos no iframe).
   // Evita que scripts/anúncios de terceiros dentro do embed falsifiquem status.
   const isTrustedMessageOrigin = useCallback(
-    (origin: string) => {
-      if (!origin || origin === "null") return false;
+    (origin: string, source?: MessageEventSource | null) => {
+      // Se a mensagem veio comprovadamente da janela do nosso próprio iframe, é 100% confiável
+      if (source && iframeRef.current && source === iframeRef.current.contentWindow) {
+        return true;
+      }
+      if (!origin) return false;
       if (origin === window.location.origin) return true;
       if (
         origin === "https://v1.watchplay.shop" ||
-        origin === "https://watchplay.shop"
+        origin === "https://watchplay.shop" ||
+        origin.includes("watchplay") ||
+        origin.includes("playerflix") ||
+        origin.includes("myembed")
       ) {
         return true;
       }
@@ -206,6 +213,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         if (iframeSrc && new URL(iframeSrc, window.location.href).origin === origin) return true;
       } catch {
         // ignora URL inválida
+      }
+      // Se a origem for "null" por causa de sandbox, mas a janela é o nosso iframe
+      if (origin === "null" && source && iframeRef.current) {
+        try {
+          if (source === iframeRef.current.contentWindow) return true;
+        } catch {}
       }
       return false;
     },
@@ -412,7 +425,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
       if (!e.data || typeof e.data !== "object") return;
-      if (!isTrustedMessageOrigin(e.origin)) return; // ignora mensagens de origens não confiáveis
+      if (!isTrustedMessageOrigin(e.origin, e.source)) return; // ignora mensagens de origens não confiáveis
       const msgType = e.data.type || e.data.event;
       if (
         msgType === "WATCHPLAY_STATUS" ||
@@ -1282,7 +1295,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {!passThroughClicks && (
         <div
           className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
-            controlsVisible && !isLocked && !isExternalPlayer
+            controlsVisible && !isLocked
               ? "opacity-100 scale-100"
               : "opacity-0 scale-95 pointer-events-none"
           }`}
@@ -1295,7 +1308,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 handleSeekRelative(-10);
               }}
               className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
-                controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+                controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
               }`}
               title="Voltar 10s"
             >
@@ -1313,7 +1326,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               handleTogglePlay();
             }}
             className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none shadow-none ${
-              controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+              controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
             }`}
             title={playerStatus.paused ? "Reproduzir" : "Pausar"}
           >
@@ -1332,7 +1345,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 handleSeekRelative(10);
               }}
               className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
-                controlsVisible && !isLocked && !isExternalPlayer ? "pointer-events-auto" : "pointer-events-none"
+                controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
               }`}
               title="Avançar 10s"
             >
@@ -1349,7 +1362,21 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           5. PARTE INFERIOR: PROGRESS BAR + BOTÕES DA NETFLIX
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
-      {!isMiniPlayer && !isExternalPlayer && (
+      {/* Barra de Progresso Fina e Contínua na Borda (quando controles completos estão ocultos) */}
+      {!isMiniPlayer && !controlsVisible && !isLocked && hasValidDuration && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 h-1 bg-black/40 pointer-events-none transition-opacity duration-300">
+          <div
+            className="h-full bg-white/25 absolute top-0 left-0 bottom-0 transition-all duration-150"
+            style={{ width: `${bufferedPercent}%` }}
+          />
+          <div
+            className="h-full bg-[#E50914] absolute top-0 left-0 bottom-0 transition-all duration-150"
+            style={{ width: `${playedPercent}%` }}
+          />
+        </div>
+      )}
+
+      {!isMiniPlayer && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
@@ -1358,6 +1385,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
         <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2.5">
+          {/* Tempo Decorrido Atual à Esquerda */}
+          <span className="text-white/90 text-[11px] sm:text-xs font-medium tabular-nums select-none shrink-0 drop-shadow min-w-[34px] text-right">
+            {formatTime(displayCurrentTime)}
+          </span>
+
           <div
             ref={progressBarRef}
             onMouseMove={handleProgressBarMouseMove}
@@ -1397,9 +1429,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             />
           </div>
 
-          {/* Tempo Restante à Direita (ex: 48:04 ou 30:05) */}
-          <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5">
-            {hasValidDuration ? formatTime(remainingTime) : "--:--"}
+          {/* Tempo Restante / Total à Direita (ex: -48:04 ou --:--) */}
+          <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5 min-w-[34px]">
+            {hasValidDuration ? (remainingTime > 0 ? `-${formatTime(remainingTime)}` : formatTime(duration)) : "--:--"}
             {isSyncStale && (
               <span
                 className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"
@@ -1439,8 +1471,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 3. Pular Abertura (apenas para séries e em tela cheia) */}
-          {isSeries && isFullscreen && (
+          {/* 3. Pular Abertura (apenas para séries) */}
+          {isSeries && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1456,8 +1488,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* 4. Episódios (apenas para séries e em tela cheia) */}
-          {isSeries && isFullscreen && (
+          {/* 4. Episódios (apenas para séries) */}
+          {isSeries && (
             <button
               onClick={() => setShowEpisodeDrawer((prev) => !prev)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
@@ -1481,8 +1513,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 5. Próximo Episódio (apenas para séries e em tela cheia) */}
-          {isSeries && isFullscreen && onEpisodeChange && (
+          {/* 5. Próximo Episódio (apenas para séries) */}
+          {isSeries && onEpisodeChange && (
             <button
               onClick={() => onEpisodeChange(episode + 1)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
