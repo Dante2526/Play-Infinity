@@ -2689,13 +2689,6 @@ async function startServer() {
         data.data.options = data.data.options.filter((opt: any) => {
           const embedUrl = (opt.embed || "").toLowerCase();
           return !embedUrl.includes("superflix") && !embedUrl.includes("sfapi") && !embedUrl.includes("byse");
-        }).map((opt: any) => {
-          if (opt.embed && (opt.embed.includes("embedplayer2.xyz") || opt.embed.includes("embedplayer1.xyz"))) {
-            // Repassa o embed real para o nosso proxy limpo
-            const localOrigin = req.protocol + "://" + req.get("host");
-            opt.embed = `${localOrigin}/api/embedplayer-proxy?url=${encodeURIComponent(opt.embed)}`;
-          }
-          return opt;
         });
       }
 
@@ -2706,43 +2699,6 @@ async function startServer() {
     } catch (err: any) {
       console.error("[VIP Player Ajax Proxy Error]:", err);
       return res.status(500).json({ status: false, error: "Erro ao buscar opções do player VIP" });
-    }
-  });
-
-  // API: Proxy para Embedplayer (remove VAST ads problemáticos)
-  app.get("/api/embedplayer-proxy", async (req, res) => {
-    try {
-      const targetUrl = req.query.url as string;
-      if (!targetUrl || !targetUrl.includes("embedplayer")) {
-        return res.status(400).send("Invalid URL");
-      }
-      const response = await fetch(targetUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          "Referer": "https://playerflix.ink/"
-        }
-      });
-      let html = await response.text();
-      
-      // Remove VAST ads and popups from FirePlayer JS configuration
-      html = html.replace(/"advertising":\{.*?\},"p2p"/g, '"advertising":{},"p2p"');
-      html = html.replace(/"popactive":true/g, '"popactive":false');
-      html = html.replace(/https:\/\/embedplayer1\.xyz\/player\/assets\/jwplayer\/netflix1\.css/g, '');
-      
-      // Inject fallback for broken CSS
-      const fallbackCss = `<style>
-      .play-button-outer { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 999997; width: 6em; height: 6em; background-color: rgba(0,0,0,0.7); border-radius: 50%; cursor: pointer; border: 2px solid white; display: flex; align-items: center; justify-content: center; }
-      .play-button-outer::after { content: ''; display: block; border-style: solid; border-width: 1em 0 1em 1.5em; border-color: transparent transparent transparent white; margin-left: 0.5em; }
-      .play-button-outer:hover { background-color: rgba(229, 9, 20, 0.9); border-color: transparent; }
-      </style>`;
-      html = html.replace('</head>', fallbackCss + '</head>');
-      
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-      return res.send(html);
-    } catch (err: any) {
-      console.error("[EmbedPlayer Proxy Error]:", err);
-      return res.status(500).send("Erro ao carregar o player secundário.");
     }
   });
 
@@ -2793,6 +2749,9 @@ async function startServer() {
       // Força o Ajax a bater no nosso proxy local usando a raiz atual (vazio)
       playerHtml = playerHtml.replace(/BASE_URL:\s*['"]https:\/\/(playerflix\.ink|myembed\.biz)['"]/gi, `BASE_URL: ''`);
 
+      // Sandboxing the iframe inside the player to prevent popups directly from the player layer
+      playerHtml = playerHtml.replace(/<iframe(.*?)>/i, '<iframe$1 sandbox="allow-scripts allow-same-origin allow-presentation">');
+
       // Blindagem Anti-Popup e Anti-VAST Ads
       const shieldScript = `
         <style>
@@ -2828,6 +2787,12 @@ async function startServer() {
               // 2. Remove do DOM qualquer elemento VAST/ad que apareça sobre o player
               const adElements = document.querySelectorAll('.vast-ad-container, .vast-blocker, [class*="vast-ad"], [id*="vast-ad"]');
               adElements.forEach(function(el) { el.remove(); });
+              
+              // 3. Garante que qualquer iframe criado dinamicamente ganhe sandbox
+              const iframes = document.querySelectorAll('iframe:not([sandbox])');
+              iframes.forEach(function(ifr) {
+                ifr.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-presentation');
+              });
             } catch(e) {}
           }, 250);
         </script>
