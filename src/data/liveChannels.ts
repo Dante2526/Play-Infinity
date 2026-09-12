@@ -94,7 +94,27 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Cobertura de todos os lances e partidas dos campeonatos estaduais e nacionais.',
     servers: [
       {
-        name: 'Servidor 1 (Ao Vivo)',
+        name: 'Servidor 1 (ge Fast Oficial)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2 (Stream Primário HD)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (N Sports Ao Vivo)',
+        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 4 (FIFA+ BR Ao Vivo)',
+        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 5 (Backup Alternativo)',
         url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
         isProxy: true
       }
@@ -110,8 +130,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal complementar Premiere com cobertura de futebol 100% brasileira.',
     servers: [
       {
-        name: 'Servidor 1 (Ao Vivo)',
+        name: 'Servidor 1 (FIFA+ Futebol Ao Vivo)',
         url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (ge Fast Ao Vivo)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3 (N Sports Ao Vivo)',
+        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
         isProxy: true
       }
     ]

@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
+import { isServerBlacklisted } from "./src/data/serverBlacklist";
 
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
@@ -427,6 +428,10 @@ async function startServer() {
     const validation = validateSafeUrl(targetUrl);
     if (!validation.valid) {
       return res.status(403).json({ success: false, error: validation.error });
+    }
+
+    if (isServerBlacklisted(targetUrl)) {
+      return res.status(403).json({ success: false, error: "Servidor bloqueado na blacklist permanente do Play Infinity." });
     }
 
     try {
@@ -2608,15 +2613,23 @@ async function startServer() {
 
           if (trimmed.includes('URI="')) {
             return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
-              const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
-              return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}"`;
+              try {
+                const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}"`;
+              } catch {
+                return `URI="${uri}"`;
+              }
             });
           }
 
           if (trimmed.startsWith("#")) return trimmed;
 
-          const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
-          return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}`;
+          try {
+            const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}`;
+          } catch {
+            return trimmed;
+          }
         }).join("\n");
 
         return res.send(rewritten);
@@ -2639,7 +2652,8 @@ async function startServer() {
 
       return res.send(buffer);
     } catch (err: any) {
-      console.error("[Live Stream Proxy Error]:", err.message);
+      console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
+      res.setHeader("Access-Control-Allow-Origin", "*");
       return res.status(500).send("Proxy error");
     }
   });
@@ -2649,200 +2663,87 @@ async function startServer() {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Vite middleware for development
-  
-  // API: Extrator Direto da EmbedPlayAPI (Bypassa o Menu)
-  app.get("/api/embedplay-direct", async (req, res) => {
+  // API: MyEmbed / Playerflix VIP Player com Escudo Anti-Popups
+  app.get("/api/myembed-stream", async (req, res) => {
     try {
-      const { tmdb, s, e, type } = req.query;
-      const isMovie = type === "movie";
-      const pageUrl = isMovie 
-        ? `https://www.embedplay.one/filme/${tmdb}`
-        : `https://www.embedplay.one/serie/${tmdb}/${s}/${e}`;
-        
-      const pageRes = await fetch(pageUrl, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
-      const html = await pageRes.text();
-      
-      let optionId = null;
-      let contentId = null;
+      const rawId = (req.query.id as string) || (req.query.url as string) || "tt22084616";
+      const idMatch = rawId.match(/(?:filme|movie|serie|series|tvshow|tv)\/([a-zA-Z0-9_-]+)/i) || rawId.match(/(tt\d+|\d+)/);
+      const id = idMatch ? idMatch[1] : rawId;
+      const type = (req.query.type as string) || (rawId.includes("serie") ? "tv" : "movie");
+      const season = req.query.s ? String(req.query.s) : "1";
+      const episode = req.query.e ? String(req.query.e) : "1";
 
-      if (isMovie) {
-         const regexOptions = /player_select_item["'][^>]*data-id=["'](\d+)["'][^>]*>[\s\S]*?<div[^>]*player_select_name[^>]*>([^<]+)<\/div>/gi;
-         let match;
-         const options = [];
-         while ((match = regexOptions.exec(html)) !== null) {
-            options.push({ id: match[1], name: match[2].trim() });
-         }
-         if (options.length > 0) {
-            const upnsOpt = options.find(o => o.name.includes("UPNS"));
-            optionId = upnsOpt ? upnsOpt.id : options[0].id;
-         }
-      } else {
-         const activeMatch = html.match(/class=["'][^"']*episodeOption\s+active[^"']*["'][^>]*data-contentid=["'](\d+)["']/i) || 
-                             html.match(/data-contentid=["'](\d+)["'][^>]*data-epi-num=["']${e}["']/i);
-                             
-         if (activeMatch) contentId = activeMatch[1];
-         
-         if (contentId) {
-            const optRes = await fetch("https://www.embedplay.one/api", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-                "User-Agent": "Mozilla/5.0",
-                "Referer": pageUrl,
-                "X-Requested-With": "XMLHttpRequest"
-              },
-              body: `action=getOptions&contentid=${contentId}`
-            });
-            const optJson = await optRes.json().catch(()=>null);
-            if (optJson?.data?.options?.length > 0) {
-               const dubOptions = optJson.data.options.filter((o:any) => String(o.target) === "1" || /dub/i.test(o.type || ""));
-               const availableOpts = dubOptions.length > 0 ? dubOptions : optJson.data.options;
-               const upnsOpt = availableOpts.find((o:any) => (o.server || "").includes("UPNS") || (o.name || "").includes("UPNS"));
-               optionId = String((upnsOpt || availableOpts[0]).ID);
-            }
-         }
-      }
+      const targetUrl = (type === "tv" || type === "series")
+        ? `https://myembed.biz/serie/${id}/${season}/${episode}`
+        : `https://myembed.biz/filme/${id}`;
 
-      if (!optionId) {
-        // Fallback to autoembed
-        return res.redirect(isMovie ? `https://player.autoembed.cc/embed/movie/${tmdb}` : `https://player.autoembed.cc/embed/tv/${tmdb}/${s}/${e}`);
-      }
-      
-      const playerRes = await fetch("https://www.embedplay.one/api", {
-        method: "POST",
+      const myembedRes = await fetch(targetUrl, {
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-          "User-Agent": "Mozilla/5.0",
-          "Referer": pageUrl,
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: `action=getPlayer&video_id=${optionId}`
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Referer": "http://localhost:3000/",
+          "Sec-Fetch-Dest": "iframe",
+          "Sec-Fetch-Mode": "navigate",
+          "Sec-Fetch-Site": "cross-site"
+        }
       });
-      const playerJson = await playerRes.json().catch(()=>null);
-      const finalUrl = playerJson?.data?.video_url;
-      
-      if (finalUrl) {
-         return res.redirect(finalUrl);
-      } else {
-         return res.redirect(isMovie ? `https://player.autoembed.cc/embed/movie/${tmdb}` : `https://player.autoembed.cc/embed/tv/${tmdb}/${s}/${e}`);
-      }
-    } catch (err) {
-       console.error("[EmbedPlay Direct Error]:", err);
-       return res.status(500).send("Erro interno");
+
+      let playerHtml = await myembedRes.text();
+
+      // Blindagem Anti-Popup e Injeção de Base Href
+      const shieldScript = `
+        <base href="https://myembed.biz/" />
+        <script>
+          window.open = function() {
+            console.warn('[Play Infinity Anti-Popup] Popup bloqueado com sucesso.');
+            return null;
+          };
+          window.alert = function() {};
+          window.confirm = function() { return false; };
+          window.onbeforeunload = null;
+        </script>
+      `;
+
+      playerHtml = playerHtml.replace("<head>", "<head>" + shieldScript);
+
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send(playerHtml);
+    } catch (err: any) {
+      console.error("[MyEmbed Stream Proxy Error]:", err);
+      return res.status(500).send("Erro ao processar stream do MyEmbed.");
     }
   });
 
-  // API: Resolver do BYSE Player (Streamberry PT-BR)
-  app.get("/api/byse-stream", async (req, res) => {
-    try {
-      const { title, tmdb, s, e, type } = req.query;
-      const isMovie = type === "movie";
-      const season = parseInt(String(s || "1"), 10) || 1;
-      const episode = parseInt(String(e || "1"), 10) || 1;
-      const cleanTitle = String(title || "").trim();
+  // Vite middleware for development
+  
+  // API: Extrator Direto da EmbedPlayAPI (Permanentemente desativado - na blacklist)
+  app.get("/api/embedplay-direct", (_req, res) => {
+    return res.status(403).json({ 
+      error: "Servidor EmbedPlay está bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer." 
+    });
+  });
 
-      if (cleanTitle) {
-        const slug = cleanTitle
-          .toLowerCase()
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "");
-
-        let targetPage = isMovie
-          ? `https://streamberry.com.br/filme/${slug}/`
-          : `https://streamberry.com.br/episodios/${slug}-${season}x${episode}/`;
-
-        let epRes = await fetch(targetPage, {
-          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-        });
-
-        let epHtml = await epRes.text();
-
-        if (
-          epRes.status === 404 ||
-          (!epHtml.includes("data-post") && !epHtml.includes("comment_post_ID"))
-        ) {
-          const searchUrl = `https://streamberry.com.br/?s=${encodeURIComponent(cleanTitle)}`;
-          const searchRes = await fetch(searchUrl, {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-          });
-          const searchHtml = await searchRes.text();
-
-          const linkMatch = searchHtml.match(
-            /href=["'](https:\/\/streamberry\.com\.br\/(?:series|filme|filmes)\/[^"']+)["']/i
-          );
-          if (linkMatch) {
-            const seriesUrl = linkMatch[1];
-            if (!isMovie) {
-              const matchSlug = seriesUrl.match(/\/(?:series|filme|filmes)\/([^/]+)/);
-              if (matchSlug) {
-                targetPage = `https://streamberry.com.br/episodios/${matchSlug[1]}-${season}x${episode}/`;
-                epRes = await fetch(targetPage, {
-                  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-                });
-                epHtml = await epRes.text();
-              }
-            } else {
-              targetPage = seriesUrl;
-              epRes = await fetch(targetPage, {
-                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-              });
-              epHtml = await epRes.text();
-            }
-          }
-        }
-
-        const postMatch =
-          epHtml.match(/data-post=["'](\d+)["']/i) ||
-          epHtml.match(/id=["']comment_post_ID["']\s+value=["'](\d+)["']/i);
-
-        if (postMatch) {
-          const postId = postMatch[1];
-          const form = new URLSearchParams();
-          form.append("action", "doo_player_ajax");
-          form.append("post", postId);
-          form.append("type", isMovie ? "movie" : "tv");
-          form.append("nume", "1");
-
-          const ajaxRes = await fetch("https://streamberry.com.br/wp-admin/admin-ajax.php", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-              "X-Requested-With": "XMLHttpRequest",
-              "Referer": targetPage
-            },
-            body: form.toString()
-          });
-
-          const ajaxJson = await ajaxRes.json().catch(() => null);
-          if (ajaxJson?.embed_url) {
-            return res.redirect(ajaxJson.embed_url);
-          }
-        }
-      }
-
-      // Fallback para EmbedPlay se Byse não estiver disponível
-      const fallbackUrl = tmdb
-        ? `/api/embedplay-direct?tmdb=${tmdb}&s=${season}&e=${episode}&type=${type || "movie"}`
-        : `https://player.autoembed.cc/embed/${isMovie ? "movie" : "tv"}/${tmdb || "1"}${!isMovie ? `/${season}/${episode}` : ""}`;
-
-      return res.redirect(fallbackUrl);
-    } catch (err) {
-      console.error("[BYSE Stream Error]:", err);
-      const { tmdb, s, e, type } = req.query;
-      const fallbackUrl = tmdb
-        ? `/api/embedplay-direct?tmdb=${tmdb}&s=${s || 1}&e=${e || 1}&type=${type || "movie"}`
-        : "https://player.autoembed.cc";
-      return res.redirect(fallbackUrl);
-    }
+  // API: Resolver do BYSE Player (Permanentemente desativado - na blacklist)
+  app.get("/api/byse-stream", (_req, res) => {
+    return res.status(403).json({ 
+      error: "Servidor BYSE/Streamberry está bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer." 
+    });
   });
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/data/**',
+            '**/scratch/**',
+            '**/*.tmp*',
+            '**/*.log',
+            '**/.system_generated/**',
+            '**/*.md',
+          ],
+        },
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

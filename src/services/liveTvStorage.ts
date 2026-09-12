@@ -68,7 +68,8 @@ export function getAllChannels(): LiveChannel[] {
   const initialMap = new Map(INITIAL_LIVE_CHANNELS.map(c => [c.id, c]));
   const validCustom = custom.filter(c => {
     const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1'));
-    if (hasBrokenUrl && initialMap.has(c.id)) {
+    // Se o canal estiver no catálogo oficial e tiver apenas 1 servidor antigo ou url problemática, prioriza o catálogo oficial atualizado
+    if (initialMap.has(c.id) && (hasBrokenUrl || (c.servers && c.servers.length <= 1))) {
       return false;
     }
     return true;

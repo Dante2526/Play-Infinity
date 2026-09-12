@@ -4,12 +4,12 @@ import {
   X, 
   Play, 
   Pause, 
+  Volume1,
   Volume2, 
   VolumeX, 
   Maximize, 
   Minimize, 
   RotateCcw, 
-  Server, 
   Tv, 
   ChevronLeft, 
   ChevronRight, 
@@ -17,7 +17,6 @@ import {
   Radio, 
   ExternalLink,
   ListFilter,
-  CheckCircle2,
   AlertCircle
 } from 'lucide-react';
 import { LiveChannel } from '../data/liveChannels';
@@ -53,7 +52,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showChannelList, setShowChannelList] = useState<boolean>(false);
-  const [showServerMenu, setShowServerMenu] = useState<boolean>(false);
   const [streamHealth, setStreamHealth] = useState<'online' | 'connecting' | 'error'>('connecting');
 
   // Ajuste automático de estabilidade para conexão (sem notificações intrusivas)
@@ -273,20 +271,56 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
   };
 
+  const lastVolumeRef = useRef<number>(1);
+
   const toggleMute = () => {
     const video = videoRef.current;
     if (!video) return;
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
+    if (isMuted || volume === 0) {
+      const restored = lastVolumeRef.current > 0 ? lastVolumeRef.current : 0.8;
+      video.muted = false;
+      video.volume = restored;
+      setVolume(restored);
+      setIsMuted(false);
+    } else {
+      lastVolumeRef.current = volume;
+      video.muted = true;
+      setIsMuted(true);
+    }
   };
 
   const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseFloat(e.target.value);
+    const val = Math.max(0, Math.min(1, parseFloat(e.target.value)));
     setVolume(val);
-    if (videoRef.current) {
-      videoRef.current.volume = val;
-      videoRef.current.muted = val === 0;
-      setIsMuted(val === 0);
+    const video = videoRef.current;
+    if (video) {
+      video.volume = val;
+      if (val > 0) {
+        video.muted = false;
+        setIsMuted(false);
+        lastVolumeRef.current = val;
+      } else {
+        video.muted = true;
+        setIsMuted(true);
+      }
+    }
+  };
+
+  const adjustVolume = (delta: number) => {
+    const base = isMuted ? 0 : volume;
+    const next = Math.max(0, Math.min(1, Math.round((base + delta) * 100) / 100));
+    setVolume(next);
+    const video = videoRef.current;
+    if (video) {
+      video.volume = next;
+      if (next > 0) {
+        video.muted = false;
+        setIsMuted(false);
+        lastVolumeRef.current = next;
+      } else {
+        video.muted = true;
+        setIsMuted(true);
+      }
     }
   };
 
@@ -300,6 +334,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   };
 
   const reloadStream = () => {
+    if (channel.servers.length > 1) {
+      setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+    }
     setIsLoading(true);
     setHasError(false);
     setStreamHealth('connecting');
@@ -354,6 +391,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         togglePlay();
       } else if (e.key === 'm') {
         toggleMute();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        adjustVolume(0.05);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        adjustVolume(-0.05);
       } else if (e.key === 'f') {
         toggleFullscreen();
       } else if (e.key === 'ArrowLeft') {
@@ -364,14 +407,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, allChannels, isPlaying, isMuted]);
+  }, [currentIndex, allChannels, isPlaying, isMuted, volume]);
 
   // Esconder controles após inatividade
   const handleMouseMove = () => {
     setShowControls(true);
     if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => {
-      if (isPlaying && !showChannelList && !showServerMenu) {
+      if (isPlaying && !showChannelList) {
         setShowControls(false);
       }
     }, 3500);
@@ -393,6 +436,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
       />
+
+      {/* Botão flutuante para ativar áudio se o navegador iniciar em mudo */}
+      {isMuted && !isLoading && !hasError && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleMute();
+          }}
+          className="absolute top-20 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-4 py-2 rounded-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold shadow-xl shadow-orange-600/30 backdrop-blur-md transition-all animate-bounce cursor-pointer border border-orange-400/40"
+        >
+          <VolumeX className="w-4 h-4" />
+          <span>Áudio Desativado • Clique para Ativar</span>
+        </button>
+      )}
 
       {/* Spinner de Carregamento / Buffering */}
       {(isLoading || isBuffering) && (
@@ -431,18 +488,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               Tentar Novamente
             </button>
 
-            {channel.servers.length > 1 && (
-              <button
-                onClick={() => {
-                  const nextServer = (selectedServerIndex + 1) % channel.servers.length;
-                  setSelectedServerIndex(nextServer);
-                }}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 font-semibold text-sm transition-all border border-white/10 cursor-pointer"
-              >
-                <Server className="w-4 h-4 text-orange-500" />
-                Alternar para Servidor {(selectedServerIndex + 1) % channel.servers.length + 1}
-              </button>
-            )}
 
             {onEditChannel && (
               <button
@@ -608,24 +653,39 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               <ChevronRight className="w-5 h-5" />
             </button>
 
-            {/* Controle de Volume */}
-            <div className="flex items-center gap-2 ml-1 md:ml-2">
+            {/* Controle de Volume Aprimorado */}
+            <div className="flex items-center gap-2 ml-1 md:ml-2 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/5 transition-all">
               <button
                 onClick={toggleMute}
-                className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
-                title={isMuted ? 'Desmutar' : 'Mutar'}
+                className="p-1 rounded-lg hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
+                title={isMuted || volume === 0 ? 'Desmutar (M)' : 'Mutar (M)'}
               >
-                {isMuted || volume === 0 ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}
+                {isMuted || volume === 0 ? (
+                  <VolumeX className="w-5 h-5 text-red-400" />
+                ) : volume < 0.5 ? (
+                  <Volume1 className="w-5 h-5 text-neutral-200" />
+                ) : (
+                  <Volume2 className="w-5 h-5 text-white" />
+                )}
               </button>
+
               <input
                 type="range"
                 min="0"
                 max="1"
-                step="0.05"
+                step="0.01"
                 value={isMuted ? 0 : volume}
                 onChange={handleVolumeChange}
-                className="w-14 md:w-24 accent-orange-500 cursor-pointer h-1.5 bg-neutral-700 rounded-lg appearance-none"
+                style={{
+                  background: `linear-gradient(to right, #ea580c ${isMuted ? 0 : Math.round(volume * 100)}%, #404040 ${isMuted ? 0 : Math.round(volume * 100)}%)`
+                }}
+                className="w-16 sm:w-24 md:w-32 accent-orange-500 cursor-pointer h-2 rounded-lg appearance-none transition-all"
+                title={`Volume: ${isMuted ? 0 : Math.round(volume * 100)}% (Use ↑ e ↓ para ajustar)`}
               />
+
+              <span className="text-xs font-bold text-neutral-300 min-w-[34px] text-right tabular-nums select-none">
+                {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
+              </span>
             </div>
 
             {/* Recarregar Stream */}
@@ -638,48 +698,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             </button>
           </div>
 
-          {/* Lado Direito: Seletor de Servidor, PiP, Fullscreen */}
+          {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-2">
-            {/* Menu de Servidor */}
-            <div className="relative">
-              <button
-                onClick={() => setShowServerMenu(!showServerMenu)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-neutral-200 text-xs font-semibold backdrop-blur-md transition-all border border-white/10 cursor-pointer"
-              >
-                <Server className="w-3.5 h-3.5 text-orange-500" />
-                <span className="hidden sm:inline">{currentServer?.name || 'Servidor 1'}</span>
-                <span className="sm:hidden">S{selectedServerIndex + 1}</span>
-              </button>
-
-              {showServerMenu && (
-                <div className="absolute bottom-full right-0 mb-2 w-64 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl p-2 shadow-2xl z-50 animate-in fade-in slide-in-from-bottom-2">
-                  <div className="px-2 py-1 text-[11px] font-bold text-neutral-400 uppercase tracking-wider border-b border-white/10 mb-1">
-                    Servidores Disponíveis
-                  </div>
-                  {channel.servers.map((srv, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setSelectedServerIndex(idx);
-                        setShowServerMenu(false);
-                      }}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left text-xs transition-all cursor-pointer ${
-                        selectedServerIndex === idx 
-                          ? 'bg-orange-600/20 text-orange-400 font-semibold' 
-                          : 'hover:bg-white/10 text-neutral-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <Server className="w-3.5 h-3.5" />
-                        <span>{srv.name}</span>
-                      </div>
-                      {selectedServerIndex === idx && <CheckCircle2 className="w-3.5 h-3.5 text-orange-500" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Picture-in-Picture se suportado */}
             {document.pictureInPictureEnabled && (
               <button
