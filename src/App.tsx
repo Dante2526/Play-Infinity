@@ -143,6 +143,25 @@ export default function App() {
     previous?: any;
   };
 
+  // Smart TV Detection for Spatial Navigation
+  useEffect(() => {
+    const ua = navigator.userAgent.toLowerCase();
+    const isTV = /smarttv|tizen|webos|bravia|android tv|aftt|afts|aftm|vidaa|hisense|philips|panasonic/i.test(ua) || 
+                 navigator.platform.toLowerCase().includes('tv');
+    if (isTV) {
+      document.body.classList.add('is-smart-tv');
+      // Polyfill focus outline explicitly for standard navigation events
+      document.addEventListener('keydown', (e) => {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+          document.body.classList.add('using-keyboard');
+        }
+      });
+      document.addEventListener('mousedown', () => {
+        document.body.classList.remove('using-keyboard');
+      });
+    }
+  }, []);
+
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (window.history.state && window.history.state.type) {
       return window.history.state;
@@ -323,50 +342,50 @@ export default function App() {
   };
 
   return (
-    <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col md:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
+    <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col lg:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
       {/* HEADER DESKTOP */}
-      <header className="hidden md:flex fixed top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-6 py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
+      <header className="hidden lg:flex fixed top-4 lg:top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
         <div 
-          className="font-black text-2xl tracking-tighter flex items-center shrink-0 ml-2 cursor-pointer"
+          className="font-black text-lg lg:text-2xl tracking-tighter flex items-center shrink-0 ml-1 lg:ml-2 cursor-pointer"
           onClick={() => navigateTo({ type: 'home' })}
         >
           <span className="text-white">PLAY</span>
           <span className="text-orange-500 ml-1">INFINITY</span>
         </div>
 
-        <nav className="flex items-center gap-1 bg-black/40 p-1.5 rounded-full border border-white/5">
-          <button onClick={() => navigateTo({ type: 'home' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
-          <button onClick={() => navigateTo({ type: 'movies' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
-          <button onClick={() => navigateTo({ type: 'series' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all cursor-pointer ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
-          <button onClick={() => navigateTo({ type: 'live-tv' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2 cursor-pointer ${viewState.type === 'live-tv' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-            <span>TV Ao Vivo</span>
-            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-red-600 text-white tracking-wider">
+        <nav className="flex items-center gap-0.5 lg:gap-1 bg-black/40 p-1 lg:p-1.5 rounded-full border border-white/5">
+          <button onClick={() => navigateTo({ type: 'home' })} className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all cursor-pointer ${viewState.type === 'home' || viewState.type === 'provider' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Início</button>
+          <button onClick={() => navigateTo({ type: 'movies' })} className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all cursor-pointer ${viewState.type === 'movies' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Filmes</button>
+          <button onClick={() => navigateTo({ type: 'series' })} className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all cursor-pointer ${viewState.type === 'series' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>Séries</button>
+          <button onClick={() => navigateTo({ type: 'live-tv' })} className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all flex items-center gap-1.5 lg:gap-2 cursor-pointer ${viewState.type === 'live-tv' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
+            <span className="w-1.5 h-1.5 lg:w-2 lg:h-2 rounded-full bg-red-500 animate-pulse"></span>
+            <span className="whitespace-nowrap">TV Ao Vivo</span>
+            <span className="hidden lg:inline-block text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-red-600 text-white tracking-wider">
               LIVE
             </span>
           </button>
-          <button onClick={() => navigateTo({ type: 'calendar' })} className={`px-5 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-1.5 cursor-pointer ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
-            <CalendarDays className="w-3.5 h-3.5" />
-            <span>Calendário</span>
+          <button onClick={() => navigateTo({ type: 'calendar' })} className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all flex items-center gap-1 lg:gap-1.5 cursor-pointer ${viewState.type === 'calendar' ? 'bg-orange-600/20 text-orange-500 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}>
+            <CalendarDays className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
+            <span className="whitespace-nowrap">Calendário</span>
           </button>
         </nav>
 
-        <div className="flex items-center gap-3 shrink-0 mr-1">
+        <div className="flex items-center gap-2 lg:gap-3 shrink-0 mr-1">
           <button 
             onClick={() => navigateTo({ type: 'search' })}
-            className={`transition-colors p-2.5 rounded-full border cursor-pointer ${viewState.type === 'search' ? 'bg-orange-600/20 text-orange-500 border-orange-500/50' : 'text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'}`}
+            className={`transition-colors p-2 lg:p-2.5 rounded-full border cursor-pointer ${viewState.type === 'search' ? 'bg-orange-600/20 text-orange-500 border-orange-500/50' : 'text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10'}`}
             title="Buscar"
           >
-            <Search className="w-4 h-4" />
+            <Search className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
           </button>
 
           {/* BOTÃO DE NOTIFICAÇÕES (DESKTOP) */}
           <button 
             onClick={() => setNotificationModalOpen(true)}
-            className="relative transition-colors p-2.5 rounded-full border cursor-pointer text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-500/40"
+            className="relative transition-colors p-2 lg:p-2.5 rounded-full border cursor-pointer text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-500/40"
             title="Notificações de Episódios"
           >
-            <Bell className="w-4 h-4" />
+            <Bell className="w-3.5 h-3.5 lg:w-4 lg:h-4" />
             {unreadNotificationsCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-orange-600 text-[10px] font-black text-white shadow-lg animate-pulse">
                 {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
@@ -376,7 +395,7 @@ export default function App() {
 
           <div 
             onClick={handleToggleProfile}
-            className={`w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
+            className={`w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs lg:text-sm cursor-pointer hover:scale-105 transition-all ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
             title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
             N
@@ -385,7 +404,7 @@ export default function App() {
       </header>
 
       {/* MOBILE BRANDING ON TOP */}
-      <div className="md:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full">
+      <div className="lg:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full">
         <div 
           className="font-black text-xl tracking-tighter flex items-center drop-shadow-md cursor-pointer pointer-events-auto shrink-0 select-none"
           onClick={() => navigateTo({ type: 'home' })}
@@ -461,7 +480,7 @@ export default function App() {
       )}
 
       {/* Footer Area */}
-      <footer className="pt-16 pb-24 md:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
+      <footer className="pt-16 pb-24 lg:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
         <div className="font-black text-4xl tracking-tighter flex items-center mb-6">
           <span className="text-neutral-500">PLAY</span>
           <span className="text-orange-500 ml-2">INFINITY</span>
@@ -544,7 +563,7 @@ export default function App() {
       </footer>
 
       {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
-      <div className="md:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
+      <div className="lg:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
         <nav className="bg-[#111111]/95 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1 flex items-center justify-around shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
           <div className="flex items-center justify-between w-full">
             <NavItem onClick={() => navigateTo({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
@@ -1070,7 +1089,7 @@ function HomePage({
                   <span>Assistir Filme</span>
                 </button>
                 <button 
-                  onClick={() => onItemClick(heroItem.id)}
+                  tabIndex={0} role="button" onClick={() => onItemClick(heroItem.id)}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-5 sm:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer text-sm md:text-base whitespace-nowrap active:scale-95"
                 >
                   <Info className="w-5 h-5 shrink-0" />
@@ -1138,7 +1157,7 @@ function HomePage({
               return (
                 <button
                   key={p}
-                  onClick={() => onProviderSelect(p)}
+                  tabIndex={0} role="button" onClick={() => onProviderSelect(p)}
                   className={`group w-full md:w-[135px] lg:w-[150px] xl:w-[160px] h-14 sm:h-16 md:h-18 lg:h-20 px-3 sm:px-4 md:px-5 backdrop-blur-md border rounded-xl sm:rounded-2xl flex items-center justify-center transition-all bg-white/5 hover:bg-white/10 border-white/5 hover:border-orange-500/30 cursor-pointer shadow-sm active:scale-95`}
                 >
                   {logoInfo ? (
@@ -2038,7 +2057,7 @@ function DetailsPage({
              {similarItems.map((sim, idx) => (
                <div 
                  key={`sim-${sim.id}-${idx}`} 
-                 onClick={() => onItemClick(sim.id, sim)} 
+                 tabIndex={0} role="button" onClick={() => onItemClick(sim.id, sim)} 
                  className="relative rounded-xl overflow-hidden border border-neutral-800/80 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(234,88,12,0.2)]"
                >
                   <img 
@@ -2237,7 +2256,7 @@ function GlobalSearchPage({
                   {allCatalogs.slice(0, 12).map((item, idx) => (
                     <div 
                       key={`rec-${item.id}-${idx}`} 
-                      onClick={() => onItemClick(item.id, item)} 
+                      tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
                       className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                     >
                       <img 
@@ -2314,7 +2333,7 @@ function GlobalSearchPage({
                 {displayedResults.map((item, idx) => (
                   <div 
                     key={`search-${item.type || 'media'}-${item.id}-${idx}`} 
-                    onClick={() => onItemClick(item.id, item)} 
+                    tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
                     className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 hover:shadow-[0_0_25px_rgba(234,88,12,0.25)] transition-all duration-300"
                   >
                     <img 
@@ -2768,7 +2787,7 @@ function FavoritesPage({
               return (
                 <div 
                   key={item.id} 
-                  onClick={() => onItemClick(item.id, item)} 
+                  tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-2xl overflow-hidden bg-[#121212] border border-neutral-800 hover:border-orange-500/50 hover:shadow-[0_0_25px_rgba(234,88,12,0.25)] transition-all duration-300 group cursor-pointer aspect-[2/3] flex flex-col justify-between"
                 >
                   <img 
@@ -3104,7 +3123,7 @@ function GlobalCatalogPage({
               {items.map((item, idx) => (
                 <div 
                   key={`cat-${item.type}-${item.id}-${idx}`} 
-                  onClick={() => onItemClick(item.id, item)} 
+                  tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                 >
                   <img 
@@ -3532,7 +3551,7 @@ function ProviderPage({
               {filteredItems.map((item, idx) => (
                 <div 
                   key={`prov-${item.type}-${item.id}-${idx}`} 
-                  onClick={() => onItemClick(item.id, item)} 
+                  tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                 >
                   <img 
@@ -3862,7 +3881,7 @@ function ContentRow({
         }}
         className={`flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden scrollbar-hide select-none ${
           isTop10 
-            ? "pt-4 pb-8 md:pt-6 md:pb-10 pl-6 md:pl-8 pr-6 md:pr-8" 
+            ? "pt-4 pb-8 md:pt-6 lg:pb-10 pl-6 md:pl-8 pr-6 md:pr-8" 
             : "pt-4 pb-6 pl-2 pr-4"
         } ${
           isDragging ? "cursor-grabbing" : "cursor-grab snap-x snap-mandatory"

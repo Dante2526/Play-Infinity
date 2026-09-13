@@ -350,7 +350,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                       <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
                         {/* Poster da Série */}
                         <div
-                          onClick={() => onItemClick(ep.seriesId)}
+                          tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
                           className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-neutral-800 shrink-0 cursor-pointer group-hover:scale-105 transition-transform bg-[#1a1a1a]"
                         >
                           <img
@@ -409,7 +409,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                           </div>
 
                           <h3
-                            onClick={() => onItemClick(ep.seriesId)}
+                            tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
                             className="font-black text-base sm:text-lg text-white hover:text-orange-400 transition-colors cursor-pointer truncate"
                           >
                             {ep.seriesTitle}
@@ -479,7 +479,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
 
                         {/* Botão Ver Série */}
                         <button
-                          onClick={() => onItemClick(ep.seriesId)}
+                          tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
                           className="px-3.5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
                           title="Ver detalhes da série"
                         >
@@ -566,7 +566,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                     >
                       {/* Pôster com Overlay */}
                       <div
-                        onClick={() => onItemClick(series.id, series)}
+                        tabIndex={0} role="button" onClick={() => onItemClick(series.id, series)}
                         className="relative aspect-[2/3] w-full overflow-hidden cursor-pointer"
                       >
                         <img
@@ -592,7 +592,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                       <div className="p-3.5 flex flex-col flex-1 justify-between bg-[#121212]">
                         <div>
                           <h4
-                            onClick={() => onItemClick(series.id, series)}
+                            tabIndex={0} role="button" onClick={() => onItemClick(series.id, series)}
                             className="font-bold text-xs sm:text-sm text-white hover:text-orange-400 transition-colors cursor-pointer truncate"
                           >
                             {series.title}

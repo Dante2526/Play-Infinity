@@ -131,6 +131,23 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     });
   }, [channels, searchQuery, selectedCategory, favoriteIds]);
 
+  // Performance Optimization: Progressive Rendering for large M3U playlists
+  const [visibleCount, setVisibleCount] = useState(36);
+
+  useEffect(() => {
+    setVisibleCount(36); // Reset when filters change
+  }, [filteredChannels.length, searchQuery, selectedCategory]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 1200) {
+        setVisibleCount((prev) => Math.min(prev + 36, filteredChannels.length));
+      }
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [filteredChannels.length]);
+
   // Canal em destaque no Banner (Premiere Clubes ou o primeiro de esportes)
   const heroChannel = useMemo(() => {
     const lastId = getLastPlayedChannelId();
@@ -384,7 +401,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                 <button
-                  onClick={() => handlePlayChannel(heroChannel)}
+                  tabIndex={0} role="button" onClick={() => handlePlayChannel(heroChannel)}
                   className="flex items-center justify-center gap-2.5 px-6 sm:px-7 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm md:text-base transition-all shadow-[0_10px_25px_rgba(234,88,12,0.5)] active:scale-95 cursor-pointer min-h-[44px]"
                 >
                   <Play className="w-5 h-5 fill-white" />
@@ -554,12 +571,12 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       ) : viewMode === 'list' ? (
         /* VISUALIZAÇÃO EM LISTA (EXTREMAMENTE RÁPIDA E ERGONÔMICA NO CELULAR) */
         <div className="space-y-2 sm:space-y-2.5">
-          {filteredChannels.map((channel) => {
+          {filteredChannels.slice(0, visibleCount).map((channel) => {
             const isFav = favoriteIds.includes(channel.id);
             return (
               <div
                 key={channel.id}
-                onClick={() => handlePlayChannel(channel)}
+                tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
                 className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all duration-200 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer overflow-hidden shadow-sm active:scale-[0.99]"
               >
                 <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
@@ -632,7 +649,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   )}
 
                   <button
-                    onClick={() => handlePlayChannel(channel)}
+                    tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
                     className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-orange-600 hover:bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-600/30 active:scale-95 ml-1 cursor-pointer shrink-0"
                     title="Assistir agora"
                   >
@@ -646,12 +663,12 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       ) : (
         /* VISUALIZAÇÃO EM GRADE (2 COLUNAS NO CELULAR, 3-4 NO DESKTOP) */
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
-          {filteredChannels.map((channel) => {
+          {filteredChannels.slice(0, visibleCount).map((channel) => {
             const isFav = favoriteIds.includes(channel.id);
             return (
               <div
                 key={channel.id}
-                onClick={() => handlePlayChannel(channel)}
+                tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
                 className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 transition-all duration-300 hover:shadow-xl hover:shadow-orange-600/10 flex flex-col justify-between cursor-pointer overflow-hidden active:scale-[0.98]"
               >
                 {/* Efeito sutil ao passar o mouse */}

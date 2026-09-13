@@ -222,18 +222,27 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         // Fallback nativo do Safari / WebKit iOS
         video.src = streamUrl;
-        video.addEventListener('loadedmetadata', () => {
+        
+        const handleNativeLoadedMetadata = () => {
           if (!isMounted) return;
           failedServersRef.current.clear();
           setIsLoading(false);
           setIsBuffering(false);
           setStreamHealth('online');
           video.play().catch(() => {});
-        });
-        video.addEventListener('error', () => {
+        };
+
+        const handleNativeError = () => {
           if (!isMounted) return;
           switchToNextServer('erro nativo video');
-        });
+        };
+
+        // Salva referência no elemento de vídeo temporariamente para facilitar o cleanup no unmount
+        (video as any)._nativeMetaHandler = handleNativeLoadedMetadata;
+        (video as any)._nativeErrorHandler = handleNativeError;
+
+        video.addEventListener('loadedmetadata', handleNativeLoadedMetadata);
+        video.addEventListener('error', handleNativeError);
       } else {
         setIsLoading(false);
         setHasError(true);
@@ -287,6 +296,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+
+      if ((video as any)._nativeMetaHandler) {
+        video.removeEventListener('loadedmetadata', (video as any)._nativeMetaHandler);
+        delete (video as any)._nativeMetaHandler;
+      }
+      if ((video as any)._nativeErrorHandler) {
+        video.removeEventListener('error', (video as any)._nativeErrorHandler);
+        delete (video as any)._nativeErrorHandler;
+      }
+
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
