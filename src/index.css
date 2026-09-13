@@ -108,3 +108,23 @@ body {
   -ms-overflow-style: none !important;
   scrollbar-width: none !important;
 }
+
+/* Smart TV Navigation Optimization */
+body.is-smart-tv.using-keyboard *:focus,
+body.is-smart-tv *:focus-visible {
+  outline: 4px solid #f97316 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.7) !important;
+  transform: scale(1.05) !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  z-index: 50 !important;
+  border-color: transparent !important;
+}
+
+body.is-smart-tv button,
+body.is-smart-tv [role="button"],
+body.is-smart-tv a,
+body.is-smart-tv [tabindex="0"] {
+  transition: transform 0.2s, outline 0.1s, box-shadow 0.2s !important;
+}
+

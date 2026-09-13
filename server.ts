@@ -796,6 +796,21 @@ async function startServer() {
           fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
         }
 
+        let parsedUrl;
+        try {
+          parsedUrl = new URL(fetchUrl);
+        } catch {
+          return res.status(400).json({ success: false, error: "Formato de URL inválido." });
+        }
+
+        if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+          return res.status(403).json({ success: false, error: "Protocolo não permitido." });
+        }
+
+        if (isPrivateOrLocalIp(parsedUrl.hostname)) {
+          return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança." });
+        }
+
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
         const resp = await fetch(fetchUrl, {
@@ -903,6 +918,24 @@ async function startServer() {
             if (!streamUrl) {
               channel.isOnline = false;
               channel.status = "offline";
+              offlineCount++;
+              return;
+            }
+
+            try {
+              const parsedStream = new URL(streamUrl);
+              if (parsedStream.protocol !== "http:" && parsedStream.protocol !== "https:") throw new Error();
+              if (isPrivateOrLocalIp(parsedStream.hostname)) {
+                channel.isOnline = false;
+                channel.status = "offline";
+                channel.error = "IP privado não permitido";
+                offlineCount++;
+                return;
+              }
+            } catch (e) {
+              channel.isOnline = false;
+              channel.status = "offline";
+              channel.error = "URL inválida";
               offlineCount++;
               return;
             }
@@ -1399,14 +1432,26 @@ async function startServer() {
       if (!rawUrl) return res.status(400).send("URL ausente");
 
       const validation = validateSafeUrl(rawUrl);
-      if (
-        !validation.valid && 
-        !rawUrl.includes("hclod.qzz.io") && 
-        !rawUrl.includes("watchplay.shop") &&
-        !rawUrl.includes("vixsrc") &&
-        !rawUrl.includes("vix-content")
-      ) {
-        return res.status(403).send("URL não permitida");
+      if (!validation.valid) {
+        let isAllowedException = false;
+        try {
+          const parsedHost = new URL(rawUrl).hostname.toLowerCase();
+          if (
+            parsedHost === "hclod.qzz.io" || parsedHost.endsWith(".hclod.qzz.io") ||
+            parsedHost === "watchplay.shop" || parsedHost.endsWith(".watchplay.shop") ||
+            parsedHost === "vixsrc.to" || parsedHost.endsWith(".vixsrc.to") ||
+            parsedHost === "vixsrc.net" || parsedHost.endsWith(".vixsrc.net") ||
+            parsedHost === "vix-content.net" || parsedHost.endsWith(".vix-content.net")
+          ) {
+            isAllowedException = true;
+          }
+        } catch (e) {
+          // hostname invalido
+        }
+
+        if (!isAllowedException) {
+          return res.status(403).send("URL não permitida");
+        }
       }
 
       res.setHeader("Access-Control-Allow-Origin", "*");
@@ -2873,16 +2918,52 @@ async function startServer() {
         headers["Referer"] = req.query.referer as string;
       }
 
-      const upstreamRes = await fetch(rawUrl, {
-        headers,
-        redirect: "follow"
-      });
+      let currentUrl = rawUrl;
+      let upstreamRes;
+      let redirects = 0;
+      const MAX_REDIRECTS = 5;
+
+      while (redirects < MAX_REDIRECTS) {
+        upstreamRes = await fetch(currentUrl, {
+          headers,
+          redirect: "manual"
+        });
+
+        if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
+          const location = upstreamRes.headers.get("location");
+          if (!location) break;
+
+          let nextUrl: URL;
+          try {
+            nextUrl = new URL(location, currentUrl);
+          } catch {
+            return res.status(502).send("Location de redirecionamento inválido");
+          }
+
+          if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
+            return res.status(403).send("Protocolo inválido no redirect.");
+          }
+
+          if (isPrivateOrLocalIp(nextUrl.hostname)) {
+            return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
+          }
+
+          currentUrl = nextUrl.toString();
+          redirects++;
+        } else {
+          break;
+        }
+      }
+
+      if (redirects >= MAX_REDIRECTS || !upstreamRes) {
+        return res.status(502).send("Muitos redirecionamentos ou falha de proxy");
+      }
 
       if (!upstreamRes.ok) {
         return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
       }
 
-      const finalUrl = upstreamRes.url || rawUrl;
+      const finalUrl = upstreamRes.url || currentUrl;
       const contentType = upstreamRes.headers.get("content-type") || "";
       const isM3U8 = rawUrl.includes(".m3u8") || 
                      finalUrl.includes(".m3u8") ||
