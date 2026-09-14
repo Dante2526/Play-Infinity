@@ -426,13 +426,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   <span>Sintonizar Canal</span>
                 </button>
 
-                <button
-                  onClick={() => openAddModal()}
-                  className="flex items-center justify-center gap-2 px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm border border-white/15 transition-all cursor-pointer min-h-[44px]"
-                >
-                  <Plus className="w-4 h-4 text-orange-400" />
-                  <span>Importar Lista M3U</span>
-                </button>
               </div>
             </div>
 
@@ -500,15 +493,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão Principal de Adicionar / Importar Lista M3U */}
-          <button
-            onClick={() => openAddModal()}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-orange-600/30 active:scale-95 cursor-pointer min-h-[44px] shrink-0"
-            title="Importar lista M3U ou adicionar canal"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Importar M3U</span>
-          </button>
+          {/* Botão de Adicionar removido conforme solicitado */}
 
           {/* Seletor de Modo de Visualização (Grade / Lista - perfeito para celular) */}
           <div className="flex items-center bg-neutral-900/90 border border-white/10 rounded-xl sm:rounded-2xl p-0.5 shrink-0">
@@ -606,25 +591,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
       {/* CHIPS DE CATEGORIAS (Scroll fluido com espaço seguro para foco e contornos) */}
       <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pt-3 pb-4 mb-4 sm:mb-6 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-2">
-        <button
-          onClick={() => openAddModal()}
-          className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Importar Lista M3U</span>
-        </button>
-
-        {customChannelsCount > 0 && (
-          <button
-            type="button"
-            onClick={handleClearAllCustom}
-            className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 shadow-sm active:scale-95"
-            title="Remover todos os canais que você importou"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Limpar Importados ({customChannelsCount})</span>
-          </button>
-        )}
+        {/* Chips de importação removidos */}
 
         {categories.map((cat) => {
           const isActive = selectedCategory === cat.id;
