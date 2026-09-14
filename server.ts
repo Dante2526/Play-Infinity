@@ -3072,6 +3072,16 @@ const PORT = 3000;
           filteredLines.push(line);
         }
 
+        let baseReferer = req.query.referer as string;
+        if (!baseReferer) {
+          try {
+            baseReferer = new URL(finalUrl).origin + "/";
+          } catch {
+            baseReferer = "";
+          }
+        }
+        const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
+
         const rewritten = filteredLines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return line;
@@ -3080,7 +3090,7 @@ const PORT = 3000;
             return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -3091,7 +3101,7 @@ const PORT = 3000;
 
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}`;
           } catch {
             return trimmed;
           }
