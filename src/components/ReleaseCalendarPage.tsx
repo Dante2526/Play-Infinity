@@ -199,7 +199,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
           <>
             {/* BARRA DE FILTROS & ABAS */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 my-8">
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+              <div className="flex items-center gap-2 overflow-x-auto py-2 px-1 -my-1 scrollbar-none">
                 <button
                   onClick={() => { setFilterTab('all'); setSelectedDay(null); }}
                   className={`px-5 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
@@ -324,179 +324,195 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                   const isSeriesEnded = ep.status === 'series_ended';
                   const isEnded = isSeasonEnded || isSeriesEnded;
 
-                  return (
-                    <div
-                      key={ep.id}
-                      className={`relative bg-[#121212] border rounded-2xl p-4 sm:p-5 transition-all flex flex-col md:flex-row gap-5 items-start md:items-center justify-between overflow-hidden group hover:border-orange-500/40 hover:shadow-[0_0_25px_rgba(234,88,12,0.15)] ${
-                        isToday
-                          ? 'border-emerald-500/40 bg-gradient-to-r from-[#121212] via-[#151d18] to-[#121212]'
-                          : isSeasonEnded
-                          ? 'border-indigo-500/30 bg-gradient-to-r from-[#121212] via-[#151525] to-[#121212]'
-                          : isSeriesEnded
-                          ? 'border-neutral-700/60 bg-[#121212]'
-                          : 'border-white/5'
-                      }`}
-                    >
-                      {/* Efeito Glow lateral */}
-                      <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${
-                        isToday ? 'bg-emerald-500' :
-                        isSeasonEnded ? 'bg-indigo-500' :
-                        isSeriesEnded ? 'bg-neutral-600' :
-                        isReleased ? 'bg-neutral-600' :
-                        'bg-orange-500'
-                      }`} />
-
-                      {/* Lado Esquerdo: Poster + Informações */}
-                      <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
-                        {/* Poster da Série */}
+                      return (
                         <div
-                          tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
-                          className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-neutral-800 shrink-0 cursor-pointer group-hover:scale-105 transition-transform bg-[#1a1a1a]"
-                        >
-                          <img
-                            src={ep.seriesPoster}
-                            alt={ep.seriesTitle}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={(e) => {
-                              e.currentTarget.onerror = null;
-                              e.currentTarget.src = ep.seriesBackdrop || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
-                            }}
-                          />
-                        </div>
-
-                        {/* Detalhes do Episódio */}
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                            <span className="px-2 py-0.5 rounded bg-white/10 text-neutral-300 text-[10px] font-bold uppercase tracking-wider">
-                              {ep.provider}
-                            </span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                              isEnded
-                                ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
-                                : 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
-                            }`}>
-                              T{ep.seasonNumber}:E{ep.episodeNumber}
-                            </span>
-                            
-                            {/* Tag de Status */}
-                            {isToday ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm whitespace-nowrap shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping shrink-0"></span>
-                                Estreia Hoje ({ep.airTime})
-                              </span>
-                            ) : isSeasonEnded ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
-                                <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
-                                <span>Temporada Concluída</span>
-                                <span className="hidden sm:inline">• Aguardando Nova Temporada</span>
-                              </span>
-                            ) : isSeriesEnded ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
-                                <CheckCircle2 className="w-3 h-3 text-neutral-500 shrink-0" />
-                                <span>Série Concluída</span>
-                                <span className="hidden sm:inline">(Finalizada)</span>
-                              </span>
-                            ) : isReleased ? (
-                              <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold whitespace-nowrap shrink-0">
-                                Já Lançado
-                              </span>
-                            ) : (
-                              <span className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold whitespace-nowrap shrink-0">
-                                {ep.dayOfWeek} às {ep.airTime}
-                              </span>
-                            )}
-                          </div>
-
-                          <h3
-                            tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
-                            className="font-black text-base sm:text-lg text-white hover:text-orange-400 transition-colors cursor-pointer truncate"
-                          >
-                            {ep.seriesTitle}
-                          </h3>
-
-                          <p className="text-sm font-semibold text-neutral-200 mt-0.5 truncate">
-                            {ep.episodeTitle}
-                          </p>
-
-                          <p className="text-xs text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
-                            {ep.synopsis}
-                          </p>
-
-                          {/* Data formatada */}
-                          <div className="flex items-center gap-3 text-xs text-neutral-400 mt-2">
-                            <span className="flex items-center gap-1">
-                              <CalendarIcon className="w-3.5 h-3.5 text-neutral-500" />
-                              {isEnded ? "Último exibido: " : ""}
-                              {new Date(ep.airDate + "T12:00:00").toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                            </span>
-                            {!isEnded && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3.5 h-3.5 text-neutral-500" />
-                                  {ep.airTime} (Horário de Brasília)
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Lado Direito: Ações */}
-                      <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
-                        {/* Botão Assistir Episódio */}
-                        <button
-                          onClick={() => {
-                            onPlay?.(
-                              `${ep.seriesTitle} - T${ep.seasonNumber}:E${ep.episodeNumber}`,
-                              ep.playerUrl,
-                              'series',
-                              ep.tmdbId,
-                              ep.imdbId,
-                              ep.seasonNumber,
-                              ep.episodeNumber,
-                              undefined,
-                              false,
-                              undefined,
-                              false,
-                              ep.seriesBackdrop || ep.seriesPoster,
-                              ep.seriesBackdrop,
-                              ep.seriesPoster
-                            );
-                          }}
-                          className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
+                          key={ep.id}
+                          tabIndex={0}
+                          role="region"
+                          aria-label={`${ep.seriesTitle} - ${ep.episodeTitle}`}
+                          className={`relative bg-[#121212] border rounded-2xl p-4 sm:p-5 transition-all flex flex-col md:flex-row gap-5 items-start md:items-center justify-between overflow-hidden group hover:border-orange-500/40 hover:shadow-[0_0_25px_rgba(234,88,12,0.15)] ${
                             isToday
-                              ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                              ? 'border-emerald-500/40 bg-gradient-to-r from-[#121212] via-[#151d18] to-[#121212]'
                               : isSeasonEnded
-                              ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
-                              : 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'
+                              ? 'border-indigo-500/30 bg-gradient-to-r from-[#121212] via-[#151525] to-[#121212]'
+                              : isSeriesEnded
+                              ? 'border-neutral-700/60 bg-[#121212]'
+                              : 'border-white/5'
                           }`}
                         >
-                          <Play className="w-3.5 h-3.5 fill-current" />
-                          <span>{isEnded ? "Assistir Último Ep" : "Assistir Episódio"}</span>
-                        </button>
+                          {/* Efeito Glow lateral */}
+                          <div className={`absolute top-0 left-0 bottom-0 w-1.5 ${
+                            isToday ? 'bg-emerald-500' :
+                            isSeasonEnded ? 'bg-indigo-500' :
+                            isSeriesEnded ? 'bg-neutral-600' :
+                            isReleased ? 'bg-neutral-600' :
+                            'bg-orange-500'
+                          }`} />
 
-                        {/* Botão Ver Série */}
-                        <button
-                          tabIndex={0} role="button" onClick={() => onItemClick(ep.seriesId)}
-                          className="px-3.5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
-                          title="Ver detalhes da série"
-                        >
-                          Ver Série
-                        </button>
+                          {/* Lado Esquerdo: Poster + Informações */}
+                          <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
+                            {/* Poster da Série */}
+                            <div
+                              onClick={() => onItemClick(ep.seriesId)}
+                              className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-neutral-800 shrink-0 cursor-pointer group-hover:scale-105 transition-transform bg-[#1a1a1a]"
+                            >
+                              <img
+                                src={ep.seriesPoster}
+                                alt={ep.seriesTitle}
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.onerror = null;
+                                  e.currentTarget.src = ep.seriesBackdrop || "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
+                                }}
+                              />
+                            </div>
 
-                        {/* Botão Seguir/Favorito */}
-                        <button
-                          onClick={() => handleToggleFav(ep.seriesId)}
-                          className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-orange-500 border border-white/10 transition-colors cursor-pointer"
-                          title="Remover série dos favoritos"
-                        >
-                          <BookmarkCheck className="w-4 h-4 fill-current" />
-                        </button>
-                      </div>
-                    </div>
-                  );
+                            {/* Detalhes do Episódio */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                                <span className="px-2 py-0.5 rounded bg-white/10 text-neutral-300 text-[10px] font-bold uppercase tracking-wider">
+                                  {ep.provider}
+                                </span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  isEnded
+                                    ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30'
+                                    : 'bg-orange-600/20 text-orange-400 border border-orange-500/30'
+                                }`}>
+                                  T{ep.seasonNumber}:E{ep.episodeNumber}
+                                </span>
+                                
+                                {/* Tag de Status */}
+                                {isToday ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm whitespace-nowrap shrink-0">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-black animate-ping shrink-0"></span>
+                                    Estreia Hoje ({ep.airTime})
+                                  </span>
+                                ) : isSeasonEnded ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                    <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
+                                    <span>Temporada Concluída</span>
+                                    <span className="hidden sm:inline">• Aguardando Nova Temporada</span>
+                                  </span>
+                                ) : isSeriesEnded ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                    <CheckCircle2 className="w-3 h-3 text-neutral-500 shrink-0" />
+                                    <span>Série Concluída</span>
+                                    <span className="hidden sm:inline">(Finalizada)</span>
+                                  </span>
+                                ) : isReleased ? (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold whitespace-nowrap shrink-0">
+                                    Já Lançado
+                                  </span>
+                                ) : (
+                                  <span className="px-2.5 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/20 text-[10px] font-semibold whitespace-nowrap shrink-0">
+                                    {ep.dayOfWeek} às {ep.airTime}
+                                  </span>
+                                )}
+                              </div>
+
+                              <h3
+                                onClick={() => onItemClick(ep.seriesId)}
+                                className="font-black text-base sm:text-lg text-white hover:text-orange-400 transition-colors cursor-pointer truncate"
+                              >
+                                {ep.seriesTitle}
+                              </h3>
+
+                              <p className="text-sm font-semibold text-neutral-200 mt-0.5 truncate">
+                                {ep.episodeTitle}
+                              </p>
+
+                              <p className="text-xs text-neutral-400 mt-1 line-clamp-2 leading-relaxed">
+                                {ep.synopsis}
+                              </p>
+
+                              {/* Data formatada */}
+                              <div className="flex items-center gap-3 text-xs text-neutral-400 mt-2">
+                                <span className="flex items-center gap-1">
+                                  <CalendarIcon className="w-3.5 h-3.5 text-neutral-500" />
+                                  {isEnded ? "Último exibido: " : ""}
+                                  {new Date(ep.airDate + "T12:00:00").toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                </span>
+                                {!isEnded && (
+                                  <>
+                                    <span>•</span>
+                                    <span className="flex items-center gap-1">
+                                      <Clock className="w-3.5 h-3.5 text-neutral-500" />
+                                      {ep.airTime} (Horário de Brasília)
+                                    </span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Lado Direito: Ações */}
+                          <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
+                            {/* Botão Assistir Episódio */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onPlay?.(
+                                  `${ep.seriesTitle} - T${ep.seasonNumber}:E${ep.episodeNumber}`,
+                                  ep.playerUrl,
+                                  'series',
+                                  ep.tmdbId,
+                                  ep.imdbId,
+                                  ep.seasonNumber,
+                                  ep.episodeNumber,
+                                  undefined,
+                                  false,
+                                  undefined,
+                                  false,
+                                  ep.seriesBackdrop || ep.seriesPoster,
+                                  ep.seriesBackdrop,
+                                  ep.seriesPoster
+                                );
+                              }}
+                              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
+                                isToday
+                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                  : isSeasonEnded
+                                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                                  : 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'
+                              }`}
+                              title={isEnded ? "Assistir Último Ep" : "Assistir Episódio"}
+                            >
+                              <Play className="w-3.5 h-3.5 fill-current" />
+                              <span>{isEnded ? "Assistir Último Ep" : "Assistir Episódio"}</span>
+                            </button>
+
+                            {/* Botão Ver Série */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onItemClick(ep.seriesId);
+                              }}
+                              className="px-3.5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
+                              title="Ver detalhes da série"
+                            >
+                              Ver Série
+                            </button>
+
+                            {/* Botão Seguir/Favorito */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleFav(ep.seriesId);
+                              }}
+                              className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-orange-500 border border-white/10 transition-colors cursor-pointer"
+                              title={favoriteIds.includes(ep.seriesId) ? "Remover série dos favoritos" : "Marcar como favorito"}
+                              aria-label={favoriteIds.includes(ep.seriesId) ? "Remover série dos favoritos" : "Marcar como favorito"}
+                            >
+                              {favoriteIds.includes(ep.seriesId) ? (
+                                <BookmarkCheck className="w-4 h-4 fill-current" />
+                              ) : (
+                                <Bookmark className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      );
                 })}
               </div>
             ) : (

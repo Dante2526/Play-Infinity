@@ -190,7 +190,7 @@ export function WebhookPanelModal({ isOpen, onClose, onPlayItem }: WebhookPanelM
                     setAdminKey(e.target.value);
                     if (submitError) setSubmitError(null);
                   }}
-                  placeholder="Cole aqui a sua chave secreta para autorizar o teste..."
+                  placeholder="Informe sua chave (padrão: playinfinity-webhook-2025)..."
                   className="w-full bg-[#0d0d0d] border border-neutral-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 font-mono placeholder:text-neutral-600"
                   required
                 />

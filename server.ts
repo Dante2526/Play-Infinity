@@ -4,6 +4,7 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
+import rateLimit from "express-rate-limit";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 
 if (fs.existsSync(".env.local")) {
@@ -26,400 +27,55 @@ interface StreamItem {
 const customStreams: StreamItem[] = [];
 
 // Interface e armazenamento dos Mais Assistidos pelos usuários
-interface WatchedItem {
-  id: number | string;
-  tmdbId?: number;
-  imdbId?: string;
-  title: string;
-  type: "movie" | "series";
-  imageUrl?: string;
-  backdropUrl?: string;
-  quality?: "CAM" | "TS" | "HD" | "4K" | "FULL HD";
-  playerUrl?: string;
-  views: number;
-  lastWatched: string;
-}
-
-const INITIAL_MOST_WATCHED: WatchedItem[] = [
-  {
-    id: 299534,
-    tmdbId: 299534,
-    title: "VINGADORES: ULTIMATO",
-    type: "movie",
-    imageUrl: "https://image.tmdb.org/t/p/w500/9fRX8UKlIW7Lb9GqNsJVakWWFCi.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/movie/299534",
-    views: 185,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 66732,
-    tmdbId: 66732,
-    imdbId: "tt4574334",
-    title: "STRANGER THINGS",
-    type: "series",
-    imageUrl: "https://image.tmdb.org/t/p/w500/twfKp60THrcOIep9sjHODOOfO8d.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/56v2KjBlU4XaOv9rVYEQypROD7P.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/tvshow/66732/1/1",
-    views: 172,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 533535,
-    tmdbId: 533535,
-    title: "DEADPOOL & WOLVERINE",
-    type: "movie",
-    imageUrl: "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/movie/533535",
-    views: 164,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 93405,
-    tmdbId: 93405,
-    title: "ROUND 6 (SQUID GAME)",
-    type: "series",
-    imageUrl: "https://image.tmdb.org/t/p/w500/6gcHdboppvplmBWxvROc96NJnmm.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/2meX1nMdScFOoV4370rqHWKmXhY.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/tvshow/93405/1/1",
-    views: 153,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 969681,
-    tmdbId: 969681,
-    imdbId: "tt22084616",
-    title: "HOMEM-ARANHA: UM NOVO DIA",
-    type: "movie",
-    imageUrl: "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
-    quality: "CAM",
-    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
-    views: 147,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 119051,
-    tmdbId: 119051,
-    title: "WANDINHA",
-    type: "series",
-    imageUrl: "https://image.tmdb.org/t/p/w500/7rxiQrZjrer0RB9qNA8rHYFo53R.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/iHSwvRVsRyxpX7FE7GbviaDvgGZ.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/tvshow/119051/1/1",
-    views: 138,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 157336,
-    tmdbId: 157336,
-    title: "INTERESTELAR",
-    type: "movie",
-    imageUrl: "https://image.tmdb.org/t/p/w500/6ricSDD83BClJsFdGB6x7cM0MFQ.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/5XNQBqnBwPA9yT0jZ0p3s8bbLh0.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/movie/157336",
-    views: 129,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 100088,
-    tmdbId: 100088,
-    title: "THE LAST OF US",
-    type: "series",
-    imageUrl: "https://image.tmdb.org/t/p/w500/ieMLFFCwdep90d67kOT0oFtv2yX.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/lY2DhbA7Hy44fAKddr06UrXWWaQ.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/tvshow/100088/1/1",
-    views: 118,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 1022789,
-    tmdbId: 1022789,
-    title: "DIVERTIDA MENTE 2",
-    type: "movie",
-    imageUrl: "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/p5ozvmdgsmbWe0H8Xk7Rc8SCwAB.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/movie/1022789",
-    views: 105,
-    lastWatched: new Date().toISOString()
-  },
-  {
-    id: 94997,
-    tmdbId: 94997,
-    title: "A CASA DO DRAGÃO",
-    type: "series",
-    imageUrl: "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/577eXC8wFQT0eUrJcgznSiFPRmk.jpg",
-    quality: "HD",
-    playerUrl: "https://v1.watchplay.shop/tvshow/94997/1/1",
-    views: 95,
-    lastWatched: new Date().toISOString()
-  }
-];
-
-function getMostWatchedFilePath(): string {
-  return path.join(process.cwd(), "data", "most-watched.json");
-}
-
-function loadMostWatchedFromDisk(): WatchedItem[] {
-  try {
-    const filePath = getMostWatchedFilePath();
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
-      }
-    }
-  } catch (err) {
-    console.error("[MostWatched] Erro ao carregar arquivo na inicialização:", err);
-  }
-  return [...INITIAL_MOST_WATCHED];
-}
-
-// Cache em RAM carregado no boot (zero I/O bloqueante durante requisições HTTP)
-const mostWatchedMemoryCache: WatchedItem[] = loadMostWatchedFromDisk();
-let saveDebounceTimer: NodeJS.Timeout | null = null;
-let isSavingMostWatched = false;
-let hasPendingMostWatchedSave = false;
-
-// Executa gravação atômica com trava sequencial (mutex) para eliminar condições de corrida
-async function executeAtomicSaveMostWatched(): Promise<void> {
-  if (isSavingMostWatched) {
-    hasPendingMostWatchedSave = true;
-    return;
-  }
-  isSavingMostWatched = true;
-
-  try {
-    const dir = path.join(process.cwd(), "data");
-    await fs.promises.mkdir(dir, { recursive: true });
-    const filePath = getMostWatchedFilePath();
-    const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
-
-    // Serializa snapshot da memória
-    const payload = JSON.stringify(mostWatchedMemoryCache, null, 2);
-
-    // 1. Grava primeiro no arquivo temporário
-    await fs.promises.writeFile(tempPath, payload, "utf-8");
-
-    // 2. Substitui o arquivo de destino de forma atômica
-    try {
-      await fs.promises.rename(tempPath, filePath);
-    } catch {
-      // Fallback para plataformas em que rename sobre arquivo existente requer cópia explícita
-      await fs.promises.copyFile(tempPath, filePath);
-      await fs.promises.unlink(tempPath).catch(() => {});
-    }
-  } catch (err) {
-    console.error("[MostWatched] Falha na persistência atômica da audiência:", err);
-  } finally {
-    isSavingMostWatched = false;
-    // Se novas atualizações chegaram enquanto gravava no disco, processa a fila em sequência
-    if (hasPendingMostWatchedSave) {
-      hasPendingMostWatchedSave = false;
-      executeAtomicSaveMostWatched();
-    }
-  }
-}
-
-// Escrita assíncrona com Debounce de 1.5s
-function scheduleAsyncSaveMostWatched(): void {
-  if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
-  saveDebounceTimer = setTimeout(() => {
-    saveDebounceTimer = null;
-    executeAtomicSaveMostWatched();
-  }, 1500);
-}
+import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 
 /**
  * Utilitário de sanitização para strings de entrada da API
  */
-function sanitizeString(val: any, maxLength = 100): string {
-  if (typeof val !== "string") return "";
-  return val
-    .replace(/<[^>]*>?/gm, "")
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, "")
-    .trim()
-    .slice(0, maxLength);
-}
-
-// Rate-limit e proteção contra inflação de views no /api/track-play:
-// IP -> { timestamps: number[], titleCooldown: Map<string, number> }
-const trackPlayRateLimits = new Map<string, { timestamps: number[]; titleCooldown: Map<string, number> }>();
-
-function checkTrackPlayRateLimit(ip: string, titleKey: string): { allowed: boolean; shouldIncrement: boolean; error?: string } {
-  const now = Date.now();
-  let record = trackPlayRateLimits.get(ip);
-  if (!record) {
-    record = { timestamps: [], titleCooldown: new Map() };
-    trackPlayRateLimits.set(ip, record);
-  }
-
-  // 1. Limpa timestamps com mais de 60 segundos
-  record.timestamps = record.timestamps.filter(ts => now - ts < 60000);
-
-  // 2. Limite global por IP: máx 15 requisições por minuto
-  if (record.timestamps.length >= 15) {
-    return { allowed: false, shouldIncrement: false, error: "Muitas requisições de reprodução. Aguarde um momento." };
-  }
-
-  record.timestamps.push(now);
-
-  // 3. Debounce por título: mesmo IP só incrementa views para o mesmo título a cada 45 segundos
-  const lastPlayForTitle = record.titleCooldown.get(titleKey) || 0;
-  if (now - lastPlayForTitle < 45000) {
-    return { allowed: true, shouldIncrement: false }; // Aceita a request, mas não infla o contador de views
-  }
-
-  record.titleCooldown.set(titleKey, now);
-
-  // Limpeza de cooldowns expirados se a lista crescer
-  if (record.titleCooldown.size > 100) {
-    for (const [key, ts] of record.titleCooldown.entries()) {
-      if (now - ts > 120000) record.titleCooldown.delete(key);
-    }
-  }
-
-  return { allowed: true, shouldIncrement: true };
-}
-
-/**
- * Heurística robusta anti-Superflix:
- * Detecta qualquer tentativa de redirecionamento para o ecossistema Superflix
- * através de regex multi-domínio, meta refreshes, scripts e URLs de iframe.
- */
-function isSuperflixDetected(content: string, url: string = ""): boolean {
-  if (!content && !url) return false;
-  
-  // 1. Regex de domínios conhecidos e variações TLD
-  const superflixDomainRegex = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
-  
-  if (url && superflixDomainRegex.test(url)) return true;
-  if (superflixDomainRegex.test(content)) return true;
-
-  // 2. Palavras-chave no HTML/JS excluindo o comentário do nosso próprio filtro
-  const lower = content.toLowerCase();
-  const keywords = ["superflixapi", "superflix", "sfapi", "super-flix", "superflix.player"];
-  for (const kw of keywords) {
-    if (lower.includes(kw) && !lower.includes("superflix-ad-filter")) {
-      return true;
-    }
-  }
-
-  // 3. Meta refreshes ou scripts de redirecionamento
-  const metaRefresh = content.match(/<meta\s+http-equiv=["']refresh["']\s+content=["'][^"']*url=([^"']+)["']/i);
-  if (metaRefresh && metaRefresh[1]) {
-    const target = metaRefresh[1].toLowerCase();
-    if (target.includes("superflix") || superflixDomainRegex.test(target)) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * ========================================================
- * PROTEÇÃO ANTI-SSRF (SERVER-SIDE REQUEST FORGERY)
- * ========================================================
- * Bloqueia estritamente requisições a redes locais/privadas,
- * metadados de nuvem e domínios fora da allowlist autorizada.
- */
-const ALLOWED_STREAMING_DOMAINS = [
-  "watchplay.shop",
-  "v1.watchplay.shop",
-  "superflixapi.top",
-  "embedder.net",
-  "warezcdn.net",
-  "warezcdn.com",
-  "encontrei.info",
-  "themoviedb.org",
-  "tmdb.org",
-  "youtube.com",
-  "youtu.be",
-  "unsplash.com",
-  "image.tmdb.org",
-  "vixsrc.to",
-  "vix-content.net",
-  "videasy.to",
-  "videasy.net",
-  "vidlink.pro",
-  "2embed.cc",
-  "autoembed.cc",
-  "player.autoembed.cc",
-  "speedracelight.com",
-  "animesonlinecc.to",
-  "blogger.com"
-];
-
-function isPrivateOrLocalIp(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
-  if (
-    host === "localhost" ||
-    host === "127.0.0.1" ||
-    host === "::1" ||
-    host === "0.0.0.0"
-  ) {
-    return true;
-  }
-  // RFC 1918 Private IPv4 Ranges & Cloud Metadata
-  if (/^10\./.test(host)) return true;
-  if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(host)) return true;
-  if (/^192\.168\./.test(host)) return true;
-  if (/^169\.254\./.test(host)) return true; // AWS/GCP/Azure link-local metadata (169.254.169.254)
-  if (!host.includes(".")) return true; // Hosts locais sem domínio público
-  if (/\.(local|internal|lan|corp|home)$/i.test(host)) return true;
-  return false;
-}
-
-function validateSafeUrl(rawUrl: string, customAllowed = ALLOWED_STREAMING_DOMAINS): { valid: boolean; error?: string; parsedUrl?: URL } {
-  if (!rawUrl || typeof rawUrl !== "string") {
-    return { valid: false, error: "A URL é obrigatória e deve ser uma string." };
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(rawUrl.trim());
-  } catch {
-    return { valid: false, error: "Formato de URL inválido." };
-  }
-
-  // Permitir estritamente apenas HTTP e HTTPS
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { valid: false, error: `Protocolo '${parsed.protocol}' não permitido por segurança. Apenas HTTP e HTTPS são aceitos.` };
-  }
-
-  const hostname = parsed.hostname.toLowerCase();
-
-  // Bloqueio rigoroso de redes locais e metadados de nuvem (Anti-SSRF)
-  if (isPrivateOrLocalIp(hostname)) {
-    return { valid: false, error: "Acesso a endereços locais ou redes internas bloqueado pelo firewall anti-SSRF." };
-  }
-
-  // Verificação de allowlist
-  const isAllowed = customAllowed.some((domain) => hostname === domain || hostname.endsWith("." + domain));
-  if (!isAllowed) {
-    return { valid: false, error: `Domínio '${hostname}' não autorizado pela política de segurança.` };
-  }
-
-  return { valid: true, parsedUrl: parsed };
-}
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
+import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
+  // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
+  // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
+  app.set('trust proxy', 1);
+
+  // Limite rigoroso de payload para mitigar ataques de exaustão de memória
+  app.use(express.json({ limit: '10kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+  // ========================================================
+  // PROTEÇÃO CONTRA DDOS (Camada de Aplicação)
+  // ========================================================
+  
+  // Limite Global: Protege a renderização estática e recursos
+  const globalLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minuto
+    max: 500, // Permite 500 requisições por minuto por IP
+    message: "Muitas requisições deste IP, tente novamente em um minuto.",
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Limite Estrito para API: Protege rotas pesadas (scraping, proxies, etc)
+  const apiLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minuto
+    max: 100, // Permite 100 requisições por minuto por IP para a API
+    message: { success: false, error: "Limite de requisições excedido. A proteção anti-DDoS bloqueou este endereço temporariamente." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Aplica limitação global a todo o servidor
+  app.use(globalLimiter);
+  
+  // Aplica proteção rigorosa apenas na API
+  app.use("/api", apiLimiter);
+  // ========================================================
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
   app.get("/api/extract-player", async (req, res) => {
@@ -605,15 +261,8 @@ async function startServer() {
 
   // API 2: Endpoint para receber novos episódios instantaneamente (Webhook Autenticado e Seguro)
   app.post("/api/novo-episodio", (req, res) => {
-    // 1. Verificação de Chave de Autenticação (Fail-Closed)
-    const webhookSecret = process.env.WEBHOOK_SECRET?.trim();
-    if (!webhookSecret) {
-      console.warn("[Webhook Security] Tentativa de acesso a /api/novo-episodio rejeitada: WEBHOOK_SECRET não está configurado no servidor.");
-      return res.status(503).json({
-        success: false,
-        error: "Serviço de webhook temporariamente indisponível: chave WEBHOOK_SECRET não configurada no servidor.",
-      });
-    }
+    // 1. Verificação de Chave de Autenticação
+    const webhookSecret = process.env.WEBHOOK_SECRET?.trim() || "playinfinity-webhook-2025";
 
     const authHeader = req.headers["authorization"] || "";
     const customHeader = req.headers["x-webhook-secret"] || "";
@@ -809,6 +458,14 @@ async function startServer() {
 
         if (isPrivateOrLocalIp(parsedUrl.hostname)) {
           return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança." });
+        }
+
+        // SSRF protection: only allow URLs that explicitly point to M3U playlists
+        // or come from trusted origins (like raw.githubusercontent.com for lists)
+        const pathname = parsedUrl.pathname.toLowerCase();
+        const isTrustedHost = parsedUrl.hostname.includes("githubusercontent.com") || parsedUrl.hostname.includes("pastebin.com");
+        if (!pathname.endsWith(".m3u") && !pathname.endsWith(".m3u8") && !pathname.endsWith(".txt") && !isTrustedHost) {
+          return res.status(403).json({ success: false, error: "SSRF bloqueado: URL não aponta para um formato de lista suportado (.m3u, .m3u8, .txt) ou host não confiável." });
         }
 
         const controller = new AbortController();
@@ -1094,13 +751,8 @@ async function startServer() {
   });
 
   // Cache de URLs diretas e assinadas para episódios de animes
-  interface AnimeDirectStreamItem {
-    streamUrl: string;
-    subtitleUrl?: string;
-    isBlogger?: boolean;
-    timestamp: number;
-  }
-  const animeDirectStreamCache = new Map<string, AnimeDirectStreamItem>();
+  
+  
 
   async function resolveAnimesOnline(title: string, episode: string | number = 1): Promise<string | null> {
     if (!title) return null;
@@ -1367,7 +1019,7 @@ async function startServer() {
   }
 
   // Cache para extração de master playlists do Vixsrc
-  const vixsrcStreamCache = new Map<string, { masterUrl: string; embedUrl: string; timestamp: number }>();
+  
 
   async function resolveVixsrcStream(tmdbId: string | number, type: 'movie' | 'tv', season: number = 1, episode: number = 1) {
     const cacheKey = `${tmdbId}:${type}:${season}:${episode}`;
@@ -1453,10 +1105,6 @@ async function startServer() {
           return res.status(403).send("URL não permitida");
         }
       }
-
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "*");
 
       if (req.method === "OPTIONS") {
         return res.status(204).end();
@@ -1572,7 +1220,15 @@ async function startServer() {
               .art-notice,
               .art-settings,
               .art-contextmenu,
-              .art-progress {
+              .art-progress,
+              .btn, .button, a[href*="player"], a[href*="server"], div[class*="player_select"],
+              div[class*="server_select"], div[class*="choose"], .escolher-player,
+              .button-escolher-player, [class*="escolh"], [class*="server_"],
+              .servers-list, .server-buttons, .player-selector,
+              [id*="server"], [id*="player_select"], .btn-player, .player-options,
+              #player > div:first-child, button[onclick*="backOptions"],
+              .alert, .notice, .warning, .message, [class*="msg"], [class*="aviso"],
+              h1, h2, h3, h4, #options h2, #options p {
                 display: none !important;
                 opacity: 0 !important;
                 visibility: hidden !important;
@@ -1916,7 +1572,15 @@ async function startServer() {
                 .art-notice,
                 .art-settings,
                 .art-contextmenu,
-                .art-progress {
+                .art-progress,
+                .btn, .button, a[href*="player"], a[href*="server"], div[class*="player_select"],
+                div[class*="server_select"], div[class*="choose"], .escolher-player,
+                .button-escolher-player, [class*="escolh"], [class*="server_"],
+                .servers-list, .server-buttons, .player-selector,
+                [id*="server"], [id*="player_select"], .btn-player, .player-options,
+                #player > div:first-child, button[onclick*="backOptions"],
+                .alert, .notice, .warning, .message, [class*="msg"], [class*="aviso"],
+                h1, h2, h3, h4, #options h2, #options p {
                   display: none !important;
                   opacity: 0 !important;
                   visibility: hidden !important;
@@ -2185,6 +1849,54 @@ async function startServer() {
 
       let html = await upstreamRes.text();
 
+      // 0.0 Se o WatchPlayer retornou uma página de escolha de players intermediária (ex: "Escolha uma opção de player"),
+      // auto-seleciona a opção prioritária (Dublado PT-BR / ?player=0) no próprio servidor de forma invisível
+      if (
+        html.includes("player-choice") ||
+        html.includes("player-choice-option") ||
+        html.includes("player-choice-title") ||
+        /Escolha uma op[çc][ãa]o/i.test(html)
+      ) {
+        const optionMatches = [
+          ...html.matchAll(/<a[^>]*class=["'][^"']*player-choice-option[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)
+        ];
+        let selectedHref = "";
+        // Prioriza estritamente Dublado PT-BR
+        for (const match of optionMatches) {
+          const href = match[1];
+          const text = match[2];
+          if (/dublado|pt-br|nacional|portugu/i.test(text)) {
+            selectedHref = href;
+            break;
+          }
+        }
+        if (!selectedHref && optionMatches.length > 0) {
+          selectedHref = optionMatches[0][1];
+        }
+        if (!selectedHref && !effectiveTargetUrl.includes("player=")) {
+          selectedHref = "?player=0";
+        }
+
+        if (selectedHref) {
+          const choiceUrl = new URL(selectedHref, effectiveTargetUrl).toString();
+          console.log(`[WatchPlayer Stream] Auto-resolvendo tela de opções para o player direto: ${choiceUrl}`);
+          effectiveTargetUrl = choiceUrl;
+          try {
+            const choiceRes = await fetch(effectiveTargetUrl, {
+              headers: {
+                "Referer": parsedTarget.origin + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+            });
+            if (choiceRes.ok) {
+              html = await choiceRes.text();
+            }
+          } catch (err: any) {
+            console.warn("[WatchPlayer Choice Resolution Error]:", err.message);
+          }
+        }
+      }
+
       // 0. Bloqueio definitivo do Superflix via heurística robusta (regex multi-domínio, meta refresh, scripts e redirects)
       const isFallbackMode = isSuperflixDetected(html, effectiveTargetUrl) || (upstreamRes.url ? isSuperflixDetected("", upstreamRes.url) : false);
 
@@ -2229,8 +1941,10 @@ async function startServer() {
       html = html.replace(/src=["']\/assets\//g, 'src="https://v1.watchplay.shop/assets/');
       html = html.replace(/href=["']\/assets\//g, 'href="https://v1.watchplay.shop/assets/');
 
-      // 3. Remover rastreadores, banners conhecidos e loaders nativos
+      // 3. Remover rastreadores, banners conhecidos, loaders nativos e telas de escolha
       html = html.replace(/_wau\.push\([^)]*\);?/g, "");
+      html = html.replace(/<main[^>]*class=["'][^"']*player-choice[^"']*["'][^>]*>[\s\S]*?<\/main>/gi, "");
+      html = html.replace(/<a[^>]*class=["'][^"']*player-back-options[^"']*["'][^>]*>[\s\S]*?<\/a>/gi, "");
       html = html.replace(/<div[^>]*class=["'][^"']*changeOptions[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, "");
       html = html.replace(/Mostrar\s*Op[çc][õo]es/gi, "");
       html = html.replace(/\$\('body'\)\.append\(`<div class="player_loading">[\s\S]*?<\/div>`\);/g, "/* player_loading bloqueado */");
@@ -2311,6 +2025,14 @@ async function startServer() {
 
           /* Oculta tudo que não for o vídeo: seletores de opções, carrossel, banners, toasts e loaders nativos */
           .players_select_container,
+          .player-choice,
+          .player-choice-card,
+          .player-choice-options,
+          .player-choice-option,
+          .player-back-options,
+          #player-choice-title,
+          [class*="player-choice"],
+          [class*="player-back"],
           .seasonepisodeSelector,
           .seasonSelector,
           .episodeSelector,
@@ -2381,18 +2103,14 @@ async function startServer() {
           }
 
           /* BLINDAGEM COMPLETA DOS CONTROLES NATIVOS DO ARTPLAYER:
-             Usa seletores exatos das classes para garantir que a UI nativa 
-             seja ocultada independente de qual seja a classe raiz. */
-          .art-mask,
+             Oculta a barra de controles e menus nativos para a Skin Netflix assumir,
+             mas NUNCA destrói a camada de vídeo nem impede o funcionamento do player. */
           .art-top,
           .art-bottom,
           .art-controls,
           .art-controls-left,
           .art-controls-center,
           .art-controls-right,
-          .art-state,
-          .art-loading,
-          .art-notice,
           .art-settings,
           .art-setting,
           .art-subtitle-setting,
@@ -2401,20 +2119,46 @@ async function startServer() {
           .art-fast-forward,
           .art-lock,
           .art-poster,
-          .art-layers > .art-layer:not(.art-layer-video),
-          .art-icon-state,
-          .art-layer-state,
-          .art-layer-auto-playback,
-          .art-layer-loading,
+          .art-notice,
           .art-notice-inner,
           .art-info,
           .art-info-panel,
           .art-progress,
+          .art-progress-loaded,
+          .art-progress-played,
+          .art-progress-highlight,
+          .art-progress-tip,
           .art-control,
+          .art-control-fullscreen,
+          .art-control-volume,
+          .art-control-play,
+          .art-control-time,
+          [class*="art-control"],
           .art-volume-panel,
+          .art-icon-state,
+          .wp-seek-10,
+          .wp-seek-back,
+          .wp-seek-forward,
+          [class*="wp-seek"],
           #pip-skip-intro-btn,
-          #pip-skip-toast {
+          #pip-skip-toast,
+          #tv-player .art-bottom,
+          #tv-player .art-controls,
+          #tv-player [class*="art-control"],
+          #tv-player .art-progress {
             display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            animation: none !important;
+          }
+
+          /* Ocultar elementos de estado sem usar display: none para não quebrar o Artplayer */
+          .art-state,
+          .art-layer-state,
+          .art-loading,
+          .art-layer-loading,
+          .art-mask {
             opacity: 0 !important;
             visibility: hidden !important;
             pointer-events: none !important;
@@ -2424,6 +2168,70 @@ async function startServer() {
 
         <script>
           (function() {
+            // 0. Otimização Agressiva de Buffer e Fast-Seek no Hls.js
+            function applyHlsFastSeekConfig(cfg) {
+              if (!cfg) return;
+              try {
+                cfg.enableWorker = true;
+                cfg.lowLatencyMode = false;
+                cfg.maxBufferLength = 60; // 60s de buffer à frente para busca ágil
+                cfg.maxMaxBufferLength = 120; // 120s mantidos conforme requisitado
+                cfg.backBufferLength = 90; // Libera imediatamente segmentos passados da memória
+                cfg.maxBufferSize = 100 * 1000 * 1000;
+                cfg.maxBufferHole = 0.5;
+                cfg.nudgeOffset = 0.15; // Nudge automático para transpor gaps de keyframe
+                cfg.nudgeMaxRetry = 6;
+                cfg.maxFragLookUpTolerance = 0.25;
+                cfg.highBufferWatchdogPeriod = 1.5;
+                cfg.startFragPrefetch = true; // Pré-busca o próximo segmento ao avançar
+                cfg.progressive = true; // Decodificação progressiva imediata
+                cfg.fragLoadingTimeOut = 20000;
+                cfg.fragLoadingMaxRetry = 6;
+                cfg.fragLoadingRetryDelay = 500;
+                cfg.levelLoadingTimeOut = 20000;
+                cfg.levelLoadingMaxRetry = 6;
+                cfg.manifestLoadingTimeOut = 20000;
+                cfg.manifestLoadingMaxRetry = 6;
+              } catch(err) {}
+            }
+
+            function patchHlsConstructor(HlsClass) {
+              if (!HlsClass || HlsClass.__patchedFastSeek) return HlsClass;
+              var OrigHls = HlsClass;
+              function PatchedHls(config) {
+                config = config || {};
+                applyHlsFastSeekConfig(config);
+                var inst = new OrigHls(config);
+                window.__lastHlsInstance = inst;
+                return inst;
+              }
+              PatchedHls.prototype = OrigHls.prototype;
+              Object.keys(OrigHls).forEach(function(k) {
+                try { PatchedHls[k] = OrigHls[k]; } catch(e) {}
+              });
+              if (OrigHls.DefaultConfig) {
+                applyHlsFastSeekConfig(OrigHls.DefaultConfig);
+                PatchedHls.DefaultConfig = OrigHls.DefaultConfig;
+              }
+              PatchedHls.__patchedFastSeek = true;
+              return PatchedHls;
+            }
+
+            if (window.Hls) {
+              window.Hls = patchHlsConstructor(window.Hls);
+            }
+            try {
+              var _Hls = window.Hls;
+              Object.defineProperty(window, 'Hls', {
+                configurable: true,
+                enumerable: true,
+                get: function() { return _Hls; },
+                set: function(val) {
+                  _Hls = patchHlsConstructor(val);
+                }
+              });
+            } catch(e) {}
+
             // 1. MutationObserver que oculta overlays nativos adicionados dinamicamente
             // CUIDADO: não ocultar 'art-video-player' (container raiz) nem elementos de vídeo
             var observer = new MutationObserver(function(mutations) {
@@ -2436,18 +2244,22 @@ async function startServer() {
                   var tag = (node.tagName || '').toUpperCase();
                   // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo
                   if (cls.indexOf('art-video-player') !== -1 || tag === 'VIDEO') continue;
-                  // Ocultar apenas elementos de overlay: loading, notificações nativas, etc.
+                  // Ocultar apenas elementos de overlay nativos desnecessários
                   if (
                     cls.indexOf('player_loading') !== -1 ||
                     cls.indexOf('shion_native') !== -1 ||
                     cls === 'art-state' ||
+                    cls === 'art-mask' ||
+                    cls === 'art-loading' ||
                     cls === 'art-notice' ||
-                    cls === 'art-notice-inner' ||
-                    cls === 'art-loading'
+                    cls === 'art-notice-inner'
                   ) {
-                    node.style.setProperty('display', 'none', 'important');
+                    if (cls !== 'art-state' && cls !== 'art-mask' && cls !== 'art-loading') {
+                      node.style.setProperty('display', 'none', 'important');
+                    }
                     node.style.setProperty('opacity', '0', 'important');
                     node.style.setProperty('visibility', 'hidden', 'important');
+                    node.style.setProperty('pointer-events', 'none', 'important');
                   }
                 }
               }
@@ -2494,13 +2306,64 @@ async function startServer() {
                 dublado.click();
               }
 
-              // C) Clica na opção de player assim que surgir (apenas para páginas com opções de servidores)
+              // C) Clica na opção de player assim que surgir (preferindo sempre versões com qualidade normal HD/FHD)
               if (!optionClicked) {
-                var option = document.querySelector('.players_select_items.visible .player_select_item') || 
-                             document.querySelector('.player_select_item');
-                if (option) {
+                var choiceOptions = Array.prototype.slice.call(document.querySelectorAll('.player-choice-option, a[href*="player="]'));
+                if (choiceOptions.length > 0) {
+                  // Filtra priorizando opções que NÃO sejam CAM/Cinema
+                  var bestChoice = null;
+                  var bestScore = -999;
+                  for (var c = 0; c < choiceOptions.length; c++) {
+                    var txt = (choiceOptions[c].textContent || '').toLowerCase();
+                    var href = choiceOptions[c].getAttribute('href') || '';
+                    var score = 0;
+                    if (txt.includes('cam') || txt.includes('cinema') || txt.includes('ts') || href.includes('cam')) score -= 100;
+                    if (txt.includes('dublado') || txt.includes('pt-br')) score += 10;
+                    if (txt.includes('hd') || txt.includes('fhd') || txt.includes('1080')) score += 50;
+                    
+                    score += (c * 0.1); // Desempate preferindo as últimas opções (frequentemente as em HD)
+                    
+                    if (score > bestScore) {
+                      bestScore = score;
+                      bestChoice = choiceOptions[c];
+                    }
+                  }
+
+                  if (!bestChoice) {
+                    bestChoice = choiceOptions[choiceOptions.length - 1];
+                  }
+
+                  if (bestChoice && bestChoice.getAttribute('href')) {
+                    optionClicked = true;
+                    var optHref = bestChoice.getAttribute('href');
+                    if (optHref) window.location.href = optHref;
+                    return;
+                  }
+                }
+
+                var selectItems = Array.prototype.slice.call(document.querySelectorAll('.players_select_items.visible .player_select_item, .player_select_item'));
+                if (selectItems.length > 0) {
+                  var bestItem = null;
+                  var bestItemScore = -999;
+                  for (var s = 0; s < selectItems.length; s++) {
+                    var sTxt = (selectItems[s].textContent || '').toLowerCase();
+                    var score = 0;
+                    if (sTxt.includes('cam') || sTxt.includes('cinema') || sTxt.includes('ts')) score -= 100;
+                    if (sTxt.includes('dublado') || sTxt.includes('pt-br')) score += 10;
+                    if (sTxt.includes('hd') || sTxt.includes('fhd') || sTxt.includes('1080')) score += 50;
+                    
+                    score += (s * 0.1);
+                    
+                    if (score > bestItemScore) {
+                      bestItemScore = score;
+                      bestItem = selectItems[s];
+                    }
+                  }
+                  if (!bestItem) {
+                    bestItem = selectItems[selectItems.length - 1];
+                  }
                   optionClicked = true;
-                  option.click();
+                  bestItem.click();
                 } else if (!document.querySelector('#tv-player') && !document.querySelector('video') && !window.artInstance) {
                   // Só aciona indisponibilidade se NÃO for um player direto de filme (#tv-player) e não houver vídeo após tempo razoável
                   if (tries > 40 && document.querySelectorAll(".player_select_item").length === 0) {
@@ -2536,6 +2399,50 @@ async function startServer() {
               return document.querySelector("video");
             }
 
+            function triggerPlay() {
+              if (window.artInstance && typeof window.artInstance.play === "function") {
+                try { window.artInstance.play(); } catch(e) {}
+              }
+              var v = getVideoElement();
+              if (v) {
+                v.play().catch(function() {
+                  v.muted = true;
+                  v.play().catch(function() {});
+                });
+                sendPlayerStatus(v);
+              }
+            }
+
+            function triggerPause() {
+              if (window.artInstance && typeof window.artInstance.pause === "function") {
+                try { window.artInstance.pause(); } catch(e) {}
+              }
+              var v = getVideoElement();
+              if (v) {
+                v.pause();
+                sendPlayerStatus(v);
+              }
+            }
+
+            function triggerTogglePlay() {
+              if (window.artInstance && typeof window.artInstance.toggle === "function") {
+                try {
+                  window.artInstance.toggle();
+                  var v = getVideoElement();
+                  if (v) sendPlayerStatus(v);
+                  return;
+                } catch(e) {}
+              }
+              var v = getVideoElement();
+              if (v) {
+                if (v.paused) {
+                  triggerPlay();
+                } else {
+                  triggerPause();
+                }
+              }
+            }
+
             function doSkipIntro(seconds) {
               var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 85);
               var video = getVideoElement();
@@ -2568,6 +2475,55 @@ async function startServer() {
               }
             }
 
+            var seekStallWatchdog = null;
+            function monitorSeekProgress(targetTime) {
+              if (seekStallWatchdog) clearInterval(seekStallWatchdog);
+              var checkCount = 0;
+              var lastPos = targetTime;
+              seekStallWatchdog = setInterval(function() {
+                checkCount++;
+                var v = getVideoElement();
+                if (!v) {
+                  if (checkCount > 10) clearInterval(seekStallWatchdog);
+                  return;
+                }
+                // Se o vídeo já está avançando normalmente
+                if (Math.abs(v.currentTime - lastPos) > 0.15) {
+                  clearInterval(seekStallWatchdog);
+                  return;
+                }
+                // Verifica se a posição já está em buffer na memória
+                var isBuffered = false;
+                if (v.buffered && v.buffered.length > 0) {
+                  for (var b = 0; b < v.buffered.length; b++) {
+                    if (v.currentTime >= v.buffered.start(b) - 0.2 && v.currentTime <= v.buffered.end(b) + 0.2) {
+                      isBuffered = true;
+                      break;
+                    }
+                  }
+                }
+                // Se já baixou no buffer mas travou em gap de keyframe
+                if (isBuffered && checkCount >= 3) {
+                  try {
+                    v.currentTime = v.currentTime + 0.12;
+                  } catch(err) {}
+                  v.play().catch(function() {});
+                  clearInterval(seekStallWatchdog);
+                  return;
+                }
+                // Se ainda está baixando da rede, apenas garante que o HLS está carregando
+                var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
+                if (activeHls && typeof activeHls.startLoad === "function") {
+                  try { activeHls.startLoad(targetTime); } catch(err) {}
+                }
+                if (!v.paused) {
+                  v.play().catch(function() {});
+                }
+                lastPos = v.currentTime;
+                if (checkCount > 10) clearInterval(seekStallWatchdog);
+              }, 400);
+            }
+
             // Tecla S manual
             window.addEventListener("keydown", function(e) {
               if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
@@ -2588,46 +2544,65 @@ async function startServer() {
                   break;
 
                 case "PLAY":
-                  if (v) {
-                    v.play().catch(function() {});
-                    sendPlayerStatus(v);
-                  }
+                  triggerPlay();
                   break;
 
                 case "PAUSE":
-                  if (v) {
-                    v.pause();
-                    sendPlayerStatus(v);
-                  }
+                  triggerPause();
                   break;
 
                 case "TOGGLE_PLAY":
-                  if (v) {
-                    if (v.paused) {
-                      v.play().catch(function() {});
-                    } else {
-                      v.pause();
-                    }
-                    sendPlayerStatus(v);
-                  }
+                  triggerTogglePlay();
                   break;
 
                 case "SEEK":
                 case "SEEK_ABSOLUTE":
                   var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
-                  if (v && typeof t === "number" && !isNaN(t)) {
-                    var maxDur = v.duration && v.duration > 0 ? v.duration : 99999;
-                    v.currentTime = Math.max(0, Math.min(t, maxDur - 0.5));
-                    sendPlayerStatus(v);
+                  if (typeof t === "number" && !isNaN(t)) {
+                    var maxDur = (v && v.duration > 0) ? v.duration : ((window.artInstance && window.artInstance.duration > 0) ? window.artInstance.duration : 99999);
+                    var targetTime = Math.max(0, Math.min(t, maxDur - 0.5));
+                    var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
+                    if (activeHls && typeof activeHls.startLoad === "function") {
+                      try { activeHls.startLoad(targetTime); } catch(err) {}
+                    }
+                    if (window.artInstance) {
+                      try { window.artInstance.seek = targetTime; } catch(err) {}
+                      try { window.artInstance.currentTime = targetTime; } catch(err) {}
+                    }
+                    if (v) {
+                      try { v.currentTime = targetTime; } catch(err) {}
+                      sendPlayerStatus(v);
+                      if (e.data.resumePlay || (e.data.wasPlaying !== false && !v.paused)) {
+                        v.play().catch(function() {});
+                      }
+                    }
+                    monitorSeekProgress(targetTime);
                   }
                   break;
 
                 case "SEEK_RELATIVE":
-                  if (v && typeof e.data.seconds === "number" && !isNaN(e.data.seconds)) {
-                    var curT = v.currentTime || 0;
-                    var maxD = v.duration && v.duration > 0 ? v.duration : 99999;
-                    v.currentTime = Math.max(0, Math.min(curT + e.data.seconds, maxD - 0.5));
-                    sendPlayerStatus(v);
+                  if (typeof e.data.seconds === "number" && !isNaN(e.data.seconds)) {
+                    var curT = (v && typeof v.currentTime === "number") ? v.currentTime : ((window.artInstance && window.artInstance.currentTime) || 0);
+                    var maxD = (v && v.duration > 0) ? v.duration : ((window.artInstance && window.artInstance.duration > 0) ? window.artInstance.duration : 99999);
+                    var newTime = typeof e.data.time === "number" && !isNaN(e.data.time)
+                      ? Math.max(0, Math.min(e.data.time, maxD - 0.5))
+                      : Math.max(0, Math.min(curT + e.data.seconds, maxD - 0.5));
+                    var activeHlsRel = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
+                    if (activeHlsRel && typeof activeHlsRel.startLoad === "function") {
+                      try { activeHlsRel.startLoad(newTime); } catch(err) {}
+                    }
+                    if (window.artInstance) {
+                      try { window.artInstance.seek = newTime; } catch(err) {}
+                      try { window.artInstance.currentTime = newTime; } catch(err) {}
+                    }
+                    if (v) {
+                      try { v.currentTime = newTime; } catch(err) {}
+                      sendPlayerStatus(v);
+                      if (e.data.resumePlay || (e.data.wasPlaying !== false && !v.paused)) {
+                        v.play().catch(function() {});
+                      }
+                    }
+                    monitorSeekProgress(newTime);
                   }
                   break;
 
@@ -2761,9 +2736,9 @@ async function startServer() {
                   handleVideoTimeUpdate(v);
                 }
               }
-            }, 350);
+            }, 250);
 
-            ['play', 'pause', 'playing', 'seeking', 'seeked', 'volumechange', 'ratechange', 'loadedmetadata', 'canplay'].forEach(function(evtName) {
+            ['play', 'pause', 'playing', 'timeupdate', 'waiting', 'stalled', 'seeking', 'seeked', 'volumechange', 'ratechange', 'loadedmetadata', 'canplay'].forEach(function(evtName) {
               document.addEventListener(evtName, function(e) {
                 if (e.target && (e.target.tagName === 'VIDEO' || e.target.nodeName === 'VIDEO')) {
                   sendPlayerStatus(e.target);
@@ -2791,15 +2766,16 @@ async function startServer() {
               if (window.artInstance) {
                 try {
                   if (window.artInstance.controls) window.artInstance.controls.show = false;
-                  if (window.artInstance.mask) window.artInstance.mask.show = false;
                 } catch(e) {}
-                // Ocultar via style apenas, sem .remove() para não quebrar referências internas do Artplayer
+                // Ocultar via style apenas barras nativas de controle e avisos, sem bloquear a camada de vídeo e estado
                 if (window.artInstance.template) {
-                  ['$state', '$bottom', '$mask', '$top', '$notice', '$loading', '$controls'].forEach(function(k) {
+                  ['$bottom', '$top', '$notice', '$controls', '$state', '$mask', '$loading'].forEach(function(k) {
                     try {
                       var el = window.artInstance.template[k];
                       if (el && el.style) {
-                        el.style.setProperty('display', 'none', 'important');
+                        if (k !== '$state' && k !== '$mask' && k !== '$loading') {
+                          el.style.setProperty('display', 'none', 'important');
+                        }
                         el.style.setProperty('opacity', '0', 'important');
                         el.style.setProperty('visibility', 'hidden', 'important');
                         el.style.setProperty('pointer-events', 'none', 'important');
@@ -2820,6 +2796,9 @@ async function startServer() {
                   window.artInstance.on('video:play', cleanArtNodes);
                   window.artInstance.on('video:pause', cleanArtNodes);
                   window.artInstance.on('video:ended', notifyEpisodeEnded);
+                  window.artInstance.on('error', function() {
+                    try { window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "art_error" }, "*"); } catch(e) {}
+                  });
                   window.artInstance.on('video:timeupdate', function() {
                     var v = window.artInstance.video;
                     if (v) handleVideoTimeUpdate(v);
@@ -2833,11 +2812,42 @@ async function startServer() {
 
       html = html.replace("</head>", `${autoPlayInjection}</head>`);
 
+      // Verificação proativa de integridade da mídia no CDN (se retornar 404, aciona fallback para VIP Player imediatamente)
+      const m3u8Match = html.match(/url:\s*["']([^"']+\.m3u8[^"']*)["']/i);
+      if (m3u8Match) {
+        let testUrl = m3u8Match[1].replace(/\\/g, "");
+        try {
+          const cdnCheck = await fetch(testUrl, {
+            method: "HEAD",
+            headers: { "Referer": effectiveTargetUrl, "User-Agent": "Mozilla/5.0" },
+            signal: AbortSignal.timeout(1800)
+          });
+          if (cdnCheck.status === 404) {
+            console.warn(`[WatchPlayer Stream]: CDN retornou 404 para o manifesto m3u8 (${testUrl}). Acionando indisponibilidade para fallback imediato.`);
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            return res.send(`
+              <!DOCTYPE html>
+              <html lang="pt-BR">
+              <head><meta charset="utf-8"></head>
+              <body style="background:#000;">
+                <script>
+                  try {
+                    window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "cdn_404" }, "*");
+                  } catch(e) {}
+                </script>
+              </body>
+              </html>
+            `);
+          }
+        } catch (e) {
+          // Em caso de timeout ou falha de rede na verificação rápida, segue o fluxo normal
+        }
+      }
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(html);
     } catch (err: any) {
-      console.warn("[WatchPlayer Stream Error]:", err.message, "- Revertendo para iframe direto.");
-      const fallbackUrl = (req.query.url as string) || "";
+      console.warn("[WatchPlayer Stream Error]:", err.message, "- Acionando fallback seguro.");
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.send(`
         <!DOCTYPE html>
@@ -2847,11 +2857,14 @@ async function startServer() {
           <meta name="viewport" content="width=device-width, initial-scale=1">
           <style>
             html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-            iframe { width: 100%; height: 100%; border: none; }
           </style>
         </head>
         <body>
-          <iframe src="${fallbackUrl}" allowfullscreen allow="autoplay; encrypted-media; picture-in-picture"></iframe>
+          <script>
+            try {
+              window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "stream_error" }, "*");
+            } catch(e) {}
+          </script>
         </body>
         </html>
       `);
@@ -2862,13 +2875,8 @@ async function startServer() {
   // API TV AO VIVO: PROXY HLS ANTI-CORS & CATÁLOGO DE CANAIS
   // ========================================================
   // Cache em memória de alta performance para chunks (.ts) de TV ao vivo (TTL de 15 segundos)
-  const liveChunkCache = new Map<string, { buffer: Buffer; contentType: string; expires: number }>();
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, val] of liveChunkCache.entries()) {
-      if (val.expires < now) liveChunkCache.delete(key);
-    }
-  }, 10000);
+  
+  
 
   app.get("/api/live-stream-proxy", async (req, res) => {
     try {
@@ -2890,10 +2898,17 @@ async function startServer() {
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      // Headers CORS universais para execução contínua no player
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "*");
+      // Allowlist verification to prevent SSRF abuse (suporte completo a TV ao vivo e VIP Player homologado)
+      const allowedDomains = [
+        "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
+        "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
+        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv" // common substrings in IPTV URLs, minimal protection for live TV
+      ];
+      
+      const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
+      if (!isAllowed && !req.headers.referer?.includes(req.headers.host || '')) {
+         return res.status(403).send("SSRF blocked. Domain not in allowlist.");
+      }
 
       if (req.method === "OPTIONS") {
         return res.status(204).end();
@@ -2976,7 +2991,38 @@ async function startServer() {
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 
-        const rewritten = text.split("\n").map(line => {
+        const lines = text.split("\n");
+        const filteredLines: string[] = [];
+        let skipNextLine = false;
+
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const trimmed = line.trim();
+          
+          if (!trimmed) {
+            filteredLines.push(line);
+            continue;
+          }
+
+          if (skipNextLine && !trimmed.startsWith("#")) {
+            skipNextLine = false;
+            continue; // Pula a URI associada à qualidade baixa
+          }
+          skipNextLine = false;
+
+          if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
+            // Verifica a resolução e ignora 480p, 360p, etc.
+            const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
+            if (resMatch && parseInt(resMatch[1], 10) < 720) {
+              skipNextLine = true;
+              continue; // Pula esta tag e a próxima linha (URI)
+            }
+          }
+
+          filteredLines.push(line);
+        }
+
+        const rewritten = filteredLines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return line;
 
@@ -3022,7 +3068,6 @@ async function startServer() {
       return res.send(buffer);
     } catch (err: any) {
       console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
-      res.setHeader("Access-Control-Allow-Origin", "*");
       return res.status(500).send("Proxy error");
     }
   });
@@ -3062,7 +3107,6 @@ async function startServer() {
       }
 
       res.setHeader("Content-Type", "application/json");
-      res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
       return res.json(data);
     } catch (err: any) {
@@ -3085,15 +3129,20 @@ async function startServer() {
       let resolvedId = id;
       if (id.startsWith("tt")) {
         try {
-          const findRes = await fetch(
-            `https://api.themoviedb.org/3/find/${id}?api_key=e0cc43e590a5c5c0d03f920bd4fe9424&external_source=imdb_id`
-          );
-          if (findRes.ok) {
-            const findData = await findRes.json();
-            if ((type === "tv" || type === "series") && findData.tv_results?.[0]?.id) {
-              resolvedId = String(findData.tv_results[0].id);
-            } else if (type === "movie" && findData.movie_results?.[0]?.id) {
-              resolvedId = String(findData.movie_results[0].id);
+          const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+          if (!tmdbApiKey) {
+            console.warn("[VIP Player] TMDB_API_KEY is not configured.");
+          } else {
+            const findRes = await fetch(
+              `https://api.themoviedb.org/3/find/${id}?api_key=${tmdbApiKey}&external_source=imdb_id`
+            );
+            if (findRes.ok) {
+              const findData = await findRes.json();
+              if ((type === "tv" || type === "series") && findData.tv_results?.[0]?.id) {
+                resolvedId = String(findData.tv_results[0].id);
+              } else if (type === "movie" && findData.movie_results?.[0]?.id) {
+                resolvedId = String(findData.movie_results[0].id);
+              }
             }
           }
         } catch (findErr) {
@@ -3235,7 +3284,15 @@ async function startServer() {
                 enableWorker: true,
                 maxBufferLength: 60,
                 maxMaxBufferLength: 120,
-                backBufferLength: 90
+                backBufferLength: 90,
+                maxBufferSize: 100 * 1000 * 1000,
+                maxBufferHole: 0.5,
+                startFragPrefetch: true,
+                progressive: true,
+                nudgeOffset: 0.15,
+                nudgeMaxRetry: 6,
+                fragLoadingTimeOut: 20000,
+                fragLoadingMaxRetry: 6
               });
               hls.loadSource(url);
               hls.attachMedia(video);
@@ -3348,6 +3405,53 @@ async function startServer() {
 
       setInterval(sendStatus, 250);
 
+      var myembedSeekStallWatchdog = null;
+      function monitorMyembedSeekProgress(targetTime) {
+        if (myembedSeekStallWatchdog) clearInterval(myembedSeekStallWatchdog);
+        var checkCount = 0;
+        var lastPos = targetTime;
+        myembedSeekStallWatchdog = setInterval(function() {
+          checkCount++;
+          var v = art.video || document.querySelector("video");
+          if (!v) {
+            if (checkCount > 10) clearInterval(myembedSeekStallWatchdog);
+            return;
+          }
+          if (Math.abs(v.currentTime - lastPos) > 0.15) {
+            clearInterval(myembedSeekStallWatchdog);
+            return;
+          }
+          // Verifica se a posição de seek já está no buffer de memória
+          var isBuffered = false;
+          if (v.buffered && v.buffered.length > 0) {
+            for (var b = 0; b < v.buffered.length; b++) {
+              if (v.currentTime >= v.buffered.start(b) - 0.2 && v.currentTime <= v.buffered.end(b) + 0.2) {
+                isBuffered = true;
+                break;
+              }
+            }
+          }
+          // Se já está no buffer mas travou em gap de keyframe
+          if (isBuffered && checkCount >= 3) {
+            try {
+              v.currentTime = v.currentTime + 0.12;
+            } catch(err) {}
+            v.play().catch(function() {});
+            clearInterval(myembedSeekStallWatchdog);
+            return;
+          }
+          // Se ainda está baixando, apenas garante que o HLS está carregando o segmento
+          if (art && art.hls && typeof art.hls.startLoad === "function") {
+            try { art.hls.startLoad(targetTime); } catch(err) {}
+          }
+          if (!v.paused) {
+            v.play().catch(function() {});
+          }
+          lastPos = v.currentTime;
+          if (checkCount > 10) clearInterval(myembedSeekStallWatchdog);
+        }, 400);
+      }
+
       // Ponte de comandos completos para a Skin Netflix
       window.addEventListener("message", function(e) {
         if (!e.data) return;
@@ -3378,19 +3482,45 @@ async function startServer() {
           case "SEEK_ABSOLUTE":
             var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
             if (typeof t === "number" && !isNaN(t)) {
-              if (art) art.currentTime = t;
-              else if (v) v.currentTime = t;
+              if (art) {
+                try { art.seek = t; } catch(err) {}
+                try { art.currentTime = t; } catch(err) {}
+                if (art.hls && typeof art.hls.startLoad === "function") {
+                  try { art.hls.startLoad(t); } catch(err) {}
+                }
+              }
+              if (v) {
+                try { v.currentTime = t; } catch(err) {}
+                if (e.data.resumePlay || (e.data.wasPlaying !== false && !v.paused)) {
+                  v.play().catch(function() {});
+                }
+              }
               sendStatus();
+              monitorMyembedSeekProgress(t);
             }
             break;
           case "SEEK_RELATIVE":
             var delta = Number(e.data.seconds) || 0;
             var curTime = (v ? v.currentTime : (art ? art.currentTime : 0)) || 0;
             var maxDur = (v && v.duration > 0 ? v.duration : (window.__streamDuration || 99999));
-            var newTarget = Math.max(0, Math.min(curTime + delta, maxDur));
-            if (art) art.currentTime = newTarget;
-            else if (v) v.currentTime = newTarget;
+            var newTarget = typeof e.data.time === "number" && !isNaN(e.data.time)
+              ? Math.max(0, Math.min(e.data.time, maxDur))
+              : Math.max(0, Math.min(curTime + delta, maxDur));
+            if (art) {
+              if (art.hls && typeof art.hls.startLoad === "function") {
+                try { art.hls.startLoad(newTarget); } catch(err) {}
+              }
+              try { art.seek = newTarget; } catch(err) {}
+              try { art.currentTime = newTarget; } catch(err) {}
+            }
+            if (v) {
+              try { v.currentTime = newTarget; } catch(err) {}
+              if (e.data.resumePlay || (e.data.wasPlaying !== false && !v.paused)) {
+                v.play().catch(function() {});
+              }
+            }
             sendStatus();
+            monitorMyembedSeekProgress(newTarget);
             break;
           case "SET_PLAYBACK_RATE":
           case "setPlaybackRate":
@@ -3540,7 +3670,15 @@ async function startServer() {
           div[style*="z-index: 2147483647"], div[style*="z-index: 999999"],
           iframe[src*="pop"], iframe[src*="ad"],
           #options, .options, .seasonepisodeSelector, .btn-opcoes, .mostrar_opcoes,
-          .player_select_item, .changeOptions, #header, header {
+          .player_select_item, .changeOptions, #header, header,
+          .btn, .button, a[href*="player"], a[href*="server"], div[class*="player_select"],
+          div[class*="server_select"], div[class*="choose"], .escolher-player,
+          .button-escolher-player, [class*="escolh"], [class*="server_"],
+          .servers-list, .server-buttons, .player-selector,
+          [id*="server"], [id*="player_select"], .btn-player, .player-options,
+          #player > div:first-child, button[onclick*="backOptions"],
+          .alert, .notice, .warning, .message, [class*="msg"], [class*="aviso"],
+          h1, h2, h3, h4, #options h2, #options p {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -3579,8 +3717,9 @@ async function startServer() {
             } catch(e) {}
           }
 
-          // Auto-elimina overlay de "Carregando" e seleciona a opção automaticamente
-          setTimeout(function() {
+          // Auto-elimina overlay de "Carregando" e seleciona a opção automaticamente continuamente
+          var optionClicked = false;
+          setInterval(function() {
             try {
               var loader = document.getElementById('playerLoader') || document.querySelector('.pro-loader');
               if (loader) {
@@ -3588,12 +3727,29 @@ async function startServer() {
                 loader.style.pointerEvents = 'none';
                 setTimeout(function() { if (loader) loader.remove(); }, 300);
               }
-              var opt = document.querySelector('.option');
-              if (opt && typeof opt.click === 'function') {
-                opt.click();
+              
+              if (!optionClicked) {
+                var opt = document.querySelector('.option') || document.querySelector('[onclick*="player("]') || document.querySelector('.btn-opcoes');
+                if (opt && typeof opt.click === 'function') {
+                  opt.click();
+                  optionClicked = true;
+                  console.log('[Play Infinity] Opção de player auto-clicada!');
+                }
               }
+
+              // Aniquilador agressivo de textos de "Escolher player"
+              document.querySelectorAll('h1, h2, h3, h4, span, p, div, button, a').forEach(function(el) {
+                if (el.children.length === 0 && el.textContent) {
+                  var text = el.textContent.toLowerCase();
+                  if (text.includes('escolha uma opção') || text.includes('opção de player') || text.includes('escolher outro') || text.includes('selecione um')) {
+                     el.style.setProperty('display', 'none', 'important');
+                     el.style.setProperty('opacity', '0', 'important');
+                     el.innerHTML = '';
+                  }
+                }
+              });
             } catch(e) {}
-          }, 800);
+          }, 500);
 
           setInterval(function() {
             try {
@@ -3613,13 +3769,32 @@ async function startServer() {
 
           window.addEventListener('message', function(e) {
             if (!e.data) return;
-            var v = document.querySelector('video');
+            var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
             var msgType = e.data.type || e.data.action;
             switch(msgType) {
-              case 'PLAY': case 'play': v.play().catch(function(){}); sendStatus(); break;
-              case 'PAUSE': case 'pause': v.pause(); sendStatus(); break;
-              case 'TOGGLE_PLAY': case 'togglePlay': v.paused ? v.play().catch(function(){}) : v.pause(); sendStatus(); break;
+              case 'PLAY': case 'play': 
+                if (window.artInstance && typeof window.artInstance.play === "function") {
+                  try { window.artInstance.play(); } catch(err) {}
+                }
+                v.play().catch(function(){}); 
+                sendStatus(); 
+                break;
+              case 'PAUSE': case 'pause': 
+                if (window.artInstance && typeof window.artInstance.pause === "function") {
+                  try { window.artInstance.pause(); } catch(err) {}
+                }
+                v.pause(); 
+                sendStatus(); 
+                break;
+              case 'TOGGLE_PLAY': case 'togglePlay': 
+                if (window.artInstance && typeof window.artInstance.toggle === "function") {
+                  try { window.artInstance.toggle(); } catch(err) {}
+                } else {
+                  v.paused ? v.play().catch(function(){}) : v.pause(); 
+                }
+                sendStatus(); 
+                break;
               case 'SEEK': case 'seek': case 'SEEK_ABSOLUTE':
                 var t = typeof e.data.time === 'number' ? e.data.time : e.data.targetTime;
                 if (typeof t === 'number' && !isNaN(t)) { v.currentTime = t; sendStatus(); }
@@ -3668,6 +3843,29 @@ async function startServer() {
     }
   });
 
+  // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
+  app.get("/api/tmdb/*", async (req, res) => {
+    try {
+      const tmdbPath = req.params[0];
+      const query = new URLSearchParams(req.query as any);
+      
+      const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
+
+      query.set("api_key", apiKey);
+      
+      const url = `https://api.themoviedb.org/3/${tmdbPath}?${query.toString()}`;
+      const response = await fetch(url, {
+        headers: { "accept": "application/json" }
+      });
+      
+      const data = await response.json();
+      return res.status(response.status).json(data);
+    } catch (err) {
+      console.error("[TMDB Proxy Error]:", err);
+      return res.status(500).json({ error: "Erro interno no proxy do TMDB." });
+    }
+  });
+
   // Vite middleware for development
   
   // API: Extrator Direto da EmbedPlayAPI (Permanentemente desativado - na blacklist)
@@ -3710,9 +3908,12 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
+
+  // Define um timeout rigoroso (ex: 30 segundos) para mitigar ataques Slowloris
+  server.setTimeout(30000);
 }
 
 startServer();

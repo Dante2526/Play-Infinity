@@ -1034,23 +1034,6 @@ export function VideoPlayerModal({
             : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
         }`}
       >
-        {/* Alerta Sandbox */}
-        {!isMiniPlayer && (() => { try { return window.self !== window.top; } catch(e){ return true; } })() && (
-          <div className="bg-orange-600 text-white text-[11px] sm:text-xs font-semibold px-3 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between shrink-0">
-            <span className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">
-                <strong>Aviso de Ambiente:</strong> Alguns players bloqueiam a reprodução dentro da pré-visualização. Se encontrar erro, abra o aplicativo em uma nova guia.
-              </span>
-              <span className="sm:hidden">
-                Players bloqueados na pré-visualização.
-              </span>
-            </span>
-            <a href={window.location.href} target="_blank" rel="noopener noreferrer" className="bg-white/20 hover:bg-white/30 px-2 py-1 sm:px-3 sm:py-1 rounded transition-colors whitespace-nowrap ml-2 cursor-pointer flex items-center gap-1.5">
-              <ExternalLink className="w-3.5 h-3.5 hidden sm:block" /> Abrir App
-            </a>
-          </div>
-        )}
         {/* Header do Mini-Player Flutuante (Arrastável) */}
         {isMiniPlayer && (
           <div
@@ -1367,7 +1350,9 @@ export function VideoPlayerModal({
                 referrerPolicy="origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  setTimeout(() => setPlayerSkinReady(true), 200);
+                  if (selectedServerKey === "srv_vip") {
+                    setTimeout(() => setPlayerSkinReady(true), 200);
+                  }
                 }}
                 onError={() => handleSilentFallback()}
               />

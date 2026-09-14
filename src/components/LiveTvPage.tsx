@@ -20,8 +20,12 @@ import {
   List,
   Upload,
   FileUp,
-  FolderOpen
+  FolderOpen,
+  Mic,
+  MicOff,
+  Info
 } from 'lucide-react';
+import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
 import { 
@@ -46,6 +50,20 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  
+  // Hook de Busca por Voz para Canais
+  const {
+    isListening: isVoiceListening,
+    interimTranscript: voiceTranscript,
+    error: voiceError,
+    isSupported: isVoiceSupported,
+    toggleListening: toggleVoiceListening,
+    clearError: clearVoiceError
+  } = useVoiceSearch({
+    onResult: (spokenText) => {
+      setSearchQuery(spokenText);
+    }
+  });
   
   // Player state
   const [activeChannel, setActiveChannel] = useState<LiveChannel | null>(null);
@@ -437,19 +455,48 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
           <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
-            placeholder="Buscar canais de TV, Premiere, SporTV, notícias..."
+            placeholder={isVoiceListening ? "Ouvindo canal desejado..." : "Buscar canais de TV, Premiere, SporTV, notícias..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-9 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-900/80 border border-white/10 text-white placeholder-neutral-500 text-xs sm:text-sm focus:outline-none focus:border-orange-500/60 focus:ring-1 focus:ring-orange-500/60 transition-all shadow-inner min-h-[44px]"
+            className={`w-full pl-10 ${searchQuery ? 'pr-20' : 'pr-12'} py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-neutral-900/80 border text-white placeholder-neutral-500 text-xs sm:text-sm focus:outline-none transition-all shadow-inner min-h-[44px] ${
+              isVoiceListening
+                ? 'border-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_20px_rgba(234,88,12,0.3)]'
+                : 'border-white/10 focus:border-orange-500/60 focus:ring-1 focus:ring-orange-500/60'
+            }`}
           />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-neutral-400 hover:text-white"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="p-1 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                title="Limpar busca"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+
+            {isVoiceSupported && (
+              <button
+                type="button"
+                onClick={toggleVoiceListening}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer relative flex items-center justify-center ${
+                  isVoiceListening 
+                    ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-[0_0_12px_rgba(239,68,68,0.7)] scale-105' 
+                    : 'text-neutral-400 hover:text-orange-400 hover:bg-white/5'
+                }`}
+                title={isVoiceListening ? "Parar de ouvir" : "Pesquisar canal por voz"}
+              >
+                {isVoiceListening ? (
+                  <>
+                    <span className="absolute inset-0 rounded-lg bg-red-500/40 animate-ping pointer-events-none" />
+                    <Mic className="w-4 h-4 relative z-10 animate-pulse text-white" />
+                  </>
+                ) : (
+                  <Mic className="w-4 h-4" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -499,14 +546,72 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         </div>
       </div>
 
-      {/* CHIPS DE CATEGORIAS (Scroll fluido com bleed no mobile) */}
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-3 mb-6 sm:mb-8 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-0">
+      {/* HUD DE ESCUTA DE VOZ ATIVA (TV AO VIVO) */}
+      {isVoiceListening && (
+        <div className="mb-5 p-3.5 sm:p-4 rounded-xl sm:rounded-2xl bg-neutral-900/95 border border-orange-500/50 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="relative flex items-center justify-center w-9 h-9 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/40 shrink-0">
+              <span className="absolute inset-0 rounded-full bg-orange-500/30 animate-ping" />
+              <Mic className="w-4 h-4 relative z-10 animate-bounce" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-white font-bold text-xs sm:text-sm flex items-center gap-1.5">
+                  Ouvindo canal...
+                  <span className="flex gap-0.5 items-end h-3 ml-1">
+                    <span className="w-1 h-2 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1 h-3 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1 h-1.5 bg-orange-500 rounded-full animate-pulse" style={{ animationDelay: '300ms' }} />
+                  </span>
+                </span>
+                <span className="text-neutral-400 text-xs hidden sm:inline">• Fale o nome do canal</span>
+              </div>
+              {voiceTranscript ? (
+                <p className="text-orange-400 font-semibold text-xs sm:text-sm truncate mt-0.5">
+                  "{voiceTranscript}"
+                </p>
+              ) : (
+                <p className="text-neutral-400 text-xs truncate mt-0.5">
+                  Diga "Globo", "SporTV", "Premiere", "ESPN", "Band"...
+                </p>
+              )}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={toggleVoiceListening}
+            className="w-full sm:w-auto px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 text-center"
+          >
+            Concluir / Cancelar
+          </button>
+        </div>
+      )}
+
+      {/* AVISO DE ERRO DE VOZ (TV AO VIVO) */}
+      {voiceError && (
+        <div className="mb-5 p-3 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2 min-w-0">
+            <Info className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="truncate">{voiceError}</span>
+          </div>
+          <button
+            type="button"
+            onClick={clearVoiceError}
+            className="p-1 hover:text-white shrink-0 cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* CHIPS DE CATEGORIAS (Scroll fluido com espaço seguro para foco e contornos) */}
+      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pt-3 pb-4 mb-4 sm:mb-6 scrollbar-none -mx-3 px-3 sm:mx-0 sm:px-2">
         <button
           onClick={() => openAddModal()}
           className="flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all cursor-pointer shrink-0 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/40 shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
-          <span>+ Importar Lista M3U</span>
+          <span>Importar Lista M3U</span>
         </button>
 
         {customChannelsCount > 0 && (
