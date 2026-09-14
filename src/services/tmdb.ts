@@ -2,6 +2,16 @@
 // As requisições agora passam pelo proxy /api/tmdb definido em server.ts.
 
 const BASE_URL = '/api/tmdb';
+const TMDB_DIRECT_BASE = 'https://api.themoviedb.org/3';
+const DEFAULT_TMDB_KEY = 'e0cc43e590a5c5c0d03f920bd4fe9424';
+
+const getTmdbApiKey = (): string => {
+  try {
+    return ((import.meta as any)?.env?.VITE_TMDB_API_KEY as string) || DEFAULT_TMDB_KEY;
+  } catch {
+    return DEFAULT_TMDB_KEY;
+  }
+};
 
 const options = {
   method: 'GET',
@@ -128,23 +138,50 @@ const DEFAULT_SEASON: Season = {
  * Valida res.ok, status HTTP (401/404/429) e JSON seguro com fallback.
  */
 async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
+  // 1. Tenta a rota interna /api/tmdb (Express proxy seguro)
   try {
     const res = await fetch(url, options);
-    if (!res.ok) {
-      console.warn(`[TMDB Service] Requisição HTTP falhou: ${res.status} ${res.statusText} (${url})`);
-      return fallback;
+    if (res.ok) {
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        if (!("status_code" in data) || (data as any).status_code === 1) {
+          return data as T;
+        }
+      }
+    } else {
+      console.warn(`[TMDB Service] Proxy local retornou status ${res.status}. Ativando fallback de deploy...`);
     }
-    const data = await res.json();
-    if (!data || typeof data !== "object") return fallback;
-    if ("status_code" in data && typeof (data as any).status_code === "number" && (data as any).status_code !== 1) {
-      console.warn(`[TMDB Service] Erro retornado pela API TMDB:`, (data as any).status_message || data);
-      return fallback;
-    }
-    return data as T;
   } catch (err: any) {
-    console.error(`[TMDB Service] Erro de rede ou parse ao acessar (${url}):`, err?.message || err);
-    return fallback;
+    console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}). Ativando fallback de deploy...`);
   }
+
+  // 2. Fallback de Deploy / Resiliência:
+  // Se o aplicativo estiver rodando em ambiente de deploy (Vercel, Netlify, Cloud Run SPA, etc.)
+  // onde o proxy Express não responde ou retorna 404, consulta diretamente o endpoint oficial da API do TMDB.
+  if (url.startsWith(BASE_URL)) {
+    try {
+      const endpoint = url.replace(BASE_URL, "");
+      const key = getTmdbApiKey();
+      const sep = endpoint.includes("?") ? "&" : "?";
+      const directUrl = `${TMDB_DIRECT_BASE}${endpoint}${sep}api_key=${key}`;
+
+      const directRes = await fetch(directUrl, options);
+      if (directRes.ok) {
+        const directData = await directRes.json();
+        if (directData && typeof directData === "object") {
+          if (!("status_code" in directData) || (directData as any).status_code === 1) {
+            return directData as T;
+          }
+        }
+      } else {
+        console.warn(`[TMDB Service] Fallback direto retornou status ${directRes.status}`);
+      }
+    } catch (directErr: any) {
+      console.error(`[TMDB Service] Erro no fallback direto TMDB:`, directErr?.message || directErr);
+    }
+  }
+
+  return fallback;
 }
 
 // API Calls
@@ -165,7 +202,8 @@ export const getTopRated = async (type: 'movie' | 'tv'): Promise<TMDBResponse> =
 };
 
 export const searchMulti = async (query: string): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query)}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
+  if (!query || !query.trim()) return DEFAULT_EMPTY_RESPONSE;
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
