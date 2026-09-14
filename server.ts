@@ -35,9 +35,9 @@ import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INIT
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
 import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+
+export const app = express();
+const PORT = 3000;
 
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
@@ -2007,6 +2007,10 @@ async function startServer() {
         '<div class="player_container visible" style="position:absolute !important; top:0 !important; left:0 !important; width:100% !important; height:100% !important; transition:none !important;">'
       );
 
+      // 5.1 Garantir que todos os scripts, estilos e fontes carreguem da CDN oficial sem depender de roteamento relativo de deploy (evita 404 no Vercel/Cloud Run)
+      html = html.replace(/(src|href)=["']\/assets\/([^"']+)["']/gi, '$1="https://v1.watchplay.shop/assets/$2"');
+      html = html.replace(/<head>/i, '<head><base href="https://v1.watchplay.shop/">');
+
       // 6. Injetar CSS de blackout absoluto e script de monitoramento no <head>
       const autoPlayInjection = `
         <style>
@@ -3883,7 +3887,9 @@ async function startServer() {
   });
 
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    // Use IIFE for async vite setup
+    (async () => {
+      const vite = await createViteServer({
       server: { 
         middlewareMode: true,
         watch: {
@@ -3899,21 +3905,23 @@ async function startServer() {
       },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+      app.use(vite.middlewares);
+    })();
   } else {
     const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+      app.get("*", (_req, res) => {
+        res.sendFile(path.join(distPath, "index.html"));
+      });
+    }
+
   }
 
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
 
-  // Define um timeout rigoroso (ex: 30 segundos) para mitigar ataques Slowloris
-  server.setTimeout(30000);
-}
-
-startServer();
+  if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+    server.setTimeout(30000);
+  }
