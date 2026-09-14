@@ -72,6 +72,15 @@ const PORT = 3000;
   // Aplica limitação global a todo o servidor
   app.use(globalLimiter);
   
+  // Serve arquivos estáticos do frontend (precisa vir ANTES dos proxies para evitar interceptação do /assets)
+  if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
+    const distPath = path.join(process.cwd(), "dist");
+    if (fs.existsSync(distPath)) {
+      app.use(express.static(distPath));
+    }
+  }
+
+  
   // Aplica proteção rigorosa apenas na API
   app.use("/api", apiLimiter);
   // ========================================================
@@ -3910,7 +3919,7 @@ const PORT = 3000;
   } else {
     const distPath = path.join(process.cwd(), "dist");
     if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
+      // O express.static foi movido para o topo do arquivo
       app.get("*", (_req, res) => {
         res.sendFile(path.join(distPath, "index.html"));
       });
