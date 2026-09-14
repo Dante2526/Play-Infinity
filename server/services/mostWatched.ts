@@ -148,6 +148,10 @@ function getMostWatchedFilePath(): string {
 }
 
 function loadMostWatchedFromDisk(): WatchedItem[] {
+  // Na Vercel, filesystem é read-only — usa apenas cache em memória
+  if (process.env.VERCEL) {
+    return [...INITIAL_MOST_WATCHED];
+  }
   try {
     const filePath = getMostWatchedFilePath();
     if (fs.existsSync(filePath)) {
@@ -211,6 +215,9 @@ async function executeAtomicSaveMostWatched(): Promise<void> {
 
 // Escrita assíncrona com Debounce de 1.5s
 function scheduleAsyncSaveMostWatched(): void {
+  // Na Vercel, não há persistência em disco
+  if (process.env.VERCEL) return;
+
   if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
   saveDebounceTimer = setTimeout(() => {
     saveDebounceTimer = null;
