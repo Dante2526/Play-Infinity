@@ -879,7 +879,7 @@ export function VideoPlayerModal({
   };
 
   const handleFullScreen = async () => {
-    const stage = document.getElementById("player-stage-container");
+    const stage = document.documentElement; // Força tela cheia no navegador inteiro para esconder barras mobile
     const isCurrentlyFull = isExpanded;
 
     if (isCurrentlyFull) {
@@ -1345,9 +1345,10 @@ export function VideoPlayerModal({
                   transformOrigin: "center center",
                   transition: "transform 0.3s ease",
                 }}
+                sandbox="allow-scripts allow-same-origin allow-presentation"
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
                 allowFullScreen
-                referrerPolicy="origin"
+                referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
                   setIsLoading(false);
                   if (selectedServerKey === "srv_vip") {

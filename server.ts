@@ -4,6 +4,8 @@ import fs from "fs";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
+import helmet from "helmet";
+import crypto from "crypto";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
@@ -42,6 +44,12 @@ const PORT = 3000;
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
   app.set('trust proxy', 1);
+
+  // Hardening de Segurança via HTTP Headers (sem quebrar os iframes de players terceiros)
+  app.use(helmet({
+    frameguard: false, // Desativado propositalmente para não quebrar a incorporação dos iframes externos caso precisem transitar contexto
+    contentSecurityPolicy: false, // CSP desativada para manter compatibilidade com scripts de terceiros na UI (Analytics, Players)
+  }));
 
   // Limite rigoroso de payload para mitigar ataques de exaustão de memória
   app.use(express.json({ limit: '10kb' }));
@@ -267,8 +275,17 @@ const PORT = 3000;
     }
   });
 
+  // Limite estrito específico para webhook (10 tentativas/minuto)
+  const webhookLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    message: { success: false, error: "Limite de tentativas excedido para o webhook." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // API 2: Endpoint para receber novos episódios instantaneamente (Webhook Autenticado e Seguro)
-  app.post("/api/novo-episodio", (req, res) => {
+  app.post("/api/novo-episodio", webhookLimiter, (req, res) => {
     // 1. Verificação de Chave de Autenticação
     const webhookSecret = process.env.WEBHOOK_SECRET?.trim() || "playinfinity-webhook-2025";
 
@@ -280,7 +297,21 @@ const PORT = 3000;
       : "";
     const providedKey = (typeof customHeader === "string" ? customHeader.trim() : "") || bearerToken;
 
-    if (!providedKey || providedKey !== webhookSecret) {
+    if (!providedKey) {
+      return res.status(401).json({
+        success: false,
+        error: "Acesso não autorizado. Chave do webhook inválida ou ausente.",
+      });
+    }
+
+    // Comparação em tempo constante para prevenir timing attacks
+    const providedBuf = Buffer.from(providedKey, "utf8");
+    const expectedBuf = Buffer.from(webhookSecret, "utf8");
+    const sameLength = providedBuf.length === expectedBuf.length;
+    
+    const isSafe = sameLength ? crypto.timingSafeEqual(providedBuf, expectedBuf) : false;
+
+    if (!sameLength || !isSafe) {
       return res.status(401).json({
         success: false,
         error: "Acesso não autorizado. Chave do webhook inválida ou ausente (informe via header x-webhook-secret ou Authorization: Bearer).",
@@ -490,6 +521,13 @@ const PORT = 3000;
         if (!resp.ok) {
           return res.status(resp.status).json({ success: false, error: `Falha ao carregar a URL (${resp.status} ${resp.statusText})` });
         }
+        
+        // Limita tamanho da resposta para evitar DoS via M3U gigante (máximo 5MB)
+        const contentLength = parseInt(resp.headers.get("content-length") || "0", 10);
+        if (contentLength > 5 * 1024 * 1024) {
+          return res.status(413).json({ success: false, error: "A lista M3U excede o tamanho máximo permitido de 5MB." });
+        }
+
         m3uText = await resp.text();
       }
 

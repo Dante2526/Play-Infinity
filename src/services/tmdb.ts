@@ -3,13 +3,11 @@
 
 const BASE_URL = '/api/tmdb';
 const TMDB_DIRECT_BASE = 'https://api.themoviedb.org/3';
-const DEFAULT_TMDB_KEY = 'e0cc43e590a5c5c0d03f920bd4fe9424';
-
 const getTmdbApiKey = (): string => {
   try {
-    return ((import.meta as any)?.env?.VITE_TMDB_API_KEY as string) || DEFAULT_TMDB_KEY;
+    return ((import.meta as any)?.env?.VITE_TMDB_API_KEY as string) || '';
   } catch {
-    return DEFAULT_TMDB_KEY;
+    return '';
   }
 };
 

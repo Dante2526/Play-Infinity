@@ -18,6 +18,15 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
 
   // Sincroniza interação do mouse para que nunca existam dois focos na tela
   useEffect(() => {
+    if (!isOpen) {
+      // Se fechar, garante que remove o foco atual
+      document.querySelectorAll('[data-tv-focused="true"]').forEach(prev => {
+        prev.removeAttribute('data-tv-focused');
+        prev.classList.remove('tv-focused');
+      });
+      return;
+    }
+
     const handleDocumentPointerDown = (e: MouseEvent | TouchEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
@@ -51,7 +60,7 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
     return () => {
       document.removeEventListener('pointerdown', handleDocumentPointerDown, true);
     };
-  }, []);
+  }, [isOpen]);
 
   // Arrastar o controle remoto pela tela
   useEffect(() => {
