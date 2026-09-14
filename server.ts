@@ -3885,7 +3885,7 @@ const PORT = 3000;
     });
   });
 
-  if (process.env.NODE_ENV !== "production") {
+  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     // Use IIFE for async vite setup
     (async () => {
       const viteName = "vite"; const { createServer: createViteServer } = await import(viteName);
@@ -3919,7 +3919,10 @@ const PORT = 3000;
   }
 
 
-  if (!process.env.VERCEL && process.env.NODE_ENV !== "test") {
+  const isRunDirectly = process.argv[1] && process.argv[1].includes("server");
+  app.use((err, req, res, next) => { console.error("Global Express Error:", err); res.status(500).send("Global Express Error: " + (err.message || err)); });
+
+  if (isRunDirectly && !process.env.VERCEL && process.env.NODE_ENV !== "test") {
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
