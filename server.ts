@@ -1,11 +1,13 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
+import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
+import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
@@ -27,13 +29,10 @@ interface StreamItem {
 const customStreams: StreamItem[] = [];
 
 // Interface e armazenamento dos Mais Assistidos pelos usuários
-import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 
 /**
  * Utilitário de sanitização para strings de entrada da API
  */
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
-import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 
 
 export const app = express();
@@ -3889,6 +3888,7 @@ const PORT = 3000;
   if (process.env.NODE_ENV !== "production") {
     // Use IIFE for async vite setup
     (async () => {
+      const viteName = "vite"; const { createServer: createViteServer } = await import(viteName);
       const vite = await createViteServer({
       server: { 
         middlewareMode: true,
@@ -3906,7 +3906,7 @@ const PORT = 3000;
       appType: "spa",
     });
       app.use(vite.middlewares);
-    })();
+    })().catch(err => console.error("Vite setup error:", err));
   } else {
     const distPath = path.join(process.cwd(), "dist");
     if (fs.existsSync(distPath)) {
