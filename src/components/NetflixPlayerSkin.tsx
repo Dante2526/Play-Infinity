@@ -24,6 +24,7 @@ import {
   Minimize2,
   PictureInPicture2,
   Scan,
+  Loader2,
 } from "lucide-react";
 import { savePlaybackProgress } from "../services/playbackHistory";
 
@@ -156,9 +157,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const volumeBarRef = useRef<HTMLDivElement>(null);
   const volumeTrackRef = useRef<HTMLDivElement>(null); // ref da barra interna de volume
 
-  // Controle de arraste da barra de progresso (scrubber)
+  // Controle de arraste da barra de progresso (scrubber) com fidelidade absoluta de toque
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
   const [scrubTime, setScrubTime] = useState<number>(0);
+  const scrubTimeRef = useRef<number>(0);
+  const lastSeekTargetRef = useRef<number>(0);
+  const lastSeekTimeRef = useRef<number>(0);
+  const wasPlayingBeforeScrubRef = useRef<boolean>(false);
+  const [isSeekingTransition, setIsSeekingTransition] = useState<boolean>(false);
+  const seekTransitionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPosPercent, setHoverPosPercent] = useState<number>(0);
   const progressBarRef = useRef<HTMLDivElement>(null);
@@ -452,14 +459,35 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : null;
 
+        // Se o player voltou a reproduzir normalmente no novo ponto após um seek, encerra a transição de seek imediatamente
+        if (isSeekingTransition && !data.paused && incomingTime !== null) {
+          if (incomingTime >= lastSeekTargetRef.current - 0.5) {
+            setIsSeekingTransition(false);
+            if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
+          }
+        }
+
         setPlayerStatus((prev) => {
           let updatedTime = prev.currentTime;
+          const isSeekingLock = Date.now() - lastSeekTimeRef.current < 1500;
+
           if (incomingTime !== null) {
-            const diff = incomingTime - prev.currentTime;
-            if (Math.abs(diff) > 1.2) {
+            if (isSeekingLock) {
+              // Durante o lock pós-seek, se o status do player já chegou no novo ponto ou avançou,
+              // sincronizamos de imediato e liberamos o lock
+              const hasReachedTarget =
+                Math.abs(incomingTime - lastSeekTargetRef.current) <= 0.8 ||
+                (lastSeekTargetRef.current > prev.currentTime && incomingTime >= lastSeekTargetRef.current - 0.3);
+
+              if (hasReachedTarget) {
+                updatedTime = incomingTime;
+                lastSeekTimeRef.current = 0;
+              } else {
+                // Descarta pacotes obsoletos em trânsito anteriores ao momento do seek
+                updatedTime = lastSeekTargetRef.current;
+              }
+            } else {
               updatedTime = incomingTime;
-            } else if (Math.abs(diff) > 0.15) {
-              updatedTime = prev.currentTime + (diff * 0.5);
             }
           }
 
@@ -488,7 +516,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [sendCommand, isTrustedMessageOrigin]);
+  }, [sendCommand, isTrustedMessageOrigin, isSeekingTransition]);
 
   // Sincronização periódica ativa com o iframe a cada 2.5s para manter o relógio fiel ao vídeo real
   useEffect(() => {
@@ -518,24 +546,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }, 1500);
     return () => clearInterval(watchdog);
   }, [hasEverSynced, playerStatus.paused]);
-
-  // Timer local suave para avançar a barra de tempo continuamente enquanto reproduz.
-  // Só avança enquanto a sincronização com o player real estiver "fresca" —
-  // se estiver stale (sem notícia do iframe há mais de 10s), congela em vez de
-  // fingir que o vídeo continua andando.
-  useEffect(() => {
-    if (playerStatus.paused || isScrubbing || isSyncStale) return;
-    const interval = setInterval(() => {
-      setPlayerStatus((prev) => {
-        if (prev.paused || prev.duration <= 0) return prev;
-        // Não extrapola o final artificialmente quando faltar menos de 1s
-        if (prev.duration - prev.currentTime <= 1.0) return prev;
-        const nextTime = Math.min(prev.duration, prev.currentTime + 0.25);
-        return { ...prev, currentTime: nextTime };
-      });
-    }, 250);
-    return () => clearInterval(interval);
-  }, [playerStatus.paused, isScrubbing, isSyncStale]);
 
   // Reseta o timer de auto-hide ao mover o mouse ou tocar
   const handleUserActivity = useCallback(() => {
@@ -632,7 +642,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // Salto relativo (-10s / +10s)
   const handleSeekRelative = (seconds: number) => {
     if (isLocked) return;
-    sendCommand({ type: "SEEK_RELATIVE", seconds });
+    const shouldResume = !playerStatus.paused;
+    const maxDur = playerStatus.duration > 0 ? playerStatus.duration : 99999;
+    const newTarget = Math.max(0, Math.min(playerStatus.currentTime + seconds, maxDur - 0.5));
+    lastSeekTargetRef.current = newTarget;
+    lastSeekTimeRef.current = Date.now();
+    sendCommand({ type: "SEEK_RELATIVE", seconds, time: newTarget, resumePlay: shouldResume });
+    setPlayerStatus((p) => ({ ...p, currentTime: newTarget }));
+    setIsSeekingTransition(true);
+    if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
+    seekTransitionTimerRef.current = setTimeout(() => {
+      setIsSeekingTransition(false);
+    }, 1400);
     handleUserActivity();
   };
 
@@ -795,39 +816,54 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     };
   }, [isDraggingVolume, updateVolumeFromPoint]);
 
-  // Controle da Barra de Progresso (Scrubber)
-  const getTimeFromEvent = (clientX: number): number => {
+  // Controle da Barra de Progresso (Scrubber) com Fidelidade de Toque e Suporte a Rotação
+  const getTimeFromEvent = useCallback((clientX: number, clientY: number): number => {
     if (!progressBarRef.current || playerStatus.duration <= 0) return 0;
     const rect = progressBarRef.current.getBoundingClientRect();
-    const pos = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    let pos = 0;
+    if (isRotated) {
+      // Quando a tela está rotacionada 90° em modo paisagem, o eixo visual da barra acompanha o eixo Y da tela física
+      const h = rect.height || 1;
+      pos = Math.max(0, Math.min(1, (clientY - rect.top) / h));
+    } else {
+      const w = rect.width || 1;
+      pos = Math.max(0, Math.min(1, (clientX - rect.left) / w));
+    }
     return pos * playerStatus.duration;
-  };
+  }, [isRotated, playerStatus.duration]);
 
   const handleProgressBarMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || playerStatus.duration <= 0) return;
-    const rect = progressBarRef.current.getBoundingClientRect();
-    const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    setHoverPosPercent(pos * 100);
-    setHoverTime(pos * playerStatus.duration);
+    const time = getTimeFromEvent(e.clientX, e.clientY);
+    const posPercent = (time / playerStatus.duration) * 100;
+    setHoverPosPercent(posPercent);
+    setHoverTime(time);
 
     if (isScrubbing) {
-      setScrubTime(pos * playerStatus.duration);
+      scrubTimeRef.current = time;
+      setScrubTime(time);
     }
   };
 
   const handleProgressBarMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (isLocked) return;
-    const time = getTimeFromEvent(e.clientX);
+    if (isLocked || playerStatus.duration <= 0) return;
+    wasPlayingBeforeScrubRef.current = !playerStatus.paused;
+    const time = getTimeFromEvent(e.clientX, e.clientY);
+    scrubTimeRef.current = time;
     setIsScrubbing(true);
     setScrubTime(time);
   };
 
   const handleProgressBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
-    if (isLocked) return;
+    if (isLocked || playerStatus.duration <= 0) return;
+    if (e.cancelable) e.preventDefault();
     const touch = e.touches[0];
-    const time = getTimeFromEvent(touch.clientX);
+    if (!touch) return;
+    wasPlayingBeforeScrubRef.current = !playerStatus.paused;
+    const time = getTimeFromEvent(touch.clientX, touch.clientY);
+    scrubTimeRef.current = time;
     setIsScrubbing(true);
     setScrubTime(time);
   };
@@ -835,41 +871,65 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isScrubbing) return;
-      const time = getTimeFromEvent(e.clientX);
+      const time = getTimeFromEvent(e.clientX, e.clientY);
+      scrubTimeRef.current = time;
       setScrubTime(time);
     };
 
     const handleGlobalTouchMove = (e: TouchEvent) => {
       if (!isScrubbing) return;
+      if (e.cancelable) e.preventDefault();
       const touch = e.touches[0];
-      const time = getTimeFromEvent(touch.clientX);
+      if (!touch) return;
+      const time = getTimeFromEvent(touch.clientX, touch.clientY);
+      scrubTimeRef.current = time;
       setScrubTime(time);
     };
 
     const handleGlobalMouseUp = (e: MouseEvent) => {
       if (!isScrubbing) return;
-      const time = getTimeFromEvent(e.clientX);
-      sendCommand({ type: "SEEK_ABSOLUTE", time });
+      const time = scrubTimeRef.current;
+      lastSeekTargetRef.current = time;
+      lastSeekTimeRef.current = Date.now();
+      const shouldResume = wasPlayingBeforeScrubRef.current;
+
+      sendCommand({ type: "SEEK_ABSOLUTE", time, resumePlay: shouldResume });
       setPlayerStatus((p) => ({ ...p, currentTime: time }));
       setIsScrubbing(false);
+      setIsSeekingTransition(true);
+
+      if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
+      seekTransitionTimerRef.current = setTimeout(() => {
+        setIsSeekingTransition(false);
+      }, 1400);
       handleUserActivity();
     };
 
     const handleGlobalTouchEnd = (e: TouchEvent) => {
       if (!isScrubbing) return;
-      const touch = e.changedTouches[0];
-      const time = getTimeFromEvent(touch.clientX);
-      sendCommand({ type: "SEEK_ABSOLUTE", time });
+      const time = scrubTimeRef.current;
+      lastSeekTargetRef.current = time;
+      lastSeekTimeRef.current = Date.now();
+      const shouldResume = wasPlayingBeforeScrubRef.current;
+
+      sendCommand({ type: "SEEK_ABSOLUTE", time, resumePlay: shouldResume });
       setPlayerStatus((p) => ({ ...p, currentTime: time }));
       setIsScrubbing(false);
+      setIsSeekingTransition(true);
+
+      if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
+      seekTransitionTimerRef.current = setTimeout(() => {
+        setIsSeekingTransition(false);
+      }, 1400);
       handleUserActivity();
     };
 
     if (isScrubbing) {
       window.addEventListener("mousemove", handleGlobalMouseMove);
       window.addEventListener("mouseup", handleGlobalMouseUp);
-      window.addEventListener("touchmove", handleGlobalTouchMove);
+      window.addEventListener("touchmove", handleGlobalTouchMove, { passive: false });
       window.addEventListener("touchend", handleGlobalTouchEnd);
+      window.addEventListener("touchcancel", handleGlobalTouchEnd);
     }
 
     return () => {
@@ -877,8 +937,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       window.removeEventListener("mouseup", handleGlobalMouseUp);
       window.removeEventListener("touchmove", handleGlobalTouchMove);
       window.removeEventListener("touchend", handleGlobalTouchEnd);
+      window.removeEventListener("touchcancel", handleGlobalTouchEnd);
     };
-  }, [isScrubbing, sendCommand, handleUserActivity]);
+  }, [isScrubbing, getTimeFromEvent, sendCommand, handleUserActivity]);
 
   // Atalhos de teclado
   useEffect(() => {
@@ -1292,6 +1353,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           3. CONTROLES CENTRAIS (RETROCEDER 10s, PLAY/PAUSE, AVANÇAR 10s)
           Espaçamento responsivo e confortável
           ======================================================== */}
+      {/* Spinner Central de Seek quando controles estão ocultos */}
+      {!controlsVisible && isSeekingTransition && !isLocked && (
+        <div className="absolute inset-0 flex items-center justify-center z-25 pointer-events-none transition-opacity duration-200">
+          <div className="p-3.5 sm:p-4 rounded-full bg-black/60 backdrop-blur-md shadow-2xl border border-white/10">
+            <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-[#E50914] animate-spin drop-shadow-md" />
+          </div>
+        </div>
+      )}
+
       {!passThroughClicks && (
         <div
           className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
@@ -1319,7 +1389,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* Play / Pause Central */}
+          {/* Play / Pause Central ou Spinner Indicador de Seek */}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1330,7 +1400,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             }`}
             title={playerStatus.paused ? "Reproduzir" : "Pausar"}
           >
-            {playerStatus.paused ? (
+            {isSeekingTransition ? (
+              <Loader2 className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} text-[#E50914] animate-spin drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
+            ) : playerStatus.paused ? (
               <Play className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
             ) : (
               <Pause className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
@@ -1396,7 +1468,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             onMouseLeave={() => setHoverTime(null)}
             onMouseDown={handleProgressBarMouseDown}
             onTouchStart={handleProgressBarTouchStart}
-            className="relative flex-1 h-5 sm:h-6 flex items-center cursor-pointer group"
+            className="relative flex-1 py-3 -my-3 h-10 flex items-center cursor-pointer group touch-none select-none"
           >
             {/* Tooltip de Prévia ao passar o mouse */}
             {hoverTime !== null && (
@@ -1424,7 +1496,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
             {/* Knob Redondo Vermelho da Netflix (Thumb) */}
             <div
-              className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-[#E50914] shadow-md shadow-black/80 pointer-events-none transition-transform group-hover:scale-110"
+              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[#E50914] shadow-md shadow-black/80 pointer-events-none transition-transform ${
+                isScrubbing ? "w-5 h-5 scale-125 ring-4 ring-[#E50914]/30" : "w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:scale-125"
+              }`}
               style={{ left: `${playedPercent}%` }}
             />
           </div>
@@ -1432,47 +1506,43 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {/* Tempo Restante / Total à Direita (ex: -48:04 ou --:--) */}
           <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5 min-w-[34px]">
             {hasValidDuration ? (remainingTime > 0 ? `-${formatTime(remainingTime)}` : formatTime(duration)) : "--:--"}
-            {isSyncStale && (
-              <span
-                className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"
-                title="Sincronização com o player pode estar atrasada (buffer ou provedor sem confirmação)"
-              />
-            )}
           </span>
         </div>
 
-        {/* LINHA DE AÇÕES INFERIORES: SEM BOTÃO SHARE, ESPAÇOSA E CONFORTÁVEL */}
-        <div className="px-2 sm:px-6 flex items-center justify-center gap-3 xs:gap-5 sm:gap-10 md:gap-14 text-white text-xs">
-          {/* 1. Velocidade */}
+        {/* LINHA DE AÇÕES INFERIORES: NO MODO CARTÃO EXIBE APENAS VELOCIDADE E ÁUDIO/LEG., DEMAIS EM TELA CHEIA */}
+        <div className="px-2 sm:px-6 flex items-center justify-center gap-4 sm:gap-8 md:gap-14 text-white text-xs">
+          {/* 1. Velocidade (Sempre visível: cartão e tela cheia) */}
           <button
             onClick={() => setShowSpeedMenu(true)}
-            className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+            className="flex items-center gap-1.5 py-1 px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
             title="Velocidade de reprodução"
           >
             <Gauge className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
             <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              <span className="hidden sm:inline">Velocidade </span>({playerStatus.playbackRate}x)
+              <span>Velocidade </span>({playerStatus.playbackRate}x)
             </span>
           </button>
 
-          {/* 2. Bloquear Tela com Animação de Cadeado Trancando/Destravando */}
-          <button
-            onClick={handleLockScreen}
-            className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
-            title="Bloquear controles da tela"
-          >
-            {isLocking ? (
-              <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse" />
-            ) : (
-              <Unlock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110" />
-            )}
-            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              {isLocking ? "Trancando..." : "Bloquear"}
-            </span>
-          </button>
+          {/* 2. Bloquear Tela com Animação de Cadeado Trancando/Destravando (Apenas em Tela Cheia) */}
+          {isFullscreen && (
+            <button
+              onClick={handleLockScreen}
+              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              title="Bloquear controles da tela"
+            >
+              {isLocking ? (
+                <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse" />
+              ) : (
+                <Unlock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110" />
+              )}
+              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+                {isLocking ? "Trancando..." : "Bloquear"}
+              </span>
+            </button>
+          )}
 
-          {/* 3. Pular Abertura (apenas para séries) */}
-          {isSeries && (
+          {/* 3. Pular Abertura (Apenas para séries em Tela Cheia) */}
+          {isFullscreen && isSeries && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -1488,8 +1558,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* 4. Episódios (apenas para séries) */}
-          {isSeries && (
+          {/* 4. Episódios (Apenas para séries em Tela Cheia) */}
+          {isFullscreen && isSeries && (
             <button
               onClick={() => setShowEpisodeDrawer((prev) => !prev)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
@@ -1500,21 +1570,20 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* 4. Áudio & Legendas */}
+          {/* 5. Áudio & Legendas (Sempre visível: cartão e tela cheia) */}
           <button
             onClick={() => setShowAudioSubtitleModal(true)}
-            className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+            className="flex items-center gap-1.5 py-1 px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
             title="Áudio e Legendas"
           >
             <MessageSquareText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
             <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              <span className="hidden sm:inline">Áudio e Legendas</span>
-              <span className="sm:hidden">Áudio/Leg.</span>
+              <span>Áudio e Legendas</span>
             </span>
           </button>
 
-          {/* 5. Próximo Episódio (apenas para séries) */}
-          {isSeries && onEpisodeChange && (
+          {/* 6. Próximo Episódio (Apenas para séries em Tela Cheia) */}
+          {isFullscreen && isSeries && onEpisodeChange && (
             <button
               onClick={() => onEpisodeChange(episode + 1)}
               className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"

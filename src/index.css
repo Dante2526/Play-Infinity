@@ -109,16 +109,30 @@ body {
   scrollbar-width: none !important;
 }
 
-/* Smart TV Navigation Optimization */
-body.is-smart-tv.using-keyboard *:focus,
+/* Smart TV Navigation & Focus Ring Optimization */
+[data-tv-focused="true"],
+.tv-focused,
 body.is-smart-tv *:focus-visible {
-  outline: 4px solid #f97316 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 20px rgba(249, 115, 22, 0.7) !important;
-  transform: scale(1.05) !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 3px #f97316, 0 0 12px rgba(249, 115, 22, 0.75) !important;
+  transform: scale(1.02) !important;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s ease !important;
   z-index: 50 !important;
-  border-color: transparent !important;
+}
+
+/* Evita que cliques normais do mouse com :focus nativo criem um segundo contorno */
+body.is-smart-tv *:focus:not(:focus-visible):not([data-tv-focused="true"]):not(.tv-focused),
+[tabindex="0"]:focus:not(:focus-visible):not([data-tv-focused="true"]):not(.tv-focused) {
+  outline: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.virtual-remote-container,
+.virtual-remote-container *,
+.virtual-remote-btn {
+  outline: none !important;
+  box-shadow: none;
 }
 
 body.is-smart-tv button,

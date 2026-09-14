@@ -151,7 +151,7 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
 
         const tmdbId = localItem?.tmdbId || id;
         const res = await fetch(
-          `https://api.themoviedb.org/3/tv/${tmdbId}?api_key=e0cc43e590a5c5c0d03f920bd4fe9424&language=pt-BR`
+          `/api/tmdb/tv/${tmdbId}?language=pt-BR`
         );
         if (!res.ok) return;
         const data = await res.json();

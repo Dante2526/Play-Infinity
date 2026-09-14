@@ -1,13 +1,7 @@
-const RAW_ENV_KEY = (import.meta as any).env?.VITE_TMDB_API_KEY;
-const TMDB_API_KEY = (RAW_ENV_KEY && RAW_ENV_KEY !== 'seu_tmdb_api_key_aqui' && typeof RAW_ENV_KEY === 'string' && RAW_ENV_KEY.trim() !== '')
-  ? RAW_ENV_KEY
-  : 'e0cc43e590a5c5c0d03f920bd4fe9424';
+// A chave de API do TMDB foi movida para o servidor para segurança (evitar vazamento no DevTools).
+// As requisições agora passam pelo proxy /api/tmdb definido em server.ts.
 
-if (!TMDB_API_KEY && typeof window !== "undefined") {
-  console.warn("[TMDB Service] VITE_TMDB_API_KEY não configurada. Defina no arquivo .env.local para carregar dados do TMDB.");
-}
-
-const BASE_URL = 'https://api.themoviedb.org/3';
+const BASE_URL = '/api/tmdb';
 
 const options = {
   method: 'GET',
@@ -155,31 +149,31 @@ async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
 
 // API Calls
 export const getTrending = async (type: 'movie' | 'tv' | 'all' = 'all', timeWindow: 'day' | 'week' = 'week'): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/trending/${type}/${timeWindow}?language=pt-BR&api_key=${TMDB_API_KEY}`, DEFAULT_EMPTY_RESPONSE);
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/trending/${type}/${timeWindow}?language=pt-BR`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getPopularMovies = async (): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/movie/popular?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, DEFAULT_EMPTY_RESPONSE);
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/movie/popular?language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getPopularSeries = async (): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/tv/popular?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, DEFAULT_EMPTY_RESPONSE);
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/tv/popular?language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getTopRated = async (type: 'movie' | 'tv'): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/${type}/top_rated?language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, DEFAULT_EMPTY_RESPONSE);
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/${type}/top_rated?language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const searchMulti = async (query: string): Promise<TMDBResponse> => {
-  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query)}&language=pt-BR&page=1&api_key=${TMDB_API_KEY}`, DEFAULT_EMPTY_RESPONSE);
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query)}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
-  return fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR&api_key=${TMDB_API_KEY}`, DEFAULT_DETAILS);
+  return fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {
-  return fetchTmdbSafe<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR&api_key=${TMDB_API_KEY}`, DEFAULT_SEASON);
+  return fetchTmdbSafe<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, DEFAULT_SEASON);
 };
 
 // TMDB Network IDs & Watch Provider IDs for streaming brands:
@@ -203,11 +197,13 @@ export const getProviderSeries = async (provider: string, page: number = 1): Pro
     networkId = 1024;
   } else if (p.includes('apple')) {
     networkId = 2552;
+  } else if (p.includes('paramount')) {
+    networkId = 4330;
   } else if (p.includes('globo')) {
     networkId = 3290;
   }
 
-  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_networks=${networkId}&watch_region=BR`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_networks=${networkId}&watch_region=BR`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
@@ -220,21 +216,22 @@ export const getProviderMovies = async (provider: string, page: number = 1): Pro
   else if (p.includes('max') || p.includes('hbo')) providerId = 1899;
   else if (p.includes('prime') || p.includes('amazon')) providerId = 119;
   else if (p.includes('apple')) providerId = 350;
+  else if (p.includes('paramount')) providerId = 531;
   else if (p.includes('globo')) providerId = 307;
 
-  const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_watch_providers=${providerId}&watch_region=BR`;
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_watch_providers=${providerId}&watch_region=BR`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const discoverMovies = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
-  let url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  let url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
   if (genreId) url += `&with_genres=${genreId}`;
   if (year) url += `&primary_release_year=${year}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const discoverSeries = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
-  let url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  let url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
   if (genreId) url += `&with_genres=${genreId}`;
   if (year) url += `&first_air_date_year=${year}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
@@ -247,34 +244,56 @@ export const getGenreIdByName = (name: string): number | undefined => {
 
 export const getMovieReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getAnimes = async (page: number = 1): Promise<TMDBResponse> => {
-  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&with_original_language=ja&vote_count.gte=5&include_adult=false`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&with_original_language=ja&vote_count.gte=5&include_adult=false`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getDoramas = async (page: number = 1): Promise<TMDBResponse> => {
   // Streaming providers no Brasil: Netflix (8), Prime Video (119), Disney+ (337), Max (1899), Rakuten Viki (344), Apple TV+ (350), Globoplay (307), Paramount+ (531)
   const streamingProvidersBR = '8|119|337|1899|344|350|307|531|619';
-  const url = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_watch_providers=${streamingProvidersBR}&watch_region=BR&with_watch_monetization_types=flatrate|free|ads&vote_count.gte=5&include_adult=false`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_watch_providers=${streamingProvidersBR}&watch_region=BR&with_watch_monetization_types=flatrate|free|ads&vote_count.gte=5&include_adult=false`;
   const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
   
   // Fallback se a consulta com watch_providers retornar poucos itens
   if (!res.results || res.results.length === 0) {
-    const fallbackUrl = `${BASE_URL}/discover/tv?api_key=${TMDB_API_KEY}&language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_genres=18&vote_count.gte=20&include_adult=false`;
+    const fallbackUrl = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_origin_country=KR&with_genres=18&vote_count.gte=20&include_adult=false`;
     return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
   }
   return res;
 };
+
+/**
+ * Busca conteúdos familiares e infantis (Animação + Família) para a Área Kids
+ */
+export const getKidsContent = async (page: number = 1): Promise<TMDBResponse> => {
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16,10751&include_adult=false&vote_count.gte=20`;
+  const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  if (!res.results || res.results.length === 0) {
+    const fallbackUrl = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&include_adult=false&vote_count.gte=10`;
+    return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
+  }
+  return res;
+};
+
+/**
+ * Busca séries e desenhos animados infantis para a Área Kids
+ */
+export const getKidsSeries = async (page: number = 1): Promise<TMDBResponse> => {
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=10762&include_adult=false&vote_count.gte=5`;
+  return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+};
+
 
 export interface TrailerVideo {
   id: string;
@@ -296,7 +315,7 @@ export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<Trai
 
   try {
     // 1. Busca vídeos em Português do Brasil (pt-BR)
-    const ptUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}&language=pt-BR`;
+    const ptUrl = `${BASE_URL}/${type}/${id}/videos?language=pt-BR`;
     const ptRes = await fetch(ptUrl, options);
     let ptVideos: any[] = [];
     if (ptRes.ok) {
@@ -310,7 +329,7 @@ export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<Trai
 
     // 2. Se não houver nenhum em pt-BR, busca no catálogo geral com fallback en-US
     if (candidates.length === 0) {
-      const fallbackUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}&language=en-US`;
+      const fallbackUrl = `${BASE_URL}/${type}/${id}/videos?language=en-US`;
       const fallbackRes = await fetch(fallbackUrl, options);
       if (fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();
@@ -320,7 +339,7 @@ export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<Trai
 
     // 3. Fallback extra sem filtro de idioma se ainda vazio
     if (candidates.length === 0) {
-      const allUrl = `${BASE_URL}/${type}/${id}/videos?api_key=${TMDB_API_KEY}`;
+      const allUrl = `${BASE_URL}/${type}/${id}/videos`;
       const allRes = await fetch(allUrl, options);
       if (allRes.ok) {
         const allData = await allRes.json();

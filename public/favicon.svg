@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ea580c" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+  </defs>
+  <!-- Body of Ouroboros -->
+  <path d="M 60 15 
+           A 45 45 0 1 1 15 60
+           A 45 45 0 0 1 50 16" 
+        fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round"/>
+  <!-- Head of Ouroboros eating the tail -->
+  <polygon points="45,5 70,16 45,27" fill="#ea580c" />
+</svg>
