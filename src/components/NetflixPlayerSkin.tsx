@@ -204,17 +204,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       if (source && iframeRef.current && source === iframeRef.current.contentWindow) {
         return true;
       }
+
       if (!origin) return false;
-      if (origin === window.location.origin) return true;
-      if (
-        origin === "https://v1.watchplay.shop" ||
-        origin === "https://watchplay.shop" ||
-        origin.includes("watchplay") ||
-        origin.includes("playerflix") ||
-        origin.includes("myembed")
-      ) {
-        return true;
-      }
+      
+      const TRUSTED_ORIGINS = new Set([
+        "https://v1.watchplay.shop",
+        "https://watchplay.shop",
+        "https://playerflix.ink",
+        "https://myembed.biz",
+        window.location.origin,
+      ]);
+
+      if (TRUSTED_ORIGINS.has(origin)) return true;
+
       try {
         const iframeSrc = iframeRef.current?.src;
         if (iframeSrc && new URL(iframeSrc, window.location.href).origin === origin) return true;
