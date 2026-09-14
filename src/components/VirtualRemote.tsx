@@ -426,7 +426,7 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
           setIsOpen(true);
           setTimeout(() => focusInitialElement(), 50);
         }}
-        className="virtual-remote-btn fixed bottom-32 sm:bottom-24 right-4 z-[9999] bg-gradient-to-r from-orange-600 to-amber-600 text-white p-3 sm:px-4 sm:py-2.5 rounded-full shadow-[0_0_25px_rgba(234,88,12,0.6)] flex items-center gap-2 hover:scale-105 active:scale-95 transition-all border border-orange-400/60 cursor-pointer"
+        className="virtual-remote-btn fixed bottom-32 sm:bottom-24 right-4 z-[9999] bg-gradient-to-r from-orange-600 to-amber-600 text-white p-3 sm:px-4 sm:py-2.5 rounded-full shadow-[0_0_25px_rgba(234,88,12,0.6)] hidden md:flex items-center gap-2 hover:scale-105 active:scale-95 transition-all border border-orange-400/60 cursor-pointer"
         title="Abrir Controle Remoto da TV para teste"
       >
         <Tv className="w-5 h-5 animate-pulse" />
@@ -445,9 +445,9 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
           ? { left: `${position.x}px`, top: `${position.y}px`, bottom: 'auto', right: 'auto' }
           : undefined
       }
-      className={`virtual-remote-container fixed ${
+      className={`virtual-remote-container hidden md:flex fixed ${
         !position ? 'bottom-28 sm:bottom-20 right-4' : ''
-      } z-[9999] bg-[#141414]/95 border-2 border-orange-500/80 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.9),0_0_30px_rgba(234,88,12,0.4)] flex flex-col items-center gap-2.5 backdrop-blur-2xl select-none transition-shadow ${
+      } z-[9999] bg-[#141414]/95 border-2 border-orange-500/80 rounded-3xl p-4 shadow-[0_10px_40px_rgba(0,0,0,0.9),0_0_30px_rgba(234,88,12,0.4)] flex-col items-center gap-2.5 backdrop-blur-2xl select-none transition-shadow ${
         isDragging ? 'cursor-grabbing shadow-[0_0_45px_rgba(234,88,12,0.7)] scale-[1.02]' : ''
       }`}
     >
