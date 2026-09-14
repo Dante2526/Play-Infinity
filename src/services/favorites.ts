@@ -1,4 +1,5 @@
 import { CatalogItem, providerCatalogs, featured } from "../data";
+import { getDetails } from "./tmdb";
 
 export interface SeriesScheduleEpisode {
   id: string;
@@ -150,12 +151,8 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
         if (localItem && localItem.type === 'movie') return;
 
         const tmdbId = localItem?.tmdbId || id;
-        const res = await fetch(
-          `/api/tmdb/tv/${tmdbId}?language=pt-BR`
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!data || data.status_code) return;
+        const data = await getDetails(Number(tmdbId), 'tv') as any;
+        if (!data || !data.id) return;
 
         const seriesTitle = (data.name || localItem?.title || "Série").toUpperCase();
         const seriesPoster = data.poster_path 

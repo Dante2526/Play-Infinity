@@ -171,9 +171,12 @@ export function GlobalSearchPage({
         if (response && response.results) {
           // Converter TMDBItem em CatalogItem com capas e players reais
           const formatted: CatalogItem[] = response.results
-            .filter(r => (r.media_type === 'movie' || r.media_type === 'tv') && (r.poster_path || r.backdrop_path))
+            .filter(r => {
+              const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
+              return isMedia && Boolean(r.title || r.name);
+            })
             .map(r => {
-              const isTv = r.media_type === 'tv';
+              const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
               const title = r.title || r.name || "Sem título";
               const year = r.release_date ? parseInt(r.release_date.substring(0, 4)) : r.first_air_date ? parseInt(r.first_air_date.substring(0, 4)) : 2024;
               const poster = formatImageUrl(r.poster_path, 'w500');
