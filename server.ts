@@ -813,10 +813,29 @@ const PORT = 3000;
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "*/*",
         "Referer": "https://animesonlinecc.to/",
-        "X-Forwarded-For": "177.100.100.1" // Spoof IP brasileiro para evitar bloqueios de CDN (ex: Amagi FAST)
+        "X-Forwarded-For": "177.100.100.1"
       };
 
-      const searchSlug = encodeURIComponent(cleanTitle.replace(/\s+/g, "+"));
+      // Mapeamento de títulos em Inglês/Português do TMDB para Romaji (usado pelos sites de anime)
+      let searchTitle = cleanTitle;
+      const titleMap: Record<string, string> = {
+        "attack on titan": "shingeki no kyojin",
+        "demon slayer": "kimetsu no yaiba",
+        "my hero academia": "boku no hero academia",
+        "the seven deadly sins": "nanatsu no taizai",
+        "sword art online": "sword art online",
+        "fullmetal alchemist": "fullmetal alchemist",
+        "dragon ball z": "dragon ball z", // Força busca exata
+      };
+
+      for (const [en, jp] of Object.entries(titleMap)) {
+        if (cleanTitle.includes(en)) {
+          searchTitle = cleanTitle.replace(en, jp);
+          break;
+        }
+      }
+
+      const searchSlug = encodeURIComponent(searchTitle.replace(/\s+/g, "+"));
       const searchUrl = `https://animesonlinecc.to/search/${searchSlug}`;
 
       const controller = new AbortController();
