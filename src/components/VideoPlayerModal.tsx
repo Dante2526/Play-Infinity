@@ -17,6 +17,7 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
+import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -330,6 +331,115 @@ export function VideoPlayerModal({
     if (parsed.id) return parsed.id;
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
+
+  // Carregamento dinâmico de temporadas e episódios reais via TMDB
+  const [seriesDetails, setSeriesDetails] = useState<TMDBDetails | null>(null);
+  const [seasonData, setSeasonData] = useState<Season | null>(null);
+  const [, setLoadingSeason] = useState<boolean>(false);
+  const activeEpisodeBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Busca detalhes da série no TMDB para obter as temporadas reais
+  useEffect(() => {
+    if (!isOpen || !isSeries) return;
+    const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numericId) return;
+
+    let isMounted = true;
+    getDetails(numericId, 'tv')
+      .then(details => {
+        if (isMounted && details) {
+          setSeriesDetails(details);
+        }
+      })
+      .catch(err => {
+        console.warn("[VideoPlayerModal] Não foi possível carregar detalhes da série:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSeries, tmdbId, resolvedId]);
+
+  // Lista de temporadas válidas da série (filtra specials e temporadas sem episódios)
+  const availableSeasons = useMemo(() => {
+    if (seriesDetails?.seasons && seriesDetails.seasons.length > 0) {
+      const valid = seriesDetails.seasons
+        .filter(s => s.season_number > 0 && s.episode_count > 0)
+        .map(s => s.season_number);
+      if (valid.length > 0) {
+        return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
+      }
+    }
+    return [1, 2, 3, 4];
+  }, [seriesDetails]);
+
+  // Ajusta a temporada selecionada caso não exista na lista de temporadas reais
+  useEffect(() => {
+    if (isSeries && availableSeasons.length > 0 && !availableSeasons.includes(season)) {
+      if (initialSeason && availableSeasons.includes(initialSeason)) {
+        setSeason(initialSeason);
+      } else {
+        setSeason(availableSeasons[0]);
+      }
+    }
+  }, [availableSeasons, isSeries, initialSeason, season]);
+
+  // Busca episódios da temporada ativa
+  useEffect(() => {
+    if (!isOpen || !isSeries) return;
+    const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numericId) return;
+
+    let isMounted = true;
+    setLoadingSeason(true);
+    getSeasonDetails(numericId, season)
+      .then(data => {
+        if (isMounted && data) {
+          setSeasonData(data);
+        }
+      })
+      .catch(err => {
+        console.warn("[VideoPlayerModal] Não foi possível carregar episódios da temporada:", err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingSeason(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSeries, tmdbId, resolvedId, season]);
+
+  // Total de episódios da temporada selecionada
+  const totalSeasonEpisodes = useMemo(() => {
+    if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      return seasonData.episodes.length;
+    }
+    const sInfo = seriesDetails?.seasons?.find(s => s.season_number === season);
+    if (sInfo?.episode_count && sInfo.episode_count > 0) {
+      return sInfo.episode_count;
+    }
+    return 8;
+  }, [seasonData, seriesDetails, season]);
+
+  // Array numérico de episódios para o seletor
+  const episodeNumbers = useMemo(() => {
+    if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      return seasonData.episodes.map(e => e.episode_number);
+    }
+    return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+  }, [seasonData, totalSeasonEpisodes]);
+
+  // Auto-scroll do botão do episódio ativo
+  useEffect(() => {
+    if (activeEpisodeBtnRef.current) {
+      activeEpisodeBtnRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [episode]);
 
   // Servidores oficiais homologados: WatchPlayer Oficial e VIP Player (Dublado PT-BR)
   const servers = useMemo(() => {
@@ -1119,15 +1229,16 @@ export function VideoPlayerModal({
                 <span>Temporada:</span>
               </div>
               
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
-                {[1, 2, 3, 4].map((s) => {
-                  const seasonDone = isSeasonFullyWatched(resolvedId, s, 8);
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hide max-w-full">
+                {availableSeasons.map((s) => {
+                  const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
+                  const seasonDone = isSeasonFullyWatched(resolvedId, s, sCount);
                   const isCurrent = season === s;
                   return (
                     <button
                       key={s}
                       onClick={() => handleSeasonChange(s)}
-                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
                         isCurrent
                           ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold"
                           : seasonDone
@@ -1147,12 +1258,12 @@ export function VideoPlayerModal({
 
               {/* Botão de Marcar Temporada Inteira como Vista */}
               {(() => {
-                const isCurrentSeasonDone = isSeasonFullyWatched(resolvedId, season, 8);
-                const watchedCount = getSeasonWatchedCount(resolvedId, season, 8);
+                const isCurrentSeasonDone = isSeasonFullyWatched(resolvedId, season, totalSeasonEpisodes);
+                const watchedCount = getSeasonWatchedCount(resolvedId, season, totalSeasonEpisodes);
                 return (
                   <button
-                    onClick={() => markSeasonWatched(resolvedId, season, 8, !isCurrentSeasonDone)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                    onClick={() => markSeasonWatched(resolvedId, season, totalSeasonEpisodes, !isCurrentSeasonDone)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer shrink-0 ${
                       isCurrentSeasonDone
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                         : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
@@ -1160,7 +1271,7 @@ export function VideoPlayerModal({
                     title={
                       isCurrentSeasonDone
                         ? `Desmarcar Temporada ${season} inteira como assistida`
-                        : `Marcar Temporada ${season} inteira como assistida (${watchedCount}/8 vistos)`
+                        : `Marcar Temporada ${season} inteira como assistida (${watchedCount}/${totalSeasonEpisodes} vistos)`
                     }
                   >
                     <Check className={`w-3.5 h-3.5 ${isCurrentSeasonDone ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
@@ -1173,7 +1284,7 @@ export function VideoPlayerModal({
                     <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${
                       isCurrentSeasonDone ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-neutral-400"
                     }`}>
-                      {watchedCount}/8
+                      {watchedCount}/{totalSeasonEpisodes}
                     </span>
                   </button>
                 );
@@ -1191,13 +1302,14 @@ export function VideoPlayerModal({
                 <span className="hidden sm:inline">Anterior</span>
               </button>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((ep) => {
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px]">
+                {episodeNumbers.map((ep) => {
                   const watched = isEpisodeWatched(resolvedId, season, ep);
                   const isCurrent = episode === ep;
                   return (
                     <button
                       key={ep}
+                      ref={isCurrent ? activeEpisodeBtnRef : null}
                       onClick={() => handleEpisodeChange(ep)}
                       title={watched ? `Episódio ${ep} (Assistido)` : `Episódio ${ep}`}
                       className={`relative w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${
@@ -1225,7 +1337,8 @@ export function VideoPlayerModal({
 
               <button
                 onClick={() => handleEpisodeChange(episode + 1)}
-                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
+                disabled={episode >= totalSeasonEpisodes}
+                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
               >
                 <span className="hidden sm:inline">Próximo</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -1407,7 +1520,10 @@ export function VideoPlayerModal({
               isSeries={isSeries}
               season={season}
               episode={episode}
-              totalEpisodes={24}
+              totalEpisodes={totalSeasonEpisodes}
+              availableSeasons={availableSeasons}
+              onSeasonChange={handleSeasonChange}
+              episodesList={seasonData?.episodes}
               onClose={handleCloseModal}
               onEpisodeChange={handleEpisodeChange}
               onSkipIntro={() => handleSkipIntro()}

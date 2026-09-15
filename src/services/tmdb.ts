@@ -74,6 +74,7 @@ export interface TMDBDetails {
   episode_run_time?: number[];
   genres: { id: number; name: string }[];
   seasons?: Season[];
+  number_of_seasons?: number;
   imdb_id?: string;
 }
 
@@ -204,8 +205,19 @@ export const searchMulti = async (query: string): Promise<TMDBResponse> => {
   return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
+import { UNAVAILABLE_SEASONS } from '../data';
+
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
-  return fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);
+  const details = await fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);
+  
+  if (type === 'tv' && details && details.seasons && UNAVAILABLE_SEASONS[id]) {
+    // Filtra as temporadas que estão marcadas como indisponíveis na configuração
+    const unavailableList = UNAVAILABLE_SEASONS[id];
+    details.seasons = details.seasons.filter(s => !unavailableList.includes(s.season_number));
+    details.number_of_seasons = details.seasons.length;
+  }
+  
+  return details;
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {

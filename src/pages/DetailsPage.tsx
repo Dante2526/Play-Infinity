@@ -149,6 +149,8 @@ export function DetailsPage({
   const [tmdbDetails, setTmdbDetails] = useState<TMDBDetails | null>(null);
   const [loadingTmdb, setLoadingTmdb] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
+  const [seasonData, setSeasonData] = useState<Season | null>(null);
+  const [loadingSeason, setLoadingSeason] = useState<boolean>(false);
   const commentTargetId = item.tmdbId || item.id || itemId;
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
@@ -255,6 +257,80 @@ export function DetailsPage({
   const effectiveTmdbId = item.tmdbId || item.id;
   const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
   const isDoramaItem = Boolean(item.isDorama || initialItem?.isDorama);
+
+  // Lista de temporadas disponíveis vindas do TMDB (ou fallback para [1, 2, 3, 4])
+  const availableSeasons = React.useMemo(() => {
+    if (tmdbDetails?.seasons && tmdbDetails.seasons.length > 0) {
+      const valid = tmdbDetails.seasons
+        .filter(s => s.season_number > 0 && s.episode_count > 0)
+        .map(s => s.season_number);
+      if (valid.length > 0) {
+        return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
+      }
+    }
+    return [1, 2, 3, 4];
+  }, [tmdbDetails]);
+
+  // Se a temporada selecionada não existir na lista, seleciona a primeira disponível
+  useEffect(() => {
+    if (availableSeasons.length > 0 && !availableSeasons.includes(selectedSeason)) {
+      setSelectedSeason(availableSeasons[0]);
+    }
+  }, [availableSeasons, selectedSeason]);
+
+  // Buscar episódios reais da temporada selecionada no TMDB sempre que mudar série ou temporada
+  useEffect(() => {
+    if (!isSeries || !effectiveTmdbId || isNaN(Number(effectiveTmdbId))) return;
+    let isMounted = true;
+    setLoadingSeason(true);
+
+    getSeasonDetails(Number(effectiveTmdbId), selectedSeason)
+      .then(data => {
+        if (isMounted && data && !('status_code' in (data as any))) {
+          setSeasonData(data);
+        }
+      })
+      .catch(err => {
+        console.warn(`[DetailsPage] Erro ao carregar episódios da T${selectedSeason}:`, err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingSeason(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isSeries, effectiveTmdbId, selectedSeason]);
+
+  // Lista dinâmica de episódios formatados da temporada atual
+  const currentEpisodes = React.useMemo(() => {
+    if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      return seasonData.episodes.map(ep => ({
+        ep: ep.episode_number,
+        name: ep.name && ep.name.trim() !== "" ? ep.name : `Episódio ${ep.episode_number}`,
+        duration: (ep as any).runtime ? `${(ep as any).runtime}m` : "24m",
+        desc: ep.overview && ep.overview.trim() !== ""
+          ? ep.overview
+          : `Acompanhe o episódio ${ep.episode_number} da Temporada ${selectedSeason} de ${item.title}.`,
+        stillPath: ep.still_path ? formatImageUrl(ep.still_path, 'w300') : null
+      }));
+    }
+
+    // Fallback dinâmico caso a API falhe ou ainda esteja carregando
+    const count = seasonData?.episode_count || tmdbDetails?.seasons?.find(s => s.season_number === selectedSeason)?.episode_count || 6;
+    return Array.from({ length: Math.min(count, 50) }, (_, idx) => {
+      const epNum = idx + 1;
+      return {
+        ep: epNum,
+        name: `Episódio ${epNum}`,
+        duration: "45m",
+        desc: `Acompanhe o episódio ${epNum} da Temporada ${selectedSeason} de ${item.title}.`,
+        stillPath: null
+      };
+    });
+  }, [seasonData, selectedSeason, item.title, tmdbDetails]);
+
+  const totalSeasonEpisodes = currentEpisodes.length;
 
   // URL de reprodução: Aponta para WatchPlayer com skin Netflix e autoplay
   const targetPlayerUrl = isSeries
@@ -538,7 +614,7 @@ export function DetailsPage({
                   <Tv className="w-5 h-5 text-orange-500" />
                   <h3 className="text-lg font-bold text-white">Episódios & Temporadas</h3>
                   <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-medium">
-                    {getSeasonWatchedCount(effectiveTmdbId, selectedSeason, 6)} de 6 assistidos
+                    {getSeasonWatchedCount(effectiveTmdbId, selectedSeason, totalSeasonEpisodes)} de {totalSeasonEpisodes} assistidos
                   </span>
                 </div>
                 
@@ -546,32 +622,33 @@ export function DetailsPage({
                   {/* Botão Marcar Temporada como Vista (Largura padronizada sem layout shift) */}
                   <button
                     tabIndex={0} role="button" onClick={() => {
-                      const fullyWatched = isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6);
-                      markSeasonWatched(effectiveTmdbId, selectedSeason, 6, !fullyWatched);
+                      const fullyWatched = isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes);
+                      markSeasonWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes, !fullyWatched);
                     }}
                     className={`min-w-[125px] justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border backdrop-blur-sm active:scale-95 ${
-                      isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6)
+                      isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes)
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                         : "bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
                     }`}
                     title="Marcar ou desmarcar todos os episódios desta temporada como vistos"
                   >
-                    <Check className={`w-3.5 h-3.5 ${isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
+                    <Check className={`w-3.5 h-3.5 ${isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
                     <span>
-                      {isSeasonFullyWatched(effectiveTmdbId, selectedSeason, 6) ? `T${selectedSeason} Vista` : `Marcar T${selectedSeason}`}
+                      {isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes) ? `T${selectedSeason} Vista` : `Marcar T${selectedSeason}`}
                     </span>
                   </button>
 
                   {/* Seletor de Temporadas */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5">
-                    {[1, 2, 3, 4].map(s => {
-                      const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, 6);
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5 max-w-full">
+                    {availableSeasons.map(s => {
+                      const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
+                      const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, seasonEpCount);
                       const isCurrent = selectedSeason === s;
                       return (
                         <button
                           key={s}
                           onClick={() => setSelectedSeason(s)}
-                          className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                          className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
                             isCurrent
                               ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold'
                               : seasonDone
@@ -592,15 +669,15 @@ export function DetailsPage({
               </div>
 
               {/* Lista de episódios da temporada selecionada */}
+              {loadingSeason && (
+                <div className="flex items-center justify-center py-4 text-orange-400 gap-2 text-xs font-medium bg-white/5 rounded-xl">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Carregando episódios da Temporada {selectedSeason}...</span>
+                </div>
+              )}
+
               <div className="space-y-3">
-                {[
-                  { ep: 1, name: "O Início", duration: "52m", desc: "Os primeiros acontecimentos que desencadeiam a trama principal." },
-                  { ep: 2, name: "Sombras e Segredos", duration: "48m", desc: "Revelações surpreendentes mudam o rumo da jornada." },
-                  { ep: 3, name: "Ponto Sem Retorno", duration: "55m", desc: "Uma escolha difícil precisa ser feita antes que seja tarde." },
-                  { ep: 4, name: "O Confronto", duration: "58m", desc: "As peças se alinham para um clímax emocionante." },
-                  { ep: 5, name: "Consequências", duration: "50m", desc: "As repercussões dos últimos acontecimentos afetam a todos." },
-                  { ep: 6, name: "O Desfecho", duration: "56m", desc: "A revelação final e as conclusões decisivas." }
-                ].map(ep => {
+                {currentEpisodes.map(ep => {
                   const watched = isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep);
                   const fullEpTitle = `T${selectedSeason}:E${ep.ep} ${ep.name}`;
                   return (
@@ -619,7 +696,7 @@ export function DetailsPage({
                             ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
                             : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
                           onPlay?.(
-                            `${item.title} - ${fullEpTitle}`, 
+                            item.title, 
                             epUrl, 
                             'series', 
                             Number(effectiveTmdbId), 
@@ -637,13 +714,34 @@ export function DetailsPage({
                           );
                         }}
                       >
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs transition-all shrink-0 border ${
-                          watched 
-                            ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30" 
-                            : "bg-orange-600/20 text-orange-500 border-orange-500/20 group-hover:bg-orange-600 group-hover:text-white"
-                        }`}>
-                          {ep.ep}
-                        </div>
+                        {ep.stillPath ? (
+                          <div className="relative w-16 h-11 sm:w-20 sm:h-13 rounded-lg overflow-hidden shrink-0 bg-neutral-900 border border-neutral-800">
+                            <img 
+                              src={ep.stillPath} 
+                              alt={ep.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                              onError={(e) => {
+                                (e.currentTarget as HTMLElement).style.display = 'none';
+                              }}
+                            />
+                            <div className={`absolute bottom-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                              watched 
+                                ? "bg-emerald-950/90 text-emerald-300 border border-emerald-500/40" 
+                                : "bg-black/75 text-white backdrop-blur-xs"
+                            }`}>
+                              {ep.ep}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs transition-all shrink-0 border ${
+                            watched 
+                              ? "bg-emerald-950/40 text-emerald-300 border-emerald-500/30" 
+                              : "bg-orange-600/20 text-orange-500 border-orange-500/20 group-hover:bg-orange-600 group-hover:text-white"
+                          }`}>
+                            {ep.ep}
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0 pr-1">
                           <div className="flex items-center gap-2 flex-wrap mb-0.5">
                             <span className="text-[11px] font-bold text-orange-400/90 tracking-wide">
