@@ -809,6 +809,13 @@ const PORT = 3000;
       const cleanTitle = baseTitle.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
       if (!cleanTitle) return null;
 
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Referer": "https://animesonlinecc.to/",
+        "X-Forwarded-For": "177.100.100.1" // Spoof IP brasileiro para evitar bloqueios de CDN (ex: Amagi FAST)
+      };
+
       const searchSlug = encodeURIComponent(cleanTitle.replace(/\s+/g, "+"));
       const searchUrl = `https://animesonlinecc.to/search/${searchSlug}`;
 
@@ -816,10 +823,7 @@ const PORT = 3000;
       const timeout = setTimeout(() => controller.abort(), 4000);
       const searchRes = await fetch(searchUrl, {
         signal: controller.signal,
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Referer": "https://animesonlinecc.to/"
-        }
+        headers
       });
       clearTimeout(timeout);
       if (!searchRes.ok) return null;
@@ -2952,7 +2956,7 @@ const PORT = 3000;
       const allowedDomains = [
         "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
         "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
-        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv" // common substrings in IPTV URLs, minimal protection for live TV
+        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv"
       ];
       
       const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
