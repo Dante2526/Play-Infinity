@@ -35,7 +35,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
   getDetails, 
@@ -173,7 +173,7 @@ export function GlobalSearchPage({
           const formatted: CatalogItem[] = response.results
             .filter(r => {
               const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
-              return isMedia && Boolean(r.title || r.name);
+              return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
             })
             .map(r => {
               const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
@@ -225,6 +225,7 @@ export function GlobalSearchPage({
       // Fallback para itens locais
       list = allCatalogs.filter(item => item.title.toLowerCase().includes(searchQuery.toLowerCase()));
     }
+    list = list.filter(isMediaAvailable);
     if (activeFilter === 'movie') return list.filter(i => i.type === 'movie');
     if (activeFilter === 'tv') return list.filter(i => i.type === 'series');
     return list;

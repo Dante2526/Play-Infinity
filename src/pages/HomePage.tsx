@@ -37,7 +37,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
   getDetails, 
@@ -412,25 +412,55 @@ export function HomePage({
           }
         }
 
-        if (isMounted && animesRes?.results && animesRes.results.length > 0) {
-          const formattedAnimes = animesRes.results
-            .filter((a: TMDBItem) => a.poster_path && (a.name || a.title))
-            .slice(0, 18)
-            .map((a: TMDBItem) => ({
-              id: a.id,
-              tmdbId: a.id,
-              title: (a.name || a.title || "").toUpperCase(),
-              imageUrl: formatImageUrl(a.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(a.backdrop_path, 'original'),
-              type: 'series' as const,
-              quality: "HD" as const,
-              isAnime: true,
-              rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
-              year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
-              playerUrl: `/api/anime-stream?provider=consumet&id=${a.id}&s=1&e=1&title=${encodeURIComponent(a.name || a.title || "")}`
-            }));
-          if (formattedAnimes.length > 0) {
-            setAnimeReleases(formattedAnimes);
+        if (isMounted) {
+          // Apenas os animes confirmados como disponíveis no WatchPlayer Oficial
+          let availableAnimes = [...animes];
+
+          if (animesRes?.results && animesRes.results.length > 0) {
+            const tmdbFiltered = animesRes.results
+              .filter((a: TMDBItem) => 
+                a.poster_path && 
+                (a.name || a.title) && 
+                WATCHPLAY_ANIME_IDS.includes(a.id) &&
+                isMediaAvailable({ id: a.id, title: a.name || a.title })
+              )
+              .map((a: TMDBItem) => ({
+                id: a.id,
+                tmdbId: a.id,
+                title: (a.name || a.title || "").toUpperCase(),
+                imageUrl: formatImageUrl(a.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(a.backdrop_path, 'original'),
+                type: 'series' as const,
+                quality: "HD" as const,
+                isAnime: true,
+                rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
+                year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
+                playerUrl: `https://v1.watchplay.shop/tvshow/${a.id}/1/1`
+              }));
+
+            const combinedMap = new Map<number, any>();
+            animes.forEach(a => combinedMap.set(a.id, a));
+            tmdbFiltered.forEach(a => {
+              const existing = combinedMap.get(a.id);
+              if (existing) {
+                combinedMap.set(a.id, {
+                  ...existing,
+                  ...a,
+                  playerUrl: existing.playerUrl || a.playerUrl,
+                  imageUrl: a.imageUrl || existing.imageUrl,
+                  backdropUrl: a.backdropUrl || existing.backdropUrl
+                });
+              } else {
+                combinedMap.set(a.id, a);
+              }
+            });
+            availableAnimes = Array.from(combinedMap.values()).filter(a => 
+              WATCHPLAY_ANIME_IDS.includes(a.id) && isMediaAvailable(a)
+            );
+          }
+
+          if (availableAnimes.length > 0) {
+            setAnimeReleases(availableAnimes);
           }
         }
 

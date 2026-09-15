@@ -409,8 +409,10 @@ export function VideoPlayerModal({
       return;
     }
 
-    console.error("[VideoPlayerModal] Servidor WatchPlayer indisponível no momento.");
-    setError("O player oficial está instável no momento. Tente novamente em instantes.");
+    console.error("[VideoPlayerModal] Conteúdo indisponível nos servidores homologados.");
+    setActiveIframeUrl(null);
+    setPlayerSkinReady(false);
+    setError("Este conteúdo ainda não está disponível nos servidores oficiais em versão Dublado PT-BR. Nossos servidores são atualizados constantemente.");
     setIsLoading(false);
   }, [servers, selectedServerKey, handleServerSwitch]);
 
@@ -1327,7 +1329,7 @@ export function VideoPlayerModal({
               </div>
             )}
 
-            {activeIframeUrl ? (
+            {activeIframeUrl && !error ? (
               <iframe
                 key={activeIframeUrl}
                 ref={iframeRef}
@@ -1358,10 +1360,12 @@ export function VideoPlayerModal({
                 onError={() => handleSilentFallback()}
               />
             ) : error ? (
-              <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
-                <AlertCircle className="w-10 h-10 text-orange-500" />
-                <h3 className="font-bold text-white text-base">Falha ao carregar o player</h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">{error}</p>
+              <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-4">
+                <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
+                  <AlertCircle className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-white text-base">Conteúdo Indisponível</h3>
+                <p className="text-xs text-neutral-400 leading-relaxed max-w-md">{error}</p>
                 <div className="pt-2 flex gap-3 flex-wrap justify-center">
                   <button
                     onClick={() => {
@@ -1375,18 +1379,16 @@ export function VideoPlayerModal({
                         handleExtract(urlInput);
                       }
                     }}
-                    className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-600/20 active:scale-95"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                    <RefreshCw className="w-4 h-4" /> Tentar novamente
                   </button>
-                  <a
-                    href={urlInput}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-colors flex items-center gap-2 cursor-pointer active:scale-95"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
-                  </a>
+                    Voltar ao Catálogo
+                  </button>
                 </div>
               </div>
             ) : (

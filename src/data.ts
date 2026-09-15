@@ -240,8 +240,186 @@ export const animes = [
     imageUrl: "https://image.tmdb.org/t/p/w500/chnG4pYo89weaBjXHJWvW68E35B.jpg",
     backdropUrl: "https://image.tmdb.org/t/p/original/z8IPicmEKXUO4I2UDdMEqw7RqOE.jpg",
     playerUrl: "https://v1.watchplay.shop/tvshow/13916/1/1",
+  },
+  {
+    id: 30984,
+    tmdbId: 30984,
+    title: "BLEACH",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/dx28DE7EgLy0FatOvnaUg0k9j92.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/o0NsbcIvsllg6CJX0FBFY8wWbsn.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/30984/1/1",
+  },
+  {
+    id: 46298,
+    tmdbId: 46298,
+    title: "HUNTER X HUNTER",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/9WxfAQquTun9ATkV6iAeFHMkqxv.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/bFKKyCI89Xq98Gul8cGox8K3sZa.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/46298/1/1",
+  },
+  {
+    id: 12971,
+    tmdbId: 12971,
+    title: "DRAGON BALL Z",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/kbkuYkaFsDwL6cyMgnBf77LczEo.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/ydf1CeiBLfdxiyNTpskM0802TKl.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/12971/1/1",
+  },
+  {
+    id: 65930,
+    tmdbId: 65930,
+    title: "MY HERO ACADEMIA",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/cfESQ8y8oNAeLuRbs7NkW7Qjwhy.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/ol0H2DGp4ifBHA4JDlCpwJWxnY2.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/65930/1/1",
+  },
+  {
+    id: 31911,
+    tmdbId: 31911,
+    title: "FULLMETAL ALCHEMIST: BROTHERHOOD",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/vIkH7fUQf8Olo8Apq56FQLGDXOo.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/A6tMQAo6t6eRFCPhsrShmxZLqFB.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/31911/1/1",
+  },
+  {
+    id: 63926,
+    tmdbId: 63926,
+    title: "ONE PUNCH MAN",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/a8BknzvFVK5EZ83rKg1a83iwaj0.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/s0w8JbuNNxL1YgaHeDWih12C3jG.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/63926/1/1",
+  },
+  {
+    id: 120089,
+    tmdbId: 120089,
+    title: "SPY X FAMILY",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/vaIREdPGZOnW9Jrs86mheVVlIQQ.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/lysUnU6V0VfcthDbviuVlIqgHOR.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/120089/1/1",
+  },
+  {
+    id: 207468,
+    tmdbId: 207468,
+    title: "KAIJU NO. 8",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/A6JOsCdFFTxtbDnKAfE0iY6jOiE.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/htGeuCcNhlBe8GTx3izKOsd8frw.jpg",
+    playerUrl: "https://v1.watchplay.shop/tvshow/207468/1/1",
+  },
+  {
+    id: 31910,
+    tmdbId: 31910,
+    title: "NARUTO SHIPPUDEN",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/nRJmByfK9XdtOY73VArcN8KpKVs.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/z0YhJvomqedHF85bplUJEotkN5l.jpg",
+    playerUrl: "/api/myembed-stream?id=31910&type=tv&s=1&e=1",
+  },
+  {
+    id: 37854,
+    tmdbId: 37854,
+    title: "ONE PIECE",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/9ltisibeD4gzqjM1AzmQwCdyirQ.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg",
+    playerUrl: "/api/myembed-stream?id=37854&type=tv&s=1&e=1",
+  },
+  {
+    id: 95479,
+    tmdbId: 95479,
+    title: "JUJUTSU KAISEN",
+    type: "series" as const,
+    quality: "HD" as const,
+    isAnime: true,
+    imageUrl: "https://image.tmdb.org/t/p/w500/8R1mMSC1gX1cg5ed7ns49JOEqw3.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/qpin8cASXEVtwhzNsprHYFiOAGk.jpg",
+    playerUrl: "/api/myembed-stream?id=95479&type=tv&s=1&e=1",
   }
 ];
+
+// IDs de animes confirmados com reprodução (dublada ou legendada) nos servidores oficiais
+export const WATCHPLAY_ANIME_IDS = [
+  1429,   // Attack on Titan
+  85937,  // Demon Slayer
+  209867, // Solo Leveling
+  13916,  // Death Note
+  30984,  // Bleach
+  46298,  // Hunter x Hunter
+  12971,  // Dragon Ball Z
+  94664,  // Mushoku Tensei
+  207468, // Kaiju No. 8
+  31910,  // Naruto Shippuden
+  37854,  // One Piece
+  95479,  // Jujutsu Kaisen
+  65945,  // Kabaneri
+  37858,  // Fate/stay night
+  60625,  // Tokyo Ghoul
+  65930,  // My Hero Academia
+  31911,  // Fullmetal Alchemist: Brotherhood
+  63926,  // One Punch Man
+  80752,  // The Promised Neverland
+  120089, // Spy x Family
+  114410, // Chainsaw Man
+  127532, // Cyberpunk: Edgerunners
+  80564,  // Dr. Stone
+  72636,  // Black Clover
+  87108,  // Fire Force
+  67070,  // Erased
+  72705,  // Overlord
+  76121,  // That Time I Got Reincarnated as a Slime
+  84669,  // Hell's Paradise
+  95557,  // Tower of God
+  84773,  // The Rising of the Shield Hero
+];
+
+// Lista de animes e títulos que NÃO possuem fontes homologadas e NÃO devem aparecer no app
+export const UNAVAILABLE_TITLES_OR_IDS = [
+  65733,   // Doraemon: O Gato do Futuro
+  57911,   // Doraemon (1979)
+  299627,  // Doraemon Specials
+  45857,   // REBORN!
+  30983,   // Detetive Conan
+  241002,  // Modaete yo, Adam-kun
+  233643,  // Secret Mission
+  70998,   // Uma Noite Pecaminosa
+  95897,   // Overflow
+  255064,  // O Incidente de Darwin
+];
+
+export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: string; name?: string }): boolean => {
+  const id = Number(item.tmdbId || item.id || 0);
+  if (id && UNAVAILABLE_TITLES_OR_IDS.includes(id)) return false;
+  const name = (item.title || item.name || "").toLowerCase();
+  if (name.includes("doraemon")) return false;
+  return true;
+};
 
 export const WATCHPLAY_DORAMA_IDS = [
   93405,  // Round 6
@@ -1204,8 +1382,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 73586,
       tmdbId: 73586,
       title: "YELLOWSTONE",
-      imageUrl: "https://image.tmdb.org/t/p/w500/peNCFcxRg1ZOMxTSZaagMNmgph4.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/m9IICv9sI6q3kYkQh23kM2Z1k0E.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/rrOYi7Zj2OmBojo1VuuZM129gic.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/ynSOcgDLZfdLCZfRSYZGiTgYJVo.jpg",
       type: "series",
       genres: ["Faroeste", "Drama"],
       synopsis: "John Dutton e sua família controlam o maior rancho contíguo dos Estados Unidos, sob constante ataque daqueles que fazem fronteira.",
@@ -1219,8 +1397,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 118956,
       tmdbId: 118956,
       title: "TULSA KING",
-      imageUrl: "https://image.tmdb.org/t/p/w500/fwTv39V5q69v9XJ5dD2e379W9h3.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/9faGSFi5jam6pDWGNd0ip80ioXA.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/rOYLWCdAifpUtPlTf1WHxyaxeMt.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/mNHRGO1gFpR2CYZdANe72kcKq7G.jpg",
       type: "series",
       genres: ["Crime", "Drama"],
       synopsis: "Após sair da prisão após 25 anos, o chefe da máfia de Nova York, Dwight Manfredi, é exilado para montar operações em Tulsa, Oklahoma.",
@@ -1234,8 +1412,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 117581,
       tmdbId: 117581,
       title: "MAYOR OF KINGSTOWN",
-      imageUrl: "https://image.tmdb.org/t/p/w500/86OUOPulMiM8rjrSV79umio540I.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/5gPpn9dIeH5xT1Lq3V6h3yT3u.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/aoZm9TTbxHfexecDoEiiYWvft3p.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/39bifj2FNytJ2m1cqOBcWMTKgmV.jpg",
       type: "series",
       genres: ["Drama", "Crime"],
       synopsis: "A família McLusky comanda a cidade de Kingstown, onde o negócio do encarceramento em massa é a única indústria próspera.",
@@ -1249,8 +1427,8 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       id: 52814,
       tmdbId: 52814,
       title: "HALO",
-      imageUrl: "https://image.tmdb.org/t/p/w500/nJUHX31usWhvlRsvWnJ4ExXZOW8.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/17sgk2nE3yQG8120L0b1aU4o6N3.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/4UmNhZCEu8Vt3byMvNxNEPyf8EY.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/zW0v2YT74C6tRafzqqBkfSqLAN0.jpg",
       type: "series",
       genres: ["Ficção científica", "Ação", "Aventura"],
       synopsis: "Uma batalha épica no século 26 entre a humanidade e uma ameaça alienígena conhecida como Covenant.",
@@ -1261,11 +1439,11 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       playerUrl: "https://v1.watchplay.shop/tvshow/52814/1/1",
     },
     {
-      id: 85937,
-      tmdbId: 85937,
+      id: 103516,
+      tmdbId: 103516,
       title: "STAR TREK: STRANGE NEW WORLDS",
-      imageUrl: "https://image.tmdb.org/t/p/w500/6A7k2GkZJpT5X3G8Y1z3u6A4c.jpg",
-      backdropUrl: "https://image.tmdb.org/t/p/original/qcp74k4a7e4L6j6XyP3q8J9y9L3.jpg",
+      imageUrl: "https://image.tmdb.org/t/p/w500/bxuUbcM9GqvmQY1EDm5sMtLdcTv.jpg",
+      backdropUrl: "https://image.tmdb.org/t/p/original/fZJs6xgU9dqIg9phIXjZAZOInzy.jpg",
       type: "series",
       genres: ["Ficção Científica", "Aventura"],
       synopsis: "O Capitão Christopher Pike, o Oficial de Ciências Spock e a Número Um exploram novos mundos ao redor da galáxia na USS Enterprise.",
@@ -1273,7 +1451,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "2 Temporadas",
       match: 96,
-      playerUrl: "https://v1.watchplay.shop/tvshow/85937/1/1",
+      playerUrl: "https://v1.watchplay.shop/tvshow/103516/1/1",
     }
   ]
 };
@@ -1283,9 +1461,9 @@ export const kidsContent = [
     id: 1184918,
     tmdbId: 1184918,
     title: "ROBÔ SELVAGEM",
-    imageUrl: "https://image.tmdb.org/t/p/w500/9w0Vh9e7fgtBp894m94g4M5W2Lq.jpg",
-    posterUrl: "https://image.tmdb.org/t/p/w500/9w0Vh9e7fgtBp894m94g4M5W2Lq.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/417tYZ4XUyJrtyZXj7HpvWf1E8f.jpg",
+    imageUrl: "https://image.tmdb.org/t/p/w500/gAHNIZKG8fmK7njOTpMmLKJXiag.jpg",
+    posterUrl: "https://image.tmdb.org/t/p/w500/gAHNIZKG8fmK7njOTpMmLKJXiag.jpg",
+    backdropUrl: "https://image.tmdb.org/t/p/original/1pmXyN3sKeYoUhu5VBZiDU4BX21.jpg",
     type: "movie" as const,
     genres: ["Animação", "Ficção científica", "Família"],
     synopsis: "Após um naufrágio, um robô inteligente chamado Roz fica preso em uma ilha desabitada e deve aprender a se adaptar ao ambiente hostil.",
