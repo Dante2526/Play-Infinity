@@ -35,7 +35,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
   getDetails, 
@@ -292,7 +292,7 @@ export function DetailsPage({
 
   const similarItems = React.useMemo(() => {
     const directMatches = allCatalogs.filter(i => {
-      if (i.id === item.id) return false;
+      if (i.id === item.id || !isMediaAvailable(i)) return false;
       const iGenres = Array.isArray(i.genres) ? i.genres : [];
       if (currentGenres.length > 0 && iGenres.some(g => currentGenres.includes(g))) {
         return true;
@@ -303,7 +303,7 @@ export function DetailsPage({
 
     if (directMatches.length >= 6) return directMatches.slice(0, 6);
 
-    const extra = allCatalogs.filter(i => i.id !== item.id && !directMatches.some(m => m.id === i.id));
+    const extra = allCatalogs.filter(i => i.id !== item.id && isMediaAvailable(i) && !directMatches.some(m => m.id === i.id));
     return [...directMatches, ...extra].slice(0, 6);
   }, [allCatalogs, item.id, item.type, currentGenres]);
 

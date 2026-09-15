@@ -1850,6 +1850,27 @@ const PORT = 3000;
         return res.json(signData);
       }
 
+      const isWatchPlayerUnavailable = (content: string, url: string, status: number): boolean => {
+        if (status >= 400) return true;
+        const lowerUrl = (url || "").toLowerCase();
+        if (lowerUrl.includes("/login") || lowerUrl.includes("/admin") || lowerUrl.includes("/painel")) return true;
+        const lower = (content || "").toLowerCase();
+        if (
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("entrar • myplayer") ||
+          lower.includes("painel administrativo") ||
+          (lower.includes("myplayer") && (lower.includes("bem-vindo") || lower.includes("bem vindo"))) ||
+          lower.includes("série não encontrada") ||
+          lower.includes("serie não encontrada") ||
+          lower.includes("filme não encontrado") ||
+          lower.includes("acesso protegido por sessão segura")
+        ) {
+          return true;
+        }
+        return false;
+      };
+
       const parsedTarget = new URL(targetUrl);
       let effectiveTargetUrl = targetUrl;
       let upstreamRes = await fetch(effectiveTargetUrl, {
@@ -1857,10 +1878,45 @@ const PORT = 3000;
           "Referer": parsedTarget.origin + "/",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
+        redirect: "manual",
       });
 
-      // Se a rota padrão falhou (ex: 404), tenta alternar automaticamente entre /tvshow/ e /series/
-      if (!upstreamRes.ok) {
+      let html = "";
+      let isUnavailable = false;
+
+      // Trata redirecionamentos manuais (evitando seguir para telas de login / painel administrativo)
+      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+        const loc = upstreamRes.headers.get("location") || "";
+        if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
+          isUnavailable = true;
+        } else {
+          try {
+            const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
+            effectiveTargetUrl = redirectedUrl;
+            upstreamRes = await fetch(effectiveTargetUrl, {
+              headers: {
+                "Referer": parsedTarget.origin + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+              redirect: "manual",
+            });
+          } catch (e) {
+            isUnavailable = true;
+          }
+        }
+      }
+
+      if (upstreamRes.status === 200) {
+        html = await upstreamRes.text();
+        if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+          isUnavailable = true;
+        }
+      } else {
+        isUnavailable = true;
+      }
+
+      // Se a rota padrão falhou (ex: 404 ou login), tenta alternar automaticamente entre /tvshow/ e /series/
+      if (isUnavailable) {
         const alternateVariants: string[] = [];
         if (effectiveTargetUrl.includes("/tvshow/")) {
           alternateVariants.push(effectiveTargetUrl.replace("/tvshow/", "/series/"));
@@ -1880,18 +1936,24 @@ const PORT = 3000;
                 "Referer": new URL(altUrl).origin + "/",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               },
+              redirect: "manual",
             });
-            if (altRes.ok) {
-              effectiveTargetUrl = altUrl;
-              upstreamRes = altRes;
-              break;
+            if (altRes.status === 200) {
+              const altText = await altRes.text();
+              if (!isWatchPlayerUnavailable(altText, altUrl, altRes.status)) {
+                effectiveTargetUrl = altUrl;
+                upstreamRes = altRes;
+                html = altText;
+                isUnavailable = false;
+                break;
+              }
             }
           } catch (e) {}
         }
       }
 
-      if (!upstreamRes.ok) {
-        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado no WatchPlayer (${effectiveTargetUrl}). Acionando fallback.`);
+      if (isUnavailable) {
+        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado ou tela de login no WatchPlayer (${effectiveTargetUrl}). Acionando fallback.`);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(404).send(`
           <!DOCTYPE html>
@@ -1907,7 +1969,7 @@ const PORT = 3000;
               try {
                 window.parent.postMessage({ 
                   type: "WATCHPLAY_UNAVAILABLE", 
-                  reason: "upstream_status_" + ${upstreamRes.status}
+                  reason: "content_not_found"
                 }, "*");
               } catch(e) {}
             </script>
@@ -1915,8 +1977,6 @@ const PORT = 3000;
           </html>
         `);
       }
-
-      let html = await upstreamRes.text();
 
       // 0.0 Se o WatchPlayer retornou uma página de escolha de players intermediária (ex: "Escolha uma opção de player"),
       // auto-seleciona a opção prioritária (Dublado PT-BR / ?player=0) no próprio servidor de forma invisível
@@ -1956,12 +2016,47 @@ const PORT = 3000;
                 "Referer": parsedTarget.origin + "/",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               },
+              redirect: "manual",
             });
-            if (choiceRes.ok) {
-              html = await choiceRes.text();
+            if (choiceRes.status === 200) {
+              const choiceHtml = await choiceRes.text();
+              if (!isWatchPlayerUnavailable(choiceHtml, effectiveTargetUrl, choiceRes.status)) {
+                html = choiceHtml;
+              } else {
+                isUnavailable = true;
+              }
+            } else {
+              isUnavailable = true;
             }
           } catch (err: any) {
             console.warn("[WatchPlayer Choice Resolution Error]:", err.message);
+            isUnavailable = true;
+          }
+
+          if (isUnavailable) {
+            console.warn(`[WatchPlayer Stream]: Opção de player inválida ou inacessível (${effectiveTargetUrl}). Acionando fallback.`);
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            return res.status(404).send(`
+              <!DOCTYPE html>
+              <html lang="pt-BR">
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+                </style>
+              </head>
+              <body>
+                <script>
+                  try {
+                    window.parent.postMessage({ 
+                      type: "WATCHPLAY_UNAVAILABLE", 
+                      reason: "choice_unavailable"
+                    }, "*");
+                  } catch(e) {}
+                </script>
+              </body>
+              </html>
+            `);
           }
         }
       }
@@ -3669,22 +3764,13 @@ const PORT = 3000;
         console.warn("[VIP Direct Stream Extraction Error]:", directExtractErr);
       }
 
-      // Se o playerflix não retornou opções válidas ou está sem fontes seguras para esta mídia, comuta direto para o WatchPlayer Oficial
-      if (!ajaxHadValidSources) {
-        console.warn(`[VIP Player]: Provedor sem fontes válidas para ${resolvedId}. Redirecionando transparentemente para o WatchPlayer Oficial...`);
-        const wpTarget = (type === "tv" || type === "series")
-          ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
-          : `https://v1.watchplay.shop/movie/${resolvedId}`;
-        return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
-      }
-
       // 2. FALLBACK SEGURO VIA PROXY DE HTML COM AUTO-DESTRUIÇÃO DE LOADER E ANTI-POPUP
       const targetUrl = (type === "tv" || type === "series")
         ? `https://playerflix.ink/serie/${resolvedId}/${season}/${episode}`
         : `https://playerflix.ink/filme/${resolvedId}`;
 
       const looksBlocked = (html: string, status: number): boolean => {
-        if (status === 403 || status === 503) return true;
+        if (status === 403 || status === 503 || status === 404) return true;
         const lower = (html || "").toLowerCase();
         if (
           lower.includes("cf-error-details") ||
@@ -3693,11 +3779,19 @@ const PORT = 3000;
           lower.includes("just a moment") ||
           lower.includes("cf-browser-verification") ||
           lower.includes("ray id") ||
-          (lower.includes("error code") && lower.includes("cloudflare"))
+          (lower.includes("error code") && lower.includes("cloudflare")) ||
+          lower.includes("investidor.blog") ||
+          lower.includes("myplayer") ||
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("painel administrativo") ||
+          lower.includes("bem-vindo") ||
+          lower.includes("bem vindo") ||
+          lower.includes("acesso protegido por sessão segura")
         ) {
           return true;
         }
-        if (!lower.includes("base_config")) {
+        if (!lower.includes("base_config") && !lower.includes("<video") && !lower.includes("player")) {
           return true;
         }
         return false;
@@ -3714,7 +3808,7 @@ const PORT = 3000;
       let playerHtml = await myembedRes.text();
 
       if (looksBlocked(playerHtml, myembedRes.status)) {
-        console.warn(`[MyEmbed Stream] playerflix.ink bloqueado. Tentando myembed.biz...`);
+        console.warn(`[MyEmbed Stream] playerflix.ink bloqueado ou sem stream. Tentando myembed.biz...`);
         const fallbackUrl = (type === "tv" || type === "series")
           ? `https://myembed.biz/serie/${resolvedId}/${season}/${episode}`
           : `https://myembed.biz/filme/${resolvedId}`;
@@ -3730,11 +3824,29 @@ const PORT = 3000;
         const fallbackHtml = await fallbackRes.text();
 
         if (looksBlocked(fallbackHtml, fallbackRes.status)) {
-          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo. Redirecionando transparentemente para o WatchPlayer Oficial...`);
-          const wpTarget = (type === "tv" || type === "series")
-            ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
-            : `https://v1.watchplay.shop/movie/${resolvedId}`;
-          return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo para ${resolvedId}. Emitindo VIP_UNAVAILABLE.`);
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          return res.status(404).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8">
+              <style>
+                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+              </style>
+            </head>
+            <body>
+              <script>
+                try {
+                  window.parent.postMessage({ 
+                    type: "VIP_UNAVAILABLE", 
+                    reason: "no_valid_sources" 
+                  }, "*");
+                } catch(e) {}
+              </script>
+            </body>
+            </html>
+          `);
         }
 
         playerHtml = fallbackHtml;

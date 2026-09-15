@@ -291,7 +291,7 @@ export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse>
 };
 
 export const getAnimes = async (page: number = 1): Promise<TMDBResponse> => {
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&with_original_language=ja&vote_count.gte=5&include_adult=false`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&with_original_language=ja&vote_count.gte=20&include_adult=false`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 

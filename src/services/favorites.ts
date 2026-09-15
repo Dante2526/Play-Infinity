@@ -1,4 +1,4 @@
-import { CatalogItem, providerCatalogs, featured } from "../data";
+import { CatalogItem, providerCatalogs, featured, isMediaAvailable } from "../data";
 import { getDetails } from "./tmdb";
 
 export interface SeriesScheduleEpisode {
@@ -62,7 +62,7 @@ export const getAllCatalogItems = (): CatalogItem[] => {
     });
   });
 
-  cachedCatalogItems = Array.from(map.values());
+  cachedCatalogItems = Array.from(map.values()).filter(isMediaAvailable);
   return cachedCatalogItems;
 };
 
