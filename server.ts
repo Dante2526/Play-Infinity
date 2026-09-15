@@ -2956,7 +2956,8 @@ const PORT = 3000;
       const allowedDomains = [
         "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
         "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
-        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv"
+        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv",
+        "jmp2.uk", "amagi.tv", "amazonaws.com", "pluto.tv", "plutotv.net", "mediatailor"
       ];
       
       const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
@@ -2980,7 +2981,8 @@ const PORT = 3000;
 
       const headers: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*"
+        "Accept": "*/*",
+        "X-Forwarded-For": "177.100.100.1" // Spoof IP brasileiro para CDNs com geo-bloqueio (Amagi FAST, Pluto TV)
       };
 
       if (req.query.referer) {
