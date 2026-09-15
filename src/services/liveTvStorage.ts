@@ -78,9 +78,9 @@ export function getAllChannels(): LiveChannel[] {
     if (c.id === 'canal-adulto-1' || c.id === 'canal-adulto-2' || (c as any).category === '+18') {
       return false;
     }
-    const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1'));
+    const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1') || s.url.includes('mediatailor'));
     // Se o canal estiver no catálogo oficial e tiver apenas 1 servidor antigo ou url problemática, prioriza o catálogo oficial atualizado
-    if (initialMap.has(c.id) && (hasBrokenUrl || (c.servers && c.servers.length <= 1))) {
+    if (initialMap.has(c.id) && (hasBrokenUrl || (c.servers && c.servers.length < 2))) {
       return false;
     }
     return true;

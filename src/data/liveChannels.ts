@@ -177,8 +177,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
     servers: [
       {
-        name: 'Servidor 1 (N Sports)',
+        name: 'Servidor 1 (N Sports Ao Vivo)',
         url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (ge Fast Ao Vivo)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (FIFA+ BR Esportes)',
+        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 4 (Pluto Esportes)',
+        url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
         isProxy: true
       }
     ]
@@ -193,8 +208,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Red Bull Sports)',
-        url: 'https://d03ae6b5c6724c24867e97a3dc04934a.mediatailor.us-west-2.amazonaws.com/v1/master/ba62fe743df0fe93366eba3a257d792884136c7f/LINEAR-1026-WORBBRPTFAST-WHALETVPLUS/1026/hls/master/playlist.m3u8',
+        name: 'Servidor 1 (Automobilismo & F1 HD)',
+        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (N Sports Ao Vivo)',
+        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (ge Fast Oficial)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 4 (FIFA+ Esportes)',
+        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
         isProxy: true
       }
     ]
@@ -314,13 +344,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Adrenalina pura, eventos ao vivo de BMX, skate, Fórmula 1 e surfe.',
     servers: [
       {
-        name: 'Servidor Oficial',
-        url: 'https://d03ae6b5c6724c24867e97a3dc04934a.mediatailor.us-west-2.amazonaws.com/v1/master/ba62fe743df0fe93366eba3a257d792884136c7f/LINEAR-1026-WORBBRPTFAST-WHALETVPLUS/1026/hls/master/playlist.m3u8',
+        name: 'Servidor Oficial (Pluto HLS 1080p)',
+        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
-        url: 'https://d03ae6b5c6724c24867e97a3dc04934a.mediatailor.us-west-2.amazonaws.com/v1/master/ba62fe743df0fe93366eba3a257d792884136c7f/LINEAR-1026-WORBBRPTFAST-WHALETVPLUS/1026/hls/master/playlist.m3u8',
+        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor Backup (N Sports)',
+        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
         isProxy: true
       }
     ]

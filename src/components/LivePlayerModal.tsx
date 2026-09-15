@@ -194,6 +194,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
 
         let networkErrorCount = 0;
+        let mediaErrorCount = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!isMounted) return;
           if (data.fatal) {
@@ -210,8 +211,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                console.log('Recuperando erro de mídia HLS silenciosamente...');
-                hls.recoverMediaError();
+                mediaErrorCount += 1;
+                if (mediaErrorCount <= 1) {
+                  console.log('Recuperando erro de mídia HLS silenciosamente...');
+                  hls.recoverMediaError();
+                } else {
+                  console.log('Erro de mídia persistente/codec não suportado, alternando para próximo servidor...');
+                  switchToNextServer('erro de midia persistente');
+                }
                 break;
               default:
                 switchToNextServer('erro fatal hls');
