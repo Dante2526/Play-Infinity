@@ -3091,9 +3091,10 @@ const PORT = 3000;
           if (!trimmed) return line;
 
           if (trimmed.includes('URI="')) {
-            return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
+            return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
+                if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
                 return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}"`;
               } catch {
                 return `URI="${uri}"`;
@@ -3105,6 +3106,7 @@ const PORT = 3000;
 
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
+            if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
             return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}`;
           } catch {
             return trimmed;
