@@ -246,69 +246,72 @@ export function GlobalSearchPage({
         </div>
         
         {/* Input de Busca */}
-        <div className="relative w-full max-w-2xl mb-8 group">
-          <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-            {isSearching ? (
-              <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
-            ) : (
-              <Search className="w-5 h-5 text-neutral-500 group-focus-within:text-orange-500 transition-colors" />
-            )}
-          </div>
-          <input 
-            type="text" 
-            placeholder={isListening ? "Ouvindo sua voz... Fale agora..." : "Digite o nome do filme ou série (ex: Avatar, Harry Potter)..."} 
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={`w-full bg-[#111111] border rounded-full py-4 pl-16 ${searchQuery ? 'pr-24' : 'pr-16'} text-base md:text-lg text-white font-medium focus:outline-none transition-all shadow-xl placeholder:text-neutral-600 ${
-              isListening 
-                ? 'border-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_25px_rgba(234,88,12,0.3)]' 
-                : 'border-white/10 focus:border-orange-500/60 focus:ring-2 focus:ring-orange-500/20'
-            }`}
-            autoFocus
-          />
-          
-          <div className="absolute inset-y-0 right-4 flex items-center gap-1.5">
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                title="Limpar busca"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
+        <div className="w-full max-w-2xl mb-8 flex flex-col gap-3">
+          <div className="relative w-full group">
+            <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
+              {isSearching ? (
+                <Loader2 className="w-5 h-5 text-orange-500 animate-spin" />
+              ) : (
+                <Search className="w-5 h-5 text-neutral-500 group-focus-within:text-orange-500 transition-colors" />
+              )}
+            </div>
+            <input 
+              type="text" 
+              placeholder={isListening ? "Ouvindo sua voz... Fale agora..." : "Digite o nome do filme ou série (ex: Avatar, Harry Potter)..."} 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className={`w-full bg-[#111111] border rounded-full py-4 pl-14 ${searchQuery ? 'pr-24' : 'pr-14'} text-base md:text-lg text-white font-medium focus:outline-none transition-all shadow-xl placeholder:text-neutral-500 ${
+                isListening 
+                  ? 'border-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_25px_rgba(234,88,12,0.3)]' 
+                  : 'border-white/10 focus:border-orange-500/60 focus:ring-2 focus:ring-orange-500/20'
+              }`}
+              autoFocus
+            />
+            
+            <div className="absolute inset-y-0 right-3.5 flex items-center gap-1.5">
+              {searchQuery && (
+                <button 
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Limpar busca"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
 
-            {/* BOTÃO DE COMANDO DE VOZ */}
-            {isVoiceSupported && (
-              <button
-                type="button"
-                onClick={toggleListening}
-                className={`p-2 rounded-full transition-all cursor-pointer relative flex items-center justify-center ${
-                  isListening 
-                    ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.7)] scale-105' 
-                    : 'text-neutral-400 hover:text-orange-400 hover:bg-orange-500/10'
-                }`}
-                title={isListening ? "Parar de ouvir" : "Pesquisar por voz"}
-              >
-                {isListening ? (
-                  <>
-                    <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
-                    <Mic className="w-5 h-5 relative z-10 animate-pulse text-white" />
-                  </>
-                ) : (
-                  <Mic className="w-5 h-5" />
-                )}
-              </button>
-            )}
+              {/* BOTÃO DE COMANDO DE VOZ */}
+              {isVoiceSupported && (
+                <button
+                  type="button"
+                  onClick={toggleListening}
+                  className={`p-2 rounded-full transition-all cursor-pointer relative flex items-center justify-center ${
+                    isListening 
+                      ? 'bg-gradient-to-r from-red-600 to-orange-600 text-white shadow-[0_0_15px_rgba(239,68,68,0.7)] scale-105' 
+                      : 'text-neutral-400 hover:text-orange-400 hover:bg-orange-500/10'
+                  }`}
+                  title={isListening ? "Parar de ouvir" : "Pesquisar por voz"}
+                >
+                  {isListening ? (
+                    <>
+                      <span className="absolute inset-0 rounded-full bg-red-500/40 animate-ping pointer-events-none" />
+                      <Mic className="w-5 h-5 relative z-10 animate-pulse text-white" />
+                    </>
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* HUD DE ESCUTA DE VOZ ATIVA */}
           {isListening && (
-            <div className="mt-3 p-4 rounded-2xl bg-[#161616] border border-orange-500/50 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="p-4 rounded-2xl bg-[#161616] border border-orange-500/50 shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <div className="relative flex items-center justify-center w-10 h-10 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/40 shrink-0">
                   <span className="absolute inset-0 rounded-full bg-orange-500/30 animate-ping" />
-                  <Mic className="w-5 h-5 relative z-10 animate-bounce" />
+                  <Mic className="w-5 h-5 relative z-10 animate-pulse" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -336,7 +339,7 @@ export function GlobalSearchPage({
               <button
                 type="button"
                 onClick={toggleListening}
-                className="w-full sm:w-auto px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 text-center"
+                className="w-full sm:w-auto px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 text-center"
               >
                 Concluir / Cancelar
               </button>
@@ -345,7 +348,7 @@ export function GlobalSearchPage({
 
           {/* MENSAGEM DE ERRO OU AVISO DA VOZ */}
           {voiceError && (
-            <div className="mt-3 p-3 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
+            <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center justify-between gap-3 animate-in fade-in">
               <div className="flex items-center gap-2 min-w-0">
                 <Info className="w-4 h-4 text-red-400 shrink-0" />
                 <span className="truncate">{voiceError}</span>
