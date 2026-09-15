@@ -164,6 +164,48 @@ export const releases = [
       "https://image.tmdb.org/t/p/w500/8LJJjLjAzAwXS40S5mx79PJ2jSs.jpg",
     playerUrl: "https://v1.watchplay.shop/movie/693134",
   },
+  {
+    id: 1022789,
+    tmdbId: 1022789,
+    title: "DIVERTIDA MENTE 2",
+    imageUrl: "https://image.tmdb.org/t/p/w500/lHKNS35r4RTa9GO72vdadMLxoiV.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/1022789",
+  },
+  {
+    id: 823464,
+    tmdbId: 823464,
+    title: "GODZILLA E KONG: O NOVO IMPÉRIO",
+    imageUrl: "https://image.tmdb.org/t/p/w500/fWSGD2yrzz6hscocnMD8AEXIThk.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/823464",
+  },
+  {
+    id: 1011985,
+    tmdbId: 1011985,
+    title: "KUNG FU PANDA 4",
+    imageUrl: "https://image.tmdb.org/t/p/w500/aNK6MA5EApIo0UJE7ZWSYcZBJKy.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/1011985",
+  },
+  {
+    id: 786892,
+    tmdbId: 786892,
+    title: "FURIOSA: UMA SAGA MAD MAX",
+    imageUrl: "https://image.tmdb.org/t/p/w500/7qOSKoOAPgemYhBwbJgBWcCxPWZ.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/786892",
+  },
+  {
+    id: 519182,
+    tmdbId: 519182,
+    title: "MEU MALVADO FAVORITO 4",
+    imageUrl: "https://image.tmdb.org/t/p/w500/s8BefU3RIJrfipTpsDtOiatlp8j.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/519182",
+  },
+  {
+    id: 558449,
+    tmdbId: 558449,
+    title: "GLADIADOR 2",
+    imageUrl: "https://image.tmdb.org/t/p/w500/342bly9MqveL65TnEFzx8TTUxcL.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/558449",
+  }
 ];
 
 export const newest = [
@@ -194,6 +236,54 @@ export const newest = [
       "https://image.tmdb.org/t/p/w500/el1KQzwdIm17I3A6cYPfsVIWhfX.jpg",
     playerUrl: "https://v1.watchplay.shop/series/100088/1/1",
   },
+  {
+    id: 106379,
+    tmdbId: 106379,
+    title: "FALLOUT",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/tQRX6GbYooU7kUaarKf5YXDTONy.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/106379/1/1",
+  },
+  {
+    id: 108545,
+    tmdbId: 108545,
+    title: "O PROBLEMA DOS 3 CORPOS",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/rqMYUtyrRJrZ1zKQvBfLgPh1c0T.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/108545/1/1",
+  },
+  {
+    id: 103540,
+    tmdbId: 103540,
+    title: "PERCY JACKSON E OS OLIMPIANOS",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/4sLiVmCiRiX9abW4niJyNZx15bK.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/103540/1/1",
+  },
+  {
+    id: 126308,
+    tmdbId: 126308,
+    title: "XÓGUM: A GLORIOSA SAGA DO JAPÃO",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/gaOb9hyCDUcbZiTYcHy7mIFmNo.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/126308/1/1",
+  },
+  {
+    id: 194764,
+    tmdbId: 194764,
+    title: "PINGUIM",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/pPUNmQZUh7h6w2423VvtzUeg1LD.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/194764/1/1",
+  },
+  {
+    id: 138502,
+    tmdbId: 138502,
+    title: "X-MEN '97",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/yvqC5hw3rkW9vputtZ8PlwYhJRp.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/138502/1/1",
+  }
 ];
 
 export const animes = [
@@ -401,6 +491,8 @@ export const WATCHPLAY_ANIME_IDS = [
 
 // Lista de animes e títulos que NÃO possuem fontes homologadas e NÃO devem aparecer no app
 export const UNAVAILABLE_TITLES_OR_IDS = [
+  939243,  // A Ilha Esquecida
+  1059955, // The Last Photograph
   65733,   // Doraemon: O Gato do Futuro
   57911,   // Doraemon (1979)
   299627,  // Doraemon Specials
