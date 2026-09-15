@@ -18,6 +18,7 @@ import {
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
+import { getAvailableEpisodes } from "../services/episodeAvailability";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -159,6 +160,7 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
+  const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
@@ -384,7 +386,7 @@ export function VideoPlayerModal({
     }
   }, [availableSeasons, isSeries, initialSeason, season]);
 
-  // Busca episódios da temporada ativa
+  // Busca episódios da temporada ativa e valida disponibilidade real nos servidores homologados
   useEffect(() => {
     if (!isOpen || !isSeries) return;
     const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
@@ -392,10 +394,24 @@ export function VideoPlayerModal({
 
     let isMounted = true;
     setLoadingSeason(true);
+    setVerifiedAvailableEpisodes(null);
+
     getSeasonDetails(numericId, season)
       .then(data => {
         if (isMounted && data) {
           setSeasonData(data);
+          const totalEpCount = data.episodes?.length || 24;
+
+          // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
+          getAvailableEpisodes(numericId, season, totalEpCount)
+            .then(availList => {
+              if (isMounted && Array.isArray(availList) && availList.length > 0) {
+                setVerifiedAvailableEpisodes(availList);
+              }
+            })
+            .catch(e => {
+              console.warn("[VideoPlayerModal] Erro na verificação de stream:", e);
+            });
         }
       })
       .catch(err => {
@@ -410,8 +426,23 @@ export function VideoPlayerModal({
     };
   }, [isOpen, isSeries, tmdbId, resolvedId, season]);
 
-  // Total de episódios da temporada selecionada
+  // Lista filtrada de episódios do TMDB contendo apenas os que realmente estão no servidor
+  const filteredSeasonEpisodes = useMemo(() => {
+    if (!seasonData?.episodes) return [];
+    if (verifiedAvailableEpisodes && Array.isArray(verifiedAvailableEpisodes)) {
+      return seasonData.episodes.filter(e => verifiedAvailableEpisodes.includes(e.episode_number));
+    }
+    return seasonData.episodes;
+  }, [seasonData, verifiedAvailableEpisodes]);
+
+  // Total de episódios da temporada selecionada com streaming comprovado
   const totalSeasonEpisodes = useMemo(() => {
+    if (filteredSeasonEpisodes.length > 0) {
+      return filteredSeasonEpisodes.length;
+    }
+    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
+      return verifiedAvailableEpisodes.length;
+    }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       return seasonData.episodes.length;
     }
@@ -420,15 +451,31 @@ export function VideoPlayerModal({
       return sInfo.episode_count;
     }
     return 8;
-  }, [seasonData, seriesDetails, season]);
+  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, seriesDetails, season]);
 
-  // Array numérico de episódios para o seletor
+  // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
   const episodeNumbers = useMemo(() => {
+    if (filteredSeasonEpisodes.length > 0) {
+      return filteredSeasonEpisodes.map(e => e.episode_number);
+    }
+    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
+      return verifiedAvailableEpisodes;
+    }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       return seasonData.episodes.map(e => e.episode_number);
     }
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
-  }, [seasonData, totalSeasonEpisodes]);
+  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
+
+  // Se o episódio atual selecionado não existir na lista de disponíveis, auto-ajusta para o último disponível
+  useEffect(() => {
+    if (isSeries && episodeNumbers.length > 0 && !episodeNumbers.includes(episode)) {
+      const fallbackEp = episodeNumbers[episodeNumbers.length - 1];
+      if (fallbackEp) {
+        setEpisode(fallbackEp);
+      }
+    }
+  }, [episodeNumbers, isSeries, episode]);
 
   // Auto-scroll do botão do episódio ativo
   useEffect(() => {
@@ -1523,7 +1570,7 @@ export function VideoPlayerModal({
               totalEpisodes={totalSeasonEpisodes}
               availableSeasons={availableSeasons}
               onSeasonChange={handleSeasonChange}
-              episodesList={seasonData?.episodes}
+              episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
               onClose={handleCloseModal}
               onEpisodeChange={handleEpisodeChange}
               onSkipIntro={() => handleSkipIntro()}

@@ -3346,6 +3346,148 @@ process.on("uncaughtException", (err) => {
     return res.redirect(`/api/myembed-stream?id=${id}&type=${type}&s=${season || 1}&e=${episode || 1}`);
   });
 
+  // Cache em memória para verificação de episódios disponíveis
+  const episodesAvailabilityCache = new Map<string, { timestamp: number; episodes: number[] }>();
+  const EPISODES_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+
+  // API: Verificador em tempo real de episódios disponíveis nos servidores homologados
+  app.get("/api/series/available-episodes", async (req, res) => {
+    try {
+      const rawId = String(req.query.id || "").trim();
+      const season = parseInt(String(req.query.season || "1"), 10) || 1;
+      const total = Math.min(Math.max(parseInt(String(req.query.total || "24"), 10) || 1, 1), 100);
+
+      if (!rawId) {
+        return res.status(400).json({ success: false, error: "ID da série obrigatório" });
+      }
+
+      // Se for IMDb tt..., converte para TMDB se possível
+      let resolvedId = rawId;
+      if (rawId.startsWith("tt")) {
+        try {
+          const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+          if (tmdbApiKey) {
+            const findRes = await fetch(
+              `https://api.themoviedb.org/3/find/${rawId}?api_key=${tmdbApiKey}&external_source=imdb_id`,
+              { signal: AbortSignal.timeout(3000) }
+            );
+            if (findRes.ok) {
+              const findData = await findRes.json();
+              if (findData.tv_results?.[0]?.id) {
+                resolvedId = String(findData.tv_results[0].id);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      const cacheKey = `${resolvedId}_${season}`;
+      const cached = episodesAvailabilityCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < EPISODES_CACHE_TTL) {
+        return res.json({
+          success: true,
+          id: resolvedId,
+          season,
+          availableEpisodes: cached.episodes,
+          totalAvailable: cached.episodes.length,
+          cached: true,
+        });
+      }
+
+      // Função de sondagem de um episódio individual
+      const checkEpisode = async (ep: number): Promise<boolean> => {
+        try {
+          // 1. Sondagem WatchPlayer (HEAD request rápido)
+          const wpPromise = (async () => {
+            try {
+              const wpRes = await fetch(`https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${ep}`, {
+                method: "HEAD",
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                },
+                signal: AbortSignal.timeout(3500),
+              });
+              return wpRes.status === 200 || wpRes.status === 301 || wpRes.status === 302;
+            } catch {
+              return false;
+            }
+          })();
+
+          // 2. Sondagem VIP Player Ajax
+          const vipPromise = (async () => {
+            try {
+              const ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=tv&id=${resolvedId}&season=${season}&episode=${ep}`;
+              const ajaxRes = await fetch(ajaxUrl, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  "Referer": "https://playerflix.ink/",
+                  "X-Requested-With": "XMLHttpRequest",
+                },
+                signal: AbortSignal.timeout(3500),
+              });
+              if (!ajaxRes.ok) return false;
+              const j = await ajaxRes.json();
+              if (j && j.status && Array.isArray(j.data?.options)) {
+                const valid = j.data.options.filter((opt: any) => {
+                  const u = (opt.embed || "").toLowerCase();
+                  return (
+                    !u.includes("superflix") &&
+                    !u.includes("sfapi") &&
+                    !u.includes("byse") &&
+                    !u.includes("streamberry")
+                  );
+                });
+                return valid.length > 0;
+              }
+              return false;
+            } catch {
+              return false;
+            }
+          })();
+
+          const [hasWp, hasVip] = await Promise.all([wpPromise, vipPromise]);
+          return hasWp || hasVip;
+        } catch {
+          return false;
+        }
+      };
+
+      // Executa sondagem paralela de todos os episódios da temporada
+      const promises: Promise<{ ep: number; available: boolean }>[] = [];
+      for (let ep = 1; ep <= total; ep++) {
+        promises.push(
+          checkEpisode(ep).then((available) => ({ ep, available }))
+        );
+      }
+
+      const results = await Promise.all(promises);
+      const availableEpisodes = results.filter((r) => r.available).map((r) => r.ep);
+
+      // Salva no cache se encontrou episódios
+      if (availableEpisodes.length > 0) {
+        episodesAvailabilityCache.set(cacheKey, {
+          timestamp: Date.now(),
+          episodes: availableEpisodes,
+        });
+      }
+
+      return res.json({
+        success: true,
+        id: resolvedId,
+        season,
+        availableEpisodes:
+          availableEpisodes.length > 0
+            ? availableEpisodes
+            : Array.from({ length: total }, (_, i) => i + 1),
+        totalAvailable: availableEpisodes.length > 0 ? availableEpisodes.length : total,
+        cached: false,
+      });
+    } catch (err: any) {
+      console.error("[Available Episodes Error]:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   // API: Proxy de Dados do Playerflix / VIP Player
   app.get(["/inc/Ajax.php", "/api/playerflix-ajax"], async (req, res) => {
     try {
