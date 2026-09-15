@@ -33,7 +33,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2 (ge Fast Ao Vivo)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor 3 (Backup Alternativo)',
@@ -96,7 +96,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 1 (ge Fast Oficial)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor 2 (Stream Primário HD)',
@@ -137,7 +137,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2 (ge Fast Ao Vivo)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor 3 (N Sports Ao Vivo)',
@@ -158,7 +158,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 1 (ge Fast Oficial)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor 2 (Proxy HLS)',
@@ -253,7 +253,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -316,7 +316,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial',
         url: 'https://d03ae6b5c6724c24867e97a3dc04934a.mediatailor.us-west-2.amazonaws.com/v1/master/ba62fe743df0fe93366eba3a257d792884136c7f/LINEAR-1026-WORBBRPTFAST-WHALETVPLUS/1026/hls/master/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -337,7 +337,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -360,7 +360,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 1 (ge Fast Globo)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor 2 (Proxy Play Infinity)',
@@ -477,7 +477,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-666c9c60a7efd40008f552f0.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -500,7 +500,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-61b790b985706b00072cb797.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -521,7 +521,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-5f171d3442a0500007362f22.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -542,7 +542,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-5f357e91b18f0b00073583d2.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -565,7 +565,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-5f4fb4cf605ddf000748e16f.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
@@ -586,7 +586,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor Oficial Direto',
         url: 'https://jmp2.uk/plu-5ffcc5130fd98c0007f2e216.m3u8',
-        isProxy: false
+        isProxy: true
       },
       {
         name: 'Servidor Proxy Play Infinity',
