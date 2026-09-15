@@ -593,5 +593,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         url: 'https://jmp2.uk/plu-5ffcc5130fd98c0007f2e216.m3u8',
         isProxy: true
       }
+    ]
   }
 ];
