@@ -231,7 +231,13 @@ export function VideoPlayerModal({
   // Sincroniza estado de tela cheia do navegador
   useEffect(() => {
     const handleFullscreenStateChange = () => {
-      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).webkitCurrentFullScreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
       setIsFullscreen(isCurrentlyFullscreen);
       if (!isCurrentlyFullscreen) {
         setIsWidescreen(false);
@@ -246,10 +252,14 @@ export function VideoPlayerModal({
 
     document.addEventListener("fullscreenchange", handleFullscreenStateChange);
     document.addEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenStateChange);
 
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenStateChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenStateChange);
     };
   }, []);
 
@@ -1038,8 +1048,7 @@ export function VideoPlayerModal({
   };
 
   const handleFullScreen = async () => {
-    const stage = document.documentElement; // Força tela cheia no navegador inteiro para esconder barras mobile
-    const isCurrentlyFull = isExpanded;
+    const isCurrentlyFull = isExpanded || !!document.fullscreenElement;
 
     if (isCurrentlyFull) {
       setIsWidescreen(false);
@@ -1055,32 +1064,44 @@ export function VideoPlayerModal({
     } else {
       setIsWidescreen(true);
 
-      // Se a tela do celular estiver na vertical (altura > largura), ativa imediatamente a rotação de 90°
+      // 1. Tenta tela cheia nativa do navegador IMEDIATAMENTE no clique síncrono com navigationUI: 'hide'
+      const elem = document.documentElement;
+      const requestFS =
+        elem.requestFullscreen ||
+        (elem as any).webkitRequestFullscreen ||
+        (elem as any).mozRequestFullScreen ||
+        (elem as any).msRequestFullscreen;
+
+      if (requestFS) {
+        try {
+          await requestFS.call(elem, { navigationUI: "hide" });
+        } catch {
+          try {
+            await requestFS.call(elem);
+          } catch (err) {
+            console.warn("Fullscreen request fallback:", err);
+          }
+        }
+      }
+
+      // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
+      let lockedLandscape = false;
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          await (screen.orientation as any).lock("landscape");
+          lockedLandscape = true;
+          setIsRotated(false);
+        } catch (err) {
+          // Fallback para dispositivos sem lock() ou quando bloqueado pelo SO
+        }
+      }
+
+      // 3. Se a tela estiver na vertical e o SO não tiver rotacionado nativamente, ativa o fallback de rotação CSS
       const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-      if (isPortrait) {
+      if (isPortrait && !lockedLandscape) {
         setIsRotated(true);
       } else {
         setIsRotated(false);
-      }
-
-      // Tenta travar em orientação paisagem no mobile se suportado pelo sistema
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
-        try {
-          (screen.orientation as any).lock("landscape").catch(() => {});
-        } catch (err) {}
-      }
-
-      // Tenta tela cheia nativa do navegador
-      if (stage) {
-        try {
-          if (stage.requestFullscreen) {
-            await stage.requestFullscreen();
-          } else if ((stage as any).webkitRequestFullscreen) {
-            await (stage as any).webkitRequestFullscreen();
-          }
-        } catch (err) {
-          console.log("Modo expandido CSS ativo:", err);
-        }
       }
     }
   };
@@ -1430,10 +1451,10 @@ export function VideoPlayerModal({
                     position: "absolute",
                     top: "50%",
                     left: "50%",
-                    width: "100vh",
-                    height: "100vw",
-                    maxWidth: "100vh",
-                    maxHeight: "100vw",
+                    width: "100dvh",
+                    height: "100dvw",
+                    maxWidth: "100dvh",
+                    maxHeight: "100dvw",
                     transform: "translate(-50%, -50%) rotate(90deg)",
                     zIndex: 20,
                   }
