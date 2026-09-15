@@ -208,8 +208,8 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Automobilismo & F1 HD)',
-        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
+        name: 'Servidor 1 (ge Fast / SporTV Ao Vivo)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       },
       {
@@ -218,13 +218,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         isProxy: true
       },
       {
-        name: 'Servidor 3 (ge Fast Oficial)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 3 (FIFA+ Esportes)',
+        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor 4 (FIFA+ Esportes)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        name: 'Servidor 4 (Automobilismo & Radical Backup)',
+        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
         isProxy: true
       }
     ]
