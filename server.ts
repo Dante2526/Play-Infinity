@@ -2957,7 +2957,8 @@ const PORT = 3000;
         "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
         "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
         "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv",
-        "jmp2.uk", "amagi.tv", "amazonaws.com", "pluto.tv", "plutotv.net", "mediatailor"
+        "jmp2.uk", "amagi.tv", "amazonaws.com", "pluto.tv", "plutotv.net", "mediatailor",
+        "otteravision.com", "wurl.com", "45.162.64.114"
       ];
       
       const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
