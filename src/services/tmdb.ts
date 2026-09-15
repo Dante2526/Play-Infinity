@@ -224,6 +224,10 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
   return fetchTmdbSafe<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, DEFAULT_SEASON);
 };
 
+export const getSimilarRecommendations = async (id: number, type: 'movie' | 'tv'): Promise<TMDBResponse> => {
+  return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/${type}/${id}/recommendations?language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
+};
+
 // TMDB Network IDs & Watch Provider IDs for streaming brands:
 // Netflix: network 213, provider 8
 // Disney+: network 2739, provider 337
@@ -352,89 +356,127 @@ export interface TrailerVideo {
   isDubbed: boolean;
   isSubtitled: boolean;
   language: string;
+  official?: boolean;
 }
 
 /**
- * Busca o melhor trailer oficial para um filme ou série no TMDB,
+ * Busca todos os trailers e teasers oficiais disponíveis para um filme ou série no TMDB,
+ * consultando simultaneamente as trilhas em Português (PT-BR) e Global,
  * priorizando versões dubladas em português (PT-BR) e legendadas.
  */
-export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<TrailerVideo | null> => {
-  if (!id || isNaN(Number(id))) return null;
+export const getTrailerList = async (id: number, type: 'movie' | 'tv'): Promise<TrailerVideo[]> => {
+  if (!id || isNaN(Number(id))) return [];
 
   try {
-    // 1. Busca vídeos em Português do Brasil (pt-BR)
+    // 1. Busca em paralelo vídeos em Português do Brasil (pt-BR) e no catálogo global (en-US / all)
     const ptUrl = `${BASE_URL}/${type}/${id}/videos?language=pt-BR`;
-    const ptRes = await fetch(ptUrl, options);
-    let ptVideos: any[] = [];
-    if (ptRes.ok) {
-      const ptData = await ptRes.json();
-      ptVideos = ptData?.results || [];
+    const allUrl = `${BASE_URL}/${type}/${id}/videos`;
+
+    const [ptRes, allRes] = await Promise.all([
+      fetch(ptUrl, options).catch(() => null),
+      fetch(allUrl, options).catch(() => null)
+    ]);
+
+    let rawVideos: any[] = [];
+
+    if (ptRes && ptRes.ok) {
+      try {
+        const ptData = await ptRes.json();
+        if (Array.isArray(ptData?.results)) {
+          rawVideos.push(...ptData.results);
+        }
+      } catch {}
     }
 
-    const filterYouTube = (list: any[]) => list.filter(v => v.site === 'YouTube' && v.key);
-
-    let candidates = filterYouTube(ptVideos);
-
-    // 2. Se não houver nenhum em pt-BR, busca no catálogo geral com fallback en-US
-    if (candidates.length === 0) {
-      const fallbackUrl = `${BASE_URL}/${type}/${id}/videos?language=en-US`;
-      const fallbackRes = await fetch(fallbackUrl, options);
-      if (fallbackRes.ok) {
-        const fallbackData = await fallbackRes.json();
-        candidates = filterYouTube(fallbackData?.results || []);
-      }
-    }
-
-    // 3. Fallback extra sem filtro de idioma se ainda vazio
-    if (candidates.length === 0) {
-      const allUrl = `${BASE_URL}/${type}/${id}/videos`;
-      const allRes = await fetch(allUrl, options);
-      if (allRes.ok) {
+    if (allRes && allRes.ok) {
+      try {
         const allData = await allRes.json();
-        candidates = filterYouTube(allData?.results || []);
+        if (Array.isArray(allData?.results)) {
+          rawVideos.push(...allData.results);
+        }
+      } catch {}
+    }
+
+    // 2. Filtra estritamente vídeos do YouTube com chave válida
+    const youtubeVideos = rawVideos.filter(
+      v => v && v.site === 'YouTube' && typeof v.key === 'string' && v.key.trim().length >= 5
+    );
+
+    if (youtubeVideos.length === 0) return [];
+
+    // 3. Deduplica por chave do YouTube (key)
+    const uniqueMap = new Map<string, any>();
+    for (const v of youtubeVideos) {
+      const existing = uniqueMap.get(v.key);
+      if (!existing) {
+        uniqueMap.set(v.key, v);
+      } else {
+        // Se já existe, prefere a entrada que tiver mais informações ou marcação pt
+        if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') {
+          uniqueMap.set(v.key, v);
+        }
       }
     }
 
-    if (candidates.length === 0) return null;
+    const candidates = Array.from(uniqueMap.values());
 
-    // 4. Sistema de pontuação: Dublado > Legendado > Trailer Oficial > Outros
+    // 4. Sistema de pontuação refinado
     const scoreVideo = (v: any) => {
       let score = 0;
       const lowerName = (v.name || '').toLowerCase();
-      const isDub = lowerName.includes('dublado') || lowerName.includes('dub');
-      const isLeg = lowerName.includes('legendado') || lowerName.includes('leg');
+      const isDub = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br') || lowerName.includes('audio br');
+      const isLeg = lowerName.includes('legendado') || lowerName.includes('leg') || lowerName.includes('sub');
+      const isShort = lowerName.includes('#shorts') || lowerName.includes('shorts') || lowerName.includes('short');
+      const isBts = lowerName.includes('behind the scenes') || lowerName.includes('bastidores') || lowerName.includes('making of');
 
-      if (isDub) score += 1000;
-      if (isLeg) score += 500;
-      if (v.type === 'Trailer') score += 100;
-      if (v.type === 'Teaser') score += 30;
-      if (v.official) score += 50;
-      if (v.iso_639_1 === 'pt') score += 200;
+      if (isDub) score += 3000;
+      if (isLeg) score += 2000;
+      if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') score += 1200;
+
+      if (v.type === 'Trailer') score += 800;
+      else if (v.type === 'Teaser') score += 400;
+      else if (v.type === 'Clip') score += 100;
+      else score += 50;
+
+      if (v.official) score += 300;
+
+      if (isShort) score -= 1500;
+      if (isBts) score -= 1000;
 
       return score;
     };
 
     candidates.sort((a, b) => scoreVideo(b) - scoreVideo(a));
-    const best = candidates[0];
 
-    const lowerBestName = (best.name || '').toLowerCase();
-    const isDubbed = lowerBestName.includes('dublado') || lowerBestName.includes('dub');
-    const isSubtitled = lowerBestName.includes('legendado') || lowerBestName.includes('leg');
+    return candidates.map((v) => {
+      const lowerName = (v.name || '').toLowerCase();
+      const isDubbed = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br');
+      const isSubtitled = !isDubbed && (lowerName.includes('legendado') || lowerName.includes('leg') || v.iso_639_1 === 'pt');
 
-    return {
-      id: best.id,
-      key: best.key,
-      name: best.name || 'Trailer Oficial',
-      site: best.site,
-      type: best.type || 'Trailer',
-      isDubbed,
-      isSubtitled: !isDubbed && (isSubtitled || best.iso_639_1 === 'pt'),
-      language: best.iso_639_1 || 'pt'
-    };
+      return {
+        id: v.id,
+        key: v.key.trim(),
+        name: v.name || (v.type === 'Teaser' ? 'Teaser Oficial' : 'Trailer Oficial'),
+        site: v.site,
+        type: v.type || 'Trailer',
+        isDubbed,
+        isSubtitled,
+        language: v.iso_639_1 || 'pt',
+        official: Boolean(v.official)
+      };
+    });
   } catch (err) {
-    console.warn(`[getTrailer] Erro ao buscar trailer para ${type}/${id}:`, err);
-    return null;
+    console.warn(`[getTrailerList] Erro ao buscar trailers para ${type}/${id}:`, err);
+    return [];
   }
+};
+
+/**
+ * Retorna o melhor trailer oficial único para um filme ou série no TMDB
+ */
+export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<TrailerVideo | null> => {
+  const list = await getTrailerList(id, type);
+  return list.length > 0 ? list[0] : null;
 };
 
 

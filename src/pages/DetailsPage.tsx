@@ -35,6 +35,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
+import { getAvailableEpisodes } from "../services/episodeAvailability";
 import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
@@ -58,6 +59,8 @@ import {
   Season,
   getTrending,
   getTrailer,
+  getTrailerList,
+  getSimilarRecommendations,
   TrailerVideo
 } from "../services/tmdb";
 import { VideoPlayerModal } from "../components/VideoPlayerModal";
@@ -138,7 +141,8 @@ export function DetailsPage({
   onBack: () => void, 
   onItemClick: (id: number, item?: CatalogItem) => void,
   onPlay?: OnPlayHandler,
-  onNavigateToCalendar?: () => void
+  onNavigateToCalendar?: () => void,
+  key?: React.Key
 }) {
   const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
   const [item, setItem] = useState<CatalogItem>(() => {
@@ -147,6 +151,7 @@ export function DetailsPage({
   });
   
   const [tmdbDetails, setTmdbDetails] = useState<TMDBDetails | null>(null);
+  const [tmdbSimilar, setTmdbSimilar] = useState<CatalogItem[]>([]);
   const [loadingTmdb, setLoadingTmdb] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState<Season | null>(null);
@@ -155,12 +160,25 @@ export function DetailsPage({
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
 
+  // Sincronizar item e dados quando itemId ou initialItem mudarem
+  useEffect(() => {
+    if (initialItem) {
+      setItem(initialItem);
+    } else {
+      const found = allCatalogs.find(i => i.id === itemId);
+      if (found) setItem(found);
+    }
+  }, [itemId, initialItem, allCatalogs]);
+
   useEffect(() => {
     setComments(getCommentsForItem(commentTargetId));
   }, [commentTargetId]);
   const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId));
   const [, setWatchedUpdateTick] = useState(0);
   const [trailerVideo, setTrailerVideo] = useState<TrailerVideo | null>(null);
+  const [trailerVideosList, setTrailerVideosList] = useState<TrailerVideo[]>([]);
+  const [selectedTrailerIndex, setSelectedTrailerIndex] = useState<number>(0);
+  const [isTrailerModalOpen, setIsTrailerModalOpen] = useState<boolean>(false);
   const [loadingTrailer, setLoadingTrailer] = useState<boolean>(false);
 
   // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
@@ -209,13 +227,45 @@ export function DetailsPage({
         setLoadingTmdb(true);
         setLoadingTrailer(true);
 
-        const [details, trailer] = await Promise.all([
+        const [details, trailers, recommendations] = await Promise.all([
           getDetails(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null),
-          getTrailer(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null)
+          getTrailerList(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => []),
+          getSimilarRecommendations(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null)
         ]);
 
         if (isMounted) {
-          if (trailer) setTrailerVideo(trailer);
+          if (Array.isArray(trailers) && trailers.length > 0) {
+            setTrailerVideosList(trailers);
+            setTrailerVideo(trailers[0]);
+            setSelectedTrailerIndex(0);
+          } else {
+            setTrailerVideosList([]);
+            setTrailerVideo(null);
+          }
+
+          if (recommendations && Array.isArray(recommendations.results) && recommendations.results.length > 0) {
+            const formattedRecs: CatalogItem[] = recommendations.results
+              .filter((r: any) => r.poster_path && r.id !== Number(targetId))
+              .slice(0, 10)
+              .map((r: any) => ({
+                id: r.id,
+                tmdbId: r.id,
+                title: r.title || r.name || 'Título Semelhante',
+                type: (r.media_type === 'tv' || item.type === 'series') ? 'series' : 'movie',
+                imageUrl: formatImageUrl(r.poster_path, 'w500'),
+                posterUrl: formatImageUrl(r.poster_path, 'w500'),
+                backdropUrl: r.backdrop_path ? formatImageUrl(r.backdrop_path, 'original') : formatImageUrl(r.poster_path, 'w500'),
+                synopsis: r.overview || '',
+                year: r.release_date ? parseInt(r.release_date.substring(0, 4)) : r.first_air_date ? parseInt(r.first_air_date.substring(0, 4)) : 2024,
+                rating: r.vote_average ? `${r.vote_average.toFixed(1)} ★` : '8.5 ★',
+                genres: [],
+                match: Math.round((r.vote_average || 8) * 10)
+              }));
+            setTmdbSimilar(formattedRecs);
+          } else {
+            setTmdbSimilar([]);
+          }
+
           setLoadingTrailer(false);
         }
 
@@ -278,16 +328,27 @@ export function DetailsPage({
     }
   }, [availableSeasons, selectedSeason]);
 
+  const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = React.useState<number[] | null>(null);
+
   // Buscar episódios reais da temporada selecionada no TMDB sempre que mudar série ou temporada
   useEffect(() => {
     if (!isSeries || !effectiveTmdbId || isNaN(Number(effectiveTmdbId))) return;
     let isMounted = true;
     setLoadingSeason(true);
+    setVerifiedAvailableEpisodes(null);
 
     getSeasonDetails(Number(effectiveTmdbId), selectedSeason)
       .then(data => {
         if (isMounted && data && !('status_code' in (data as any))) {
           setSeasonData(data);
+          const totalCount = data.episodes?.length || 24;
+          getAvailableEpisodes(Number(effectiveTmdbId), selectedSeason, totalCount)
+            .then(availList => {
+              if (isMounted && Array.isArray(availList) && availList.length > 0) {
+                setVerifiedAvailableEpisodes(availList);
+              }
+            })
+            .catch(() => {});
         }
       })
       .catch(err => {
@@ -302,10 +363,14 @@ export function DetailsPage({
     };
   }, [isSeries, effectiveTmdbId, selectedSeason]);
 
-  // Lista dinâmica de episódios formatados da temporada atual
+  // Lista dinâmica de episódios formatados da temporada atual com streaming comprovado
   const currentEpisodes = React.useMemo(() => {
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
-      return seasonData.episodes.map(ep => ({
+      let eps = seasonData.episodes;
+      if (verifiedAvailableEpisodes && Array.isArray(verifiedAvailableEpisodes)) {
+        eps = eps.filter(ep => verifiedAvailableEpisodes.includes(ep.episode_number));
+      }
+      return eps.map(ep => ({
         ep: ep.episode_number,
         name: ep.name && ep.name.trim() !== "" ? ep.name : `Episódio ${ep.episode_number}`,
         duration: (ep as any).runtime ? `${(ep as any).runtime}m` : "24m",
@@ -318,8 +383,9 @@ export function DetailsPage({
 
     // Fallback dinâmico caso a API falhe ou ainda esteja carregando
     const count = seasonData?.episode_count || tmdbDetails?.seasons?.find(s => s.season_number === selectedSeason)?.episode_count || 6;
-    return Array.from({ length: Math.min(count, 50) }, (_, idx) => {
-      const epNum = idx + 1;
+    const baseCount = verifiedAvailableEpisodes?.length || Math.min(count, 50);
+    return Array.from({ length: baseCount }, (_, idx) => {
+      const epNum = verifiedAvailableEpisodes ? verifiedAvailableEpisodes[idx] : idx + 1;
       return {
         ep: epNum,
         name: `Episódio ${epNum}`,
@@ -328,7 +394,7 @@ export function DetailsPage({
         stillPath: null
       };
     });
-  }, [seasonData, selectedSeason, item.title, tmdbDetails]);
+  }, [seasonData, verifiedAvailableEpisodes, selectedSeason, item.title, tmdbDetails]);
 
   const totalSeasonEpisodes = currentEpisodes.length;
 
@@ -367,21 +433,51 @@ export function DetailsPage({
       : [];
 
   const similarItems = React.useMemo(() => {
-    const directMatches = allCatalogs.filter(i => {
-      if (i.id === item.id || !isMediaAvailable(i)) return false;
-      const iGenres = Array.isArray(i.genres) ? i.genres : [];
-      if (currentGenres.length > 0 && iGenres.some(g => currentGenres.includes(g))) {
-        return true;
+    const list: CatalogItem[] = [];
+    const seenIds = new Set<number>([item.id, Number(item.tmdbId)]);
+
+    // 1. Recomendações TMDB diretas para este título
+    for (const sim of tmdbSimilar) {
+      if (!seenIds.has(sim.id)) {
+        seenIds.add(sim.id);
+        list.push(sim);
       }
-      if (i.type && item.type && i.type === item.type) return true;
-      return false;
-    });
+    }
 
-    if (directMatches.length >= 6) return directMatches.slice(0, 6);
+    // 2. Mídias do catálogo local com mesmo gênero e tipo
+    for (const cat of allCatalogs) {
+      if (!seenIds.has(cat.id) && isMediaAvailable(cat)) {
+        const catGenres = Array.isArray(cat.genres) ? cat.genres : [];
+        if (currentGenres.length > 0 && catGenres.some(g => currentGenres.includes(g))) {
+          seenIds.add(cat.id);
+          list.push(cat);
+        } else if (cat.type === item.type) {
+          seenIds.add(cat.id);
+          list.push(cat);
+        }
+      }
+    }
 
-    const extra = allCatalogs.filter(i => i.id !== item.id && isMediaAvailable(i) && !directMatches.some(m => m.id === i.id));
-    return [...directMatches, ...extra].slice(0, 6);
-  }, [allCatalogs, item.id, item.type, currentGenres]);
+    // 3. Fallback com outros itens disponíveis
+    if (list.length < 6) {
+      for (const cat of allCatalogs) {
+        if (!seenIds.has(cat.id) && isMediaAvailable(cat)) {
+          seenIds.add(cat.id);
+          list.push(cat);
+          if (list.length >= 6) break;
+        }
+      }
+    }
+
+    return list.slice(0, 6);
+  }, [tmdbSimilar, allCatalogs, item.id, item.tmdbId, item.type, currentGenres]);
+
+  const handleSimilarClick = (sim: CatalogItem) => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    onItemClick(sim.id, sim);
+  };
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen bg-[#0a0a0a] animate-in fade-in duration-500">
@@ -483,28 +579,31 @@ export function DetailsPage({
               </button>
 
               {/* Botão Assistir Trailer */}
-              {trailerVideo && (
-                <button 
-                  tabIndex={0} role="button" onClick={() => {
-                    const el = document.getElementById("trailer-section");
-                    el?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className="flex items-center justify-center gap-2.5 bg-white/10 hover:bg-white/20 text-white font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 hover:border-white/40 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg"
-                  title="Ver trailer oficial"
-                >
-                  <Film className="w-4 h-4 md:w-5 md:h-5 text-orange-400" />
-                  <span>Trailer</span>
-                  {trailerVideo.isDubbed ? (
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
-                      Dublado
-                    </span>
-                  ) : trailerVideo.isSubtitled ? (
-                    <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
-                      Legendado
-                    </span>
-                  ) : null}
-                </button>
-              )}
+              {(trailerVideosList.length > 0 || trailerVideo) && (() => {
+                const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
+                if (!activeTrailer) return null;
+                return (
+                  <button 
+                    tabIndex={0} 
+                    role="button" 
+                    onClick={() => setIsTrailerModalOpen(true)}
+                    className="flex items-center justify-center gap-2.5 bg-white/10 hover:bg-white/20 text-white font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 hover:border-white/40 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                    title="Assistir trailer oficial em alta definição"
+                  >
+                    <Film className="w-4 h-4 md:w-5 md:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                    <span>Trailer</span>
+                    {activeTrailer.isDubbed ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                        Dublado
+                      </span>
+                    ) : activeTrailer.isSubtitled ? (
+                      <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
+                        Legendado
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })()}
 
               <button 
                 onClick={handleToggleFavorite}
@@ -817,22 +916,24 @@ export function DetailsPage({
           )}
 
           {/* Seção Dedicada: Trailer Oficial */}
-          {trailerVideo && (
-            <div id="trailer-section" className="space-y-4 pt-2">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-neutral-800/60">
-                <div className="flex items-center gap-3">
+          {(trailerVideosList.length > 0 || trailerVideo) && (() => {
+            const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
+            if (!activeTrailer) return null;
+            return (
+              <div id="trailer-section" className="space-y-4 pt-2">
+                <div className="flex items-center gap-3 pb-2 border-b border-neutral-800/60">
                   <div className="w-10 h-10 rounded-xl bg-orange-600/20 text-orange-500 flex items-center justify-center border border-orange-500/30 shrink-0 shadow-[0_0_15px_rgba(234,88,12,0.15)]">
                     <Film className="w-5 h-5 text-orange-400" />
                   </div>
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-white font-bold text-lg">Trailer Oficial</h3>
-                      {trailerVideo.isDubbed ? (
+                      {activeTrailer.isDubbed ? (
                         <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
                           <CheckCircle2 className="w-3 h-3 text-emerald-400" />
                           Dublado PT-BR
                         </span>
-                      ) : trailerVideo.isSubtitled ? (
+                      ) : activeTrailer.isSubtitled ? (
                         <span className="px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
                           Legendado (PT-BR)
                         </span>
@@ -842,25 +943,25 @@ export function DetailsPage({
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-neutral-400 truncate max-w-xl mt-0.5">
-                      {trailerVideo.name}
-                    </p>
                   </div>
                 </div>
-              </div>
 
-              {/* Player 16:9 Cinematográfico do YouTube */}
-              <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-neutral-800 shadow-2xl group hover:border-orange-500/40 transition-all">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${trailerVideo.key}?rel=0&modestbranding=1&autoplay=0`}
-                  title={trailerVideo.name}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                />
+                {/* Player 16:9 Cinematográfico do YouTube */}
+                <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black border border-neutral-800 shadow-2xl group hover:border-orange-500/40 transition-all">
+                  <iframe
+                    key={`yt-iframe-${activeTrailer.key}`}
+                    src={`https://www.youtube.com/embed/${activeTrailer.key}?autoplay=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
+                    title={activeTrailer.name || "Trailer Oficial"}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Comments Section */}
           <div className="space-y-6 pt-4 border-t border-neutral-800/50">
@@ -934,8 +1035,10 @@ export function DetailsPage({
              {similarItems.map((sim, idx) => (
                <div 
                  key={`sim-${sim.id}-${idx}`} 
-                 tabIndex={0} role="button" onClick={() => onItemClick(sim.id, sim)} 
-                 className="relative rounded-xl overflow-hidden border border-neutral-800/80 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(234,88,12,0.2)]"
+                 tabIndex={0} 
+                 role="button" 
+                 onClick={() => handleSimilarClick(sim)} 
+                 className="relative rounded-xl overflow-hidden border border-neutral-800/80 group cursor-pointer aspect-[2/3] hover:border-orange-500/60 transition-all duration-300 shadow-lg hover:shadow-[0_0_20px_rgba(234,88,12,0.2)] hover:scale-[1.02] active:scale-95"
                >
                   <img 
                     src={sim.posterUrl || sim.imageUrl} 
@@ -962,6 +1065,80 @@ export function DetailsPage({
         </div>
         
       </div>
+
+      {/* Modal Cinematográfico de Trailer Oficial */}
+      {isTrailerModalOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200"
+          onClick={() => setIsTrailerModalOpen(false)}
+        >
+          <div 
+            className="relative w-full max-w-4xl bg-neutral-900 border border-neutral-800 rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            {(() => {
+              const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
+              return (
+                <>
+                  <div className="flex items-center justify-between px-4 sm:px-6 py-3.5 border-b border-neutral-800 bg-neutral-950/60 backdrop-blur-md">
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <div className="w-8 h-8 rounded-lg bg-orange-600/20 text-orange-500 flex items-center justify-center border border-orange-500/30 shrink-0">
+                        <Film className="w-4 h-4 text-orange-400" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-white font-bold text-sm sm:text-base truncate">
+                            {item.title} — Trailer Oficial
+                          </h3>
+                          {activeTrailer?.isDubbed ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold uppercase shrink-0">
+                              Dublado
+                            </span>
+                          ) : activeTrailer?.isSubtitled ? (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold uppercase shrink-0">
+                              Legendado
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        onClick={() => setIsTrailerModalOpen(false)}
+                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer hover:scale-105 active:scale-95"
+                        title="Fechar Trailer (Esc)"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Video Player */}
+                  {activeTrailer ? (
+                    <div className="relative aspect-video w-full bg-black">
+                      <iframe
+                        key={`modal-yt-${activeTrailer.key}`}
+                        src={`https://www.youtube.com/embed/${activeTrailer.key}?autoplay=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
+                        title={activeTrailer.name || "Trailer"}
+                        className="w-full h-full border-0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        referrerPolicy="strict-origin-when-cross-origin"
+                      />
+                    </div>
+                  ) : (
+                    <div className="aspect-video w-full flex items-center justify-center bg-black text-neutral-400 text-sm">
+                      Trailer indisponível no momento.
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

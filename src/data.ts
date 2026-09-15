@@ -332,17 +332,6 @@ export const animes = [
     playerUrl: "https://v1.watchplay.shop/tvshow/13916/1/1",
   },
   {
-    id: 30984,
-    tmdbId: 30984,
-    title: "BLEACH",
-    type: "series" as const,
-    quality: "HD" as const,
-    isAnime: true,
-    imageUrl: "https://image.tmdb.org/t/p/w500/dx28DE7EgLy0FatOvnaUg0k9j92.jpg",
-    backdropUrl: "https://image.tmdb.org/t/p/original/o0NsbcIvsllg6CJX0FBFY8wWbsn.jpg",
-    playerUrl: "https://v1.watchplay.shop/tvshow/30984/1/1",
-  },
-  {
     id: 46298,
     tmdbId: 46298,
     title: "HUNTER X HUNTER",
@@ -460,7 +449,6 @@ export const WATCHPLAY_ANIME_IDS = [
   85937,  // Demon Slayer
   209867, // Solo Leveling
   13916,  // Death Note
-  30984,  // Bleach
   46298,  // Hunter x Hunter
   12971,  // Dragon Ball Z
   94664,  // Mushoku Tensei
@@ -507,7 +495,6 @@ export const UNAVAILABLE_TITLES_OR_IDS = [
 
 // Mapeamento de temporadas indisponíveis (ID do TMDB -> array de números de temporada que devem ser ocultados)
 export const UNAVAILABLE_SEASONS: Record<number, number[]> = {
-  30984: [2], // Bleach: Temporada 2 (Guerra Sangrenta de Mil Anos) - Links do blogger quebrados / Superflix na blacklist
 };
 
 export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: string; name?: string }): boolean => {
