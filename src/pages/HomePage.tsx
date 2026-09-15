@@ -288,129 +288,17 @@ export function HomePage({
     let isMounted = true;
     // Busca automática dos destaques (filmes e séries populares, incluindo HBO Max)
     const fetchTopTrending = async () => {
-      try {
-        const [trendingRes, maxSeriesRes, trendingSeriesRes] = await Promise.all([
-          getTrending('all', 'day'),
-          getProviderSeries('Max', 1),
-          getTrending('tv', 'day')
-        ]);
-        if (!isMounted) return;
-
-        // Combina filmes e séries em alta, com ênfase em grandes lançamentos (como séries da HBO Max)
-        const rawPool = [
-          ...(maxSeriesRes?.results || []).slice(0, 3).map(s => ({ ...s, media_type: 'tv' as const })),
-          ...(trendingRes?.results || []),
-          ...(trendingSeriesRes?.results || [])
-        ];
-
-        const seenIds = new Set<number>();
-        const candidates = rawPool
-          .filter((item: TMDBItem) => {
-            if (!item.backdrop_path || (!item.title && !item.name)) return false;
-            if (seenIds.has(item.id)) return false;
-            seenIds.add(item.id);
-            return true;
-          })
-          .sort((a: TMDBItem, b: TMDBItem) => (b.popularity || 0) - (a.popularity || 0))
-          .slice(0, 7);
-
-        if (candidates.length === 0) return;
-
-        const formattedHeroItems = candidates.map((item: TMDBItem) => {
-          const isSeries = item.media_type === 'tv' || !item.release_date;
-          const fullTitle = item.title || item.name || "Sem título";
-          let logoText = fullTitle.toUpperCase();
-          if (logoText.includes(": ")) {
-            logoText = logoText.replace(": ", "\n");
-          } else if (logoText.includes(" - ")) {
-            logoText = logoText.replace(" - ", "\n");
-          }
-
-          const genresList = getGenreNames(item.genre_ids || []);
-          const releaseYear = parseInt(
-            (isSeries ? item.first_air_date : item.release_date)?.substring(0, 4) || "2026"
-          );
-
-          return {
-            id: item.id,
-            tmdbId: item.id,
-            title: fullTitle,
-            type: isSeries ? ('series' as const) : ('movie' as const),
-            description: item.overview || featured.description,
-            imageUrl: formatImageUrl(item.backdrop_path, 'original'),
-            posterUrl: formatImageUrl(item.poster_path, 'w500'),
-            logoText,
-            playerUrl: isSeries 
-              ? `https://v1.watchplay.shop/tvshow/${item.id}/1/1`
-              : `https://v1.watchplay.shop/movie/${item.id}`,
-            year: releaseYear,
-            duration: isSeries ? "Série • Em Alta" : "2h 10m",
-            rating: item.vote_average ? item.vote_average.toFixed(1) : "8.5",
-            genres: genresList.length > 0 ? genresList.slice(0, 3) : ["Ação", "Aventura"],
-            quality: checkIsCam(fullTitle) ? ("CAM" as const) : ("HD" as const)
-          };
-        });
-
-        if (!isMounted) return;
-        setHeroItems(formattedHeroItems);
-      } catch (err) {
-        console.error("Erro ao sincronizar destaque automático com TMDB:", err);
-      }
+      // Desativado: Garante que apenas o destaque manual (que sabidamente possui stream) apareça.
+      return;
     };
 
     // Sincronização automática de lançamentos reais (filmes, séries, animes, doramas e kids) no TMDB
     const fetchReleases = async () => {
       try {
-        const [moviesRes, seriesRes, animesRes, doramasRes, kidsRes, kidsSeriesRes] = await Promise.all([
-          getMovieReleases(),
-          getSeriesReleases(),
+        const [animesRes, doramasRes] = await Promise.all([
           getAnimes(),
-          getDoramas(),
-          getKidsContent(),
-          getKidsSeries()
+          getDoramas()
         ]);
-
-        if (isMounted && moviesRes?.results && moviesRes.results.length > 0) {
-          const formattedMovies = moviesRes.results
-            .filter((m: TMDBItem) => m.poster_path && (m.title || m.name))
-            .slice(0, 18)
-            .map((m: TMDBItem) => ({
-              id: m.id,
-              tmdbId: m.id,
-              title: (m.title || m.name || "").toUpperCase(),
-              imageUrl: formatImageUrl(m.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-              type: 'movie' as const,
-              quality: checkIsCam(m.title || "") ? ("CAM" as const) : ("HD" as const),
-              rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
-              year: m.release_date ? m.release_date.substring(0, 4) : "2026",
-              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
-            }));
-          if (formattedMovies.length > 0) {
-            setMovieReleases(formattedMovies);
-          }
-        }
-
-        if (isMounted && seriesRes?.results && seriesRes.results.length > 0) {
-          const formattedSeries = seriesRes.results
-            .filter((s: TMDBItem) => s.poster_path && (s.name || s.title))
-            .slice(0, 18)
-            .map((s: TMDBItem) => ({
-              id: s.id,
-              tmdbId: s.id,
-              title: (s.name || s.title || "").toUpperCase(),
-              imageUrl: formatImageUrl(s.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-              type: 'series' as const,
-              quality: "HD" as const,
-              rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
-              year: s.first_air_date ? s.first_air_date.substring(0, 4) : "2026",
-              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
-            }));
-          if (formattedSeries.length > 0) {
-            setSeriesReleases(formattedSeries);
-          }
-        }
 
         if (isMounted) {
           // Apenas os animes confirmados como disponíveis no WatchPlayer Oficial
@@ -497,50 +385,6 @@ export function HomePage({
 
           if (availableDoramas.length > 0) {
             setDoramaReleases(availableDoramas);
-          }
-        }
-
-        // Filmes Infantis Dinâmicos (Área Kids)
-        if (isMounted && kidsRes?.results && kidsRes.results.length > 0) {
-          const formattedKidsMovies = kidsRes.results
-            .filter((m: TMDBItem) => m.poster_path && (m.title || m.name))
-            .slice(0, 18)
-            .map((m: TMDBItem) => ({
-              id: m.id,
-              tmdbId: m.id,
-              title: (m.title || m.name || "").toUpperCase(),
-              imageUrl: formatImageUrl(m.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-              type: 'movie' as const,
-              quality: "HD" as const,
-              rating: m.vote_average ? m.vote_average.toFixed(1) : "8.5",
-              year: m.release_date ? m.release_date.substring(0, 4) : "2024",
-              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
-            }));
-          if (formattedKidsMovies.length > 0) {
-            setKidsReleases(formattedKidsMovies);
-          }
-        }
-
-        // Séries e Desenhos Infantis Dinâmicos (Área Kids)
-        if (isMounted && kidsSeriesRes?.results && kidsSeriesRes.results.length > 0) {
-          const formattedKidsSeries = kidsSeriesRes.results
-            .filter((s: TMDBItem) => s.poster_path && (s.name || s.title))
-            .slice(0, 18)
-            .map((s: TMDBItem) => ({
-              id: s.id,
-              tmdbId: s.id,
-              title: (s.name || s.title || "").toUpperCase(),
-              imageUrl: formatImageUrl(s.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-              type: 'series' as const,
-              quality: "HD" as const,
-              rating: s.vote_average ? s.vote_average.toFixed(1) : "8.0",
-              year: s.first_air_date ? s.first_air_date.substring(0, 4) : "2024",
-              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
-            }));
-          if (formattedKidsSeries.length > 0) {
-            setKidsSeriesReleases(formattedKidsSeries);
           }
         }
       } catch (err) {
