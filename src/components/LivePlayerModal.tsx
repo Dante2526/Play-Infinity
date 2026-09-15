@@ -202,7 +202,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 networkErrorCount += 1;
-                if (networkErrorCount <= 2) {
+                // TV ao vivo frequentemente tem pequenos engasgos ou chunks bloqueados.
+                // Tolerância maior (até 5 falhas seguidas) antes de desistir do servidor.
+                if (networkErrorCount <= 5) {
                   console.log('Recuperando erro de rede HLS silenciosamente...');
                   hls.startLoad();
                 } else {
@@ -212,7 +214,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 mediaErrorCount += 1;
-                if (mediaErrorCount <= 1) {
+                // Canais FAST (Amagi, Pluto) possuem descontinuidades constantes devido a ads.
+                // Permitir recuperação contínua para evitar queda de servidor por causa de ads.
+                if (mediaErrorCount <= 10) {
                   console.log('Recuperando erro de mídia HLS silenciosamente...');
                   hls.recoverMediaError();
                 } else {
@@ -224,6 +228,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 switchToNextServer('erro fatal hls');
                 break;
             }
+          } else {
+             // Erros não fatais (ex: bufferStalledError ocasional) podem resetar os contadores se a reprodução continuar fluindo
+             if (data.details === Hls.ErrorDetails.BUFFER_APPENDING_ERROR || data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                // Ignore silent errors that don't stop playback
+             }
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {

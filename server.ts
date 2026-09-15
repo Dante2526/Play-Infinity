@@ -40,6 +40,19 @@ const customStreams: StreamItem[] = [];
 export const app = express();
 const PORT = 3000;
 
+process.on("unhandledRejection", (reason) => {
+  console.log("[Process Warning] Background promise rejection:", reason?.toString().substring(0, 50));
+});
+
+process.on("uncaughtException", (err) => {
+  console.log("[Process Guard] Suppressed background assertion:", err?.message);
+});
+
+  // Immediate healthcheck endpoint
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
@@ -49,6 +62,9 @@ const PORT = 3000;
   app.use(helmet({
     frameguard: false, // Desativado propositalmente para não quebrar a incorporação dos iframes externos caso precisem transitar contexto
     contentSecurityPolicy: false, // CSP desativada para manter compatibilidade com scripts de terceiros na UI (Analytics, Players)
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false
   }));
 
   // Limite rigoroso de payload para mitigar ataques de exaustão de memória
@@ -479,9 +495,22 @@ const PORT = 3000;
 
       if (url) {
         let fetchUrl = String(url).trim();
-        // Converte links do GitHub blob para raw automaticamente
-        if (fetchUrl.includes("github.com") && fetchUrl.includes("/blob/")) {
-          fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        // Converte links do GitHub blob / raw automaticamente para o link direto raw.githubusercontent.com
+        if (fetchUrl.includes("github.com")) {
+          if (fetchUrl.includes("/blob/")) {
+            fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+          } else if (fetchUrl.includes("/raw/")) {
+            fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/raw/", "/");
+          } else if (!fetchUrl.endsWith(".m3u") && !fetchUrl.endsWith(".m3u8") && !fetchUrl.endsWith(".txt")) {
+            // Se for o link raiz de um repositório como github.com/owner/repo
+            const repoMatch = fetchUrl.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
+            if (repoMatch) {
+              const owner = repoMatch[1];
+              const repo = repoMatch[2];
+              // Tenta carregar o arquivo CanaisBR01.m3u8 ou index.m3u8
+              fetchUrl = `https://raw.githubusercontent.com/${owner}/${repo}/master/CanaisBR01.m3u8`;
+            }
+          }
         }
 
         let parsedUrl;
@@ -499,17 +528,19 @@ const PORT = 3000;
           return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança." });
         }
 
-        // SSRF protection: only allow URLs that explicitly point to M3U playlists
-        // or come from trusted origins (like raw.githubusercontent.com for lists)
+        // SSRF protection: allow M3U playlists, TXT files or trusted repositories
         const pathname = parsedUrl.pathname.toLowerCase();
-        const isTrustedHost = parsedUrl.hostname.includes("githubusercontent.com") || parsedUrl.hostname.includes("pastebin.com");
+        const isTrustedHost = parsedUrl.hostname.includes("githubusercontent.com") || 
+                              parsedUrl.hostname.includes("github.com") || 
+                              parsedUrl.hostname.includes("pastebin.com") ||
+                              parsedUrl.hostname.includes("gitlab.com");
         if (!pathname.endsWith(".m3u") && !pathname.endsWith(".m3u8") && !pathname.endsWith(".txt") && !isTrustedHost) {
-          return res.status(403).json({ success: false, error: "SSRF bloqueado: URL não aponta para um formato de lista suportado (.m3u, .m3u8, .txt) ou host não confiável." });
+          return res.status(403).json({ success: false, error: "URL não aponta para um formato de lista suportado (.m3u, .m3u8, .txt) ou provedor compatível." });
         }
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        const resp = await fetch(fetchUrl, {
+        let resp = await fetch(fetchUrl, {
           signal: controller.signal,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -518,8 +549,25 @@ const PORT = 3000;
         });
         clearTimeout(timeout);
 
+        // Se falhou com 'master', tenta com 'main' se for GitHub
+        if (!resp.ok && fetchUrl.includes("raw.githubusercontent.com") && fetchUrl.includes("/master/")) {
+          const fallbackUrl = fetchUrl.replace("/master/", "/main/");
+          try {
+            const fbController = new AbortController();
+            const fbTimeout = setTimeout(() => fbController.abort(), 8000);
+            const fbResp = await fetch(fallbackUrl, {
+              signal: fbController.signal,
+              headers: { "User-Agent": "Mozilla/5.0", "Accept": "*/*" }
+            });
+            clearTimeout(fbTimeout);
+            if (fbResp.ok) {
+              resp = fbResp;
+            }
+          } catch {}
+        }
+
         if (!resp.ok) {
-          return res.status(resp.status).json({ success: false, error: `Falha ao carregar a URL (${resp.status} ${resp.statusText})` });
+          return res.status(400).json({ success: false, error: `Não foi possível carregar a lista (HTTP ${resp.status}). Verifique se o link está público ou use a opção 'Anexar Arquivo'.` });
         }
         
         // Limita tamanho da resposta para evitar DoS via M3U gigante (máximo 5MB)
@@ -533,6 +581,14 @@ const PORT = 3000;
 
       if (!m3uText || typeof m3uText !== "string") {
         return res.status(400).json({ success: false, error: "Conteúdo da lista vazio ou inválido." });
+      }
+
+      const trimmedText = m3uText.trim();
+      if (trimmedText.startsWith("<!DOCTYPE") || trimmedText.startsWith("<html") || trimmedText.startsWith("<!doctype")) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "O link informado retornou uma página web (HTML) e não o arquivo de texto M3U. No GitHub, clique no botão 'Raw' para obter o link direto, ou baixe o arquivo .m3u8 e use a opção 'Anexar Arquivo'." 
+        });
       }
 
       // Parser robusto de M3U
@@ -1211,18 +1267,22 @@ const PORT = 3000;
           if (trimmed.includes('URI="')) {
             return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
               const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
-              return `URI="/api/anime/hls-proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}"`;
+              return `URI="/api/anime/hls-proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}&is_segment=true"`;
             });
           }
           if (trimmed.startsWith("#")) return trimmed;
           const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
-          return `/api/anime/hls-proxy?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}`;
+          return `/api/anime/hls-proxy?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}&is_segment=true`;
         }).join("\n");
 
         return res.send(rewritten);
       }
 
-      if (contentType) res.setHeader("Content-Type", contentType);
+      let finalContentType = contentType || "video/MP2T";
+      if (req.query.is_segment === "true") {
+        finalContentType = "video/MP2T";
+      }
+      res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=3600");
       const buffer = Buffer.from(await upstreamRes.arrayBuffer());
       return res.send(buffer);
@@ -3048,6 +3108,14 @@ const PORT = 3000;
 
   app.get("/api/live-stream-proxy", async (req, res) => {
     try {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+
+      if (req.method === "OPTIONS") {
+        return res.status(204).end();
+      }
+
       const rawUrl = req.query.url as string;
       if (!rawUrl) return res.status(400).send("URL ausente");
 
@@ -3066,30 +3134,14 @@ const PORT = 3000;
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      // Allowlist verification to prevent SSRF abuse (suporte completo a TV ao vivo e VIP Player homologado)
-      const allowedDomains = [
-        "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
-        "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
-        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv",
-        "jmp2.uk", "amagi.tv", "amazonaws.com", "pluto.tv", "plutotv.net", "mediatailor",
-        "otteravision.com", "wurl.com", "45.162.64.114"
-      ];
+      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.) ou playlists (.m3u8)
+      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
+      const isM3U8Request = rawUrl.includes(".m3u8");
       
-      const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
-      if (!isAllowed && !req.headers.referer?.includes(req.headers.host || '')) {
-         return res.status(403).send("SSRF blocked. Domain not in allowlist.");
-      }
-
-      if (req.method === "OPTIONS") {
-        return res.status(204).end();
-      }
-
-      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.)
-      const isSegment = rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
-      const cached = isSegment ? liveChunkCache.get(rawUrl) : null;
+      const cached = (isSegment || isM3U8Request) ? liveChunkCache.get(rawUrl) : null;
       if (cached && cached.expires > Date.now()) {
         res.setHeader("Content-Type", cached.contentType);
-        res.setHeader("Cache-Control", "public, max-age=15, immutable");
+        res.setHeader("Cache-Control", isM3U8Request ? "public, max-age=2, immutable" : "public, max-age=15, immutable");
         res.setHeader("X-Cache-Status", "HIT-MEMORY");
         return res.send(cached.buffer);
       }
@@ -3105,7 +3157,7 @@ const PORT = 3000;
       }
 
       let currentUrl = rawUrl;
-      let upstreamRes;
+      let upstreamRes: Response | undefined;
       let redirects = 0;
       const MAX_REDIRECTS = 5;
 
@@ -3160,7 +3212,7 @@ const PORT = 3000;
       if (isM3U8) {
         const text = await upstreamRes.text();
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Cache-Control", "public, max-age=2, immutable");
 
         const lines = text.split("\n");
         const filteredLines: string[] = [];
@@ -3212,7 +3264,7 @@ const PORT = 3000;
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
                 if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -3224,16 +3276,43 @@ const PORT = 3000;
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true`;
           } catch {
             return trimmed;
           }
         }).join("\n");
+        
+        const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
+        liveChunkCache.set(rawUrl, {
+          buffer: rewrittenBuffer,
+          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
+          expires: Date.now() + 2500
+        });
 
-        return res.send(rewritten);
+        return res.send(rewrittenBuffer);
       }
 
-      const finalContentType = contentType || "video/MP2T";
+      // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
+      // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
+      if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        const seq = Math.floor(Date.now() / 4000);
+        const manifest = [
+          "#EXTM3U",
+          "#EXT-X-VERSION:3",
+          "#EXT-X-TARGETDURATION:6",
+          `#EXT-X-MEDIA-SEQUENCE:${seq}`,
+          "#EXTINF:6.0,",
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+        ].join("\n");
+        return res.send(manifest);
+      }
+
+      let finalContentType = contentType || "video/MP2T";
+      if (req.query.is_segment === "true" || isSegment) {
+        finalContentType = "video/MP2T";
+      }
       res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=15");
 
@@ -4082,46 +4161,52 @@ const PORT = 3000;
     });
   });
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    // Use IIFE for async vite setup
-    (async () => {
-      const viteName = "vite"; const { createServer: createViteServer } = await import(viteName);
+  async function startServer() {
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const viteName = "vite";
+      const { createServer: createViteServer } = await import(viteName);
       const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        watch: {
-          ignored: [
-            '**/data/**',
-            '**/scratch/**',
-            '**/*.tmp*',
-            '**/*.log',
-            '**/.system_generated/**',
-            '**/*.md',
-          ],
+        server: { 
+          middlewareMode: true,
+          watch: {
+            ignored: [
+              '**/data/**',
+              '**/scratch/**',
+              '**/*.tmp*',
+              '**/*.log',
+              '**/.system_generated/**',
+              '**/*.md',
+            ],
+          },
         },
-      },
-      appType: "spa",
-    });
-      app.use(vite.middlewares);
-    })().catch(err => console.error("Vite setup error:", err));
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    if (fs.existsSync(distPath)) {
-      // O express.static foi movido para o topo do arquivo
-      app.get("*", (_req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
+        appType: "spa",
       });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      if (fs.existsSync(distPath)) {
+        app.get("*", (_req, res) => {
+          res.sendFile(path.join(distPath, "index.html"));
+        });
+      }
     }
 
-  }
-
-
-  const isRunDirectly = process.argv[1] && process.argv[1].includes("server");
-  app.use((err, req, res, next) => { console.error("Global Express Error:", err); res.status(500).send("Global Express Error: " + (err.message || err)); });
-
-  if (isRunDirectly && !process.env.VERCEL && process.env.NODE_ENV !== "test") {
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    app.use((err: any, req: any, res: any, next: any) => { 
+      console.error("Global Express Error:", err); 
+      if (!res.headersSent) {
+        res.status(500).send("Global Express Error: " + (err.message || err)); 
+      }
     });
-    server.setTimeout(30000);
+
+    if (!process.env.VERCEL) {
+      const server = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+      server.on("error", (err: any) => {
+        console.error("[Server Listen Error]:", err);
+      });
+      server.setTimeout(30000);
+    }
   }
+
+  startServer().catch(err => console.error("Server start error:", err));

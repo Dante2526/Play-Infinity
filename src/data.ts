@@ -413,6 +413,11 @@ export const UNAVAILABLE_TITLES_OR_IDS = [
   255064,  // O Incidente de Darwin
 ];
 
+// Mapeamento de temporadas indisponíveis (ID do TMDB -> array de números de temporada que devem ser ocultados)
+export const UNAVAILABLE_SEASONS: Record<number, number[]> = {
+  30984: [2], // Bleach: Temporada 2 (Guerra Sangrenta de Mil Anos) - Links do blogger quebrados / Superflix na blacklist
+};
+
 export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: string; name?: string }): boolean => {
   const id = Number(item.tmdbId || item.id || 0);
   if (id && UNAVAILABLE_TITLES_OR_IDS.includes(id)) return false;

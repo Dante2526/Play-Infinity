@@ -45,6 +45,14 @@ interface NetflixPlayerSkinProps {
   season?: number;
   episode?: number;
   totalEpisodes?: number;
+  availableSeasons?: number[];
+  onSeasonChange?: (newSeason: number) => void;
+  episodesList?: Array<{
+    episode_number: number;
+    name?: string;
+    overview?: string;
+    still_path?: string;
+  }>;
   onClose: () => void;
   onEpisodeChange?: (newEpisode: number) => void;
   onSkipIntro: () => void;
@@ -89,6 +97,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   season = 1,
   episode = 1,
   totalEpisodes = 24,
+  availableSeasons,
+  onSeasonChange,
+  episodesList,
   onClose,
   onEpisodeChange,
   onSkipIntro,
@@ -1015,9 +1026,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
   const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
 
-  // Formato do título central da Netflix: S1:E1 "Pilot" ou Nome do Filme
+  // Título e dados do episódio ativo
+  const currentEpData = episodesList?.find(e => e.episode_number === episode);
+  const currentEpName = currentEpData?.name || `Episódio ${episode}`;
+
+  // Formato do título central da Netflix: Série • S1:E1 "Pilot" ou Nome do Filme
+  const cleanTitle = isSeries && title ? title.replace(/\s*-\s*T\d+:E\d+.*$/i, '').trim() : title;
   const topTitleText = isSeries
-    ? `S${season}:E${episode} "${title || "Episódio " + episode}"`
+    ? `${cleanTitle ? `${cleanTitle} • ` : ""}S${season}:E${episode} "${currentEpName}"`
     : `"${title || "Filme"}"`;
 
   // Ocultar controles nativos em players externos é resolvido bloqueando eventos de ponteiro no iframe,
@@ -1697,14 +1713,33 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             className="w-full sm:w-96 h-full bg-[#141414] border-l border-neutral-800 flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 pointer-events-auto"
           >
             {/* Cabeçalho do Drawer */}
-            <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-center justify-between">
-              <div>
+            <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-start justify-between gap-2">
+              <div className="flex-1 min-w-0">
                 <h3 className="text-white font-bold text-base sm:text-lg">Episódios</h3>
-                <p className="text-xs text-neutral-400">Temporada {season}</p>
+                {availableSeasons && availableSeasons.length > 1 && onSeasonChange ? (
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-xs text-neutral-400 mr-1">Temporada:</span>
+                    {availableSeasons.map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => onSeasonChange(s)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          season === s
+                            ? "bg-red-600 text-white shadow-sm font-extrabold"
+                            : "bg-neutral-800 text-neutral-400 hover:text-white hover:bg-neutral-700"
+                        }`}
+                      >
+                        T{s}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-neutral-400 mt-0.5">Temporada {season}</p>
+                )}
               </div>
               <button
                 onClick={() => setShowEpisodeDrawer(false)}
-                className="p-2 text-neutral-400 hover:text-white rounded-full hover:bg-neutral-800 transition-colors cursor-pointer"
+                className="p-2 text-neutral-400 hover:text-white rounded-full hover:bg-neutral-800 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1712,34 +1747,90 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
             {/* Lista de Episódios com Scrollbar Ultrafina e Elegante */}
             <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
-              {Array.from({ length: totalEpisodes }, (_, i) => i + 1).map((epNum) => (
-                <button
-                  key={epNum}
-                  onClick={() => {
-                    if (onEpisodeChange) onEpisodeChange(epNum);
-                    setShowEpisodeDrawer(false);
-                  }}
-                  className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
-                    episode === epNum
-                      ? "bg-white/10 border-white/30 text-white"
-                      : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
-                        episode === epNum ? "bg-white text-black font-bold" : "bg-neutral-800 text-neutral-400"
+              {episodesList && episodesList.length > 0 ? (
+                episodesList.map((ep) => {
+                  const epNum = ep.episode_number;
+                  const isCurrent = episode === epNum;
+                  return (
+                    <button
+                      key={epNum}
+                      onClick={() => {
+                        if (onEpisodeChange) onEpisodeChange(epNum);
+                        setShowEpisodeDrawer(false);
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
+                        isCurrent
+                          ? "bg-white/10 border-white/30 text-white shadow-md shadow-black/40"
+                          : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
                       }`}
                     >
-                      {epNum}
-                    </span>
-                    <span className="font-medium text-sm">
-                      Episódio {epNum}
-                    </span>
-                  </div>
-                  {episode === epNum && <Check className="w-4 h-4 text-[#E50914]" />}
-                </button>
-              ))}
+                      <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                        {ep.still_path ? (
+                          <div className="relative w-16 h-10 rounded-lg overflow-hidden bg-neutral-800 shrink-0 border border-white/5">
+                            <img
+                              src={`https://image.tmdb.org/t/p/w185${ep.still_path}`}
+                              alt={ep.name || `Episódio ${epNum}`}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                            <div className="absolute bottom-0.5 right-0.5 bg-black/80 px-1 rounded text-[9px] font-bold text-white">
+                              {epNum}
+                            </div>
+                          </div>
+                        ) : (
+                          <span
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                              isCurrent ? "bg-white text-black font-bold" : "bg-neutral-800 text-neutral-400"
+                            }`}
+                          >
+                            {epNum}
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold text-sm block truncate text-neutral-200">
+                            {ep.name ? `${epNum}. ${ep.name}` : `Episódio ${epNum}`}
+                          </span>
+                          {ep.overview && (
+                            <p className="text-[11px] text-neutral-400 line-clamp-1 mt-0.5 font-normal">
+                              {ep.overview}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      {isCurrent && <Check className="w-4 h-4 text-[#E50914] shrink-0" />}
+                    </button>
+                  );
+                })
+              ) : (
+                Array.from({ length: totalEpisodes }, (_, i) => i + 1).map((epNum) => (
+                  <button
+                    key={epNum}
+                    onClick={() => {
+                      if (onEpisodeChange) onEpisodeChange(epNum);
+                      setShowEpisodeDrawer(false);
+                    }}
+                    className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
+                      episode === epNum
+                        ? "bg-white/10 border-white/30 text-white"
+                        : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${
+                          episode === epNum ? "bg-white text-black font-bold" : "bg-neutral-800 text-neutral-400"
+                        }`}
+                      >
+                        {epNum}
+                      </span>
+                      <span className="font-medium text-sm">
+                        Episódio {epNum}
+                      </span>
+                    </div>
+                    {episode === epNum && <Check className="w-4 h-4 text-[#E50914]" />}
+                  </button>
+                ))
+              )}
             </div>
           </div>
         </div>
