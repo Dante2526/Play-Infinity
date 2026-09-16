@@ -177,6 +177,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   }, [channels]);
 
   const handlePlayChannel = (channel: LiveChannel) => {
+    // Entra em tela cheia imediatamente após o clique do usuário
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Fullscreen request failed", e);
+    }
+
     setLastPlayedChannelId(channel.id);
     setActiveChannel(channel);
   };
@@ -840,7 +851,12 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         <LivePlayerModal
           channel={activeChannel}
           allChannels={channels}
-          onClose={() => setActiveChannel(null)}
+          onClose={() => {
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(() => {});
+            }
+            setActiveChannel(null);
+          }}
           onSelectChannel={(newChan) => setActiveChannel(newChan)}
           onEditChannel={(ch) => openAddModal(ch)}
         />
