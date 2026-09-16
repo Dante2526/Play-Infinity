@@ -766,9 +766,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       {/* CONTROLES INFERIORES (BOTTOM BAR) */}
       <div 
-        className={`absolute bottom-0 left-0 w-full p-4 md:p-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
+        className={`absolute bottom-0 left-0 w-full px-4 pt-4 md:px-6 md:pt-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
+        style={{ paddingBottom: 'max(1.75rem, env(safe-area-inset-bottom, 1.75rem))' }}
       >
         <div className="flex items-center justify-between gap-4 max-w-5xl mx-auto">
           {/* Lado Esquerdo: Play, Vol, Próximo/Anterior */}

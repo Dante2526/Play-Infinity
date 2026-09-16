@@ -1470,9 +1470,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
           }`}
           style={{ 
-            paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
-            paddingLeft: "env(safe-area-inset-left, 0px)",
-            paddingRight: "env(safe-area-inset-right, 0px)"
+            paddingBottom: "max(1.75rem, env(safe-area-inset-bottom, 1.75rem))",
+            paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(1rem, env(safe-area-inset-right, 0px))"
           }}
           onClick={(e) => e.stopPropagation()}
         >

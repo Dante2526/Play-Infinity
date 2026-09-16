@@ -1264,7 +1264,7 @@ export function VideoPlayerModal({
             } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
           : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
               isExpanded 
-                ? "p-0 m-0 bg-black w-[100dvw] h-[100dvh] overflow-hidden" 
+                ? "p-0 m-0 bg-black overflow-hidden" 
                 : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
             }`
       }
@@ -1284,7 +1284,7 @@ export function VideoPlayerModal({
           isMiniPlayer
             ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
             : isExpanded
-            ? "w-[100dvw] h-[100dvh] max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+            ? "absolute inset-0 max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
             : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
         }`}
       >
@@ -1514,7 +1514,7 @@ export function VideoPlayerModal({
           onMouseMove={handleStageMouseMove}
           onMouseLeave={handleStageMouseLeave}
           className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${
-            isExpanded ? "w-[100dvw] h-[100dvh] flex-1 fixed inset-0 z-[999999]" : "aspect-video"
+            isExpanded ? "fixed inset-0 z-[999999]" : "aspect-video"
           }`}
         >
           {/* Inner Viewport Rotacionável para modo Paisagem (Widescreen Deitado) no Celular */}
