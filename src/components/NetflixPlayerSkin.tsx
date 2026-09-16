@@ -1595,11 +1595,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           <button
             onClick={() => setShowAudioSubtitleModal(true)}
             className="flex items-center gap-1.5 py-1 px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
-            title="Áudio e Legendas"
+            title="Áudio"
           >
             <MessageSquareText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
             <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              <span>Áudio e Legendas</span>
+              <span>Áudio</span>
             </span>
           </button>
 
@@ -1861,7 +1861,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                   <MessageSquareText className="w-4 h-4 stroke-[2]" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white leading-tight">Áudio e Legendas</h3>
+                  <h3 className="text-base font-bold text-white leading-tight">Áudio</h3>
                   <p className="text-xs text-neutral-400">Escolha o idioma de reprodução</p>
                 </div>
               </div>
