@@ -1464,29 +1464,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         </div>
       )}
 
-      {/* Botão Flutuante Netflix "Pular Abertura" quando a abertura estiver ativa */}
-      {isIntroActive && isSeries && !isLocked && !isMiniPlayer && (
-        <div
-          className="absolute right-3 sm:right-6 bottom-20 sm:bottom-24 z-30 animate-in fade-in slide-in-from-right-4 duration-300 pointer-events-auto"
-          style={{
-            marginRight: "env(safe-area-inset-right, 0px)",
-            marginBottom: "env(safe-area-inset-bottom, 0px)"
-          }}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onSkipIntro();
-            }}
-            className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-black/80 hover:bg-black/95 text-white font-semibold text-xs sm:text-sm rounded-md border border-white/40 shadow-2xl active:scale-95 transition-all cursor-pointer backdrop-blur-md group"
-            title="Pular Abertura (+85s)"
-          >
-            <FastForward className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
-            <span>Pular Abertura</span>
-          </button>
-        </div>
-      )}
-
       {!isMiniPlayer && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 pt-1.5 flex flex-col transition-all duration-300 ${
