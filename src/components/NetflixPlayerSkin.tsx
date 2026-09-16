@@ -1464,20 +1464,43 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         </div>
       )}
 
+      {/* Botão Flutuante Netflix "Pular Abertura" quando a abertura estiver ativa */}
+      {isIntroActive && isSeries && !isLocked && !isMiniPlayer && (
+        <div
+          className="absolute right-3 sm:right-6 bottom-20 sm:bottom-24 z-30 animate-in fade-in slide-in-from-right-4 duration-300 pointer-events-auto"
+          style={{
+            marginRight: "env(safe-area-inset-right, 0px)",
+            marginBottom: "env(safe-area-inset-bottom, 0px)"
+          }}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onSkipIntro();
+            }}
+            className="flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 bg-black/80 hover:bg-black/95 text-white font-semibold text-xs sm:text-sm rounded-md border border-white/40 shadow-2xl active:scale-95 transition-all cursor-pointer backdrop-blur-md group"
+            title="Pular Abertura (+85s)"
+          >
+            <FastForward className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+            <span>Pular Abertura</span>
+          </button>
+        </div>
+      )}
+
       {!isMiniPlayer && (
         <div
           className={`absolute bottom-0 left-0 right-0 z-20 pt-1.5 flex flex-col transition-all duration-300 ${
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
           }`}
           style={{ 
-            paddingBottom: "max(1.75rem, env(safe-area-inset-bottom, 1.75rem))",
-            paddingLeft: "max(1rem, env(safe-area-inset-left, 0px))",
-            paddingRight: "max(1rem, env(safe-area-inset-right, 0px))"
+            paddingBottom: "max(1.5rem, env(safe-area-inset-bottom, 1.5rem))",
+            paddingLeft: "max(0.75rem, env(safe-area-inset-left, 0px))",
+            paddingRight: "max(0.75rem, env(safe-area-inset-right, 0px))"
           }}
           onClick={(e) => e.stopPropagation()}
         >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
-        <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2.5">
+        <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1 sm:mb-2">
           {/* Tempo Decorrido Atual à Esquerda */}
           <span className="text-white/90 text-[11px] sm:text-xs font-medium tabular-nums select-none shrink-0 drop-shadow min-w-[34px] text-right">
             {formatTime(displayCurrentTime)}
@@ -1530,33 +1553,33 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </span>
         </div>
 
-        {/* LINHA DE AÇÕES INFERIORES: NO MODO CARTÃO EXIBE APENAS VELOCIDADE E ÁUDIO/LEG., DEMAIS EM TELA CHEIA */}
-        <div className="px-2 sm:px-6 flex items-center justify-center gap-4 sm:gap-8 md:gap-14 text-white text-xs">
-          {/* 1. Velocidade (Sempre visível: cartão e tela cheia) */}
+        {/* LINHA DE AÇÕES INFERIORES: DISCRETA, ELEGANTE E PROPORCIONAL EM TELAS MÓVEIS E DESKTOP */}
+        <div className="w-full flex items-center justify-center gap-3 xs:gap-4 sm:gap-7 md:gap-11 text-white text-xs px-2">
+          {/* 1. Velocidade */}
           <button
             onClick={() => setShowSpeedMenu(true)}
-            className="flex items-center gap-1.5 py-1 px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+            className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
             title="Velocidade de reprodução"
           >
-            <Gauge className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              <span>Velocidade </span>({playerStatus.playbackRate}x)
+            <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
+            <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
+              Velocidade ({playerStatus.playbackRate}x)
             </span>
           </button>
 
-          {/* 2. Bloquear Tela com Animação de Cadeado Trancando/Destravando (Apenas em Tela Cheia) */}
+          {/* 2. Bloquear Tela (Apenas em Tela Cheia) */}
           {isFullscreen && (
             <button
               onClick={handleLockScreen}
-              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
               title="Bloquear controles da tela"
             >
               {isLocking ? (
-                <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse" />
+                <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse shrink-0" />
               ) : (
-                <Unlock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110" />
+                <Unlock className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110 shrink-0" />
               )}
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
                 {isLocking ? "Trancando..." : "Bloquear"}
               </span>
             </button>
@@ -1569,11 +1592,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 e.stopPropagation();
                 onSkipIntro();
               }}
-              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
               title="Pular Abertura (+85s) - Tecla S"
             >
-              <FastForward className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] group-hover:text-orange-400 transition-colors" />
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
+              <FastForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] group-hover:text-orange-400 transition-colors shrink-0" />
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
                 Pular Abertura
               </span>
             </button>
@@ -1583,23 +1606,23 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {isFullscreen && isSeries && (
             <button
               onClick={() => setShowEpisodeDrawer((prev) => !prev)}
-              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
               title="Lista de episódios"
             >
-              <Layers className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">Episódios</span>
+              <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">Episódios</span>
             </button>
           )}
 
-          {/* 5. Áudio & Legendas (Sempre visível: cartão e tela cheia) */}
+          {/* 5. Áudio (Sempre visível: cartão e tela cheia) */}
           <button
             onClick={() => setShowAudioSubtitleModal(true)}
-            className="flex items-center gap-1.5 py-1 px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+            className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
             title="Áudio"
           >
-            <MessageSquareText className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-            <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">
-              <span>Áudio</span>
+            <MessageSquareText className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
+            <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
+              Áudio
             </span>
           </button>
 
@@ -1607,11 +1630,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {isFullscreen && isSeries && onEpisodeChange && (
             <button
               onClick={() => onEpisodeChange(episode + 1)}
-              className="flex items-center gap-1.5 py-1 px-1.5 sm:px-2 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
               title="Próximo Episódio (Tecla N)"
             >
-              <SkipForward className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7]" />
-              <span className="font-normal text-[11px] sm:text-xs whitespace-nowrap">Próximo</span>
+              <SkipForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">Próximo</span>
             </button>
           )}
         </div>
