@@ -8,8 +8,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/299534",
-    "views": 194,
-    "lastWatched": "2026-09-12T01:15:53.579Z"
+    "views": 197,
+    "lastWatched": "2026-09-16T02:02:46.360Z"
   },
   {
     "id": 66732,
@@ -57,9 +57,9 @@
     "imageUrl": "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
     "backdropUrl": "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     "quality": "CAM",
-    "playerUrl": "https://v1.watchplay.shop/movie/969681",
-    "views": 167,
-    "lastWatched": "2026-09-12T00:47:28.765Z"
+    "playerUrl": "https://v1.watchplay.shop/movie/tt22084616",
+    "views": 172,
+    "lastWatched": "2026-09-16T02:00:55.970Z"
   },
   {
     "id": 119051,
@@ -355,5 +355,17 @@
     "playerUrl": "https://v1.watchplay.shop/movie/1560520",
     "views": 1,
     "lastWatched": "2026-09-12T00:49:06.823Z"
+  },
+  {
+    "id": 236235,
+    "tmdbId": 236235,
+    "title": "Magnatas do Crime",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/236235/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-16T02:04:07.774Z"
   }
 ]
