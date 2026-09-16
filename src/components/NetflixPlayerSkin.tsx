@@ -91,6 +91,8 @@ function formatTime(sec: number): string {
   return `${m < 10 ? "0" : ""}${m}:${s < 10 ? "0" : ""}${s}`;
 }
 
+const isTouchDevice = typeof window !== "undefined" && ("ontouchstart" in window || navigator.maxTouchPoints > 0);
+
 export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   title,
   isSeries,
@@ -1246,7 +1248,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2. CONTROLE VERTICAL DE BRILHO DA NETFLIX (SOL À ESQUERDA)
           Exibido apenas quando estiver em TELA CHEIA (isFullscreen)
           ======================================================== */}
-      {isFullscreen && !isExternalPlayer && (
+      {isFullscreen && !isExternalPlayer && isTouchDevice && (
         <div
           ref={brightnessBarRef}
           onMouseDown={handleBrightnessMouseDown}
@@ -1295,7 +1297,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2.1 CONTROLE VERTICAL DE SOM DA NETFLIX (LADO OPOSTO - DIREITA)
           Exibido apenas quando estiver em TELA CHEIA (isFullscreen), idêntico ao Brilho
           ======================================================== */}
-      {isFullscreen && !isExternalPlayer && (
+      {isFullscreen && !isExternalPlayer && isTouchDevice && (
         <div
           ref={volumeBarRef}
           onMouseDown={handleVolumeMouseDown}
