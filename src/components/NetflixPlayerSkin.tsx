@@ -194,7 +194,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showCastModal, setShowCastModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "pt-BR" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "pt-BR" : activeServerKey === "srv_pomfy" ? "pomfy" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   // Rastreamento se a abertura já foi pulada neste episódio
@@ -1282,7 +1282,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {/* Barra Vertical de Brilho da Netflix em Branco Sólido */}
           <div
             ref={brightnessTrackRef}
-            className="relative w-3 sm:w-3.5 h-36 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
+            className="relative w-3 sm:w-3.5 h-32 sm:h-40 landscape:h-28 landscape:sm:h-32 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
             title={`Brilho: ${Math.round(Math.max(0, Math.min(1, (brightness - 0.2) / 1.0)) * 100)}%`}
           >
             <div
@@ -1350,7 +1350,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           {/* Barra Vertical de Som da Netflix em Branco Sólido */}
           <div
             ref={volumeTrackRef}
-            className="relative w-3 sm:w-3.5 h-36 sm:h-48 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
+            className="relative w-3 sm:w-3.5 h-32 sm:h-40 landscape:h-28 landscape:sm:h-32 bg-black/60 border border-white/25 rounded-full overflow-hidden flex flex-col justify-end backdrop-blur-md group/slider shadow-2xl shrink-0"
             title={`Volume: ${playerStatus.muted ? 0 : Math.round(playerStatus.volume * 100)}%`}
           >
             <div
@@ -1466,9 +1466,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
       {!isMiniPlayer && (
         <div
-          className={`absolute bottom-0 left-0 right-0 z-20 pb-2.5 sm:pb-4 pt-1.5 flex flex-col transition-all duration-300 ${
+          className={`absolute bottom-0 left-0 right-0 z-20 pt-1.5 flex flex-col transition-all duration-300 ${
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 translate-y-4 pointer-events-none"
           }`}
+          style={{ 
+            paddingBottom: "max(1rem, env(safe-area-inset-bottom, 1rem))",
+            paddingLeft: "env(safe-area-inset-left, 0px)",
+            paddingRight: "env(safe-area-inset-right, 0px)"
+          }}
           onClick={(e) => e.stopPropagation()}
         >
         {/* LINHA DA TIMELINE (SCRUBBER) */}
@@ -1847,10 +1852,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm sm:max-w-md bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-5 animate-in zoom-in-95 duration-200 pointer-events-auto"
+            className="w-full max-w-sm sm:max-w-lg bg-[#161616]/95 border border-neutral-800 rounded-2xl p-4 sm:p-5 shadow-2xl text-white space-y-3 sm:space-y-4 animate-in zoom-in-95 duration-200 pointer-events-auto max-h-[90%] overflow-y-auto"
           >
             {/* Cabeçalho */}
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-2 sm:pb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white">
                   <MessageSquareText className="w-4 h-4 stroke-[2]" />
@@ -1869,7 +1874,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Coluna de Áudio */}
               <div className="space-y-2">
                 <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5 px-0.5">
@@ -1879,7 +1884,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 <div className="space-y-1.5">
                   <button
                     onClick={() => onServerChange?.("srv_vip")}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "pt-BR"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
@@ -1891,14 +1896,26 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
                   <button
                     onClick={() => onServerChange?.("srv_watchplay")}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "en-US"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Inglês [Original]</span>
+                    <span>Inglês [WatchPlayer]</span>
                     {selectedAudio === "en-US" && <Check className="w-4 h-4 text-black" />}
+                  </button>
+                  
+                  <button
+                    onClick={() => onServerChange?.("srv_pomfy")}
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                      selectedAudio === "pomfy"
+                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
+                    }`}
+                  >
+                    <span>Alternativo [Pomfy]</span>
+                    {selectedAudio === "pomfy" && <Check className="w-4 h-4 text-black" />}
                   </button>
                 </div>
               </div>
@@ -1912,7 +1929,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 <div className="space-y-1.5">
                   <button
                     onClick={() => setSelectedSubtitle("off")}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedSubtitle === "off"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
@@ -1924,7 +1941,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
                   <button
                     onClick={() => setSelectedSubtitle("pt-BR")}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedSubtitle === "pt-BR"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
@@ -1938,7 +1955,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </div>
 
             {/* Status Informativo */}
-            <div className="px-3.5 py-2.5 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between text-xs">
+            <div className="px-3.5 py-2 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between text-xs">
               <span className="text-neutral-400 font-medium">Configuração Ativa:</span>
               <span className="font-bold text-white flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>

@@ -519,6 +519,15 @@ export function VideoPlayerModal({
             `/api/myembed-stream?id=${id}&type=tv&s=${s}&e=${e}&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
+        },
+        {
+          key: "srv_pomfy",
+          label: "Pomfy Stream",
+          badge: "Pomfy Stream • Rápido",
+          buildUrl: (id: string, s: number, e: number) => 
+            `https://api.pomfy.stream/serie/${id}/${s}/${e}`,
+          isMatch: (u: string) => u.includes("pomfy.stream"),
+          name: "Pomfy Stream"
         }
       ];
     } else {
@@ -539,6 +548,15 @@ export function VideoPlayerModal({
             `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
+        },
+        {
+          key: "srv_pomfy",
+          label: "Pomfy Stream",
+          badge: "Pomfy Stream • Rápido",
+          buildUrl: (id: string) => 
+            `https://api.pomfy.stream/filme/${id}`,
+          isMatch: (u: string) => u.includes("pomfy.stream"),
+          name: "Pomfy Stream"
         }
       ];
     }
@@ -551,8 +569,8 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
-    // Para o VIP Player, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
-    setPlayerSkinReady(serverKey === "srv_vip");
+    // Para o VIP Player e Pomfy, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
+    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_pomfy");
     setError(null);
     const newUrl = isSeries
       ? srv.buildUrl(resolvedId, season, episode)
@@ -692,6 +710,9 @@ export function VideoPlayerModal({
       const targetType = parsed.isSeries ? "tv" : "movie";
       return `/api/myembed-stream?id=${targetId}&type=${targetType}&s=${parsed.season || season}&e=${parsed.episode || episode}&cb=${Date.now()}`;
     }
+    if (url.includes("pomfy.stream")) {
+      return url; // Retorna a URL direta do Pomfy
+    }
     return url;
   };
 
@@ -707,6 +728,8 @@ export function VideoPlayerModal({
       window.location.origin,
       "https://v1.watchplay.shop",
       "https://watchplay.shop",
+      "https://api.pomfy.stream",
+      "https://pomfy.stream",
       "https://player.videasy.to",
       "https://videasy.to",
       "https://superflixapi.top",
@@ -1241,7 +1264,7 @@ export function VideoPlayerModal({
             } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
           : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
               isExpanded 
-                ? "p-0 m-0 bg-black w-screen h-screen overflow-hidden" 
+                ? "p-0 m-0 bg-black w-[100dvw] h-[100dvh] overflow-hidden" 
                 : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
             }`
       }
@@ -1261,7 +1284,7 @@ export function VideoPlayerModal({
           isMiniPlayer
             ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
             : isExpanded
-            ? "w-screen h-screen max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+            ? "w-[100dvw] h-[100dvh] max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
             : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
         }`}
       >
@@ -1491,7 +1514,7 @@ export function VideoPlayerModal({
           onMouseMove={handleStageMouseMove}
           onMouseLeave={handleStageMouseLeave}
           className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${
-            isExpanded ? "w-screen h-screen flex-1 fixed inset-0 z-[999999]" : "aspect-video"
+            isExpanded ? "w-[100dvw] h-[100dvh] flex-1 fixed inset-0 z-[999999]" : "aspect-video"
           }`}
         >
           {/* Inner Viewport Rotacionável para modo Paisagem (Widescreen Deitado) no Celular */}
@@ -1585,7 +1608,7 @@ export function VideoPlayerModal({
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  if (selectedServerKey === "srv_vip") {
+                  if (selectedServerKey === "srv_vip" || selectedServerKey === "srv_pomfy") {
                     setTimeout(() => setPlayerSkinReady(true), 200);
                   }
                 }}
