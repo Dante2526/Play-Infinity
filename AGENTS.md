@@ -7,13 +7,12 @@
 
 ## 1. Política Estrita de Servidores de Vídeo (VOD: Filmes, Séries e Animes)
 
-1. **Dois Únicos Reprodutores Homologados:**
-   - **WatchPlayer Oficial (Padrão 1):**
-     - URL Oficial: `https://v1.watchplay.shop/...` e seu proxy seguro `/api/watchplayer-stream`.
-     - Suporte nativo à skin Netflix, telemetria em tempo real e controle automático de episódios.
-   - **VIP Player Dublado PT-BR (Padrão 2 / Fallback Seguro):**
-     - Endpoint Sanitizado: `/api/myembed-stream?id=...&type=movie|tv`.
-     - Executado obrigatoriamente através do proxy interno com escudo anti-popup (`window.open` neutralizado e scripts de anúncios removidos).
+1. **Reprodutores Homologados:**
+   Qualquer reprodutor de vídeo que **NÃO** constar na lista negra abaixo pode ser utilizado, adicionado ou testado, desde que homologado pelo dono do projeto.
+   Atualmente homologados:
+   - **WatchPlayer Oficial:** `https://v1.watchplay.shop/...`
+   - **VIP Player Dublado PT-BR:** `/api/myembed-stream?id=...`
+   - **Pomfy Stream:** `https://api.pomfy.stream/...` (Permitido pois não consta na lista negra).
 
 2. **Proibição Absoluta de Servidores Alternativos (Lista Negra)**
    - **É ESTRITAMENTE PROIBIDO** reintroduzir ou sugerir servidores alternativos como:
@@ -29,7 +28,7 @@
    - Qualquer domínio, rota ou provedor que conste na lista negra **JAMAIS** deve ser reativado ou reintroduzido no catálogo.
 
 3. **Seletor de Servidores Homologados**
-   - O seletor de servidores no reprodutor deve conter exclusivamente os provedores homologados: `WatchPlayer Oficial` e `VIP Player (Dublado PT-BR)`.
+   - O seletor de servidores no reprodutor deve conter exclusivamente os provedores homologados que não estão na lista negra.
 
 4. **Prioridade Mandatória para Conteúdo em Português (Dublado PT-BR / Nacional):**
    - Toda lógica de extração, seleção de servidores, resolução de opções e fallbacks de áudio deve priorizar estritamente opções em **Português do Brasil (Dublado PT-BR)** ou conteúdos nacionais.
