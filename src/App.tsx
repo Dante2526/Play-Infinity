@@ -312,15 +312,37 @@ export default function App() {
     posterUrl?: string,
     isAnime?: boolean
   ) => {
-    // Entra em tela cheia imediatamente após o clique do usuário
-    try {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      } else if ((document.documentElement as any).webkitRequestFullscreen) {
-        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+    // Quando autoFullscreen for solicitado (ex: ao clicar em Continue Assistindo),
+    // aciona a tela cheia nativa imediatamente no clique do usuário para ocultar as barras do navegador
+    if (autoFullscreen) {
+      const elem = document.documentElement;
+      const requestFS =
+        elem.requestFullscreen ||
+        (elem as any).webkitRequestFullscreen ||
+        (elem as any).mozRequestFullScreen ||
+        (elem as any).msRequestFullscreen;
+
+      if (requestFS && !document.fullscreenElement) {
+        try {
+          const res = requestFS.call(elem, { navigationUI: "hide" });
+          if (res && typeof res.catch === "function") {
+            res.catch(() => {
+              try { requestFS.call(elem); } catch (_) {}
+            });
+          }
+        } catch (_) {
+          try { requestFS.call(elem); } catch (_) {}
+        }
       }
-    } catch (e) {
-      console.warn("Fullscreen request failed", e);
+
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          const lockPromise = (screen.orientation as any).lock("landscape");
+          if (lockPromise && typeof lockPromise.catch === "function") {
+            lockPromise.catch(() => {});
+          }
+        } catch (_) {}
+      }
     }
 
     setPlayerModal({

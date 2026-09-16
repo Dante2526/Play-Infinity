@@ -619,9 +619,42 @@ export function VideoPlayerModal({
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
       if (autoFullscreen) {
         setIsWidescreen(true);
+        const elem = document.documentElement;
+        const requestFS =
+          elem.requestFullscreen ||
+          (elem as any).webkitRequestFullscreen ||
+          (elem as any).mozRequestFullScreen ||
+          (elem as any).msRequestFullscreen;
+
+        if (requestFS && !document.fullscreenElement) {
+          try {
+            const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
+            if (fsPromise && typeof fsPromise.catch === "function") {
+              fsPromise.catch(() => {
+                try { requestFS.call(elem); } catch (_) {}
+              });
+            }
+          } catch (_) {
+            try { requestFS.call(elem); } catch (_) {}
+          }
+        }
+
         const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
         if (isPortrait) {
           setIsRotated(true);
+        } else {
+          setIsRotated(false);
+        }
+
+        if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+          try {
+            const lockPromise = (screen.orientation as any).lock("landscape");
+            if (lockPromise && typeof lockPromise.then === "function") {
+              lockPromise.then(() => {
+                setIsRotated(false);
+              }).catch(() => {});
+            }
+          } catch (_) {}
         }
       }
 
@@ -946,8 +979,24 @@ export function VideoPlayerModal({
   };
 
   const handleCloseModal = () => {
-    if (document.fullscreenElement) {
-      document.exitFullscreen().catch(() => {});
+    const hasFS = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+    if (hasFS) {
+      try {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        } else if ((document as any).webkitExitFullscreen) {
+          (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          (document as any).msExitFullscreen();
+        }
+      } catch (e) {}
     }
     if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
       try {
@@ -1084,24 +1133,26 @@ export function VideoPlayerModal({
         }
       }
 
-      // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
-      let lockedLandscape = false;
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
-        try {
-          await (screen.orientation as any).lock("landscape");
-          lockedLandscape = true;
-          setIsRotated(false);
-        } catch (err) {
-          // Fallback para dispositivos sem lock() ou quando bloqueado pelo SO
-        }
-      }
-
-      // 3. Se a tela estiver na vertical e o SO não tiver rotacionado nativamente, ativa o fallback de rotação CSS
+      // 3. Se a tela estiver na vertical, ativa o fallback de rotação CSS
       const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-      if (isPortrait && !lockedLandscape) {
+      if (isPortrait) {
         setIsRotated(true);
       } else {
         setIsRotated(false);
+      }
+
+      // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          const lockPromise = (screen.orientation as any).lock("landscape");
+          if (lockPromise && typeof lockPromise.then === "function") {
+            lockPromise.then(() => {
+              setIsRotated(false);
+            }).catch(() => {});
+          }
+        } catch (err) {
+          // Fallback
+        }
       }
     }
   };
