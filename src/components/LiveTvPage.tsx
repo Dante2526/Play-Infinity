@@ -307,7 +307,19 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      const data = await res.json();
+      
+      let data: any;
+      const rawText = await res.text();
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(
+          rawText.includes('<!DOCTYPE') || rawText.includes('<html')
+            ? 'O link fornecido retornou uma página web (HTML) e não o arquivo de lista M3U. No GitHub, copie o link clicando no botão "Raw" ou baixe o arquivo e use a aba "Anexar Arquivo".'
+            : 'Erro de comunicação ao processar lista.'
+        );
+      }
+
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Erro ao analisar a lista M3U');
       }
@@ -437,6 +449,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   <span>Sintonizar Canal</span>
                 </button>
 
+                <button
+                  onClick={() => {
+                    setEditingChannel(null);
+                    setModalTab('m3u');
+                    setIsAddModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-2 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm transition-all border border-white/10 cursor-pointer min-h-[44px]"
+                >
+                  <Upload className="w-4 h-4 text-orange-400" />
+                  <span>Carregar Próprio Arquivo / M3U</span>
+                </button>
               </div>
             </div>
 
@@ -504,7 +527,31 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão de Adicionar removido conforme solicitado */}
+          {/* Botão de Adicionar / Importar Arquivo ou Lista M3U */}
+          <button
+            onClick={() => {
+              setEditingChannel(null);
+              setModalTab('m3u');
+              setIsAddModalOpen(true);
+            }}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-orange-600/30 active:scale-95 cursor-pointer min-h-[44px] shrink-0"
+            title="Importar lista M3U ou carregar arquivo próprio"
+          >
+            <Upload className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">Carregar Lista / Arquivo</span>
+            <span className="sm:hidden">Carregar M3U</span>
+          </button>
+
+          {customChannelsCount > 0 && (
+            <button
+              onClick={handleClearAllCustom}
+              className="flex items-center gap-1.5 px-3 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 font-semibold text-xs transition-all cursor-pointer min-h-[44px] shrink-0"
+              title="Remover todos os canais personalizados importados"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Limpar Importados ({customChannelsCount})</span>
+            </button>
+          )}
 
           {/* Seletor de Modo de Visualização (Grade / Lista - perfeito para celular) */}
           <div className="flex items-center bg-neutral-900/90 border border-white/10 rounded-xl sm:rounded-2xl p-0.5 shrink-0">
@@ -1011,7 +1058,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                         setImportErrorMsg('');
                       }}
                       className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
-                        m3uInputType === 'url' ? 'bg-white/15 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                        m3uInputType === 'url' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                       }`}
                     >
                       Link / URL
@@ -1036,7 +1083,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                         setImportErrorMsg('');
                       }}
                       className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
-                        m3uInputType === 'text' ? 'bg-white/15 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
+                        m3uInputType === 'text' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
                       }`}
                     >
                       Colar Texto

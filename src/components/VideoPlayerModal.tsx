@@ -17,6 +17,8 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
+import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
+import { getAvailableEpisodes } from "../services/episodeAvailability";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -158,6 +160,7 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
+  const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
@@ -228,7 +231,13 @@ export function VideoPlayerModal({
   // Sincroniza estado de tela cheia do navegador
   useEffect(() => {
     const handleFullscreenStateChange = () => {
-      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).webkitCurrentFullScreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
       setIsFullscreen(isCurrentlyFullscreen);
       if (!isCurrentlyFullscreen) {
         setIsWidescreen(false);
@@ -243,10 +252,14 @@ export function VideoPlayerModal({
 
     document.addEventListener("fullscreenchange", handleFullscreenStateChange);
     document.addEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenStateChange);
 
     return () => {
       document.removeEventListener("fullscreenchange", handleFullscreenStateChange);
       document.removeEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenStateChange);
     };
   }, []);
 
@@ -331,6 +344,160 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
+  // Carregamento dinâmico de temporadas e episódios reais via TMDB
+  const [seriesDetails, setSeriesDetails] = useState<TMDBDetails | null>(null);
+  const [seasonData, setSeasonData] = useState<Season | null>(null);
+  const [, setLoadingSeason] = useState<boolean>(false);
+  const activeEpisodeBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Busca detalhes da série no TMDB para obter as temporadas reais
+  useEffect(() => {
+    if (!isOpen || !isSeries) return;
+    const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numericId) return;
+
+    let isMounted = true;
+    getDetails(numericId, 'tv')
+      .then(details => {
+        if (isMounted && details) {
+          setSeriesDetails(details);
+        }
+      })
+      .catch(err => {
+        console.warn("[VideoPlayerModal] Não foi possível carregar detalhes da série:", err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSeries, tmdbId, resolvedId]);
+
+  // Lista de temporadas válidas da série (filtra specials e temporadas sem episódios)
+  const availableSeasons = useMemo(() => {
+    if (seriesDetails?.seasons && seriesDetails.seasons.length > 0) {
+      const valid = seriesDetails.seasons
+        .filter(s => s.season_number > 0 && s.episode_count > 0)
+        .map(s => s.season_number);
+      if (valid.length > 0) {
+        return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
+      }
+    }
+    return [1, 2, 3, 4];
+  }, [seriesDetails]);
+
+  // Ajusta a temporada selecionada caso não exista na lista de temporadas reais
+  useEffect(() => {
+    if (isSeries && availableSeasons.length > 0 && !availableSeasons.includes(season)) {
+      if (initialSeason && availableSeasons.includes(initialSeason)) {
+        setSeason(initialSeason);
+      } else {
+        setSeason(availableSeasons[0]);
+      }
+    }
+  }, [availableSeasons, isSeries, initialSeason, season]);
+
+  // Busca episódios da temporada ativa e valida disponibilidade real nos servidores homologados
+  useEffect(() => {
+    if (!isOpen || !isSeries) return;
+    const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numericId) return;
+
+    let isMounted = true;
+    setLoadingSeason(true);
+    setVerifiedAvailableEpisodes(null);
+
+    getSeasonDetails(numericId, season)
+      .then(data => {
+        if (isMounted && data) {
+          setSeasonData(data);
+          const totalEpCount = data.episodes?.length || 24;
+
+          // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
+          getAvailableEpisodes(numericId, season, totalEpCount)
+            .then(availList => {
+              if (isMounted && Array.isArray(availList) && availList.length > 0) {
+                setVerifiedAvailableEpisodes(availList);
+              }
+            })
+            .catch(e => {
+              console.warn("[VideoPlayerModal] Erro na verificação de stream:", e);
+            });
+        }
+      })
+      .catch(err => {
+        console.warn("[VideoPlayerModal] Não foi possível carregar episódios da temporada:", err);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingSeason(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSeries, tmdbId, resolvedId, season]);
+
+  // Lista filtrada de episódios do TMDB contendo apenas os que realmente estão no servidor
+  const filteredSeasonEpisodes = useMemo(() => {
+    if (!seasonData?.episodes) return [];
+    if (verifiedAvailableEpisodes && Array.isArray(verifiedAvailableEpisodes)) {
+      return seasonData.episodes.filter(e => verifiedAvailableEpisodes.includes(e.episode_number));
+    }
+    return seasonData.episodes;
+  }, [seasonData, verifiedAvailableEpisodes]);
+
+  // Total de episódios da temporada selecionada com streaming comprovado
+  const totalSeasonEpisodes = useMemo(() => {
+    if (filteredSeasonEpisodes.length > 0) {
+      return filteredSeasonEpisodes.length;
+    }
+    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
+      return verifiedAvailableEpisodes.length;
+    }
+    if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      return seasonData.episodes.length;
+    }
+    const sInfo = seriesDetails?.seasons?.find(s => s.season_number === season);
+    if (sInfo?.episode_count && sInfo.episode_count > 0) {
+      return sInfo.episode_count;
+    }
+    return 8;
+  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, seriesDetails, season]);
+
+  // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
+  const episodeNumbers = useMemo(() => {
+    if (filteredSeasonEpisodes.length > 0) {
+      return filteredSeasonEpisodes.map(e => e.episode_number);
+    }
+    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
+      return verifiedAvailableEpisodes;
+    }
+    if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      return seasonData.episodes.map(e => e.episode_number);
+    }
+    return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
+
+  // Se o episódio atual selecionado não existir na lista de disponíveis, auto-ajusta para o último disponível
+  useEffect(() => {
+    if (isSeries && episodeNumbers.length > 0 && !episodeNumbers.includes(episode)) {
+      const fallbackEp = episodeNumbers[episodeNumbers.length - 1];
+      if (fallbackEp) {
+        setEpisode(fallbackEp);
+      }
+    }
+  }, [episodeNumbers, isSeries, episode]);
+
+  // Auto-scroll do botão do episódio ativo
+  useEffect(() => {
+    if (activeEpisodeBtnRef.current) {
+      activeEpisodeBtnRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [episode]);
+
   // Servidores oficiais homologados: WatchPlayer Oficial e VIP Player (Dublado PT-BR)
   const servers = useMemo(() => {
     if (isSeries) {
@@ -409,8 +576,10 @@ export function VideoPlayerModal({
       return;
     }
 
-    console.error("[VideoPlayerModal] Servidor WatchPlayer indisponível no momento.");
-    setError("O player oficial está instável no momento. Tente novamente em instantes.");
+    console.error("[VideoPlayerModal] Conteúdo indisponível nos servidores homologados.");
+    setActiveIframeUrl(null);
+    setPlayerSkinReady(false);
+    setError("Este conteúdo ainda não está disponível nos servidores oficiais em versão Dublado PT-BR. Nossos servidores são atualizados constantemente.");
     setIsLoading(false);
   }, [servers, selectedServerKey, handleServerSwitch]);
 
@@ -879,8 +1048,7 @@ export function VideoPlayerModal({
   };
 
   const handleFullScreen = async () => {
-    const stage = document.documentElement; // Força tela cheia no navegador inteiro para esconder barras mobile
-    const isCurrentlyFull = isExpanded;
+    const isCurrentlyFull = isExpanded || !!document.fullscreenElement;
 
     if (isCurrentlyFull) {
       setIsWidescreen(false);
@@ -896,32 +1064,44 @@ export function VideoPlayerModal({
     } else {
       setIsWidescreen(true);
 
-      // Se a tela do celular estiver na vertical (altura > largura), ativa imediatamente a rotação de 90°
+      // 1. Tenta tela cheia nativa do navegador IMEDIATAMENTE no clique síncrono com navigationUI: 'hide'
+      const elem = document.documentElement;
+      const requestFS =
+        elem.requestFullscreen ||
+        (elem as any).webkitRequestFullscreen ||
+        (elem as any).mozRequestFullScreen ||
+        (elem as any).msRequestFullscreen;
+
+      if (requestFS) {
+        try {
+          await requestFS.call(elem, { navigationUI: "hide" });
+        } catch {
+          try {
+            await requestFS.call(elem);
+          } catch (err) {
+            console.warn("Fullscreen request fallback:", err);
+          }
+        }
+      }
+
+      // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
+      let lockedLandscape = false;
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          await (screen.orientation as any).lock("landscape");
+          lockedLandscape = true;
+          setIsRotated(false);
+        } catch (err) {
+          // Fallback para dispositivos sem lock() ou quando bloqueado pelo SO
+        }
+      }
+
+      // 3. Se a tela estiver na vertical e o SO não tiver rotacionado nativamente, ativa o fallback de rotação CSS
       const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-      if (isPortrait) {
+      if (isPortrait && !lockedLandscape) {
         setIsRotated(true);
       } else {
         setIsRotated(false);
-      }
-
-      // Tenta travar em orientação paisagem no mobile se suportado pelo sistema
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
-        try {
-          (screen.orientation as any).lock("landscape").catch(() => {});
-        } catch (err) {}
-      }
-
-      // Tenta tela cheia nativa do navegador
-      if (stage) {
-        try {
-          if (stage.requestFullscreen) {
-            await stage.requestFullscreen();
-          } else if ((stage as any).webkitRequestFullscreen) {
-            await (stage as any).webkitRequestFullscreen();
-          }
-        } catch (err) {
-          console.log("Modo expandido CSS ativo:", err);
-        }
       }
     }
   };
@@ -1117,15 +1297,16 @@ export function VideoPlayerModal({
                 <span>Temporada:</span>
               </div>
               
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
-                {[1, 2, 3, 4].map((s) => {
-                  const seasonDone = isSeasonFullyWatched(resolvedId, s, 8);
+              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hide max-w-full">
+                {availableSeasons.map((s) => {
+                  const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
+                  const seasonDone = isSeasonFullyWatched(resolvedId, s, sCount);
                   const isCurrent = season === s;
                   return (
                     <button
                       key={s}
                       onClick={() => handleSeasonChange(s)}
-                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
                         isCurrent
                           ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold"
                           : seasonDone
@@ -1145,12 +1326,12 @@ export function VideoPlayerModal({
 
               {/* Botão de Marcar Temporada Inteira como Vista */}
               {(() => {
-                const isCurrentSeasonDone = isSeasonFullyWatched(resolvedId, season, 8);
-                const watchedCount = getSeasonWatchedCount(resolvedId, season, 8);
+                const isCurrentSeasonDone = isSeasonFullyWatched(resolvedId, season, totalSeasonEpisodes);
+                const watchedCount = getSeasonWatchedCount(resolvedId, season, totalSeasonEpisodes);
                 return (
                   <button
-                    onClick={() => markSeasonWatched(resolvedId, season, 8, !isCurrentSeasonDone)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer ${
+                    onClick={() => markSeasonWatched(resolvedId, season, totalSeasonEpisodes, !isCurrentSeasonDone)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer shrink-0 ${
                       isCurrentSeasonDone
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                         : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
@@ -1158,7 +1339,7 @@ export function VideoPlayerModal({
                     title={
                       isCurrentSeasonDone
                         ? `Desmarcar Temporada ${season} inteira como assistida`
-                        : `Marcar Temporada ${season} inteira como assistida (${watchedCount}/8 vistos)`
+                        : `Marcar Temporada ${season} inteira como assistida (${watchedCount}/${totalSeasonEpisodes} vistos)`
                     }
                   >
                     <Check className={`w-3.5 h-3.5 ${isCurrentSeasonDone ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
@@ -1171,7 +1352,7 @@ export function VideoPlayerModal({
                     <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${
                       isCurrentSeasonDone ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-neutral-400"
                     }`}>
-                      {watchedCount}/8
+                      {watchedCount}/{totalSeasonEpisodes}
                     </span>
                   </button>
                 );
@@ -1189,13 +1370,14 @@ export function VideoPlayerModal({
                 <span className="hidden sm:inline">Anterior</span>
               </button>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((ep) => {
+              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px]">
+                {episodeNumbers.map((ep) => {
                   const watched = isEpisodeWatched(resolvedId, season, ep);
                   const isCurrent = episode === ep;
                   return (
                     <button
                       key={ep}
+                      ref={isCurrent ? activeEpisodeBtnRef : null}
                       onClick={() => handleEpisodeChange(ep)}
                       title={watched ? `Episódio ${ep} (Assistido)` : `Episódio ${ep}`}
                       className={`relative w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${
@@ -1223,7 +1405,8 @@ export function VideoPlayerModal({
 
               <button
                 onClick={() => handleEpisodeChange(episode + 1)}
-                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
+                disabled={episode >= totalSeasonEpisodes}
+                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
               >
                 <span className="hidden sm:inline">Próximo</span>
                 <ChevronRight className="w-3.5 h-3.5" />
@@ -1268,10 +1451,10 @@ export function VideoPlayerModal({
                     position: "absolute",
                     top: "50%",
                     left: "50%",
-                    width: "100vh",
-                    height: "100vw",
-                    maxWidth: "100vh",
-                    maxHeight: "100vw",
+                    width: "100dvh",
+                    height: "100dvw",
+                    maxWidth: "100dvh",
+                    maxHeight: "100dvw",
                     transform: "translate(-50%, -50%) rotate(90deg)",
                     zIndex: 20,
                   }
@@ -1327,7 +1510,7 @@ export function VideoPlayerModal({
               </div>
             )}
 
-            {activeIframeUrl ? (
+            {activeIframeUrl && !error ? (
               <iframe
                 key={activeIframeUrl}
                 ref={iframeRef}
@@ -1358,10 +1541,12 @@ export function VideoPlayerModal({
                 onError={() => handleSilentFallback()}
               />
             ) : error ? (
-              <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-3">
-                <AlertCircle className="w-10 h-10 text-orange-500" />
-                <h3 className="font-bold text-white text-base">Falha ao carregar o player</h3>
-                <p className="text-xs text-neutral-400 leading-relaxed">{error}</p>
+              <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-4">
+                <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500">
+                  <AlertCircle className="w-7 h-7" />
+                </div>
+                <h3 className="font-bold text-white text-base">Conteúdo Indisponível</h3>
+                <p className="text-xs text-neutral-400 leading-relaxed max-w-md">{error}</p>
                 <div className="pt-2 flex gap-3 flex-wrap justify-center">
                   <button
                     onClick={() => {
@@ -1375,18 +1560,16 @@ export function VideoPlayerModal({
                         handleExtract(urlInput);
                       }
                     }}
-                    className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    className="px-5 py-2.5 bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow-lg shadow-orange-600/20 active:scale-95"
                   >
-                    <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                    <RefreshCw className="w-4 h-4" /> Tentar novamente
                   </button>
-                  <a
-                    href={urlInput}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  <button
+                    onClick={handleCloseModal}
+                    className="px-5 py-2.5 bg-white/10 hover:bg-white/20 text-white text-xs font-semibold rounded-xl transition-colors flex items-center gap-2 cursor-pointer active:scale-95"
                   >
-                    <ExternalLink className="w-3.5 h-3.5" /> Abrir em nova aba
-                  </a>
+                    Voltar ao Catálogo
+                  </button>
                 </div>
               </div>
             ) : (
@@ -1405,7 +1588,10 @@ export function VideoPlayerModal({
               isSeries={isSeries}
               season={season}
               episode={episode}
-              totalEpisodes={24}
+              totalEpisodes={totalSeasonEpisodes}
+              availableSeasons={availableSeasons}
+              onSeasonChange={handleSeasonChange}
+              episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
               onClose={handleCloseModal}
               onEpisodeChange={handleEpisodeChange}
               onSkipIntro={() => handleSkipIntro()}

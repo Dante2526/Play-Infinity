@@ -1,0 +1,25 @@
+--- src/components/VideoPlayerModal.tsx
++++ src/components/VideoPlayerModal.tsx
+@@ -424,21 +424,7 @@
+   // Array numérico de episódios para o seletor
+   const episodeNumbers = useMemo(() => {
+     if (seasonData?.episodes && seasonData.episodes.length > 0) {
+-      const now = new Date();
+-      // Oculta episódios que ainda não foram ao ar ou foram há menos de 4 dias
+-      // Isso dá tempo para os servidores piratas uparem e processarem o vídeo
+-      const availableEpisodes = seasonData.episodes.filter(e => {
+-        if (!e.air_date) return true;
+-        
+-        const airDate = new Date(e.air_date);
+-        if (isNaN(airDate.getTime())) return true;
+-        
+-        // Adiciona um período de carência de 4 dias após a data de lançamento na TV
+-        airDate.setDate(airDate.getDate() + 4); 
+-        return airDate <= now;
+-      });
+-
+-      return availableEpisodes.map(e => e.episode_number);
++      return seasonData.episodes.map(e => e.episode_number);
+     }
+     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+   }, [seasonData, totalSeasonEpisodes]);

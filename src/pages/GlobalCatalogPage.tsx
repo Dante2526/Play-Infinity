@@ -37,7 +37,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
   getDetails, 
@@ -196,27 +196,29 @@ export function GlobalCatalogPage({
           if (!isMounted) return;
 
           if (res && res.results && res.results.length > 0) {
-            const formatted: CatalogItem[] = res.results.map((m: TMDBItem) => ({
-              id: m.id,
-              tmdbId: m.id,
-              title: m.title || m.name || "Sem título",
-              imageUrl: formatImageUrl(m.poster_path, 'w500'),
-              posterUrl: formatImageUrl(m.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-              type: 'movie',
-              genres: getGenreNames(m.genre_ids || []),
-              synopsis: m.overview || "Sinopse não disponível no momento.",
-              year: parseInt(m.release_date?.substring(0, 4) || '2024'),
-              rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
-              duration: "Filme",
-              match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
-              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`,
-            }));
+            const formatted: CatalogItem[] = res.results
+              .filter((m: TMDBItem) => isMediaAvailable({ id: m.id, title: m.title || m.name }))
+              .map((m: TMDBItem) => ({
+                id: m.id,
+                tmdbId: m.id,
+                title: m.title || m.name || "Sem título",
+                imageUrl: formatImageUrl(m.poster_path, 'w500'),
+                posterUrl: formatImageUrl(m.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+                type: 'movie',
+                genres: getGenreNames(m.genre_ids || []),
+                synopsis: m.overview || "Sinopse não disponível no momento.",
+                year: parseInt(m.release_date?.substring(0, 4) || '2024'),
+                rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
+                duration: "Filme",
+                match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
+                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`,
+              }));
             setItems(formatted);
             setTotalPages(Math.min(res.total_pages || 1, 500));
             setTotalCount(res.total_results || 10000);
           } else {
-            setItems(initialLocalItems);
+            setItems(initialLocalItems.filter(isMediaAvailable));
             setTotalPages(1);
           }
         } else {
@@ -225,27 +227,29 @@ export function GlobalCatalogPage({
           if (!isMounted) return;
 
           if (res && res.results && res.results.length > 0) {
-            const formatted: CatalogItem[] = res.results.map((s: TMDBItem) => ({
-              id: s.id,
-              tmdbId: s.id,
-              title: s.name || s.title || "Sem título",
-              imageUrl: formatImageUrl(s.poster_path, 'w500'),
-              posterUrl: formatImageUrl(s.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-              type: 'series',
-              genres: getGenreNames(s.genre_ids || []),
-              synopsis: s.overview || "Sinopse não disponível no momento.",
-              year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
-              rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
-              duration: "Série",
-              match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
-              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`,
-            }));
+            const formatted: CatalogItem[] = res.results
+              .filter((s: TMDBItem) => isMediaAvailable({ id: s.id, title: s.name || s.title }))
+              .map((s: TMDBItem) => ({
+                id: s.id,
+                tmdbId: s.id,
+                title: s.name || s.title || "Sem título",
+                imageUrl: formatImageUrl(s.poster_path, 'w500'),
+                posterUrl: formatImageUrl(s.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+                type: 'series',
+                genres: getGenreNames(s.genre_ids || []),
+                synopsis: s.overview || "Sinopse não disponível no momento.",
+                year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
+                rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
+                duration: "Série",
+                match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
+                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`,
+              }));
             setItems(formatted);
             setTotalPages(Math.min(res.total_pages || 1, 500));
             setTotalCount(res.total_results || 10000);
           } else {
-            setItems(initialLocalItems);
+            setItems(initialLocalItems.filter(isMediaAvailable));
             setTotalPages(1);
           }
         }
