@@ -60,6 +60,8 @@ interface NetflixPlayerSkinProps {
   isIntroActive: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  activeServerKey?: string;
+  onServerChange?: (serverKey: string) => void;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
   onBrightnessChange?: (brightness: number) => void;
   isCam?: boolean;
@@ -127,6 +129,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onTogglePiP,
   isMiniPlayer = false,
   passThroughClicks = false,
+  activeServerKey = "srv_watchplay",
+  onServerChange,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -189,8 +193,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
   const [showCastModal, setShowCastModal] = useState<boolean>(false);
 
-  // Preferências selecionadas no modal de áudio/legendas
-  const [selectedAudio, setSelectedAudio] = useState<string>("pt-BR");
+  // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
+  const selectedAudio = activeServerKey === "srv_vip" ? "pt-BR" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   // Rastreamento se a abertura já foi pulada neste episódio
@@ -1874,7 +1878,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 </h4>
                 <div className="space-y-1.5">
                   <button
-                    onClick={() => setSelectedAudio("pt-BR")}
+                    onClick={() => onServerChange?.("srv_vip")}
                     className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "pt-BR"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
@@ -1886,7 +1890,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setSelectedAudio("en-US")}
+                    onClick={() => onServerChange?.("srv_watchplay")}
                     className={`w-full text-left px-3.5 py-2.5 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                       selectedAudio === "en-US"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"

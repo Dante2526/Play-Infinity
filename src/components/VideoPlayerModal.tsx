@@ -1590,6 +1590,8 @@ export function VideoPlayerModal({
               episode={episode}
               totalEpisodes={totalSeasonEpisodes}
               availableSeasons={availableSeasons}
+              activeServerKey={selectedServerKey}
+              onServerChange={handleServerSwitch}
               onSeasonChange={handleSeasonChange}
               episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
               onClose={handleCloseModal}
