@@ -497,6 +497,7 @@ export default function App() {
 
       {viewState.type === 'details' && viewState.id ? (
         <DetailsPage 
+          key={`details-${viewState.id}`}
           itemId={Number(viewState.id)} 
           initialItem={viewState.itemData}
           onBack={handleBack} 

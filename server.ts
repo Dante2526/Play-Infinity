@@ -40,6 +40,19 @@ const customStreams: StreamItem[] = [];
 export const app = express();
 const PORT = 3000;
 
+process.on("unhandledRejection", (reason) => {
+  console.log("[Process Warning] Background promise rejection:", reason?.toString().substring(0, 50));
+});
+
+process.on("uncaughtException", (err) => {
+  console.log("[Process Guard] Suppressed background assertion:", err?.message);
+});
+
+  // Immediate healthcheck endpoint
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
@@ -49,6 +62,9 @@ const PORT = 3000;
   app.use(helmet({
     frameguard: false, // Desativado propositalmente para não quebrar a incorporação dos iframes externos caso precisem transitar contexto
     contentSecurityPolicy: false, // CSP desativada para manter compatibilidade com scripts de terceiros na UI (Analytics, Players)
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false
   }));
 
   // Limite rigoroso de payload para mitigar ataques de exaustão de memória
@@ -479,9 +495,22 @@ const PORT = 3000;
 
       if (url) {
         let fetchUrl = String(url).trim();
-        // Converte links do GitHub blob para raw automaticamente
-        if (fetchUrl.includes("github.com") && fetchUrl.includes("/blob/")) {
-          fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+        // Converte links do GitHub blob / raw automaticamente para o link direto raw.githubusercontent.com
+        if (fetchUrl.includes("github.com")) {
+          if (fetchUrl.includes("/blob/")) {
+            fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/blob/", "/");
+          } else if (fetchUrl.includes("/raw/")) {
+            fetchUrl = fetchUrl.replace("github.com", "raw.githubusercontent.com").replace("/raw/", "/");
+          } else if (!fetchUrl.endsWith(".m3u") && !fetchUrl.endsWith(".m3u8") && !fetchUrl.endsWith(".txt")) {
+            // Se for o link raiz de um repositório como github.com/owner/repo
+            const repoMatch = fetchUrl.match(/github\.com\/([^\/]+)\/([^\/\?#]+)/);
+            if (repoMatch) {
+              const owner = repoMatch[1];
+              const repo = repoMatch[2];
+              // Tenta carregar o arquivo CanaisBR01.m3u8 ou index.m3u8
+              fetchUrl = `https://raw.githubusercontent.com/${owner}/${repo}/master/CanaisBR01.m3u8`;
+            }
+          }
         }
 
         let parsedUrl;
@@ -499,17 +528,19 @@ const PORT = 3000;
           return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança." });
         }
 
-        // SSRF protection: only allow URLs that explicitly point to M3U playlists
-        // or come from trusted origins (like raw.githubusercontent.com for lists)
+        // SSRF protection: allow M3U playlists, TXT files or trusted repositories
         const pathname = parsedUrl.pathname.toLowerCase();
-        const isTrustedHost = parsedUrl.hostname.includes("githubusercontent.com") || parsedUrl.hostname.includes("pastebin.com");
+        const isTrustedHost = parsedUrl.hostname.includes("githubusercontent.com") || 
+                              parsedUrl.hostname.includes("github.com") || 
+                              parsedUrl.hostname.includes("pastebin.com") ||
+                              parsedUrl.hostname.includes("gitlab.com");
         if (!pathname.endsWith(".m3u") && !pathname.endsWith(".m3u8") && !pathname.endsWith(".txt") && !isTrustedHost) {
-          return res.status(403).json({ success: false, error: "SSRF bloqueado: URL não aponta para um formato de lista suportado (.m3u, .m3u8, .txt) ou host não confiável." });
+          return res.status(403).json({ success: false, error: "URL não aponta para um formato de lista suportado (.m3u, .m3u8, .txt) ou provedor compatível." });
         }
 
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 10000);
-        const resp = await fetch(fetchUrl, {
+        let resp = await fetch(fetchUrl, {
           signal: controller.signal,
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -518,8 +549,25 @@ const PORT = 3000;
         });
         clearTimeout(timeout);
 
+        // Se falhou com 'master', tenta com 'main' se for GitHub
+        if (!resp.ok && fetchUrl.includes("raw.githubusercontent.com") && fetchUrl.includes("/master/")) {
+          const fallbackUrl = fetchUrl.replace("/master/", "/main/");
+          try {
+            const fbController = new AbortController();
+            const fbTimeout = setTimeout(() => fbController.abort(), 8000);
+            const fbResp = await fetch(fallbackUrl, {
+              signal: fbController.signal,
+              headers: { "User-Agent": "Mozilla/5.0", "Accept": "*/*" }
+            });
+            clearTimeout(fbTimeout);
+            if (fbResp.ok) {
+              resp = fbResp;
+            }
+          } catch {}
+        }
+
         if (!resp.ok) {
-          return res.status(resp.status).json({ success: false, error: `Falha ao carregar a URL (${resp.status} ${resp.statusText})` });
+          return res.status(400).json({ success: false, error: `Não foi possível carregar a lista (HTTP ${resp.status}). Verifique se o link está público ou use a opção 'Anexar Arquivo'.` });
         }
         
         // Limita tamanho da resposta para evitar DoS via M3U gigante (máximo 5MB)
@@ -533,6 +581,14 @@ const PORT = 3000;
 
       if (!m3uText || typeof m3uText !== "string") {
         return res.status(400).json({ success: false, error: "Conteúdo da lista vazio ou inválido." });
+      }
+
+      const trimmedText = m3uText.trim();
+      if (trimmedText.startsWith("<!DOCTYPE") || trimmedText.startsWith("<html") || trimmedText.startsWith("<!doctype")) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "O link informado retornou uma página web (HTML) e não o arquivo de texto M3U. No GitHub, clique no botão 'Raw' para obter o link direto, ou baixe o arquivo .m3u8 e use a opção 'Anexar Arquivo'." 
+        });
       }
 
       // Parser robusto de M3U
@@ -1211,18 +1267,22 @@ const PORT = 3000;
           if (trimmed.includes('URI="')) {
             return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
               const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
-              return `URI="/api/anime/hls-proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}"`;
+              return `URI="/api/anime/hls-proxy?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}&is_segment=true"`;
             });
           }
           if (trimmed.startsWith("#")) return trimmed;
           const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
-          return `/api/anime/hls-proxy?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}`;
+          return `/api/anime/hls-proxy?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}&is_segment=true`;
         }).join("\n");
 
         return res.send(rewritten);
       }
 
-      if (contentType) res.setHeader("Content-Type", contentType);
+      let finalContentType = contentType || "video/MP2T";
+      if (req.query.is_segment === "true") {
+        finalContentType = "video/MP2T";
+      }
+      res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=3600");
       const buffer = Buffer.from(await upstreamRes.arrayBuffer());
       return res.send(buffer);
@@ -1850,6 +1910,27 @@ const PORT = 3000;
         return res.json(signData);
       }
 
+      const isWatchPlayerUnavailable = (content: string, url: string, status: number): boolean => {
+        if (status >= 400) return true;
+        const lowerUrl = (url || "").toLowerCase();
+        if (lowerUrl.includes("/login") || lowerUrl.includes("/admin") || lowerUrl.includes("/painel")) return true;
+        const lower = (content || "").toLowerCase();
+        if (
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("entrar • myplayer") ||
+          lower.includes("painel administrativo") ||
+          (lower.includes("myplayer") && (lower.includes("bem-vindo") || lower.includes("bem vindo"))) ||
+          lower.includes("série não encontrada") ||
+          lower.includes("serie não encontrada") ||
+          lower.includes("filme não encontrado") ||
+          lower.includes("acesso protegido por sessão segura")
+        ) {
+          return true;
+        }
+        return false;
+      };
+
       const parsedTarget = new URL(targetUrl);
       let effectiveTargetUrl = targetUrl;
       let upstreamRes = await fetch(effectiveTargetUrl, {
@@ -1857,10 +1938,45 @@ const PORT = 3000;
           "Referer": parsedTarget.origin + "/",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         },
+        redirect: "manual",
       });
 
-      // Se a rota padrão falhou (ex: 404), tenta alternar automaticamente entre /tvshow/ e /series/
-      if (!upstreamRes.ok) {
+      let html = "";
+      let isUnavailable = false;
+
+      // Trata redirecionamentos manuais (evitando seguir para telas de login / painel administrativo)
+      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
+        const loc = upstreamRes.headers.get("location") || "";
+        if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
+          isUnavailable = true;
+        } else {
+          try {
+            const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
+            effectiveTargetUrl = redirectedUrl;
+            upstreamRes = await fetch(effectiveTargetUrl, {
+              headers: {
+                "Referer": parsedTarget.origin + "/",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              },
+              redirect: "manual",
+            });
+          } catch (e) {
+            isUnavailable = true;
+          }
+        }
+      }
+
+      if (upstreamRes.status === 200) {
+        html = await upstreamRes.text();
+        if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+          isUnavailable = true;
+        }
+      } else {
+        isUnavailable = true;
+      }
+
+      // Se a rota padrão falhou (ex: 404 ou login), tenta alternar automaticamente entre /tvshow/ e /series/
+      if (isUnavailable) {
         const alternateVariants: string[] = [];
         if (effectiveTargetUrl.includes("/tvshow/")) {
           alternateVariants.push(effectiveTargetUrl.replace("/tvshow/", "/series/"));
@@ -1880,18 +1996,24 @@ const PORT = 3000;
                 "Referer": new URL(altUrl).origin + "/",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               },
+              redirect: "manual",
             });
-            if (altRes.ok) {
-              effectiveTargetUrl = altUrl;
-              upstreamRes = altRes;
-              break;
+            if (altRes.status === 200) {
+              const altText = await altRes.text();
+              if (!isWatchPlayerUnavailable(altText, altUrl, altRes.status)) {
+                effectiveTargetUrl = altUrl;
+                upstreamRes = altRes;
+                html = altText;
+                isUnavailable = false;
+                break;
+              }
             }
           } catch (e) {}
         }
       }
 
-      if (!upstreamRes.ok) {
-        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado no WatchPlayer (${effectiveTargetUrl}). Acionando fallback.`);
+      if (isUnavailable) {
+        console.warn(`[WatchPlayer Stream Status ${upstreamRes.status}]: Episódio não encontrado ou tela de login no WatchPlayer (${effectiveTargetUrl}). Acionando fallback.`);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(404).send(`
           <!DOCTYPE html>
@@ -1907,7 +2029,7 @@ const PORT = 3000;
               try {
                 window.parent.postMessage({ 
                   type: "WATCHPLAY_UNAVAILABLE", 
-                  reason: "upstream_status_" + ${upstreamRes.status}
+                  reason: "content_not_found"
                 }, "*");
               } catch(e) {}
             </script>
@@ -1915,8 +2037,6 @@ const PORT = 3000;
           </html>
         `);
       }
-
-      let html = await upstreamRes.text();
 
       // 0.0 Se o WatchPlayer retornou uma página de escolha de players intermediária (ex: "Escolha uma opção de player"),
       // auto-seleciona a opção prioritária (Dublado PT-BR / ?player=0) no próprio servidor de forma invisível
@@ -1956,12 +2076,47 @@ const PORT = 3000;
                 "Referer": parsedTarget.origin + "/",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
               },
+              redirect: "manual",
             });
-            if (choiceRes.ok) {
-              html = await choiceRes.text();
+            if (choiceRes.status === 200) {
+              const choiceHtml = await choiceRes.text();
+              if (!isWatchPlayerUnavailable(choiceHtml, effectiveTargetUrl, choiceRes.status)) {
+                html = choiceHtml;
+              } else {
+                isUnavailable = true;
+              }
+            } else {
+              isUnavailable = true;
             }
           } catch (err: any) {
             console.warn("[WatchPlayer Choice Resolution Error]:", err.message);
+            isUnavailable = true;
+          }
+
+          if (isUnavailable) {
+            console.warn(`[WatchPlayer Stream]: Opção de player inválida ou inacessível (${effectiveTargetUrl}). Acionando fallback.`);
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            return res.status(404).send(`
+              <!DOCTYPE html>
+              <html lang="pt-BR">
+              <head>
+                <meta charset="utf-8">
+                <style>
+                  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+                </style>
+              </head>
+              <body>
+                <script>
+                  try {
+                    window.parent.postMessage({ 
+                      type: "WATCHPLAY_UNAVAILABLE", 
+                      reason: "choice_unavailable"
+                    }, "*");
+                  } catch(e) {}
+                </script>
+              </body>
+              </html>
+            `);
           }
         }
       }
@@ -2953,6 +3108,14 @@ const PORT = 3000;
 
   app.get("/api/live-stream-proxy", async (req, res) => {
     try {
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
+
+      if (req.method === "OPTIONS") {
+        return res.status(204).end();
+      }
+
       const rawUrl = req.query.url as string;
       if (!rawUrl) return res.status(400).send("URL ausente");
 
@@ -2971,30 +3134,14 @@ const PORT = 3000;
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      // Allowlist verification to prevent SSRF abuse (suporte completo a TV ao vivo e VIP Player homologado)
-      const allowedDomains = [
-        "watchplay.shop", "hclod.qzz.io", "vixsrc.to", "vixsrc.net", "vix-content.net",
-        "embedplayer", "cincloud", "playcine", "myembed", "playerflix", "your-storagebox", "storagebox",
-        "starlive", "live", "tv", "stream", "cdn", "m3u", "iptv",
-        "jmp2.uk", "amagi.tv", "amazonaws.com", "pluto.tv", "plutotv.net", "mediatailor",
-        "otteravision.com", "wurl.com", "45.162.64.114"
-      ];
+      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.) ou playlists (.m3u8)
+      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
+      const isM3U8Request = rawUrl.includes(".m3u8");
       
-      const isAllowed = allowedDomains.some(d => parsed.hostname.toLowerCase().includes(d));
-      if (!isAllowed && !req.headers.referer?.includes(req.headers.host || '')) {
-         return res.status(403).send("SSRF blocked. Domain not in allowlist.");
-      }
-
-      if (req.method === "OPTIONS") {
-        return res.status(204).end();
-      }
-
-      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.)
-      const isSegment = rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
-      const cached = isSegment ? liveChunkCache.get(rawUrl) : null;
+      const cached = (isSegment || isM3U8Request) ? liveChunkCache.get(rawUrl) : null;
       if (cached && cached.expires > Date.now()) {
         res.setHeader("Content-Type", cached.contentType);
-        res.setHeader("Cache-Control", "public, max-age=15, immutable");
+        res.setHeader("Cache-Control", isM3U8Request ? "public, max-age=2, immutable" : "public, max-age=15, immutable");
         res.setHeader("X-Cache-Status", "HIT-MEMORY");
         return res.send(cached.buffer);
       }
@@ -3010,7 +3157,7 @@ const PORT = 3000;
       }
 
       let currentUrl = rawUrl;
-      let upstreamRes;
+      let upstreamRes: Response | undefined;
       let redirects = 0;
       const MAX_REDIRECTS = 5;
 
@@ -3065,7 +3212,7 @@ const PORT = 3000;
       if (isM3U8) {
         const text = await upstreamRes.text();
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        res.setHeader("Cache-Control", "public, max-age=2, immutable");
 
         const lines = text.split("\n");
         const filteredLines: string[] = [];
@@ -3117,7 +3264,7 @@ const PORT = 3000;
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
                 if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -3129,16 +3276,43 @@ const PORT = 3000;
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true`;
           } catch {
             return trimmed;
           }
         }).join("\n");
+        
+        const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
+        liveChunkCache.set(rawUrl, {
+          buffer: rewrittenBuffer,
+          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
+          expires: Date.now() + 2500
+        });
 
-        return res.send(rewritten);
+        return res.send(rewrittenBuffer);
       }
 
-      const finalContentType = contentType || "video/MP2T";
+      // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
+      // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
+      if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        const seq = Math.floor(Date.now() / 4000);
+        const manifest = [
+          "#EXTM3U",
+          "#EXT-X-VERSION:3",
+          "#EXT-X-TARGETDURATION:6",
+          `#EXT-X-MEDIA-SEQUENCE:${seq}`,
+          "#EXTINF:6.0,",
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+        ].join("\n");
+        return res.send(manifest);
+      }
+
+      let finalContentType = contentType || "video/MP2T";
+      if (req.query.is_segment === "true" || isSegment) {
+        finalContentType = "video/MP2T";
+      }
       res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=15");
 
@@ -3170,6 +3344,148 @@ const PORT = 3000;
     const { id, season, episode } = req.params;
     const type = req.path.startsWith("/serie") ? "tv" : "movie";
     return res.redirect(`/api/myembed-stream?id=${id}&type=${type}&s=${season || 1}&e=${episode || 1}`);
+  });
+
+  // Cache em memória para verificação de episódios disponíveis
+  const episodesAvailabilityCache = new Map<string, { timestamp: number; episodes: number[] }>();
+  const EPISODES_CACHE_TTL = 30 * 60 * 1000; // 30 minutos
+
+  // API: Verificador em tempo real de episódios disponíveis nos servidores homologados
+  app.get("/api/series/available-episodes", async (req, res) => {
+    try {
+      const rawId = String(req.query.id || "").trim();
+      const season = parseInt(String(req.query.season || "1"), 10) || 1;
+      const total = Math.min(Math.max(parseInt(String(req.query.total || "24"), 10) || 1, 1), 100);
+
+      if (!rawId) {
+        return res.status(400).json({ success: false, error: "ID da série obrigatório" });
+      }
+
+      // Se for IMDb tt..., converte para TMDB se possível
+      let resolvedId = rawId;
+      if (rawId.startsWith("tt")) {
+        try {
+          const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+          if (tmdbApiKey) {
+            const findRes = await fetch(
+              `https://api.themoviedb.org/3/find/${rawId}?api_key=${tmdbApiKey}&external_source=imdb_id`,
+              { signal: AbortSignal.timeout(3000) }
+            );
+            if (findRes.ok) {
+              const findData = await findRes.json();
+              if (findData.tv_results?.[0]?.id) {
+                resolvedId = String(findData.tv_results[0].id);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      const cacheKey = `${resolvedId}_${season}`;
+      const cached = episodesAvailabilityCache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < EPISODES_CACHE_TTL) {
+        return res.json({
+          success: true,
+          id: resolvedId,
+          season,
+          availableEpisodes: cached.episodes,
+          totalAvailable: cached.episodes.length,
+          cached: true,
+        });
+      }
+
+      // Função de sondagem de um episódio individual
+      const checkEpisode = async (ep: number): Promise<boolean> => {
+        try {
+          // 1. Sondagem WatchPlayer (HEAD request rápido)
+          const wpPromise = (async () => {
+            try {
+              const wpRes = await fetch(`https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${ep}`, {
+                method: "HEAD",
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                },
+                signal: AbortSignal.timeout(3500),
+              });
+              return wpRes.status === 200 || wpRes.status === 301 || wpRes.status === 302;
+            } catch {
+              return false;
+            }
+          })();
+
+          // 2. Sondagem VIP Player Ajax
+          const vipPromise = (async () => {
+            try {
+              const ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=tv&id=${resolvedId}&season=${season}&episode=${ep}`;
+              const ajaxRes = await fetch(ajaxUrl, {
+                headers: {
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                  "Referer": "https://playerflix.ink/",
+                  "X-Requested-With": "XMLHttpRequest",
+                },
+                signal: AbortSignal.timeout(3500),
+              });
+              if (!ajaxRes.ok) return false;
+              const j = await ajaxRes.json();
+              if (j && j.status && Array.isArray(j.data?.options)) {
+                const valid = j.data.options.filter((opt: any) => {
+                  const u = (opt.embed || "").toLowerCase();
+                  return (
+                    !u.includes("superflix") &&
+                    !u.includes("sfapi") &&
+                    !u.includes("byse") &&
+                    !u.includes("streamberry")
+                  );
+                });
+                return valid.length > 0;
+              }
+              return false;
+            } catch {
+              return false;
+            }
+          })();
+
+          const [hasWp, hasVip] = await Promise.all([wpPromise, vipPromise]);
+          return hasWp || hasVip;
+        } catch {
+          return false;
+        }
+      };
+
+      // Executa sondagem paralela de todos os episódios da temporada
+      const promises: Promise<{ ep: number; available: boolean }>[] = [];
+      for (let ep = 1; ep <= total; ep++) {
+        promises.push(
+          checkEpisode(ep).then((available) => ({ ep, available }))
+        );
+      }
+
+      const results = await Promise.all(promises);
+      const availableEpisodes = results.filter((r) => r.available).map((r) => r.ep);
+
+      // Salva no cache se encontrou episódios
+      if (availableEpisodes.length > 0) {
+        episodesAvailabilityCache.set(cacheKey, {
+          timestamp: Date.now(),
+          episodes: availableEpisodes,
+        });
+      }
+
+      return res.json({
+        success: true,
+        id: resolvedId,
+        season,
+        availableEpisodes:
+          availableEpisodes.length > 0
+            ? availableEpisodes
+            : Array.from({ length: total }, (_, i) => i + 1),
+        totalAvailable: availableEpisodes.length > 0 ? availableEpisodes.length : total,
+        cached: false,
+      });
+    } catch (err: any) {
+      console.error("[Available Episodes Error]:", err);
+      return res.status(500).json({ success: false, error: err.message });
+    }
   });
 
   // API: Proxy de Dados do Playerflix / VIP Player
@@ -3669,22 +3985,13 @@ const PORT = 3000;
         console.warn("[VIP Direct Stream Extraction Error]:", directExtractErr);
       }
 
-      // Se o playerflix não retornou opções válidas ou está sem fontes seguras para esta mídia, comuta direto para o WatchPlayer Oficial
-      if (!ajaxHadValidSources) {
-        console.warn(`[VIP Player]: Provedor sem fontes válidas para ${resolvedId}. Redirecionando transparentemente para o WatchPlayer Oficial...`);
-        const wpTarget = (type === "tv" || type === "series")
-          ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
-          : `https://v1.watchplay.shop/movie/${resolvedId}`;
-        return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
-      }
-
       // 2. FALLBACK SEGURO VIA PROXY DE HTML COM AUTO-DESTRUIÇÃO DE LOADER E ANTI-POPUP
       const targetUrl = (type === "tv" || type === "series")
         ? `https://playerflix.ink/serie/${resolvedId}/${season}/${episode}`
         : `https://playerflix.ink/filme/${resolvedId}`;
 
       const looksBlocked = (html: string, status: number): boolean => {
-        if (status === 403 || status === 503) return true;
+        if (status === 403 || status === 503 || status === 404) return true;
         const lower = (html || "").toLowerCase();
         if (
           lower.includes("cf-error-details") ||
@@ -3693,11 +4000,19 @@ const PORT = 3000;
           lower.includes("just a moment") ||
           lower.includes("cf-browser-verification") ||
           lower.includes("ray id") ||
-          (lower.includes("error code") && lower.includes("cloudflare"))
+          (lower.includes("error code") && lower.includes("cloudflare")) ||
+          lower.includes("investidor.blog") ||
+          lower.includes("myplayer") ||
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("painel administrativo") ||
+          lower.includes("bem-vindo") ||
+          lower.includes("bem vindo") ||
+          lower.includes("acesso protegido por sessão segura")
         ) {
           return true;
         }
-        if (!lower.includes("base_config")) {
+        if (!lower.includes("base_config") && !lower.includes("<video") && !lower.includes("player")) {
           return true;
         }
         return false;
@@ -3714,7 +4029,7 @@ const PORT = 3000;
       let playerHtml = await myembedRes.text();
 
       if (looksBlocked(playerHtml, myembedRes.status)) {
-        console.warn(`[MyEmbed Stream] playerflix.ink bloqueado. Tentando myembed.biz...`);
+        console.warn(`[MyEmbed Stream] playerflix.ink bloqueado ou sem stream. Tentando myembed.biz...`);
         const fallbackUrl = (type === "tv" || type === "series")
           ? `https://myembed.biz/serie/${resolvedId}/${season}/${episode}`
           : `https://myembed.biz/filme/${resolvedId}`;
@@ -3730,11 +4045,29 @@ const PORT = 3000;
         const fallbackHtml = await fallbackRes.text();
 
         if (looksBlocked(fallbackHtml, fallbackRes.status)) {
-          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo. Redirecionando transparentemente para o WatchPlayer Oficial...`);
-          const wpTarget = (type === "tv" || type === "series")
-            ? `https://v1.watchplay.shop/tvshow/${resolvedId}/${season}/${episode}`
-            : `https://v1.watchplay.shop/movie/${resolvedId}`;
-          return res.redirect(`/api/watchplayer-stream?url=${encodeURIComponent(wpTarget)}`);
+          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo para ${resolvedId}. Emitindo VIP_UNAVAILABLE.`);
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          return res.status(404).send(`
+            <!DOCTYPE html>
+            <html lang="pt-BR">
+            <head>
+              <meta charset="utf-8">
+              <style>
+                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+              </style>
+            </head>
+            <body>
+              <script>
+                try {
+                  window.parent.postMessage({ 
+                    type: "VIP_UNAVAILABLE", 
+                    reason: "no_valid_sources" 
+                  }, "*");
+                } catch(e) {}
+              </script>
+            </body>
+            </html>
+          `);
         }
 
         playerHtml = fallbackHtml;
@@ -3970,46 +4303,52 @@ const PORT = 3000;
     });
   });
 
-  if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-    // Use IIFE for async vite setup
-    (async () => {
-      const viteName = "vite"; const { createServer: createViteServer } = await import(viteName);
+  async function startServer() {
+    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      const viteName = "vite";
+      const { createServer: createViteServer } = await import(viteName);
       const vite = await createViteServer({
-      server: { 
-        middlewareMode: true,
-        watch: {
-          ignored: [
-            '**/data/**',
-            '**/scratch/**',
-            '**/*.tmp*',
-            '**/*.log',
-            '**/.system_generated/**',
-            '**/*.md',
-          ],
+        server: { 
+          middlewareMode: true,
+          watch: {
+            ignored: [
+              '**/data/**',
+              '**/scratch/**',
+              '**/*.tmp*',
+              '**/*.log',
+              '**/.system_generated/**',
+              '**/*.md',
+            ],
+          },
         },
-      },
-      appType: "spa",
-    });
-      app.use(vite.middlewares);
-    })().catch(err => console.error("Vite setup error:", err));
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    if (fs.existsSync(distPath)) {
-      // O express.static foi movido para o topo do arquivo
-      app.get("*", (_req, res) => {
-        res.sendFile(path.join(distPath, "index.html"));
+        appType: "spa",
       });
+      app.use(vite.middlewares);
+    } else {
+      const distPath = path.join(process.cwd(), "dist");
+      if (fs.existsSync(distPath)) {
+        app.get("*", (_req, res) => {
+          res.sendFile(path.join(distPath, "index.html"));
+        });
+      }
     }
 
-  }
-
-
-  const isRunDirectly = process.argv[1] && process.argv[1].includes("server");
-  app.use((err, req, res, next) => { console.error("Global Express Error:", err); res.status(500).send("Global Express Error: " + (err.message || err)); });
-
-  if (isRunDirectly && !process.env.VERCEL && process.env.NODE_ENV !== "test") {
-    const server = app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    app.use((err: any, req: any, res: any, next: any) => { 
+      console.error("Global Express Error:", err); 
+      if (!res.headersSent) {
+        res.status(500).send("Global Express Error: " + (err.message || err)); 
+      }
     });
-    server.setTimeout(30000);
+
+    if (!process.env.VERCEL) {
+      const server = app.listen(PORT, "0.0.0.0", () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+      });
+      server.on("error", (err: any) => {
+        console.error("[Server Listen Error]:", err);
+      });
+      server.setTimeout(30000);
+    }
   }
+
+  startServer().catch(err => console.error("Server start error:", err));

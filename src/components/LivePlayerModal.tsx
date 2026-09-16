@@ -194,6 +194,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
 
         let networkErrorCount = 0;
+        let mediaErrorCount = 0;
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!isMounted) return;
           if (data.fatal) {
@@ -201,7 +202,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 networkErrorCount += 1;
-                if (networkErrorCount <= 2) {
+                // TV ao vivo frequentemente tem pequenos engasgos ou chunks bloqueados.
+                // Tolerância maior (até 5 falhas seguidas) antes de desistir do servidor.
+                if (networkErrorCount <= 5) {
                   console.log('Recuperando erro de rede HLS silenciosamente...');
                   hls.startLoad();
                 } else {
@@ -210,13 +213,26 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
-                console.log('Recuperando erro de mídia HLS silenciosamente...');
-                hls.recoverMediaError();
+                mediaErrorCount += 1;
+                // Canais FAST (Amagi, Pluto) possuem descontinuidades constantes devido a ads.
+                // Permitir recuperação contínua para evitar queda de servidor por causa de ads.
+                if (mediaErrorCount <= 10) {
+                  console.log('Recuperando erro de mídia HLS silenciosamente...');
+                  hls.recoverMediaError();
+                } else {
+                  console.log('Erro de mídia persistente/codec não suportado, alternando para próximo servidor...');
+                  switchToNextServer('erro de midia persistente');
+                }
                 break;
               default:
                 switchToNextServer('erro fatal hls');
                 break;
             }
+          } else {
+             // Erros não fatais (ex: bufferStalledError ocasional) podem resetar os contadores se a reprodução continuar fluindo
+             if (data.details === Hls.ErrorDetails.BUFFER_APPENDING_ERROR || data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
+                // Ignore silent errors that don't stop playback
+             }
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
@@ -378,11 +394,86 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
   };
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
+  // Sincroniza estado de tela cheia do navegador
+  useEffect(() => {
+    const handleFullscreenStateChange = () => {
+      const isCurrentlyFullscreen = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).webkitCurrentFullScreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+      setIsFullscreen(isCurrentlyFullscreen);
+      if (!isCurrentlyFullscreen && screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (_) {}
+      }
+    };
+
+    document.addEventListener("fullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("mozfullscreenchange", handleFullscreenStateChange);
+    document.addEventListener("MSFullscreenChange", handleFullscreenStateChange);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("mozfullscreenchange", handleFullscreenStateChange);
+      document.removeEventListener("MSFullscreenChange", handleFullscreenStateChange);
+    };
+  }, []);
+
+  const toggleFullscreen = async () => {
+    const isCurrentlyFullscreen = !!(
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement
+    );
+
+    if (!isCurrentlyFullscreen) {
+      const elem = containerRef.current || document.documentElement;
+      const requestFS =
+        elem.requestFullscreen ||
+        (elem as any).webkitRequestFullscreen ||
+        (elem as any).mozRequestFullScreen ||
+        (elem as any).msRequestFullscreen;
+
+      if (requestFS) {
+        try {
+          await requestFS.call(elem, { navigationUI: "hide" });
+        } catch {
+          try {
+            await requestFS.call(elem);
+          } catch (_) {}
+        }
+      }
+      setIsFullscreen(true);
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        try {
+          (screen.orientation as any).lock("landscape").catch(() => {});
+        } catch (_) {}
+      }
     } else {
-      document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
+      if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (_) {}
+      }
+      try {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        } else if ((document as any).webkitExitFullscreen) {
+          await (document as any).webkitExitFullscreen();
+        } else if ((document as any).mozCancelFullScreen) {
+          await (document as any).mozCancelFullScreen();
+        } else if ((document as any).msExitFullscreen) {
+          await (document as any).msExitFullscreen();
+        }
+      } catch (_) {}
+      setIsFullscreen(false);
     }
   };
 
