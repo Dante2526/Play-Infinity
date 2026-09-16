@@ -274,9 +274,19 @@ export function VideoPlayerModal({
 
     window.addEventListener("resize", handleOrientationOrResize);
     window.addEventListener("orientationchange", handleOrientationOrResize);
+    if (typeof screen !== "undefined" && screen.orientation) {
+      try {
+        screen.orientation.addEventListener("change", handleOrientationOrResize);
+      } catch (_) {}
+    }
     return () => {
       window.removeEventListener("resize", handleOrientationOrResize);
       window.removeEventListener("orientationchange", handleOrientationOrResize);
+      if (typeof screen !== "undefined" && screen.orientation) {
+        try {
+          screen.orientation.removeEventListener("change", handleOrientationOrResize);
+        } catch (_) {}
+      }
     };
   }, []);
 
