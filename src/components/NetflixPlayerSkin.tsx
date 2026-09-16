@@ -1049,17 +1049,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
       <div
         className={`absolute inset-0 z-0 touch-none ${
-          isExternalPlayer || passThroughClicks ? "pointer-events-none" : "cursor-pointer pointer-events-auto"
+          isExternalPlayer || passThroughClicks ? "pointer-events-none" : "cursor-default pointer-events-auto"
         }`}
-        onClick={() => {
-          if (!isLocked && !isExternalPlayer && !passThroughClicks) {
-            handleTogglePlay();
-          }
-        }}
         onDoubleClick={isExternalPlayer || passThroughClicks ? undefined : onToggleFullscreen}
-        onTouchStart={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchStart}
-        onTouchMove={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchMove}
-        onTouchEnd={isExternalPlayer || passThroughClicks ? undefined : handleScreenTouchEnd}
       />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}

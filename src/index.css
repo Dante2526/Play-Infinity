@@ -142,3 +142,14 @@ body.is-smart-tv [tabindex="0"] {
   transition: transform 0.2s, outline 0.1s, box-shadow 0.2s !important;
 }
 
+/* Oculta os controles de volume e mídia nativos do iOS/Safari */
+::-webkit-media-controls {
+  display: none !important;
+}
+video::-webkit-media-controls {
+  display: none !important;
+}
+video::-webkit-media-controls-enclosure {
+  display: none !important;
+}
+

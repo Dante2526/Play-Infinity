@@ -312,6 +312,17 @@ export default function App() {
     posterUrl?: string,
     isAnime?: boolean
   ) => {
+    // Entra em tela cheia imediatamente após o clique do usuário
+    try {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ((document.documentElement as any).webkitRequestFullscreen) {
+        (document.documentElement as any).webkitRequestFullscreen().catch(() => {});
+      }
+    } catch (e) {
+      console.warn("Fullscreen request failed", e);
+    }
+
     setPlayerModal({
       isOpen: true,
       title,
