@@ -137,6 +137,7 @@ const GEEK_AVATARS = [
   { id: "spiderman", url: "https://image.tmdb.org/t/p/w500/c24sv2weTHPsmDa7jEMN0m2P3RT.jpg", name: "Homem-Aranha" },
   { id: "deadpool", url: "https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg", name: "Deadpool" },
   { id: "superman", url: "https://image.tmdb.org/t/p/w500/8GFtkImmK0K1VaUChR0n9O61CFU.jpg", name: "Superman" },
+  { id: "vader", url: "https://image.tmdb.org/t/p/w500/doeFDzZ0Ywp8YUoRaEhVE5UBqka.jpg", name: "Darth Vader" },
   { id: "heisenberg", url: "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg", name: "Heisenberg" },
   { id: "johnwick", url: "https://image.tmdb.org/t/p/w500/wXqWR7dHncNRbxoEGybEy7QTe9h.jpg", name: "John Wick" },
   { id: "mandalorian", url: "https://image.tmdb.org/t/p/w500/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg", name: "O Mandaloriano" },
