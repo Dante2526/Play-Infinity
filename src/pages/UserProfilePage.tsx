@@ -129,7 +129,21 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 import { OnPlayHandler } from "../types";
 import { auth, db } from "../services/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
-import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
+import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile } from "firebase/auth";
+
+const GEEK_AVATARS = [
+  { id: "ironman", url: "https://image.tmdb.org/t/p/w500/5qHNjhtjMD4YWH3UP0rm4tKwxCL.jpg", name: "Homem de Ferro" },
+  { id: "batman", url: "https://image.tmdb.org/t/p/w500/7Pxez9J8fuPd2Mn9kex13YALrCQ.jpg", name: "Batman" },
+  { id: "spiderman", url: "https://image.tmdb.org/t/p/w500/5OK84Wn1bIEIThFKcVoaN087mLj.jpg", name: "Homem-Aranha" },
+  { id: "deadpool", url: "https://image.tmdb.org/t/p/w500/trzgptffGvAlAT6MEu01fz47cLW.jpg", name: "Deadpool" },
+  { id: "superman", url: "https://image.tmdb.org/t/p/w500/kN3A5oLgtKYAxa9lAkpsIGYKYVo.jpg", name: "Superman" },
+  { id: "heisenberg", url: "https://image.tmdb.org/t/p/w500/npIIZJGSrcJIJ6yHdmbqO6Jzo5I.jpg", name: "Heisenberg" },
+  { id: "johnwick", url: "https://image.tmdb.org/t/p/w500/8RZLOyYGsoRe9p44q3xin9QkMHv.jpg", name: "John Wick" },
+  { id: "mandalorian", url: "https://image.tmdb.org/t/p/w500/oKcMbVn0NJTNzQt0ClKKvVXkm60.jpg", name: "O Mandaloriano" },
+  { id: "harleyquinn", url: "https://image.tmdb.org/t/p/w500/8LqG2N6j98lFGMpuYsRUAhOunSd.jpg", name: "Arlequina" },
+  { id: "oppenheimer", url: "https://image.tmdb.org/t/p/w500/2lKs67r7FI4bPu0AXxMUJZxmUXn.jpg", name: "Oppenheimer" },
+  { id: "thor", url: "https://image.tmdb.org/t/p/w500/piQGdoIQOF3C1EI5cbYZLAW1gfj.jpg", name: "Thor" }
+];
 
 export function UserProfilePage({ 
   onNavigate,
@@ -144,6 +158,9 @@ export function UserProfilePage({
   const [userName, setUserName] = useState<string>(() => {
     return auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : "Naylan Moreira");
   });
+  const [userAvatar, setUserAvatar] = useState<string | null>(auth.currentUser?.photoURL || null);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [subscriptionLabel, setSubscriptionLabel] = useState<string>("Assinante Premium • Acesso Ilimitado");
   const [isVitalicio, setIsVitalicio] = useState<boolean>(false);
 
@@ -234,6 +251,23 @@ export function UserProfilePage({
       }
     } finally {
       setPasswordLoading(false);
+    }
+  };
+
+  const handleAvatarSelect = async (url: string) => {
+    if (!auth.currentUser) return;
+    setAvatarLoading(true);
+    try {
+      await updateProfile(auth.currentUser, { photoURL: url });
+      try { await updateDoc(doc(db, "usuarios", auth.currentUser.uid), { photoURL: url }); } catch (e) {}
+      try { await updateDoc(doc(db, "users", auth.currentUser.uid), { photoURL: url }); } catch (e) {}
+      setUserAvatar(url);
+      setIsAvatarModalOpen(false);
+    } catch (err) {
+      console.error("Erro ao atualizar avatar:", err);
+      alert("Não foi possível atualizar o avatar. Tente novamente.");
+    } finally {
+      setAvatarLoading(false);
     }
   };
 
@@ -357,10 +391,25 @@ export function UserProfilePage({
         </h1>
         
         {/* Card do Usuário */}
-        <div className="bg-[#111111] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 shadow-xl">
-          <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[4px] border-[#0a0a0a] flex items-center justify-center font-black text-4xl md:text-5xl shadow-[0_0_30px_rgba(234,88,12,0.6)] shrink-0">
-            {userInitial}
-          </div>
+        <div className="bg-[#111111] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 shadow-xl relative overflow-hidden">
+          {/* Decorative glow */}
+          <div className="absolute -top-32 -right-32 w-96 h-96 bg-orange-600/10 rounded-full blur-[100px] pointer-events-none"></div>
+          
+          <button 
+            onClick={() => setIsAvatarModalOpen(true)}
+            className="group relative w-24 h-24 md:w-32 md:h-32 rounded-full border-[4px] border-[#0a0a0a] flex items-center justify-center shadow-[0_0_30px_rgba(234,88,12,0.6)] shrink-0 overflow-hidden transition-transform hover:scale-105 bg-gradient-to-tr from-orange-600 to-orange-400"
+          >
+            {userAvatar ? (
+              <img src={userAvatar} alt={userName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-black text-4xl md:text-5xl text-white">{userInitial}</span>
+            )}
+            
+            {/* Hover Overlay */}
+            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 backdrop-blur-sm">
+              <span className="text-white text-xs font-bold uppercase tracking-wider">Alterar</span>
+            </div>
+          </button>
           
           <div className="flex flex-col items-center md:items-start flex-1 text-center md:text-left">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{userName}</h2>
@@ -696,6 +745,72 @@ export function UserProfilePage({
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Seleção de Avatar */}
+      {isAvatarModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-xl" onClick={() => !avatarLoading && setIsAvatarModalOpen(false)} />
+          <div 
+            className="bg-[#111111] border border-white/10 w-full max-w-3xl relative flex flex-col overflow-hidden shadow-2xl max-h-[85vh] animate-fade-in" 
+            style={{ borderRadius: '24px' }}
+          >
+            <div className="flex items-center justify-between p-6 border-b border-white/5 bg-[#1a1a1c]">
+              <div>
+                <h3 className="text-xl font-bold text-white mb-1">Escolha seu Avatar</h3>
+                <p className="text-sm text-neutral-400">Selecione um personagem para o seu perfil</p>
+              </div>
+              <button
+                onClick={() => setIsAvatarModalOpen(false)}
+                disabled={avatarLoading}
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-all disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto">
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+                {GEEK_AVATARS.map((avatar) => (
+                  <button
+                    key={avatar.id}
+                    onClick={() => handleAvatarSelect(avatar.url)}
+                    disabled={avatarLoading}
+                    className={`relative aspect-square rounded-full overflow-hidden border-[3px] transition-all group ${
+                      userAvatar === avatar.url 
+                        ? 'border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.5)] scale-105' 
+                        : 'border-transparent hover:border-white/30 hover:scale-105'
+                    } ${avatarLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  >
+                    <img 
+                      src={avatar.url} 
+                      alt={avatar.name}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                    />
+                    {userAvatar === avatar.url && (
+                      <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center">
+                        <CheckCircle2 className="w-8 h-8 text-white drop-shadow-md" />
+                      </div>
+                    )}
+                    
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-center">
+                      <span className="text-[10px] font-bold text-white text-center leading-tight shadow-black drop-shadow-md">
+                        {avatar.name}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {avatarLoading && (
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-10">
+                <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+              </div>
+            )}
           </div>
         </div>
       )}
