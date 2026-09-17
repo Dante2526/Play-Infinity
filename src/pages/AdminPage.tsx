@@ -100,8 +100,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <ShieldAlert className="w-8 h-8 text-orange-500" />
             </div>
           </div>
-          <h2 className="text-[24px] font-extrabold text-white text-center mb-2">Painel Admin</h2>
-          <p className="text-white/50 text-[14px] text-center mb-8">Acesso restrito à equipe Play Infinity.</p>
+          <h2 className="text-[24px] font-extrabold text-white text-center mb-2">Bem-vindo(a) de volta!</h2>
+          <p className="text-white/50 text-[14px] text-center mb-8">Acesso restrito à equipe administrativa.</p>
 
           {error && (
             <div className="mb-6 p-3 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 text-sm text-center font-medium">
