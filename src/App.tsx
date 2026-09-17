@@ -254,13 +254,26 @@ export default function App() {
     if (sessionStorage.getItem("isAdmin") === "true" && viewState.type === 'admin') return;
 
     let isSubscribed = true;
-    const userRef = doc(db, "users", currentUser.uid);
+    const userRef = doc(db, "usuarios", currentUser.uid);
 
     const unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
       if (!isSubscribed) return;
 
-      // Se o documento foi apagado do Firestore (ou revogado no Painel Admin)
+      // Se o documento não existir em 'usuarios', verifica se ainda está em 'users'
       if (!snap.exists()) {
+        try {
+          const { getDoc } = await import("firebase/firestore");
+          const legacySnap = await getDoc(doc(db, "users", currentUser.uid));
+          if (legacySnap.exists()) {
+            const data = legacySnap.data();
+            const name = data.nome || data.name || data.displayName;
+            if (name && isSubscribed) {
+              setUserDisplayName(name);
+            }
+            return;
+          }
+        } catch (e) {}
+
         console.warn("[Auth] Conta revogada ou removida do banco de dados. Encerrando sessão...");
         localStorage.removeItem("playinfinity_logged_in");
         // Fecha player e paywall se estiverem abertos
@@ -278,7 +291,7 @@ export default function App() {
 
       // Se existe, mantém o nome de exibição sincronizado
       const data = snap.data();
-      const name = data.nome || data.nomeExibicao || data.name || data.displayName;
+      const name = data.nome || data.name || data.displayName;
       if (name && isSubscribed) {
         setUserDisplayName(name);
       }
@@ -299,14 +312,19 @@ export default function App() {
     if (!currentUser) return;
     const updatePresence = async () => {
       try {
-        const userRef = doc(db, "users", currentUser.uid);
+        const userRef = doc(db, "usuarios", currentUser.uid);
         // Usa updateDoc para não recriar documento se ele tiver sido excluído
         await updateDoc(userRef, {
           ultimoAcesso: new Date().toISOString(),
           lastActive: new Date().toISOString()
         });
       } catch (err) {
-        // Silencioso se o documento não existir mais
+        try {
+          await updateDoc(doc(db, "users", currentUser.uid), {
+            ultimoAcesso: new Date().toISOString(),
+            lastActive: new Date().toISOString()
+          });
+        } catch (e) {}
       }
     };
     updatePresence();

@@ -23,7 +23,7 @@ function syncWatchedToCloud(store: Record<string, boolean>) {
     if (!user) return; // Só sincroniza se estiver logado
     
     try {
-      const userRef = doc(db, "users", user.uid);
+      const userRef = doc(db, "usuarios", user.uid);
       await setDoc(userRef, { watchedEpisodes: store }, { merge: true });
     } catch (e) {
       console.warn("[Firestore Sync] Falha ao sincronizar episódios:", e);
@@ -36,8 +36,10 @@ export async function fetchWatchedFromCloud(): Promise<void> {
   if (!user) return;
   
   try {
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
+    let snap = await getDoc(doc(db, "usuarios", user.uid));
+    if (!snap.exists()) {
+      snap = await getDoc(doc(db, "users", user.uid));
+    }
     if (snap.exists()) {
       const data = snap.data();
       if (data.watchedEpisodes) {
