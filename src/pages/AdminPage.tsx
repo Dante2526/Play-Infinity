@@ -27,6 +27,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio">("mensal");
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
@@ -118,11 +119,25 @@ export function AdminPage({ onBack }: AdminPageProps) {
       // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
       const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
       
-      // 2. Calcula 1 mês para frente
-      // Usamos "T12:00:00" para evitar bugs de fuso horário recuando 1 dia
-      const payDate = new Date(paymentDate + "T12:00:00");
-      const expirationDate = new Date(payDate);
-      expirationDate.setMonth(expirationDate.getMonth() + 1);
+      // 2. Calcula data de expiração
+      let expirationDate: Date;
+      let payDate = new Date();
+      let expireStr = "";
+      
+      if (accessType === "teste") {
+        expirationDate = new Date();
+        expirationDate.setHours(expirationDate.getHours() + 1);
+        expireStr = "Em 1 hora (" + expirationDate.toLocaleTimeString('pt-BR') + ")";
+      } else if (accessType === "vitalicio") {
+        expirationDate = new Date();
+        expirationDate.setFullYear(2099);
+        expireStr = "Vitalício (Permanente)";
+      } else {
+        payDate = new Date(paymentDate + "T12:00:00");
+        expirationDate = new Date(payDate);
+        expirationDate.setMonth(expirationDate.getMonth() + 1);
+        expireStr = expirationDate.toLocaleDateString('pt-BR');
+      }
 
       // 3. Salva no banco de dados como ACTIVE e salva as datas
       await setDoc(doc(db, "users", userCredential.user.uid), {
@@ -131,17 +146,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
         paymentDate: payDate.toISOString(),
         expirationDate: expirationDate.toISOString(),
         createdAt: new Date().toISOString(),
-        createdByAdmin: true
+        createdByAdmin: true,
+        accessType: accessType
       });
 
       // 4. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
       await signOut(auth);
 
-      setCreateSuccess(`Cliente criado! O acesso expira automaticamente em: ${expirationDate.toLocaleDateString('pt-BR')}`);
+      setCreateSuccess(`Cliente criado! O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
         email: newEmail,
         password: newPassword,
-        expirationDate: expirationDate.toLocaleDateString('pt-BR')
+        expirationDate: expireStr
       });
       
       setNewEmail("");
@@ -345,7 +361,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         )}
 
         {/* Cadastro Manual de Usuário (PIX) */}
-        <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-8 mb-12 shadow-xl">
+        <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-8 mb-12 shadow-xl relative z-10">
           <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
             <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl">
               <Users className="w-5 h-5" />
@@ -353,7 +369,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             Cadastrar Cliente Manualmente
           </h3>
           <p className="text-white/50 text-sm mb-6 max-w-2xl">
-            Crie acessos para quem pagou por PIX/dinheiro. A assinatura ficará <strong>Ativa</strong> automaticamente e o vencimento será calculado para exatos 1 mês após a data do pagamento escolhida.
+            Crie acessos para seus clientes. Escolha o tipo de acesso desejado e gere as credenciais instantaneamente.
           </p>
 
           {createSuccess && (
@@ -368,48 +384,92 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           )}
 
-          <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="md:col-span-1">
-              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente</label>
-              <input
-                type="email"
-                value={newEmail}
-                onChange={(e) => setNewEmail(e.target.value)}
-                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                placeholder="cliente@email.com"
-                required
-              />
-            </div>
-            
-            <div className="md:col-span-1">
-              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Senha Criada</label>
-              <input
-                type="text"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                placeholder="Ex: 123456"
-                minLength={6}
-                required
-              />
+          <form onSubmit={handleCreateUser} className="space-y-5">
+            {/* Tipo de Acesso (Segmented Control) */}
+            <div>
+              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Tipo de Acesso</label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAccessType('teste')}
+                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                    accessType === 'teste' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  Teste (1 Hora)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessType('mensal')}
+                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                    accessType === 'mensal' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  Mensal (1 Mês)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessType('vitalicio')}
+                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                    accessType === 'vitalicio' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  Vitalício
+                </button>
+              </div>
             </div>
 
-            <div className="md:col-span-1">
-              <CustomDatePicker 
-                label="Data do Pagamento"
-                value={paymentDate}
-                onChange={(date) => setPaymentDate(date)}
-              />
-            </div>
+            <div className={`grid grid-cols-1 ${accessType === 'mensal' ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
+              <div className="md:col-span-1">
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente</label>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                  placeholder="cliente@email.com"
+                  required
+                />
+              </div>
+              
+              <div className="md:col-span-1">
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Senha Criada</label>
+                <input
+                  type="text"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                  placeholder="Ex: 123456"
+                  minLength={6}
+                  required
+                />
+              </div>
 
-            <div className="md:col-span-1 flex items-end">
-              <button
-                type="submit"
-                disabled={createLoading}
-                className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
-              >
-                {createLoading ? "Criando..." : "Criar Acesso"}
-              </button>
+              {accessType === 'mensal' && (
+                <div className="md:col-span-1">
+                  <CustomDatePicker 
+                    label="Data do Pagamento"
+                    value={paymentDate}
+                    onChange={(date) => setPaymentDate(date)}
+                  />
+                </div>
+              )}
+
+              <div className="md:col-span-1 flex items-end">
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+                >
+                  {createLoading ? "Criando..." : "Criar Acesso"}
+                </button>
+              </div>
             </div>
           </form>
         </div>
