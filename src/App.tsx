@@ -65,7 +65,7 @@ import { AuthModal } from "./components/AuthModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { useSubscription } from "./hooks/useSubscription";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { auth } from "./services/firebase";
+import { auth, db } from "./services/firebase";
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
 ) {
@@ -139,11 +139,13 @@ import { FilterChip } from './components/FilterChip';
 import { ContentRow } from './components/ContentRow';
 import { NavItem } from './components/NavItem';
 
+const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
+
 import { OnPlayHandler } from "./types";
 
 export default function App() {
   type ViewState = { 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details' | 'live-tv';
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details' | 'live-tv' | 'admin';
     id?: string;
     itemData?: CatalogItem;
     previous?: any;
@@ -178,6 +180,9 @@ export default function App() {
   }, []);
 
   const [viewState, setViewState] = useState<ViewState>(() => {
+    if (window.location.pathname.toUpperCase() === '/ADM') {
+      return { type: 'admin' };
+    }
     if (window.history.state && window.history.state.type) {
       return window.history.state;
     }
@@ -230,6 +235,22 @@ export default function App() {
     });
     return () => unsubscribe();
   }, []);
+
+  // Heartbeat para rastrear "Pessoas Assistindo Agora"
+  useEffect(() => {
+    if (!currentUser) return;
+    const updatePresence = async () => {
+      try {
+        const { doc, setDoc } = await import("firebase/firestore");
+        await setDoc(doc(auth.app ? (auth as any).app : db as any, "users", currentUser.uid), {
+          lastActive: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {}
+    };
+    updatePresence();
+    const interval = setInterval(updatePresence, 3 * 60000); // A cada 3 minutos
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   // Carrega e atualiza a contagem de episódios novos das séries favoritas
   useEffect(() => {
@@ -619,6 +640,13 @@ export default function App() {
         <UserProfilePage onNavigate={(type) => navigateTo({ type: type as any })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'favorites' ? (
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
+      ) : viewState.type === 'admin' ? (
+        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+          <AdminPage onBack={() => {
+            window.history.replaceState({ type: 'home' }, '', '/');
+            setViewState({ type: 'home' });
+          }} />
+        </React.Suspense>
       ) : (
         <HomePage 
           onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} 
