@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
 import { auth } from '../services/firebase';
+import { useSubscription } from '../hooks/useSubscription';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -27,6 +28,15 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     expiryYear: '',
     ccv: ''
   });
+
+  const { isPremium } = useSubscription();
+
+  useEffect(() => {
+    if (isOpen && isPremium) {
+      alert("Pagamento reconhecido automaticamente pelo sistema! Seu Premium foi liberado.");
+      window.location.reload();
+    }
+  }, [isOpen, isPremium]);
 
   if (!isOpen) return null;
 
