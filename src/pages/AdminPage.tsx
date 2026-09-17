@@ -242,9 +242,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <button onClick={onBack} className="p-2 bg-white/5 hover:bg-white/10 rounded-full transition-colors text-white/70 hover:text-white">
-                <ChevronLeft className="w-5 h-5" />
-              </button>
               <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
                 <ShieldAlert className="w-8 h-8 text-orange-500" />
                 Painel Administrativo
