@@ -514,7 +514,7 @@ process.on("uncaughtException", (err) => {
   // Criar Assinatura e retornar link de pagamento
   app.post("/api/create-subscription", async (req, res) => {
     try {
-      const { userId, email, name } = req.body;
+      const { userId, email, name, cpfCnpj, creditCard, creditCardHolderInfo, billingType = "UNDEFINED" } = req.body;
       if (!userId || !email) return res.status(400).json({ error: "Faltam parâmetros obrigatórios." });
 
       const baseUrl = getAsaasBaseUrl();
@@ -531,7 +531,7 @@ process.on("uncaughtException", (err) => {
         const newCusRes = await fetch(`${baseUrl}/customers`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ name: name || email, email })
+          body: JSON.stringify({ name: name || email, email, cpfCnpj })
         });
         const newCusData = await newCusRes.json();
         customerId = newCusData.id;
@@ -543,18 +543,34 @@ process.on("uncaughtException", (err) => {
       const nextDueDate = new Date();
       nextDueDate.setDate(nextDueDate.getDate() + 1); // Vence amanhã para evitar bloqueios de compensação no dia atual
 
+      const subPayload: any = {
+        customer: customerId,
+        billingType, // "CREDIT_CARD" ou "UNDEFINED"
+        value: 9.90,
+        nextDueDate: nextDueDate.toISOString().split('T')[0],
+        cycle: "MONTHLY",
+        description: "Play Infinity Premium",
+        externalReference: userId // MANDATÓRIO: Identifica o usuário no webhook!
+      };
+
+      if (billingType === "CREDIT_CARD") {
+        if (!creditCard || !creditCardHolderInfo) {
+          throw new Error("Dados do cartão e do titular são obrigatórios para pagamento via cartão de crédito.");
+        }
+        subPayload.creditCard = creditCard;
+        subPayload.creditCardHolderInfo = creditCardHolderInfo;
+        
+        // No cartão, o pagamento inicial pode ser debitado na hora (hoje)
+        // O Asaas recomenda não setar nextDueDate para amanhã no cartão se quiser cobrança instantânea,
+        // mas setar para amanhã no billingType UNDEFINED (boleto/pix) evita bloqueio compensatório.
+        // Vamos manter nextDueDate para cobrança imediata do cartão.
+        delete subPayload.nextDueDate;
+      }
+
       const subRes = await fetch(`${baseUrl}/subscriptions`, {
         method: "POST",
         headers,
-        body: JSON.stringify({
-          customer: customerId,
-          billingType: "UNDEFINED", // Deixa o cliente escolher (Pix, Cartão, Boleto) no link
-          value: 9.90,
-          nextDueDate: nextDueDate.toISOString().split('T')[0],
-          cycle: "MONTHLY",
-          description: "Play Infinity Premium",
-          externalReference: userId // MANDATÓRIO: Identifica o usuário no webhook!
-        })
+        body: JSON.stringify(subPayload)
       });
       
       const subData = await subRes.json();
@@ -562,12 +578,14 @@ process.on("uncaughtException", (err) => {
         throw new Error(subData.errors[0].description);
       }
 
-      // 3. Pega a cobrança gerada para extrair a URL de pagamento (invoiceUrl)
-      const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { headers });
-      const payData = await payRes.json();
-      
-      const invoiceUrl = payData.data?.[0]?.invoiceUrl;
-      if (!invoiceUrl) throw new Error("Cobrança inicial não gerou URL de pagamento.");
+      // 3. URL de pagamento (apenas se não for cartão direto)
+      let invoiceUrl;
+      if (billingType !== "CREDIT_CARD") {
+        const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { headers });
+        const payData = await payRes.json();
+        invoiceUrl = payData.data?.[0]?.invoiceUrl;
+        if (!invoiceUrl) throw new Error("Cobrança inicial não gerou URL de pagamento.");
+      }
       
       res.json({ success: true, invoiceUrl, subscriptionId: subData.id });
     } catch (err: any) {
