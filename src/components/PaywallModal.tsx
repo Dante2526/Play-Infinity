@@ -126,7 +126,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      Assinar agora por R$ 19,90 <Crown size={20} />
+                      Assinar agora por R$ 9,90 <Crown size={20} />
                     </>
                   )}
                 </span>

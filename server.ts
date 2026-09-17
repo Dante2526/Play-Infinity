@@ -549,7 +549,7 @@ process.on("uncaughtException", (err) => {
         body: JSON.stringify({
           customer: customerId,
           billingType: "UNDEFINED", // Deixa o cliente escolher (Pix, Cartão, Boleto) no link
-          value: 19.90,
+          value: 9.90,
           nextDueDate: nextDueDate.toISOString().split('T')[0],
           cycle: "MONTHLY",
           description: "Play Infinity Premium",
@@ -584,21 +584,27 @@ process.on("uncaughtException", (err) => {
       // O Asaas envia um 'externalReference' que nós injetamos na assinatura
       if (payment && payment.externalReference && db) {
         const userId = payment.externalReference;
-        const userRef = doc(db, "users", userId);
+        const userRef = doc(db, "usuarios", userId);
         
         // Se pagou (Pix/Boleto) ou o cartão foi confirmado
         if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+          const now = new Date();
+          const nextMonth = new Date(now);
+          nextMonth.setMonth(now.getMonth() + 1);
+          
           await setDoc(userRef, { 
-            subscription: "ACTIVE",
+            assinatura: "ATIVA",
             subscriptionId: payment.subscription || "",
-            updatedAt: new Date().toISOString()
+            dataPagamento: now.toISOString(),
+            dataExpiracao: nextMonth.toISOString(),
+            ultimoAcesso: now.toISOString()
           }, { merge: true });
           console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId}`);
         } 
         // Se a assinatura atrasou ou o pagamento foi estornado/recusado
         else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
           await setDoc(userRef, { 
-            subscription: "INACTIVE",
+            assinatura: "INATIVA",
             updatedAt: new Date().toISOString()
           }, { merge: true });
           console.log(`[Webhook Asaas] Assinatura INATIVADA para o user: ${userId}`);
