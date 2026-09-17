@@ -81,6 +81,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
       if (!querySnapshot.empty) {
         setIsAdmin(true);
         sessionStorage.setItem("isAdmin", "true");
+        // Tenta autenticar no Auth também, caso as regras do Firestore exijam request.auth
+        try {
+          const { signInWithEmailAndPassword } = await import("firebase/auth");
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch (authErr) {
+          console.warn("Autenticação secundária no Firebase Auth dispensada:", authErr);
+        }
       } else {
         setError("Credenciais inválidas. Verifique o email e a senha.");
       }
