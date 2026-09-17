@@ -61,7 +61,11 @@ import {
   TrailerVideo
 } from "./services/tmdb";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
-
+import { AuthModal } from "./components/AuthModal";
+import { PaywallModal } from "./components/PaywallModal";
+import { useSubscription } from "./hooks/useSubscription";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { auth } from "./services/firebase";
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
 ) {
@@ -92,7 +96,8 @@ import {
   isItemFavorite,
   getAllCatalogItems,
   SERIES_EPISODE_SCHEDULE,
-  getScheduleForFavorites
+  getScheduleForFavorites,
+  fetchFavoritesFromCloud
 } from "./services/favorites";
 import {
   getFavoriteEpisodeNotifications,
@@ -103,9 +108,10 @@ import {
   toggleEpisodeWatched,
   markSeasonWatched,
   isSeasonFullyWatched,
-  getSeasonWatchedCount
+  getSeasonWatchedCount,
+  fetchWatchedFromCloud
 } from "./services/watchedEpisodes";
-import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "./services/playbackHistory";
+import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem, fetchHistoryFromCloud } from "./services/playbackHistory";
 import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "./services/comments";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
@@ -204,6 +210,26 @@ export default function App() {
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+  
+  // Autenticação Firebase & Assinatura
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isAuthInitialized, setIsAuthInitialized] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const { isPremium } = useSubscription();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthInitialized(true);
+      if (user) {
+        fetchHistoryFromCloud(); // Baixa histórico e mescla no login
+        fetchFavoritesFromCloud(); // Baixa favoritos da nuvem
+        fetchWatchedFromCloud(); // Baixa episódios assistidos
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Carrega e atualiza a contagem de episódios novos das séries favoritas
   useEffect(() => {
@@ -280,6 +306,11 @@ export default function App() {
   };
 
   const handleToggleProfile = () => {
+    if (!currentUser) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+    
     if (viewState.type === 'profile' || viewState.type === 'favorites') {
       if (viewState.previous && viewState.previous.type !== 'profile' && viewState.previous.type !== 'favorites') {
         navigateTo(viewState.previous);
@@ -312,6 +343,11 @@ export default function App() {
     posterUrl?: string,
     isAnime?: boolean
   ) => {
+    if (!isPremium) {
+      setIsPaywallOpen(true);
+      return;
+    }
+
     // Quando autoFullscreen for solicitado (ex: ao clicar em Continue Assistindo),
     // aciona a tela cheia nativa imediatamente no clique do usuário para ocultar as barras do navegador
     if (autoFullscreen) {
@@ -382,6 +418,44 @@ export default function App() {
       console.warn("[TrackPlay] Erro ao disparar registro:", err);
     }
   };
+
+  if (!isAuthInitialized) {
+    return (
+      <div className="bg-[#0a0a0a] min-h-screen flex items-center justify-center">
+        <Loader2 className="w-10 h-10 text-orange-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // TELA DE BLOQUEIO INICIAL (FORÇA O LOGIN ANTES DO CATÁLOGO)
+  if (!currentUser) {
+    return (
+      <div className="bg-[#0a0a0a] min-h-screen relative overflow-hidden flex flex-col">
+        {/* Background Cinematográfico Desfocado */}
+        <div className="absolute inset-0 z-0">
+          <img 
+            src="https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=1920&q=80" 
+            className="w-full h-full object-cover opacity-20" 
+            alt="Background" 
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-transparent"></div>
+        </div>
+
+        {/* Top Branding (Visível apenas na tela de bloqueio) */}
+        <div className="relative z-10 w-full py-6 px-8 flex justify-between items-center">
+          <div className="font-black text-2xl tracking-tighter flex items-center select-none">
+            <span className="text-white">PLAY</span>
+            <span className="text-orange-500 ml-1">INFINITY</span>
+          </div>
+        </div>
+
+        {/* Modal Fixado */}
+        <div className="relative z-10 flex-1 w-full h-full">
+           <AuthModal isOpen={true} onClose={() => {}} isDismissible={false} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col lg:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
@@ -652,6 +726,11 @@ export default function App() {
       </div>
 
       <VirtualRemote isHidden={playerModal.isOpen} />
+      
+      {/* Auth & Paywall Modals */}
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+      <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
+
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
       <React.Suspense fallback={null}>
         {playerModal.isOpen && (

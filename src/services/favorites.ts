@@ -1,5 +1,7 @@
 import { CatalogItem, providerCatalogs, featured, isMediaAvailable } from "../data";
 import { getDetails } from "./tmdb";
+import { db, auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export interface SeriesScheduleEpisode {
   id: string;
@@ -81,11 +83,52 @@ export const getFavoriteIds = (): number[] => {
   return DEFAULT_FAVORITE_IDS;
 };
 
+// Timer para evitar spam de writes no Firestore (Debounce de 5s)
+let syncTimeout: any = null;
+
+function syncFavoritesToCloud(ids: number[]) {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  
+  syncTimeout = setTimeout(async () => {
+    const user = auth.currentUser;
+    if (!user) return; // Só sincroniza se estiver logado
+    
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { favorites: ids }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore Sync] Falha ao sincronizar favoritos:", e);
+    }
+  }, 5000);
+}
+
+export async function fetchFavoritesFromCloud(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  try {
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.favorites && Array.isArray(data.favorites)) {
+        // Mescla favoritos da nuvem com os locais e remove duplicatas
+        const local = getFavoriteIds();
+        const merged = Array.from(new Set([...local, ...data.favorites]));
+        saveFavoriteIds(merged);
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore Fetch] Erro ao baixar favoritos:", e);
+  }
+}
+
 export const saveFavoriteIds = (ids: number[]) => {
   try {
     localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(ids));
     // Dispara evento para sincronizar em outros componentes
     window.dispatchEvent(new CustomEvent("playinfinity:favorites_updated", { detail: ids }));
+    syncFavoritesToCloud(ids);
   } catch (e) {
     console.error("Erro ao salvar favoritos no localStorage:", e);
   }

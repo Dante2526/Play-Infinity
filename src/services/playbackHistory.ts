@@ -1,5 +1,6 @@
 import { getAllCatalogItems } from "./favorites";
-
+import { db, auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 const CHAIR_PHOTO_ID = "photo-1489599849927-2ee91cede3ba";
 
 export function isInvalidOrChairPhoto(url?: string): boolean {
@@ -125,10 +126,51 @@ function getStore(): Record<string, PlaybackHistoryItem> {
   }
 }
 
+// Timer para evitar spam de writes no Firestore (Debounce de 10s)
+let syncTimeout: any = null;
+
+function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  
+  syncTimeout = setTimeout(async () => {
+    const user = auth.currentUser;
+    if (!user) return; // Só sincroniza se estiver logado
+    
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { playbackHistory: store }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
+    }
+  }, 10000);
+}
+
+export async function fetchHistoryFromCloud(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  try {
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.playbackHistory) {
+        // Mescla histórico da nuvem com o local
+        const local = getStore();
+        const merged = { ...local, ...data.playbackHistory };
+        saveStore(merged);
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore Fetch] Erro ao baixar histórico:", e);
+  }
+}
+
 function saveStore(store: Record<string, PlaybackHistoryItem>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: store }));
+    syncStoreToCloud(store);
   } catch (e) {
     console.error("Erro ao salvar histórico de reprodução:", e);
   }

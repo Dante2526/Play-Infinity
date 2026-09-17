@@ -11,7 +11,8 @@ import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
 import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
-
+import { initializeApp } from "firebase/app";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
 }
@@ -40,6 +41,23 @@ const customStreams: StreamItem[] = [];
 
 export const app = express();
 const PORT = 3000;
+
+// Configuração Firebase (Backend JS SDK bypass para Firestore)
+let db: any = null;
+try {
+  const fbApp = initializeApp({
+    apiKey: process.env.VITE_FIREBASE_API_KEY,
+    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    appId: process.env.VITE_FIREBASE_APP_ID,
+  });
+  db = getFirestore(fbApp);
+  console.log("[Firebase] Backend conectado ao Firestore.");
+} catch (e) {
+  console.warn("[Firebase] Aviso: Falha ao inicializar no backend.", e);
+}
 
 process.on("unhandledRejection", (reason) => {
   console.log("[Process Warning] Background promise rejection:", reason?.toString().substring(0, 50));
@@ -481,6 +499,116 @@ process.on("uncaughtException", (err) => {
     } catch (err: any) {
       console.error("[API track-play] Erro:", err);
       res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ========================================================
+  // Integração Asaas (Assinaturas e Pagamentos)
+  // ========================================================
+  const getAsaasHeaders = () => ({
+    "access_token": process.env.ASAAS_API_KEY || "",
+    "Content-Type": "application/json"
+  });
+  const getAsaasBaseUrl = () => process.env.ASAAS_ENVIRONMENT === "sandbox" ? "https://sandbox.asaas.com/api/v3" : "https://api.asaas.com/v3";
+
+  // Criar Assinatura e retornar link de pagamento
+  app.post("/api/create-subscription", async (req, res) => {
+    try {
+      const { userId, email, name } = req.body;
+      if (!userId || !email) return res.status(400).json({ error: "Faltam parâmetros obrigatórios." });
+
+      const baseUrl = getAsaasBaseUrl();
+      const headers = getAsaasHeaders();
+
+      // 1. Busca ou cria cliente no Asaas
+      let customerId = "";
+      const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { headers });
+      const cusData = await cusRes.json();
+      
+      if (cusData.data && cusData.data.length > 0) {
+        customerId = cusData.data[0].id;
+      } else {
+        const newCusRes = await fetch(`${baseUrl}/customers`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ name: name || email, email })
+        });
+        const newCusData = await newCusRes.json();
+        customerId = newCusData.id;
+      }
+
+      if (!customerId) throw new Error("Falha ao resolver o cliente no Asaas.");
+
+      // 2. Cria Assinatura
+      const nextDueDate = new Date();
+      nextDueDate.setDate(nextDueDate.getDate() + 1); // Vence amanhã para evitar bloqueios de compensação no dia atual
+
+      const subRes = await fetch(`${baseUrl}/subscriptions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          customer: customerId,
+          billingType: "UNDEFINED", // Deixa o cliente escolher (Pix, Cartão, Boleto) no link
+          value: 19.90,
+          nextDueDate: nextDueDate.toISOString().split('T')[0],
+          cycle: "MONTHLY",
+          description: "Play Infinity Premium",
+          externalReference: userId // MANDATÓRIO: Identifica o usuário no webhook!
+        })
+      });
+      
+      const subData = await subRes.json();
+      if (subData.errors) {
+        throw new Error(subData.errors[0].description);
+      }
+
+      // 3. Pega a cobrança gerada para extrair a URL de pagamento (invoiceUrl)
+      const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { headers });
+      const payData = await payRes.json();
+      
+      const invoiceUrl = payData.data?.[0]?.invoiceUrl;
+      if (!invoiceUrl) throw new Error("Cobrança inicial não gerou URL de pagamento.");
+      
+      res.json({ success: true, invoiceUrl, subscriptionId: subData.id });
+    } catch (err: any) {
+      console.error("[Asaas] Erro ao criar assinatura:", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // Webhook de recebimento de pagamentos
+  app.post("/api/webhook/asaas", async (req, res) => {
+    try {
+      const { event, payment } = req.body;
+
+      // O Asaas envia um 'externalReference' que nós injetamos na assinatura
+      if (payment && payment.externalReference && db) {
+        const userId = payment.externalReference;
+        const userRef = doc(db, "users", userId);
+        
+        // Se pagou (Pix/Boleto) ou o cartão foi confirmado
+        if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+          await setDoc(userRef, { 
+            subscription: "ACTIVE",
+            subscriptionId: payment.subscription || "",
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId}`);
+        } 
+        // Se a assinatura atrasou ou o pagamento foi estornado/recusado
+        else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
+          await setDoc(userRef, { 
+            subscription: "INACTIVE",
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          console.log(`[Webhook Asaas] Assinatura INATIVADA para o user: ${userId}`);
+        }
+      }
+      
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error("[Webhook Asaas] Erro:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 
