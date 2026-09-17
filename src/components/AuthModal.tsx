@@ -38,23 +38,23 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#141414] border border-white/10 rounded-xl w-full max-w-md overflow-hidden relative shadow-2xl animate-fade-in">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 sm:p-6">
+      <div className="bg-[#1c1c1e]/80 backdrop-blur-3xl border border-white/10 w-full max-w-sm sm:max-w-md overflow-hidden relative shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-fade-in" style={{ borderRadius: '28px' }}>
         {isDismissible && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-white/50 hover:text-white transition-colors"
+            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all"
           >
-            <X className="w-6 h-6" />
+            <X className="w-4 h-4" />
           </button>
         )}
 
-        <div className="p-8">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-white mb-2">
+        <div className="p-8 sm:p-10">
+          <div className="text-center mb-10 mt-2">
+            <h2 className="text-[28px] leading-tight font-extrabold text-white tracking-tight mb-2">
               {isLogin ? "Entrar" : "Criar Conta"}
             </h2>
-            <p className="text-white/60 text-sm">
+            <p className="text-white/50 text-[15px] font-medium px-4">
               {isLogin 
                 ? "Acesse sua conta para continuar assistindo de onde parou." 
                 : "Crie sua conta para sincronizar seus favoritos em qualquer tela."}
@@ -62,42 +62,42 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2 text-red-500 text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-400 text-sm" style={{ borderRadius: '20px' }}>
+              <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              <span className="font-medium leading-relaxed">{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-white/70 mb-1">E-mail</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-white/40" />
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                  <Mail className="h-[18px] w-[18px]" />
                 </div>
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="seu@email.com"
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                  style={{ borderRadius: '22px' }}
+                  placeholder="Seu E-mail"
                   required
                 />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-white/70 mb-1">Senha</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-white/40" />
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                  <Lock className="h-[18px] w-[18px]" />
                 </div>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 pl-10 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
-                  placeholder="••••••••"
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                  style={{ borderRadius: '22px' }}
+                  placeholder="Senha"
                   minLength={6}
                   required
                 />
@@ -107,13 +107,14 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-primary hover:bg-primary/90 text-white font-medium py-3 rounded-lg transition-colors mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+              style={{ borderRadius: '22px' }}
             >
               {loading ? "Aguarde..." : (isLogin ? "Entrar" : "Criar Conta")}
             </button>
           </form>
 
-          <div className="mt-6 text-center text-sm text-white/60">
+          <div className="mt-8 text-center text-[15px] text-white/50 font-medium">
             {isLogin ? "Novo por aqui? " : "Já tem uma conta? "}
             <button
               type="button"
@@ -121,9 +122,9 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                 setIsLogin(!isLogin);
                 setError("");
               }}
-              className="text-primary hover:text-primary/80 font-medium transition-colors"
+              className="text-orange-500 hover:text-orange-400 font-bold transition-colors ml-1"
             >
-              {isLogin ? "Assine agora." : "Entre agora."}
+              {isLogin ? "Assine agora" : "Entre agora"}
             </button>
           </div>
         </div>
