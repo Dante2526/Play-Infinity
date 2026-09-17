@@ -232,6 +232,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
       });
 
       // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
+      localStorage.removeItem("playinfinity_logged_in");
+      localStorage.removeItem("playinfinity_playback_history");
+      localStorage.removeItem("playinfinity_favorites");
+      localStorage.removeItem("playinfinity_watched_episodes");
+      localStorage.removeItem("playinfinity_watched_seasons");
       await signOut(auth);
 
       setCreateSuccess(`Cliente ${newName.trim() ? `"${newName.trim()}" ` : ""}criado com sucesso! O acesso expira em: ${expireStr}`);

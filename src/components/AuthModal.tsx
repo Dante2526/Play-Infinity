@@ -28,6 +28,12 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
     try {
       if (isLogin) {
+        // Limpa resquícios locais de contas anteriores antes de logar
+        localStorage.removeItem("playinfinity_playback_history");
+        localStorage.removeItem("playinfinity_favorites");
+        localStorage.removeItem("playinfinity_watched_episodes");
+        localStorage.removeItem("playinfinity_watched_seasons");
+
         const userCred = await signInWithEmailAndPassword(auth, email, password);
         // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)
         let userSnap = await getDoc(doc(db, "usuarios", userCred.user.uid));

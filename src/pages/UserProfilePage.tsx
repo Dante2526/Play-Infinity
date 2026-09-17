@@ -159,6 +159,10 @@ export function UserProfilePage({
   const handleLogout = async () => {
     try {
       localStorage.removeItem("playinfinity_logged_in");
+      localStorage.removeItem("playinfinity_playback_history");
+      localStorage.removeItem("playinfinity_favorites");
+      localStorage.removeItem("playinfinity_watched_episodes");
+      localStorage.removeItem("playinfinity_watched_seasons");
       await signOut(auth);
       onNavigate('home');
     } catch (err) {

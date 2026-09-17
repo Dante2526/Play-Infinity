@@ -276,6 +276,11 @@ export default function App() {
 
         console.warn("[Auth] Conta revogada ou removida do banco de dados. Encerrando sessão...");
         localStorage.removeItem("playinfinity_logged_in");
+        localStorage.removeItem("playinfinity_playback_history");
+        localStorage.removeItem("playinfinity_favorites");
+        localStorage.removeItem("playinfinity_watched_episodes");
+        localStorage.removeItem("playinfinity_watched_seasons");
+        
         // Fecha player e paywall se estiverem abertos
         setPlayerModal(prev => ({ ...prev, isOpen: false }));
         setIsPaywallOpen(false);
