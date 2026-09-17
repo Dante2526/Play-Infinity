@@ -23,7 +23,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
   const handleNativeCast = async () => {
     setStatusMsg(null);
     try {
-      // 1. Tentar Remote Playback API nativa nos elementos de vídeo presentes
+      // 1. Tentar Remote Playback API nativa nos elementos de vídeo presentes (Chrome Android / iOS Safari AirPlay)
       const videos = document.querySelectorAll('video');
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i] as any;
@@ -38,6 +38,12 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
               return;
             }
           }
+        }
+        // Suporte a AirPlay em dispositivos Apple (Safari / iOS)
+        if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
+          video.webkitShowPlaybackTargetPicker();
+          onClose();
+          return;
         }
       }
 
@@ -54,8 +60,8 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
         }
       }
 
-      // 3. Fallback informativo caso o navegador/dispositivo não suporte a API
-      setStatusMsg("Nenhum receptor compatível com transmissão direta detectado neste navegador. Use o Código QR ou o espelhamento do seu celular (Smart View / AirPlay).");
+      // 3. Fallback explicativo se o browser mobile estiver rodando em iframe ou sem bridge local
+      setStatusMsg("Restrição de Navegador: Para proteger direitos autorais, o Chrome/Safari no celular bloqueia transmissões diretas de players protegidos. Use o Código QR abaixo para abrir direto na TV ou arraste a barra do seu celular e use o 'Smart View'/'Transmitir Tela'.");
     } catch (e) {
       setStatusMsg("Dispositivo de transmissão não localizado. Conecte na mesma rede Wi-Fi da Smart TV.");
     }
