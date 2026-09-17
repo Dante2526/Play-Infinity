@@ -3,6 +3,7 @@ import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft } 
 import { collection, getDocs, query, where, doc, setDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "../services/firebase";
+import { CustomDatePicker } from "../components/CustomDatePicker";
 
 interface AdminPageProps {
   onBack: () => void;
@@ -351,13 +352,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
 
             <div className="md:col-span-1">
-              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Data do Pagamento</label>
-              <input
-                type="date"
+              <CustomDatePicker 
+                label="Data do Pagamento"
                 value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                required
+                onChange={(date) => setPaymentDate(date)}
               />
             </div>
 
