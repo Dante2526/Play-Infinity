@@ -137,7 +137,7 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
     if (!user) return; // Só sincroniza se estiver logado
     
     try {
-      const userRef = doc(db, "users", user.uid);
+      const userRef = doc(db, "usuarios", user.uid);
       await setDoc(userRef, { playbackHistory: store }, { merge: true });
     } catch (e) {
       console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
@@ -150,8 +150,10 @@ export async function fetchHistoryFromCloud(): Promise<void> {
   if (!user) return;
   
   try {
-    const userRef = doc(db, "users", user.uid);
-    const snap = await getDoc(userRef);
+    let snap = await getDoc(doc(db, "usuarios", user.uid));
+    if (!snap.exists()) {
+      snap = await getDoc(doc(db, "users", user.uid));
+    }
     if (snap.exists()) {
       const data = snap.data();
       if (data.playbackHistory) {

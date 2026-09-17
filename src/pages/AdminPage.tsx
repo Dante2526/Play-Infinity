@@ -100,7 +100,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const loadStats = async () => {
     try {
-      const usersSnap = await getDocs(collection(db, "users"));
+      let usersSnap = await getDocs(collection(db, "usuarios"));
+      // Se usuarios estiver vazio, busca de users para migração pendente
+      if (usersSnap.empty) {
+        const legacySnap = await getDocs(collection(db, "users"));
+        if (!legacySnap.empty) {
+          usersSnap = legacySnap;
+        }
+      }
+
       let total = 0;
       let active = 0;
       let inactive = 0;
@@ -132,10 +140,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
           id: docSnap.id,
           name: data.nome || data.name || data.displayName || data.nomeExibicao || "",
           email: data.email || "Sem e-mail",
-          subscription: data.assinatura === "ATIVA" ? "ACTIVE" : (data.subscription || "INACTIVE"),
+          subscription: (data.assinatura === "ATIVA" || data.subscription === "ACTIVE") ? "ACTIVE" : "INACTIVE",
           accessType: data.tipoAcesso || data.accessType || "mensal",
           expirationDate: data.dataExpiracao || data.expirationDate,
-          initialPassword: data.senhaInicial || data.initialPassword,
+          initialPassword: data.senha || data.senhaInicial || data.initialPassword,
           createdAt: data.criadoEm || data.createdAt,
           lastActive: data.ultimoAcesso || data.lastActive
         });
@@ -204,18 +212,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
         expireStr = expirationDate.toLocaleDateString('pt-BR');
       }
 
-      // 4. Salva no banco de dados como ACTIVE e salva as datas, nome e senha
-      await setDoc(doc(db, "users", userCredential.user.uid), {
+      // 4. Salva no banco de dados na coleção 'usuarios' com campos limpos em português
+      await setDoc(doc(db, "usuarios", userCredential.user.uid), {
         email: newEmail,
         nome: newName.trim(),
-        nomeExibicao: newName.trim(),
         assinatura: "ATIVA",
         dataPagamento: payDate.toISOString(),
         dataExpiracao: expirationDate.toISOString(),
-        criadoEm: new Date().toISOString(),
         criadoPorAdmin: true,
         tipoAcesso: accessType,
-        senhaInicial: newPassword
+        senha: newPassword
       });
 
       // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
@@ -247,7 +253,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
     if (!window.confirm(confirmMsg)) return;
 
     try {
-      await deleteDoc(doc(db, "users", user.id));
+      await deleteDoc(doc(db, "usuarios", user.id));
+      try { await deleteDoc(doc(db, "users", user.id)); } catch(e){}
       setRevokeSuccess(`Acesso de ${user.email} revogado com sucesso!`);
       await loadStats();
     } catch (err: any) {
@@ -262,8 +269,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setRevokeSuccess("");
 
     try {
-      const q = query(collection(db, "users"), where("email", "==", revokeEmail));
-      const snap = await getDocs(q);
+      let q = query(collection(db, "usuarios"), where("email", "==", revokeEmail));
+      let snap = await getDocs(q);
+
+      if (snap.empty) {
+        const qOld = query(collection(db, "users"), where("email", "==", revokeEmail));
+        snap = await getDocs(qOld);
+      }
 
       if (snap.empty) {
         setRevokeError("Nenhum cliente ativo encontrado com esse e-mail.");
@@ -272,7 +284,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
       }
 
       for (const document of snap.docs) {
-        await deleteDoc(doc(db, "users", document.id));
+        await deleteDoc(document.ref);
+        try { await deleteDoc(doc(db, "usuarios", document.id)); } catch(e){}
+        try { await deleteDoc(doc(db, "users", document.id)); } catch(e){}
       }
 
       setRevokeSuccess(`Acesso de ${revokeEmail} revogado com sucesso!`);
@@ -286,67 +300,64 @@ export function AdminPage({ onBack }: AdminPageProps) {
   };
 
   const handleMigrateDatabase = async () => {
-    if (!window.confirm("Essa ação vai traduzir todos os campos do banco (inglês para português) e apagar as chaves antigas. Deseja continuar?")) return;
+    if (!window.confirm("Essa ação vai migrar a coleção para 'usuarios', traduzir e limpar todos os campos (remover nomeExibicao, criadoEm e usar apenas nome, senha e tipoAcesso). Deseja continuar?")) return;
     
     setMigrationLoading(true);
     try {
-      const snap = await getDocs(collection(db, "users"));
+      // 1. Busca documentos das coleções 'users' e 'usuarios'
+      const legacySnap = await getDocs(collection(db, "users"));
+      const currentSnap = await getDocs(collection(db, "usuarios"));
+      
+      const allDocsMap = new Map<string, any>();
+      legacySnap.forEach(d => allDocsMap.set(d.id, { docRef: d.ref, data: d.data(), fromLegacy: true }));
+      currentSnap.forEach(d => allDocsMap.set(d.id, { docRef: d.ref, data: d.data(), fromLegacy: false }));
+
       let migrated = 0;
       
-      for (const docSnap of snap.docs) {
-        const data = docSnap.data();
-        let needsMigration = false;
-        const updateData: any = {};
+      for (const [docId, item] of allDocsMap.entries()) {
+        const data = item.data;
         
-        if (data.subscription !== undefined) {
-           updateData.assinatura = data.subscription === "ACTIVE" ? "ATIVA" : (data.subscription === "INACTIVE" ? "INATIVA" : data.subscription);
-           updateData.subscription = deleteField();
-           needsMigration = true;
+        // Constrói o documento rigorosamente padronizado e limpo
+        const cleanDoc: any = {
+          nome: (data.nome || data.nomeExibicao || data.name || data.displayName || "").trim(),
+          email: (data.email || "").trim(),
+          assinatura: (data.assinatura === "ATIVA" || data.subscription === "ACTIVE") ? "ATIVA" : "INATIVA",
+          tipoAcesso: data.tipoAcesso || data.accessType || "mensal",
+          dataExpiracao: data.dataExpiracao || data.expirationDate || ""
+        };
+
+        const pass = data.senha || data.senhaInicial || data.initialPassword;
+        if (pass) cleanDoc.senha = pass;
+
+        const payDate = data.dataPagamento || data.paymentDate;
+        if (payDate) cleanDoc.dataPagamento = payDate;
+
+        if (data.criadoPorAdmin !== undefined) {
+          cleanDoc.criadoPorAdmin = data.criadoPorAdmin;
+        } else if (data.createdByAdmin !== undefined) {
+          cleanDoc.criadoPorAdmin = data.createdByAdmin;
         }
-        if (data.createdAt !== undefined) {
-           updateData.criadoEm = data.createdAt;
-           updateData.createdAt = deleteField();
-           needsMigration = true;
+
+        const lastAct = data.ultimoAcesso || data.lastActive;
+        if (lastAct) cleanDoc.ultimoAcesso = lastAct;
+
+        // Salva na coleção oficial 'usuarios' (substitui completamente, removendo campos antigos)
+        await setDoc(doc(db, "usuarios", docId), cleanDoc);
+
+        // Se o documento estava na coleção antiga 'users', remove-o de lá
+        if (item.fromLegacy) {
+          try {
+            await deleteDoc(doc(db, "users", docId));
+          } catch (delErr) {
+            console.warn("Aviso ao remover da coleção legada:", delErr);
+          }
         }
-        if (data.createdByAdmin !== undefined) {
-           updateData.criadoPorAdmin = data.createdByAdmin;
-           updateData.createdByAdmin = deleteField();
-           needsMigration = true;
-        }
-        if (data.displayName !== undefined) {
-           updateData.nomeExibicao = data.displayName;
-           updateData.displayName = deleteField();
-           needsMigration = true;
-        }
-        if (data.expirationDate !== undefined) {
-           updateData.dataExpiracao = data.expirationDate;
-           updateData.expirationDate = deleteField();
-           needsMigration = true;
-        }
-        if (data.initialPassword !== undefined) {
-           updateData.senhaInicial = data.initialPassword;
-           updateData.initialPassword = deleteField();
-           needsMigration = true;
-        }
-        if (data.name !== undefined) {
-           updateData.nome = data.name;
-           updateData.name = deleteField();
-           needsMigration = true;
-        }
-        if (data.paymentDate !== undefined) {
-           updateData.dataPagamento = data.paymentDate;
-           updateData.paymentDate = deleteField();
-           needsMigration = true;
-        }
-        
-        if (needsMigration) {
-          await updateDoc(docSnap.ref, updateData);
-          migrated++;
-        }
+
+        migrated++;
       }
       
-      alert(`Migração concluída com sucesso! ${migrated} usuário(s) convertidos para o padrão em português.`);
-      loadStats();
+      alert(`Migração concluída com sucesso! ${migrated} usuário(s) salvos na coleção 'usuarios' com padrão em português e campos limpos.`);
+      await loadStats();
     } catch (err: any) {
       alert("Erro ao migrar banco: " + err.message);
     } finally {

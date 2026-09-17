@@ -30,7 +30,10 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
       if (isLogin) {
         const userCred = await signInWithEmailAndPassword(auth, email, password);
         // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)
-        const userSnap = await getDoc(doc(db, "users", userCred.user.uid));
+        let userSnap = await getDoc(doc(db, "usuarios", userCred.user.uid));
+        if (!userSnap.exists()) {
+          userSnap = await getDoc(doc(db, "users", userCred.user.uid));
+        }
         if (!userSnap.exists()) {
           await signOut(auth);
           localStorage.removeItem("playinfinity_logged_in");
@@ -39,12 +42,12 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         if (userCred.user) {
-          await setDoc(doc(db, "users", userCred.user.uid), {
+          await setDoc(doc(db, "usuarios", userCred.user.uid), {
             nome: email.split("@")[0],
             email: email,
+            senha: password,
             assinatura: "INATIVA",
-            tipoAcesso: "mensal",
-            criadoEm: new Date().toISOString()
+            tipoAcesso: "mensal"
           }, { merge: true });
         }
       }

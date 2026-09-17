@@ -199,10 +199,17 @@ export function UserProfilePage({
 
       // 3. Atualiza campo no Firestore para manter sincronizado com o painel de adm
       try {
-        await updateDoc(doc(db, "users", user.uid), {
-          senhaInicial: newPassword
+        await updateDoc(doc(db, "usuarios", user.uid), {
+          senha: newPassword
         });
-      } catch (dbErr) {}
+      } catch (dbErr) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            senha: newPassword,
+            senhaInicial: newPassword
+          });
+        } catch (e) {}
+      }
 
       setPasswordSuccess("Senha alterada com sucesso!");
       setCurrentPassword("");
@@ -251,12 +258,15 @@ export function UserProfilePage({
 
       // 2. Consulta o documento do usuário
       try {
-        const snap = await getDoc(doc(db, "users", user.uid));
+        let snap = await getDoc(doc(db, "usuarios", user.uid));
+        if (!snap.exists()) {
+          snap = await getDoc(doc(db, "users", user.uid));
+        }
         if (snap.exists()) {
           const data = snap.data();
 
           // Sincroniza nome
-          const name = data.nome || data.nomeExibicao || data.name || data.displayName;
+          const name = data.nome || data.name || data.displayName || data.nomeExibicao;
           if (name) {
             setUserName(name);
           } else if (user.displayName) {
