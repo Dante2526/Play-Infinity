@@ -481,7 +481,8 @@ export default function App() {
   return (
     <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col lg:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
       {/* HEADER DESKTOP */}
-      <header className="hidden lg:flex fixed top-4 lg:top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
+      {viewState.type !== 'admin' && (
+        <header className="hidden lg:flex fixed top-4 lg:top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
         <div 
           tabIndex={-1}
           data-no-tv-focus="true"
@@ -566,8 +567,10 @@ export default function App() {
           </button>
         </div>
       </header>
+      )}
 
       {/* MOBILE BRANDING ON TOP */}
+      {viewState.type !== 'admin' && (
       <div className="lg:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full">
         <div 
           tabIndex={-1}
@@ -611,6 +614,7 @@ export default function App() {
           </button>
         </div>
       </div>
+      )}
 
       {viewState.type === 'details' && viewState.id ? (
         <DetailsPage 
@@ -657,6 +661,7 @@ export default function App() {
       )}
 
       {/* Footer Area */}
+      {viewState.type !== 'admin' && (
       <footer className="pt-16 pb-24 lg:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
         <div className="font-black text-4xl tracking-tighter flex items-center mb-6">
           <span className="text-neutral-500">PLAY</span>
@@ -738,8 +743,10 @@ export default function App() {
           </div>
         </div>
       </footer>
+      )}
 
       {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
+      {viewState.type !== 'admin' && (
       <div className="lg:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
         <nav className="bg-[#111111]/95 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1 flex items-center justify-around shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
           <div className="flex items-center justify-between w-full">
@@ -752,6 +759,7 @@ export default function App() {
           </div>
         </nav>
       </div>
+      )}
 
       <VirtualRemote isHidden={playerModal.isOpen} />
       
