@@ -68,8 +68,8 @@ export const getAllCatalogItems = (): CatalogItem[] => {
   return cachedCatalogItems;
 };
 
-// Obter IDs padrão iniciais se for primeira visita
-const DEFAULT_FAVORITE_IDS = [66732, 94997, 76479]; // Stranger Things, A Casa do Dragão, The Boys
+// Inicialmente vazio para contas novas
+const DEFAULT_FAVORITE_IDS: number[] = [];
 
 export const getFavoriteIds = (): number[] => {
   try {

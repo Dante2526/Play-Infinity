@@ -9,6 +9,56 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const currentFocusedRef = useRef<HTMLElement | null>(null);
 
+  // Oculta automaticamente se estiver em tela cheia ou se algum player (ao vivo ou VOD) estiver aberto
+  const [isFullscreen, setIsFullscreen] = useState(() => !!document.fullscreenElement);
+  const [isPlayerActive, setIsPlayerActive] = useState(() => {
+    return typeof document !== 'undefined' && (
+      document.body.classList.contains('live-player-open') ||
+      document.body.classList.contains('player-open') ||
+      !!document.querySelector('[data-live-player="true"], .live-player-modal')
+    );
+  });
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      ));
+    };
+
+    const handlePlayerState = (e: any) => {
+      if (typeof e.detail?.isOpen === 'boolean') {
+        setIsPlayerActive(e.detail.isOpen);
+      }
+    };
+
+    window.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    window.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    window.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    window.addEventListener('playinfinity:player_state', handlePlayerState);
+
+    const observer = new MutationObserver(() => {
+      const active = document.body.classList.contains('live-player-open') ||
+                     document.body.classList.contains('player-open') ||
+                     !!document.querySelector('[data-live-player="true"], .live-player-modal');
+      setIsPlayerActive(active);
+    });
+    observer.observe(document.body, { attributes: true, childList: true, subtree: true });
+
+    return () => {
+      window.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      window.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      window.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+      window.removeEventListener('playinfinity:player_state', handlePlayerState);
+      observer.disconnect();
+    };
+  }, []);
+
   // Ativa a classe de Smart TV no body enquanto o controle estiver aberto
   useEffect(() => {
     if (isOpen) {
@@ -424,7 +474,7 @@ export function VirtualRemote({ isHidden }: { isHidden?: boolean }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen]);
 
-  if (isHidden) return null;
+  if (isHidden || isFullscreen || isPlayerActive) return null;
 
   if (!isOpen) {
     return (

@@ -64,7 +64,8 @@ import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import { AuthModal } from "./components/AuthModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { useSubscription } from "./hooks/useSubscription";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, User, signOut } from "firebase/auth";
+import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { auth, db } from "./services/firebase";
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -229,19 +230,12 @@ export default function App() {
       setCurrentUser(user);
       setIsAuthInitialized(true);
       if (user) {
+        localStorage.setItem("playinfinity_logged_in", "true");
+        if (user.email) {
+          localStorage.setItem("playinfinity_last_email", user.email);
+        }
         if (user.displayName) {
           setUserDisplayName(user.displayName);
-        } else {
-          try {
-            const { doc, getDoc } = await import("firebase/firestore");
-            const snap = await getDoc(doc(db, "users", user.uid));
-            if (snap.exists()) {
-              const data = snap.data();
-              if (data.name || data.displayName) {
-                setUserDisplayName(data.name || data.displayName);
-              }
-            }
-          } catch (e) {}
         }
         fetchHistoryFromCloud(); // Baixa histórico e mescla no login
         fetchFavoritesFromCloud(); // Baixa favoritos da nuvem
@@ -253,6 +247,51 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // Monitora a existência do usuário no Firestore em tempo real
+  useEffect(() => {
+    if (!currentUser) return;
+    // Se o admin estiver visualizando o painel administrativo, não deslogar
+    if (sessionStorage.getItem("isAdmin") === "true" && viewState.type === 'admin') return;
+
+    let isSubscribed = true;
+    const userRef = doc(db, "users", currentUser.uid);
+
+    const unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
+      if (!isSubscribed) return;
+
+      // Se o documento foi apagado do Firestore (ou revogado no Painel Admin)
+      if (!snap.exists()) {
+        console.warn("[Auth] Conta revogada ou removida do banco de dados. Encerrando sessão...");
+        localStorage.removeItem("playinfinity_logged_in");
+        // Fecha player e paywall se estiverem abertos
+        setPlayerModal(prev => ({ ...prev, isOpen: false }));
+        setIsPaywallOpen(false);
+        setViewState({ type: 'home' });
+        setUserDisplayName("");
+        try {
+          await signOut(auth);
+        } catch (e) {
+          console.error("Erro ao encerrar sessão:", e);
+        }
+        return;
+      }
+
+      // Se existe, mantém o nome de exibição sincronizado
+      const data = snap.data();
+      const name = data.nome || data.nomeExibicao || data.name || data.displayName;
+      if (name && isSubscribed) {
+        setUserDisplayName(name);
+      }
+    }, (err) => {
+      console.warn("[Auth] Listener do documento do usuário:", err);
+    });
+
+    return () => {
+      isSubscribed = false;
+      unsubscribeUserDoc();
+    };
+  }, [currentUser, viewState.type]);
+
   const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || 'N').trim().charAt(0).toUpperCase() || 'N';
 
   // Heartbeat para rastrear "Pessoas Assistindo Agora"
@@ -260,11 +299,15 @@ export default function App() {
     if (!currentUser) return;
     const updatePresence = async () => {
       try {
-        const { doc, setDoc } = await import("firebase/firestore");
-        await setDoc(doc(auth.app ? (auth as any).app : db as any, "users", currentUser.uid), {
+        const userRef = doc(db, "users", currentUser.uid);
+        // Usa updateDoc para não recriar documento se ele tiver sido excluído
+        await updateDoc(userRef, {
+          ultimoAcesso: new Date().toISOString(),
           lastActive: new Date().toISOString()
-        }, { merge: true });
-      } catch (err) {}
+        });
+      } catch (err) {
+        // Silencioso se o documento não existir mais
+      }
     };
     updatePresence();
     const interval = setInterval(updatePresence, 3 * 60000); // A cada 3 minutos

@@ -15,8 +15,8 @@ export function useSubscription() {
         const unsubscribeSnap = onSnapshot(userRef, (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
-            // Se subscription for 'ACTIVE', é premium
-            setIsPremium(data.subscription === "ACTIVE");
+            // Se subscription for 'ACTIVE' ou assinatura for 'ATIVA', é premium
+            setIsPremium(data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
           } else {
             setIsPremium(false);
           }
