@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft } from "lucide-react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../services/firebase";
+import { collection, getDocs, query, where, doc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth, db } from "../services/firebase";
 
 interface AdminPageProps {
   onBack: () => void;
@@ -20,6 +21,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
     inactive: 0,
     watchingNow: 0
   });
+
+  // User Creation State
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [createSuccess, setCreateSuccess] = useState("");
+  const [createError, setCreateError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,6 +99,48 @@ export function AdminPage({ onBack }: AdminPageProps) {
       return () => clearInterval(interval);
     }
   }, [isAdmin]);
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreateLoading(true);
+    setCreateError("");
+    setCreateSuccess("");
+
+    try {
+      // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
+      const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
+      
+      // 2. Calcula 1 mês para frente
+      // Usamos "T12:00:00" para evitar bugs de fuso horário recuando 1 dia
+      const payDate = new Date(paymentDate + "T12:00:00");
+      const expirationDate = new Date(payDate);
+      expirationDate.setMonth(expirationDate.getMonth() + 1);
+
+      // 3. Salva no banco de dados como ACTIVE e salva as datas
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        email: newEmail,
+        subscription: "ACTIVE",
+        paymentDate: payDate.toISOString(),
+        expirationDate: expirationDate.toISOString(),
+        createdAt: new Date().toISOString(),
+        createdByAdmin: true
+      });
+
+      // 4. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
+      await signOut(auth);
+
+      setCreateSuccess(`Cliente criado! O acesso expira automaticamente em: ${expirationDate.toLocaleDateString('pt-BR')}`);
+      setNewEmail("");
+      setNewPassword("");
+      loadStats();
+    } catch (err: any) {
+      // Se falhar (ex: email já existe), desloga só por garantia
+      try { await signOut(auth); } catch(e){}
+      setCreateError("Erro: " + err.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   if (!isAdmin) {
     return (
@@ -247,6 +298,79 @@ export function AdminPage({ onBack }: AdminPageProps) {
             email: "seu@email.com"<br/>
             senha: "suasenha123"
           </div>
+        </div>
+
+        {/* Cadastro Manual de Usuário (PIX) */}
+        <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-8 mb-12 shadow-xl">
+          <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
+            <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl">
+              <Users className="w-5 h-5" />
+            </div>
+            Cadastrar Cliente Manualmente
+          </h3>
+          <p className="text-white/50 text-sm mb-6 max-w-2xl">
+            Crie acessos para quem pagou por PIX/dinheiro. A assinatura ficará <strong>Ativa</strong> automaticamente e o vencimento será calculado para exatos 1 mês após a data do pagamento escolhida.
+          </p>
+
+          {createSuccess && (
+            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-[20px] text-green-400 font-medium">
+              ✅ {createSuccess}
+            </div>
+          )}
+          
+          {createError && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 font-medium">
+              ❌ {createError}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateUser} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="md:col-span-1">
+              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente</label>
+              <input
+                type="email"
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                placeholder="cliente@email.com"
+                required
+              />
+            </div>
+            
+            <div className="md:col-span-1">
+              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Senha Criada</label>
+              <input
+                type="text"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                placeholder="Ex: 123456"
+                minLength={6}
+                required
+              />
+            </div>
+
+            <div className="md:col-span-1">
+              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Data do Pagamento</label>
+              <input
+                type="date"
+                value={paymentDate}
+                onChange={(e) => setPaymentDate(e.target.value)}
+                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                required
+              />
+            </div>
+
+            <div className="md:col-span-1 flex items-end">
+              <button
+                type="submit"
+                disabled={createLoading}
+                className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+              >
+                {createLoading ? "Criando..." : "Criar Acesso"}
+              </button>
+            </div>
+          </form>
         </div>
 
       </div>
