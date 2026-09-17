@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import Hls from 'hls.js';
-import { 
+import { Cast, 
   X, 
   Play, 
   Pause, 
@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { LiveChannel } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
+import { CastModal } from './CastModal';
 
 interface LivePlayerModalProps {
   channel: LiveChannel;
@@ -52,6 +53,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showChannelList, setShowChannelList] = useState<boolean>(false);
+  const [showCastModal, setShowCastModal] = useState<boolean>(false);
   const [streamHealth, setStreamHealth] = useState<'online' | 'connecting' | 'error'>('connecting');
 
   // Ajuste automático de estabilidade para conexão (sem notificações intrusivas)
@@ -846,6 +848,15 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-2">
             {/* Picture-in-Picture se suportado */}
+            {/* Transmitir / Cast */}
+            <button
+              onClick={() => setShowCastModal(true)}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              title="Transmitir para TV"
+            >
+              <Cast className="w-5 h-5" />
+            </button>
+
             {document.pictureInPictureEnabled && (
               <button
                 onClick={() => {
