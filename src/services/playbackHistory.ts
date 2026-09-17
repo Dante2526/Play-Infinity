@@ -138,7 +138,7 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
     
     try {
       const userRef = doc(db, "usuarios", user.uid);
-      await setDoc(userRef, { playbackHistory: store }, { merge: true });
+      await setDoc(userRef, { historicoReproducao: store }, { merge: true });
     } catch (e) {
       console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
     }
@@ -156,10 +156,11 @@ export async function fetchHistoryFromCloud(): Promise<void> {
     }
     if (snap.exists()) {
       const data = snap.data();
-      if (data.playbackHistory) {
+      const remoteHistory = data.historicoReproducao || data.playbackHistory;
+      if (remoteHistory) {
         // Mescla histórico da nuvem com o local
         const local = getStore();
-        const merged = { ...local, ...data.playbackHistory };
+        const merged = { ...local, ...remoteHistory };
         saveStore(merged);
       }
     }

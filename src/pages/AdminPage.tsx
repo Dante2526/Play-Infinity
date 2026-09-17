@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Database, Loader2 } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
-import { createUserWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
-import { auth, db } from "../services/firebase";
+import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
+import { initializeApp, deleteApp } from "firebase/app";
+import { auth, db, firebaseConfig } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
 
 export interface ClientUser {
@@ -57,7 +58,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [revokeSuccess, setRevokeSuccess] = useState("");
   const [revokeError, setRevokeError] = useState("");
 
-  const [migrationLoading, setMigrationLoading] = useState(false);
+  // Edit User State
+  const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editSuccess, setEditSuccess] = useState("");
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -299,69 +306,82 @@ export function AdminPage({ onBack }: AdminPageProps) {
     }
   };
 
-  const handleMigrateDatabase = async () => {
-    if (!window.confirm("Essa ação vai migrar a coleção para 'usuarios', traduzir e limpar todos os campos (remover nomeExibicao, criadoEm e usar apenas nome, senha e tipoAcesso). Deseja continuar?")) return;
-    
-    setMigrationLoading(true);
+  const handleOpenEdit = (user: ClientUser) => {
+    setEditingUser(user);
+    setEditEmail(user.email || "");
+    setEditPassword(user.initialPassword || "");
+    setEditError("");
+    setEditSuccess("");
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    setEditLoading(true);
+    setEditError("");
+    setEditSuccess("");
+
+    const trimmedEmail = editEmail.trim();
+    const trimmedPass = editPassword.trim();
+
+    if (!trimmedEmail) {
+      setEditError("O e-mail não pode ficar em branco.");
+      setEditLoading(false);
+      return;
+    }
+
+    if (trimmedPass && trimmedPass.length < 6) {
+      setEditError("A senha deve conter no mínimo 6 caracteres.");
+      setEditLoading(false);
+      return;
+    }
+
     try {
-      // 1. Busca documentos das coleções 'users' e 'usuarios'
-      const legacySnap = await getDocs(collection(db, "users"));
-      const currentSnap = await getDocs(collection(db, "usuarios"));
-      
-      const allDocsMap = new Map<string, any>();
-      legacySnap.forEach(d => allDocsMap.set(d.id, { docRef: d.ref, data: d.data(), fromLegacy: true }));
-      currentSnap.forEach(d => allDocsMap.set(d.id, { docRef: d.ref, data: d.data(), fromLegacy: false }));
+      // 1. Atualiza na coleção 'usuarios' do Firestore
+      const updates: any = {
+        email: trimmedEmail,
+      };
+      if (trimmedPass) {
+        updates.senha = trimmedPass;
+      }
 
-      let migrated = 0;
-      
-      for (const [docId, item] of allDocsMap.entries()) {
-        const data = item.data;
-        
-        // Constrói o documento rigorosamente padronizado e limpo
-        const cleanDoc: any = {
-          nome: (data.nome || data.nomeExibicao || data.name || data.displayName || "").trim(),
-          email: (data.email || "").trim(),
-          assinatura: (data.assinatura === "ATIVA" || data.subscription === "ACTIVE") ? "ATIVA" : "INATIVA",
-          tipoAcesso: data.tipoAcesso || data.accessType || "mensal",
-          dataExpiracao: data.dataExpiracao || data.expirationDate || ""
-        };
+      await updateDoc(doc(db, "usuarios", editingUser.id), updates);
 
-        const pass = data.senha || data.senhaInicial || data.initialPassword;
-        if (pass) cleanDoc.senha = pass;
+      // 2. Se tiver senha anterior e for conhecida, sincroniza no Firebase Auth via app temporário
+      const oldPass = editingUser.initialPassword;
+      if (oldPass) {
+        let tempApp: any = null;
+        try {
+          const tempAppName = `editAuth_${Date.now()}`;
+          tempApp = initializeApp(firebaseConfig, tempAppName);
+          const tempAuth = getAuth(tempApp);
 
-        const payDate = data.dataPagamento || data.paymentDate;
-        if (payDate) cleanDoc.dataPagamento = payDate;
-
-        if (data.criadoPorAdmin !== undefined) {
-          cleanDoc.criadoPorAdmin = data.criadoPorAdmin;
-        } else if (data.createdByAdmin !== undefined) {
-          cleanDoc.criadoPorAdmin = data.createdByAdmin;
-        }
-
-        const lastAct = data.ultimoAcesso || data.lastActive;
-        if (lastAct) cleanDoc.ultimoAcesso = lastAct;
-
-        // Salva na coleção oficial 'usuarios' (substitui completamente, removendo campos antigos)
-        await setDoc(doc(db, "usuarios", docId), cleanDoc);
-
-        // Se o documento estava na coleção antiga 'users', remove-o de lá
-        if (item.fromLegacy) {
-          try {
-            await deleteDoc(doc(db, "users", docId));
-          } catch (delErr) {
-            console.warn("Aviso ao remover da coleção legada:", delErr);
+          const userCred = await signInWithEmailAndPassword(tempAuth, editingUser.email, oldPass);
+          if (trimmedPass && trimmedPass !== oldPass) {
+            await updatePassword(userCred.user, trimmedPass);
+          }
+          if (trimmedEmail !== editingUser.email) {
+            await updateEmail(userCred.user, trimmedEmail);
+          }
+        } catch (authErr: any) {
+          console.warn("[AdminPage] Falha ao sincronizar alteração no Firebase Auth:", authErr);
+        } finally {
+          if (tempApp) {
+            try { await deleteApp(tempApp); } catch(e) {}
           }
         }
-
-        migrated++;
       }
-      
-      alert(`Migração concluída com sucesso! ${migrated} usuário(s) salvos na coleção 'usuarios' com padrão em português e campos limpos.`);
+
+      setEditSuccess("Credenciais atualizadas com sucesso!");
       await loadStats();
+      setTimeout(() => {
+        setEditingUser(null);
+        setEditSuccess("");
+      }, 1000);
     } catch (err: any) {
-      alert("Erro ao migrar banco: " + err.message);
+      setEditError("Erro ao salvar: " + err.message);
     } finally {
-      setMigrationLoading(false);
+      setEditLoading(false);
     }
   };
 
@@ -437,14 +457,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </div>
 
           <div className="flex items-center gap-2">
-            <button 
-              onClick={handleMigrateDatabase}
-              disabled={migrationLoading}
-              className="flex items-center gap-2 px-5 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-full font-medium transition-colors disabled:opacity-50"
-            >
-              {migrationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
-              {migrationLoading ? "Traduzindo..." : "Traduzir Banco (PT-BR)"}
-            </button>
             <button 
               onClick={() => {
                 sessionStorage.removeItem("isAdmin");
@@ -676,6 +688,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           <span className="font-medium text-white/90">{expireLabel}</span>
                         </div>
 
+                        {/* Botão de Editar Credenciais */}
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEdit(client)}
+                          title="Editar e-mail e senha do cliente"
+                          className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 font-bold"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          <span>Editar</span>
+                        </button>
+
                         {/* Botão de Revogar Acesso */}
                         <button
                           type="button"
@@ -889,6 +912,87 @@ export function AdminPage({ onBack }: AdminPageProps) {
         </div>
 
       </div>
+
+      {/* Modal de Edição de Credenciais */}
+      {editingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setEditingUser(null)}
+              className="absolute top-5 right-5 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-orange-500/20 text-orange-500 rounded-2xl">
+                <Key className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Editar Acesso</h3>
+                <p className="text-xs text-white/50">{editingUser.name || editingUser.email}</p>
+              </div>
+            </div>
+
+            {editSuccess && (
+              <div className="mb-4 p-3.5 bg-green-500/10 border border-green-500/20 rounded-2xl text-green-400 text-sm font-medium">
+                ✅ {editSuccess}
+              </div>
+            )}
+
+            {editError && (
+              <div className="mb-4 p-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-medium">
+                ❌ {editError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Novo E-mail</label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  required
+                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
+                  placeholder="cliente@email.com"
+                />
+              </div>
+
+              <div>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Nova Senha</label>
+                <input
+                  type="text"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium font-mono"
+                  placeholder="Mínimo 6 caracteres"
+                />
+                <p className="text-[11px] text-white/40 mt-1">Deixe como está ou digite a nova senha desejada.</p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setEditingUser(null)}
+                  className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={editLoading}
+                  className="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold transition-all disabled:opacity-50 shadow-lg shadow-orange-600/30 flex items-center gap-2"
+                >
+                  {editLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {editLoading ? "Salvando..." : "Salvar Alterações"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

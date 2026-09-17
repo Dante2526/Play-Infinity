@@ -95,7 +95,7 @@ function syncFavoritesToCloud(ids: number[]) {
     
     try {
       const userRef = doc(db, "usuarios", user.uid);
-      await setDoc(userRef, { favorites: ids }, { merge: true });
+      await setDoc(userRef, { favoritos: ids }, { merge: true });
     } catch (e) {
       console.warn("[Firestore Sync] Falha ao sincronizar favoritos:", e);
     }
@@ -113,10 +113,11 @@ export async function fetchFavoritesFromCloud(): Promise<void> {
     }
     if (snap.exists()) {
       const data = snap.data();
-      if (data.favorites && Array.isArray(data.favorites)) {
+      const remoteFavorites = data.favoritos || data.favorites;
+      if (remoteFavorites && Array.isArray(remoteFavorites)) {
         // Mescla favoritos da nuvem com os locais e remove duplicatas
         const local = getFavoriteIds();
-        const merged = Array.from(new Set([...local, ...data.favorites]));
+        const merged = Array.from(new Set([...local, ...remoteFavorites]));
         saveFavoriteIds(merged);
       }
     }
