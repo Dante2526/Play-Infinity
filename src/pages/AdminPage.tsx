@@ -182,23 +182,40 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCreateLoading(true);
     setCreateError("");
     setCreateSuccess("");
 
+    // Validação estrita de campos obrigatórios
+    if (!newName.trim()) {
+      setCreateError("O campo Nome do Cliente é obrigatório.");
+      return;
+    }
+    if (!newEmail.trim()) {
+      setCreateError("O campo E-mail do Cliente é obrigatório.");
+      return;
+    }
+    if (!newPassword.trim() || newPassword.length < 6) {
+      setCreateError("A senha é obrigatória e deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    if (accessType === "mensal" && !paymentDate) {
+      setCreateError("A data de pagamento é obrigatória para o plano mensal.");
+      return;
+    }
+
+    setCreateLoading(true);
+
     try {
       // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
-      const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
+      const userCredential = await createUserWithEmailAndPassword(auth, newEmail.trim(), newPassword);
       
-      // 2. Se informou nome, atualiza no perfil do Auth
-      if (newName.trim()) {
-        try {
-          await updateProfile(userCredential.user, {
-            displayName: newName.trim()
-          });
-        } catch (pErr) {
-          console.warn("Falha ao atualizar displayName no Auth:", pErr);
-        }
+      // 2. Atualiza nome no perfil do Auth
+      try {
+        await updateProfile(userCredential.user, {
+          displayName: newName.trim()
+        });
+      } catch (pErr) {
+        console.warn("Falha ao atualizar displayName no Auth:", pErr);
       }
 
       // 3. Calcula data de expiração
@@ -223,7 +240,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
       // 4. Salva no banco de dados na coleção 'usuarios' com campos limpos em português
       await setDoc(doc(db, "usuarios", userCredential.user.uid), {
-        email: newEmail,
+        email: newEmail.trim(),
         nome: newName.trim(),
         assinatura: "ATIVA",
         dataPagamento: payDate.toISOString(),
@@ -241,10 +258,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
       localStorage.removeItem("playinfinity_watched_seasons");
       await signOut(auth);
 
-      setCreateSuccess(`Cliente ${newName.trim() ? `"${newName.trim()}" ` : ""}criado com sucesso! O acesso expira em: ${expireStr}`);
+      setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso! O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
         name: newName.trim(),
-        email: newEmail,
+        email: newEmail.trim(),
         password: newPassword,
         expirationDate: expireStr
       });
@@ -821,7 +838,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
             <div className={`grid grid-cols-1 sm:grid-cols-2 ${accessType === 'mensal' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
               <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Nome do Cliente</label>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  Nome do Cliente <span className="text-orange-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={newName}
@@ -833,7 +852,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
 
               <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente</label>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  E-mail do Cliente <span className="text-orange-500">*</span>
+                </label>
                 <input
                   type="email"
                   value={newEmail}
@@ -845,7 +866,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
               
               <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Senha Criada</label>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  Senha Criada <span className="text-orange-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={newPassword}
@@ -860,7 +883,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               {accessType === 'mensal' && (
                 <div>
                   <CustomDatePicker 
-                    label="Data do Pagamento"
+                    label="Data do Pagamento *"
                     value={paymentDate}
                     onChange={(date) => setPaymentDate(date)}
                   />
