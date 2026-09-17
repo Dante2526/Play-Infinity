@@ -35,6 +35,9 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           userSnap = await getDoc(doc(db, "users", userCred.user.uid));
         }
         if (!userSnap.exists()) {
+          userSnap = await getDoc(doc(db, "administradores", userCred.user.uid));
+        }
+        if (!userSnap.exists()) {
           await signOut(auth);
           localStorage.removeItem("playinfinity_logged_in");
           throw new Error("Sua conta foi desativada ou removida. Entre em contato com o suporte.");
