@@ -124,6 +124,8 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 
 import { OnPlayHandler } from "../types";
+import { auth, db } from "../services/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export function UserProfilePage({ 
   onNavigate,
@@ -135,6 +137,38 @@ export function UserProfilePage({
   onPlay?: OnPlayHandler
 }) {
   const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+  const [userName, setUserName] = useState<string>(() => {
+    return auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : "Naylan Moreira");
+  });
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (user.displayName) {
+        setUserName(user.displayName);
+        return;
+      }
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.name) {
+            setUserName(data.name);
+          } else if (data.displayName) {
+            setUserName(data.displayName);
+          } else if (user.email) {
+            setUserName(user.email.split('@')[0]);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao carregar perfil do usuário:", err);
+      }
+    };
+    fetchUserData();
+  }, []);
+
+  const userInitial = (userName.trim() || 'N').charAt(0).toUpperCase();
 
   useEffect(() => {
     const handleFavUpdate = (e: any) => {
@@ -162,11 +196,11 @@ export function UserProfilePage({
         {/* Card do Usuário */}
         <div className="bg-[#111111] border border-white/5 rounded-3xl p-6 md:p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8 shadow-xl">
           <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[4px] border-[#0a0a0a] flex items-center justify-center font-black text-4xl md:text-5xl shadow-[0_0_30px_rgba(234,88,12,0.6)] shrink-0">
-            N
+            {userInitial}
           </div>
           
           <div className="flex flex-col items-center md:items-start flex-1 text-center md:text-left">
-            <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">Naylan Moreira</h2>
+            <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{userName}</h2>
             <p className="text-neutral-400 mb-5 font-medium text-sm">Assinante Premium • Acesso Ilimitado</p>
             
             {/* Badges de estatísticas */}
