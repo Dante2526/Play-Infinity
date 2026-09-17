@@ -148,7 +148,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="relative w-full max-w-lg overflow-hidden rounded-3xl bg-zinc-900 border border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.15)] max-h-[95vh] overflow-y-auto [&::-webkit-scrollbar]:hidden"
+            className={`relative w-full max-w-lg rounded-3xl bg-zinc-900 border border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.15)] max-h-[95vh] ${step === 'checkout' ? 'overflow-y-auto' : 'overflow-hidden'} [&::-webkit-scrollbar]:hidden [scrollbar-width:none]`}
           >
             {/* Background Glows */}
             <div className="absolute -top-32 -left-32 w-64 h-64 bg-purple-600/30 rounded-full blur-[80px]" />
