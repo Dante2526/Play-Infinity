@@ -3854,17 +3854,18 @@ process.on("uncaughtException", (err) => {
               if (artInstance.hls) artInstance.hls.destroy();
               var hls = new Hls({
                 enableWorker: true,
-                maxBufferLength: 60,
-                maxMaxBufferLength: 120,
-                backBufferLength: 90,
-                maxBufferSize: 100 * 1000 * 1000,
+                maxBufferLength: 20,
+                maxMaxBufferLength: 40,
+                backBufferLength: 30,
+                maxBufferSize: 30 * 1000 * 1000,
                 maxBufferHole: 0.5,
                 startFragPrefetch: true,
                 progressive: true,
                 nudgeOffset: 0.15,
-                nudgeMaxRetry: 6,
-                fragLoadingTimeOut: 20000,
-                fragLoadingMaxRetry: 6
+                nudgeMaxRetry: 8,
+                fragLoadingTimeOut: 30000,
+                manifestLoadingTimeOut: 20000,
+                fragLoadingMaxRetry: 8
               });
               hls.loadSource(url);
               hls.attachMedia(video);
