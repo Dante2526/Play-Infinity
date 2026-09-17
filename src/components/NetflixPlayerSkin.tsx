@@ -27,6 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { savePlaybackProgress } from "../services/playbackHistory";
+import { CastModal } from "./CastModal";
 
 export interface NetflixPlayerStatus {
   currentTime: number;
@@ -1191,6 +1192,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
+          {/* Botão de Cast (Transmitir) */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowCastModal(true);
+            }}
+            className="p-1.5 sm:p-2 transition-colors cursor-pointer rounded-full text-white/90 hover:text-white hover:bg-white/10"
+            title="Transmitir para Smart TV"
+          >
+            <Cast className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
+          </button>
+
           {/* Botão Picture-in-Picture (Mini-Player Flutuante) */}
           <button
             onClick={(e) => {
@@ -1977,46 +1990,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {/* ========================================================
           MODAL: TRANSMITIR SMART TV / CHROMECAST
           ======================================================== */}
-      {showCastModal && (
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowCastModal(false);
-          }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 pointer-events-auto"
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-[#161616]/95 border border-neutral-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-white space-y-4 text-center animate-in zoom-in-95 duration-200 pointer-events-auto"
-          >
-            <div className="w-12 h-12 rounded-full bg-white/10 border border-white/15 flex items-center justify-center mx-auto text-white">
-              <Cast className="w-6 h-6 stroke-[1.8]" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white">Transmitir para Smart TV</h3>
-              <p className="text-xs text-neutral-400 mt-1">
-                Conecte seu dispositivo na mesma rede Wi-Fi da sua TV ou Chromecast.
-              </p>
-            </div>
-            <div className="p-3 bg-neutral-900/90 rounded-xl border border-neutral-800 text-left space-y-2">
-              <div className="flex items-center gap-2.5 text-xs text-neutral-300">
-                <Tv className="w-4 h-4 text-neutral-400" />
-                <span>Smart TV Sala de Estar</span>
-              </div>
-              <div className="flex items-center gap-2.5 text-xs text-neutral-300">
-                <Cast className="w-4 h-4 text-neutral-400" />
-                <span>Chromecast Quarto</span>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowCastModal(false)}
-              className="w-full py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white font-semibold text-xs sm:text-sm transition-colors cursor-pointer"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      )}
+      {showCastModal && <CastModal onClose={() => setShowCastModal(false)} />}
     </div>
   );
 };

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
+import { Readable } from "stream";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
@@ -1284,8 +1285,14 @@ process.on("uncaughtException", (err) => {
       }
       res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=3600");
-      const buffer = Buffer.from(await upstreamRes.arrayBuffer());
-      return res.send(buffer);
+
+      if (upstreamRes.body) {
+        // Stream directly to HTTP response avoiding multi-megabyte RAM allocations
+        return Readable.fromWeb(upstreamRes.body as any).pipe(res);
+      } else {
+        const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+        return res.send(buffer);
+      }
     } catch (err: any) {
       console.error("[HLS Proxy Error]:", err.message);
       return res.status(500).send("Proxy error");
@@ -3134,14 +3141,14 @@ process.on("uncaughtException", (err) => {
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      // Verifica cache em memória para segmentos de vídeo (.ts / .aac / etc.) ou playlists (.m3u8)
+      // Verifica cache em memória apenas para manifestos/playlists (.m3u8), sem acumular vídeos pesados na RAM
       const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
       const isM3U8Request = rawUrl.includes(".m3u8");
       
-      const cached = (isSegment || isM3U8Request) ? liveChunkCache.get(rawUrl) : null;
+      const cached = isM3U8Request ? liveChunkCache.get(rawUrl) : null;
       if (cached && cached.expires > Date.now()) {
         res.setHeader("Content-Type", cached.contentType);
-        res.setHeader("Cache-Control", isM3U8Request ? "public, max-age=2, immutable" : "public, max-age=15, immutable");
+        res.setHeader("Cache-Control", "public, max-age=2, immutable");
         res.setHeader("X-Cache-Status", "HIT-MEMORY");
         return res.send(cached.buffer);
       }
@@ -3316,18 +3323,13 @@ process.on("uncaughtException", (err) => {
       res.setHeader("Content-Type", finalContentType);
       res.setHeader("Cache-Control", "public, max-age=15");
 
-      const buffer = Buffer.from(await upstreamRes.arrayBuffer());
-
-      // Salva no cache em memória se for segmento de mídia
-      if (isSegment && buffer.length > 0 && buffer.length < 8 * 1024 * 1024) {
-        liveChunkCache.set(rawUrl, {
-          buffer,
-          contentType: finalContentType,
-          expires: Date.now() + 15000 // 15 segundos
-        });
+      if (upstreamRes.body) {
+        // Stream directly to HTTP response to prevent holding large video segments in RAM
+        return Readable.fromWeb(upstreamRes.body as any).pipe(res);
+      } else {
+        const buffer = Buffer.from(await upstreamRes.arrayBuffer());
+        return res.send(buffer);
       }
-
-      return res.send(buffer);
     } catch (err: any) {
       console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
       return res.status(500).send("Proxy error");
