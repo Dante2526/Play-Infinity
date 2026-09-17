@@ -15,8 +15,31 @@ export function useSubscription() {
         const unsubscribeSnap = onSnapshot(userRef, async (snapshot) => {
           if (snapshot.exists()) {
             const data = snapshot.data();
-            // Se subscription for 'ACTIVE' ou assinatura for 'ATIVA', é premium
-            setIsPremium(data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
+            const isExplicitlyActive = (data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
+            const expDateStr = data.dataExpiracao || data.expirationDate;
+            let isExpired = false;
+
+            if (expDateStr) {
+              const expDate = new Date(expDateStr);
+              if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
+                isExpired = expDate.getTime() <= Date.now();
+              }
+            }
+
+            const active = isExplicitlyActive && !isExpired;
+            setIsPremium(active);
+
+            // Se o documento estava como ATIVA mas já expirou, atualiza no Firestore
+            if (isExplicitlyActive && isExpired) {
+              try {
+                const { updateDoc } = await import("firebase/firestore");
+                await updateDoc(userRef, {
+                  assinatura: "EXPIRADA",
+                  subscription: "INACTIVE"
+                });
+              } catch (e) {}
+            }
+
             setLoading(false);
           } else {
             try {
@@ -24,7 +47,19 @@ export function useSubscription() {
               const legacySnap = await getDoc(doc(db, "users", user.uid));
               if (legacySnap.exists()) {
                 const data = legacySnap.data();
-                setIsPremium(data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
+                const isExplicitlyActive = (data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
+                const expDateStr = data.dataExpiracao || data.expirationDate;
+                let isExpired = false;
+
+                if (expDateStr) {
+                  const expDate = new Date(expDateStr);
+                  if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
+                    isExpired = expDate.getTime() <= Date.now();
+                  }
+                }
+
+                const active = isExplicitlyActive && !isExpired;
+                setIsPremium(active);
                 setLoading(false);
                 return;
               }
