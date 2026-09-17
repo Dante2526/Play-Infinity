@@ -132,17 +132,17 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "fireb
 import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile } from "firebase/auth";
 
 const GEEK_AVATARS = [
-  { id: "ironman", url: "https://image.tmdb.org/t/p/w500/5qHNjhtjMD4YWH3UP0rm4tKwxCL.jpg", name: "Homem de Ferro" },
-  { id: "batman", url: "https://image.tmdb.org/t/p/w500/7Pxez9J8fuPd2Mn9kex13YALrCQ.jpg", name: "Batman" },
-  { id: "spiderman", url: "https://image.tmdb.org/t/p/w500/5OK84Wn1bIEIThFKcVoaN087mLj.jpg", name: "Homem-Aranha" },
-  { id: "deadpool", url: "https://image.tmdb.org/t/p/w500/trzgptffGvAlAT6MEu01fz47cLW.jpg", name: "Deadpool" },
-  { id: "superman", url: "https://image.tmdb.org/t/p/w500/kN3A5oLgtKYAxa9lAkpsIGYKYVo.jpg", name: "Superman" },
-  { id: "heisenberg", url: "https://image.tmdb.org/t/p/w500/npIIZJGSrcJIJ6yHdmbqO6Jzo5I.jpg", name: "Heisenberg" },
-  { id: "johnwick", url: "https://image.tmdb.org/t/p/w500/8RZLOyYGsoRe9p44q3xin9QkMHv.jpg", name: "John Wick" },
-  { id: "mandalorian", url: "https://image.tmdb.org/t/p/w500/oKcMbVn0NJTNzQt0ClKKvVXkm60.jpg", name: "O Mandaloriano" },
-  { id: "harleyquinn", url: "https://image.tmdb.org/t/p/w500/8LqG2N6j98lFGMpuYsRUAhOunSd.jpg", name: "Arlequina" },
-  { id: "oppenheimer", url: "https://image.tmdb.org/t/p/w500/2lKs67r7FI4bPu0AXxMUJZxmUXn.jpg", name: "Oppenheimer" },
-  { id: "thor", url: "https://image.tmdb.org/t/p/w500/piQGdoIQOF3C1EI5cbYZLAW1gfj.jpg", name: "Thor" }
+  { id: "ironman", url: "https://image.tmdb.org/t/p/w500/78lPtwv72eTNqFW9COBYI0dWDJa.jpg", name: "Homem de Ferro" },
+  { id: "batman", url: "https://image.tmdb.org/t/p/w500/74xTEgt7R36Fpooo50r9T25onhq.jpg", name: "Batman" },
+  { id: "spiderman", url: "https://image.tmdb.org/t/p/w500/c24sv2weTHPsmDa7jEMN0m2P3RT.jpg", name: "Homem-Aranha" },
+  { id: "deadpool", url: "https://image.tmdb.org/t/p/w500/8cdWjvZQUExUUTzyp4t6EDMubfO.jpg", name: "Deadpool" },
+  { id: "superman", url: "https://image.tmdb.org/t/p/w500/8GFtkImmK0K1VaUChR0n9O61CFU.jpg", name: "Superman" },
+  { id: "heisenberg", url: "https://image.tmdb.org/t/p/w500/anFx9aTOOYqgS3v7x3R84Kz67ly.jpg", name: "Heisenberg" },
+  { id: "johnwick", url: "https://image.tmdb.org/t/p/w500/wXqWR7dHncNRbxoEGybEy7QTe9h.jpg", name: "John Wick" },
+  { id: "mandalorian", url: "https://image.tmdb.org/t/p/w500/sWgBv7LV2PRoQgkxwlibdGXKz1S.jpg", name: "O Mandaloriano" },
+  { id: "harleyquinn", url: "https://image.tmdb.org/t/p/w500/h4VB6m0RwcicVEZvzftYZyKXs6K.jpg", name: "Arlequina" },
+  { id: "oppenheimer", url: "https://image.tmdb.org/t/p/w500/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg", name: "Oppenheimer" },
+  { id: "thor", url: "https://image.tmdb.org/t/p/w500/rzRwTcFvttcN1ZpX2xv4j3tSdJu.jpg", name: "Thor" }
 ];
 
 export function UserProfilePage({ 
