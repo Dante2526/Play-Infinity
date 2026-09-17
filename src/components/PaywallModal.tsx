@@ -129,7 +129,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const benefits = [
     { icon: <Zap size={20} className="text-yellow-400" />, text: "Sem popups, sem redirecionamentos chatos" },
     { icon: <ShieldCheck size={20} className="text-green-400" />, text: "Servidores ultrarrápidos e seguros" },
-    { icon: <Crown size={20} className="text-purple-400" />, text: "Catálogo completo (Filmes, Séries, Animes e TV)" },
+    { icon: <Crown size={20} className="text-purple-400" />, text: "Catálogo (Filmes, Séries, Animes e TV)" },
   ];
 
   return (
