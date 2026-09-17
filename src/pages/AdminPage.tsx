@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "../services/firebase";
@@ -30,6 +30,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
+  const [lastCreatedUser, setLastCreatedUser] = useState<{email: string, password?: string, expirationDate: string} | null>(null);
 
   // Revoke Access State
   const [revokeEmail, setRevokeEmail] = useState("");
@@ -137,6 +138,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
       await signOut(auth);
 
       setCreateSuccess(`Cliente criado! O acesso expira automaticamente em: ${expirationDate.toLocaleDateString('pt-BR')}`);
+      setLastCreatedUser({
+        email: newEmail,
+        password: newPassword,
+        expirationDate: expirationDate.toLocaleDateString('pt-BR')
+      });
+      
       setNewEmail("");
       setNewPassword("");
       loadStats();
@@ -319,20 +326,23 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         </div>
 
-        {/* Instalação do DB Info */}
-        <div className="mt-12 bg-white/5 border border-white/10 rounded-[28px] p-8">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <ShieldAlert className="w-5 h-5 text-orange-500" />
-            Configuração de Administradores
-          </h3>
-          <p className="text-white/60 text-sm leading-relaxed mb-4 max-w-3xl">
-            Para gerenciar quem tem acesso a este painel, acesse o painel do Firebase, vá em <strong>Firestore Database</strong> e crie uma coleção chamada <code className="bg-black/50 px-2 py-1 rounded text-orange-400">administradores</code>. Dentro dela, adicione documentos com os seguintes campos exatos:
-          </p>
-          <div className="bg-black/50 p-4 rounded-xl border border-white/5 inline-block text-sm text-white/80 font-mono">
-            email: "seu@email.com"<br/>
-            senha: "suasenha123"
+        {/* Último Cliente Cadastrado */}
+        {lastCreatedUser && (
+          <div className="mt-12 bg-green-500/10 border border-green-500/20 backdrop-blur-xl rounded-[28px] p-8 animate-fade-in">
+            <h3 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
+              <Check className="w-5 h-5 text-green-400" />
+              Credenciais do Último Cliente Cadastrado
+            </h3>
+            <p className="text-white/60 text-sm leading-relaxed mb-4 max-w-3xl">
+              Guarde essas informações e envie para o seu cliente (ou use o e-mail caso precise revogar o acesso dele depois).
+            </p>
+            <div className="bg-black/60 p-5 rounded-xl border border-white/5 inline-block text-sm text-white/90 font-mono tracking-wide">
+              E-mail: <strong className="text-orange-400">{lastCreatedUser.email}</strong><br/>
+              Senha: <strong className="text-orange-400">{lastCreatedUser.password}</strong><br/>
+              Vencimento: <span className="text-white/70">{lastCreatedUser.expirationDate}</span>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Cadastro Manual de Usuário (PIX) */}
         <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-8 mb-12 shadow-xl">
