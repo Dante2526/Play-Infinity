@@ -218,23 +218,42 @@ export default function App() {
   
   // Autenticação Firebase & Assinatura
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [userDisplayName, setUserDisplayName] = useState<string>("");
   const [isAuthInitialized, setIsAuthInitialized] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const { isPremium } = useSubscription();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setIsAuthInitialized(true);
       if (user) {
+        if (user.displayName) {
+          setUserDisplayName(user.displayName);
+        } else {
+          try {
+            const { doc, getDoc } = await import("firebase/firestore");
+            const snap = await getDoc(doc(db, "users", user.uid));
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data.name || data.displayName) {
+                setUserDisplayName(data.name || data.displayName);
+              }
+            }
+          } catch (e) {}
+        }
         fetchHistoryFromCloud(); // Baixa histórico e mescla no login
         fetchFavoritesFromCloud(); // Baixa favoritos da nuvem
         fetchWatchedFromCloud(); // Baixa episódios assistidos
+      } else {
+        setUserDisplayName("");
       }
     });
     return () => unsubscribe();
   }, []);
+
+  const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || 'N').trim().charAt(0).toUpperCase() || 'N';
 
   // Heartbeat para rastrear "Pessoas Assistindo Agora"
   useEffect(() => {
@@ -563,7 +582,7 @@ export default function App() {
             className={`w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs lg:text-sm cursor-pointer hover:scale-105 transition-all outline-none ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
             title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
-            N
+            {userInitial}
           </button>
         </div>
       </header>
@@ -610,7 +629,7 @@ export default function App() {
             }`}
             title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
-            N
+            {userInitial}
           </button>
         </div>
       </div>

@@ -1,9 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { auth, db } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
+
+export interface ClientUser {
+  id: string;
+  name?: string;
+  email: string;
+  subscription: string;
+  accessType?: "mensal" | "teste" | "vitalicio";
+  expirationDate?: string;
+  initialPassword?: string;
+  createdAt?: string;
+  lastActive?: string;
+}
 
 interface AdminPageProps {
   onBack: () => void;
@@ -23,7 +35,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
     watchingNow: 0
   });
 
+  // Client List State
+  const [usersList, setUsersList] = useState<ClientUser[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
   // User Creation State
+  const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
@@ -31,13 +49,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
-  const [lastCreatedUser, setLastCreatedUser] = useState<{email: string, password?: string, expirationDate: string} | null>(null);
+  const [lastCreatedUser, setLastCreatedUser] = useState<{name?: string, email: string, password?: string, expirationDate: string} | null>(null);
 
   // Revoke Access State
   const [revokeEmail, setRevokeEmail] = useState("");
   const [revokeLoading, setRevokeLoading] = useState(false);
   const [revokeSuccess, setRevokeSuccess] = useState("");
   const [revokeError, setRevokeError] = useState("");
+
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,13 +96,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
       let active = 0;
       let inactive = 0;
       let watchingNow = 0;
+      const list: ClientUser[] = [];
       
       const fiveMinutesAgo = new Date();
       fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
 
-      usersSnap.forEach((doc) => {
+      usersSnap.forEach((docSnap) => {
         total++;
-        const data = doc.data();
+        const data = docSnap.data();
         
         if (data.subscription === "ACTIVE") {
           active++;
@@ -93,8 +118,28 @@ export function AdminPage({ onBack }: AdminPageProps) {
             watchingNow++;
           }
         }
+
+        list.push({
+          id: docSnap.id,
+          name: data.name || data.displayName || "",
+          email: data.email || "Sem e-mail",
+          subscription: data.subscription || "INACTIVE",
+          accessType: data.accessType || "mensal",
+          expirationDate: data.expirationDate,
+          initialPassword: data.initialPassword,
+          createdAt: data.createdAt,
+          lastActive: data.lastActive
+        });
       });
 
+      // Ordenar pelos mais recentes criados
+      list.sort((a, b) => {
+        const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return timeB - timeA;
+      });
+
+      setUsersList(list);
       setStats({ total, active, inactive, watchingNow });
     } catch (err) {
       console.error("Erro ao carregar estatísticas", err);
@@ -119,7 +164,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
       // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
       const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
       
-      // 2. Calcula data de expiração
+      // 2. Se informou nome, atualiza no perfil do Auth
+      if (newName.trim()) {
+        try {
+          await updateProfile(userCredential.user, {
+            displayName: newName.trim()
+          });
+        } catch (pErr) {
+          console.warn("Falha ao atualizar displayName no Auth:", pErr);
+        }
+      }
+
+      // 3. Calcula data de expiração
       let expirationDate: Date;
       let payDate = new Date();
       let expireStr = "";
@@ -139,36 +195,54 @@ export function AdminPage({ onBack }: AdminPageProps) {
         expireStr = expirationDate.toLocaleDateString('pt-BR');
       }
 
-      // 3. Salva no banco de dados como ACTIVE e salva as datas
+      // 4. Salva no banco de dados como ACTIVE e salva as datas, nome e senha
       await setDoc(doc(db, "users", userCredential.user.uid), {
         email: newEmail,
+        name: newName.trim(),
+        displayName: newName.trim(),
         subscription: "ACTIVE",
         paymentDate: payDate.toISOString(),
         expirationDate: expirationDate.toISOString(),
         createdAt: new Date().toISOString(),
         createdByAdmin: true,
-        accessType: accessType
+        accessType: accessType,
+        initialPassword: newPassword
       });
 
-      // 4. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
+      // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
       await signOut(auth);
 
-      setCreateSuccess(`Cliente criado! O acesso expira em: ${expireStr}`);
+      setCreateSuccess(`Cliente ${newName.trim() ? `"${newName.trim()}" ` : ""}criado com sucesso! O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
+        name: newName.trim(),
         email: newEmail,
         password: newPassword,
         expirationDate: expireStr
       });
       
+      setNewName("");
       setNewEmail("");
       setNewPassword("");
-      loadStats();
+      await loadStats();
     } catch (err: any) {
       // Se falhar (ex: email já existe), desloga só por garantia
       try { await signOut(auth); } catch(e){}
       setCreateError("Erro: " + err.message);
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleRevokeDirect = async (user: ClientUser) => {
+    const confirmMsg = `Tem certeza que deseja revogar o acesso de ${user.name ? `${user.name} (${user.email})` : user.email}? O cliente perderá acesso imediatamente.`;
+    if (!window.confirm(confirmMsg)) return;
+
+    try {
+      await deleteDoc(doc(db, "users", user.id));
+      setRevokeSuccess(`Acesso de ${user.email} revogado com sucesso!`);
+      await loadStats();
+    } catch (err: any) {
+      setRevokeError("Erro ao revogar acesso: " + err.message);
     }
   };
 
@@ -194,7 +268,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
       setRevokeSuccess(`Acesso de ${revokeEmail} revogado com sucesso!`);
       setRevokeEmail("");
-      loadStats();
+      await loadStats();
     } catch (err: any) {
       setRevokeError("Erro ao revogar acesso: " + err.message);
     } finally {
@@ -342,9 +416,188 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         </div>
 
+        {/* Lista de Clientes Cadastrados */}
+        <div className="mt-12 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl">
+                  <Users className="w-5 h-5" />
+                </div>
+                <h3 className="text-2xl font-bold text-white">Clientes Cadastrados</h3>
+                <span className="px-3 py-1 bg-white/10 text-white/80 rounded-full text-xs font-semibold">
+                  {usersList.length} {usersList.length === 1 ? 'cliente' : 'clientes'}
+                </span>
+              </div>
+              <p className="text-white/50 text-sm mt-1 ml-11">
+                Visualize todos os acessos criados, credenciais, planos e gerencie assinaturas.
+              </p>
+            </div>
+
+            {/* Barra de Pesquisa */}
+            <div className="relative w-full sm:w-72">
+              <Search className="w-4 h-4 text-white/40 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por nome ou e-mail..."
+                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-2.5 pl-11 pr-4 text-white placeholder-white/30 text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium"
+              />
+            </div>
+          </div>
+
+          {usersList.filter(u => {
+            const q = searchTerm.toLowerCase();
+            return (
+              (u.name && u.name.toLowerCase().includes(q)) ||
+              u.email.toLowerCase().includes(q) ||
+              (u.accessType && u.accessType.toLowerCase().includes(q))
+            );
+          }).length === 0 ? (
+            <div className="text-center py-12 border border-dashed border-white/10 rounded-[22px] bg-white/[0.02]">
+              <Users className="w-10 h-10 text-white/20 mx-auto mb-3" />
+              <p className="text-white/50 text-sm font-medium">
+                {searchTerm ? "Nenhum cliente encontrado com esse termo." : "Nenhum cliente cadastrado no banco de dados."}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-3">
+              {usersList
+                .filter(u => {
+                  const q = searchTerm.toLowerCase();
+                  return (
+                    (u.name && u.name.toLowerCase().includes(q)) ||
+                    u.email.toLowerCase().includes(q) ||
+                    (u.accessType && u.accessType.toLowerCase().includes(q))
+                  );
+                })
+                .map((client) => {
+                  const initial = (client.name || client.email || 'U').charAt(0).toUpperCase();
+                  let expireLabel = "Não definida";
+                  if (client.expirationDate) {
+                    const d = new Date(client.expirationDate);
+                    if (d.getFullYear() >= 2099) {
+                      expireLabel = "Vitalício (Permanente)";
+                    } else {
+                      expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
+                    }
+                  }
+
+                  const isActive = client.subscription === "ACTIVE";
+
+                  return (
+                    <div
+                      key={client.id}
+                      className="bg-black/40 hover:bg-black/60 border border-white/5 hover:border-white/15 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                    >
+                      {/* Perfil & Identificação */}
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)] shrink-0">
+                          {initial}
+                        </div>
+
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-white text-[15px] truncate">
+                              {client.name || "Sem nome informado"}
+                            </span>
+                            
+                            {/* Badge Tipo de Acesso */}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                              client.accessType === 'vitalicio'
+                                ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : client.accessType === 'teste'
+                                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+                            }`}>
+                              {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === 'teste' ? 'Teste 1h' : 'Mensal'}
+                            </span>
+
+                            {/* Badge Status */}
+                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                              isActive
+                                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/15 text-red-400 border border-red-500/30'
+                            }`}>
+                              {isActive ? 'Ativo' : 'Inativo'}
+                            </span>
+                          </div>
+
+                          {/* E-mail com cópia */}
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-white/60 text-xs font-mono truncate">{client.email}</span>
+                            <button
+                              type="button"
+                              onClick={() => copyToClipboard(client.email, `email-${client.id}`)}
+                              title="Copiar e-mail"
+                              className="text-white/40 hover:text-white p-1 hover:bg-white/10 rounded transition-colors"
+                            >
+                              {copiedKey === `email-${client.id}` ? (
+                                <Check className="w-3.5 h-3.5 text-green-400" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Senha, Vencimento & Ações */}
+                      <div className="flex flex-wrap items-center gap-3 lg:gap-4 text-xs text-white/70">
+                        {/* Senha */}
+                        <div className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <Key className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                          <span className="text-white/40">Senha:</span>
+                          {client.initialPassword ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono font-bold text-orange-300">{client.initialPassword}</span>
+                              <button
+                                type="button"
+                                onClick={() => copyToClipboard(client.initialPassword!, `pass-${client.id}`)}
+                                title="Copiar senha"
+                                className="text-white/40 hover:text-white p-0.5 hover:bg-white/10 rounded transition-colors"
+                              >
+                                {copiedKey === `pass-${client.id}` ? (
+                                  <Check className="w-3.5 h-3.5 text-green-400" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-white/30 italic text-[11px]">(Criptografada no Firebase)</span>
+                          )}
+                        </div>
+
+                        {/* Vencimento */}
+                        <div className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                          <span className="text-white/40">Vence:</span>
+                          <span className="font-medium text-white/90">{expireLabel}</span>
+                        </div>
+
+                        {/* Botão de Revogar Acesso */}
+                        <button
+                          type="button"
+                          onClick={() => handleRevokeDirect(client)}
+                          title="Revogar acesso do cliente"
+                          className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 font-bold"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span>Revogar</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+
         {/* Último Cliente Cadastrado */}
         {lastCreatedUser && (
-          <div className="mt-12 bg-green-500/10 border border-green-500/20 backdrop-blur-xl rounded-[28px] p-8 animate-fade-in">
+          <div className="mt-8 bg-green-500/10 border border-green-500/20 backdrop-blur-xl rounded-[28px] p-8 animate-fade-in">
             <h3 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
               <Check className="w-5 h-5 text-green-400" />
               Credenciais do Último Cliente Cadastrado
@@ -353,6 +606,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               Guarde essas informações e envie para o seu cliente (ou use o e-mail caso precise revogar o acesso dele depois).
             </p>
             <div className="bg-black/60 p-5 rounded-xl border border-white/5 inline-block text-sm text-white/90 font-mono tracking-wide">
+              {lastCreatedUser.name && (
+                <>Nome: <strong className="text-white">{lastCreatedUser.name}</strong><br/></>
+              )}
               E-mail: <strong className="text-orange-400">{lastCreatedUser.email}</strong><br/>
               Senha: <strong className="text-orange-400">{lastCreatedUser.password}</strong><br/>
               Vencimento: <span className="text-white/70">{lastCreatedUser.expirationDate}</span>
@@ -425,8 +681,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             </div>
 
-            <div className={`grid grid-cols-1 ${accessType === 'mensal' ? 'md:grid-cols-4' : 'md:grid-cols-3'} gap-4`}>
-              <div className="md:col-span-1">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 ${accessType === 'mensal' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
+              <div>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Nome do Cliente</label>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                  placeholder="Ex: João Silva"
+                  required
+                />
+              </div>
+
+              <div>
                 <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente</label>
                 <input
                   type="email"
@@ -438,7 +706,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 />
               </div>
               
-              <div className="md:col-span-1">
+              <div>
                 <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Senha Criada</label>
                 <input
                   type="text"
@@ -452,7 +720,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
 
               {accessType === 'mensal' && (
-                <div className="md:col-span-1">
+                <div>
                   <CustomDatePicker 
                     label="Data do Pagamento"
                     value={paymentDate}
@@ -461,7 +729,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               )}
 
-              <div className="md:col-span-1 flex items-end">
+              <div className="flex items-end">
                 <button
                   type="submit"
                   disabled={createLoading}
