@@ -4,12 +4,12 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: "AIzaSyAvv3XgTuTfUHUH8pRdRJ8XiH98uCUcSAs",
+  authDomain: "play-infinity-63eaa.firebaseapp.com",
+  projectId: "play-infinity-63eaa",
+  storageBucket: "play-infinity-63eaa.firebasestorage.app",
+  messagingSenderId: "341774996820",
+  appId: "1:341774996820:web:871c91206a157cce6ce4c1"
 };
 
 // Initialize Firebase only once
