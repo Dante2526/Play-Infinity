@@ -810,16 +810,42 @@ export function VideoPlayerModal({
 
       if (isEnded) {
         if (isSeries) {
-          const nextEp = episode + 1;
-          console.log(`[Player Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
-          setAutoNextNotice({ nextEp });
+          const totalEpCount = seasonData?.episodes?.length || 0;
+          const hasNextEpInSeason = totalEpCount > 0 ? (episode < totalEpCount) : true; // fallback if we don't know
 
-          // Passa imediatamente para o próximo episódio e inicia sozinho
-          handleEpisodeChange(nextEp);
+          if (hasNextEpInSeason) {
+            const nextEp = episode + 1;
+            console.log(`[Player Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
+            setAutoNextNotice({ nextEp });
+            handleEpisodeChange(nextEp);
+            setTimeout(() => setAutoNextNotice(null), 4500);
+          } else {
+            const totalSeasons = seriesDetails?.number_of_seasons || 0;
+            const hasNextSeason = totalSeasons > 0 && season < totalSeasons;
 
-          setTimeout(() => {
-            setAutoNextNotice(null);
-          }, 4500);
+            if (hasNextSeason) {
+              const nextSeason = season + 1;
+              console.log(`[Player Auto-Next] Temporada ${season} encerrada. Passando para Temp ${nextSeason} Ep 1...`);
+              
+              if (resolvedId) markEpisodeWatched(resolvedId, season, episode, true);
+              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch {}
+              
+              transitionEpochRef.current = Date.now();
+              setSeason(nextSeason);
+              setEpisode(1);
+              setIsIntroActive(false);
+              setPlayerSkinReady(false);
+              fallbackAttemptsRef.current.clear();
+              
+              const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
+              const newUrl = activeServer.buildUrl(resolvedId, nextSeason, 1);
+              setUrlInput(newUrl);
+              setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
+              setExtractedSource(newUrl);
+            } else {
+              console.log(`[Player Auto-Next] Fim da série alcançado.`);
+            }
+          }
         }
       } else if (event.data.type === "WATCHPLAY_INTRO_ACTIVE") {
         setIsIntroActive(!!event.data.active);
