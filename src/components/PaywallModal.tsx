@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode } from 'lucide-react';
+import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
 import { auth } from '../services/firebase';
 
 interface PaywallModalProps {
@@ -9,9 +9,12 @@ interface PaywallModalProps {
 }
 
 export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
-  const [step, setStep] = useState<'intro' | 'form'>('intro');
+  const [step, setStep] = useState<'intro' | 'checkout'>('intro');
+  const [activeTab, setActiveTab] = useState<'CREDIT_CARD' | 'PIX'>('CREDIT_CARD');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   
   const [formData, setFormData] = useState({
     cpfCnpj: '',
@@ -31,7 +34,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubscribe = async (method: 'CREDIT_CARD' | 'UNDEFINED') => {
+  const handleSubscribe = async (method: 'CREDIT_CARD' | 'PIX') => {
     const user = auth.currentUser;
     if (!user) {
       setError('Você precisa estar logado para assinar.');
@@ -88,12 +91,28 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       if (method === 'CREDIT_CARD') {
         alert("Assinatura confirmada com sucesso! Bem-vindo(a) ao Premium.");
         window.location.reload();
-      } else if (data.invoiceUrl) {
-        window.location.href = data.invoiceUrl;
+      } else if (method === 'PIX') {
+        if (data.pixQrCode) {
+          setPixData({
+            encodedImage: data.pixQrCode.encodedImage,
+            payload: data.pixQrCode.payload
+          });
+        } else {
+          throw new Error("Erro ao gerar QR Code do Pix.");
+        }
       }
     } catch (err: any) {
       setError(err.message);
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCopyPix = () => {
+    if (pixData?.payload) {
+      navigator.clipboard.writeText(pixData.payload);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -159,7 +178,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                 </div>
 
                 <button
-                  onClick={() => setStep('form')}
+                  onClick={() => setStep('checkout')}
                   className="group relative w-full py-4 rounded-xl font-bold text-lg overflow-hidden transition-all"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 transition-all group-hover:scale-[1.02]" />
@@ -171,14 +190,17 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
             ) : (
               <div className="relative p-8 flex flex-col">
                 <button 
-                  onClick={() => setStep('intro')}
+                  onClick={() => {
+                    if (pixData) setPixData(null);
+                    else setStep('intro');
+                  }}
                   className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors mb-6 w-fit"
                 >
                   <ArrowLeft size={20} /> Voltar
                 </button>
                 
                 <h2 className="text-2xl font-black text-white mb-6 flex items-center gap-2">
-                  <CreditCard className="text-purple-400" /> Pagamento Seguro
+                  <Lock className="text-purple-400" /> Pagamento Seguro
                 </h2>
 
                 {error && (
@@ -187,113 +209,163 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                   </div>
                 )}
 
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">CPF/CNPJ *</label>
-                      <input 
-                        type="text" name="cpfCnpj" value={formData.cpfCnpj} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="000.000.000-00"
-                      />
+                {/* Se já gerou o PIX, mostra apenas a tela do QR Code */}
+                {pixData ? (
+                  <div className="flex flex-col items-center">
+                    <div className="bg-white p-4 rounded-2xl mb-6">
+                      <img src={`data:image/jpeg;base64,${pixData.encodedImage}`} alt="QR Code Pix" className="w-48 h-48" />
                     </div>
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Celular (com DDD) *</label>
-                      <input 
-                        type="text" name="mobilePhone" value={formData.mobilePhone} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="(11) 99999-9999"
-                      />
-                    </div>
-                  </div>
+                    
+                    <button 
+                      onClick={handleCopyPix}
+                      className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-white font-medium flex items-center justify-center gap-2 transition-colors mb-6"
+                    >
+                      {copied ? <Check size={20} className="text-green-400" /> : <Copy size={20} />}
+                      {copied ? "Código Copiado!" : "Copiar código Pix"}
+                    </button>
 
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="col-span-2">
-                      <label className="text-xs text-zinc-400 mb-1 block">CEP *</label>
-                      <input 
-                        type="text" name="postalCode" value={formData.postalCode} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="00000-000"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Número *</label>
-                      <input 
-                        type="text" name="addressNumber" value={formData.addressNumber} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="Ex: 123"
-                      />
-                    </div>
+                    <button 
+                      onClick={() => window.location.reload()}
+                      className="w-full py-4 bg-purple-600 hover:bg-purple-500 rounded-xl text-white font-bold text-lg transition-all"
+                    >
+                      Já paguei / Atualizar
+                    </button>
+                    
+                    <p className="text-zinc-500 text-xs mt-4 text-center">
+                      Assim que pagar no app do seu banco, clique no botão acima para liberar seu acesso.
+                    </p>
                   </div>
+                ) : (
+                  <>
+                    {/* Tabs de Seleção de Método */}
+                    <div className="flex bg-black/40 rounded-xl p-1 mb-6 border border-white/10">
+                      <button
+                        onClick={() => setActiveTab('CREDIT_CARD')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'CREDIT_CARD' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      >
+                        <CreditCard size={18} /> Cartão
+                      </button>
+                      <button
+                        onClick={() => setActiveTab('PIX')}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-colors ${activeTab === 'PIX' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'}`}
+                      >
+                        <QrCode size={18} /> Pix Nativo
+                      </button>
+                    </div>
 
-                  <div className="h-px w-full bg-white/10 my-2" />
+                    {activeTab === 'CREDIT_CARD' && (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">CPF/CNPJ *</label>
+                            <input 
+                              type="text" name="cpfCnpj" value={formData.cpfCnpj} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="000.000.000-00"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">Celular (com DDD) *</label>
+                            <input 
+                              type="text" name="mobilePhone" value={formData.mobilePhone} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="(11) 99999-9999"
+                            />
+                          </div>
+                        </div>
 
-                  <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">Nome impresso no cartão *</label>
-                    <input 
-                      type="text" name="holderName" value={formData.holderName} onChange={handleChange}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors uppercase"
-                      placeholder="NOME COMO ESTÁ NO CARTÃO"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-zinc-400 mb-1 block">Número do Cartão *</label>
-                    <input 
-                      type="text" name="cardNumber" value={formData.cardNumber} onChange={handleChange}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                      placeholder="0000 0000 0000 0000"
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Mês (MM) *</label>
-                      <input 
-                        type="text" name="expiryMonth" value={formData.expiryMonth} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="12" maxLength={2}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">Ano (AAAA) *</label>
-                      <input 
-                        type="text" name="expiryYear" value={formData.expiryYear} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="2030" maxLength={4}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs text-zinc-400 mb-1 block">CVV *</label>
-                      <input 
-                        type="text" name="ccv" value={formData.ccv} onChange={handleChange}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
-                        placeholder="123" maxLength={4}
-                      />
-                    </div>
-                  </div>
-                </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div className="col-span-2">
+                            <label className="text-xs text-zinc-400 mb-1 block">CEP *</label>
+                            <input 
+                              type="text" name="postalCode" value={formData.postalCode} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="00000-000"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">Número *</label>
+                            <input 
+                              type="text" name="addressNumber" value={formData.addressNumber} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="Ex: 123"
+                            />
+                          </div>
+                        </div>
 
-                <button
-                  onClick={() => handleSubscribe('CREDIT_CARD')}
-                  disabled={loading}
-                  className="mt-8 group relative w-full py-4 rounded-xl font-bold text-lg overflow-hidden transition-all disabled:opacity-70"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 transition-all group-hover:scale-[1.02]" />
-                  <span className="relative flex items-center justify-center gap-2 text-white">
-                    {loading ? (
-                      <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <>Pagar R$ 9,90 <Check size={20} /></>
+                        <div className="h-px w-full bg-white/10 my-2" />
+
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Nome impresso no cartão *</label>
+                          <input 
+                            type="text" name="holderName" value={formData.holderName} onChange={handleChange}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors uppercase"
+                            placeholder="NOME COMO ESTÁ NO CARTÃO"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-zinc-400 mb-1 block">Número do Cartão *</label>
+                          <input 
+                            type="text" name="cardNumber" value={formData.cardNumber} onChange={handleChange}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                            placeholder="0000 0000 0000 0000"
+                          />
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">Mês (MM) *</label>
+                            <input 
+                              type="text" name="expiryMonth" value={formData.expiryMonth} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="12" maxLength={2}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">Ano (AAAA) *</label>
+                            <input 
+                              type="text" name="expiryYear" value={formData.expiryYear} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="2030" maxLength={4}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-zinc-400 mb-1 block">CVV *</label>
+                            <input 
+                              type="text" name="ccv" value={formData.ccv} onChange={handleChange}
+                              className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                              placeholder="123" maxLength={4}
+                            />
+                          </div>
+                        </div>
+                      </div>
                     )}
-                  </span>
-                </button>
-                
-                <button
-                  onClick={() => handleSubscribe('UNDEFINED')}
-                  disabled={loading}
-                  className="mt-4 flex items-center justify-center gap-2 text-zinc-400 hover:text-white transition-colors py-2"
-                >
-                  <QrCode size={18} /> Ou pague com Pix / Boleto
-                </button>
+
+                    {activeTab === 'PIX' && (
+                      <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                        <QrCode size={48} className="text-purple-400 opacity-50" />
+                        <p className="text-zinc-300">Pagamento instantâneo via Pix.</p>
+                        <p className="text-zinc-500 text-sm">O acesso é liberado em poucos segundos após a confirmação do pagamento.</p>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => handleSubscribe(activeTab)}
+                      disabled={loading}
+                      className="mt-8 group relative w-full py-4 rounded-xl font-bold text-lg overflow-hidden transition-all disabled:opacity-70"
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 transition-all group-hover:scale-[1.02]" />
+                      <span className="relative flex items-center justify-center gap-2 text-white">
+                        {loading ? (
+                          <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : (
+                          <>
+                            {activeTab === 'PIX' ? 'Gerar PIX de R$ 9,90' : 'Pagar R$ 9,90'} <Check size={20} />
+                          </>
+                        )}
+                      </span>
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </motion.div>

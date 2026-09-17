@@ -578,16 +578,30 @@ process.on("uncaughtException", (err) => {
         throw new Error(subData.errors[0].description);
       }
 
-      // 3. URL de pagamento (apenas se não for cartão direto)
+      // 3. Processamento adicional baseado no método
       let invoiceUrl;
+      let pixQrCode;
+      
       if (billingType !== "CREDIT_CARD") {
         const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { headers });
         const payData = await payRes.json();
-        invoiceUrl = payData.data?.[0]?.invoiceUrl;
-        if (!invoiceUrl) throw new Error("Cobrança inicial não gerou URL de pagamento.");
+        
+        const firstPayment = payData.data?.[0];
+        if (!firstPayment) throw new Error("Cobrança inicial não foi gerada.");
+        
+        invoiceUrl = firstPayment.invoiceUrl;
+        
+        // Se for PIX explícito, busca a imagem do QR Code e o copia-e-cola
+        if (billingType === "PIX") {
+          const qrRes = await fetch(`${baseUrl}/payments/${firstPayment.id}/pixQrCode`, { headers });
+          const qrData = await qrRes.json();
+          if (qrData.success !== false) {
+            pixQrCode = qrData;
+          }
+        }
       }
       
-      res.json({ success: true, invoiceUrl, subscriptionId: subData.id });
+      res.json({ success: true, invoiceUrl, subscriptionId: subData.id, pixQrCode });
     } catch (err: any) {
       console.error("[Asaas] Erro ao criar assinatura:", err);
       res.status(500).json({ success: false, error: err.message });
