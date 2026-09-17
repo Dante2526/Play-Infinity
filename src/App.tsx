@@ -449,7 +449,7 @@ export default function App() {
   }
 
   // TELA DE BLOQUEIO INICIAL (FORÇA O LOGIN ANTES DO CATÁLOGO)
-  if (!currentUser) {
+  if (!currentUser && viewState.type !== 'admin') {
     return (
       <div className="bg-[#0a0a0a] min-h-screen relative overflow-hidden flex flex-col">
         {/* Background Cinematográfico Desfocado */}
