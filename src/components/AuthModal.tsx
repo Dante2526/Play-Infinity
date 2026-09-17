@@ -25,6 +25,32 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Validação estrita de campos obrigatórios
+    if (!isLogin) {
+      if (!name.trim()) {
+        setError("Por favor, preencha o seu nome.");
+        return;
+      }
+      if (!email.trim()) {
+        setError("Por favor, informe o seu e-mail.");
+        return;
+      }
+      if (!password.trim() || password.length < 6) {
+        setError("A senha é obrigatória e deve ter pelo menos 6 caracteres.");
+        return;
+      }
+    } else {
+      if (!email.trim()) {
+        setError("Por favor, informe o seu e-mail.");
+        return;
+      }
+      if (!password.trim()) {
+        setError("Por favor, informe a sua senha.");
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -35,7 +61,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
         localStorage.removeItem("playinfinity_watched_episodes");
         localStorage.removeItem("playinfinity_watched_seasons");
 
-        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        const userCred = await signInWithEmailAndPassword(auth, email.trim(), password);
         // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)
         let userSnap = await getDoc(doc(db, "usuarios", userCred.user.uid));
         if (!userSnap.exists()) {
@@ -50,11 +76,11 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           throw new Error("Sua conta foi desativada ou removida. Entre em contato com o suporte.");
         }
       } else {
-        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        const userCred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         if (userCred.user) {
           await setDoc(doc(db, "usuarios", userCred.user.uid), {
-            nome: name.trim() || email.split("@")[0],
-            email: email,
+            nome: name.trim(),
+            email: email.trim(),
             senha: password,
             assinatura: "INATIVA",
             tipoAcesso: "mensal"
@@ -64,15 +90,15 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
       // Salva no localStorage que este navegador tem um usuário conectado
       localStorage.setItem("playinfinity_logged_in", "true");
-      localStorage.setItem("playinfinity_last_email", email);
+      localStorage.setItem("playinfinity_last_email", email.trim());
 
       // Notifica o gerenciador nativo de senhas do navegador se disponível
       if (typeof window !== "undefined" && 'credentials' in navigator && (window as any).PasswordCredential) {
         try {
           const cred = new (window as any).PasswordCredential({
-            id: email,
+            id: email.trim(),
             password: password,
-            name: email.split('@')[0]
+            name: (!isLogin && name.trim()) ? name.trim() : email.split('@')[0]
           });
           navigator.credentials.store(cred).catch(() => {});
         } catch (credErr) {}
@@ -126,6 +152,9 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           <form onSubmit={handleSubmit} method="post" action="#" autoComplete="on" className="space-y-4">
             {!isLogin && (
               <div>
+                <label className="block text-white/70 text-xs font-bold mb-1.5 ml-2 uppercase tracking-wider">
+                  Seu Nome <span className="text-orange-500">*</span>
+                </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
                     <User className="h-[18px] w-[18px]" />
@@ -139,14 +168,19 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                     autoComplete="name"
                     className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                     style={{ borderRadius: '22px' }}
-                    placeholder="Seu Nome"
-                    required={!isLogin}
+                    placeholder="Nome Completo"
+                    required
                   />
                 </div>
               </div>
             )}
 
             <div>
+              {!isLogin && (
+                <label className="block text-white/70 text-xs font-bold mb-1.5 ml-2 uppercase tracking-wider">
+                  Seu E-mail <span className="text-orange-500">*</span>
+                </label>
+              )}
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
                   <Mail className="h-[18px] w-[18px]" />
@@ -169,6 +203,11 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             </div>
 
             <div>
+              {!isLogin && (
+                <label className="block text-white/70 text-xs font-bold mb-1.5 ml-2 uppercase tracking-wider">
+                  Sua Senha <span className="text-orange-500">*</span>
+                </label>
+              )}
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
                   <Lock className="h-[18px] w-[18px]" />
@@ -182,7 +221,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                   autoComplete={isLogin ? "current-password" : "new-password"}
                   className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                   style={{ borderRadius: '22px' }}
-                  placeholder="Senha"
+                  placeholder={isLogin ? "Senha" : "Senha (mínimo 6 caracteres)"}
                   minLength={6}
                   required
                 />
