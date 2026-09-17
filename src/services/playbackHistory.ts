@@ -1,6 +1,6 @@
 import { getAllCatalogItems } from "./favorites";
 import { db, auth } from "./firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 const CHAIR_PHOTO_ID = "photo-1489599849927-2ee91cede3ba";
 
 export function isInvalidOrChairPhoto(url?: string): boolean {
