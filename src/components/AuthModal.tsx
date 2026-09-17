@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { X, Lock, Mail, AlertCircle } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../services/firebase";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "../services/firebase";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -11,7 +12,9 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalProps) {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(() => {
+    return localStorage.getItem("playinfinity_last_email") || "";
+  });
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -25,13 +28,52 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
+        const userCred = await signInWithEmailAndPassword(auth, email, password);
+        // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)
+        const userSnap = await getDoc(doc(db, "users", userCred.user.uid));
+        if (!userSnap.exists()) {
+          await signOut(auth);
+          localStorage.removeItem("playinfinity_logged_in");
+          throw new Error("Sua conta foi desativada ou removida. Entre em contato com o suporte.");
+        }
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const userCred = await createUserWithEmailAndPassword(auth, email, password);
+        if (userCred.user) {
+          await setDoc(doc(db, "users", userCred.user.uid), {
+            nome: email.split("@")[0],
+            email: email,
+            assinatura: "INATIVA",
+            tipoAcesso: "mensal",
+            criadoEm: new Date().toISOString()
+          }, { merge: true });
+        }
       }
+
+      // Salva no localStorage que este navegador tem um usuário conectado
+      localStorage.setItem("playinfinity_logged_in", "true");
+      localStorage.setItem("playinfinity_last_email", email);
+
+      // Notifica o gerenciador nativo de senhas do navegador se disponível
+      if (typeof window !== "undefined" && 'credentials' in navigator && (window as any).PasswordCredential) {
+        try {
+          const cred = new (window as any).PasswordCredential({
+            id: email,
+            password: password,
+            name: email.split('@')[0]
+          });
+          navigator.credentials.store(cred).catch(() => {});
+        } catch (credErr) {}
+      }
+
       onClose(); // Autenticação com sucesso
     } catch (err: any) {
-      setError(err.message || "Erro na autenticação. Tente novamente.");
+      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
+        setError("E-mail ou senha incorretos.");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("Este e-mail já está cadastrado.");
+      } else {
+        setError(err.message || "Erro na autenticação. Tente novamente.");
+      }
     } finally {
       setLoading(false);
     }
@@ -68,16 +110,21 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} method="post" action="#" autoComplete="on" className="space-y-4">
             <div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
                   <Mail className="h-[18px] w-[18px]" />
                 </div>
                 <input
+                  id="auth-email"
+                  name="username"
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
                   className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                   style={{ borderRadius: '22px' }}
                   placeholder="Seu E-mail"
@@ -92,9 +139,12 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                   <Lock className="h-[18px] w-[18px]" />
                 </div>
                 <input
+                  id="auth-password"
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete={isLogin ? "current-password" : "new-password"}
                   className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                   style={{ borderRadius: '22px' }}
                   placeholder="Senha"
@@ -107,7 +157,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] cursor-pointer"
               style={{ borderRadius: '22px' }}
             >
               {loading ? "Aguarde..." : (isLogin ? "Entrar" : "Criar Conta")}

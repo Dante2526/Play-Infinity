@@ -72,6 +72,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     failedServersRef.current.clear();
   }, [channel.id]);
 
+  // Notifica o app que o player ao vivo está aberto (para ocultar botões e controles flutuantes)
+  useEffect(() => {
+    document.body.classList.add('live-player-open');
+    window.dispatchEvent(new CustomEvent('playinfinity:player_state', { detail: { isOpen: true } }));
+    return () => {
+      document.body.classList.remove('live-player-open');
+      window.dispatchEvent(new CustomEvent('playinfinity:player_state', { detail: { isOpen: false } }));
+    };
+  }, []);
+
   // Função centralizada para alternar de servidor automaticamente em caso de queda ou erro
   const switchToNextServer = useCallback((reason?: string) => {
     if (channel.servers.length <= 1) {
@@ -139,6 +149,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     const video = videoRef.current;
     if (!video || !streamUrl) return;
 
+    // Garante que o elemento inicie com volume no máximo (100%)
+    video.volume = 1.0;
+    video.muted = false;
+
     // Destrói instância HLS prévia
     if (hlsRef.current) {
       hlsRef.current.destroy();
@@ -178,7 +192,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           setIsBuffering(false);
           setStreamHealth('online');
 
+          // Assegura volume inicial alto (100%)
+          video.volume = 1.0;
+          video.muted = false;
+          setIsMuted(false);
+          setVolume(1.0);
+
           video.play().catch(() => {
+            // Se o navegador bloquear autoplay com som, inicia em mudo e oferece botão para desmutar
             video.muted = true;
             setIsMuted(true);
             video.play().catch(() => {});
@@ -247,7 +268,17 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           setIsLoading(false);
           setIsBuffering(false);
           setStreamHealth('online');
-          video.play().catch(() => {});
+
+          video.volume = 1.0;
+          video.muted = false;
+          setIsMuted(false);
+          setVolume(1.0);
+
+          video.play().catch(() => {
+            video.muted = true;
+            setIsMuted(true);
+            video.play().catch(() => {});
+          });
         };
 
         const handleNativeError = () => {
@@ -349,13 +380,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     const video = videoRef.current;
     if (!video) return;
     if (isMuted || volume === 0) {
-      const restored = lastVolumeRef.current > 0 ? lastVolumeRef.current : 0.8;
+      const restored = lastVolumeRef.current > 0 ? lastVolumeRef.current : 1.0;
       video.muted = false;
       video.volume = restored;
       setVolume(restored);
       setIsMuted(false);
+      lastVolumeRef.current = restored;
     } else {
-      lastVolumeRef.current = volume;
+      lastVolumeRef.current = volume > 0 ? volume : 1.0;
       video.muted = true;
       setIsMuted(true);
     }
@@ -569,8 +601,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   return (
     <div 
       ref={containerRef}
+      data-live-player="true"
       onMouseMove={handleMouseMove}
-      className="fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden"
+      className="live-player-modal fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden"
     >
       {/* Elemento de Vídeo */}
       <video
@@ -578,8 +611,19 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         playsInline
         autoPlay
         className="w-full h-full object-contain cursor-pointer"
-        onClick={togglePlay}
-        onPlay={() => setIsPlaying(true)}
+        onClick={() => {
+          if (isMuted) {
+            toggleMute();
+          } else {
+            togglePlay();
+          }
+        }}
+        onPlay={() => {
+          setIsPlaying(true);
+          if (videoRef.current && !videoRef.current.muted) {
+            videoRef.current.volume = 1.0;
+          }
+        }}
         onPause={() => setIsPlaying(false)}
       />
 

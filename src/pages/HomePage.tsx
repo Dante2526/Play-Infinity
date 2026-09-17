@@ -260,7 +260,7 @@ export function HomePage({
     if (hasHistoryEverBeenSaved !== null) {
       return [];
     }
-    return continueWatching;
+    return []; // Remove fallbacks para dados mockados em contas novas
   });
 
   const handleRemoveHistoryItem = (e: React.MouseEvent, item: any) => {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck } from "lucide-react";
-import { collection, getDocs, query, where, doc, setDoc, deleteDoc } from "firebase/firestore";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Database, Loader2 } from "lucide-react";
+import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { auth, db } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
@@ -57,6 +57,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [revokeSuccess, setRevokeSuccess] = useState("");
   const [revokeError, setRevokeError] = useState("");
 
+  const [migrationLoading, setMigrationLoading] = useState(false);
+
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -105,15 +107,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
         total++;
         const data = docSnap.data();
         
-        if (data.subscription === "ACTIVE") {
+        if (data.subscription === "ACTIVE" || data.assinatura === "ATIVA") {
           active++;
         } else {
           inactive++;
         }
 
         // Pessoas assistindo nos últimos 5 minutos
-        if (data.lastActive) {
-          const lastActiveDate = new Date(data.lastActive);
+        if (data.lastActive || data.ultimoAcesso) {
+          const lastActiveDate = new Date(data.lastActive || data.ultimoAcesso);
           if (lastActiveDate >= fiveMinutesAgo) {
             watchingNow++;
           }
@@ -121,14 +123,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         list.push({
           id: docSnap.id,
-          name: data.name || data.displayName || "",
+          name: data.nome || data.name || data.displayName || data.nomeExibicao || "",
           email: data.email || "Sem e-mail",
-          subscription: data.subscription || "INACTIVE",
-          accessType: data.accessType || "mensal",
-          expirationDate: data.expirationDate,
-          initialPassword: data.initialPassword,
-          createdAt: data.createdAt,
-          lastActive: data.lastActive
+          subscription: data.assinatura === "ATIVA" ? "ACTIVE" : (data.subscription || "INACTIVE"),
+          accessType: data.tipoAcesso || data.accessType || "mensal",
+          expirationDate: data.dataExpiracao || data.expirationDate,
+          initialPassword: data.senhaInicial || data.initialPassword,
+          createdAt: data.criadoEm || data.createdAt,
+          lastActive: data.ultimoAcesso || data.lastActive
         });
       });
 
@@ -198,15 +200,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
       // 4. Salva no banco de dados como ACTIVE e salva as datas, nome e senha
       await setDoc(doc(db, "users", userCredential.user.uid), {
         email: newEmail,
-        name: newName.trim(),
-        displayName: newName.trim(),
-        subscription: "ACTIVE",
-        paymentDate: payDate.toISOString(),
-        expirationDate: expirationDate.toISOString(),
-        createdAt: new Date().toISOString(),
-        createdByAdmin: true,
-        accessType: accessType,
-        initialPassword: newPassword
+        nome: newName.trim(),
+        nomeExibicao: newName.trim(),
+        assinatura: "ATIVA",
+        dataPagamento: payDate.toISOString(),
+        dataExpiracao: expirationDate.toISOString(),
+        criadoEm: new Date().toISOString(),
+        criadoPorAdmin: true,
+        tipoAcesso: accessType,
+        senhaInicial: newPassword
       });
 
       // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
@@ -273,6 +275,75 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setRevokeError("Erro ao revogar acesso: " + err.message);
     } finally {
       setRevokeLoading(false);
+    }
+  };
+
+  const handleMigrateDatabase = async () => {
+    if (!window.confirm("Essa ação vai traduzir todos os campos do banco (inglês para português) e apagar as chaves antigas. Deseja continuar?")) return;
+    
+    setMigrationLoading(true);
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      let migrated = 0;
+      
+      for (const docSnap of snap.docs) {
+        const data = docSnap.data();
+        let needsMigration = false;
+        const updateData: any = {};
+        
+        if (data.subscription !== undefined) {
+           updateData.assinatura = data.subscription === "ACTIVE" ? "ATIVA" : (data.subscription === "INACTIVE" ? "INATIVA" : data.subscription);
+           updateData.subscription = deleteField();
+           needsMigration = true;
+        }
+        if (data.createdAt !== undefined) {
+           updateData.criadoEm = data.createdAt;
+           updateData.createdAt = deleteField();
+           needsMigration = true;
+        }
+        if (data.createdByAdmin !== undefined) {
+           updateData.criadoPorAdmin = data.createdByAdmin;
+           updateData.createdByAdmin = deleteField();
+           needsMigration = true;
+        }
+        if (data.displayName !== undefined) {
+           updateData.nomeExibicao = data.displayName;
+           updateData.displayName = deleteField();
+           needsMigration = true;
+        }
+        if (data.expirationDate !== undefined) {
+           updateData.dataExpiracao = data.expirationDate;
+           updateData.expirationDate = deleteField();
+           needsMigration = true;
+        }
+        if (data.initialPassword !== undefined) {
+           updateData.senhaInicial = data.initialPassword;
+           updateData.initialPassword = deleteField();
+           needsMigration = true;
+        }
+        if (data.name !== undefined) {
+           updateData.nome = data.name;
+           updateData.name = deleteField();
+           needsMigration = true;
+        }
+        if (data.paymentDate !== undefined) {
+           updateData.dataPagamento = data.paymentDate;
+           updateData.paymentDate = deleteField();
+           needsMigration = true;
+        }
+        
+        if (needsMigration) {
+          await updateDoc(docSnap.ref, updateData);
+          migrated++;
+        }
+      }
+      
+      alert(`Migração concluída com sucesso! ${migrated} usuário(s) convertidos para o padrão em português.`);
+      loadStats();
+    } catch (err: any) {
+      alert("Erro ao migrar banco: " + err.message);
+    } finally {
+      setMigrationLoading(false);
     }
   };
 
@@ -347,16 +418,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
             <p className="text-white/50 pl-14">Visão geral e métricas em tempo real da plataforma.</p>
           </div>
 
-          <button 
-            onClick={() => {
-              sessionStorage.removeItem("isAdmin");
-              setIsAdmin(false);
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair do Painel
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={handleMigrateDatabase}
+              disabled={migrationLoading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 rounded-full font-medium transition-colors disabled:opacity-50"
+            >
+              {migrationLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
+              {migrationLoading ? "Traduzindo..." : "Traduzir Banco (PT-BR)"}
+            </button>
+            <button 
+              onClick={() => {
+                sessionStorage.removeItem("isAdmin");
+                setIsAdmin(false);
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              Sair do Painel
+            </button>
+          </div>
         </div>
 
         {/* Dashboard Cards */}

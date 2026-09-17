@@ -32,7 +32,10 @@ import {
   FileText,
   Bell,
   Mic,
-  MicOff
+  MicOff,
+  KeyRound,
+  Lock,
+  AlertCircle
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
@@ -125,7 +128,8 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 import { OnPlayHandler } from "../types";
 import { auth, db } from "../services/firebase";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider } from "firebase/auth";
 
 export function UserProfilePage({ 
   onNavigate,
@@ -140,25 +144,170 @@ export function UserProfilePage({
   const [userName, setUserName] = useState<string>(() => {
     return auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : "Naylan Moreira");
   });
+  const [subscriptionLabel, setSubscriptionLabel] = useState<string>("Assinante Premium • Acesso Ilimitado");
+  const [isVitalicio, setIsVitalicio] = useState<boolean>(false);
+
+  // Estados do Modal de Troca de Senha
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  const handleLogout = async () => {
+    try {
+      localStorage.removeItem("playinfinity_logged_in");
+      await signOut(auth);
+      onNavigate('home');
+    } catch (err) {
+      console.error("Erro ao encerrar sessão:", err);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (newPassword.length < 6) {
+      setPasswordError("A nova senha deve ter no mínimo 6 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("A confirmação não coincide com a nova senha.");
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user || !user.email) {
+      setPasswordError("Usuário não autenticado.");
+      return;
+    }
+
+    setPasswordLoading(true);
+
+    try {
+      // 1. Reautentica com a senha atual para validação de segurança
+      const credential = EmailAuthProvider.credential(user.email, currentPassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // 2. Atualiza a senha no Authentication
+      await updatePassword(user, newPassword);
+
+      // 3. Atualiza campo no Firestore para manter sincronizado com o painel de adm
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          senhaInicial: newPassword
+        });
+      } catch (dbErr) {}
+
+      setPasswordSuccess("Senha alterada com sucesso!");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setTimeout(() => {
+        setIsChangePasswordOpen(false);
+        setPasswordSuccess("");
+      }, 1800);
+    } catch (err: any) {
+      console.error("Erro ao alterar senha:", err);
+      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setPasswordError("Senha atual incorreta.");
+      } else if (err.code === "auth/weak-password") {
+        setPasswordError("A nova senha é muito fraca.");
+      } else {
+        setPasswordError(err.message || "Não foi possível alterar a senha. Tente novamente.");
+      }
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
       const user = auth.currentUser;
       if (!user) return;
-      if (user.displayName) {
-        setUserName(user.displayName);
-        return;
+      
+      let vitalicio = false;
+
+      // 1. Verifica se o e-mail consta na coleção 'administradores'
+      if (user.email) {
+        try {
+          const adminQ = query(
+            collection(db, "administradores"),
+            where("email", "==", user.email)
+          );
+          const adminSnap = await getDocs(adminQ);
+          if (!adminSnap.empty) {
+            vitalicio = true;
+          }
+        } catch (adminErr) {
+          console.warn("Verificação de administradores:", adminErr);
+        }
       }
+
+      // 2. Consulta o documento do usuário
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.exists()) {
           const data = snap.data();
-          if (data.name) {
-            setUserName(data.name);
-          } else if (data.displayName) {
-            setUserName(data.displayName);
+
+          // Sincroniza nome
+          const name = data.nome || data.nomeExibicao || data.name || data.displayName;
+          if (name) {
+            setUserName(name);
+          } else if (user.displayName) {
+            setUserName(user.displayName);
           } else if (user.email) {
             setUserName(user.email.split('@')[0]);
+          }
+
+          // Verifica se tipo de acesso é vitalício
+          const tipoAcesso = (data.tipoAcesso || data.accessType || "").toLowerCase();
+          if (tipoAcesso === "vitalicio" || tipoAcesso === "vitalício") {
+            vitalicio = true;
+          }
+
+          if (vitalicio) {
+            setIsVitalicio(true);
+            setSubscriptionLabel("Assinante Premium • Acesso Ilimitado Vitalício");
+          } else {
+            setIsVitalicio(false);
+            const rawExp = data.dataExpiracao || data.expirationDate;
+            if (rawExp) {
+              const expDate = new Date(rawExp);
+              if (!isNaN(expDate.getTime())) {
+                const isPast = expDate.getTime() < Date.now();
+                const isTeste = tipoAcesso === "teste";
+                if (isTeste) {
+                  const timeStr = expDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+                  const dateStr = expDate.toLocaleDateString("pt-BR");
+                  setSubscriptionLabel(isPast 
+                    ? `Acesso Teste Vencido em: ${dateStr} às ${timeStr}`
+                    : `Vencimento: ${dateStr} às ${timeStr}`
+                  );
+                } else {
+                  const dateStr = expDate.toLocaleDateString("pt-BR");
+                  setSubscriptionLabel(isPast 
+                    ? `Assinatura Vencida em: ${dateStr}`
+                    : `Vencimento: ${dateStr}`
+                  );
+                }
+              } else {
+                setSubscriptionLabel(`Vencimento: ${rawExp}`);
+              }
+            } else {
+              setSubscriptionLabel("Assinante Ativo");
+            }
+          }
+        } else {
+          // Se não houver documento em users, mas for admin
+          if (vitalicio) {
+            setIsVitalicio(true);
+            setSubscriptionLabel("Assinante Premium • Acesso Ilimitado Vitalício");
           }
         }
       } catch (err) {
@@ -201,7 +350,10 @@ export function UserProfilePage({
           
           <div className="flex flex-col items-center md:items-start flex-1 text-center md:text-left">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{userName}</h2>
-            <p className="text-neutral-400 mb-5 font-medium text-sm">Assinante Premium • Acesso Ilimitado</p>
+            <p className="text-neutral-400 mb-5 font-medium text-sm flex items-center justify-center md:justify-start gap-1.5">
+              {isVitalicio && <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />}
+              <span>{subscriptionLabel}</span>
+            </p>
             
             {/* Badges de estatísticas */}
             <div className="grid grid-cols-3 gap-3 w-full max-w-md mb-6">
@@ -393,11 +545,146 @@ export function UserProfilePage({
             </div>
           ))}
 
-          <button className="w-full mt-8 py-4 text-center font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors border border-transparent hover:border-red-500/20 text-sm cursor-pointer">
+          <button 
+            type="button"
+            onClick={() => {
+              setPasswordError("");
+              setPasswordSuccess("");
+              setCurrentPassword("");
+              setNewPassword("");
+              setConfirmPassword("");
+              setIsChangePasswordOpen(true);
+            }}
+            className="w-full mt-8 py-4 text-center font-bold text-neutral-200 hover:text-white bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 hover:border-white/15 text-sm cursor-pointer active:scale-98 flex items-center justify-center gap-2 shadow-sm"
+          >
+            <KeyRound className="w-4 h-4 text-orange-500" />
+            <span>Trocar Senha</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={handleLogout}
+            className="w-full mt-3 py-4 text-center font-bold text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors border border-transparent hover:border-red-500/20 text-sm cursor-pointer active:scale-98"
+          >
             Encerrar Sessão
           </button>
         </div>
       </div>
+
+      {/* Modal de Troca de Senha */}
+      {isChangePasswordOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-md p-4 sm:p-6 animate-fade-in">
+          <div className="bg-[#1c1c1e]/90 backdrop-blur-3xl border border-white/10 w-full max-w-sm sm:max-w-md overflow-hidden relative shadow-[0_8px_32px_rgba(0,0,0,0.6)]" style={{ borderRadius: '28px' }}>
+            <button
+              type="button"
+              onClick={() => setIsChangePasswordOpen(false)}
+              className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            <div className="p-8 sm:p-10">
+              <div className="text-center mb-8 mt-2">
+                <div className="w-12 h-12 bg-orange-500/10 border border-orange-500/20 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                  <KeyRound className="w-6 h-6" />
+                </div>
+                <h2 className="text-[24px] leading-tight font-extrabold text-white tracking-tight mb-2">
+                  Trocar Senha
+                </h2>
+                <p className="text-white/50 text-[14px] font-medium px-2">
+                  Informe sua senha atual e escolha uma nova senha de acesso.
+                </p>
+              </div>
+
+              {passwordError && (
+                <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-400 text-sm rounded-[20px]">
+                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span className="font-medium leading-relaxed">{passwordError}</span>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 flex items-start gap-3 text-green-400 text-sm rounded-[20px]">
+                  <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" />
+                  <span className="font-medium leading-relaxed">{passwordSuccess}</span>
+                </div>
+              )}
+
+              <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-1.5 ml-1">Senha Atual</label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                      <Lock className="h-[18px] w-[18px]" />
+                    </div>
+                    <input
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[20px]"
+                      placeholder="Sua senha atual"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-1.5 ml-1">Nova Senha</label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                      <Lock className="h-[18px] w-[18px]" />
+                    </div>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[20px]"
+                      placeholder="Mínimo 6 caracteres"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-1.5 ml-1">Confirmar Nova Senha</label>
+                  <div className="relative group">
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                      <Lock className="h-[18px] w-[18px]" />
+                    </div>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[20px]"
+                      placeholder="Repita a nova senha"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={passwordLoading}
+                    className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] py-4 rounded-[22px] transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    {passwordLoading ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Atualizando...</span>
+                      </>
+                    ) : (
+                      <span>Atualizar Senha</span>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
