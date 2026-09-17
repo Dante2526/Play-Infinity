@@ -24,7 +24,7 @@ function syncWatchedToCloud(store: Record<string, boolean>) {
     
     try {
       const userRef = doc(db, "usuarios", user.uid);
-      await setDoc(userRef, { watchedEpisodes: store }, { merge: true });
+      await setDoc(userRef, { episodiosAssistidos: store }, { merge: true });
     } catch (e) {
       console.warn("[Firestore Sync] Falha ao sincronizar episódios:", e);
     }
@@ -42,10 +42,11 @@ export async function fetchWatchedFromCloud(): Promise<void> {
     }
     if (snap.exists()) {
       const data = snap.data();
-      if (data.watchedEpisodes) {
+      const remoteWatched = data.episodiosAssistidos || data.watchedEpisodes;
+      if (remoteWatched) {
         // Mescla episódios da nuvem com os locais
         const local = getStore();
-        const merged = { ...local, ...data.watchedEpisodes };
+        const merged = { ...local, ...remoteWatched };
         saveStore(merged);
       }
     }
