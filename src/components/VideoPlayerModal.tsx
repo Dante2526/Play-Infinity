@@ -1612,8 +1612,8 @@ export function VideoPlayerModal({
                   transformOrigin: "center center",
                   transition: "transform 0.3s ease",
                 }}
-                sandbox="allow-scripts allow-same-origin allow-presentation"
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock"
+                fetchpriority="high"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock; accelerometer; gyroscope"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
