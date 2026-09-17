@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft } from "lucide-react";
-import { collection, getDocs, query, where, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, setDoc, deleteDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth, db } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
@@ -30,6 +30,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
+
+  // Revoke Access State
+  const [revokeEmail, setRevokeEmail] = useState("");
+  const [revokeLoading, setRevokeLoading] = useState(false);
+  const [revokeSuccess, setRevokeSuccess] = useState("");
+  const [revokeError, setRevokeError] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -140,6 +146,36 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setCreateError("Erro: " + err.message);
     } finally {
       setCreateLoading(false);
+    }
+  };
+
+  const handleRevokeAccess = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRevokeLoading(true);
+    setRevokeError("");
+    setRevokeSuccess("");
+
+    try {
+      const q = query(collection(db, "users"), where("email", "==", revokeEmail));
+      const snap = await getDocs(q);
+
+      if (snap.empty) {
+        setRevokeError("Nenhum cliente ativo encontrado com esse e-mail.");
+        setRevokeLoading(false);
+        return;
+      }
+
+      for (const document of snap.docs) {
+        await deleteDoc(doc(db, "users", document.id));
+      }
+
+      setRevokeSuccess(`Acesso de ${revokeEmail} revogado com sucesso!`);
+      setRevokeEmail("");
+      loadStats();
+    } catch (err: any) {
+      setRevokeError("Erro ao revogar acesso: " + err.message);
+    } finally {
+      setRevokeLoading(false);
     }
   };
 
@@ -368,6 +404,53 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 {createLoading ? "Criando..." : "Criar Acesso"}
               </button>
             </div>
+          </form>
+        </div>
+
+        {/* Revogar Acesso (Deletar Conta) */}
+        <div className="mt-8 bg-red-950/20 border border-red-500/20 backdrop-blur-xl rounded-[28px] p-8 shadow-xl">
+          <h3 className="text-2xl font-bold text-red-500 mb-2 flex items-center gap-3">
+            <div className="p-2 bg-red-500/20 text-red-500 rounded-xl">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            Revogar Acesso (Suspender)
+          </h3>
+          <p className="text-white/50 text-sm mb-6 max-w-2xl">
+            Digite o e-mail do cliente para deletar a assinatura dele do banco de dados. Ele perderá o acesso premium imediatamente e cairá na tela de pagamento caso tente assistir algo.
+          </p>
+
+          {revokeSuccess && (
+            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-[20px] text-green-400 font-medium">
+              ✅ {revokeSuccess}
+            </div>
+          )}
+          
+          {revokeError && (
+            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 font-medium">
+              ❌ {revokeError}
+            </div>
+          )}
+
+          <form onSubmit={handleRevokeAccess} className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente para Excluir</label>
+              <input
+                type="email"
+                value={revokeEmail}
+                onChange={(e) => setRevokeEmail(e.target.value)}
+                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all font-medium text-[15px] rounded-[22px]"
+                placeholder="cliente@email.com"
+                required
+              />
+            </div>
+            
+            <button
+              type="submit"
+              disabled={revokeLoading}
+              className="w-full md:w-auto h-[52px] px-8 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(220,38,38,0.4)] whitespace-nowrap"
+            >
+              {revokeLoading ? "Excluindo..." : "Revogar Acesso"}
+            </button>
           </form>
         </div>
 
