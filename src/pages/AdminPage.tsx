@@ -131,10 +131,32 @@ export function AdminPage({ onBack }: AdminPageProps) {
         total++;
         const data = docSnap.data();
         
-        if (data.subscription === "ACTIVE" || data.assinatura === "ATIVA") {
+        const isExplicitlyActive = (data.subscription === "ACTIVE" || data.assinatura === "ATIVA");
+        const expDateStr = data.dataExpiracao || data.expirationDate;
+        let isExpired = false;
+
+        if (expDateStr) {
+          const expDate = new Date(expDateStr);
+          if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
+            isExpired = expDate.getTime() <= Date.now();
+          }
+        }
+
+        const activeStatus = isExplicitlyActive && !isExpired;
+
+        if (activeStatus) {
           active++;
         } else {
           inactive++;
+        }
+
+        if (isExplicitlyActive && isExpired) {
+          try {
+            updateDoc(doc(db, "usuarios", docSnap.id), {
+              assinatura: "EXPIRADA",
+              subscription: "INACTIVE"
+            });
+          } catch(e) {}
         }
 
         // Pessoas assistindo nos últimos 5 minutos
@@ -149,7 +171,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           id: docSnap.id,
           name: data.nome || data.name || data.displayName || data.nomeExibicao || "",
           email: data.email || "Sem e-mail",
-          subscription: (data.assinatura === "ATIVA" || data.subscription === "ACTIVE") ? "ACTIVE" : "INACTIVE",
+          subscription: activeStatus ? "ACTIVE" : "INACTIVE",
           accessType: data.tipoAcesso || data.accessType || "mensal",
           expirationDate: data.dataExpiracao || data.expirationDate,
           initialPassword: data.senha || data.senhaInicial || data.initialPassword,
@@ -629,6 +651,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   }
 
                   const isActive = client.subscription === "ACTIVE";
+                  
+                  let isExpiredClient = false;
+                  if (client.expirationDate) {
+                    const d = new Date(client.expirationDate);
+                    if (!isNaN(d.getTime()) && d.getFullYear() < 2099 && d.getTime() <= Date.now()) {
+                      isExpiredClient = true;
+                    }
+                  }
 
                   return (
                     <div
@@ -662,9 +692,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               isActive
                                 ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                                : isExpiredClient
+                                ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.3)]'
                                 : 'bg-red-500/15 text-red-400 border border-red-500/30'
                             }`}>
-                              {isActive ? 'Ativo' : 'Inativo'}
+                              {isActive ? 'Ativo' : isExpiredClient ? 'Expirado' : 'Inativo'}
                             </span>
                           </div>
 
