@@ -761,7 +761,9 @@ export default function App() {
       </div>
       )}
 
-      <VirtualRemote isHidden={playerModal.isOpen} />
+      {viewState.type !== 'admin' && (
+        <VirtualRemote isHidden={playerModal.isOpen} />
+      )}
       
       {/* Auth & Paywall Modals */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
