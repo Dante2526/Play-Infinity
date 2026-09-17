@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Lock, Mail, AlertCircle } from "lucide-react";
+import { X, Lock, Mail, AlertCircle, User } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
@@ -15,6 +15,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   const [email, setEmail] = useState(() => {
     return localStorage.getItem("playinfinity_last_email") || "";
   });
+  const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -52,7 +53,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
         const userCred = await createUserWithEmailAndPassword(auth, email, password);
         if (userCred.user) {
           await setDoc(doc(db, "usuarios", userCred.user.uid), {
-            nome: email.split("@")[0],
+            nome: name.trim() || email.split("@")[0],
             email: email,
             senha: password,
             assinatura: "INATIVA",
@@ -123,6 +124,28 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           )}
 
           <form onSubmit={handleSubmit} method="post" action="#" autoComplete="on" className="space-y-4">
+            {!isLogin && (
+              <div>
+                <div className="relative group">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
+                    <User className="h-[18px] w-[18px]" />
+                  </div>
+                  <input
+                    id="auth-name"
+                    name="name"
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    autoComplete="name"
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                    style={{ borderRadius: '22px' }}
+                    placeholder="Seu Nome"
+                    required={!isLogin}
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <div className="relative group">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none transition-colors group-focus-within:text-orange-500 text-white/30">
