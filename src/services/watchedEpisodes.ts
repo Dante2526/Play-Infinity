@@ -1,3 +1,6 @@
+import { db, auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+
 const STORAGE_KEY = "playinfinity_watched_episodes";
 
 function getStore(): Record<string, boolean> {
@@ -9,10 +12,51 @@ function getStore(): Record<string, boolean> {
   }
 }
 
+// Timer para evitar spam de writes no Firestore (Debounce de 5s)
+let syncTimeout: any = null;
+
+function syncWatchedToCloud(store: Record<string, boolean>) {
+  if (syncTimeout) clearTimeout(syncTimeout);
+  
+  syncTimeout = setTimeout(async () => {
+    const user = auth.currentUser;
+    if (!user) return; // Só sincroniza se estiver logado
+    
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await setDoc(userRef, { watchedEpisodes: store }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore Sync] Falha ao sincronizar episódios:", e);
+    }
+  }, 5000);
+}
+
+export async function fetchWatchedFromCloud(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  try {
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      if (data.watchedEpisodes) {
+        // Mescla episódios da nuvem com os locais
+        const local = getStore();
+        const merged = { ...local, ...data.watchedEpisodes };
+        saveStore(merged);
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore Fetch] Erro ao baixar episódios:", e);
+  }
+}
+
 function saveStore(store: Record<string, boolean>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     window.dispatchEvent(new CustomEvent("playinfinity:watched_updated", { detail: store }));
+    syncWatchedToCloud(store);
   } catch (e) {
     console.error("Erro ao salvar episódios assistidos:", e);
   }
