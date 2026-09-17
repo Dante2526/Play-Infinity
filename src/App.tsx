@@ -645,10 +645,14 @@ export default function App() {
             tabIndex={0}
             role="button"
             onClick={handleToggleProfile}
-            className={`w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs lg:text-sm cursor-pointer hover:scale-105 transition-all outline-none ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
+            className={`w-8 h-8 lg:w-10 lg:h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs lg:text-sm cursor-pointer hover:scale-105 transition-all outline-none overflow-hidden ${viewState.type === 'profile' || viewState.type === 'favorites' ? 'border-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.8)]' : 'border-[#0a0a0a] shadow-[0_0_15px_rgba(234,88,12,0.4)]'}`}
             title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
-            {userInitial}
+            {currentUser?.photoURL ? (
+              <img src={currentUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              userInitial
+            )}
           </button>
         </div>
       </header>
@@ -688,14 +692,18 @@ export default function App() {
             tabIndex={0}
             role="button"
             onClick={handleToggleProfile}
-            className={`w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg cursor-pointer transition-all active:scale-95 outline-none ${
+            className={`w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 border-[2px] flex items-center justify-center font-bold text-xs shadow-lg cursor-pointer transition-all active:scale-95 outline-none overflow-hidden ${
               viewState.type === 'profile' || viewState.type === 'favorites' 
                 ? 'border-white ring-2 ring-orange-500 shadow-[0_0_15px_rgba(234,88,12,0.8)] scale-105' 
                 : 'border-white/20 hover:border-orange-500'
             }`}
             title={viewState.type === 'profile' || viewState.type === 'favorites' ? 'Fechar Perfil' : 'Meu Perfil'}
           >
-            {userInitial}
+            {currentUser?.photoURL ? (
+              <img src={currentUser.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+            ) : (
+              userInitial
+            )}
           </button>
         </div>
       </div>
