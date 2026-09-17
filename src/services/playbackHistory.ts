@@ -138,9 +138,17 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
     
     try {
       const userRef = doc(db, "usuarios", user.uid);
-      await setDoc(userRef, { historicoReproducao: store }, { merge: true });
-    } catch (e) {
-      console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
+      // Usamos updateDoc para sobrescrever completamente o campo historicoReproducao
+      // sem afetar o resto do documento (setDoc com merge=true não deleta chaves removidas localmente).
+      await updateDoc(userRef, { historicoReproducao: store });
+    } catch (e: any) {
+      if (e.code === 'not-found') {
+        // Se o documento não existir, criamos
+        const userRef = doc(db, "usuarios", user.uid);
+        await setDoc(userRef, { historicoReproducao: store }, { merge: true });
+      } else {
+        console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
+      }
     }
   }, 10000);
 }
