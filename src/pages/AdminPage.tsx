@@ -11,7 +11,7 @@ export interface ClientUser {
   name?: string;
   email: string;
   subscription: string;
-  accessType?: "mensal" | "teste" | "vitalicio";
+  accessType?: "mensal" | "teste" | "vitalicio" | "4horas" | "1dia";
   expirationDate?: string;
   initialPassword?: string;
   createdAt?: string;
@@ -46,7 +46,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio">("mensal");
+  const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia">("mensal");
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
@@ -249,6 +249,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
         expirationDate = new Date();
         expirationDate.setHours(expirationDate.getHours() + 1);
         expireStr = "Em 1 hora (" + expirationDate.toLocaleTimeString('pt-BR') + ")";
+      } else if (accessType === "4horas") {
+        expirationDate = new Date();
+        expirationDate.setHours(expirationDate.getHours() + 4);
+        expireStr = "Em 4 horas (" + expirationDate.toLocaleTimeString('pt-BR') + ")";
+      } else if (accessType === "1dia") {
+        expirationDate = new Date();
+        expirationDate.setHours(expirationDate.getHours() + 24);
+        expireStr = "Em 1 dia (" + (expirationDate.toLocaleDateString('pt-BR') + " às " + expirationDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) + ")";
       } else if (accessType === "vitalicio") {
         expirationDate = new Date();
         expirationDate.setFullYear(2099);
@@ -646,7 +654,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     if (d.getFullYear() >= 2099) {
                       expireLabel = "Vitalício (Permanente)";
                     } else {
-                      expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
+                      expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' || client.accessType === '4horas' || client.accessType === '1dia' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
                     }
                   }
 
@@ -683,9 +691,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                                 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                                 : client.accessType === 'teste'
                                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                                : client.accessType === '4horas'
+                                ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                : client.accessType === '1dia'
+                                ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
                                 : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                             }`}>
-                              {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === 'teste' ? 'Teste 1h' : 'Mensal'}
+                              {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === 'teste' ? 'Teste 1h' : client.accessType === '4horas' ? '4 Horas' : client.accessType === '1dia' ? '1 Dia' : 'Mensal'}
                             </span>
 
                             {/* Badge Status */}
@@ -835,29 +847,51 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('teste')}
-                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
                     accessType === 'teste' 
                       ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
                       : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
                   }`}
                 >
-                  Teste (1 Hora)
+                  1 Hora
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessType('4horas')}
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                    accessType === '4horas' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  4 Horas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessType('1dia')}
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                    accessType === '1dia' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  1 Dia
                 </button>
                 <button
                   type="button"
                   onClick={() => setAccessType('mensal')}
-                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
                     accessType === 'mensal' 
                       ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
                       : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
                   }`}
                 >
-                  Mensal (1 Mês)
+                  Mensal
                 </button>
                 <button
                   type="button"
                   onClick={() => setAccessType('vitalicio')}
-                  className={`flex-1 py-3 px-4 rounded-[22px] font-bold text-sm transition-all ${
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
                     accessType === 'vitalicio' 
                       ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
                       : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
@@ -935,52 +969,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </form>
         </div>
 
-        {/* Revogar Acesso (Deletar Conta) */}
-        <div className="mt-8 bg-red-950/20 border border-red-500/20 backdrop-blur-xl rounded-[28px] p-8 shadow-xl">
-          <h3 className="text-2xl font-bold text-red-500 mb-2 flex items-center gap-3">
-            <div className="p-2 bg-red-500/20 text-red-500 rounded-xl">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            Revogar Acesso (Suspender)
-          </h3>
-          <p className="text-white/50 text-sm mb-6 max-w-2xl">
-            Digite o e-mail do cliente para deletar a assinatura dele do banco de dados. Ele perderá o acesso premium imediatamente e cairá na tela de pagamento caso tente assistir algo.
-          </p>
 
-          {revokeSuccess && (
-            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-[20px] text-green-400 font-medium">
-              ✅ {revokeSuccess}
-            </div>
-          )}
-          
-          {revokeError && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 font-medium">
-              ❌ {revokeError}
-            </div>
-          )}
-
-          <form onSubmit={handleRevokeAccess} className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 w-full">
-              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">E-mail do Cliente para Excluir</label>
-              <input
-                type="email"
-                value={revokeEmail}
-                onChange={(e) => setRevokeEmail(e.target.value)}
-                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-red-500 transition-all font-medium text-[15px] rounded-[22px]"
-                placeholder="cliente@email.com"
-                required
-              />
-            </div>
-            
-            <button
-              type="submit"
-              disabled={revokeLoading}
-              className="w-full md:w-auto h-[52px] px-8 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(220,38,38,0.4)] whitespace-nowrap"
-            >
-              {revokeLoading ? "Excluindo..." : "Revogar Acesso"}
-            </button>
-          </form>
-        </div>
 
       </div>
 
