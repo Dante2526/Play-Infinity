@@ -62,6 +62,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   // Edit User State
   const [editingUser, setEditingUser] = useState<ClientUser | null>(null);
   const [editEmail, setEditEmail] = useState("");
+  const [editName, setEditName] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
@@ -318,6 +319,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const handleOpenEdit = (user: ClientUser) => {
     setEditingUser(user);
+    setEditName(user.name || "");
     setEditEmail(user.email || "");
     setEditPassword(user.initialPassword || "");
     setEditError("");
@@ -331,6 +333,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setEditError("");
     setEditSuccess("");
 
+    const trimmedName = editName.trim();
     const trimmedEmail = editEmail.trim();
     const trimmedPass = editPassword.trim();
 
@@ -351,6 +354,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
       const updates: any = {
         email: trimmedEmail,
       };
+      if (trimmedName !== undefined) {
+        updates.nome = trimmedName;
+      }
       if (trimmedPass) {
         updates.senha = trimmedPass;
       }
@@ -959,7 +965,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
             <form onSubmit={handleSaveEdit} className="space-y-4">
               <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Novo E-mail</label>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Nome</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
+                  placeholder="Nome do cliente (opcional)"
+                />
+              </div>
+
+              <div>
+                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">E-mail</label>
                 <input
                   type="email"
                   value={editEmail}
