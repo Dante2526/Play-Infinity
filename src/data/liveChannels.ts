@@ -26,18 +26,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O melhor do futebol brasileiro 24 horas por dia com cobertura de jogos exclusivos.',
     servers: [
       {
-        name: 'Servidor 1 (Stream Primário)',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/896',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD)',
         url: 'http://up.kiwi/351921603109/34939156/898',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 2 (ge Fast Ao Vivo)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3 (Backup Alternativo)',
-        url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
         isProxy: true
       }
     ]
@@ -52,13 +47,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões completas e exclusivas dos jogos do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (Ao Vivo)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/896',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (N Sports)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/898',
         isProxy: true
       }
     ]
@@ -73,13 +68,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal secundário Premiere para rodadas simultâneas de jogos.',
     servers: [
       {
-        name: 'Servidor 1 (Stream Primário)',
-        url: 'http://up.kiwi/351921603109/34939156/861',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/859',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (Pluto Esportes)',
-        url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/861',
         isProxy: true
       }
     ]
@@ -94,28 +89,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Cobertura de todos os lances e partidas dos campeonatos estaduais e nacionais.',
     servers: [
       {
-        name: 'Servidor 1 (ge Fast Oficial)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/865',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (Stream Primário HD)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/867',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (N Sports Ao Vivo)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 4 (FIFA+ BR Ao Vivo)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 5 (Backup Alternativo)',
-        url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
+        name: 'Servidor 3 (HD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296309',
         isProxy: true
       }
     ]
@@ -130,18 +115,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal complementar Premiere com cobertura de futebol 100% brasileira.',
     servers: [
       {
-        name: 'Servidor 1 (FIFA+ Futebol Ao Vivo)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/296311',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (ge Fast Ao Vivo)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3 (N Sports Ao Vivo)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/296312',
         isProxy: true
       }
     ]
@@ -156,13 +136,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal campeão com debates, cobertura ao vivo, vôlei, basquete e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (ge Fast Oficial)',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/1229',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD)',
         url: 'http://up.kiwi/351921603109/34939156/1231',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (Proxy HLS)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 3 (FHD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/305202',
         isProxy: true
       }
     ]
@@ -177,23 +162,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
     servers: [
       {
-        name: 'Servidor 1 (N Sports Ao Vivo)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/296210',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (ge Fast Ao Vivo)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/1221',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (FIFA+ BR Esportes)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 4 (Pluto Esportes)',
-        url: 'https://jmp2.uk/plu-5f32d2db0af67400077f29c4.m3u8',
+        name: 'Servidor 3 (HD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296209',
         isProxy: true
       }
     ]
@@ -208,23 +188,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (ge Fast / SporTV Ao Vivo)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/1224',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (N Sports Ao Vivo)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 2 (HD)',
+        url: 'http://up.kiwi/351921603109/34939156/1226',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (FIFA+ Esportes)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 4 (Automobilismo & Radical Backup)',
-        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
+        name: 'Servidor 3 (HD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296212',
         isProxy: true
       }
     ]
