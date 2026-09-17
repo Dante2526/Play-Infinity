@@ -71,6 +71,11 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       };
 
       if (method === 'CREDIT_CARD') {
+        if (!formData.cpfCnpj) {
+           setError('Preencha o CPF/CNPJ.');
+           setLoading(false);
+           return;
+        }
         payload.cpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
         payload.creditCard = {
           holderName: formData.holderName,
@@ -87,6 +92,13 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
           addressNumber: formData.addressNumber,
           mobilePhone: formData.mobilePhone.replace(/\D/g, '')
         };
+      } else if (method === 'PIX') {
+        if (!formData.cpfCnpj) {
+           setError('Preencha o CPF/CNPJ para gerar o PIX.');
+           setLoading(false);
+           return;
+        }
+        payload.cpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
       }
 
       const res = await fetch('/api/create-subscription', {
@@ -95,7 +107,14 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
+      // Trata caso a resposta do servidor seja vazia ou erro 500 html
+      let data;
+      try {
+        const textData = await res.text();
+        data = JSON.parse(textData);
+      } catch (err) {
+        throw new Error('Erro ao processar resposta do servidor. Tente novamente mais tarde.');
+      }
       if (!data.success) throw new Error(data.error || 'Erro ao processar assinatura.');
 
       if (method === 'CREDIT_CARD') {
@@ -351,10 +370,18 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     )}
 
                     {activeTab === 'PIX' && (
-                      <div className="flex flex-col items-center justify-center py-8 text-center space-y-4">
+                      <div className="flex flex-col items-center justify-center py-6 text-center space-y-4">
                         <QrCode size={48} className="text-purple-400 opacity-50" />
                         <p className="text-zinc-300">Pagamento instantâneo via Pix.</p>
                         <p className="text-zinc-500 text-sm">O acesso é liberado em poucos segundos após a confirmação do pagamento.</p>
+                        <div className="w-full text-left mt-4">
+                          <label className="text-xs text-zinc-400 mb-1 block">CPF/CNPJ (Obrigatório para gerar o PIX) *</label>
+                          <input 
+                            type="text" name="cpfCnpj" value={formData.cpfCnpj} onChange={handleChange}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                            placeholder="000.000.000-00"
+                          />
+                        </div>
                       </div>
                     )}
 
