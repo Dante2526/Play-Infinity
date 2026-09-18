@@ -132,10 +132,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // Determina a URL atual baseada no servidor selecionado
+  // Determina a URL atual baseada no servidor selecionado (Edge Proxy na Cloudflare)
+  const CLOUDFLARE_PROXY_URL = (import.meta as any).env?.VITE_LIVE_PROXY_URL || "https://jolly-art-3b46.lopesisa40.workers.dev";
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
   const streamUrl = currentServer?.isProxy 
-    ? `/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
+    ? `${CLOUDFLARE_PROXY_URL}?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;
 
   // Inicializa e carrega o stream com Hls.js com ABR 100% automático baseado na conexão
