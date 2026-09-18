@@ -172,7 +172,8 @@ export function VideoPlayerModal({
       target.includes("/api/myembed-stream") ||
       target.includes("/api/anime-stream") ||
       target.includes("/api/vixsrc-stream") ||
-      target.includes("/api/live-stream-proxy");
+      target.includes("/api/live-stream-proxy") ||
+      target.includes("workers.dev");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput]);

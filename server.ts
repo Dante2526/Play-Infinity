@@ -1,8 +1,6 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import os from "os";
-import v8 from "v8";
 import { Readable } from "stream";
 import * as cheerio from "cheerio";
 import dotenv from "dotenv";
@@ -3277,242 +3275,26 @@ process.on("uncaughtException", (err) => {
   });
 
   // ==========================================
-  // API TV AO VIVO: PROXY HLS ANTI-CORS & CATÁLOGO DE CANAIS
+  // API TV AO VIVO: EDGE PROXY (CLOUDFLARE WORKER)
   // ========================================================
-  // Cache em memória de alta performance para chunks (.ts) de TV ao vivo (TTL de 15 segundos)
-  
-  
+  // Redireciona 100% do tráfego de streaming para a Cloudflare Worker (zero impacto na RAM do Node)
+  app.get("/api/live-stream-proxy", (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "*");
 
-  let activeProxyStreams = 0;
-
-  app.get("/api/live-stream-proxy", async (req, res) => {
-    try {
-      activeProxyStreams++;
-      console.log(`[Proxy] Novo stream aberto. Total Simultâneo: ${activeProxyStreams}`);
-      res.on("close", () => {
-        activeProxyStreams--;
-        console.log(`[Proxy] Stream fechado. Total Simultâneo: ${activeProxyStreams}`);
-      });
-
-      res.setHeader("Access-Control-Allow-Origin", "*");
-      res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-      res.setHeader("Access-Control-Allow-Headers", "*");
-
-      if (req.method === "OPTIONS") {
-        return res.status(204).end();
-      }
-
-      const rawUrl = req.query.url as string;
-      if (!rawUrl) return res.status(400).send("URL ausente");
-
-      let parsed: URL;
-      try {
-        parsed = new URL(rawUrl.trim());
-      } catch {
-        return res.status(400).send("Formato de URL inválido");
-      }
-
-      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-        return res.status(403).send("Protocolo inválido.");
-      }
-
-      if (isPrivateOrLocalIp(parsed.hostname)) {
-        return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
-      }
-
-      // Verifica cache em memória apenas para manifestos/playlists (.m3u8), sem acumular vídeos pesados na RAM
-      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
-      const isM3U8Request = rawUrl.includes(".m3u8");
-      
-      const cached = isM3U8Request ? liveChunkCache.get(rawUrl) : null;
-      if (cached && cached.expires > Date.now()) {
-        res.setHeader("Content-Type", cached.contentType);
-        res.setHeader("Cache-Control", "public, max-age=2, immutable");
-        res.setHeader("X-Cache-Status", "HIT-MEMORY");
-        return res.send(cached.buffer);
-      }
-
-      const headers: Record<string, string> = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "X-Forwarded-For": "177.100.100.1" // Spoof IP brasileiro para CDNs com geo-bloqueio (Amagi FAST, Pluto TV)
-      };
-
-      if (req.query.referer) {
-        headers["Referer"] = req.query.referer as string;
-      }
-
-      let currentUrl = rawUrl;
-      let upstreamRes: Response | undefined;
-      let redirects = 0;
-      const MAX_REDIRECTS = 5;
-
-      while (redirects < MAX_REDIRECTS) {
-        upstreamRes = await fetch(currentUrl, {
-          headers,
-          redirect: "manual"
-        });
-
-        if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
-          const location = upstreamRes.headers.get("location");
-          if (!location) break;
-
-          let nextUrl: URL;
-          try {
-            nextUrl = new URL(location, currentUrl);
-          } catch {
-            return res.status(502).send("Location de redirecionamento inválido");
-          }
-
-          if (nextUrl.protocol !== "http:" && nextUrl.protocol !== "https:") {
-            return res.status(403).send("Protocolo inválido no redirect.");
-          }
-
-          if (isPrivateOrLocalIp(nextUrl.hostname)) {
-            return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
-          }
-
-          currentUrl = nextUrl.toString();
-          redirects++;
-        } else {
-          break;
-        }
-      }
-
-      if (redirects >= MAX_REDIRECTS || !upstreamRes) {
-        return res.status(502).send("Muitos redirecionamentos ou falha de proxy");
-      }
-
-      if (!upstreamRes.ok) {
-        return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
-      }
-
-      const finalUrl = upstreamRes.url || currentUrl;
-      const contentType = upstreamRes.headers.get("content-type") || "";
-      const isM3U8 = rawUrl.includes(".m3u8") || 
-                     finalUrl.includes(".m3u8") ||
-                     contentType.includes("mpegurl") || 
-                     contentType.includes("application/x-mpegURL") ||
-                     contentType.includes("vnd.apple.mpegurl");
-
-      if (isM3U8) {
-        const text = await upstreamRes.text();
-        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "public, max-age=2, immutable");
-
-        const lines = text.split("\n");
-        const filteredLines: string[] = [];
-        let skipNextLine = false;
-
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          const trimmed = line.trim();
-          
-          if (!trimmed) {
-            filteredLines.push(line);
-            continue;
-          }
-
-          if (skipNextLine && !trimmed.startsWith("#")) {
-            skipNextLine = false;
-            continue; // Pula a URI associada à qualidade baixa
-          }
-          skipNextLine = false;
-
-          if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
-            // Verifica a resolução e ignora 480p, 360p, etc.
-            const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
-            if (resMatch && parseInt(resMatch[1], 10) < 720) {
-              skipNextLine = true;
-              continue; // Pula esta tag e a próxima linha (URI)
-            }
-          }
-
-          filteredLines.push(line);
-        }
-
-        let baseReferer = req.query.referer as string;
-        if (!baseReferer) {
-          try {
-            baseReferer = new URL(finalUrl).origin + "/";
-          } catch {
-            baseReferer = "";
-          }
-        }
-        const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
-
-        const rewritten = filteredLines.map(line => {
-          const trimmed = line.trim();
-          if (!trimmed) return line;
-
-          if (trimmed.includes('URI="')) {
-            return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
-              try {
-                const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
-                if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true"`;
-              } catch {
-                return `URI="${uri}"`;
-              }
-            });
-          }
-
-          if (trimmed.startsWith("#")) return trimmed;
-
-          try {
-            const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
-            if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true`;
-          } catch {
-            return trimmed;
-          }
-        }).join("\n");
-        
-        const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
-        liveChunkCache.set(rawUrl, {
-          buffer: rewrittenBuffer,
-          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
-          expires: Date.now() + 2500
-        });
-
-        return res.send(rewrittenBuffer);
-      }
-
-      // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
-      // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
-      if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
-        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        const seq = Math.floor(Date.now() / 4000);
-        const manifest = [
-          "#EXTM3U",
-          "#EXT-X-VERSION:3",
-          "#EXT-X-TARGETDURATION:6",
-          `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-          "#EXTINF:6.0,",
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
-        ].join("\n");
-        return res.send(manifest);
-      }
-
-      let finalContentType = contentType || "video/MP2T";
-      if (req.query.is_segment === "true" || isSegment) {
-        finalContentType = "video/MP2T";
-      }
-      res.setHeader("Content-Type", finalContentType);
-      res.setHeader("Cache-Control", "public, max-age=15");
-
-      if (upstreamRes.body) {
-        // Stream directly to HTTP response to prevent holding large video segments in RAM
-        return Readable.fromWeb(upstreamRes.body as any).pipe(res);
-      } else {
-        const buffer = Buffer.from(await upstreamRes.arrayBuffer());
-        return res.send(buffer);
-      }
-    } catch (err: any) {
-      console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
-      return res.status(500).send("Proxy error");
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
     }
+
+    const rawUrl = req.query.url as string;
+    if (!rawUrl) return res.status(400).send("URL ausente");
+
+    const liveProxyBase = process.env.LIVE_PROXY_URL || "https://jolly-art-3b46.lopesisa40.workers.dev";
+    const isSegment = req.query.is_segment ? `&is_segment=${req.query.is_segment}` : "";
+    const referer = req.query.referer ? `&referer=${encodeURIComponent(req.query.referer as string)}` : "";
+    const ts = req.query._ts ? `&_ts=${req.query._ts}` : "";
+    return res.redirect(307, `${liveProxyBase}?url=${encodeURIComponent(rawUrl)}${isSegment}${referer}${ts}`);
   });
 
   // Healthcheck
@@ -3800,7 +3582,8 @@ process.on("uncaughtException", (err) => {
                 const m3u8Source = vidData.securedLink || vidData.videoSource;
                 if (!m3u8Source || typeof m3u8Source !== "string" || !m3u8Source.startsWith("http")) continue;
 
-                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
+                const liveProxyBase = process.env.LIVE_PROXY_URL || "https://jolly-art-3b46.lopesisa40.workers.dev";
+                const proxiedStreamUrl = `${liveProxyBase}?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
 
                 res.setHeader("Content-Type", "text/html; charset=utf-8");
                 res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -4590,9 +4373,6 @@ process.on("uncaughtException", (err) => {
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
         console.log(`Server running on http://localhost:${PORT}`);
-        console.log(`[TELEMETRY] Plataforma: RENDER=${!!process.env.RENDER} | RAILWAY=${!!process.env.RAILWAY_ENVIRONMENT} | DYNO=${!!process.env.DYNO}`);
-        console.log(`[TELEMETRY] Memória Total do SO: ${Math.round(os.totalmem() / 1024 / 1024)} MB`);
-        console.log(`[TELEMETRY] Heap Limit Atual: ${Math.round(v8.getHeapStatistics().heap_size_limit / 1024 / 1024)} MB`);
       });
       server.on("error", (err: any) => {
         console.error("[Server Listen Error]:", err);
