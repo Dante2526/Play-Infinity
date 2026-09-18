@@ -35,7 +35,8 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 
@@ -125,7 +126,7 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 import { OnPlayHandler } from "../types";
 
-export function ContentRow({ 
+function ContentRowInner({ 
   title, 
   items, 
   isTop10 = false, 
@@ -320,79 +321,109 @@ export function ContentRow({
         }`}
       >
         {items.map((item, idx) => (
-          <div 
-            key={`cr-${item.id || item.title}-${idx}`} 
-            tabIndex={0} 
-            role="button" 
-            onClick={(e) => {
-              if (hasDraggedRef.current) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-              }
-              onItemClick && onItemClick(item.id, item);
-            }} 
-            className={`snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-20 origin-bottom transform-gpu outline-none ${
-              isTop10 ? "rounded-2xl" : "rounded-xl"
-            }`}
-          >
-            {isTop10 ? (
-              <div className="flex relative items-end w-[280px] md:w-[320px] h-[160px] md:h-[180px] rounded-2xl">
-                {/* Bold background number */}
-                <span className="absolute left-1 bottom-0 text-[80px] md:text-[100px] leading-none font-black text-neutral-600/80 group-hover:text-orange-500/90 group-focus:text-orange-500 group-[.tv-focused]:text-orange-500 z-0 tracking-tighter drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] select-none transition-colors duration-300">
-                  {idx + startNumber}
-                </span>
-                {/* Image */}
-                <div className="relative w-[78%] md:w-[80%] ml-auto h-full rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 group-focus:border-orange-500/50 transition-colors z-10">
-                   {checkIsCam(item.title, item.quality) && (
-                     <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
-                       CAM
-                     </span>
-                   )}
-                   <img 
-                     src={item.imageUrl} 
-                     alt={item.title} 
-                     draggable={false}
-                     className="w-full h-full object-cover pointer-events-none" 
-                     loading="lazy" 
-                     onError={(e) => handlePosterError(e, item.backdropUrl)}
-                   />
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
-                   <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow pointer-events-none">
-                     {item.title}
-                   </span>
-                </div>
-              </div>
-            ) : (
-              <div className={`relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors 
-                ${aspect === 'landscape' ? 'w-[240px] md:w-[300px] h-[135px] md:h-[170px]' : 'w-[160px] md:w-[200px] h-[240px] md:h-[300px]'}`}>
-                {item.provider && (
-                  <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-neutral-200 font-bold text-[9px] tracking-wider uppercase border border-white/10 shadow-md">
-                    {item.provider}
-                  </span>
-                )}
-                {checkIsCam(item.title, item.quality) && (
-                  <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
-                    CAM
-                  </span>
-                )}
-                <img 
-                  src={item.imageUrl} 
-                  alt={item.title} 
-                  draggable={false}
-                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 pointer-events-none" 
-                  loading="lazy" 
-                  onError={(e) => handlePosterError(e, item.backdropUrl)}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
-                <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg pointer-events-none`}>
-                  {item.title}
-                </span>
-              </div>
-            )}
-          </div>
+          <ContentCard
+            key={`cr-${item.id || item.title}-${idx}`}
+            item={item}
+            idx={idx}
+            startNumber={startNumber}
+            isTop10={isTop10}
+            aspect={aspect}
+            onItemClick={onItemClick}
+            hasDraggedRef={hasDraggedRef}
+          />
         ))}
       </div>
     </section>
   );
 }
+
+const ContentCardInner = ({ item, idx, startNumber, isTop10, aspect, onItemClick, hasDraggedRef }: any) => {
+  return (
+    <div 
+      tabIndex={0} 
+      role="button" 
+      onClick={(e) => {
+        if (hasDraggedRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        onItemClick && onItemClick(item.id, item);
+      }} 
+      className={`snap-start shrink-0 relative group cursor-pointer transition-transform duration-300 hover:scale-105 hover:z-20 origin-bottom transform-gpu outline-none ${
+        isTop10 ? "rounded-2xl" : "rounded-xl"
+      }`}
+    >
+      {isTop10 ? (
+        <div className="flex relative items-end w-[280px] md:w-[320px] h-[160px] md:h-[180px] rounded-2xl">
+          {/* Bold background number */}
+          <span className="absolute left-1 bottom-0 text-[80px] md:text-[100px] leading-none font-black text-neutral-600/80 group-hover:text-orange-500/90 group-focus:text-orange-500 group-[.tv-focused]:text-orange-500 z-0 tracking-tighter drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] select-none transition-colors duration-300">
+            {idx + startNumber}
+          </span>
+          {/* Image */}
+          <div className="relative w-[78%] md:w-[80%] ml-auto h-full rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 group-focus:border-orange-500/50 transition-colors z-10">
+             {checkIsCam(item.title, item.quality) && (
+               <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
+                 CAM
+               </span>
+             )}
+             <img 
+               src={item.imageUrl} 
+               alt={item.title} 
+               draggable={false}
+               className="w-full h-full object-cover pointer-events-none" 
+               loading="lazy" 
+               onError={(e) => handlePosterError(e, item.backdropUrl)}
+             />
+             <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
+             <span className="absolute bottom-3 left-3 font-bold text-lg md:text-xl text-white uppercase tracking-wider text-shadow pointer-events-none">
+               {item.title}
+             </span>
+          </div>
+        </div>
+      ) : (
+        <div className={`relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group-hover:border-orange-500/50 transition-colors 
+          ${aspect === 'landscape' ? 'w-[240px] md:w-[300px] h-[135px] md:h-[170px]' : 'w-[160px] md:w-[200px] h-[240px] md:h-[300px]'}`}>
+          {item.provider && (
+            <span className="absolute top-2 left-2 z-20 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-neutral-200 font-bold text-[9px] tracking-wider uppercase border border-white/10 shadow-md">
+              {item.provider}
+            </span>
+          )}
+          {checkIsCam(item.title, item.quality) && (
+            <span className="absolute top-2 right-2 z-20 px-2 py-0.5 rounded bg-amber-500 text-black font-black text-[10px] tracking-wider uppercase shadow-md flex items-center gap-1">
+              CAM
+            </span>
+          )}
+          <img 
+            src={item.imageUrl} 
+            alt={item.title} 
+            draggable={false}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 pointer-events-none" 
+            loading="lazy" 
+            onError={(e) => handlePosterError(e, item.backdropUrl)}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
+          <span className={`absolute ${aspect === 'landscape' ? 'bottom-3 left-3' : 'bottom-4 inset-x-0 mx-4 text-center font-black'} uppercase text-white drop-shadow-lg pointer-events-none`}>
+            {item.title}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export const ContentCard = React.memo(ContentCardInner, (prev, next) => {
+  return prev.item.id === next.item.id &&
+         prev.idx === next.idx &&
+         prev.isTop10 === next.isTop10 &&
+         prev.aspect === next.aspect &&
+         prev.startNumber === next.startNumber;
+});
+
+export const ContentRow = React.memo(ContentRowInner, (prev, next) => {
+  return prev.title === next.title &&
+         prev.items === next.items &&
+         prev.isTop10 === next.isTop10 &&
+         prev.aspect === next.aspect &&
+         prev.badge === next.badge;
+});

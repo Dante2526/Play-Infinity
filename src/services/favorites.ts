@@ -1,4 +1,5 @@
-import { CatalogItem, providerCatalogs, featured, isMediaAvailable, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";
+import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";;
+import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";;
 import { getDetails } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";

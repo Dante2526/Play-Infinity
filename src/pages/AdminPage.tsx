@@ -23,7 +23,38 @@ interface AdminPageProps {
 }
 
 export function AdminPage({ onBack }: AdminPageProps) {
-  const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem("isAdmin") === "true");
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(!!sessionStorage.getItem("adminSessionToken"));
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = sessionStorage.getItem("adminSessionToken");
+      if (!token) {
+        setIsCheckingAuth(false);
+        return;
+      }
+
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const docRef = doc(db, "administradores", token);
+        const docSnap = await getDoc(docRef);
+        
+        if (docSnap.exists()) {
+          setIsAdmin(true);
+        } else {
+          sessionStorage.removeItem("adminSessionToken");
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        sessionStorage.removeItem("adminSessionToken");
+        setIsAdmin(false);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -88,8 +119,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
       const querySnapshot = await getDocs(q);
 
       if (!querySnapshot.empty) {
+        const adminDoc = querySnapshot.docs[0];
         setIsAdmin(true);
-        sessionStorage.setItem("isAdmin", "true");
+        sessionStorage.setItem("adminSessionToken", adminDoc.id);
         // Tenta autenticar no Auth também, caso as regras do Firestore exijam request.auth
         try {
           const { signInWithEmailAndPassword } = await import("firebase/auth");
@@ -448,6 +480,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
     }
   };
 
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-red-600 animate-spin" />
+      </div>
+    );
+  }
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
@@ -522,7 +562,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <div className="flex items-center gap-2">
             <button 
               onClick={() => {
-                sessionStorage.removeItem("isAdmin");
+                sessionStorage.removeItem("adminSessionToken");
                 setIsAdmin(false);
               }}
               className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"

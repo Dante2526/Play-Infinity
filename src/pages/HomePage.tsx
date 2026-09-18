@@ -37,7 +37,8 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../data";
+import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs } from "../data";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 

@@ -6,7 +6,7 @@ import {
   SkipForward, RotateCcw, PictureInPicture2
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
-import { checkIsCam } from "../data";
+import { checkIsCam } from "../utils/mediaUtils";;
 import { detectConnectionQuality } from "../services/networkQuality";
 import { 
   isEpisodeWatched, 

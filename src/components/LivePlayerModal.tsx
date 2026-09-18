@@ -22,6 +22,7 @@ import { Cast,
 import { LiveChannel } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
 import { CastModal } from './CastModal';
+import { detectConnectionQuality } from '../services/networkQuality';
 
 interface LivePlayerModalProps {
   channel: LiveChannel;
@@ -55,11 +56,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [showChannelList, setShowChannelList] = useState<boolean>(false);
   const [showCastModal, setShowCastModal] = useState<boolean>(false);
   const [streamHealth, setStreamHealth] = useState<'online' | 'connecting' | 'error'>('connecting');
+  const [reloadNonce, setReloadNonce] = useState<number>(0);
 
   // Ajuste automático de estabilidade para conexão (sem notificações intrusivas)
-  const [isLowBandwidthMode, setIsLowBandwidthMode] = useState<boolean>(() => {
-    return localStorage.getItem('playinfinity_live_low_bandwidth') === 'true';
-  });
+  const [isLowBandwidthMode, setIsLowBandwidthMode] = useState<boolean>(false);
   const [activeResolutionLabel, setActiveResolutionLabel] = useState<string>('Auto');
 
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -149,6 +149,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     const video = videoRef.current;
     if (!video || !streamUrl) return;
 
+    let recoveryTimeout: NodeJS.Timeout | null = null;
+    const clearRecoveryTimeout = () => {
+      if (recoveryTimeout) {
+        clearTimeout(recoveryTimeout);
+        recoveryTimeout = null;
+      }
+    };
+
     // Garante que o elemento inicie com volume no máximo (100%)
     video.volume = 1.0;
     video.muted = false;
@@ -159,16 +167,26 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       hlsRef.current = null;
     }
 
-    const startHls = () => {
+    const startHls = async () => {
+      let currentLowBandwidth = isLowBandwidthMode;
+      if (!currentLowBandwidth) {
+        const quality = await detectConnectionQuality();
+        if (!isMounted) return;
+        if (quality === 'slow') {
+          currentLowBandwidth = true;
+          setIsLowBandwidthMode(true);
+        }
+      }
+
       if (Hls.isSupported()) {
         // Configuração Maximizada para Estabilidade (Anti-Travamento IPTV)
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false, // Desabilitado para focar em estabilidade
-          liveSyncDuration: isLowBandwidthMode ? 25 : 15, // Margem do "ao vivo" para não travar
-          liveMaxLatencyDuration: isLowBandwidthMode ? 45 : 30,
-          maxBufferLength: isLowBandwidthMode ? 60 : 40, // Segundos de vídeo mantidos na memória
-          maxMaxBufferLength: isLowBandwidthMode ? 120 : 80, // Limite máximo absoluto
+          liveSyncDuration: currentLowBandwidth ? 25 : 15, // Margem do "ao vivo" para não travar
+          liveMaxLatencyDuration: currentLowBandwidth ? 45 : 30,
+          maxBufferLength: currentLowBandwidth ? 60 : 40, // Segundos de vídeo mantidos na memória
+          maxMaxBufferLength: currentLowBandwidth ? 120 : 80, // Limite máximo absoluto
           backBufferLength: 30, // Mantém 30s anteriores caso a rede oscile
           manifestLoadingTimeOut: 30000,
           manifestLoadingMaxRetry: 10, // Mais tentativas antes de dar erro fatal
@@ -218,8 +236,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         let networkErrorCount = 0;
         let mediaErrorCount = 0;
+
+        hls.on(Hls.Events.FRAG_LOADED, () => {
+          if (!isMounted) return;
+          clearRecoveryTimeout();
+          recoveryTimeout = setTimeout(() => {
+            if (!isMounted) return;
+            if (networkErrorCount > 0 || mediaErrorCount > 0) {
+              console.log('[LivePlayer] Conexão estável. Resetando contadores de erro cumulativos.');
+            }
+            networkErrorCount = 0;
+            mediaErrorCount = 0;
+          }, 15000);
+        });
+
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!isMounted) return;
+          clearRecoveryTimeout();
+          
           if (data.fatal) {
             console.warn('[LivePlayer HLS Fatal Error]:', data.type, data.details);
             switch (data.type) {
@@ -327,7 +361,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (stallCountRef.current >= 2 && !isLowBandwidthMode) {
         stallCountRef.current = 0;
         setIsLowBandwidthMode(true);
-        localStorage.setItem('playinfinity_live_low_bandwidth', 'true');
+        if (hlsRef.current) {
+          hlsRef.current.config.liveSyncDuration = 25;
+          hlsRef.current.config.maxBufferLength = 60;
+          hlsRef.current.config.maxMaxBufferLength = 120;
+        }
       }
     };
 
@@ -343,6 +381,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     return () => {
       isMounted = false;
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
+      clearRecoveryTimeout();
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
 
@@ -360,7 +399,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         hlsRef.current = null;
       }
     };
-  }, [streamUrl, channel.id, selectedServerIndex, isLowBandwidthMode]);
+  }, [streamUrl, channel.id, selectedServerIndex, reloadNonce]);
 
   // Autoplay / Pause listener
   const togglePlay = () => {
@@ -514,31 +553,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const reloadStream = () => {
     if (channel.servers.length > 1) {
       setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
+    } else {
+      setReloadNonce(prev => prev + 1);
     }
     setIsLoading(true);
     setHasError(false);
     setStreamHealth('connecting');
-    const video = videoRef.current;
-    if (video && hlsRef.current && streamUrl) {
-      hlsRef.current.destroy();
-      const hls = new Hls({ 
-        enableWorker: true, 
-        lowLatencyMode: false,
-        liveSyncDuration: isLowBandwidthMode ? 25 : 15,
-        maxBufferLength: isLowBandwidthMode ? 60 : 40,
-        maxMaxBufferLength: isLowBandwidthMode ? 120 : 80,
-        capLevelToPlayerSize: false,
-        startLevel: -1
-      });
-      hlsRef.current = hls;
-      hls.loadSource(streamUrl);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        setIsLoading(false);
-        setStreamHealth('online');
-        video.play().catch(() => {});
-      });
-    }
   };
 
   // Navegação de canais (Anterior / Próximo)

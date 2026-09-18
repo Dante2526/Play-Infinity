@@ -1,3 +1,4 @@
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./utils/mediaUtils";
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import {
@@ -35,7 +36,6 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "./hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./data";
 import { 
   searchMulti, 
   getDetails, 
@@ -129,15 +129,13 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 };
 
 
-import { HomePage } from './pages/HomePage';
-import { DetailsPage } from './pages/DetailsPage';
-import { GlobalSearchPage } from './pages/GlobalSearchPage';
-import { UserProfilePage } from './pages/UserProfilePage';
-import { FavoritesPage } from './pages/FavoritesPage';
-import { GlobalCatalogPage } from './pages/GlobalCatalogPage';
-import { ProviderPage } from './pages/ProviderPage';
-import { FilterChip } from './components/FilterChip';
-import { ContentRow } from './components/ContentRow';
+const HomePage = lazyWithRetry(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const DetailsPage = lazyWithRetry(() => import('./pages/DetailsPage').then(m => ({ default: m.DetailsPage })));
+const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearchPage').then(m => ({ default: m.GlobalSearchPage })));
+const UserProfilePage = lazyWithRetry(() => import('./pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
+const FavoritesPage = lazyWithRetry(() => import('./pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })));
+const GlobalCatalogPage = lazyWithRetry(() => import('./pages/GlobalCatalogPage').then(m => ({ default: m.GlobalCatalogPage })));
+const ProviderPage = lazyWithRetry(() => import('./pages/ProviderPage').then(m => ({ default: m.ProviderPage })));
 import { NavItem } from './components/NavItem';
 
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
@@ -709,7 +707,8 @@ export default function App() {
       </div>
       )}
 
-      {viewState.type === 'details' && viewState.id ? (
+      <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+        {viewState.type === 'details' && viewState.id ? (
         <DetailsPage 
           key={`details-${viewState.id}`}
           itemId={Number(viewState.id)} 
@@ -724,13 +723,13 @@ export default function App() {
       ) : viewState.type === 'movies' || viewState.type === 'series' ? (
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'live-tv' ? (
-        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+        
           <LiveTvPage onBack={handleBack} />
-        </React.Suspense>
+        
       ) : viewState.type === 'calendar' ? (
-        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+        
           <ReleaseCalendarPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToSeries={() => navigateTo({ type: 'series' })} />
-        </React.Suspense>
+        
       ) : viewState.type === 'search' ? (
         <GlobalSearchPage onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'profile' ? (
@@ -738,12 +737,12 @@ export default function App() {
       ) : viewState.type === 'favorites' ? (
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
       ) : viewState.type === 'admin' ? (
-        <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+        
           <AdminPage onBack={() => {
             window.history.replaceState({ type: 'home' }, '', '/');
             setViewState({ type: 'home' });
           }} />
-        </React.Suspense>
+        
       ) : (
         <HomePage 
           onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} 
@@ -752,6 +751,7 @@ export default function App() {
           onNavigateToLiveTv={() => navigateTo({ type: 'live-tv' })}
         />
       )}
+      </React.Suspense>
 
       {/* Footer Area */}
       {viewState.type !== 'admin' && (
