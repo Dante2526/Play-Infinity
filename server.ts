@@ -72,6 +72,141 @@ process.on("uncaughtException", (err) => {
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
+  // =====================================================
+  // SMART TV DETECTION — Serve página leve para Smart TVs
+  // Navegadores de Smart TV (WebOS, Tizen) não suportam
+  // Tailwind v4 (color-mix, @property). Esta rota
+  // intercepta esses UAs e entrega HTML com CSS inline.
+  // =====================================================
+  app.use((req, res, next) => {
+    // Ignora requisições de API e assets
+    if (req.path.startsWith("/api") || req.path.startsWith("/assets") || req.path.includes(".")) {
+      return next();
+    }
+    const ua = (req.headers["user-agent"] || "").toLowerCase();
+    const isSmartTV = ua.includes("webos") || ua.includes("tizen") || ua.includes("smart-tv") || ua.includes("smarttv") || ua.includes("netcast") || ua.includes("hbbtv") || ua.includes("googletv") || ua.includes("crkey");
+    if (!isSmartTV) return next();
+
+    const domain = req.headers.host || "play-infinity-app.onrender.com";
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=https://${domain}`;
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Play Infinity — Smart TV</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0a;
+      color: #fff;
+      font-family: Arial, Helvetica, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px 20px;
+    }
+    .container { max-width: 700px; width: 100%; }
+    .logo {
+      font-size: 2.8rem;
+      font-weight: 900;
+      letter-spacing: -2px;
+      margin-bottom: 8px;
+    }
+    .logo span { color: #f97316; }
+    .subtitle {
+      font-size: 1rem;
+      color: #9ca3af;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    .card h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .card p {
+      color: #9ca3af;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .qr-box {
+      background: #fff;
+      display: inline-block;
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .qr-box img { display: block; border-radius: 6px; }
+    .url-box {
+      background: #0a0a0a;
+      border: 1px solid #3a3a3a;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 1rem;
+      color: #f97316;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .tip {
+      font-size: 0.85rem;
+      color: #6b7280;
+      margin-top: 32px;
+    }
+    .badge {
+      display: inline-block;
+      background: #1f1f1f;
+      border: 1px solid #3a3a3a;
+      border-radius: 999px;
+      padding: 4px 14px;
+      font-size: 0.78rem;
+      color: #f97316;
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">PLAY<span>INFINITY</span></div>
+    <div class="subtitle">Streaming sem limites</div>
+    <span class="badge">📺 Smart TV Detectada</span>
+
+    <div class="card">
+      <h2>🎬 Como assistir na sua TV</h2>
+      <p>
+        O seu navegador de Smart TV não suporta alguns recursos modernos da nossa plataforma.
+        Para a melhor experiência, acesse o site pelo <strong>celular ou computador</strong> e aproveite tudo sem limitações.
+      </p>
+      <p>Aponte a câmera do celular para o QR Code abaixo:</p>
+      <div class="qr-box">
+        <img src="${qrUrl}" alt="QR Code Play Infinity" width="200" height="200">
+      </div>
+      <br>
+      <p>Ou acesse pelo endereço:</p>
+      <div class="url-box">https://${domain}</div>
+    </div>
+
+    <p class="tip">Dica: No celular, você pode usar o Chromecast ou espelhar a tela para assistir na TV com qualidade máxima.</p>
+  </div>
+</body>
+</html>`);
+  });
+
+
+
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
