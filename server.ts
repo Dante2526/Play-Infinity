@@ -3283,16 +3283,8 @@ process.on("uncaughtException", (err) => {
   
   
 
-  let activeProxyStreams = 0;
-
   app.get("/api/live-stream-proxy", async (req, res) => {
     try {
-      activeProxyStreams++;
-      console.log(`[Proxy] Novo stream aberto. Total Simultâneo: ${activeProxyStreams}`);
-      res.on("close", () => {
-        activeProxyStreams--;
-        console.log(`[Proxy] Stream fechado. Total Simultâneo: ${activeProxyStreams}`);
-      });
 
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
@@ -4590,9 +4582,6 @@ process.on("uncaughtException", (err) => {
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
         console.log(`Server running on http://localhost:${PORT}`);
-        console.log(`[TELEMETRY] Plataforma: RENDER=${!!process.env.RENDER} | RAILWAY=${!!process.env.RAILWAY_ENVIRONMENT} | DYNO=${!!process.env.DYNO}`);
-        console.log(`[TELEMETRY] Memória Total do SO: ${Math.round(os.totalmem() / 1024 / 1024)} MB`);
-        console.log(`[TELEMETRY] Heap Limit Atual: ${Math.round(v8.getHeapStatistics().heap_size_limit / 1024 / 1024)} MB`);
       });
       server.on("error", (err: any) => {
         console.error("[Server Listen Error]:", err);
