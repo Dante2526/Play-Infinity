@@ -50,6 +50,64 @@ export const featured = {
   playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
 };
 
+export const featuredCarousel = [
+  featured,
+  {
+    id: 533535,
+    tmdbId: 533535,
+    title: "DEADPOOL & WOLVERINE",
+    type: "movie" as const,
+    year: "2024",
+    duration: "2h 07min",
+    rating: 4.8,
+    genres: ["Ação", "Comédia", "Ficção científica"],
+    description:
+      "Um Deadpool apático vive uma vida civil, tendo deixado para trás seus dias como o mercenário tagarela. Mas quando seu mundo natal enfrenta uma ameaça existencial, um relutante Wade tem que se vestir de novo ao lado de um ainda mais relutante Wolverine.",
+    imageUrl:
+      "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
+    posterUrl:
+      "https://image.tmdb.org/t/p/w500/cJFqqiDYprqExaXatu4AaoMzDG2.jpg",
+    logoText: "DEADPOOL\n& WOLVERINE",
+    playerUrl: "https://v1.watchplay.shop/movie/533535",
+  },
+  {
+    id: 94997,
+    tmdbId: 94997,
+    title: "A CASA DO DRAGÃO",
+    type: "series" as const,
+    year: "2024",
+    duration: "T2",
+    rating: 4.9,
+    genres: ["Fantasia", "Drama", "Ação"],
+    description:
+      "O clã Targaryen divide-se enquanto a Dança dos Dragões começa. Rhaenyra e Aegon II lutam pelo Trono de Ferro, travando uma guerra civil épica por todo o reino de Westeros que mudará o mundo para sempre.",
+    imageUrl:
+      "https://image.tmdb.org/t/p/original/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg",
+    posterUrl:
+      "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
+    logoText: "A CASA DO\nDRAGÃO",
+    playerUrl: "https://v1.watchplay.shop/series/94997/2/1",
+  },
+  {
+    id: 106379,
+    tmdbId: 106379,
+    title: "FALLOUT",
+    type: "series" as const,
+    year: "2024",
+    duration: "T1",
+    rating: 4.7,
+    genres: ["Ficção científica", "Ação", "Aventura"],
+    description:
+      "Baseada em uma das maiores franquias de videogame de todos os tempos, Fallout é a história de quem tem e quem não tem em um mundo onde não há quase nada para se ter. Duzentos anos após o apocalipse, os habitantes gentis dos luxuosos abrigos são forçados a retornar à paisagem irradiada.",
+    imageUrl:
+      "https://image.tmdb.org/t/p/original/1R68vl3d5s86JsS2NPjl8UoMqIS.jpg",
+    posterUrl:
+      "https://image.tmdb.org/t/p/w500/tQRX6GbYooU7kUaarKf5YXDTONy.jpg",
+    logoText: "FALLOUT",
+    playerUrl: "https://v1.watchplay.shop/series/106379/1/1",
+  }
+];
+
 export const providers = [
   "NETFLIX",
   "Disney+",

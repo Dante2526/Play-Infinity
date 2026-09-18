@@ -37,7 +37,7 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../data";
+import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../data";
 import { 
   searchMulti, 
   getDetails, 
@@ -140,9 +140,9 @@ export function HomePage({
   onPlay?: OnPlayHandler,
   onNavigateToLiveTv?: () => void
 }) {
-  const [heroItems, setHeroItems] = useState<any[]>([featured]);
+  const [heroItems, setHeroItems] = useState<any[]>(featuredCarousel);
   const [heroIndex, setHeroIndex] = useState<number>(0);
-  const heroItem = heroItems[heroIndex] || featured;
+  const heroItem = heroItems[heroIndex] || featuredCarousel[0];
 
   // Gestos touch e drag no Banner Destaque Principal
   const heroTouchStartXRef = useRef(0);
