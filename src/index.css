@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 /* Prevenção de overflow horizontal indesejado mantendo scroll vertical livre e fluido */
 html {
