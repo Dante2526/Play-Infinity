@@ -176,10 +176,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           fragLoadingTimeOut: 45000,
           fragLoadingMaxRetry: 15, // Suporta falhas curtas de operadora
           fragLoadingRetryDelay: 1000, // Tempo de espera base para retries
-          // ABR agressivo para descer qualidade rapidamente se a net cair
-          abrBandWidthFactor: isLowBandwidthMode ? 0.6 : 0.8,
-          abrBandWidthUpFactor: isLowBandwidthMode ? 0.4 : 0.6,
-          capLevelToPlayerSize: true, // Evita baixar resoluções muito altas para a tela
+          // Removemos capLevelToPlayerSize e fatores ABR agressivos para evitar pulos constantes de resolução
+          capLevelToPlayerSize: false,
           startLevel: -1
         });
 
@@ -529,7 +527,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         liveSyncDuration: isLowBandwidthMode ? 25 : 15,
         maxBufferLength: isLowBandwidthMode ? 60 : 40,
         maxMaxBufferLength: isLowBandwidthMode ? 120 : 80,
-        capLevelToPlayerSize: true,
+        capLevelToPlayerSize: false,
         startLevel: -1
       });
       hlsRef.current = hls;

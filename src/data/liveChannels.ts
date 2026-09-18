@@ -1,7 +1,7 @@
 export interface LiveChannel {
   id: string;
   name: string;
-  category: 'Esportes' | 'TV Aberta' | 'Notícias' | 'Filmes & Séries' | 'Infantil' | 'Variedades';
+  category: 'Esportes' | 'TV Aberta' | 'Notícias' | 'Filmes & Séries' | 'Infantil' | 'Variedades' | 'Adultos';
   logo: string;
   currentProgram?: string;
   quality: '1080p' | '720p' | 'HD';
@@ -748,6 +748,78 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/351', isProxy: true },
       { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/353', isProxy: true },
       { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296570', isProxy: true }
+    ]
+  },
+  {
+    id: 'xxx-hardcore',
+    name: 'XXX HARDCORE',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Conteúdo Adulto (18+)',
+    quality: '1080p',
+    description: 'Canal de TV focado em conteúdo adulto explícito.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/1730', isProxy: true }
+    ]
+  },
+  {
+    id: 'xxx-live-cams',
+    name: 'XXX LIVE CAMS',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Câmeras Ao Vivo (18+)',
+    quality: '1080p',
+    description: 'Transmissões ao vivo ininterruptas de webcams adultas.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/1742', isProxy: true }
+    ]
+  },
+  {
+    id: 'xxx-anal',
+    name: 'XXX ANAL',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Conteúdo Adulto (18+)',
+    quality: '1080p',
+    description: 'Canal de TV focado em conteúdo adulto explícito.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/1695', isProxy: true }
+    ]
+  },
+  {
+    id: 'of-juliana-bonde',
+    name: 'OF - JULIANA BONDE',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Conteúdo Exclusivo (18+)',
+    quality: '1080p',
+    description: 'Canal dedicado ao conteúdo OnlyFans da Juliana Bonde.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/300324', isProxy: true }
+    ]
+  },
+  {
+    id: 'of-elisa-sanches',
+    name: 'OF - ELISA SANCHES',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Conteúdo Exclusivo (18+)',
+    quality: '1080p',
+    description: 'Canal dedicado ao conteúdo OnlyFans da Elisa Sanches.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/300318', isProxy: true }
+    ]
+  },
+  {
+    id: 'of-mc-pipokinha',
+    name: 'OF - MC PIPOKINHA',
+    category: 'Adultos',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/playboy-tv-us.png',
+    currentProgram: 'Conteúdo Exclusivo (18+)',
+    quality: '1080p',
+    description: 'Canal dedicado ao conteúdo OnlyFans da MC Pipokinha.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/300341', isProxy: true }
     ]
   }
 ];
