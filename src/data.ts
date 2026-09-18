@@ -213,14 +213,6 @@ export const top10 = [
 
 export const releases = [
   {
-    id: 299939,
-    tmdbId: 299939,
-    title: "MONSTRO: A HISTÓRIA DE LIZZIE BORDEN",
-    type: "series" as const,
-    imageUrl: "https://image.tmdb.org/t/p/w500/cLP2z0O78DLiMqH8pvtB8EYq8KY.jpg",
-    playerUrl: "/api/myembed-stream?id=299939&type=tv&s=1&e=1",
-  },
-  {
     id: 969681,
     tmdbId: 969681,
     title: "HOMEM-ARANHA: UM NOVO DIA",
@@ -290,6 +282,14 @@ export const releases = [
 ];
 
 export const newest = [
+  {
+    id: 299939,
+    tmdbId: 299939,
+    title: "MONSTRO: A HISTÓRIA DE LIZZIE BORDEN",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/cLP2z0O78DLiMqH8pvtB8EYq8KY.jpg",
+    playerUrl: "/api/myembed-stream?id=299939&type=tv&s=1&e=1",
+  },
   {
     id: 125988,
     tmdbId: 125988,
