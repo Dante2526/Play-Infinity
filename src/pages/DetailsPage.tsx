@@ -36,7 +36,8 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes } from "../services/episodeAvailability";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../data";
+
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 

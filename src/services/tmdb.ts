@@ -2,14 +2,6 @@
 // As requisições agora passam pelo proxy /api/tmdb definido em server.ts.
 
 const BASE_URL = '/api/tmdb';
-const TMDB_DIRECT_BASE = 'https://api.themoviedb.org/3';
-const getTmdbApiKey = (): string => {
-  try {
-    return ((import.meta as any)?.env?.VITE_TMDB_API_KEY as string) || '';
-  } catch {
-    return '';
-  }
-};
 
 const options = {
   method: 'GET',
@@ -154,31 +146,7 @@ async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
     console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}). Ativando fallback de deploy...`);
   }
 
-  // 2. Fallback de Deploy / Resiliência:
-  // Se o aplicativo estiver rodando em ambiente de deploy (Vercel, Netlify, Cloud Run SPA, etc.)
-  // onde o proxy Express não responde ou retorna 404, consulta diretamente o endpoint oficial da API do TMDB.
-  if (url.startsWith(BASE_URL)) {
-    try {
-      const endpoint = url.replace(BASE_URL, "");
-      const key = getTmdbApiKey();
-      const sep = endpoint.includes("?") ? "&" : "?";
-      const directUrl = `${TMDB_DIRECT_BASE}${endpoint}${sep}api_key=${key}`;
 
-      const directRes = await fetch(directUrl, options);
-      if (directRes.ok) {
-        const directData = await directRes.json();
-        if (directData && typeof directData === "object") {
-          if (!("status_code" in directData) || (directData as any).status_code === 1) {
-            return directData as T;
-          }
-        }
-      } else {
-        console.warn(`[TMDB Service] Fallback direto retornou status ${directRes.status}`);
-      }
-    } catch (directErr: any) {
-      console.error(`[TMDB Service] Erro no fallback direto TMDB:`, directErr?.message || directErr);
-    }
-  }
 
   return fallback;
 }
@@ -205,7 +173,7 @@ export const searchMulti = async (query: string): Promise<TMDBResponse> => {
   return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
-import { UNAVAILABLE_SEASONS } from '../data';
+import { UNAVAILABLE_SEASONS } from "../data";;;
 
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
   const details = await fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);

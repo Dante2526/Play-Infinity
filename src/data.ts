@@ -1,34 +1,4 @@
-export type CatalogItem = {
-  id: number;
-  tmdbId?: number;
-  imdbId?: string;
-  title: string;
-  imageUrl: string;
-  posterUrl?: string;
-  backdropUrl?: string;
-  type: 'movie' | 'series';
-  genres: string[];
-  synopsis?: string;
-  year?: number;
-  rating?: string;
-  duration?: string;
-  match?: number;
-  playerUrl?: string;
-  quality?: 'CAM' | 'TS' | 'HD' | '4K' | 'FULL HD';
-  provider?: string;
-  isAnime?: boolean;
-  isDorama?: boolean;
-};
-
-/** Verifica se um item possui qualidade CAM (gravação de cinema) */
-export function checkIsCam(title?: string, quality?: string): boolean {
-  if (quality === 'CAM' || quality === 'TS') return true;
-  if (!title) return false;
-  const upper = title.toUpperCase();
-  if (upper.includes('CAM') || upper.includes('CINEMA') || upper.includes('TS')) return true;
-  if (upper.includes('HOMEM-ARANHA: UM NOVO DIA') || upper.includes('HOMEM-ARANHA 4')) return true;
-  return false;
-}
+import { CatalogItem } from './utils/mediaUtils';
 
 export const featured = {
   id: 969681,
@@ -503,83 +473,10 @@ export const animes = [
 ];
 
 // IDs de animes confirmados com reprodução (dublada ou legendada) nos servidores oficiais
-export const WATCHPLAY_ANIME_IDS = [
-  1429,   // Attack on Titan
-  85937,  // Demon Slayer
-  209867, // Solo Leveling
-  13916,  // Death Note
-  46298,  // Hunter x Hunter
-  12971,  // Dragon Ball Z
-  94664,  // Mushoku Tensei
-  207468, // Kaiju No. 8
-  31910,  // Naruto Shippuden
-  37854,  // One Piece
-  95479,  // Jujutsu Kaisen
-  65945,  // Kabaneri
-  37858,  // Fate/stay night
-  60625,  // Tokyo Ghoul
-  65930,  // My Hero Academia
-  31911,  // Fullmetal Alchemist: Brotherhood
-  63926,  // One Punch Man
-  80752,  // The Promised Neverland
-  120089, // Spy x Family
-  114410, // Chainsaw Man
-  127532, // Cyberpunk: Edgerunners
-  80564,  // Dr. Stone
-  72636,  // Black Clover
-  87108,  // Fire Force
-  67070,  // Erased
-  72705,  // Overlord
-  76121,  // That Time I Got Reincarnated as a Slime
-  84669,  // Hell's Paradise
-  95557,  // Tower of God
-  84773,  // The Rising of the Shield Hero
-];
-
 // Lista de animes e títulos que NÃO possuem fontes homologadas e NÃO devem aparecer no app
-export const UNAVAILABLE_TITLES_OR_IDS = [
-  939243,  // A Ilha Esquecida
-  1059955, // The Last Photograph
-  65733,   // Doraemon: O Gato do Futuro
-  57911,   // Doraemon (1979)
-  299627,  // Doraemon Specials
-  45857,   // REBORN!
-  30983,   // Detetive Conan
-  241002,  // Modaete yo, Adam-kun
-  233643,  // Secret Mission
-  70998,   // Uma Noite Pecaminosa
-  95897,   // Overflow
-  255064,  // O Incidente de Darwin
-];
-
 // Mapeamento de temporadas indisponíveis (ID do TMDB -> array de números de temporada que devem ser ocultados)
 export const UNAVAILABLE_SEASONS: Record<number, number[]> = {
 };
-
-export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: string; name?: string }): boolean => {
-  const id = Number(item.tmdbId || item.id || 0);
-  if (id && UNAVAILABLE_TITLES_OR_IDS.includes(id)) return false;
-  const name = (item.title || item.name || "").toLowerCase();
-  if (name.includes("doraemon")) return false;
-  return true;
-};
-
-export const WATCHPLAY_DORAMA_IDS = [
-  93405,  // Round 6
-  127529, // Cães de Caça (Bloodhounds)
-  230777, // The Trunk
-  233742, // Newtopia
-  231280, // Um Bom Garoto (Good Boy)
-  239385, // O Manipulado (The Manipulated)
-  291496, // Um Grude de Amor
-  276161, // Aprendendo a Lição (Study Group)
-  296206, // Agente Kim: Reativado
-  285838, // Se Desejos Matassem...
-  279323, // A Leste do Palácio
-  259710, // A Rainha dos Golpes
-  271885, // Você Estava Lá
-  245079  // Traição e Redenção
-];
 
 export const doramas = [
   {

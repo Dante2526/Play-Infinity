@@ -15,7 +15,7 @@ import {
   Bell,
   AlertCircle
 } from "lucide-react";
-import { CatalogItem } from "../data";
+import { CatalogItem } from "../utils/mediaUtils";;
 import {
   SeriesScheduleEpisode,
   getFavoriteIds,

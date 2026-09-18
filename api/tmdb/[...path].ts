@@ -10,7 +10,10 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    const apiKey = process.env.TMDB_API_KEY || (process.env as any).VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
+    const apiKey = process.env.TMDB_API_KEY || (process.env as any).VITE_TMDB_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: "Server Configuration Error: TMDB_API_KEY is missing." });
+    }
     query.set("api_key", apiKey);
 
     const url = `https://api.themoviedb.org/3/${subPath}?${query.toString()}`;

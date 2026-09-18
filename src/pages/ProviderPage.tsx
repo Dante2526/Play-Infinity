@@ -1,5 +1,6 @@
 
 import { FilterChip } from '../components/FilterChip';
+import { providerCatalogs } from '../data';
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import {
@@ -37,7 +38,8 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 

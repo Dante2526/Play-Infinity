@@ -38,7 +38,8 @@ import {
   AlertCircle
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, providers, releases, newest, animes, doramas, mostWatched, continueWatching, providerCatalogs, CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../data";
+
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 
