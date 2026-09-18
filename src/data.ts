@@ -106,21 +106,7 @@ export const featuredCarousel = [
     logoText: "FALLOUT",
     playerUrl: "https://v1.watchplay.shop/series/106379/1/1",
   },
-  {
-    id: 299939,
-    tmdbId: 299939,
-    title: "MONSTRO: A HISTÓRIA DE LIZZIE BORDEN",
-    type: "series" as const,
-    year: "2026",
-    duration: "T1",
-    rating: 8.5,
-    genres: ["Crime", "Drama", "Mistério"],
-    description: "A série dramatiza o famoso caso real ocorrido em 1892, onde Lizzie Borden foi acusada de assassinar seu pai e sua madrasta com um machado, explorando as pressões sociais da época.",
-    imageUrl: "https://image.tmdb.org/t/p/original/3JVjgaqfX5MhxxHKpGWz05QV7Dz.jpg",
-    posterUrl: "https://image.tmdb.org/t/p/w500/cLP2z0O78DLiMqH8pvtB8EYq8KY.jpg",
-    logoText: "MONSTRO:\nLIZZIE BORDEN",
-    playerUrl: "/api/myembed-stream?id=299939&type=tv&s=1&e=1",
-  }
+
 ];
 
 export const providers = [
@@ -282,14 +268,6 @@ export const releases = [
 ];
 
 export const newest = [
-  {
-    id: 299939,
-    tmdbId: 299939,
-    title: "MONSTRO: A HISTÓRIA DE LIZZIE BORDEN",
-    type: "series" as const,
-    imageUrl: "https://image.tmdb.org/t/p/w500/cLP2z0O78DLiMqH8pvtB8EYq8KY.jpg",
-    playerUrl: "/api/myembed-stream?id=299939&type=tv&s=1&e=1",
-  },
   {
     id: 125988,
     tmdbId: 125988,

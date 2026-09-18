@@ -161,24 +161,26 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     const startHls = () => {
       if (Hls.isSupported()) {
-        // Configuração 100% automática de HLS com ABR dinâmico baseado na velocidade da rede
+        // Configuração Maximizada para Estabilidade (Anti-Travamento IPTV)
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: !isLowBandwidthMode,
-          liveSyncDuration: isLowBandwidthMode ? 10 : 3,
-          liveMaxLatencyDuration: isLowBandwidthMode ? 25 : 8,
-          maxBufferLength: isLowBandwidthMode ? 35 : 15,
-          maxMaxBufferLength: isLowBandwidthMode ? 60 : 30,
-          backBufferLength: 30,
-          manifestLoadingTimeOut: 25000,
-          manifestLoadingMaxRetry: 5,
-          levelLoadingTimeOut: 25000,
-          fragLoadingTimeOut: 30000,
-          fragLoadingMaxRetry: 6,
-          // ABR automático: calibra a resolução dinamicamente com a banda real
-          abrBandWidthFactor: isLowBandwidthMode ? 0.7 : 0.9,
-          abrBandWidthUpFactor: isLowBandwidthMode ? 0.5 : 0.7,
-          startLevel: -1 // -1 = 100% Automático
+          lowLatencyMode: false, // Desabilitado para focar em estabilidade
+          liveSyncDuration: isLowBandwidthMode ? 25 : 15, // Margem do "ao vivo" para não travar
+          liveMaxLatencyDuration: isLowBandwidthMode ? 45 : 30,
+          maxBufferLength: isLowBandwidthMode ? 60 : 40, // Segundos de vídeo mantidos na memória
+          maxMaxBufferLength: isLowBandwidthMode ? 120 : 80, // Limite máximo absoluto
+          backBufferLength: 30, // Mantém 30s anteriores caso a rede oscile
+          manifestLoadingTimeOut: 30000,
+          manifestLoadingMaxRetry: 10, // Mais tentativas antes de dar erro fatal
+          levelLoadingTimeOut: 30000,
+          fragLoadingTimeOut: 45000,
+          fragLoadingMaxRetry: 15, // Suporta falhas curtas de operadora
+          fragLoadingRetryDelay: 1000, // Tempo de espera base para retries
+          // ABR agressivo para descer qualidade rapidamente se a net cair
+          abrBandWidthFactor: isLowBandwidthMode ? 0.6 : 0.8,
+          abrBandWidthUpFactor: isLowBandwidthMode ? 0.4 : 0.6,
+          capLevelToPlayerSize: true, // Evita baixar resoluções muito altas para a tela
+          startLevel: -1
         });
 
         hlsRef.current = hls;
@@ -523,9 +525,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       hlsRef.current.destroy();
       const hls = new Hls({ 
         enableWorker: true, 
-        lowLatencyMode: !isLowBandwidthMode,
-        liveSyncDuration: isLowBandwidthMode ? 10 : 3,
-        maxBufferLength: isLowBandwidthMode ? 35 : 15,
+        lowLatencyMode: false,
+        liveSyncDuration: isLowBandwidthMode ? 25 : 15,
+        maxBufferLength: isLowBandwidthMode ? 60 : 40,
+        maxMaxBufferLength: isLowBandwidthMode ? 120 : 80,
+        capLevelToPlayerSize: true,
         startLevel: -1
       });
       hlsRef.current = hls;

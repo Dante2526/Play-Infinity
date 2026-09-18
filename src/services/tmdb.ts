@@ -296,13 +296,13 @@ export const getGenreIdByName = (name: string): number | undefined => {
 
 export const getMovieReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=0&include_adult=false&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=3&include_adult=false&page=${page}`;
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=0&include_adult=false&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
