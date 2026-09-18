@@ -523,7 +523,9 @@ process.on("uncaughtException", (err) => {
       // 1. Busca ou cria cliente no Asaas
       let customerId = "";
       const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { headers });
-      const cusData = await cusRes.json();
+      if (cusRes.status === 401) throw new Error("Chave da API do Asaas inválida ou expirada. Verifique o arquivo .env");
+      const cusText = await cusRes.text();
+      const cusData = cusText ? JSON.parse(cusText) : {};
       
       if (cusData.data && cusData.data.length > 0) {
         customerId = cusData.data[0].id;

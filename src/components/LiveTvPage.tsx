@@ -18,8 +18,6 @@ import {
   Trophy,
   LayoutGrid,
   List,
-  Upload,
-  FileUp,
   FolderOpen,
   Mic,
   MicOff,
@@ -35,7 +33,6 @@ import {
   clearAllCustomChannels,
   getFavoriteChannelIds, 
   toggleFavoriteChannel,
-  parseM3UPlaylist,
   setLastPlayedChannelId,
   getLastPlayedChannelId
 } from '../services/liveTvStorage';
@@ -71,7 +68,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   // Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
   const [editingChannel, setEditingChannel] = useState<LiveChannel | null>(null);
-  const [modalTab, setModalTab] = useState<'single' | 'm3u'>('single');
 
   // View mode (grid or list - great for mobile)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
@@ -95,24 +91,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
   const [formStreamUrl, setFormStreamUrl] = useState<string>('');
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
   const [formQuality, setFormQuality] = useState<'1080p' | '720p' | 'HD'>('1080p');
-  const [m3uText, setM3uText] = useState<string>('');
-  const [m3uUrl, setM3uUrl] = useState<string>('');
-  const [m3uInputType, setM3uInputType] = useState<'url' | 'text' | 'file'>('url');
-  const [selectedFileName, setSelectedFileName] = useState<string>('');
-  const [validateStreamsCheck, setValidateStreamsCheck] = useState<boolean>(true);
-  const [isAnalyzingM3u, setIsAnalyzingM3u] = useState<boolean>(false);
-  const [m3uFilterView, setM3uFilterView] = useState<'online' | 'all' | 'offline'>('online');
-  const [m3uAnalysisResult, setM3uAnalysisResult] = useState<{
-    total: number;
-    onlineCount: number;
-    offlineCount: number;
-    validated: boolean;
-    categories: Record<string, number>;
-    channels: (LiveChannel & { isOnline?: boolean; status?: string; responseTimeMs?: number; error?: string })[];
-    sample: LiveChannel[];
-  } | null>(null);
-  const [importSuccessMsg, setImportSuccessMsg] = useState<string>('');
-  const [importErrorMsg, setImportErrorMsg] = useState<string>('');
 
   // Carrega canais e favoritos ao montar
   const refreshChannels = () => {
@@ -206,7 +184,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       setFormStreamUrl(channelToEdit.servers[0]?.url || '');
       setFormLogoUrl(channelToEdit.logo || '');
       setFormQuality(channelToEdit.quality || '1080p');
-      setModalTab('single');
     } else {
       setEditingChannel(null);
       setFormName('');
@@ -214,11 +191,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       setFormStreamUrl('');
       setFormLogoUrl('');
       setFormQuality('1080p');
-      setModalTab('single');
     }
-    setImportSuccessMsg('');
-    setImportErrorMsg('');
-    setM3uAnalysisResult(null);
     setIsAddModalOpen(true);
   };
 
@@ -257,108 +230,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     if (activeChannel?.id === channelId) {
       setActiveChannel(newChannel);
     }
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setSelectedFileName(file.name);
-    setImportErrorMsg('');
-    setImportSuccessMsg('');
-    setM3uAnalysisResult(null);
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const content = event.target?.result as string;
-      if (content) {
-        setM3uText(content);
-      }
-    };
-    reader.onerror = () => {
-      setImportErrorMsg('Erro ao ler o arquivo anexado.');
-    };
-    reader.readAsText(file);
-  };
-
-  const handleAnalyzeM3U = async () => {
-    setImportErrorMsg('');
-    setImportSuccessMsg('');
-    setM3uAnalysisResult(null);
-
-    const isUrl = m3uInputType === 'url';
-    const payload = isUrl 
-      ? { url: m3uUrl.trim(), validateStreams: validateStreamsCheck } 
-      : { content: m3uText.trim(), validateStreams: validateStreamsCheck };
-
-    if (isUrl && !m3uUrl.trim()) {
-      setImportErrorMsg('Por favor, insira o link da playlist M3U.');
-      return;
-    }
-    if (!isUrl && !m3uText.trim()) {
-      setImportErrorMsg(m3uInputType === 'file' ? 'Por favor, selecione um arquivo de lista M3U.' : 'Por favor, cole o texto da playlist M3U.');
-      return;
-    }
-
-    setIsAnalyzingM3u(true);
-    try {
-      const res = await fetch('/api/parse-m3u-playlist', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      
-      let data: any;
-      const rawText = await res.text();
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        throw new Error(
-          rawText.includes('<!DOCTYPE') || rawText.includes('<html')
-            ? 'O link fornecido retornou uma página web (HTML) e não o arquivo de lista M3U. No GitHub, copie o link clicando no botão "Raw" ou baixe o arquivo e use a aba "Anexar Arquivo".'
-            : 'Erro de comunicação ao processar lista.'
-        );
-      }
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Erro ao analisar a lista M3U');
-      }
-
-      if (data.total === 0) {
-        setImportErrorMsg('Nenhum canal com link de stream válido foi encontrado nessa lista.');
-      } else {
-        setM3uAnalysisResult(data);
-        setM3uFilterView(data.onlineCount > 0 ? 'online' : 'all');
-      }
-    } catch (err: any) {
-      setImportErrorMsg(err.message || 'Falha de conexão ao processar lista M3U.');
-    } finally {
-      setIsAnalyzingM3u(false);
-    }
-  };
-
-  const handleImportParsedChannels = (onlyOnline: boolean = false) => {
-    if (!m3uAnalysisResult || m3uAnalysisResult.channels.length === 0) return;
-
-    const channelsToSave = onlyOnline 
-      ? m3uAnalysisResult.channels.filter(c => c.isOnline)
-      : m3uAnalysisResult.channels;
-
-    if (channelsToSave.length === 0) {
-      setImportErrorMsg('Nenhum canal selecionado para importação.');
-      return;
-    }
-
-    channelsToSave.forEach(c => saveCustomChannel(c));
-    refreshChannels();
-    setImportSuccessMsg(`${channelsToSave.length} canais adicionados com sucesso ao seu catálogo!`);
-    setTimeout(() => {
-      setIsAddModalOpen(false);
-      setM3uText('');
-      setM3uUrl('');
-      setM3uAnalysisResult(null);
-      setImportSuccessMsg('');
-    }, 1500);
   };
 
   const [toastMsg, setToastMsg] = useState<string>('');
@@ -449,17 +320,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   <span>Sintonizar Canal</span>
                 </button>
 
-                <button
-                  onClick={() => {
-                    setEditingChannel(null);
-                    setModalTab('m3u');
-                    setIsAddModalOpen(true);
-                  }}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm transition-all border border-white/10 cursor-pointer min-h-[44px]"
-                >
-                  <Upload className="w-4 h-4 text-orange-400" />
-                  <span>Carregar Próprio Arquivo / M3U</span>
-                </button>
+
               </div>
             </div>
 
@@ -527,20 +388,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão de Adicionar / Importar Arquivo ou Lista M3U */}
-          <button
-            onClick={() => {
-              setEditingChannel(null);
-              setModalTab('m3u');
-              setIsAddModalOpen(true);
-            }}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs sm:text-sm transition-all shadow-md shadow-orange-600/30 active:scale-95 cursor-pointer min-h-[44px] shrink-0"
-            title="Importar lista M3U ou carregar arquivo próprio"
-          >
-            <Upload className="w-4 h-4 shrink-0" />
-            <span className="hidden sm:inline">Carregar Lista / Arquivo</span>
-            <span className="sm:hidden">Carregar M3U</span>
-          </button>
+
 
           {customChannelsCount > 0 && (
             <button
@@ -909,7 +757,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
         />
       )}
 
-      {/* MODAL: ADICIONAR / EDITAR CANAL DE TV OU IMPORTAR M3U */}
+      {/* MODAL: ADICIONAR / EDITAR CANAL DE TV */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
           <div className="bg-neutral-900 border border-white/10 rounded-2xl sm:rounded-3xl w-full max-w-lg p-4 sm:p-6 shadow-2xl relative overflow-hidden max-h-[92vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
@@ -922,7 +770,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
                   <h3 className="font-bold text-sm sm:text-base text-white">
                     {editingChannel ? 'Editar Canal de TV' : 'Adicionar Canal de TV'}
                   </h3>
-                  <p className="text-[11px] sm:text-xs text-neutral-400">Configure servidores de streaming ao vivo ou importe listas</p>
+                  <p className="text-[11px] sm:text-xs text-neutral-400">Configure servidores de streaming ao vivo</p>
                 </div>
               </div>
               <button
@@ -933,488 +781,97 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
               </button>
             </div>
 
-            {/* Abas do Modal */}
-            <div className="flex items-center gap-1 sm:gap-2 p-1 bg-black/40 rounded-xl mb-4 sm:mb-5 border border-white/5 shrink-0">
-              <button
-                type="button"
-                onClick={() => setModalTab('single')}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer min-h-[38px] flex items-center justify-center ${
-                  modalTab === 'single' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                Canal Individual
-              </button>
-              <button
-                type="button"
-                onClick={() => setModalTab('m3u')}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all cursor-pointer min-h-[38px] flex items-center justify-center ${
-                  modalTab === 'm3u' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                }`}
-              >
-                Importar Lista M3U
-              </button>
-            </div>
-
             <div className="overflow-y-auto pr-1 flex-1 space-y-4 custom-scrollbar">
-              {modalTab === 'single' ? (
-                <form onSubmit={handleSaveChannel} className="space-y-3 sm:space-y-4">
+              <form onSubmit={handleSaveChannel} className="space-y-3 sm:space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Nome do Canal</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: Premiere Futebol HD, SporTV, ESPN Brasil"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Nome do Canal</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Ex: Premiere Futebol HD, SporTV, ESPN Brasil"
-                      value={formName}
-                      onChange={(e) => setFormName(e.target.value)}
+                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Categoria</label>
+                    <select
+                      value={formCategory}
+                      onChange={(e) => setFormCategory(e.target.value as any)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Categoria</label>
-                      <select
-                        value={formCategory}
-                        onChange={(e) => setFormCategory(e.target.value as any)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
-                      >
-                        <option value="Esportes">Esportes</option>
-                        <option value="TV Aberta">TV Aberta</option>
-                        <option value="Notícias">Notícias</option>
-                        <option value="Filmes & Séries">Filmes & Séries</option>
-                        <option value="Infantil">Infantil</option>
-                        <option value="Variedades">Variedades</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Qualidade</label>
-                      <select
-                        value={formQuality}
-                        onChange={(e) => setFormQuality(e.target.value as any)}
-                        className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
-                      >
-                        <option value="1080p">1080p (Full HD)</option>
-                        <option value="720p">720p (HD)</option>
-                        <option value="HD">HD Padrão</option>
-                      </select>
-                    </div>
+                    >
+                      <option value="Esportes">Esportes</option>
+                      <option value="TV Aberta">TV Aberta</option>
+                      <option value="Notícias">Notícias</option>
+                      <option value="Filmes & Séries">Filmes & Séries</option>
+                      <option value="Infantil">Infantil</option>
+                      <option value="Variedades">Variedades</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                      URL do Stream (.m3u8 ou HLS)
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      placeholder="https://exemplo.com/live/premiere/index.m3u8"
-                      value={formStreamUrl}
-                      onChange={(e) => setFormStreamUrl(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500 font-mono text-xs"
-                    />
-                    <p className="text-[11px] text-neutral-500 mt-1">
-                      O app usa automaticamente nosso proxy anti-CORS integrado para permitir reprodução sem bloqueios.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                      URL do Logo (Opcional)
-                    </label>
-                    <input
-                      type="url"
-                      placeholder="https://exemplo.com/logo-canal.png"
-                      value={formLogoUrl}
-                      onChange={(e) => setFormLogoUrl(e.target.value)}
+                    <label className="block text-xs font-semibold text-neutral-300 mb-1.5">Qualidade</label>
+                    <select
+                      value={formQuality}
+                      onChange={(e) => setFormQuality(e.target.value as any)}
                       className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddModalOpen(false)}
-                      className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer min-h-[42px]"
                     >
-                      Cancelar
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-600/30 cursor-pointer min-h-[42px]"
-                    >
-                      {editingChannel ? 'Salvar Alterações' : 'Adicionar Canal'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                <div className="space-y-4">
-                  {/* Tipo de Entrada: Link URL vs Anexar Arquivo vs Texto */}
-                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/50 rounded-xl border border-white/5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setM3uInputType('url');
-                        setImportErrorMsg('');
-                      }}
-                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
-                        m3uInputType === 'url' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      Link / URL
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setM3uInputType('file');
-                        setImportErrorMsg('');
-                      }}
-                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 truncate ${
-                        m3uInputType === 'file' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      <Upload className="w-3.5 h-3.5 shrink-0" />
-                      <span>Anexar Arquivo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setM3uInputType('text');
-                        setImportErrorMsg('');
-                      }}
-                      className={`py-2 px-1 text-center text-[11px] sm:text-xs font-semibold rounded-lg transition-all cursor-pointer truncate ${
-                        m3uInputType === 'text' ? 'bg-orange-600 text-white shadow-sm' : 'text-neutral-400 hover:text-white'
-                      }`}
-                    >
-                      Colar Texto
-                    </button>
-                  </div>
-
-                  {/* Toggle para Testar Links em Tempo Real */}
-                  <div className="flex items-center justify-between p-2.5 bg-black/40 border border-white/10 rounded-xl">
-                    <div className="space-y-0.5">
-                      <span className="text-xs font-semibold text-white block">
-                        Testar Links e Conectividade
-                      </span>
-                      <p className="text-[10px] text-neutral-400">
-                        Verifica automaticamente em tempo real quais transmissões estão online e sem travas.
-                      </p>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={validateStreamsCheck}
-                        onChange={(e) => setValidateStreamsCheck(e.target.checked)}
-                        className="sr-only peer"
-                      />
-                      <div className="w-9 h-5 bg-neutral-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-600"></div>
-                    </label>
-                  </div>
-
-                  {m3uInputType === 'url' && (
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                        Link público da lista (.m3u, .m3u8 ou raw GitHub)
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="url"
-                          placeholder="https://exemplo.com/minha-lista.m3u"
-                          value={m3uUrl}
-                          onChange={(e) => setM3uUrl(e.target.value)}
-                          className="flex-1 px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-orange-500"
-                        />
-                        <button
-                          type="button"
-                          disabled={isAnalyzingM3u || !m3uUrl.trim()}
-                          onClick={handleAnalyzeM3U}
-                          className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold transition-all shrink-0 cursor-pointer flex items-center gap-1.5 shadow-md shadow-orange-600/30"
-                        >
-                          {isAnalyzingM3u ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Testando links...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Search className="w-3.5 h-3.5" />
-                              <span>Analisar e Testar</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                      <p className="text-[11px] text-neutral-400 mt-1.5">
-                        O sistema baixa a lista, faz o teste de conexão de cada canal e categoriza tudo.
-                      </p>
-                    </div>
-                  )}
-
-                  {m3uInputType === 'file' && (
-                    <div className="space-y-3">
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1">
-                        Selecione o arquivo da sua Lista (.m3u, .m3u8, .txt)
-                      </label>
-                      <div 
-                        onClick={() => document.getElementById('m3u-file-upload-input')?.click()}
-                        className="border-2 border-dashed border-white/20 hover:border-orange-500/60 rounded-2xl p-5 sm:p-6 text-center bg-black/30 hover:bg-orange-500/5 transition-all cursor-pointer flex flex-col items-center justify-center gap-2.5 group"
-                      >
-                        <input
-                          id="m3u-file-upload-input"
-                          type="file"
-                          accept=".m3u,.m3u8,.txt,text/plain"
-                          onChange={handleFileUpload}
-                          className="hidden"
-                        />
-                        <div className="w-12 h-12 rounded-full bg-orange-500/20 group-hover:bg-orange-500/30 text-orange-400 flex items-center justify-center transition-all">
-                          <FileUp className="w-6 h-6" />
-                        </div>
-                        <div className="space-y-1">
-                          <p className="text-xs sm:text-sm font-bold text-white">
-                            {selectedFileName ? selectedFileName : 'Toque aqui para anexar seu arquivo M3U'}
-                          </p>
-                          <p className="text-[11px] text-neutral-400">
-                            Suporta arquivos baixados .m3u, .m3u8 e listas em texto (.txt)
-                          </p>
-                        </div>
-                        {selectedFileName && (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-xs font-semibold">
-                            <Check className="w-3.5 h-3.5" /> Arquivo Carregado ({m3uText.length > 0 ? `${(m3uText.length / 1024).toFixed(1)} KB` : 'Pronto'})
-                          </span>
-                        )}
-                      </div>
-
-                      {m3uText.trim() && (
-                        <button
-                          type="button"
-                          disabled={isAnalyzingM3u}
-                          onClick={handleAnalyzeM3U}
-                          className="w-full py-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-orange-600/30"
-                        >
-                          {isAnalyzingM3u ? (
-                            <>
-                              <RefreshCw className="w-4 h-4 animate-spin" />
-                              <span>Testando links do arquivo anexado...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Search className="w-4 h-4" />
-                              <span>Analisar e Testar Canais do Arquivo</span>
-                            </>
-                          )}
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {m3uInputType === 'text' && (
-                    <div>
-                      <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                        Cole o conteúdo da Lista M3U / M3U8
-                      </label>
-                      <textarea
-                        rows={4}
-                        placeholder={`#EXTM3U\n#EXTINF:-1 tvg-logo="..." group-title="Esportes",Premiere 1 HD\nhttp://exemplo.com/premiere.m3u8`}
-                        value={m3uText}
-                        onChange={(e) => setM3uText(e.target.value)}
-                        className="w-full p-3 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-mono focus:outline-none focus:border-orange-500 custom-scrollbar"
-                      />
-                      <div className="flex justify-end mt-2">
-                        <button
-                          type="button"
-                          disabled={isAnalyzingM3u || !m3uText.trim()}
-                          onClick={handleAnalyzeM3U}
-                          className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
-                        >
-                          {isAnalyzingM3u ? (
-                            <>
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              <span>Testando links...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Search className="w-3.5 h-3.5" />
-                              <span>Analisar e Testar Texto</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Mensagens de Erro */}
-                  {importErrorMsg && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
-                      <X className="w-4 h-4 text-red-500 shrink-0" />
-                      <span>{importErrorMsg}</span>
-                    </div>
-                  )}
-
-                  {/* Resumo da Análise e Diagnóstico dos Canais */}
-                  {m3uAnalysisResult && (
-                    <div className="bg-black/60 border border-white/10 rounded-xl p-3.5 space-y-3 animate-in fade-in duration-200">
-                      {/* Placar de Saúde dos Links */}
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-2">
-                          <span className="text-[10px] text-neutral-400 block font-semibold">Total</span>
-                          <span className="text-sm sm:text-base font-black text-white">{m3uAnalysisResult.total}</span>
-                        </div>
-                        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2">
-                          <span className="text-[10px] text-emerald-400 block font-semibold flex items-center justify-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            Online
-                          </span>
-                          <span className="text-sm sm:text-base font-black text-emerald-400">{m3uAnalysisResult.onlineCount}</span>
-                        </div>
-                        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-2">
-                          <span className="text-[10px] text-red-400 block font-semibold">Inativos</span>
-                          <span className="text-sm sm:text-base font-black text-red-400">{m3uAnalysisResult.offlineCount}</span>
-                        </div>
-                      </div>
-
-                      {/* Categorias Detectadas */}
-                      <div>
-                        <span className="text-[10px] text-neutral-400 block mb-1.5 font-semibold uppercase tracking-wider">
-                          Categorias Detectadas:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {Object.entries(m3uAnalysisResult.categories).map(([cat, count]) => (
-                            <span key={cat} className="text-[10px] px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-neutral-300">
-                              <strong className="text-white">{cat}:</strong> {count}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Filtro da Prévia */}
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">
-                            Lista de Canais:
-                          </span>
-                          <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded-lg border border-white/5">
-                            <button
-                              type="button"
-                              onClick={() => setM3uFilterView('online')}
-                              className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
-                                m3uFilterView === 'online' ? 'bg-emerald-600 text-white' : 'text-neutral-400 hover:text-white'
-                              }`}
-                            >
-                              Online ({m3uAnalysisResult.onlineCount})
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setM3uFilterView('all')}
-                              className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
-                                m3uFilterView === 'all' ? 'bg-white/15 text-white' : 'text-neutral-400 hover:text-white'
-                              }`}
-                            >
-                              Todos ({m3uAnalysisResult.total})
-                            </button>
-                            {m3uAnalysisResult.offlineCount > 0 && (
-                              <button
-                                type="button"
-                                onClick={() => setM3uFilterView('offline')}
-                                className={`px-2 py-0.5 text-[10px] font-semibold rounded ${
-                                  m3uFilterView === 'offline' ? 'bg-red-600 text-white' : 'text-neutral-400 hover:text-white'
-                                }`}
-                              >
-                                Inativos ({m3uAnalysisResult.offlineCount})
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Lista de Canais com Status Badge */}
-                        <div className="max-h-36 overflow-y-auto space-y-1 pr-1 custom-scrollbar text-xs">
-                          {m3uAnalysisResult.channels
-                            .filter(ch => {
-                              if (m3uFilterView === 'online') return ch.isOnline;
-                              if (m3uFilterView === 'offline') return !ch.isOnline;
-                              return true;
-                            })
-                            .slice(0, 15)
-                            .map((ch, idx) => (
-                              <div key={idx} className="flex items-center justify-between p-1.5 rounded-lg bg-white/5 text-[11px] gap-2">
-                                <span className="font-semibold text-white truncate max-w-[170px] sm:max-w-[220px]">
-                                  {ch.name}
-                                </span>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                  <span className="text-[9px] text-neutral-400">{ch.category}</span>
-                                  {ch.isOnline ? (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                                      <span className="w-1 h-1 rounded-full bg-emerald-400"></span>
-                                      {ch.responseTimeMs ? `${ch.responseTimeMs}ms` : 'Online'}
-                                    </span>
-                                  ) : (
-                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30">
-                                      Offline
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ))}
-                        </div>
-                      </div>
-
-                      {/* Botões de Ação para Importar */}
-                      <div className="space-y-2 pt-1">
-                        {m3uAnalysisResult.onlineCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => handleImportParsedChannels(true)}
-                            className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-all shadow-md shadow-emerald-600/30 cursor-pointer flex items-center justify-center gap-2"
-                          >
-                            <Plus className="w-4 h-4" />
-                            <span>Adicionar Apenas os {m3uAnalysisResult.onlineCount} Canais Online (Recomendado)</span>
-                          </button>
-                        ) : (
-                          <p className="text-xs text-red-400 text-center py-1">
-                            Nenhum canal respondeu ao teste de stream nesta lista no momento.
-                          </p>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => handleImportParsedChannels(false)}
-                          className="w-full py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 hover:text-white font-semibold text-xs transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-white/10"
-                        >
-                          <span>Importar Todos os {m3uAnalysisResult.total} Canais Mesmo Assim</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {importSuccessMsg && (
-                    <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs flex items-center gap-2">
-                      <Check className="w-4 h-4 text-orange-500 shrink-0" />
-                      <span>{importSuccessMsg}</span>
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10">
-                    {customChannelsCount > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleClearAllCustom();
-                          setIsAddModalOpen(false);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 text-xs font-semibold cursor-pointer min-h-[42px]"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span>Remover Todos os {customChannelsCount} Manuais</span>
-                      </button>
-                    ) : <div />}
-                    <button
-                      type="button"
-                      onClick={() => setIsAddModalOpen(false)}
-                      className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer min-h-[42px]"
-                    >
-                      Fechar
-                    </button>
+                      <option value="1080p">1080p (Full HD)</option>
+                      <option value="720p">720p (HD)</option>
+                      <option value="HD">HD Padrão</option>
+                    </select>
                   </div>
                 </div>
-              )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                    URL do Stream (.m3u8 ou HLS)
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://exemplo.com/live/premiere/index.m3u8"
+                    value={formStreamUrl}
+                    onChange={(e) => setFormStreamUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500 font-mono text-xs"
+                  />
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    O app usa automaticamente nosso proxy anti-CORS integrado para permitir reprodução sem bloqueios.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
+                    URL do Logo (Opcional)
+                  </label>
+                  <input
+                    type="url"
+                    placeholder="https://exemplo.com/logo-canal.png"
+                    value={formLogoUrl}
+                    onChange={(e) => setFormLogoUrl(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-base sm:text-sm focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(false)}
+                    className="px-4 py-2.5 rounded-xl text-neutral-400 hover:text-white text-xs font-medium cursor-pointer min-h-[42px]"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all shadow-md shadow-orange-600/30 cursor-pointer min-h-[42px]"
+                  >
+                    {editingChannel ? 'Salvar Alterações' : 'Adicionar Canal'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
