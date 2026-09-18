@@ -1,4 +1,4 @@
-import { CatalogItem, providerCatalogs, featured, isMediaAvailable } from "../data";
+import { CatalogItem, providerCatalogs, featured, isMediaAvailable, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";
 import { getDetails } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -39,6 +39,15 @@ export const getAllCatalogItems = (): CatalogItem[] => {
 
   const map = new Map<number, CatalogItem>();
   
+  const addItems = (items: any[]) => {
+    if (!items) return;
+    items.forEach(item => {
+      if (item.id) {
+         map.set(item.id, { ...item, type: item.type || 'movie' } as CatalogItem);
+      }
+    });
+  };
+
   if (featured) {
     map.set(featured.id, {
       id: featured.id,
@@ -58,9 +67,16 @@ export const getAllCatalogItems = (): CatalogItem[] => {
     });
   }
 
+  addItems(featuredCarousel);
+  addItems(top10);
+  addItems(releases);
+  addItems(newest);
+  addItems(animes);
+  addItems(doramas);
+
   Object.entries(providerCatalogs).forEach(([_, items]) => {
     items.forEach(item => {
-      map.set(item.id, item);
+      map.set(item.id, item as CatalogItem);
     });
   });
 

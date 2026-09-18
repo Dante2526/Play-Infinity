@@ -214,13 +214,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O líder mundial em esportes com Premier League, LaLiga, NFL, NBA e debates.',
     servers: [
       {
-        name: 'Servidor 1 (Ao Vivo HLS)',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 1 (Kiwi FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/296354',
         isProxy: true
       },
       {
-        name: 'Servidor 2 (FIFA+ BR)',
-        url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
+        name: 'Servidor 2 (Kiwi HD)',
+        url: 'http://up.kiwi/351921603109/34939156/506',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Kiwi HD²)',
+        url: 'http://up.kiwi/351921603109/34939156/296355',
         isProxy: true
       }
     ]
@@ -616,8 +621,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Mais opções esportivas, basquete, beisebol, futebol e debates.',
     servers: [
       {
-        name: 'Servidor 1 (Stream Primário)',
+        name: 'Servidor 1 (Kiwi HD Principal)',
         url: 'http://up.kiwi/351921603109/34939156/296556',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (Kiwi HD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/497',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Kiwi FHD H265)',
+        url: 'http://up.kiwi/351921603109/34939156/493',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 4 (Kiwi SD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296557',
         isProxy: true
       }
     ]
@@ -632,8 +652,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal de esportes do Grupo Bandeirantes.',
     servers: [
       {
-        name: 'Servidor 1 (Stream Primário)',
+        name: 'Servidor 1 (Kiwi HD Principal)',
         url: 'http://up.kiwi/351921603109/34939156/147',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (Kiwi FHD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/145',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Kiwi HD² Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296480',
         isProxy: true
       }
     ]
@@ -648,10 +678,76 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O maior canal de lutas e artes marciais do Brasil.',
     servers: [
       {
-        name: 'Servidor 1 (Stream Primário)',
+        name: 'Servidor 1 (Kiwi HD Principal)',
         url: 'http://up.kiwi/351921603109/34939156/280',
         isProxy: true
+      },
+      {
+        name: 'Servidor 2 (Kiwi FHD Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/278',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Kiwi HD² Backup)',
+        url: 'http://up.kiwi/351921603109/34939156/296482',
+        isProxy: true
       }
+    ]
+  },
+  {
+    id: 'discovery-channel',
+    name: 'Discovery Channel HD',
+    category: 'Variedades',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/discovery-channel-us.png',
+    currentProgram: 'Documentários, Ciência e Exploração',
+    quality: '1080p',
+    description: 'O canal pioneiro em documentários sobre ciência, tecnologia, história e natureza.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/340', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/342', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296584', isProxy: true }
+    ]
+  },
+  {
+    id: 'history',
+    name: 'History HD',
+    category: 'Variedades',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/history-us.png',
+    currentProgram: 'Programas Históricos e Realities',
+    quality: '1080p',
+    description: 'A história do mundo, grandes eventos e teorias fascinantes.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/669', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/671', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296604', isProxy: true }
+    ]
+  },
+  {
+    id: 'animal-planet',
+    name: 'Animal Planet HD',
+    category: 'Variedades',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/animal-planet-us.png',
+    currentProgram: 'Vida Selvagem e Natureza',
+    quality: '1080p',
+    description: 'Programas focados na relação entre humanos e animais e na vida selvagem.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/28', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/30', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296564', isProxy: true }
+    ]
+  },
+  {
+    id: 'discovery-id',
+    name: 'Discovery ID HD',
+    category: 'Variedades',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/united-states/investigation-discovery-us.png',
+    currentProgram: 'Crimes Reais e Investigações',
+    quality: '1080p',
+    description: 'Mistérios da vida real, crimes chocantes e grandes investigações forenses.',
+    servers: [
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/351', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/353', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296570', isProxy: true }
     ]
   }
 ];
