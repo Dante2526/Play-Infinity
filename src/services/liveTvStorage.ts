@@ -75,7 +75,8 @@ export function getAllChannels(): LiveChannel[] {
   // Se o usuário tiver um canal customizado antigo com url descontinuada da Pluto, descarta para usar a lista oficial atualizada
   const initialMap = new Map(INITIAL_LIVE_CHANNELS.map(c => [c.id, c]));
   const validCustom = custom.filter(c => {
-    if (c.id === 'canal-adulto-1' || c.id === 'canal-adulto-2' || (c as any).category === '+18') {
+    const blockedIds = ['canal-adulto-1', 'canal-adulto-2', 'xxx-gay', 'xxx-hardcore', 'xxx-live-cams', 'of-juliana-bonde', 'of-elisa-sanches', 'of-mc-pipokinha'];
+    if (blockedIds.includes(c.id) || (c as any).category === '+18') {
       return false;
     }
     const hasBrokenUrl = c.servers?.some(s => s.url.includes('plu-6102e04e9ab1db0007a980a1') || s.url.includes('mediatailor'));
