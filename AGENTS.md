@@ -47,3 +47,29 @@
 ## 3. Conformidade e Verificação Obrigatória
 
 - Ao modificar qualquer componente de player (`VideoPlayerModal.tsx`, `NetflixPlayerSkin.tsx`, `LivePlayerModal.tsx`), execute sempre a validação com `npx tsc --noEmit` antes de concluir a tarefa.
+
+---
+
+## 4. Infraestrutura de Streaming de TV ao Vivo (VPS Oracle Cloud)
+
+> **IMPORTANTE PARA TODOS OS AGENTES:**  
+> O projeto possui uma VPS dedicada na **Oracle Cloud Infrastructure (OCI - São Paulo)** para hospedar o proxy de streaming de TV ao vivo, evitando estourar a franquia de 100 GB/mês do Render.
+
+1. **Dados da VPS Oracle:**
+   - **IP Público:** `147.15.57.146` (Região: São Paulo - AS31898 Oracle)
+   - **Domínio Oficial HTTPS:** `https://play-infinity-app.duckdns.org` (SSL Let's Encrypt ativo via Nginx)
+   - **Chave SSH:** `oracle-vps.key`
+   - **Código do Proxy:** `/home/ubuntu/proxy.mjs` (gerenciado por PM2 como `video-proxy` na porta interna 8080)
+   - **Endpoint de Saúde:** `https://play-infinity-app.duckdns.org/api/health`
+
+2. **Como o Frontend consome:**
+   - No componente `src/components/LivePlayerModal.tsx`:
+     ```ts
+     const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity-app.duckdns.org';
+     ```
+   - Todo o tráfego de streaming de canais ao vivo é roteado diretamente para a VPS Oracle com HTTPS.
+
+3. **Status Atual:**
+   - A VPS na Oracle está **ONLINE, 100% OPERACIONAL e com certificado SSL HTTPS ativo**.
+   - Zero consumo da franquia de 100 GB do Render para TV ao vivo.
+   - Veja o documento completo em [`ORACLE_PROXY.md`](./ORACLE_PROXY.md).
