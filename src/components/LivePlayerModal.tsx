@@ -8,14 +8,15 @@ import { Cast,
   Volume2, 
   VolumeX, 
   Maximize, 
+  Maximize2,
   Minimize, 
+  PictureInPicture2,
   RotateCcw, 
   Tv, 
   ChevronLeft, 
   ChevronRight, 
   Settings, 
   Radio, 
-  ExternalLink,
   ListFilter,
   AlertCircle
 } from 'lucide-react';
@@ -68,6 +69,114 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   // Espelha isLowBandwidthMode em ref para uso dentro de intervals/closures sem precisar recriar o efeito
   const isLowBandwidthModeRef = useRef<boolean>(false);
   const failedServersRef = useRef<Set<number>>(new Set());
+
+  // Mini Player Flutuante (mesmo mecanismo de arrastar/redimensionar usado em filmes e séries)
+  const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
+  const [miniPosition, setMiniPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cardDimensionsRef = useRef<{ width: number; height: number }>({ width: 300, height: 200 });
+  const miniContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Mantém o mini player contido na tela se a janela for redimensionada
+  useEffect(() => {
+    if (!isMiniPlayer || !miniPosition || !miniContainerRef.current) return;
+
+    const handleResize = () => {
+      const rect = miniContainerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const maxX = Math.max(8, window.innerWidth - rect.width - 8);
+      const maxY = Math.max(8, window.innerHeight - rect.height - 8);
+
+      setMiniPosition((prev) => {
+        if (!prev) return null;
+        const clampedX = Math.max(8, Math.min(maxX, prev.x));
+        const clampedY = Math.max(8, Math.min(maxY, prev.y));
+        if (clampedX === prev.x && clampedY === prev.y) return prev;
+        return { x: clampedX, y: clampedY };
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMiniPlayer, !miniPosition]);
+
+  const handleMiniHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Apenas botão principal (esquerdo) ou toque
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if ((e.target as HTMLElement).closest('button')) return;
+    if (!miniContainerRef.current) return;
+
+    const rect = miniContainerRef.current.getBoundingClientRect();
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+    cardDimensionsRef.current = {
+      width: rect.width,
+      height: rect.height,
+    };
+
+    // Fixa a posição atual em pixels imediatamente para início de arraste suave sem pulos
+    setMiniPosition({ x: rect.left, y: rect.top });
+    setIsDragging(true);
+
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) {}
+  };
+
+  const handleMiniHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+
+    const { width, height } = cardDimensionsRef.current;
+    const minX = 8;
+    const maxX = Math.max(minX, window.innerWidth - width - 8);
+    const minY = 8;
+    const maxY = Math.max(minY, window.innerHeight - height - 8);
+
+    const rawX = e.clientX - dragOffsetRef.current.x;
+    const rawY = e.clientY - dragOffsetRef.current.y;
+
+    const clampedX = Math.max(minX, Math.min(maxX, rawX));
+    const clampedY = Math.max(minY, Math.min(maxY, rawY));
+
+    setMiniPosition({ x: clampedX, y: clampedY });
+  };
+
+  const handleMiniHeaderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch (_) {}
+      setIsDragging(false);
+    }
+  };
+
+  const handleToggleMiniPlayer = () => {
+    if (isMiniPlayer) {
+      setIsMiniPlayer(false);
+    } else {
+      // Some da tela cheia nativa antes de encolher, senão o navegador mantém o vídeo preso em tela cheia
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+      setShowChannelList(false);
+      if (miniPosition) {
+        const width = miniContainerRef.current?.offsetWidth || 300;
+        const height = miniContainerRef.current?.offsetHeight || 200;
+        const maxX = Math.max(8, window.innerWidth - width - 8);
+        const maxY = Math.max(8, window.innerHeight - height - 8);
+        setMiniPosition({
+          x: Math.max(8, Math.min(maxX, miniPosition.x)),
+          y: Math.max(8, Math.min(maxY, miniPosition.y)),
+        });
+      }
+      setIsMiniPlayer(true);
+    }
+  };
 
   // Limpa histórico de falhas ao trocar de canal
   useEffect(() => {
@@ -667,35 +776,105 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
   return (
     <div 
-      ref={containerRef}
+      ref={(node) => {
+        containerRef.current = node;
+        miniContainerRef.current = node;
+      }}
       data-live-player="true"
       onMouseMove={handleMouseMove}
-      className="live-player-modal fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden"
+      style={
+        isMiniPlayer && miniPosition
+          ? { left: `${miniPosition.x}px`, top: `${miniPosition.y}px`, right: 'auto', bottom: 'auto' }
+          : undefined
+      }
+      className={
+        isMiniPlayer
+          ? `fixed z-[100] select-none w-[220px] xs:w-[260px] sm:w-[320px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90 bg-black overflow-hidden flex flex-col ${
+              !miniPosition ? 'bottom-4 right-4' : ''
+            } ${isDragging ? 'transition-none' : 'transition-[left,top] duration-150'} animate-in slide-in-from-bottom-5`
+          : 'live-player-modal fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden'
+      }
     >
-      {/* Elemento de Vídeo */}
-      <video
-        ref={videoRef}
-        playsInline
-        autoPlay
-        className="w-full h-full object-contain cursor-pointer"
-        onClick={() => {
-          if (isMuted) {
-            toggleMute();
-          } else {
-            togglePlay();
-          }
-        }}
-        onPlay={() => {
-          setIsPlaying(true);
-          if (videoRef.current && !videoRef.current.muted) {
-            videoRef.current.volume = 1.0;
-          }
-        }}
-        onPause={() => setIsPlaying(false)}
-      />
+      {/* Overlay global durante o arraste, evita que o clique caia sobre o vídeo */}
+      {isDragging && (
+        <div
+          className="fixed inset-0 z-[9999] cursor-grabbing select-none bg-transparent"
+          onPointerMove={handleMiniHeaderPointerMove}
+          onPointerUp={handleMiniHeaderPointerUp}
+          onPointerCancel={handleMiniHeaderPointerUp}
+        />
+      )}
+
+      {/* Cabeçalho do Mini Player Flutuante (arrastável) */}
+      {isMiniPlayer && (
+        <div
+          onPointerDown={handleMiniHeaderPointerDown}
+          onPointerMove={handleMiniHeaderPointerMove}
+          onPointerUp={handleMiniHeaderPointerUp}
+          onPointerCancel={handleMiniHeaderPointerUp}
+          className={`flex items-center justify-between px-2.5 py-2 bg-[#161616] border-b border-neutral-800 text-xs select-none gap-2 touch-none shrink-0 ${
+            isDragging ? 'cursor-grabbing bg-[#1c1c1c]' : 'cursor-grab hover:bg-[#1a1a1a]'
+          } transition-colors`}
+        >
+          <div className="flex items-center gap-2 min-w-0 pointer-events-none">
+            <span className="w-2 h-2 rounded-full bg-red-500 shrink-0 shadow-[0_0_6px_rgba(239,68,68,0.8)]" />
+            <span className="text-white font-medium truncate text-xs">{channel.name}</span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={handleToggleMiniPlayer}
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Restaurar Player"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onClose}
+              className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+              title="Fechar"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Elemento de Vídeo — permanece montado o tempo todo (nunca desmonta ao entrar/sair do mini player) */}
+      <div className={isMiniPlayer ? 'relative w-full aspect-video bg-black shrink-0' : 'contents'}>
+        <video
+          ref={videoRef}
+          playsInline
+          autoPlay
+          className="w-full h-full object-contain cursor-pointer"
+          onClick={() => {
+            if (isMiniPlayer) return;
+            if (isMuted) {
+              toggleMute();
+            } else {
+              togglePlay();
+            }
+          }}
+          onPlay={() => {
+            setIsPlaying(true);
+            if (videoRef.current && !videoRef.current.muted) {
+              videoRef.current.volume = 1.0;
+            }
+          }}
+          onPause={() => setIsPlaying(false)}
+        />
+
+        {/* Spinner compacto do mini player, sem textos (não cabem no espaço reduzido) */}
+        {isMiniPlayer && (isLoading || isBuffering) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+            <div className="w-6 h-6 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin"></div>
+          </div>
+        )}
+      </div>
 
       {/* Botão flutuante para ativar áudio se o navegador iniciar em mudo */}
-      {isMuted && !isLoading && !hasError && (
+      {!isMiniPlayer && isMuted && !isLoading && !hasError && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -709,7 +888,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Spinner de Carregamento / Buffering */}
-      {(isLoading || isBuffering) && (
+      {!isMiniPlayer && (isLoading || isBuffering) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs pointer-events-none z-20">
           <div className="relative">
             <div className="w-16 h-16 rounded-full border-4 border-orange-500/20 border-t-orange-500 animate-spin"></div>
@@ -726,7 +905,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Banner de Erro com Troca de Servidor Rápida */}
-      {hasError && (
+      {!isMiniPlayer && hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md z-30 p-6 text-center">
           <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-4 text-red-500">
             <AlertCircle className="w-8 h-8" />
@@ -760,6 +939,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* CONTROLES SUPERIORES (TOP BAR) */}
+      {!isMiniPlayer && (
       <div 
         className={`absolute top-0 left-0 w-full p-4 md:p-6 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -823,9 +1003,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           </button>
         </div>
       </div>
+      )}
 
       {/* GAVETA LATERAL DE CANAIS RÁPIDA (QUICK CHANNEL SWITCHER) */}
-      {showChannelList && (
+      {!isMiniPlayer && showChannelList && (
         <div className="absolute top-16 right-4 md:right-6 bottom-20 w-80 max-w-[85vw] bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3 z-40 flex flex-col shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200">
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
             <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -878,6 +1059,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* CONTROLES INFERIORES (BOTTOM BAR) */}
+      {!isMiniPlayer && (
       <div 
         className={`absolute bottom-0 left-0 w-full px-4 pt-4 md:px-6 md:pt-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -958,24 +1140,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
           {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-2">
-            {/* Picture-in-Picture se suportado */}
-            {document.pictureInPictureEnabled && (
-              <button
-                onClick={() => {
-                  if (videoRef.current) {
-                    if (document.pictureInPictureElement) {
-                      document.exitPictureInPicture().catch(() => {});
-                    } else {
-                      videoRef.current.requestPictureInPicture().catch(() => {});
-                    }
-                  }
-                }}
-                className="hidden md:flex p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
-                title="Picture in Picture (Mini Player)"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </button>
-            )}
+            {/* Mini Player Flutuante (arrastável, continua tocando em qualquer página do app) */}
+            <button
+              onClick={handleToggleMiniPlayer}
+              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              title="Mini Player Flutuante"
+            >
+              <PictureInPicture2 className="w-4 h-4" />
+            </button>
 
             {/* Tela Cheia */}
             <button
@@ -988,6 +1160,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
