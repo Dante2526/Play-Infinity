@@ -38,6 +38,9 @@ const router = Router();
           body: JSON.stringify({ name: name || email, email, cpfCnpj })
         });
         const newCusData = await newCusRes.json();
+        if (newCusData.errors && newCusData.errors.length > 0) {
+          throw new Error(newCusData.errors[0].description);
+        }
         customerId = newCusData.id;
       }
 
@@ -64,7 +67,7 @@ const router = Router();
               // Cliente legado sem campo de valor explicitamente registrado:
               // Se foi criado antes de 19/09/2026 (ou sem data criada, sendo legado), mantém 9,90
               const createdDate = uData.criadoEm || uData.createdAt;
-              if (!createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00Z")) {
+              if (!createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00-03:00")) {
                 finalPrice = 9.90;
               } else {
                 finalPrice = 13.00;
@@ -140,6 +143,9 @@ const router = Router();
         if (billingType === "PIX") {
           const qrRes = await fetch(`${baseUrl}/payments/${firstPayment.id}/pixQrCode`, { headers });
           const qrData = await qrRes.json();
+          if (qrData.errors && qrData.errors.length > 0) {
+            throw new Error(qrData.errors[0].description);
+          }
           if (qrData.success !== false) {
             pixQrCode = qrData;
           }
