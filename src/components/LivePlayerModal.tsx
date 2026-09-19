@@ -653,9 +653,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
   }, []);
 
-  // Ao abrir a TV ao vivo, entra automaticamente em tela cheia e força a orientação
-  // paisagem no celular -- mesmo comportamento já usado no player de filmes/séries
-  // (autoFullscreen). Roda uma única vez, na primeira montagem do player.
+  // Ao abrir a TV ao vivo, entra automaticamente em tela cheia e já força a exibição
+  // deitada (paisagem) no celular -- sem depender de nenhuma detecção pontual/condicional
+  // que possa falhar por timing com a troca para tela cheia. Fica escutando a orientação
+  // real do aparelho o tempo todo enquanto o player estiver aberto, então sempre que o
+  // celular estiver na vertical a imagem já aparece girada, e volta ao normal sozinha se
+  // o usuário girar o aparelho de verdade para paisagem.
   useEffect(() => {
     const elem = document.documentElement;
     const requestFS =
@@ -677,24 +680,36 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
     }
 
-    // Se o aparelho estiver na vertical, ativa o fallback de rotação via CSS
-    const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-    setIsRotated(isPortrait);
-
-    // Em navegadores/dispositivos com suporte, trava a orientação em paisagem de verdade
-    // (quando isso funciona, dispensa o fallback de rotação por CSS)
+    // Em navegadores/dispositivos com suporte, tenta travar a orientação em paisagem de
+    // verdade (best-effort; se falhar ou não tiver suporte, o fallback de rotação por CSS
+    // abaixo garante a exibição deitada de qualquer forma)
     if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
       try {
         const lockPromise = (screen.orientation as any).lock("landscape");
-        if (lockPromise && typeof lockPromise.then === "function") {
-          lockPromise.then(() => {
-            setIsRotated(false);
-          }).catch(() => {});
+        if (lockPromise && typeof lockPromise.catch === "function") {
+          lockPromise.catch(() => {});
         }
-      } catch (_) {
-        // Fallback: mantém a rotação via CSS
-      }
+      } catch (_) {}
     }
+
+    // Escuta a orientação real do aparelho continuamente (não é uma checagem única):
+    // sempre que estiver na vertical, força o fallback de rotação via CSS imediatamente.
+    const mq = window.matchMedia("(orientation: portrait)");
+    const syncRotation = () => setIsRotated(mq.matches);
+    syncRotation();
+    if (typeof mq.addEventListener === "function") {
+      mq.addEventListener("change", syncRotation);
+    } else if (typeof (mq as any).addListener === "function") {
+      (mq as any).addListener(syncRotation);
+    }
+
+    return () => {
+      if (typeof mq.removeEventListener === "function") {
+        mq.removeEventListener("change", syncRotation);
+      } else if (typeof (mq as any).removeListener === "function") {
+        (mq as any).removeListener(syncRotation);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
