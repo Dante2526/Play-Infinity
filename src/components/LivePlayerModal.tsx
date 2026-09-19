@@ -49,6 +49,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(1);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isRotated, setIsRotated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [hasError, setHasError] = useState<boolean>(false);
@@ -652,6 +653,51 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
   }, []);
 
+  // Ao abrir a TV ao vivo, entra automaticamente em tela cheia e força a orientação
+  // paisagem no celular -- mesmo comportamento já usado no player de filmes/séries
+  // (autoFullscreen). Roda uma única vez, na primeira montagem do player.
+  useEffect(() => {
+    const elem = document.documentElement;
+    const requestFS =
+      elem.requestFullscreen ||
+      (elem as any).webkitRequestFullscreen ||
+      (elem as any).mozRequestFullScreen ||
+      (elem as any).msRequestFullscreen;
+
+    if (requestFS && !document.fullscreenElement) {
+      try {
+        const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
+        if (fsPromise && typeof fsPromise.catch === "function") {
+          fsPromise.catch(() => {
+            try { requestFS.call(elem); } catch (_) {}
+          });
+        }
+      } catch (_) {
+        try { requestFS.call(elem); } catch (_) {}
+      }
+    }
+
+    // Se o aparelho estiver na vertical, ativa o fallback de rotação via CSS
+    const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+    setIsRotated(isPortrait);
+
+    // Em navegadores/dispositivos com suporte, trava a orientação em paisagem de verdade
+    // (quando isso funciona, dispensa o fallback de rotação por CSS)
+    if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+      try {
+        const lockPromise = (screen.orientation as any).lock("landscape");
+        if (lockPromise && typeof lockPromise.then === "function") {
+          lockPromise.then(() => {
+            setIsRotated(false);
+          }).catch(() => {});
+        }
+      } catch (_) {
+        // Fallback: mantém a rotação via CSS
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleFullscreen = async () => {
     const isCurrentlyFullscreen = !!(
       document.fullscreenElement ||
@@ -843,6 +889,23 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       {/* Elemento de Vídeo — permanece montado o tempo todo (nunca desmonta ao entrar/sair do mini player) */}
       <div className={isMiniPlayer ? 'relative w-full aspect-video bg-black shrink-0' : 'contents'}>
+        <div
+          style={
+            !isMiniPlayer && isRotated
+              ? {
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  width: '100dvh',
+                  height: '100dvw',
+                  maxWidth: '100dvh',
+                  maxHeight: '100dvw',
+                  transform: 'translate(-50%, -50%) rotate(90deg)',
+                }
+              : { position: 'relative', width: '100%', height: '100%' }
+          }
+          className="flex items-center justify-center bg-black overflow-hidden select-none"
+        >
         <video
           ref={videoRef}
           playsInline
@@ -871,6 +934,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             <div className="w-6 h-6 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin"></div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Botão flutuante para ativar áudio se o navegador iniciar em mudo */}
