@@ -294,15 +294,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (Hls.isSupported()) {
         // Configuração Balanceada: Início Rápido + Estabilidade (Anti-Travamento)
+        // Reduz jitter de live-edge com contagem de 4-5 segmentos (~8-10s) para evitar micro-stalls
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          // Remover liveSyncDuration fixo em segundos. Usar a contagem padrão (3 segmentos = ~6s)
-          // Isso resolve o problema da tela preta de 20s (a playlist tem apenas 12s no total)
-          liveSyncDurationCount: currentLowBandwidth ? 4 : 3, 
-          liveMaxLatencyDurationCount: currentLowBandwidth ? 6 : 5,
-          maxBufferLength: currentLowBandwidth ? 45 : 30, // Segundos mantidos na memória
-          maxMaxBufferLength: currentLowBandwidth ? 90 : 60, // Limite máximo absoluto
+          liveSyncDurationCount: currentLowBandwidth ? 5 : 4, 
+          liveMaxLatencyDurationCount: currentLowBandwidth ? 8 : 7,
+          maxBufferLength: currentLowBandwidth ? 60 : 45, // Segundos mantidos na memória
+          maxMaxBufferLength: currentLowBandwidth ? 120 : 90, // Limite máximo absoluto
+          maxBufferHole: 0.8, // Tolera gaps minúsculos entre fragmentos sem disparar stall
+          highBufferWatchdogPeriod: 2,
           backBufferLength: 15, // Reduzido o back buffer para economizar memória do celular
           manifestLoadingTimeOut: 30000,
           manifestLoadingMaxRetry: 10, // Mais tentativas antes de dar erro fatal
@@ -458,19 +459,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     let bufferingDebounceTimer: NodeJS.Timeout | null = null;
 
     const handleWaiting = () => {
-      // Debounce de 600ms antes de mostrar o aviso de buffering
-      // Impede que micro-pausas normais do HLS fiquem piscando "Ajustando transmissão..." na tela
+      // Debounce ampliado de 2000ms antes de escurecer a tela e exibir aviso de buffering.
+      // Em transmissões ao vivo com chunks de 2s, pequenas variações de 500-1500ms são comuns
+      // e resolvidas naturalmente pelo Hls.js sem necessidade de interromper a visão do usuário.
       if (!bufferingDebounceTimer) {
         bufferingDebounceTimer = setTimeout(() => {
           if (!isMounted) return;
           setIsBuffering(true);
-        }, 600);
+        }, 2000);
       }
 
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
 
-      // Tentativa de recuperação suave aos 8 segundos (sem cortar a conexão)
+      // Tentativa de recuperação suave aos 6 segundos (sem cortar a conexão)
       recoveryAttemptTimer = setTimeout(() => {
         if (!isMounted || !videoRef.current) return;
         if (hlsRef.current) {
@@ -479,7 +481,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         if (videoRef.current.paused) {
           videoRef.current.play().catch(() => {});
         }
-      }, 8000);
+      }, 6000);
 
       // Se ficar congelado no buffering por mais de 20s seguidos, alterna automaticamente de servidor
       bufferStallTimer = setTimeout(() => {
@@ -527,8 +529,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       setStreamHealth('online');
     };
 
+    // Ao avançar o tempo de reprodução, cancela qualquer aviso de buffering pendente imediatamente
+    const handleTimeUpdate = () => {
+      if (bufferingDebounceTimer) {
+        clearTimeout(bufferingDebounceTimer);
+        bufferingDebounceTimer = null;
+      }
+      setIsBuffering(false);
+      setIsPlaying(true);
+      setStreamHealth('online');
+    };
+
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('timeupdate', handleTimeUpdate);
 
     // Watchdog de recuperação de qualidade: o ABR nativo do hls.js só reavalia a banda
     // quando baixa fragmentos. Se a rede piorou, o buffer fica maior (modo baixa banda),
@@ -576,6 +590,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       clearRecoveryTimeout();
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
 
       if ((video as any)._nativeMetaHandler) {
         video.removeEventListener('loadedmetadata', (video as any)._nativeMetaHandler);
@@ -1013,20 +1028,28 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         </button>
       )}
 
-      {/* Spinner de Carregamento / Buffering */}
-      {!isMiniPlayer && (isLoading || isBuffering) && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs pointer-events-none z-20">
+      {/* Spinner de Carregamento Inicial (Sintonizando canal) */}
+      {!isMiniPlayer && isLoading && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs pointer-events-none z-20">
           <div className="relative">
             <div className="w-16 h-16 rounded-full border-4 border-orange-500/20 border-t-orange-500 animate-spin"></div>
             <Tv className="w-6 h-6 text-orange-500 absolute inset-0 m-auto animate-pulse" />
           </div>
           <p className="mt-4 text-white font-medium tracking-wide text-sm flex items-center gap-2">
             <Radio className="w-4 h-4 text-orange-500 animate-pulse" />
-            {isLoading ? `Sintonizando ${channel.name}...` : 'Ajustando transmissão...'}
+            Sintonizando {channel.name}...
           </p>
           <span className="text-xs text-neutral-400 mt-1">
             Qualidade adaptativa automática
           </span>
+        </div>
+      )}
+
+      {/* Indicador Discreto de Buffering / Ajuste (Não bloqueia a tela nem tampa o vídeo) */}
+      {!isMiniPlayer && !isLoading && isBuffering && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/70 border border-orange-500/30 backdrop-blur-md text-white text-xs font-medium shadow-lg pointer-events-none animate-in fade-in duration-300">
+          <div className="w-3.5 h-3.5 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin shrink-0"></div>
+          <span className="text-orange-300">Ajustando transmissão...</span>
         </div>
       )}
 
@@ -1100,7 +1123,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         <div className="flex items-center gap-2">
           {/* Status do stream */}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300">
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300">
             <span className={`w-2 h-2 rounded-full ${
               hasError || streamHealth === 'error' ? 'bg-red-500' :
               (isLoading || isBuffering) ? 'bg-yellow-500 animate-pulse' :
