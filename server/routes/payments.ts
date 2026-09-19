@@ -8,7 +8,7 @@ import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString } from "../utils/helpers";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "../utils/caches";
 import { Readable } from "stream";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { db, getAsaasBaseUrl, getAsaasHeaders } from "../../server";
 
 const router = Router();
@@ -43,17 +43,58 @@ const router = Router();
 
       if (!customerId) throw new Error("Falha ao resolver o cliente no Asaas.");
 
-      // 2. Cria Assinatura
+      // 2. Determina o valor da mensalidade (R$ 9,90 para clientes antigos acordados ou R$ 13,00 para novos)
+      let finalPrice = 13.00;
+      try {
+        if (db && userId) {
+          let userSnap = await getDoc(doc(db, "usuarios", userId));
+          if (!userSnap.exists()) {
+            userSnap = await getDoc(doc(db, "users", userId));
+          }
+          if (userSnap.exists()) {
+            const uData = userSnap.data();
+            const rawVal = uData.valorMensalidade ?? uData.valor ?? uData.monthlyFee;
+            if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
+              if (typeof rawVal === "number") {
+                finalPrice = rawVal === 13 ? 13.00 : 9.90;
+              } else {
+                finalPrice = String(rawVal).includes("13") ? 13.00 : 9.90;
+              }
+            } else {
+              // Cliente legado sem campo de valor explicitamente registrado:
+              // Se foi criado antes de 19/09/2026 (ou sem data criada, sendo legado), mantém 9,90
+              const createdDate = uData.criadoEm || uData.createdAt;
+              if (!createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00Z")) {
+                finalPrice = 9.90;
+              } else {
+                finalPrice = 13.00;
+              }
+
+              // Grava no Firestore para que fique registrado permanentemente no cadastro dele
+              try {
+                await setDoc(doc(db, "usuarios", userId), {
+                  valorMensalidade: finalPrice,
+                  valor: finalPrice === 13 ? "13,00" : "9,90"
+                }, { merge: true });
+              } catch(e) {}
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[Payments] Erro ao consultar valor do cliente no Firestore:", err);
+      }
+
+      // 3. Cria Assinatura
       const nextDueDate = new Date();
       nextDueDate.setDate(nextDueDate.getDate() + 1); // Vence amanhã para evitar bloqueios de compensação no dia atual
 
       const subPayload: any = {
         customer: customerId,
         billingType, // "CREDIT_CARD" ou "UNDEFINED"
-        value: 9.90,
+        value: finalPrice,
         nextDueDate: nextDueDate.toISOString().split('T')[0],
         cycle: "MONTHLY",
-        description: "Play Infinity Premium",
+        description: `Play Infinity Premium (R$ ${finalPrice.toFixed(2).replace('.', ',')})`,
         externalReference: userId // MANDATÓRIO: Identifica o usuário no webhook!
       };
 

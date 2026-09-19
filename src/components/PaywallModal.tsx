@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy, Bug } from 'lucide-react';
-import { auth } from '../services/firebase';
+import { auth, db } from '../services/firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useSubscription } from '../hooks/useSubscription';
 
 interface PaywallModalProps {
@@ -13,6 +14,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const [step, setStep] = useState<'intro' | 'checkout'>('intro');
   const [activeTab, setActiveTab] = useState<'CREDIT_CARD' | 'PIX'>('CREDIT_CARD');
   const [loading, setLoading] = useState(false);
+  const [monthlyFeeText, setMonthlyFeeText] = useState<string>("13,00");
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -50,6 +52,44 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         name: prev.name || user.displayName || user.email?.split('@')[0] || '',
         email: prev.email || user.email || ''
       }));
+
+      // Carrega o valor configurado para este usuário (9,90 para clientes antigos ou 13,00 para novos)
+      getDoc(doc(db, "usuarios", user.uid)).then((docSnap) => {
+        if (!docSnap.exists()) {
+          return getDoc(doc(db, "users", user.uid));
+        }
+        return docSnap;
+      }).then((docSnap) => {
+        if (docSnap && docSnap.exists()) {
+          const data = docSnap.data();
+          const rawVal = data.valorMensalidade ?? data.valor ?? data.monthlyFee;
+          if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
+            if (typeof rawVal === "number") {
+              setMonthlyFeeText(rawVal === 13 ? "13,00" : "9,90");
+            } else {
+              setMonthlyFeeText(String(rawVal).includes("13") ? "13,00" : "9,90");
+            }
+          } else {
+            // Cliente antigo sem valor explicitamente cadastrado:
+            const createdDate = data.criadoEm || data.createdAt;
+            const isLegacy = !createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00Z");
+            const assignedNum = isLegacy ? 9.90 : 13.00;
+            const assignedTxt = isLegacy ? "9,90" : "13,00";
+            setMonthlyFeeText(assignedTxt);
+
+            // Grava silenciosamente no Firestore para que fique registrado no cadastro dele
+            setDoc(doc(db, "usuarios", user.uid), {
+              valorMensalidade: assignedNum,
+              valor: assignedTxt
+            }, { merge: true }).catch(() => {});
+          }
+        }
+      }).catch((err) => {
+        console.warn("[Paywall] Erro ao buscar valor do cliente:", err);
+      });
+    } else if (isOpen) {
+      // Visitante não logado vê o novo preço padrão de R$ 13,00
+      setMonthlyFeeText("13,00");
     }
   }, [isOpen]);
 
@@ -283,7 +323,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-purple-600 to-blue-600 transition-all group-hover:scale-[1.02]" />
                   <span className="relative flex items-center justify-center gap-2 text-white">
-                    Assinar agora por R$ 9,90 <Crown size={20} />
+                    Assinar agora por R$ {monthlyFeeText} <Crown size={20} />
                   </span>
                 </button>
               </div>
@@ -503,7 +543,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                           <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : (
                           <>
-                            {activeTab === 'PIX' ? 'Gerar PIX de R$ 9,90' : 'Pagar R$ 9,90'} <Check size={20} />
+                            {activeTab === 'PIX' ? `Gerar PIX de R$ ${monthlyFeeText}` : `Pagar R$ ${monthlyFeeText}`} <Check size={20} />
                           </>
                         )}
                       </span>

@@ -12,6 +12,7 @@ export interface ClientUser {
   email: string;
   subscription: string;
   accessType?: "mensal" | "teste" | "vitalicio" | "4horas" | "1dia";
+  monthlyFee?: string;
   expirationDate?: string;
   initialPassword?: string;
   createdAt?: string;
@@ -78,10 +79,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [newPassword, setNewPassword] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia">("mensal");
+  const [monthlyPrice, setMonthlyPrice] = useState<"9.90" | "13.00">("13.00");
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
-  const [lastCreatedUser, setLastCreatedUser] = useState<{name?: string, email: string, password?: string, expirationDate: string} | null>(null);
+  const [lastCreatedUser, setLastCreatedUser] = useState<{name?: string, email: string, password?: string, expirationDate: string, monthlyFee?: string} | null>(null);
 
   // Revoke Access State
   const [revokeEmail, setRevokeEmail] = useState("");
@@ -95,6 +97,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editEmail, setEditEmail] = useState("");
   const [editName, setEditName] = useState("");
   const [editPassword, setEditPassword] = useState("");
+  const [editMonthlyPrice, setEditMonthlyPrice] = useState<"9.90" | "13.00">("13.00");
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
@@ -199,12 +202,38 @@ export function AdminPage({ onBack }: AdminPageProps) {
           }
         }
 
+        const rawFee = data.valorMensalidade ?? data.valor ?? data.monthlyFee;
+        let feeFormatted: string | undefined = undefined;
+        if (rawFee !== undefined && rawFee !== null && rawFee !== "") {
+          if (typeof rawFee === "number") {
+            feeFormatted = rawFee === 13 ? "13,00" : "9,90";
+          } else {
+            const str = String(rawFee);
+            feeFormatted = str.includes("13") ? "13,00" : "9,90";
+          }
+        } else if ((data.tipoAcesso || data.accessType || "mensal") === "mensal") {
+          const createdDate = data.criadoEm || data.createdAt;
+          const isLegacy = !createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00Z");
+          const assignedNum = isLegacy ? 9.90 : 13.00;
+          const assignedTxt = isLegacy ? "9,90" : "13,00";
+          feeFormatted = assignedTxt;
+          
+          // Grava automaticamente o campo no documento do cliente no Firestore
+          try {
+            updateDoc(doc(db, "usuarios", docSnap.id), {
+              valorMensalidade: assignedNum,
+              valor: assignedTxt
+            }).catch(() => {});
+          } catch(e) {}
+        }
+
         list.push({
           id: docSnap.id,
           name: data.nome || data.name || data.displayName || data.nomeExibicao || "",
           email: data.email || "Sem e-mail",
           subscription: activeStatus ? "ACTIVE" : "INACTIVE",
           accessType: data.tipoAcesso || data.accessType || "mensal",
+          monthlyFee: feeFormatted,
           expirationDate: data.dataExpiracao || data.expirationDate,
           initialPassword: data.senha || data.senhaInicial || data.initialPassword,
           createdAt: data.criadoEm || data.createdAt,
@@ -301,6 +330,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
       }
 
       // 4. Salva no banco de dados na coleção 'usuarios' com campos limpos em português
+      const valorNum = monthlyPrice === "13.00" ? 13.00 : 9.90;
+      const valorTxt = monthlyPrice === "13.00" ? "13,00" : "9,90";
+
       await setDoc(doc(db, "usuarios", userCredential.user.uid), {
         email: newEmail.trim(),
         nome: newName.trim(),
@@ -309,7 +341,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
         dataExpiracao: expirationDate.toISOString(),
         criadoPorAdmin: true,
         tipoAcesso: accessType,
-        senha: newPassword
+        valorMensalidade: accessType === "mensal" ? valorNum : null,
+        valor: accessType === "mensal" ? valorTxt : null,
+        senha: newPassword,
+        criadoEm: new Date().toISOString()
       });
 
       // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
@@ -320,17 +355,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
       localStorage.removeItem("playinfinity_watched_seasons");
       await signOut(auth);
 
-      setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso! O acesso expira em: ${expireStr}`);
+      setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso!${accessType === 'mensal' ? ` Mensalidade: R$ ${valorTxt}.` : ''} O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
         name: newName.trim(),
         email: newEmail.trim(),
         password: newPassword,
-        expirationDate: expireStr
+        expirationDate: expireStr,
+        monthlyFee: accessType === 'mensal' ? `R$ ${valorTxt}` : undefined
       });
       
       setNewName("");
       setNewEmail("");
       setNewPassword("");
+      setMonthlyPrice("13.00");
       await loadStats();
     } catch (err: any) {
       // Se falhar (ex: email já existe), desloga só por garantia
@@ -401,6 +438,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setEditName(user.name || "");
     setEditEmail(user.email || "");
     setEditPassword(user.initialPassword || "");
+    setEditMonthlyPrice(user.monthlyFee?.includes("9,90") || user.monthlyFee?.includes("9.90") ? "9.90" : "13.00");
     setEditError("");
     setEditSuccess("");
   };
@@ -438,6 +476,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
       }
       if (trimmedPass) {
         updates.senha = trimmedPass;
+      }
+      if (editingUser.accessType === "mensal") {
+        updates.valorMensalidade = editMonthlyPrice === "13.00" ? 13.00 : 9.90;
+        updates.valor = editMonthlyPrice === "13.00" ? "13,00" : "9,90";
       }
 
       await updateDoc(doc(db, "usuarios", editingUser.id), updates);
@@ -740,6 +782,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === 'teste' ? 'Teste 1h' : client.accessType === '4horas' ? '4 Horas' : client.accessType === '1dia' ? '1 Dia' : 'Mensal'}
                             </span>
 
+                            {/* Badge Valor Mensalidade */}
+                            {client.monthlyFee && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                R$ {client.monthlyFee}
+                              </span>
+                            )}
+
                             {/* Badge Status */}
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
                               isActive
@@ -850,6 +899,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               )}
               E-mail: <strong className="text-orange-400">{lastCreatedUser.email}</strong><br/>
               Senha: <strong className="text-orange-400">{lastCreatedUser.password}</strong><br/>
+              {lastCreatedUser.monthlyFee && (
+                <>Mensalidade: <strong className="text-emerald-400">{lastCreatedUser.monthlyFee}</strong><br/></>
+              )}
               Vencimento: <span className="text-white/70">{lastCreatedUser.expirationDate}</span>
             </div>
           </div>
@@ -942,70 +994,160 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             </div>
 
-            <div className={`grid grid-cols-1 sm:grid-cols-2 ${accessType === 'mensal' ? 'lg:grid-cols-5' : 'lg:grid-cols-4'} gap-4`}>
-              <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
-                  Nome do Cliente <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                  placeholder="Ex: João Silva"
-                  required
-                />
-              </div>
+            {/* Campos de Cadastro */}
+            {accessType === 'mensal' ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                      Nome do Cliente <span className="text-orange-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      placeholder="Ex: João Silva"
+                      required
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
-                  E-mail do Cliente <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
-                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                  placeholder="cliente@email.com"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
-                  Senha Criada <span className="text-orange-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
-                  placeholder="Ex: 123456"
-                  minLength={6}
-                  required
-                />
-              </div>
+                  <div>
+                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                      E-mail do Cliente <span className="text-orange-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      value={newEmail}
+                      onChange={(e) => setNewEmail(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      placeholder="cliente@email.com"
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                      Senha Criada <span className="text-orange-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      placeholder="Ex: 123456"
+                      minLength={6}
+                      required
+                    />
+                  </div>
+                </div>
 
-              {accessType === 'mensal' && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div>
+                    <CustomDatePicker 
+                      label="Data do Pagamento *"
+                      value={paymentDate}
+                      onChange={(date) => setPaymentDate(date)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                      Valor da Mensalidade <span className="text-orange-500">*</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setMonthlyPrice("13.00")}
+                        className={`flex-1 h-[52px] rounded-[22px] font-bold text-sm transition-all flex items-center justify-center gap-1.5 ${
+                          monthlyPrice === "13.00"
+                            ? "bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)] ring-2 ring-orange-400/50"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span>R$ 13,00 (Padrão)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMonthlyPrice("9.90")}
+                        className={`flex-1 h-[52px] rounded-[22px] font-bold text-sm transition-all flex items-center justify-center gap-1.5 ${
+                          monthlyPrice === "9.90"
+                            ? "bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)] ring-2 ring-orange-400/50"
+                            : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                        }`}
+                      >
+                        <span>R$ 9,90</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-end">
+                    <button
+                      type="submit"
+                      disabled={createLoading}
+                      className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+                    >
+                      {createLoading ? "Criando..." : "Criar Acesso"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                  <CustomDatePicker 
-                    label="Data do Pagamento *"
-                    value={paymentDate}
-                    onChange={(date) => setPaymentDate(date)}
+                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    Nome do Cliente <span className="text-orange-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    placeholder="Ex: João Silva"
+                    required
                   />
                 </div>
-              )}
 
-              <div className="flex items-end">
-                <button
-                  type="submit"
-                  disabled={createLoading}
-                  className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
-                >
-                  {createLoading ? "Criando..." : "Criar Acesso"}
-                </button>
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    E-mail do Cliente <span className="text-orange-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    placeholder="cliente@email.com"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    Senha Criada <span className="text-orange-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    placeholder="Ex: 123456"
+                    minLength={6}
+                    required
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <button
+                    type="submit"
+                    disabled={createLoading}
+                    className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+                  >
+                    {createLoading ? "Criando..." : "Criar Acesso"}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </form>
         </div>
 
@@ -1082,6 +1224,36 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 />
                 <p className="text-[11px] text-white/40 mt-1">Deixe como está ou digite a nova senha desejada.</p>
               </div>
+
+              {editingUser.accessType === "mensal" && (
+                <div>
+                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Valor da Mensalidade</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditMonthlyPrice("13.00")}
+                      className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all ${
+                        editMonthlyPrice === "13.00"
+                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
+                          : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      R$ 13,00 (Padrão)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditMonthlyPrice("9.90")}
+                      className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all ${
+                        editMonthlyPrice === "9.90"
+                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
+                          : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                      }`}
+                    >
+                      R$ 9,90
+                    </button>
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
                 <button
