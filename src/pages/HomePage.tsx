@@ -296,21 +296,64 @@ export function HomePage({
     // Sincronização automática de lançamentos reais (filmes, séries, animes, doramas e kids) no TMDB
     const fetchReleases = async () => {
       try {
-        const [animesRes, doramasRes] = await Promise.all([
+        const [animesRes, doramasRes, moviesRes, seriesRes] = await Promise.all([
           getAnimes(),
-          getDoramas()
+          getDoramas(),
+          getMovieReleases(),
+          getSeriesReleases()
         ]);
 
         if (isMounted) {
-          // Apenas os animes confirmados como disponíveis no WatchPlayer Oficial
-          let availableAnimes = [...animes];
+          // Processamento dinâmico de Lançamentos (Filmes)
+          if (moviesRes?.results && moviesRes.results.length > 0) {
+            const tmdbMovies = moviesRes.results
+              .filter((m: TMDBItem) => m.poster_path && (m.title || m.name) && isMediaAvailable({ id: m.id, title: m.title || m.name }))
+              .map((m: TMDBItem) => ({
+                id: m.id,
+                tmdbId: m.id,
+                title: (m.title || m.name || "").toUpperCase(),
+                imageUrl: formatImageUrl(m.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+                type: 'movie' as const,
+                quality: checkIsCam(m.title || m.name) ? "CAM" : "HD",
+                rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
+                year: m.release_date ? m.release_date.substring(0, 4) : new Date().getFullYear().toString(),
+                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
+              }));
+            
+            if (tmdbMovies.length > 0) {
+              setMovieReleases(tmdbMovies);
+            }
+          }
 
+          // Processamento dinâmico de Séries Recentes
+          if (seriesRes?.results && seriesRes.results.length > 0) {
+            const tmdbSeries = seriesRes.results
+              .filter((s: TMDBItem) => s.poster_path && (s.name || s.title) && isMediaAvailable({ id: s.id, title: s.name || s.title }))
+              .map((s: TMDBItem) => ({
+                id: s.id,
+                tmdbId: s.id,
+                title: (s.name || s.title || "").toUpperCase(),
+                imageUrl: formatImageUrl(s.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+                type: 'series' as const,
+                quality: "HD" as const,
+                rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
+                year: s.first_air_date ? s.first_air_date.substring(0, 4) : new Date().getFullYear().toString(),
+                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
+              }));
+            
+            if (tmdbSeries.length > 0) {
+              setSeriesReleases(tmdbSeries);
+            }
+          }
+
+          // Processamento dinâmico de Animes
           if (animesRes?.results && animesRes.results.length > 0) {
             const tmdbFiltered = animesRes.results
               .filter((a: TMDBItem) => 
                 a.poster_path && 
                 (a.name || a.title) && 
-                WATCHPLAY_ANIME_IDS.includes(a.id) &&
                 isMediaAvailable({ id: a.id, title: a.name || a.title })
               )
               .map((a: TMDBItem) => ({
@@ -323,43 +366,19 @@ export function HomePage({
                 quality: "HD" as const,
                 isAnime: true,
                 rating: a.vote_average ? a.vote_average.toFixed(1) : undefined,
-                year: a.first_air_date ? a.first_air_date.substring(0, 4) : "2026",
+                year: a.first_air_date ? a.first_air_date.substring(0, 4) : new Date().getFullYear().toString(),
                 playerUrl: `https://v1.watchplay.shop/tvshow/${a.id}/1/1`
               }));
 
-            const combinedMap = new Map<number, any>();
-            animes.forEach(a => combinedMap.set(a.id, a));
-            tmdbFiltered.forEach(a => {
-              const existing = combinedMap.get(a.id);
-              if (existing) {
-                combinedMap.set(a.id, {
-                  ...existing,
-                  ...a,
-                  playerUrl: existing.playerUrl || a.playerUrl,
-                  imageUrl: a.imageUrl || existing.imageUrl,
-                  backdropUrl: a.backdropUrl || existing.backdropUrl
-                });
-              } else {
-                combinedMap.set(a.id, a);
-              }
-            });
-            availableAnimes = Array.from(combinedMap.values()).filter(a => 
-              WATCHPLAY_ANIME_IDS.includes(a.id) && isMediaAvailable(a)
-            );
+            if (tmdbFiltered.length > 0) {
+              setAnimeReleases(tmdbFiltered);
+            }
           }
 
-          if (availableAnimes.length > 0) {
-            setAnimeReleases(availableAnimes);
-          }
-        }
-
-        if (isMounted) {
-          // Apenas os doramas confirmados como disponíveis no Watchplay
-          let availableDoramas = [...doramas];
-
+          // Processamento dinâmico de Doramas
           if (doramasRes?.results && doramasRes.results.length > 0) {
             const tmdbFiltered = doramasRes.results
-              .filter((d: TMDBItem) => d.poster_path && (d.name || d.title) && WATCHPLAY_DORAMA_IDS.includes(d.id))
+              .filter((d: TMDBItem) => d.poster_path && (d.name || d.title) && isMediaAvailable({ id: d.id, title: d.name || d.title }))
               .map((d: TMDBItem) => ({
                 id: d.id,
                 tmdbId: d.id,
@@ -370,22 +389,13 @@ export function HomePage({
                 quality: "HD" as const,
                 isDorama: true,
                 rating: d.vote_average ? d.vote_average.toFixed(1) : undefined,
-                year: d.first_air_date ? d.first_air_date.substring(0, 4) : "2026",
+                year: d.first_air_date ? d.first_air_date.substring(0, 4) : new Date().getFullYear().toString(),
                 playerUrl: `https://v1.watchplay.shop/tvshow/${d.id}/1/1`
               }));
 
             if (tmdbFiltered.length > 0) {
-              const combinedMap = new Map<number, any>();
-              // Carrega a base padrão de doramas confirmados do Watchplay
-              doramas.forEach(d => combinedMap.set(d.id, d));
-              // Atualiza com metadados frescos do TMDB quando disponíveis
-              tmdbFiltered.forEach(d => combinedMap.set(d.id, d));
-              availableDoramas = Array.from(combinedMap.values()).filter(d => WATCHPLAY_DORAMA_IDS.includes(d.id));
+              setDoramaReleases(tmdbFiltered);
             }
-          }
-
-          if (availableDoramas.length > 0) {
-            setDoramaReleases(availableDoramas);
           }
         }
       } catch (err) {

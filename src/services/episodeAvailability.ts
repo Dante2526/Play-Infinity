@@ -35,7 +35,7 @@ export async function getAvailableEpisodes(
 
   try {
     const res = await fetch(
-      `/api/series/available-episodes?id=${encodeURIComponent(idStr)}&season=${season}&total=${totalSeasonEpisodes}`
+      `/api/check-season?tmdbId=${encodeURIComponent(idStr)}&season=${season}&count=${totalSeasonEpisodes}`
     );
 
     if (!res.ok) {

@@ -134,8 +134,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
   // Determina a URL atual baseada no servidor selecionado
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
+  const proxyBase = import.meta.env.VITE_PROXY_URL || '';
   const streamUrl = currentServer?.isProxy 
-    ? `/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
+    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;
 
   // Inicializa e carrega o stream com Hls.js com ABR 100% automático baseado na conexão
@@ -179,15 +180,17 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
 
       if (Hls.isSupported()) {
-        // Configuração Maximizada para Estabilidade (Anti-Travamento IPTV)
+        // Configuração Balanceada: Início Rápido + Estabilidade (Anti-Travamento)
         const hls = new Hls({
           enableWorker: true,
-          lowLatencyMode: false, // Desabilitado para focar em estabilidade
-          liveSyncDuration: currentLowBandwidth ? 25 : 15, // Margem do "ao vivo" para não travar
-          liveMaxLatencyDuration: currentLowBandwidth ? 45 : 30,
-          maxBufferLength: currentLowBandwidth ? 60 : 40, // Segundos de vídeo mantidos na memória
-          maxMaxBufferLength: currentLowBandwidth ? 120 : 80, // Limite máximo absoluto
-          backBufferLength: 30, // Mantém 30s anteriores caso a rede oscile
+          lowLatencyMode: false,
+          // Remover liveSyncDuration fixo em segundos. Usar a contagem padrão (3 segmentos = ~6s)
+          // Isso resolve o problema da tela preta de 20s (a playlist tem apenas 12s no total)
+          liveSyncDurationCount: currentLowBandwidth ? 4 : 3, 
+          liveMaxLatencyDurationCount: currentLowBandwidth ? 6 : 5,
+          maxBufferLength: currentLowBandwidth ? 45 : 30, // Segundos mantidos na memória
+          maxMaxBufferLength: currentLowBandwidth ? 90 : 60, // Limite máximo absoluto
+          backBufferLength: 15, // Reduzido o back buffer para economizar memória do celular
           manifestLoadingTimeOut: 30000,
           manifestLoadingMaxRetry: 10, // Mais tentativas antes de dar erro fatal
           levelLoadingTimeOut: 30000,
@@ -914,15 +917,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-2">
             {/* Picture-in-Picture se suportado */}
-            {/* Transmitir / Cast */}
-            <button
-              onClick={() => setShowCastModal(true)}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
-              title="Transmitir para TV"
-            >
-              <Cast className="w-5 h-5" />
-            </button>
-
             {document.pictureInPictureEnabled && (
               <button
                 onClick={() => {
