@@ -65,6 +65,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const stallCountRef = useRef<number>(0);
   const lastStallTimeRef = useRef<number>(0);
+  // Espelha isLowBandwidthMode em ref para uso dentro de intervals/closures sem precisar recriar o efeito
+  const isLowBandwidthModeRef = useRef<boolean>(false);
   const failedServersRef = useRef<Set<number>>(new Set());
 
   // Limpa histórico de falhas ao trocar de canal
@@ -175,6 +177,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         if (!isMounted) return;
         if (quality === 'slow') {
           currentLowBandwidth = true;
+          isLowBandwidthModeRef.current = true;
           setIsLowBandwidthMode(true);
         }
       }
@@ -361,8 +364,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       lastStallTimeRef.current = now;
 
       // Se ocorrerem stalls sucessivos em rede instável, ativa buffer estendido automaticamente e silenciosamente
-      if (stallCountRef.current >= 2 && !isLowBandwidthMode) {
+      if (stallCountRef.current >= 2 && !isLowBandwidthModeRef.current) {
         stallCountRef.current = 0;
+        isLowBandwidthModeRef.current = true;
         setIsLowBandwidthMode(true);
         if (hlsRef.current) {
           hlsRef.current.config.liveSyncDuration = 25;
@@ -381,9 +385,47 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
 
+    // Watchdog de recuperação de qualidade: o ABR nativo do hls.js só reavalia a banda
+    // quando baixa fragmentos. Se a rede piorou, o buffer fica maior (modo baixa banda),
+    // o player passa a baixar fragmentos com menos frequência e a estimativa de banda
+    // "congela" no valor ruim — por isso a qualidade nunca volta sozinha, mesmo com a
+    // internet já normalizada. Este watchdog testa periodicamente se a conexão melhorou
+    // e força o hls.js a experimentar um nível de qualidade acima (1 fragmento, sem sair
+    // do modo Auto), além de desativar o modo de baixa banda e normalizar os buffers.
+    const qualityRecoveryInterval = setInterval(async () => {
+      if (!isMounted) return;
+      const hls = hlsRef.current;
+      if (!hls || !hls.levels || hls.levels.length <= 1) return;
+
+      // Evita testar upgrade logo após um travamento recente
+      if (Date.now() - lastStallTimeRef.current < 20000) return;
+
+      const netQuality = await detectConnectionQuality(true); // força nova checagem, ignora cache
+      if (!isMounted || netQuality !== 'fast') return;
+
+      const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel;
+      if (current >= 0 && current < hls.levels.length - 1) {
+        console.log('[LivePlayer] Conexão recuperada, testando nível de qualidade superior...');
+        // nextAutoLevel testa 1 fragmento no nível acima sem tirar o player do modo Auto.
+        // Se o fragmento carregar bem, o hls.js segue naturalmente subindo a partir daí;
+        // se falhar/atrasar, o próprio ABR nativo já rebaixa de novo sozinho.
+        hls.nextAutoLevel = current + 1;
+      }
+
+      if (isLowBandwidthModeRef.current) {
+        hls.config.maxBufferLength = 30;
+        hls.config.maxMaxBufferLength = 60;
+        hls.config.liveSyncDuration = undefined;
+        isLowBandwidthModeRef.current = false;
+        setIsLowBandwidthMode(false);
+        console.log('[LivePlayer] Conexão estável, buffers normalizados.');
+      }
+    }, 20000);
+
     return () => {
       isMounted = false;
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
+      clearInterval(qualityRecoveryInterval);
       clearRecoveryTimeout();
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
