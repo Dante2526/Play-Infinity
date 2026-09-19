@@ -126,11 +126,11 @@ app.get("/api/live-stream-proxy", async (req, res) => {
     }
 
     const finalUrl = upstreamRes.url || currentUrl;
-    const contentType = upstreamRes.headers.get("content-type") || "";
+    const contentType = (upstreamRes.headers.get("content-type") || "").toLowerCase();
     const isM3U8 = rawUrl.includes(".m3u8") || 
                    finalUrl.includes(".m3u8") ||
                    contentType.includes("mpegurl") || 
-                   contentType.includes("application/x-mpegURL") ||
+                   contentType.includes("x-mpegurl") || 
                    contentType.includes("vnd.apple.mpegurl");
 
     if (isM3U8) {
@@ -206,7 +206,9 @@ app.get("/api/live-stream-proxy", async (req, res) => {
         try {
           const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
           if (fullSegUrl.startsWith("https://") && fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-          return `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true&kiwi=${isKiwi}`;
+          const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
+          const segParam = isStreamManifest ? "" : "&is_segment=true";
+          return `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}${segParam}&kiwi=${isKiwi}`;
         } catch {
           return trimmed;
         }
@@ -243,7 +245,7 @@ app.get("/api/live-stream-proxy", async (req, res) => {
     }
 
     let finalContentType = contentType || "video/MP2T";
-    if (req.query.is_segment === "true" || isSegment) {
+    if ((req.query.is_segment === "true" || isSegment) && !contentType.includes("mpegurl")) {
       finalContentType = "video/MP2T";
     }
     res.setHeader("Content-Type", finalContentType);

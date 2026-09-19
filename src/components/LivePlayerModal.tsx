@@ -454,16 +454,39 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     // Detecção automática de travamentos (Buffer Stalls) em redes móveis/instáveis
     let bufferStallTimer: NodeJS.Timeout | null = null;
-    const handleWaiting = () => {
-      setIsBuffering(true);
-      if (bufferStallTimer) clearTimeout(bufferStallTimer);
+    let recoveryAttemptTimer: NodeJS.Timeout | null = null;
+    let bufferingDebounceTimer: NodeJS.Timeout | null = null;
 
-      // Se ficar congelado no buffering por mais de 7s, tenta recuperar ou alternar servidor automaticamente
+    const handleWaiting = () => {
+      // Debounce de 600ms antes de mostrar o aviso de buffering
+      // Impede que micro-pausas normais do HLS fiquem piscando "Ajustando transmissão..." na tela
+      if (!bufferingDebounceTimer) {
+        bufferingDebounceTimer = setTimeout(() => {
+          if (!isMounted) return;
+          setIsBuffering(true);
+        }, 600);
+      }
+
+      if (bufferStallTimer) clearTimeout(bufferStallTimer);
+      if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
+
+      // Tentativa de recuperação suave aos 8 segundos (sem cortar a conexão)
+      recoveryAttemptTimer = setTimeout(() => {
+        if (!isMounted || !videoRef.current) return;
+        if (hlsRef.current) {
+          hlsRef.current.startLoad();
+        }
+        if (videoRef.current.paused) {
+          videoRef.current.play().catch(() => {});
+        }
+      }, 8000);
+
+      // Se ficar congelado no buffering por mais de 20s seguidos, alterna automaticamente de servidor
       bufferStallTimer = setTimeout(() => {
         if (!isMounted) return;
-        console.log('[LivePlayer] Buffering prolongado detectado. Alternando automaticamente de servidor...');
+        console.log('[LivePlayer] Buffering prolongado (20s) detectado. Alternando automaticamente de servidor...');
         switchToNextServer('buffering prolongado');
-      }, 7000);
+      }, 20000);
 
       const now = Date.now();
       if (now - lastStallTimeRef.current < 20000) {
@@ -487,9 +510,21 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
 
     const handlePlaying = () => {
-      if (bufferStallTimer) clearTimeout(bufferStallTimer);
+      if (bufferingDebounceTimer) {
+        clearTimeout(bufferingDebounceTimer);
+        bufferingDebounceTimer = null;
+      }
+      if (bufferStallTimer) {
+        clearTimeout(bufferStallTimer);
+        bufferStallTimer = null;
+      }
+      if (recoveryAttemptTimer) {
+        clearTimeout(recoveryAttemptTimer);
+        recoveryAttemptTimer = null;
+      }
       setIsBuffering(false);
       setIsPlaying(true);
+      setStreamHealth('online');
     };
 
     video.addEventListener('waiting', handleWaiting);
@@ -534,6 +569,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     return () => {
       isMounted = false;
+      if (bufferingDebounceTimer) clearTimeout(bufferingDebounceTimer);
+      if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       clearInterval(qualityRecoveryInterval);
       clearRecoveryTimeout();
@@ -1065,10 +1102,17 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           {/* Status do stream */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300">
             <span className={`w-2 h-2 rounded-full ${
+              hasError || streamHealth === 'error' ? 'bg-red-500' :
+              (isLoading || isBuffering) ? 'bg-yellow-500 animate-pulse' :
               streamHealth === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 
-              streamHealth === 'connecting' ? 'bg-yellow-500 animate-pulse' : 'bg-red-500'
+              'bg-yellow-500 animate-pulse'
             }`}></span>
-            <span>{streamHealth === 'online' ? 'Sinal Estável' : streamHealth === 'connecting' ? 'Sincronizando...' : 'Sem Sinal'}</span>
+            <span>
+              {hasError || streamHealth === 'error' ? 'Sem Sinal' :
+               isLoading ? 'Sintonizando...' :
+               isBuffering ? 'Ajustando Buffer...' :
+               streamHealth === 'online' ? 'Sinal Estável' : 'Sincronizando...'}
+            </span>
           </div>
 
           {/* Botão Guia de Canais Rápido */}
