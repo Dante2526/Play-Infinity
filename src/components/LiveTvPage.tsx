@@ -36,13 +36,21 @@ import {
   setLastPlayedChannelId,
   getLastPlayedChannelId
 } from '../services/liveTvStorage';
-import { LivePlayerModal } from './LivePlayerModal';
 
 interface LiveTvPageProps {
   onBack?: () => void;
+  // Estado e controle do player elevados para o App.tsx (mesmo padrão do player de filmes/séries),
+  // para que o canal continue tocando (inclusive no mini player) ao navegar para outras páginas.
+  activeChannel: LiveChannel | null;
+  onPlayChannel: (channel: LiveChannel, allChannels: LiveChannel[]) => void;
+  onCloseActiveChannel: () => void;
+  // Quando o usuário pede para editar o canal a partir do player minimizado em outra página,
+  // o App.tsx navega de volta para cá e sinaliza qual canal deve abrir no modal de edição.
+  pendingEditChannelId?: string | null;
+  onPendingEditHandled?: () => void;
 }
 
-export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
+export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayChannel, onCloseActiveChannel, pendingEditChannelId, onPendingEditHandled }) => {
   const [channels, setChannels] = useState<LiveChannel[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
@@ -61,9 +69,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
       setSearchQuery(spokenText);
     }
   });
-  
-  // Player state
-  const [activeChannel, setActiveChannel] = useState<LiveChannel | null>(null);
 
   // Modais
   const [isAddModalOpen, setIsAddModalOpen] = useState<boolean>(false);
@@ -167,7 +172,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     }
 
     setLastPlayedChannelId(channel.id);
-    setActiveChannel(channel);
+    onPlayChannel(channel, channels);
   };
 
   const handleToggleFav = (channelId: string, e: React.MouseEvent) => {
@@ -194,6 +199,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     }
     setIsAddModalOpen(true);
   };
+
+  // Atende pedidos de edição feitos a partir do player minimizado em outra página do app:
+  // o App.tsx navega de volta para a Live TV e sinaliza qual canal deve abrir no modal de edição.
+  useEffect(() => {
+    if (!pendingEditChannelId || channels.length === 0) return;
+    const found = channels.find(c => c.id === pendingEditChannelId);
+    if (found) {
+      openAddModal(found);
+    }
+    onPendingEditHandled?.();
+  }, [pendingEditChannelId, channels]);
 
   const handleSaveChannel = (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,7 +244,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
 
     // Se estiver assistindo esse canal, atualiza a reprodução
     if (activeChannel?.id === channelId) {
-      setActiveChannel(newChannel);
+      onPlayChannel(newChannel, channels);
     }
   };
 
@@ -251,7 +267,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
     deleteCustomChannel(channelId);
     refreshChannels();
     if (activeChannel?.id === channelId) {
-      setActiveChannel(null);
+      onCloseActiveChannel();
     }
     setToastMsg('Canal removido com sucesso!');
     setTimeout(() => setToastMsg(''), 2500);
@@ -739,22 +755,6 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = () => {
             );
           })}
         </div>
-      )}
-
-      {/* PLAYER MODAL ATIVO */}
-      {activeChannel && (
-        <LivePlayerModal
-          channel={activeChannel}
-          allChannels={channels}
-          onClose={() => {
-            if (document.fullscreenElement) {
-              document.exitFullscreen().catch(() => {});
-            }
-            setActiveChannel(null);
-          }}
-          onSelectChannel={(newChan) => setActiveChannel(newChan)}
-          onEditChannel={(ch) => openAddModal(ch)}
-        />
       )}
 
       {/* MODAL: ADICIONAR / EDITAR CANAL DE TV */}

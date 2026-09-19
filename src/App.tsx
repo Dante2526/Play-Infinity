@@ -61,6 +61,7 @@ import {
   TrailerVideo
 } from "./services/tmdb";
 import { VideoPlayerModal } from "./components/VideoPlayerModal";
+import type { LiveChannel } from "./data/liveChannels";
 import { AuthModal } from "./components/AuthModal";
 import { PaywallModal } from "./components/PaywallModal";
 import { useSubscription } from "./hooks/useSubscription";
@@ -89,6 +90,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
 const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
+const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal"));
 const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import { VirtualRemote } from "./components/VirtualRemote";
 import {
@@ -210,6 +212,24 @@ export default function App() {
     title: "",
     url: "https://v1.watchplay.shop/movie/tt22084616",
   });
+
+  // Estado do player de TV ao vivo, elevado para o App.tsx (mesmo padrão do playerModal acima)
+  // para que o canal continue tocando -- inclusive no mini player -- ao navegar entre páginas.
+  const [activeLiveChannel, setActiveLiveChannel] = useState<LiveChannel | null>(null);
+  const [liveChannelsList, setLiveChannelsList] = useState<LiveChannel[]>([]);
+  const [pendingLiveEditChannelId, setPendingLiveEditChannelId] = useState<string | null>(null);
+
+  const openLiveChannel = (channel: LiveChannel, allChannels: LiveChannel[]) => {
+    setLiveChannelsList(allChannels);
+    setActiveLiveChannel(channel);
+  };
+
+  const closeLiveChannel = () => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+    }
+    setActiveLiveChannel(null);
+  };
 
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -724,7 +744,14 @@ export default function App() {
         <GlobalCatalogPage type={viewState.type} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'live-tv' ? (
         
-          <LiveTvPage onBack={handleBack} />
+          <LiveTvPage
+            onBack={handleBack}
+            activeChannel={activeLiveChannel}
+            onPlayChannel={openLiveChannel}
+            onCloseActiveChannel={closeLiveChannel}
+            pendingEditChannelId={pendingLiveEditChannelId}
+            onPendingEditHandled={() => setPendingLiveEditChannelId(null)}
+          />
         
       ) : viewState.type === 'calendar' ? (
         
@@ -855,7 +882,7 @@ export default function App() {
       )}
 
       {viewState.type !== 'admin' && (
-        <VirtualRemote isHidden={playerModal.isOpen} />
+        <VirtualRemote isHidden={playerModal.isOpen || !!activeLiveChannel} />
       )}
       
       {/* Auth & Paywall Modals */}
@@ -883,6 +910,24 @@ export default function App() {
             imageUrl={playerModal.imageUrl}
             backdropUrl={playerModal.backdropUrl}
             posterUrl={playerModal.posterUrl}
+          />
+        )}
+
+        {/* Player de TV ao vivo: montado na raiz do app (fora do switch de páginas) para que o
+            canal continue tocando -- inclusive minimizado no mini player -- ao navegar entre páginas,
+            do mesmo jeito que já acontece com o VideoPlayerModal de filmes/séries acima. */}
+        {activeLiveChannel && (
+          <LivePlayerModal
+            channel={activeLiveChannel}
+            allChannels={liveChannelsList}
+            onClose={closeLiveChannel}
+            onSelectChannel={(newChan) => setActiveLiveChannel(newChan)}
+            onEditChannel={(ch) => {
+              // Edição de servidores só existe na tela de TV ao vivo; navega até lá e sinaliza
+              // qual canal deve abrir automaticamente no modal de edição.
+              setPendingLiveEditChannelId(ch.id);
+              navigateTo({ type: 'live-tv' });
+            }}
           />
         )}
 
