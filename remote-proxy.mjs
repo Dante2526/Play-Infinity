@@ -127,20 +127,38 @@ app.get("/api/live-stream-proxy", async (req, res) => {
 
     const finalUrl = upstreamRes.url || currentUrl;
     const contentType = (upstreamRes.headers.get("content-type") || "").toLowerCase();
-    const isM3U8 = rawUrl.includes(".m3u8") || 
-                   finalUrl.includes(".m3u8") ||
-                   contentType.includes("mpegurl") || 
-                   contentType.includes("x-mpegurl") || 
-                   contentType.includes("vnd.apple.mpegurl");
+    let isM3U8 = req.query.is_manifest === "true" ||
+                 rawUrl.includes(".m3u8") || 
+                 finalUrl.includes(".m3u8") ||
+                 contentType.includes("mpegurl") || 
+                 contentType.includes("x-mpegurl") || 
+                 contentType.includes("vnd.apple.mpegurl");
+
+    let upstreamText = null;
+    if (!isSegment) {
+      if (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t")) {
+        upstreamText = await upstreamRes.text();
+        if (upstreamText.includes("#EXTM3U")) {
+          isM3U8 = true;
+        }
+      }
+    }
 
     if (isM3U8) {
-      const text = await upstreamRes.text();
+      const text = upstreamText !== null ? upstreamText : await upstreamRes.text();
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=2, immutable");
       
       const isKiwi = rawUrl.includes("up.kiwi") || req.query.kiwi === "true";
 
-      const lines = text.split("\n");
+      // Remove lixo HTML/PHP warnings anteriores a #EXTM3U que quebram o parser
+      let cleanText = text;
+      const m3uIdx = cleanText.indexOf("#EXTM3U");
+      if (m3uIdx !== -1) {
+        cleanText = cleanText.slice(m3uIdx);
+      }
+
+      const lines = cleanText.split("\n");
       const filteredLines = [];
       let skipNextLine = false;
 
@@ -150,6 +168,11 @@ app.get("/api/live-stream-proxy", async (req, res) => {
         
         if (!trimmed) {
           filteredLines.push(line);
+          continue;
+        }
+
+        // Descarta avisos HTML inseridos no meio ou fim da playlist
+        if (trimmed.startsWith("<") || trimmed.includes("</") || trimmed.includes("WARNING")) {
           continue;
         }
 
@@ -207,7 +230,7 @@ app.get("/api/live-stream-proxy", async (req, res) => {
           const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
           if (fullSegUrl.startsWith("https://") && fullSegUrl.includes("plutotv.net")) return fullSegUrl;
           const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
-          const segParam = isStreamManifest ? "" : "&is_segment=true";
+          const segParam = isStreamManifest ? "&is_manifest=true" : "&is_segment=true";
           return `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}${segParam}&kiwi=${isKiwi}`;
         } catch {
           return trimmed;
@@ -251,7 +274,9 @@ app.get("/api/live-stream-proxy", async (req, res) => {
     res.setHeader("Content-Type", finalContentType);
     res.setHeader("Cache-Control", "public, max-age=15");
 
-    if (upstreamRes.body) {
+    if (upstreamText !== null) {
+      return res.send(Buffer.from(upstreamText, "utf-8"));
+    } else if (upstreamRes.body) {
       return Readable.fromWeb(upstreamRes.body).pipe(res);
     } else {
       const buffer = Buffer.from(await upstreamRes.arrayBuffer());
