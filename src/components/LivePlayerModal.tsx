@@ -246,7 +246,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
   // Determina a URL atual baseada no servidor selecionado
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
-  const proxyBase = import.meta.env.VITE_PROXY_URL || '';
+  const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity-app.duckdns.org';
   const streamUrl = currentServer?.isProxy 
     ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;
@@ -672,18 +672,28 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
         if (fsPromise && typeof fsPromise.catch === "function") {
           fsPromise.catch(() => {
-            try { requestFS.call(elem); } catch (_) {}
+            try {
+              const fallbackPromise = requestFS.call(elem);
+              if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+                fallbackPromise.catch(() => {});
+              }
+            } catch (_) {}
           });
         }
       } catch (_) {
-        try { requestFS.call(elem); } catch (_) {}
+        try {
+          const fallbackPromise = requestFS.call(elem);
+          if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+            fallbackPromise.catch(() => {});
+          }
+        } catch (_) {}
       }
     }
 
     // Em navegadores/dispositivos com suporte, tenta travar a orientação em paisagem de
     // verdade (best-effort; se falhar ou não tiver suporte, o fallback de rotação por CSS
     // abaixo garante a exibição deitada de qualquer forma)
-    if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+    if (typeof screen !== "undefined" && screen.orientation && typeof (screen.orientation as any).lock === "function") {
       try {
         const lockPromise = (screen.orientation as any).lock("landscape");
         if (lockPromise && typeof lockPromise.catch === "function") {

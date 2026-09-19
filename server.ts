@@ -121,7 +121,18 @@ process.on("uncaughtException", (err) => {
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
     if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
+      app.use(express.static(distPath, {
+        maxAge: "30d",
+        setHeaders: (res, filePath) => {
+          // Arquivos HTML e manifestos nunca devem ser cacheados permanentemente para refletir atualizações na hora
+          if (filePath.endsWith(".html") || filePath.endsWith("metadata.json")) {
+            res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+          } else if (filePath.includes("/assets/")) {
+            // Assets do Vite com hash de versão (ex: index-CCLh_Jfm.js) têm cache longo e imutável
+            res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          }
+        }
+      }));
     }
   }
 

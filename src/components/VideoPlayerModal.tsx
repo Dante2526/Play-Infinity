@@ -666,11 +666,21 @@ export function VideoPlayerModal({
             const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
             if (fsPromise && typeof fsPromise.catch === "function") {
               fsPromise.catch(() => {
-                try { requestFS.call(elem); } catch (_) {}
+                try {
+                  const fallbackPromise = requestFS.call(elem);
+                  if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+                    fallbackPromise.catch(() => {});
+                  }
+                } catch (_) {}
               });
             }
           } catch (_) {
-            try { requestFS.call(elem); } catch (_) {}
+            try {
+              const fallbackPromise = requestFS.call(elem);
+              if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+                fallbackPromise.catch(() => {});
+              }
+            } catch (_) {}
           }
         }
 

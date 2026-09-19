@@ -245,7 +245,13 @@ export default function App() {
   const { isPremium } = useSubscription();
 
   useEffect(() => {
+    // Fallback de segurança para redes móveis lentas: não trava na tela preta por mais de 3s
+    const authTimeout = setTimeout(() => {
+      setIsAuthInitialized(true);
+    }, 3000);
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      clearTimeout(authTimeout);
       setCurrentUser(user);
       setIsAuthInitialized(true);
       if (user) {
@@ -263,7 +269,10 @@ export default function App() {
         setUserDisplayName("");
       }
     });
-    return () => unsubscribe();
+    return () => {
+      clearTimeout(authTimeout);
+      unsubscribe();
+    };
   }, []);
 
   // Monitora a existência do usuário no Firestore em tempo real
@@ -488,11 +497,21 @@ export default function App() {
           const res = requestFS.call(elem, { navigationUI: "hide" });
           if (res && typeof res.catch === "function") {
             res.catch(() => {
-              try { requestFS.call(elem); } catch (_) {}
+              try {
+                const fallbackPromise = requestFS.call(elem);
+                if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+                  fallbackPromise.catch(() => {});
+                }
+              } catch (_) {}
             });
           }
         } catch (_) {
-          try { requestFS.call(elem); } catch (_) {}
+          try {
+            const fallbackPromise = requestFS.call(elem);
+            if (fallbackPromise && typeof fallbackPromise.catch === "function") {
+              fallbackPromise.catch(() => {});
+            }
+          } catch (_) {}
         }
       }
 

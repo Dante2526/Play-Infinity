@@ -30,6 +30,11 @@ function isIgnorableError(message: string): boolean {
   if (lower.includes('resizeobserver loop limit exceeded')) return true;
   if (lower.includes('the user aborted a request')) return true;
   if (lower.includes('aborterror')) return true;
+  if (lower.includes('permissions check failed')) return true;
+  if (lower.includes('requestfullscreen')) return true;
+  if (lower.includes('fullscreen request was denied')) return true;
+  if (lower.includes('orientation lock failed')) return true;
+  if (lower.includes('screen.orientation')) return true;
   return false;
 }
 
