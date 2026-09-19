@@ -213,7 +213,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           }
         } else if ((data.tipoAcesso || data.accessType || "mensal") === "mensal") {
           const createdDate = data.criadoEm || data.createdAt;
-          const isLegacy = !createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00Z");
+          const isLegacy = !createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00-03:00");
           const assignedNum = isLegacy ? 9.90 : 13.00;
           const assignedTxt = isLegacy ? "9,90" : "13,00";
           feeFormatted = assignedTxt;
