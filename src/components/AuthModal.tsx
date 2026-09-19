@@ -83,7 +83,10 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             email: email.trim(),
             senha: password,
             assinatura: "INATIVA",
-            tipoAcesso: "mensal"
+            tipoAcesso: "mensal",
+            valorMensalidade: 13.00,
+            valor: "13,00",
+            criadoEm: new Date().toISOString()
           }, { merge: true });
         }
       }
