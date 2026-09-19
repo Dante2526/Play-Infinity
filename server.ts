@@ -129,6 +129,53 @@ process.on("uncaughtException", (err) => {
   // Aplica proteção rigorosa apenas na API
   app.use("/api", apiLimiter);
   // ========================================================
+  
+  // API: Check Season Availability (Espião de episódios quebrados)
+  app.get("/api/check-season", async (req, res) => {
+    try {
+      const tmdbId = req.query.tmdbId as string;
+      const season = parseInt(req.query.season as string) || 1;
+      const count = parseInt(req.query.count as string) || 0;
+
+      if (!tmdbId || count <= 0 || count > 150) {
+        return res.status(400).json({ success: false, error: "Parâmetros inválidos ou contagem excessiva" });
+      }
+
+      const checks = Array.from({ length: count }, (_, i) => i + 1);
+      const limit = 10; // Batch de requisições simultâneas
+      const availableEpisodes: number[] = [];
+
+      for (let i = 0; i < checks.length; i += limit) {
+        const batch = checks.slice(i, i + limit);
+        const results = await Promise.all(batch.map(async (ep) => {
+          const url = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/${ep}`;
+          try {
+            // Requisita a página e verifica o corpo
+            const resp = await fetch(url, { method: "GET", headers: { "User-Agent": "Mozilla/5.0 PlayInfinity" } });
+            if (!resp.ok) return { ep, available: false };
+            
+            const text = await resp.text();
+            // A plataforma WatchPlayShop devolve 200 OK mas com a string "Série não encontrada." se estiver faltando.
+            if (text.includes("Série não encontrada") || text.includes("não encontrad")) {
+              return { ep, available: false };
+            }
+            return { ep, available: true };
+          } catch {
+            return { ep, available: false };
+          }
+        }));
+        
+        results.forEach(r => {
+          if (r.available) availableEpisodes.push(r.ep);
+        });
+      }
+
+      res.json({ success: true, availableEpisodes });
+    } catch (err) {
+      console.error("[Check Season] Erro:", err);
+      res.status(500).json({ success: false, error: "Internal Error" });
+    }
+  });
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
   app.get("/api/extract-player", async (req, res) => {

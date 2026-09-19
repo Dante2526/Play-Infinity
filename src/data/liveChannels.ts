@@ -27,12 +27,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/896',
+        url: 'http://up.kiwi/351921603109/34939156/896.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/898',
+        url: 'http://up.kiwi/351921603109/34939156/898.m3u8',
         isProxy: true
       }
     ]
@@ -48,12 +48,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/896',
+        url: 'http://up.kiwi/351921603109/34939156/896.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/898',
+        url: 'http://up.kiwi/351921603109/34939156/898.m3u8',
         isProxy: true
       }
     ]
@@ -69,12 +69,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/859',
+        url: 'http://up.kiwi/351921603109/34939156/859.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/861',
+        url: 'http://up.kiwi/351921603109/34939156/861.m3u8',
         isProxy: true
       }
     ]
@@ -90,17 +90,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/865',
+        url: 'http://up.kiwi/351921603109/34939156/865.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/867',
+        url: 'http://up.kiwi/351921603109/34939156/867.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296309',
+        url: 'http://up.kiwi/351921603109/34939156/296309.m3u8',
         isProxy: true
       }
     ]
@@ -116,12 +116,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/296311',
+        url: 'http://up.kiwi/351921603109/34939156/296311.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/296312',
+        url: 'http://up.kiwi/351921603109/34939156/296312.m3u8',
         isProxy: true
       }
     ]
@@ -137,17 +137,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/1229',
+        url: 'http://up.kiwi/351921603109/34939156/1229.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/1231',
+        url: 'http://up.kiwi/351921603109/34939156/1231.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (FHD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/305202',
+        url: 'http://up.kiwi/351921603109/34939156/305202.m3u8',
         isProxy: true
       }
     ]
@@ -163,17 +163,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/296210',
+        url: 'http://up.kiwi/351921603109/34939156/296210.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/1221',
+        url: 'http://up.kiwi/351921603109/34939156/1221.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296209',
+        url: 'http://up.kiwi/351921603109/34939156/296209.m3u8',
         isProxy: true
       }
     ]
@@ -189,17 +189,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/1224',
+        url: 'http://up.kiwi/351921603109/34939156/1224.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/1226',
+        url: 'http://up.kiwi/351921603109/34939156/1226.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296212',
+        url: 'http://up.kiwi/351921603109/34939156/296212.m3u8',
         isProxy: true
       }
     ]
@@ -215,17 +215,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/296354',
+        url: 'http://up.kiwi/351921603109/34939156/296354.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (Kiwi HD)',
-        url: 'http://up.kiwi/351921603109/34939156/506',
+        url: 'http://up.kiwi/351921603109/34939156/506.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (Kiwi HD²)',
-        url: 'http://up.kiwi/351921603109/34939156/296355',
+        url: 'http://up.kiwi/351921603109/34939156/296355.m3u8',
         isProxy: true
       }
     ]
@@ -241,7 +241,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Amagi FAST)',
-        url: 'http://up.kiwi/351921603109/34939156/296538',
+        url: 'http://up.kiwi/351921603109/34939156/296538.m3u8',
         isProxy: true
       },
       {
@@ -622,22 +622,22 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi HD Principal)',
-        url: 'http://up.kiwi/351921603109/34939156/296556',
+        url: 'http://up.kiwi/351921603109/34939156/296556.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (Kiwi HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/497',
+        url: 'http://up.kiwi/351921603109/34939156/497.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (Kiwi FHD H265)',
-        url: 'http://up.kiwi/351921603109/34939156/493',
+        url: 'http://up.kiwi/351921603109/34939156/493.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 4 (Kiwi SD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296557',
+        url: 'http://up.kiwi/351921603109/34939156/296557.m3u8',
         isProxy: true
       }
     ]
@@ -653,17 +653,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi HD Principal)',
-        url: 'http://up.kiwi/351921603109/34939156/147',
+        url: 'http://up.kiwi/351921603109/34939156/147.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (Kiwi FHD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/145',
+        url: 'http://up.kiwi/351921603109/34939156/145.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (Kiwi HD² Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296480',
+        url: 'http://up.kiwi/351921603109/34939156/296480.m3u8',
         isProxy: true
       }
     ]
@@ -679,17 +679,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi HD Principal)',
-        url: 'http://up.kiwi/351921603109/34939156/280',
+        url: 'http://up.kiwi/351921603109/34939156/280.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 2 (Kiwi FHD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/278',
+        url: 'http://up.kiwi/351921603109/34939156/278.m3u8',
         isProxy: true
       },
       {
         name: 'Servidor 3 (Kiwi HD² Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296482',
+        url: 'http://up.kiwi/351921603109/34939156/296482.m3u8',
         isProxy: true
       }
     ]
@@ -703,9 +703,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '1080p',
     description: 'O canal pioneiro em documentários sobre ciência, tecnologia, história e natureza.',
     servers: [
-      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/340', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/342', isProxy: true },
-      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296584', isProxy: true }
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/340.m3u8', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/342.m3u8', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296584.m3u8', isProxy: true }
     ]
   },
   {
@@ -717,9 +717,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '1080p',
     description: 'A história do mundo, grandes eventos e teorias fascinantes.',
     servers: [
-      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/669', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/671', isProxy: true },
-      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296604', isProxy: true }
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/669.m3u8', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/671.m3u8', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296604.m3u8', isProxy: true }
     ]
   },
   {
@@ -731,9 +731,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '1080p',
     description: 'Programas focados na relação entre humanos e animais e na vida selvagem.',
     servers: [
-      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/28', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/30', isProxy: true },
-      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296564', isProxy: true }
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/28.m3u8', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/30.m3u8', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296564.m3u8', isProxy: true }
     ]
   },
   {
@@ -745,9 +745,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '1080p',
     description: 'Mistérios da vida real, crimes chocantes e grandes investigações forenses.',
     servers: [
-      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/351', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/353', isProxy: true },
-      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296570', isProxy: true }
+      { name: 'Servidor 1 (Kiwi FHD)', url: 'http://up.kiwi/351921603109/34939156/351.m3u8', isProxy: true },
+      { name: 'Servidor 2 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/353.m3u8', isProxy: true },
+      { name: 'Servidor 3 (Kiwi HD²)', url: 'http://up.kiwi/351921603109/34939156/296570.m3u8', isProxy: true }
     ]
   },
   {
@@ -759,7 +759,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '1080p',
     description: 'Canal de TV focado em conteúdo adulto explícito.',
     servers: [
-      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/1695', isProxy: true }
+      { name: 'Servidor 1 (Kiwi HD)', url: 'http://up.kiwi/351921603109/34939156/1695.m3u8', isProxy: true }
     ]
   }
 ];

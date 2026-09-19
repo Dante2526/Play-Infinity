@@ -1,0 +1,10 @@
+{
+  "name": "play-infinity-proxy",
+  "version": "1.0.0",
+  "main": "remote-proxy.mjs",
+  "type": "module",
+  "dependencies": {
+    "express": "^4.19.2",
+    "helmet": "^7.1.0"
+  }
+}

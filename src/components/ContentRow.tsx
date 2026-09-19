@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";
 import { 
   searchMulti, 
   getDetails, 

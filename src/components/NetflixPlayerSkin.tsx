@@ -27,7 +27,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { savePlaybackProgress } from "../services/playbackHistory";
-import { CastModal } from "./CastModal";
 
 export interface NetflixPlayerStatus {
   currentTime: number;
@@ -192,7 +191,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
   const [showEpisodeDrawer, setShowEpisodeDrawer] = useState<boolean>(false);
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
-  const [showCastModal, setShowCastModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
   const selectedAudio = activeServerKey === "srv_vip" ? "pt-BR" : activeServerKey === "srv_pomfy" ? "pomfy" : "en-US";
@@ -1192,18 +1190,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* Botão de Cast (Transmitir) */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowCastModal(true);
-            }}
-            className="p-1.5 sm:p-2 transition-colors cursor-pointer rounded-full text-white/90 hover:text-white hover:bg-white/10"
-            title="Transmitir para Smart TV"
-          >
-            <Cast className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
-          </button>
-
           {/* Botão Picture-in-Picture (Mini-Player Flutuante) */}
           <button
             onClick={(e) => {
@@ -1986,11 +1972,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </div>
         </div>
       )}
-
-      {/* ========================================================
-          MODAL: TRANSMITIR SMART TV / CHROMECAST
-          ======================================================== */}
-      {showCastModal && <CastModal onClose={() => setShowCastModal(false)} />}
     </div>
   );
 };

@@ -203,7 +203,7 @@ export const getSimilarRecommendations = async (id: number, type: 'movie' | 'tv'
 // Amazon Prime: network 1024, provider 119
 // Apple TV+: network 2552, provider 350
 // Globoplay: network 3290, provider 307
-export const getProviderSeries = async (provider: string, page: number = 1): Promise<TMDBResponse> => {
+export const getProviderSeries = async (provider: string, page: number = 1, sortBy: string = 'popularity.desc', releaseDateLte?: string): Promise<TMDBResponse> => {
   let networkId = 213; // default Netflix
   const p = provider.toLowerCase();
 
@@ -223,11 +223,12 @@ export const getProviderSeries = async (provider: string, page: number = 1): Pro
     networkId = 3290;
   }
 
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_networks=${networkId}&watch_region=BR`;
+  let url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=${sortBy}&page=${page}&with_networks=${networkId}&watch_region=BR`;
+  if (releaseDateLte) url += `&first_air_date.lte=${releaseDateLte}&vote_count.gte=0&include_adult=false`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
-export const getProviderMovies = async (provider: string, page: number = 1): Promise<TMDBResponse> => {
+export const getProviderMovies = async (provider: string, page: number = 1, sortBy: string = 'popularity.desc', releaseDateLte?: string): Promise<TMDBResponse> => {
   let providerId = 8;
   const p = provider.toLowerCase();
 
@@ -239,7 +240,8 @@ export const getProviderMovies = async (provider: string, page: number = 1): Pro
   else if (p.includes('paramount')) providerId = 531;
   else if (p.includes('globo')) providerId = 307;
 
-  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_watch_providers=${providerId}&watch_region=BR`;
+  let url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=${sortBy}&page=${page}&with_watch_providers=${providerId}&watch_region=BR`;
+  if (releaseDateLte) url += `&primary_release_date.lte=${releaseDateLte}&vote_count.gte=0&include_adult=false`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
@@ -264,13 +266,15 @@ export const getGenreIdByName = (name: string): number | undefined => {
 
 export const getMovieReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=0&include_adult=false&page=${page}`;
+  const providers = "8|119|337|1899|350|531|307";
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=0&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=0&include_adult=false&page=${page}`;
+  const providers = "8|119|337|1899|350|531|307";
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=0&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 

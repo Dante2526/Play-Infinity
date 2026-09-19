@@ -161,6 +161,7 @@ export function VideoPlayerModal({
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
+  const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
@@ -415,6 +416,7 @@ export function VideoPlayerModal({
     let isMounted = true;
     setLoadingSeason(true);
     setVerifiedAvailableEpisodes(null);
+    setIsCheckingEpisodes(true);
 
     getSeasonDetails(numericId, season)
       .then(data => {
@@ -425,13 +427,18 @@ export function VideoPlayerModal({
           // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
           getAvailableEpisodes(numericId, season, totalEpCount)
             .then(availList => {
-              if (isMounted && Array.isArray(availList) && availList.length > 0) {
-                setVerifiedAvailableEpisodes(availList);
+              if (isMounted && Array.isArray(availList)) {
+                setVerifiedAvailableEpisodes(availList.length > 0 ? availList : []);
               }
             })
             .catch(e => {
               console.warn("[VideoPlayerModal] Erro na verificação de stream:", e);
+            })
+            .finally(() => {
+              if (isMounted) setIsCheckingEpisodes(false);
             });
+        } else {
+          if (isMounted) setIsCheckingEpisodes(false);
         }
       })
       .catch(err => {
@@ -1470,7 +1477,18 @@ export function VideoPlayerModal({
             </div>
 
             {/* Bloco de Episódios */}
-            <div className="flex items-center gap-2 flex-wrap">
+            {isCheckingEpisodes ? (
+              <div className="flex items-center gap-2 text-sm text-neutral-400 py-1.5 px-3 bg-white/5 rounded-xl border border-white/5">
+                <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+                <span>Verificando episódios...</span>
+              </div>
+            ) : episodeNumbers.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-red-400 py-1.5 px-3 bg-red-950/30 rounded-xl border border-red-500/20">
+                <AlertCircle className="w-4 h-4" />
+                <span>Temporada não disponível no momento.</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => handleEpisodeChange(episode - 1)}
                 disabled={episode <= 1}
@@ -1541,6 +1559,7 @@ export function VideoPlayerModal({
                 </span>
               </button>
             </div>
+            )}
           </div>
         )}
 

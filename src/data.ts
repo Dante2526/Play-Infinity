@@ -52,7 +52,7 @@ export const featuredCarousel = [
     description:
       "O clã Targaryen divide-se enquanto a Dança dos Dragões começa. Rhaenyra e Aegon II lutam pelo Trono de Ferro, travando uma guerra civil épica por todo o reino de Westeros que mudará o mundo para sempre.",
     imageUrl:
-      "https://image.tmdb.org/t/p/original/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg",
+      "https://image.tmdb.org/t/p/original/577eXC8wFQT0eUrJcgznSiFPRmk.jpg",
     posterUrl:
       "https://image.tmdb.org/t/p/w500/oKJDm4QCKbp6mR4FnxXrFlPJP8Y.jpg",
     logoText: "A CASA DO\nDRAGÃO",
@@ -70,7 +70,7 @@ export const featuredCarousel = [
     description:
       "Baseada em uma das maiores franquias de videogame de todos os tempos, Fallout é a história de quem tem e quem não tem em um mundo onde não há quase nada para se ter. Duzentos anos após o apocalipse, os habitantes gentis dos luxuosos abrigos são forçados a retornar à paisagem irradiada.",
     imageUrl:
-      "https://image.tmdb.org/t/p/original/1R68vl3d5s86JsS2NPjl8UoMqIS.jpg",
+      "https://image.tmdb.org/t/p/original/coaPCIqQBPUZsOnJcWZxhaORcDT.jpg",
     posterUrl:
       "https://image.tmdb.org/t/p/w500/tQRX6GbYooU7kUaarKf5YXDTONy.jpg",
     logoText: "FALLOUT",
@@ -169,6 +169,13 @@ export const top10 = [
 
 export const releases = [
   {
+    id: 1284041,
+    tmdbId: 1284041,
+    title: "A ÚLTIMA CASA",
+    imageUrl: "https://image.tmdb.org/t/p/w500/AqOwuZ4X0Ssi3LIsYqXNw52IIvW.jpg",
+    playerUrl: "https://v1.watchplay.shop/movie/1284041",
+  },
+  {
     id: 969681,
     tmdbId: 969681,
     title: "HOMEM-ARANHA: UM NOVO DIA",
@@ -238,6 +245,14 @@ export const releases = [
 ];
 
 export const newest = [
+  {
+    id: 299939,
+    tmdbId: 299939,
+    title: "MONSTRO: A HISTÓRIA DE LIZZIE BORDEN",
+    type: "series" as const,
+    imageUrl: "https://image.tmdb.org/t/p/w500/zeUdYvw2DKRsiabu2ptTaUlairp.jpg",
+    playerUrl: "https://v1.watchplay.shop/series/299939/1/1",
+  },
   {
     id: 125988,
     tmdbId: 125988,

@@ -172,8 +172,13 @@ export function ProviderPage({
 
     const loadProviderData = async () => {
       try {
+        const today = new Date().toISOString().split('T')[0];
+        const isReleases = sortBy === 'first_air_date.desc';
+        const moviesSortBy = isReleases ? 'primary_release_date.desc' : sortBy;
+        const releaseDateParam = isReleases ? today : undefined;
+
         if (filterType === 'movie') {
-          const res = await getProviderMovies(provider, currentPage);
+          const res = await getProviderMovies(provider, currentPage, moviesSortBy, releaseDateParam);
           if (!isMounted) return;
           if (res && res.results && res.results.length > 0) {
             const formatted: CatalogItem[] = res.results.map((m: TMDBItem) => ({
@@ -200,7 +205,7 @@ export function ProviderPage({
             setTotalPages(1);
           }
         } else if (filterType === 'series') {
-          const res = await getProviderSeries(provider, currentPage);
+          const res = await getProviderSeries(provider, currentPage, sortBy, releaseDateParam);
           if (!isMounted) return;
           if (res && res.results && res.results.length > 0) {
             const formatted: CatalogItem[] = res.results.map((s: TMDBItem) => ({
@@ -229,8 +234,8 @@ export function ProviderPage({
         } else {
           // Both (séries + filmes)
           const [seriesRes, moviesRes] = await Promise.all([
-            getProviderSeries(provider, currentPage),
-            getProviderMovies(provider, currentPage)
+            getProviderSeries(provider, currentPage, sortBy, releaseDateParam),
+            getProviderMovies(provider, currentPage, moviesSortBy, releaseDateParam)
           ]);
           if (!isMounted) return;
 
@@ -305,10 +310,12 @@ export function ProviderPage({
     return () => {
       isMounted = false;
     };
-  }, [provider, filterType, currentPage]);
+  }, [provider, filterType, currentPage, sortBy]);
 
-  // get all unique genres for this provider
-  const availableGenres = Array.from(new Set<string>(items.flatMap(item => item.genres || []))).sort();
+  // get all unique genres from the current loaded items
+  const availableGenres = React.useMemo(() => {
+    return Array.from(new Set<string>(items.flatMap(item => item.genres || []))).sort();
+  }, [items]);
 
   const filteredItems = items.filter(item => {
     if (filterGenre !== 'all' && (!item.genres || !item.genres.includes(filterGenre))) return false;
@@ -378,20 +385,37 @@ export function ProviderPage({
           {availableGenres.length > 0 && (
             <div>
               <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block mb-2 text-center">
-                Gênero
+                Gênero e Lançamentos
               </span>
               <div className="flex flex-wrap justify-center items-center gap-1.5 md:gap-2">
                 <FilterChip 
+                  label="Lançamentos ✨" 
+                  active={sortBy === 'first_air_date.desc'} 
+                  onClick={() => {
+                    setSortBy('first_air_date.desc');
+                    setFilterGenre('all');
+                    setCurrentPage(1);
+                  }} 
+                />
+                <FilterChip 
                   label="Todos Gêneros" 
-                  active={filterGenre === 'all'} 
-                  onClick={() => setFilterGenre('all')} 
+                  active={filterGenre === 'all' && sortBy === 'popularity.desc'} 
+                  onClick={() => {
+                    setSortBy('popularity.desc');
+                    setFilterGenre('all');
+                    setCurrentPage(1);
+                  }} 
                 />
                 {availableGenres.map(genre => (
                   <FilterChip 
                     key={genre} 
                     label={genre} 
-                    active={filterGenre === genre} 
-                    onClick={() => setFilterGenre(genre)} 
+                    active={filterGenre === genre && sortBy === 'popularity.desc'} 
+                    onClick={() => {
+                      setSortBy('popularity.desc');
+                      setFilterGenre(genre);
+                      setCurrentPage(1);
+                    }} 
                   />
                 ))}
               </div>
