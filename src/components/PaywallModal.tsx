@@ -4,6 +4,7 @@ import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode,
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useSubscription } from '../hooks/useSubscription';
+import { reportAppError } from './GlobalErrorModal';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -215,6 +216,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       }
     } catch (err: any) {
       setError(err.message);
+      reportAppError(err, 'Processamento de Pagamento / Assinatura');
     } finally {
       setLoading(false);
     }
