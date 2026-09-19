@@ -20,6 +20,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const [debugCopied, setDebugCopied] = useState(false);
   
   const [formData, setFormData] = useState({
+    name: '',
+    email: '',
     cpfCnpj: '',
     postalCode: '',
     addressNumber: '',
@@ -39,6 +41,17 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       window.location.reload();
     }
   }, [isOpen, isPremium]);
+
+  useEffect(() => {
+    if (isOpen && auth.currentUser) {
+      const user = auth.currentUser;
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name || user.displayName || user.email?.split('@')[0] || '',
+        email: prev.email || user.email || ''
+      }));
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -61,6 +74,35 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: Preencha todos os campos do cartão e endereço.`);
         return;
       }
+    } else if (method === 'PIX') {
+      // Validações estritas do PIX: Nome completo, E-mail e CPF
+      const trimmedName = (formData.name || '').trim();
+      if (!trimmedName) {
+        const msg = 'Preencha o nome completo.';
+        setError(msg);
+        setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: ${msg}`);
+        return;
+      }
+
+      const rawEmail = formData.email || '';
+      const trimmedEmail = rawEmail.trim();
+      const hasSpacesOrSlashes = /[\s/\\]/.test(rawEmail);
+      const isValidEmailFormat = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(trimmedEmail);
+
+      if (!trimmedEmail || hasSpacesOrSlashes || !isValidEmailFormat) {
+        const msg = 'Informe um e-mail válido (com @ e domínio, sem barras nem espaços).';
+        setError(msg);
+        setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: ${msg}`);
+        return;
+      }
+
+      const cpfDigits = (formData.cpfCnpj || '').replace(/\D/g, '');
+      if (cpfDigits.length !== 11) {
+        const msg = 'O CPF deve conter exatamente 11 números.';
+        setError(msg);
+        setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: ${msg}`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -71,8 +113,6 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     try {
       const payload: any = {
         userId: user.uid,
-        email: user.email,
-        name: user.displayName || user.email?.split('@')[0],
         billingType: method,
       };
 
@@ -83,6 +123,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
            setLoading(false);
            return;
         }
+        payload.email = formData.email?.trim() || user.email;
+        payload.name = formData.name?.trim() || user.displayName || user.email?.split('@')[0];
         payload.cpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
         payload.creditCard = {
           holderName: formData.holderName,
@@ -92,21 +134,21 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
           ccv: formData.ccv
         };
         payload.creditCardHolderInfo = {
-          name: user.displayName || user.email?.split('@')[0],
-          email: user.email,
+          name: payload.name,
+          email: payload.email,
           cpfCnpj: payload.cpfCnpj,
           postalCode: formData.postalCode.replace(/\D/g, ''),
           addressNumber: formData.addressNumber,
           mobilePhone: formData.mobilePhone.replace(/\D/g, '')
         };
       } else if (method === 'PIX') {
-        if (!formData.cpfCnpj) {
-           setError('Preencha o CPF/CNPJ para gerar o PIX.');
-           setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: Preencha o CPF/CNPJ para gerar o PIX.`);
-           setLoading(false);
-           return;
-        }
-        payload.cpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
+        const trimmedName = formData.name.trim();
+        const trimmedEmail = formData.email.trim();
+        const cpfDigits = formData.cpfCnpj.replace(/\D/g, '');
+
+        payload.name = trimmedName;
+        payload.email = trimmedEmail;
+        payload.cpfCnpj = cpfDigits;
       }
 
       requestLog = `=== [${new Date().toLocaleTimeString()}] DADOS ENVIADOS PELO APP ===\n` +
@@ -399,15 +441,51 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     )}
 
                     {activeTab === 'PIX' && (
-                      <div className="flex flex-col items-center justify-center py-6 text-center space-y-4">
-                        <QrCode size={48} className="text-purple-400 opacity-50" />
-                        <p className="text-zinc-300">Pagamento instantâneo via Pix.</p>
-                        <p className="text-zinc-500 text-sm">O acesso é liberado em poucos segundos após a confirmação do pagamento.</p>
-                        <div className="w-full text-left mt-4">
-                          <label className="text-xs text-zinc-400 mb-1 block">CPF/CNPJ (Obrigatório para gerar o PIX) *</label>
+                      <div className="space-y-4 py-2">
+                        <div className="flex items-center gap-3 bg-purple-500/10 border border-purple-500/20 p-3 rounded-xl mb-4">
+                          <QrCode size={24} className="text-purple-400 shrink-0" />
+                          <div className="text-left">
+                            <p className="text-white text-xs font-semibold">Pagamento Instantâneo via Pix</p>
+                            <p className="text-zinc-400 text-[11px]">Preencha os dados abaixo para gerar o QR Code.</p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <label htmlFor="pix-input-name" className="text-xs text-zinc-400 mb-1 block">Nome Completo *</label>
                           <input 
-                            type="text" name="cpfCnpj" value={formData.cpfCnpj} onChange={handleChange}
-                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors"
+                            id="pix-input-name"
+                            type="text" 
+                            name="name" 
+                            value={formData.name} 
+                            onChange={handleChange}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors text-sm"
+                            placeholder="Nome completo do titular"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="pix-input-email" className="text-xs text-zinc-400 mb-1 block">E-mail *</label>
+                          <input 
+                            id="pix-input-email"
+                            type="email" 
+                            name="email" 
+                            value={formData.email} 
+                            onChange={handleChange}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors text-sm"
+                            placeholder="seuemail@exemplo.com"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor="pix-input-cpf" className="text-xs text-zinc-400 mb-1 block">CPF (11 números) *</label>
+                          <input 
+                            id="pix-input-cpf"
+                            type="text" 
+                            name="cpfCnpj" 
+                            value={formData.cpfCnpj} 
+                            onChange={handleChange}
+                            maxLength={14}
+                            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-purple-500 transition-colors text-sm"
                             placeholder="000.000.000-00"
                           />
                         </div>
