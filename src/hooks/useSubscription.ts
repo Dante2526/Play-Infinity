@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
+import { isAiStudioOrDevEnvironment } from "../utils/envUtils";
 
 export function useSubscription() {
-  const [isPremium, setIsPremium] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
+  const isDev = isAiStudioOrDevEnvironment();
+  const [isPremium, setIsPremium] = useState<boolean>(isDev);
+  const [loading, setLoading] = useState<boolean>(!isDev);
 
   useEffect(() => {
     // Escuta a autenticação para atrelar o snapshot ao usuário logado
@@ -64,17 +66,18 @@ export function useSubscription() {
                 return;
               }
             } catch (e) {}
-            setIsPremium(false);
+            setIsPremium(isDev);
             setLoading(false);
           }
         }, (err) => {
           console.error("Erro ao escutar assinatura do usuário:", err);
+          setIsPremium(isDev);
           setLoading(false);
         });
 
         return () => unsubscribeSnap();
       } else {
-        setIsPremium(false);
+        setIsPremium(isDev);
         setLoading(false);
       }
     });
