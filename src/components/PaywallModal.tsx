@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
+import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy, Bug } from 'lucide-react';
 import { auth } from '../services/firebase';
 import { useSubscription } from '../hooks/useSubscription';
 
@@ -16,6 +16,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string>('');
+  const [debugCopied, setDebugCopied] = useState(false);
   
   const [formData, setFormData] = useState({
     cpfCnpj: '',
@@ -48,6 +50,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     const user = auth.currentUser;
     if (!user) {
       setError('Você precisa estar logado para assinar.');
+      setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO LOCAL: Nenhum usuário autenticado encontrado no Firebase Auth.`);
       return;
     }
 
@@ -55,12 +58,15 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       // Basic validation
       if (!formData.cpfCnpj || !formData.postalCode || !formData.addressNumber || !formData.holderName || !formData.cardNumber || !formData.expiryMonth || !formData.expiryYear || !formData.ccv || !formData.mobilePhone) {
         setError('Preencha todos os campos do cartão e endereço.');
+        setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: Preencha todos os campos do cartão e endereço.`);
         return;
       }
     }
 
     setLoading(true);
     setError('');
+
+    let requestLog = '';
 
     try {
       const payload: any = {
@@ -73,6 +79,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       if (method === 'CREDIT_CARD') {
         if (!formData.cpfCnpj) {
            setError('Preencha o CPF/CNPJ.');
+           setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO: Preencha o CPF/CNPJ.`);
            setLoading(false);
            return;
         }
@@ -95,11 +102,17 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       } else if (method === 'PIX') {
         if (!formData.cpfCnpj) {
            setError('Preencha o CPF/CNPJ para gerar o PIX.');
+           setDebugInfo(`[${new Date().toLocaleTimeString()}] ERRO DE VALIDAÇÃO: Preencha o CPF/CNPJ para gerar o PIX.`);
            setLoading(false);
            return;
         }
         payload.cpfCnpj = formData.cpfCnpj.replace(/\D/g, '');
       }
+
+      requestLog = `=== [${new Date().toLocaleTimeString()}] DADOS ENVIADOS PELO APP ===\n` +
+        `Endpoint: POST /api/create-subscription\n` +
+        `Payload:\n` + JSON.stringify(payload, null, 2);
+      setDebugInfo(requestLog);
 
       const res = await fetch('/api/create-subscription', {
         method: 'POST',
@@ -107,31 +120,47 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         body: JSON.stringify(payload),
       });
 
-      // Trata caso a resposta do servidor seja vazia ou erro 500 html
-      let data;
+      const textData = await res.text();
+      let data: any = null;
       try {
-        const textData = await res.text();
         data = JSON.parse(textData);
       } catch (err) {
-        throw new Error('Erro ao processar resposta do servidor. Tente novamente mais tarde.');
+        // Ignora erro de JSON se for texto puro
       }
-      if (!data.success) throw new Error(data.error || 'Erro ao processar assinatura.');
+
+      const responseLog = `\n\n=== [${new Date().toLocaleTimeString()}] RESPOSTA DO SERVIDOR ===\n` +
+        `Status HTTP: ${res.status} ${res.statusText}\n` +
+        `Corpo da Resposta:\n` + (data ? JSON.stringify(data, null, 2) : textData);
+
+      setDebugInfo(requestLog + responseLog);
+
+      if (!data) {
+        throw new Error(`Resposta do servidor não é um JSON válido. Status: ${res.status}`);
+      }
+
+      if (!data.success) {
+        throw new Error(data.error || 'Erro ao processar assinatura.');
+      }
 
       if (method === 'CREDIT_CARD') {
         alert("Assinatura confirmada com sucesso! Bem-vindo(a) ao Premium.");
         window.location.reload();
       } else if (method === 'PIX') {
-        if (data.pixQrCode) {
+        if (data.pixQrCode && data.pixQrCode.encodedImage) {
           setPixData({
             encodedImage: data.pixQrCode.encodedImage,
             payload: data.pixQrCode.payload
           });
         } else {
-          throw new Error("Erro ao gerar QR Code do Pix.");
+          throw new Error("O servidor respondeu com sucesso, mas 'pixQrCode' veio ausente ou sem imagem.");
         }
       }
     } catch (err: any) {
       setError(err.message);
+      setDebugInfo((prev) => {
+        const errorLog = `\n\n=== [${new Date().toLocaleTimeString()}] ERRO CAPTURADO ===\n${err.message}`;
+        return prev ? prev + errorLog : errorLog;
+      });
     } finally {
       setLoading(false);
     }
@@ -403,6 +432,38 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     </button>
                   </>
                 )}
+
+                {/* Caixa de Diagnóstico da Requisição (Envio & Resposta do PIX) */}
+                <div id="pix-debug-container" className="mt-6 pt-4 border-t border-white/10 w-full text-left">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
+                      <Bug size={14} className="text-purple-400" /> Diagnóstico da Requisição (Envio & Resposta)
+                    </span>
+                    <button
+                      id="copy-debug-button"
+                      type="button"
+                      onClick={() => {
+                        if (debugInfo) {
+                          navigator.clipboard.writeText(debugInfo);
+                          setDebugCopied(true);
+                          setTimeout(() => setDebugCopied(false), 2000);
+                        }
+                      }}
+                      disabled={!debugInfo}
+                      className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:hover:bg-zinc-800 rounded-lg text-xs text-white font-medium flex items-center gap-1.5 transition-colors border border-white/10"
+                    >
+                      {debugCopied ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
+                      {debugCopied ? "Copiado!" : "Copiar"}
+                    </button>
+                  </div>
+                  <textarea
+                    id="pix-debug-textarea"
+                    readOnly
+                    value={debugInfo}
+                    placeholder="Ao clicar em 'Gerar PIX', os dados enviados pelo app e a resposta retornada pelo servidor aparecerão aqui..."
+                    className="w-full h-36 bg-black/60 border border-white/10 rounded-xl p-3 font-mono text-xs leading-relaxed text-zinc-300 resize-y outline-none focus:border-purple-500/50"
+                  />
+                </div>
               </div>
             )}
           </motion.div>
