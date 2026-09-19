@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -98,6 +98,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editName, setEditName] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editMonthlyPrice, setEditMonthlyPrice] = useState<"9.90" | "13.00">("13.00");
+  const [editAccessType, setEditAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia">("mensal");
+  const [editExpirationDate, setEditExpirationDate] = useState("");
+  const [quickExtendLoadingId, setQuickExtendLoadingId] = useState<string | null>(null);
+  const [actionSuccessToast, setActionSuccessToast] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
@@ -433,14 +437,107 @@ export function AdminPage({ onBack }: AdminPageProps) {
     }
   };
 
+  const formatIsoToLocalInput = (isoStr?: string) => {
+    if (!isoStr) return "";
+    try {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return "";
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+      return "";
+    }
+  };
+
   const handleOpenEdit = (user: ClientUser) => {
     setEditingUser(user);
     setEditName(user.name || "");
     setEditEmail(user.email || "");
     setEditPassword(user.initialPassword || "");
+    setEditAccessType(user.accessType || "mensal");
     setEditMonthlyPrice(user.monthlyFee?.includes("9,90") || user.monthlyFee?.includes("9.90") ? "9.90" : "13.00");
+    setEditExpirationDate(formatIsoToLocalInput(user.expirationDate));
     setEditError("");
     setEditSuccess("");
+  };
+
+  const applyQuickEditDuration = (
+    hours: number | "vitalicio",
+    type: "teste" | "4horas" | "1dia" | "mensal" | "vitalicio"
+  ) => {
+    setEditAccessType(type);
+    if (type === "vitalicio" || hours === "vitalicio") {
+      const vit = new Date();
+      vit.setFullYear(2099);
+      setEditExpirationDate(formatIsoToLocalInput(vit.toISOString()));
+      return;
+    }
+
+    const now = Date.now();
+    let baseTime = now;
+    if (editExpirationDate) {
+      const parsed = new Date(editExpirationDate).getTime();
+      if (!isNaN(parsed) && parsed > now) {
+        baseTime = parsed;
+      }
+    }
+
+    const target = new Date(baseTime + hours * 60 * 60 * 1000);
+    setEditExpirationDate(formatIsoToLocalInput(target.toISOString()));
+  };
+
+  const applyFromNow = (
+    hours: number,
+    type: "teste" | "4horas" | "1dia" | "mensal"
+  ) => {
+    setEditAccessType(type);
+    const target = new Date(Date.now() + hours * 60 * 60 * 1000);
+    setEditExpirationDate(formatIsoToLocalInput(target.toISOString()));
+  };
+
+  const handleQuickExtend = async (
+    client: ClientUser, 
+    hoursToAdd: number, 
+    newType: "teste" | "4horas" | "1dia" | "mensal"
+  ) => {
+    setQuickExtendLoadingId(client.id);
+    try {
+      const now = Date.now();
+      let baseTime = now;
+      if (client.expirationDate) {
+        const prev = new Date(client.expirationDate).getTime();
+        // Se ainda não expirou, soma ao tempo restante; se já expirou, renova a partir de agora
+        if (!isNaN(prev) && prev > now) {
+          baseTime = prev;
+        }
+      }
+
+      const targetDate = new Date(baseTime + hoursToAdd * 60 * 60 * 1000);
+      const updates: any = {
+        assinatura: "ATIVA",
+        subscription: "ACTIVE",
+        dataExpiracao: targetDate.toISOString(),
+        expirationDate: targetDate.toISOString(),
+        tipoAcesso: newType,
+        accessType: newType,
+      };
+
+      await updateDoc(doc(db, "usuarios", client.id), updates);
+      try {
+        await updateDoc(doc(db, "users", client.id), updates);
+      } catch(e) {}
+
+      const durationLabel = hoursToAdd === 1 ? "1 hora" : hoursToAdd === 4 ? "4 horas" : hoursToAdd === 24 ? "1 dia" : `${hoursToAdd} horas`;
+      setActionSuccessToast(`Acesso de "${client.name || client.email}" renovado com sucesso por mais ${durationLabel}!`);
+      setTimeout(() => setActionSuccessToast(null), 4000);
+
+      await loadStats();
+    } catch (err: any) {
+      console.error("Erro ao renovar tempo:", err);
+      alert("Erro ao renovar tempo: " + err.message);
+    } finally {
+      setQuickExtendLoadingId(null);
+    }
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -470,6 +567,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
       // 1. Atualiza na coleção 'usuarios' do Firestore
       const updates: any = {
         email: trimmedEmail,
+        tipoAcesso: editAccessType,
+        accessType: editAccessType,
       };
       if (trimmedName !== undefined) {
         updates.nome = trimmedName;
@@ -477,12 +576,41 @@ export function AdminPage({ onBack }: AdminPageProps) {
       if (trimmedPass) {
         updates.senha = trimmedPass;
       }
-      if (editingUser.accessType === "mensal") {
+
+      if (editAccessType === "vitalicio") {
+        const vit = new Date();
+        vit.setFullYear(2099);
+        updates.dataExpiracao = vit.toISOString();
+        updates.expirationDate = vit.toISOString();
+        updates.assinatura = "ATIVA";
+        updates.subscription = "ACTIVE";
+      } else if (editExpirationDate) {
+        const expDate = new Date(editExpirationDate);
+        if (!isNaN(expDate.getTime())) {
+          updates.dataExpiracao = expDate.toISOString();
+          updates.expirationDate = expDate.toISOString();
+          if (expDate.getTime() > Date.now()) {
+            updates.assinatura = "ATIVA";
+            updates.subscription = "ACTIVE";
+          } else {
+            updates.assinatura = "EXPIRADA";
+            updates.subscription = "INACTIVE";
+          }
+        }
+      }
+
+      if (editAccessType === "mensal") {
         updates.valorMensalidade = editMonthlyPrice === "13.00" ? 13.00 : 9.90;
         updates.valor = editMonthlyPrice === "13.00" ? "13,00" : "9,90";
+      } else {
+        updates.valorMensalidade = null;
+        updates.valor = null;
       }
 
       await updateDoc(doc(db, "usuarios", editingUser.id), updates);
+      try {
+        await updateDoc(doc(db, "users", editingUser.id), updates);
+      } catch(e) {}
 
       // 2. Se tiver senha anterior e for conhecida, sincroniza no Firebase Auth via app temporário
       const oldPass = editingUser.initialPassword;
@@ -509,7 +637,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         }
       }
 
-      setEditSuccess("Credenciais atualizadas com sucesso!");
+      setEditSuccess("Dados e tempo de acesso atualizados com sucesso!");
       await loadStats();
       setTimeout(() => {
         setEditingUser(null);
@@ -586,7 +714,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pb-24 pt-20 px-4 sm:px-8">
+    <div className="min-h-screen bg-[#0a0a0a] pb-24 pt-20 px-4 sm:px-8 relative">
+      {/* Toast de Notificação de Renovação / Ação */}
+      {actionSuccessToast && (
+        <div className="fixed top-6 right-6 z-50 p-4 bg-emerald-600 text-white font-bold text-sm rounded-2xl shadow-2xl shadow-emerald-500/40 flex items-center gap-3 animate-fade-in border border-emerald-400/30">
+          <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+          <span>{actionSuccessToast}</span>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto animate-fade-in">
         
         {/* Header Admin */}
@@ -852,6 +988,41 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
                           <span className="text-white/40">Vence:</span>
                           <span className="font-medium text-white/90">{expireLabel}</span>
+                        </div>
+
+                        {/* Ações Rápidas de Extensão de Tempo */}
+                        <div className="bg-white/5 border border-white/5 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5">
+                          <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 mr-0.5">
+                            <Timer className="w-3.5 h-3.5 text-orange-400" />
+                            Tempo:
+                          </span>
+                          <button
+                            type="button"
+                            disabled={quickExtendLoadingId === client.id}
+                            onClick={() => handleQuickExtend(client, 1, "teste")}
+                            title="Dar +1 hora de teste ao usuário (reativa imediatamente)"
+                            className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+1h"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={quickExtendLoadingId === client.id}
+                            onClick={() => handleQuickExtend(client, 4, "4horas")}
+                            title="Mudar/dar 4 horas de acesso (reativa imediatamente)"
+                            className="px-2 py-1 bg-orange-500/15 hover:bg-orange-500/30 text-orange-300 rounded-lg text-[11px] font-bold border border-orange-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            +4h
+                          </button>
+                          <button
+                            type="button"
+                            disabled={quickExtendLoadingId === client.id}
+                            onClick={() => handleQuickExtend(client, 24, "1dia")}
+                            title="Mudar/dar 1 dia de acesso (reativa imediatamente)"
+                            className="px-2 py-1 bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 rounded-lg text-[11px] font-bold border border-teal-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            +1 Dia
+                          </button>
                         </div>
 
                         {/* Botão de Editar Credenciais */}
@@ -1225,7 +1396,157 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <p className="text-[11px] text-white/40 mt-1">Deixe como está ou digite a nova senha desejada.</p>
               </div>
 
-              {editingUser.accessType === "mensal" && (
+              {/* Programação de Tempo & Duração do Teste / Acesso */}
+              <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-3.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-white/80 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Timer className="w-4 h-4 text-orange-400" />
+                    Tempo de Uso / Duração
+                  </label>
+
+                  {/* Indicador de Status Atual */}
+                  {(() => {
+                    if (editAccessType === "vitalicio") {
+                      return (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                          Acesso Vitalício
+                        </span>
+                      );
+                    }
+                    if (!editExpirationDate) {
+                      return (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/50">
+                          Sem data definida
+                        </span>
+                      );
+                    }
+                    const exp = new Date(editExpirationDate).getTime();
+                    const isExp = isNaN(exp) ? false : exp <= Date.now();
+                    return (
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isExp 
+                          ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse' 
+                          : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                      }`}>
+                        {isExp ? 'Expirado no momento' : 'Válido / Ativo'}
+                      </span>
+                    );
+                  })()}
+                </div>
+
+                {/* Seleção do Tipo de Acesso / Duração */}
+                <div>
+                  <span className="text-white/50 text-[11px] block mb-1.5 font-medium">Plano / Duração:</span>
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => applyFromNow(1, 'teste')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === 'teste'
+                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      1h Teste
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyFromNow(4, '4horas')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === '4horas'
+                          ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      4 Horas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyFromNow(24, '1dia')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === '1dia'
+                          ? 'bg-teal-500 text-white shadow-md shadow-teal-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      1 Dia
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyFromNow(720, 'mensal')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === 'mensal'
+                          ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      Mensal
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration('vitalicio', 'vitalicio')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all col-span-3 sm:col-span-1 ${
+                        editAccessType === 'vitalicio'
+                          ? 'bg-purple-500 text-white shadow-md shadow-purple-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      Vitalício
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ações de Extensão Rápida (Acrescentar mais tempo ao tempo restante/atual) */}
+                <div className="pt-2 border-t border-white/5">
+                  <span className="text-white/50 text-[11px] block mb-1.5 flex items-center gap-1 font-medium">
+                    <Plus className="w-3 h-3 text-orange-400" />
+                    Dar mais tempo (soma a partir de agora ou acrescenta):
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration(1, 'teste')}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                    >
+                      +1h de Teste
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration(4, '4horas')}
+                      className="px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                    >
+                      +4 Horas
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration(24, '1dia')}
+                      className="px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                    >
+                      +1 Dia (24h)
+                    </button>
+                  </div>
+                </div>
+
+                {/* Campo Data e Hora de Expiração Programada */}
+                {editAccessType !== 'vitalicio' && (
+                  <div className="pt-2 border-t border-white/5">
+                    <label className="text-white/50 text-[11px] block mb-1 font-medium">
+                      Data e Horário de Expiração Programados:
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={editExpirationDate}
+                      onChange={(e) => setEditExpirationDate(e.target.value)}
+                      className="w-full bg-white/5 border border-white/10 py-2.5 px-3 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-mono"
+                    />
+                    <p className="text-[10px] text-white/40 mt-1">
+                      Você pode digitar ou escolher no calendário qualquer data/hora desejada. Ao salvar com data futura, o status do usuário reativa para ATIVO automaticamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {editAccessType === "mensal" && (
                 <div>
                   <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Valor da Mensalidade</label>
                   <div className="flex gap-2">
