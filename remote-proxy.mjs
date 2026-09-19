@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import helmet from "helmet";
 
 const app = express();
-const PORT = 80;
+const PORT = process.env.PORT || 8080;
 
 app.use(helmet({
   frameguard: false,
@@ -180,7 +180,11 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       }
       const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
       
-      const serverIp = "147.15.57.146"; // The proxy's public IP or domain
+      const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity-app.duckdns.org";
+      const finalProto = (host.includes("duckdns.org") || proto === "https") ? "https" : proto;
+      const baseUrl = `${finalProto}://${host}`;
+
       let lastTag = "";
       const mappedLines = filteredLines.map(line => {
         const trimmed = line.trim();
@@ -191,8 +195,8 @@ app.get("/api/live-stream-proxy", async (req, res) => {
           return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
             try {
               const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
-              if (fullUri.includes("plutotv.net") || isKiwi) return `URI="${fullUri}"`;
-              return `URI="http://${serverIp}/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true&kiwi=${isKiwi}"`;
+              if (fullUri.startsWith("https://") && fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
+              return `URI="${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true&kiwi=${isKiwi}"`;
             } catch {
               return `URI="${uri}"`;
             }
@@ -201,9 +205,8 @@ app.get("/api/live-stream-proxy", async (req, res) => {
 
         try {
           const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
-          const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
-          if (fullSegUrl.includes("plutotv.net") || (isKiwi && !isStreamManifest)) return fullSegUrl;
-          return `http://${serverIp}/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true&kiwi=${isKiwi}`;
+          if (fullSegUrl.startsWith("https://") && fullSegUrl.includes("plutotv.net")) return fullSegUrl;
+          return `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true&kiwi=${isKiwi}`;
         } catch {
           return trimmed;
         }
@@ -224,14 +227,17 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       const seq = Math.floor(Date.now() / 4000);
-      const serverIp = "147.15.57.146";
+      const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
+      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity-app.duckdns.org";
+      const finalProto = (host.includes("duckdns.org") || proto === "https") ? "https" : proto;
+      const baseUrl = `${finalProto}://${host}`;
       const manifest = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
         "#EXT-X-TARGETDURATION:6",
         `#EXT-X-MEDIA-SEQUENCE:${seq}`,
         "#EXTINF:6.0,",
-        `http://${serverIp}/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+        `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
       ].join("\n");
       return res.send(manifest);
     }
