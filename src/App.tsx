@@ -69,6 +69,7 @@ import { useSubscription } from "./hooks/useSubscription";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { auth, db } from "./services/firebase";
+import { isAiStudioOrDevEnvironment } from "./utils/envUtils";
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
 ) {
@@ -237,6 +238,7 @@ export default function App() {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
   
   // Autenticação Firebase & Assinatura
+  const isDevEnvironment = isAiStudioOrDevEnvironment();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userDisplayName, setUserDisplayName] = useState<string>("");
   const [isAuthInitialized, setIsAuthInitialized] = useState(false);
@@ -338,7 +340,7 @@ export default function App() {
     };
   }, [currentUser, viewState.type]);
 
-  const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || 'N').trim().charAt(0).toUpperCase() || 'N';
+  const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || (isDevEnvironment ? 'DEV' : 'N')).trim().charAt(0).toUpperCase() || 'P';
 
   // Heartbeat para rastrear "Pessoas Assistindo Agora"
   useEffect(() => {
@@ -440,7 +442,7 @@ export default function App() {
   };
 
   const handleToggleProfile = () => {
-    if (!currentUser) {
+    if (!currentUser && !isDevEnvironment) {
       setIsAuthModalOpen(true);
       return;
     }
@@ -477,7 +479,7 @@ export default function App() {
     posterUrl?: string,
     isAnime?: boolean
   ) => {
-    if (!isPremium) {
+    if (!isPremium && !isDevEnvironment) {
       setIsPaywallOpen(true);
       return;
     }
@@ -572,7 +574,9 @@ export default function App() {
   }
 
   // TELA DE BLOQUEIO INICIAL (FORÇA O LOGIN ANTES DO CATÁLOGO)
-  if (!currentUser && viewState.type !== 'admin') {
+  // No Google AI Studio (desenvolvimento/testes), desabilita para permitir testes diretos de funções
+  // Na versão de deploy (produção), a tela de login permanece 100% ativa e obrigatória
+  if (!currentUser && viewState.type !== 'admin' && !isDevEnvironment) {
     return (
       <div className="bg-[#0a0a0a] min-h-screen relative overflow-hidden flex flex-col">
         {/* Background Cinematográfico Desfocado */}
@@ -679,6 +683,18 @@ export default function App() {
             )}
           </button>
 
+          {isDevEnvironment && (
+            <button 
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] font-semibold text-orange-400 select-none cursor-pointer hover:bg-orange-500/20 transition-all"
+              title="Ambiente Google AI Studio: Login automático desabilitado para testes rápidos. Clique aqui para abrir a tela de login manualmente."
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+              Modo Teste AI Studio
+            </button>
+          )}
+
           <button 
             tabIndex={0}
             role="button"
@@ -711,6 +727,18 @@ export default function App() {
         
         {/* AÇÕES NO CANTO SUPERIOR DIREITO (MOBILE) */}
         <div className="pointer-events-auto shrink-0 flex items-center gap-2">
+          {isDevEnvironment && (
+            <button 
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-[10px] font-semibold text-orange-400 select-none cursor-pointer"
+              title="Ambiente Google AI Studio (Testes): Toque para abrir login"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
+              Teste
+            </button>
+          )}
+
           {/* BOTÃO DE NOTIFICAÇÕES (MOBILE) */}
           <button 
             tabIndex={0}
