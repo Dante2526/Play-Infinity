@@ -3,6 +3,7 @@ import { X, Lock, Mail, AlertCircle, User } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
+import { reportAppError } from "./GlobalErrorModal";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -115,6 +116,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
         setError("Este e-mail já está cadastrado.");
       } else {
         setError(err.message || "Erro na autenticação. Tente novamente.");
+        reportAppError(err, 'Autenticação / Conta de Usuário');
       }
     } finally {
       setLoading(false);

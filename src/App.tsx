@@ -64,6 +64,7 @@ import { VideoPlayerModal } from "./components/VideoPlayerModal";
 import type { LiveChannel } from "./data/liveChannels";
 import { AuthModal } from "./components/AuthModal";
 import { PaywallModal } from "./components/PaywallModal";
+import { GlobalErrorModal } from "./components/GlobalErrorModal";
 import { useSubscription } from "./hooks/useSubscription";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -888,6 +889,7 @@ export default function App() {
       {/* Auth & Paywall Modals */}
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
+      <GlobalErrorModal />
 
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
       <React.Suspense fallback={null}>
