@@ -2061,9 +2061,12 @@ const router = Router();
           skipNextLine = false;
 
           if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
-            // Verifica a resolução e ignora 480p, 360p, etc.
+            // Permitimos o ABR do hls.js cair até 480p em caso de internet ruim — isso é
+            // essencial para ele conseguir se adaptar de verdade (ver nota anterior).
+            // Abaixo de 480p (360p, 240p, etc.) a qualidade fica ruim demais para o padrão
+            // do produto, então essas variantes continuam sendo removidas do manifesto.
             const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
-            if (resMatch && parseInt(resMatch[1], 10) < 720) {
+            if (resMatch && parseInt(resMatch[1], 10) < 480) {
               skipNextLine = true;
               continue; // Pula esta tag e a próxima linha (URI)
             }
