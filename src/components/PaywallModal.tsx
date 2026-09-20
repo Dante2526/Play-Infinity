@@ -5,6 +5,7 @@ import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useSubscription } from '../hooks/useSubscription';
 import { reportAppError } from './GlobalErrorModal';
+import { getFriendlyErrorMessage } from '../utils/errorTranslator';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -215,7 +216,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         }
       }
     } catch (err: any) {
-      setError(err.message);
+      setError(getFriendlyErrorMessage(err, "Não foi possível processar o pagamento. Tente novamente."));
       reportAppError(err, 'Processamento de Pagamento / Assinatura');
     } finally {
       setLoading(false);

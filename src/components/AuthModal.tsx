@@ -4,6 +4,7 @@ import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } f
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 import { reportAppError } from "./GlobalErrorModal";
+import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -110,12 +111,9 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
       onClose(); // Autenticação com sucesso
     } catch (err: any) {
-      if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found" || err.code === "auth/wrong-password") {
-        setError("E-mail ou senha incorretos.");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Este e-mail já está cadastrado.");
-      } else {
-        setError(err.message || "Erro na autenticação. Tente novamente.");
+      const friendly = getFriendlyErrorMessage(err, "Erro na autenticação. Tente novamente.");
+      setError(friendly);
+      if (err.code !== "auth/invalid-credential" && err.code !== "auth/user-not-found" && err.code !== "auth/wrong-password" && err.code !== "auth/invalid-email") {
         reportAppError(err, 'Autenticação / Conta de Usuário');
       }
     } finally {

@@ -65,6 +65,7 @@ import {
   TrailerVideo
 } from "../services/tmdb";
 import { VideoPlayerModal } from "../components/VideoPlayerModal";
+import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -244,13 +245,7 @@ export function UserProfilePage({
       }, 1800);
     } catch (err: any) {
       console.error("Erro ao alterar senha:", err);
-      if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
-        setPasswordError("Senha atual incorreta.");
-      } else if (err.code === "auth/weak-password") {
-        setPasswordError("A nova senha é muito fraca.");
-      } else {
-        setPasswordError(err.message || "Não foi possível alterar a senha. Tente novamente.");
-      }
+      setPasswordError(getFriendlyErrorMessage(err, "Não foi possível alterar a senha. Tente novamente."));
     } finally {
       setPasswordLoading(false);
     }

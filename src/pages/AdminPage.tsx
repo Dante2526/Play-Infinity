@@ -5,6 +5,7 @@ import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signIn
 import { initializeApp, deleteApp } from "firebase/app";
 import { auth, db, firebaseConfig } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
+import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 
 export interface ClientUser {
   id: string;
@@ -140,7 +141,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         setError("Credenciais inválidas. Verifique o email e a senha.");
       }
     } catch (err: any) {
-      setError("Erro ao autenticar: " + err.message);
+      setError(getFriendlyErrorMessage(err, "Erro ao autenticar. Verifique suas credenciais."));
     } finally {
       setLoading(false);
     }
@@ -277,10 +278,28 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setCreateError("O campo Nome do Cliente é obrigatório.");
       return;
     }
-    if (!newEmail.trim()) {
+
+    const cleanEmail = newEmail.trim().toLowerCase();
+    if (!cleanEmail) {
       setCreateError("O campo E-mail do Cliente é obrigatório.");
       return;
     }
+
+    // Validação preventiva de erros comuns de digitação de e-mail
+    if (cleanEmail.includes(".@")) {
+      setCreateError("O e-mail contém um ponto '.' antes do '@' (ex: '01.@'). Remova esse ponto para prosseguir.");
+      return;
+    }
+    if (cleanEmail.includes("@.") || cleanEmail.endsWith(".")) {
+      setCreateError("O e-mail contém um ponto '.' em posição inválida. Verifique a digitação.");
+      return;
+    }
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setCreateError("Formato de e-mail inválido. Verifique se digitou corretamente (ex: cliente@hotmail.com).");
+      return;
+    }
+
     if (!newPassword.trim() || newPassword.length < 6) {
       setCreateError("A senha é obrigatória e deve ter pelo menos 6 caracteres.");
       return;
@@ -294,7 +313,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
     try {
       // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
-      const userCredential = await createUserWithEmailAndPassword(auth, newEmail.trim(), newPassword);
+      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
       
       // 2. Atualiza nome no perfil do Auth
       try {
@@ -338,7 +357,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       const valorTxt = monthlyPrice === "13.00" ? "13,00" : "9,90";
 
       await setDoc(doc(db, "usuarios", userCredential.user.uid), {
-        email: newEmail.trim(),
+        email: cleanEmail,
         nome: newName.trim(),
         assinatura: "ATIVA",
         dataPagamento: payDate.toISOString(),
@@ -362,7 +381,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso!${accessType === 'mensal' ? ` Mensalidade: R$ ${valorTxt}.` : ''} O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
         name: newName.trim(),
-        email: newEmail.trim(),
+        email: cleanEmail,
         password: newPassword,
         expirationDate: expireStr,
         monthlyFee: accessType === 'mensal' ? `R$ ${valorTxt}` : undefined
@@ -376,7 +395,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     } catch (err: any) {
       // Se falhar (ex: email já existe), desloga só por garantia
       try { await signOut(auth); } catch(e){}
-      setCreateError("Erro: " + err.message);
+      setCreateError(getFriendlyErrorMessage(err, "Não foi possível criar o acesso do cliente."));
     } finally {
       setCreateLoading(false);
     }
@@ -394,7 +413,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setRevokeSuccess(`Acesso de ${confirmRevokeUser.email} revogado com sucesso!`);
       await loadStats();
     } catch (err: any) {
-      setRevokeError("Erro ao revogar acesso: " + err.message);
+      setRevokeError(getFriendlyErrorMessage(err, "Erro ao revogar acesso do cliente."));
     } finally {
       setConfirmRevokeUser(null);
     }
@@ -431,7 +450,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setRevokeEmail("");
       await loadStats();
     } catch (err: any) {
-      setRevokeError("Erro ao revogar acesso: " + err.message);
+      setRevokeError(getFriendlyErrorMessage(err, "Erro ao revogar acesso do cliente."));
     } finally {
       setRevokeLoading(false);
     }
@@ -534,7 +553,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       await loadStats();
     } catch (err: any) {
       console.error("Erro ao renovar tempo:", err);
-      alert("Erro ao renovar tempo: " + err.message);
+      alert(getFriendlyErrorMessage(err, "Erro ao renovar tempo de acesso."));
     } finally {
       setQuickExtendLoadingId(null);
     }
@@ -644,7 +663,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         setEditSuccess("");
       }, 1000);
     } catch (err: any) {
-      setEditError("Erro ao salvar: " + err.message);
+      setEditError(getFriendlyErrorMessage(err, "Erro ao atualizar dados do cliente."));
     } finally {
       setEditLoading(false);
     }
