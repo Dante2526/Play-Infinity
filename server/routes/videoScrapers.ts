@@ -7,7 +7,7 @@ import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp } from "../utils/helpers";
 import { resolveVixsrcStream, resolveDirectAnimeStream } from "../../server";
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "../utils/caches";
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 
@@ -1919,6 +1919,134 @@ const router = Router();
         </body>
         </html>
       `);
+    }
+  });
+
+  // API 6.5: Verificação Real de Disponibilidade de Episódios por Temporada
+  // Usada pelo front-end (src/services/episodeAvailability.ts) para esconder da grade de
+  // episódios qualquer episódio que ainda não tenha streaming disponível em nenhum servidor
+  // homologado (ex: temporada anunciada com 50 episódios mas só 40 realmente no ar).
+  router.get("/api/check-season", async (req, res) => {
+    try {
+      const tmdbId = String(req.query.tmdbId || "").trim();
+      const season = parseInt(String(req.query.season || ""), 10);
+      const count = Math.min(Math.max(parseInt(String(req.query.count || "24"), 10) || 24, 1), 100);
+
+      if (!tmdbId || !season || Number.isNaN(season)) {
+        return res.status(400).json({ success: false, error: "Parâmetros 'tmdbId' e 'season' são obrigatórios." });
+      }
+
+      const cacheKey = `${tmdbId}_${season}_${count}`;
+      const cached = seasonAvailabilityCache.get(cacheKey);
+      if (cached) {
+        return res.json({
+          success: true,
+          id: tmdbId,
+          season,
+          availableEpisodes: cached.episodes,
+          totalAvailable: cached.episodes.length,
+          cached: true,
+        });
+      }
+
+      // Mesma heurística já usada em /api/watchplayer-stream para detectar quando o
+      // WatchPlayer devolve uma página de "não encontrado" / login em vez do player real.
+      const isCheckUnavailable = (content: string, url: string, status: number): boolean => {
+        if (status >= 400) return true;
+        const lowerUrl = (url || "").toLowerCase();
+        if (lowerUrl.includes("/login") || lowerUrl.includes("/admin") || lowerUrl.includes("/painel")) return true;
+        const lower = (content || "").toLowerCase();
+        return (
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("entrar • myplayer") ||
+          lower.includes("painel administrativo") ||
+          (lower.includes("myplayer") && (lower.includes("bem-vindo") || lower.includes("bem vindo"))) ||
+          lower.includes("série não encontrada") ||
+          lower.includes("serie não encontrada") ||
+          lower.includes("filme não encontrado") ||
+          lower.includes("acesso protegido por sessão segura")
+        );
+      };
+
+      const checkEpisode = async (episode: number): Promise<boolean> => {
+        const url = `https://v1.watchplay.shop/tvshow/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
+        const commonHeaders = {
+          "Referer": "https://v1.watchplay.shop/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        };
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          let upstream = await fetch(url, {
+            headers: commonHeaders,
+            redirect: "manual",
+            signal: controller.signal,
+          });
+
+          if (upstream.status >= 300 && upstream.status < 400) {
+            const loc = upstream.headers.get("location") || "";
+            if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
+              clearTimeout(timeoutId);
+              return false;
+            }
+            try {
+              const redirectedUrl = new URL(loc, url).toString();
+              upstream = await fetch(redirectedUrl, { headers: commonHeaders, signal: controller.signal });
+            } catch {
+              clearTimeout(timeoutId);
+              return false;
+            }
+          }
+
+          if (upstream.status >= 400) {
+            clearTimeout(timeoutId);
+            return false;
+          }
+
+          const html = await upstream.text();
+          clearTimeout(timeoutId);
+          return !isCheckUnavailable(html, upstream.url || url, upstream.status);
+        } catch {
+          // Erro de rede/timeout ao checar: não temos certeza se está indisponível de
+          // verdade ou se foi só instabilidade momentânea -- por segurança, não escondemos
+          // o episódio nesse caso (evita sumir episódio real por um erro de rede pontual).
+          return true;
+        }
+      };
+
+      // Verifica os episódios em paralelo com um limite de concorrência, para não
+      // sobrecarregar o servidor de origem nem travar a requisição por muito tempo.
+      const CONCURRENCY = 5;
+      const isAvailable: boolean[] = new Array(count).fill(false);
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(CONCURRENCY, count) }, async () => {
+        while (cursor < count) {
+          const idx = cursor++;
+          isAvailable[idx] = await checkEpisode(idx + 1);
+        }
+      });
+      await Promise.all(workers);
+
+      const availableEpisodes = isAvailable
+        .map((ok, idx) => (ok ? idx + 1 : null))
+        .filter((n): n is number => n !== null);
+
+      seasonAvailabilityCache.set(cacheKey, { episodes: availableEpisodes, timestamp: Date.now() });
+
+      res.json({
+        success: true,
+        id: tmdbId,
+        season,
+        availableEpisodes,
+        totalAvailable: availableEpisodes.length,
+        cached: false,
+      });
+    } catch (err) {
+      console.error("[check-season] Erro ao verificar disponibilidade da temporada:", err);
+      res.status(500).json({ success: false, error: "Falha ao verificar disponibilidade da temporada." });
     }
   });
 

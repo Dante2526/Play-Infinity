@@ -73,3 +73,14 @@
    - A VPS na Oracle está **ONLINE, 100% OPERACIONAL e com certificado SSL HTTPS ativo**.
    - Zero consumo da franquia de 100 GB do Render para TV ao vivo.
    - Veja o documento completo em [`ORACLE_PROXY.md`](./ORACLE_PROXY.md).
+
+---
+
+## 5. Arquitetura de Streaming de VOD (Filmes, Séries e Animes)
+
+- O tráfego de VOD viaja diretamente da **CDN de origem para o navegador do cliente** (não consome banda do Render nem da VPS).
+- A interface é controlada via `NetflixPlayerSkin.tsx` comunicando-se por `postMessage`.
+- O sistema possui **Watchdog em Dois Níveis** (Macro no modal com fallback automático; Micro na skin para buffer suave sem reiniciar o vídeo).
+- Os endpoints de backend (`/api/watchplayer-stream` e `/api/anime/hls-proxy`) possuem **timeouts estritos com `AbortController`**, detecção de cancelamento de conexão (`req.on('close')`), sondagem paralela de variantes via `Promise.any` e cache de prefixos funcionais em memória (`watchPlayerWorkingPrefixCache`).
+- Consulte a documentação completa e detalhada em [`VOD_ARCHITECTURE.md`](./VOD_ARCHITECTURE.md).
+

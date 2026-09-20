@@ -34,3 +34,11 @@ export const searchCache = new LRUCache<string, any>({
   max: 50,
   ttl: 1000 * 60 * 5,
 });
+
+// 5. Season Episode Availability Cache - guarda quais episódios de uma temporada
+// realmente têm streaming disponível no servidor de origem, evitando reconsultar
+// (e sobrecarregar) o WatchPlayer a cada vez que alguém abre a mesma série/temporada.
+export const seasonAvailabilityCache = new LRUCache<string, { episodes: number[]; timestamp: number }>({
+  max: 200,
+  ttl: 1000 * 60 * 20, // 20 minutos
+});

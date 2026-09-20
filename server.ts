@@ -11,7 +11,7 @@ import helmet from "helmet";
 import crypto from "crypto";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "./server/utils/caches";
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "./server/utils/caches";
 import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
@@ -145,53 +145,6 @@ process.on("uncaughtException", (err) => {
     return apiLimiter(req, res, next);
   });
   // ========================================================
-  
-  // API: Check Season Availability (Espião de episódios quebrados)
-  app.get("/api/check-season", async (req, res) => {
-    try {
-      const tmdbId = req.query.tmdbId as string;
-      const season = parseInt(req.query.season as string) || 1;
-      const count = parseInt(req.query.count as string) || 0;
-
-      if (!tmdbId || count <= 0 || count > 150) {
-        return res.status(400).json({ success: false, error: "Parâmetros inválidos ou contagem excessiva" });
-      }
-
-      const checks = Array.from({ length: count }, (_, i) => i + 1);
-      const limit = 10; // Batch de requisições simultâneas
-      const availableEpisodes: number[] = [];
-
-      for (let i = 0; i < checks.length; i += limit) {
-        const batch = checks.slice(i, i + limit);
-        const results = await Promise.all(batch.map(async (ep) => {
-          const url = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/${ep}`;
-          try {
-            // Requisita a página e verifica o corpo
-            const resp = await fetch(url, { method: "GET", headers: { "User-Agent": "Mozilla/5.0 PlayInfinity" } });
-            if (!resp.ok) return { ep, available: false };
-            
-            const text = await resp.text();
-            // A plataforma WatchPlayShop devolve 200 OK mas com a string "Série não encontrada." se estiver faltando.
-            if (text.includes("Série não encontrada") || text.includes("não encontrad")) {
-              return { ep, available: false };
-            }
-            return { ep, available: true };
-          } catch {
-            return { ep, available: false };
-          }
-        }));
-        
-        results.forEach(r => {
-          if (r.available) availableEpisodes.push(r.ep);
-        });
-      }
-
-      res.json({ success: true, availableEpisodes });
-    } catch (err) {
-      console.error("[Check Season] Erro:", err);
-      res.status(500).json({ success: false, error: "Internal Error" });
-    }
-  });
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
   app.get("/api/extract-player", async (req, res) => {
@@ -1475,13 +1428,30 @@ process.on("uncaughtException", (err) => {
         if (referer.startsWith("http")) originHeader = new URL(referer).origin;
       } catch {}
 
-      const upstreamRes = await fetch(rawUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Referer": referer,
-          "Origin": originHeader
-        }
+      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s");
+      // Timeout seguro: 8s para manifests m3u8, 15s para chunks/segmentos de vídeo
+      const timeoutMs = isSegment ? 15000 : 8000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      // Se o cliente (navegador/player) cancelar ou fechar a conexão, aborta o upstream imediatamente
+      req.on("close", () => {
+        controller.abort();
       });
+
+      let upstreamRes: Response;
+      try {
+        upstreamRes = await fetch(rawUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": referer,
+            "Origin": originHeader
+          },
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!upstreamRes.ok) {
         return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
@@ -1527,8 +1497,16 @@ process.on("uncaughtException", (err) => {
         return res.send(buffer);
       }
     } catch (err: any) {
-      console.error("[HLS Proxy Error]:", err.message);
-      return res.status(500).send("Proxy error");
+      if (err.name === "AbortError") {
+        if (!res.headersSent) {
+          return res.status(504).send("Gateway Timeout: CDN upstream demorou para responder");
+        }
+        return;
+      }
+      if (!res.headersSent) {
+        console.error("[HLS Proxy Error]:", err.message);
+        return res.status(500).send("Proxy error");
+      }
     }
   });
 
@@ -2124,6 +2102,9 @@ process.on("uncaughtException", (err) => {
     }
   });
 
+  // Cache em memória para rota/prefixo funcional de séries do WatchPlayer (/tvshow/, /series/, /serie/)
+  const watchPlayerWorkingPrefixCache = new Map<string, string>();
+
   // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   app.get("/api/watchplayer-stream", async (req, res) => {
     try {
@@ -2173,49 +2154,77 @@ process.on("uncaughtException", (err) => {
 
       const parsedTarget = new URL(targetUrl);
       let effectiveTargetUrl = targetUrl;
-      let upstreamRes = await fetch(effectiveTargetUrl, {
-        headers: {
-          "Referer": parsedTarget.origin + "/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-        redirect: "manual",
-      });
+
+      // Otimização: Identifica ID da série e aplica prefixo funcional previamente cacheado
+      const seriesKeyMatch = parsedTarget.pathname.match(/\/(tvshow|series|serie)\/([^/]+)/);
+      const seriesId = seriesKeyMatch ? seriesKeyMatch[2] : null;
+      const currentPrefix = seriesKeyMatch ? seriesKeyMatch[1] : null;
+
+      if (seriesId && currentPrefix && watchPlayerWorkingPrefixCache.has(seriesId)) {
+        const cachedPrefix = watchPlayerWorkingPrefixCache.get(seriesId)!;
+        if (cachedPrefix !== currentPrefix) {
+          effectiveTargetUrl = effectiveTargetUrl.replace(`/${currentPrefix}/`, `/${cachedPrefix}/`);
+        }
+      }
+
+      const initialController = new AbortController();
+      const initialTimeout = setTimeout(() => initialController.abort(), 4500);
+      req.on("close", () => initialController.abort());
 
       let html = "";
       let isUnavailable = false;
+      let upstreamRes: Response | null = null;
 
-      // Trata redirecionamentos manuais (evitando seguir para telas de login / painel administrativo)
-      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-        const loc = upstreamRes.headers.get("location") || "";
-        if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
-          isUnavailable = true;
-        } else {
-          try {
-            const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
-            effectiveTargetUrl = redirectedUrl;
-            upstreamRes = await fetch(effectiveTargetUrl, {
-              headers: {
-                "Referer": parsedTarget.origin + "/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              },
-              redirect: "manual",
-            });
-          } catch (e) {
+      try {
+        let resAttempt = await fetch(effectiveTargetUrl, {
+          headers: {
+            "Referer": parsedTarget.origin + "/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          redirect: "manual",
+          signal: initialController.signal,
+        });
+
+        // Trata redirecionamentos manuais (evitando telas de login ou erro)
+        if (resAttempt.status >= 300 && resAttempt.status < 400) {
+          const loc = resAttempt.headers.get("location") || "";
+          if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
             isUnavailable = true;
+          } else {
+            try {
+              const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
+              effectiveTargetUrl = redirectedUrl;
+              resAttempt = await fetch(effectiveTargetUrl, {
+                headers: {
+                  "Referer": parsedTarget.origin + "/",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                redirect: "manual",
+                signal: initialController.signal,
+              });
+            } catch (e) {
+              isUnavailable = true;
+            }
           }
         }
-      }
 
-      if (upstreamRes.status === 200) {
-        html = await upstreamRes.text();
-        if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+        upstreamRes = resAttempt;
+
+        if (upstreamRes.status === 200) {
+          html = await upstreamRes.text();
+          if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+            isUnavailable = true;
+          }
+        } else {
           isUnavailable = true;
         }
-      } else {
+      } catch (err) {
         isUnavailable = true;
+      } finally {
+        clearTimeout(initialTimeout);
       }
 
-      // Se a rota padrão falhou (ex: 404 ou login), tenta alternar automaticamente entre /tvshow/ e /series/
+      // Se a rota inicial falhou, testa todas as variantes concorrentemente em paralelo (sem esperar uma por uma)
       if (isUnavailable) {
         const alternateVariants: string[] = [];
         if (effectiveTargetUrl.includes("/tvshow/")) {
@@ -2229,26 +2238,68 @@ process.on("uncaughtException", (err) => {
           alternateVariants.push(effectiveTargetUrl.replace("/serie/", "/tvshow/"));
         }
 
-        for (const altUrl of alternateVariants) {
+        if (alternateVariants.length > 0) {
+          const probeVariant = async (altUrl: string): Promise<{ url: string; res: Response; html: string }> => {
+            const probeCtrl = new AbortController();
+            const probeTimer = setTimeout(() => probeCtrl.abort(), 4000);
+            req.on("close", () => probeCtrl.abort());
+
+            try {
+              let currentUrl = altUrl;
+              let altRes = await fetch(currentUrl, {
+                headers: {
+                  "Referer": new URL(altUrl).origin + "/",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                redirect: "manual",
+                signal: probeCtrl.signal,
+              });
+
+              if (altRes.status >= 300 && altRes.status < 400) {
+                const loc = altRes.headers.get("location") || "";
+                if (!loc.includes("/login") && !loc.includes("/admin") && !loc.includes("/painel")) {
+                  currentUrl = new URL(loc, currentUrl).toString();
+                  altRes = await fetch(currentUrl, {
+                    headers: {
+                      "Referer": new URL(altUrl).origin + "/",
+                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    },
+                    redirect: "manual",
+                    signal: probeCtrl.signal,
+                  });
+                }
+              }
+
+              if (altRes.status === 200) {
+                const altText = await altRes.text();
+                if (!isWatchPlayerUnavailable(altText, currentUrl, altRes.status)) {
+                  return { url: currentUrl, res: altRes, html: altText };
+                }
+              }
+              throw new Error("Unavailable");
+            } finally {
+              clearTimeout(probeTimer);
+            }
+          };
+
           try {
-            const altRes = await fetch(altUrl, {
-              headers: {
-                "Referer": new URL(altUrl).origin + "/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              },
-              redirect: "manual",
-            });
-            if (altRes.status === 200) {
-              const altText = await altRes.text();
-              if (!isWatchPlayerUnavailable(altText, altUrl, altRes.status)) {
-                effectiveTargetUrl = altUrl;
-                upstreamRes = altRes;
-                html = altText;
-                isUnavailable = false;
-                break;
+            // Executa todas as variantes em paralelo: a primeira que responder com sucesso vence imediatamente!
+            const winner = await Promise.any(alternateVariants.map(probeVariant));
+            effectiveTargetUrl = winner.url;
+            upstreamRes = winner.res;
+            html = winner.html;
+            isUnavailable = false;
+
+            // Salva no cache o prefixo que funcionou para essa série
+            if (seriesId) {
+              const matchedWinner = winner.url.match(/\/(tvshow|series|serie)\//);
+              if (matchedWinner) {
+                watchPlayerWorkingPrefixCache.set(seriesId, matchedWinner[1]);
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            // Nenhuma variante respondeu positivamente
+          }
         }
       }
 
@@ -3336,6 +3387,135 @@ process.on("uncaughtException", (err) => {
         </body>
         </html>
       `);
+    }
+  });
+
+  // API 6.5: Verificação Real de Disponibilidade de Episódios por Temporada
+  // Usada pelo front-end (src/services/episodeAvailability.ts) para esconder da grade de
+  // episódios qualquer episódio que ainda não tenha streaming disponível em nenhum servidor
+  // homologado (ex: temporada anunciada com 50 episódios mas só 40 realmente no ar).
+  app.get("/api/check-season", async (req, res) => {
+    try {
+      const tmdbId = String(req.query.tmdbId || "").trim();
+      const season = parseInt(String(req.query.season || ""), 10);
+      const count = Math.min(Math.max(parseInt(String(req.query.count || "24"), 10) || 24, 1), 100);
+
+      if (!tmdbId || !season || Number.isNaN(season)) {
+        return res.status(400).json({ success: false, error: "Parâmetros 'tmdbId' e 'season' são obrigatórios." });
+      }
+
+      const cacheKey = `${tmdbId}_${season}_${count}`;
+      const cached = seasonAvailabilityCache.get(cacheKey);
+      if (cached) {
+        return res.json({
+          success: true,
+          id: tmdbId,
+          season,
+          availableEpisodes: cached.episodes,
+          totalAvailable: cached.episodes.length,
+          cached: true,
+        });
+      }
+
+      // Mesma heurística já usada em /api/watchplayer-stream para detectar quando o
+      // WatchPlayer devolve uma página de "não encontrado" / login em vez do player real.
+      const isCheckUnavailable = (content: string, url: string, status: number): boolean => {
+        if (status >= 400) return true;
+        const lowerUrl = (url || "").toLowerCase();
+        if (lowerUrl.includes("/login") || lowerUrl.includes("/admin") || lowerUrl.includes("/painel")) return true;
+        const lower = (content || "").toLowerCase();
+        return (
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("entrar • myplayer") ||
+          lower.includes("painel administrativo") ||
+          (lower.includes("myplayer") && (lower.includes("bem-vindo") || lower.includes("bem vindo"))) ||
+          lower.includes("série não encontrada") ||
+          lower.includes("serie não encontrada") ||
+          lower.includes("filme não encontrado") ||
+          lower.includes("acesso protegido por sessão segura")
+        );
+      };
+
+      const prefix = watchPlayerWorkingPrefixCache.get(tmdbId) || "tvshow";
+      const checkEpisode = async (episode: number): Promise<boolean> => {
+        const url = `https://v1.watchplay.shop/${prefix}/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
+        const commonHeaders = {
+          "Referer": "https://v1.watchplay.shop/",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        };
+
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+          let upstream = await fetch(url, {
+            headers: commonHeaders,
+            redirect: "manual",
+            signal: controller.signal,
+          });
+
+          if (upstream.status >= 300 && upstream.status < 400) {
+            const loc = upstream.headers.get("location") || "";
+            if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
+              clearTimeout(timeoutId);
+              return false;
+            }
+            try {
+              const redirectedUrl = new URL(loc, url).toString();
+              upstream = await fetch(redirectedUrl, { headers: commonHeaders, signal: controller.signal });
+            } catch {
+              clearTimeout(timeoutId);
+              return false;
+            }
+          }
+
+          if (upstream.status >= 400) {
+            clearTimeout(timeoutId);
+            return false;
+          }
+
+          const html = await upstream.text();
+          clearTimeout(timeoutId);
+          return !isCheckUnavailable(html, upstream.url || url, upstream.status);
+        } catch {
+          // Erro de rede/timeout ao checar: não temos certeza se está indisponível de
+          // verdade ou se foi só instabilidade momentânea -- por segurança, não escondemos
+          // o episódio nesse caso (evita sumir episódio real por um erro de rede pontual).
+          return true;
+        }
+      };
+
+      // Verifica os episódios em paralelo com um limite de concorrência, para não
+      // sobrecarregar o servidor de origem nem travar a requisição por muito tempo.
+      const CONCURRENCY = 5;
+      const isAvailable: boolean[] = new Array(count).fill(false);
+      let cursor = 0;
+      const workers = Array.from({ length: Math.min(CONCURRENCY, count) }, async () => {
+        while (cursor < count) {
+          const idx = cursor++;
+          isAvailable[idx] = await checkEpisode(idx + 1);
+        }
+      });
+      await Promise.all(workers);
+
+      const availableEpisodes = isAvailable
+        .map((ok, idx) => (ok ? idx + 1 : null))
+        .filter((n): n is number => n !== null);
+
+      seasonAvailabilityCache.set(cacheKey, { episodes: availableEpisodes, timestamp: Date.now() });
+
+      res.json({
+        success: true,
+        id: tmdbId,
+        season,
+        availableEpisodes,
+        totalAvailable: availableEpisodes.length,
+        cached: false,
+      });
+    } catch (err) {
+      console.error("[check-season] Erro ao verificar disponibilidade da temporada:", err);
+      res.status(500).json({ success: false, error: "Falha ao verificar disponibilidade da temporada." });
     }
   });
 
