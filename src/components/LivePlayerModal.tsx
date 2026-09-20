@@ -293,25 +293,28 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
 
       if (Hls.isSupported()) {
-        // Configuração Balanceada: Início Rápido + Estabilidade (Anti-Travamento)
-        // Reduz jitter de live-edge com contagem de 4-5 segmentos (~8-10s) para evitar micro-stalls
+        // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
+        // Mantém margem segura da borda ao vivo (live-edge) para absorver oscilações de rede sem micro-stalls
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          liveSyncDurationCount: currentLowBandwidth ? 5 : 4, 
-          liveMaxLatencyDurationCount: currentLowBandwidth ? 8 : 7,
-          maxBufferLength: currentLowBandwidth ? 60 : 45, // Segundos mantidos na memória
+          liveSyncDurationCount: currentLowBandwidth ? 6 : 5, 
+          liveMaxLatencyDurationCount: currentLowBandwidth ? 12 : 9,
+          maxBufferLength: currentLowBandwidth ? 60 : 45, // Segundos mantidos no buffer
           maxMaxBufferLength: currentLowBandwidth ? 120 : 90, // Limite máximo absoluto
-          maxBufferHole: 0.8, // Tolera gaps minúsculos entre fragmentos sem disparar stall
+          maxBufferHole: 1.2, // Tolera gaps temporários entre fragmentos sem disparar stall
           highBufferWatchdogPeriod: 2,
-          backBufferLength: 15, // Reduzido o back buffer para economizar memória do celular
+          nudgeMaxRetry: 8,
+          nudgeOffset: 0.1,
+          backBufferLength: 20, // Mantém back buffer seguro
           manifestLoadingTimeOut: 30000,
-          manifestLoadingMaxRetry: 10, // Mais tentativas antes de dar erro fatal
+          manifestLoadingMaxRetry: 10,
           levelLoadingTimeOut: 30000,
+          levelLoadingMaxRetry: 8,
           fragLoadingTimeOut: 45000,
-          fragLoadingMaxRetry: 15, // Suporta falhas curtas de operadora
-          fragLoadingRetryDelay: 1000, // Tempo de espera base para retries
-          // Removemos capLevelToPlayerSize e fatores ABR agressivos para evitar pulos constantes de resolução
+          fragLoadingMaxRetry: 15, // Suporta oscilações momentâneas
+          fragLoadingRetryDelay: 1000,
+          fragLoadingMaxRetryTimeout: 64000,
           capLevelToPlayerSize: false,
           startLevel: -1
         });
@@ -377,24 +380,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               case Hls.ErrorTypes.NETWORK_ERROR:
                 networkErrorCount += 1;
                 // TV ao vivo frequentemente tem pequenos engasgos ou chunks bloqueados.
-                // Tolerância maior (até 5 falhas seguidas) antes de desistir do servidor.
-                if (networkErrorCount <= 5) {
-                  console.log('Recuperando erro de rede HLS silenciosamente...');
+                // Tolerância alta com reconexão contínua antes de alternar de servidor
+                if (networkErrorCount <= 8) {
+                  console.log(`[LivePlayer] Recuperando erro de rede HLS silenciosamente (${networkErrorCount}/8)...`);
                   hls.startLoad();
                 } else {
-                  console.log('Servidor instável ou desconectado, alternando automaticamente para próximo servidor...');
+                  console.log('[LivePlayer] Servidor instável ou desconectado, alternando automaticamente para próximo servidor...');
                   switchToNextServer('erro de rede hls');
                 }
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 mediaErrorCount += 1;
-                // Canais FAST (Amagi, Pluto) possuem descontinuidades constantes devido a ads.
-                // Permitir recuperação contínua para evitar queda de servidor por causa de ads.
-                if (mediaErrorCount <= 10) {
-                  console.log('Recuperando erro de mídia HLS silenciosamente...');
+                // Canais FAST possuem descontinuidades constantes devido a ads ou alternância de codec.
+                // Permitir recuperação contínua para evitar interrupções
+                if (mediaErrorCount <= 12) {
+                  console.log(`[LivePlayer] Recuperando erro de mídia HLS silenciosamente (${mediaErrorCount}/12)...`);
                   hls.recoverMediaError();
                 } else {
-                  console.log('Erro de mídia persistente/codec não suportado, alternando para próximo servidor...');
+                  console.log('[LivePlayer] Erro de mídia persistente, alternando para próximo servidor...');
                   switchToNextServer('erro de midia persistente');
                 }
                 break;
@@ -403,9 +406,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 break;
             }
           } else {
-             // Erros não fatais (ex: bufferStalledError ocasional) podem resetar os contadores se a reprodução continuar fluindo
-             if (data.details === Hls.ErrorDetails.BUFFER_APPENDING_ERROR || data.details === Hls.ErrorDetails.FRAG_LOAD_ERROR) {
-                // Ignore silent errors that don't stop playback
+             if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
+               // Em micro-stalls, tenta desobstruir suavemente o buffer sem interromper
+               try {
+                 if (hls && !video.paused) {
+                   hls.startLoad();
+                 }
+               } catch (_) {}
              }
           }
         });
@@ -453,42 +460,51 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     startHls();
 
-    // Detecção automática de travamentos (Buffer Stalls) em redes móveis/instáveis
+    // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
     let recoveryAttemptTimer: NodeJS.Timeout | null = null;
     let bufferingDebounceTimer: NodeJS.Timeout | null = null;
 
     const handleWaiting = () => {
-      // Debounce ampliado de 2000ms antes de escurecer a tela e exibir aviso de buffering.
-      // Em transmissões ao vivo com chunks de 2s, pequenas variações de 500-1500ms são comuns
-      // e resolvidas naturalmente pelo Hls.js sem necessidade de interromper a visão do usuário.
+      // Debounce suave antes de escurecer a tela e exibir aviso de buffering
       if (!bufferingDebounceTimer) {
         bufferingDebounceTimer = setTimeout(() => {
           if (!isMounted) return;
           setIsBuffering(true);
-        }, 2000);
+        }, 2200);
       }
 
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
 
-      // Tentativa de recuperação suave aos 6 segundos (sem cortar a conexão)
+      // Tentativa de recuperação ativa aos 3.5 segundos para garantir fluxo contínuo
       recoveryAttemptTimer = setTimeout(() => {
         if (!isMounted || !videoRef.current) return;
+        const v = videoRef.current;
         if (hlsRef.current) {
           hlsRef.current.startLoad();
         }
-        if (videoRef.current.paused) {
-          videoRef.current.play().catch(() => {});
+        if (v.paused) {
+          v.play().catch(() => {});
+        } else if (v.readyState < 3) {
+          // Micro-salto para descolar de timestamp travado
+          try {
+            if (hlsRef.current && hlsRef.current.liveSyncPosition) {
+              const livePos = hlsRef.current.liveSyncPosition;
+              if (livePos > 0 && Math.abs(v.currentTime - livePos) > 4) {
+                v.currentTime = livePos - 1;
+              }
+            }
+          } catch (_) {}
         }
-      }, 6000);
+      }, 3500);
 
-      // Se ficar congelado no buffering por mais de 20s seguidos, alterna automaticamente de servidor
+      // Se ficar congelado no buffering por mais de 18s seguidos, alterna automaticamente de servidor
       bufferStallTimer = setTimeout(() => {
         if (!isMounted) return;
-        console.log('[LivePlayer] Buffering prolongado (20s) detectado. Alternando automaticamente de servidor...');
+        console.log('[LivePlayer] Buffering prolongado (18s) detectado. Alternando automaticamente de servidor...');
         switchToNextServer('buffering prolongado');
-      }, 20000);
+      }, 18000);
 
       const now = Date.now();
       if (now - lastStallTimeRef.current < 20000) {
@@ -504,7 +520,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         isLowBandwidthModeRef.current = true;
         setIsLowBandwidthMode(true);
         if (hlsRef.current) {
-          hlsRef.current.config.liveSyncDuration = 25;
+          hlsRef.current.config.liveSyncDurationCount = 6;
+          hlsRef.current.config.liveMaxLatencyDurationCount = 12;
           hlsRef.current.config.maxBufferLength = 60;
           hlsRef.current.config.maxMaxBufferLength = 120;
         }

@@ -1655,6 +1655,88 @@ process.on("uncaughtException", (err) => {
 
                 setInterval(sendStatus, 300);
 
+                // Auto-Healer A/V Sync para Artplayer HLS
+                (function initAVSyncArtHls() {
+                  var lastFrameCallbackTime = Date.now();
+                  var lastCheckedCurrentTime = 0;
+                  var lastTotalFrames = 0;
+                  var stallTicks = 0;
+                  var isHealing = false;
+                  var lastHealAt = 0;
+
+                  function trackFrameRender(v) {
+                    if (!v) return;
+                    if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                      v._rvfcActive = true;
+                      function onFrame() {
+                        lastFrameCallbackTime = Date.now();
+                        if (v && !v.paused) {
+                          v.requestVideoFrameCallback(onFrame);
+                        } else if (v) {
+                          v._rvfcActive = false;
+                        }
+                      }
+                      try { v.requestVideoFrameCallback(onFrame); } catch(e) { v._rvfcActive = false; }
+                    }
+                  }
+
+                  setInterval(function() {
+                    var v = art.video || document.querySelector("video");
+                    if (!v) return;
+                    trackFrameRender(v);
+
+                    if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                      stallTicks = 0;
+                      lastCheckedCurrentTime = v.currentTime || 0;
+                      return;
+                    }
+
+                    var now = Date.now();
+                    var cur = v.currentTime || 0;
+                    var audioMoving = cur > (lastCheckedCurrentTime + 0.35);
+                    lastCheckedCurrentTime = cur;
+
+                    if (audioMoving) {
+                      var frameFresh = false;
+                      if (typeof v.requestVideoFrameCallback === 'function') {
+                        if ((now - lastFrameCallbackTime) < 1800) frameFresh = true;
+                      }
+                      if (typeof v.getVideoPlaybackQuality === 'function') {
+                        try {
+                          var q = v.getVideoPlaybackQuality();
+                          if (q && typeof q.totalVideoFrames === 'number') {
+                            if (q.totalVideoFrames > lastTotalFrames) {
+                              frameFresh = true;
+                              lastTotalFrames = q.totalVideoFrames;
+                            }
+                          }
+                        } catch(e) {}
+                      }
+
+                      if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                        stallTicks++;
+                        if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                          isHealing = true;
+                          lastHealAt = now;
+                          stallTicks = 0;
+                          try {
+                            if (art && art.hls && typeof art.hls.recoverMediaError === 'function') {
+                              art.hls.recoverMediaError();
+                            }
+                            var nowP = v.currentTime;
+                            v.currentTime = nowP + 0.005;
+                            v._rvfcActive = false;
+                            trackFrameRender(v);
+                          } catch(err) {}
+                          finally { setTimeout(function() { isHealing = false; }, 800); }
+                        }
+                      } else {
+                        stallTicks = 0;
+                      }
+                    }
+                  }, 800);
+                })();
+
                 window.addEventListener("message", function(e) {
                   if (!e.data) return;
                   var v = art.video || document.querySelector("video");
@@ -2018,6 +2100,88 @@ process.on("uncaughtException", (err) => {
                   }
 
                   setInterval(sendStatus, 300);
+
+                  // Auto-Healer A/V Sync
+                  (function initAVSyncArt2() {
+                    var lastFrameCallbackTime = Date.now();
+                    var lastCheckedCurrentTime = 0;
+                    var lastTotalFrames = 0;
+                    var stallTicks = 0;
+                    var isHealing = false;
+                    var lastHealAt = 0;
+
+                    function trackFrameRender(v) {
+                      if (!v) return;
+                      if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                        v._rvfcActive = true;
+                        function onFrame() {
+                          lastFrameCallbackTime = Date.now();
+                          if (v && !v.paused) {
+                            v.requestVideoFrameCallback(onFrame);
+                          } else if (v) {
+                            v._rvfcActive = false;
+                          }
+                        }
+                        try { v.requestVideoFrameCallback(onFrame); } catch(e) { v._rvfcActive = false; }
+                      }
+                    }
+
+                    setInterval(function() {
+                      var v = art.video || document.querySelector("video");
+                      if (!v) return;
+                      trackFrameRender(v);
+
+                      if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                        stallTicks = 0;
+                        lastCheckedCurrentTime = v.currentTime || 0;
+                        return;
+                      }
+
+                      var now = Date.now();
+                      var cur = v.currentTime || 0;
+                      var audioMoving = cur > (lastCheckedCurrentTime + 0.35);
+                      lastCheckedCurrentTime = cur;
+
+                      if (audioMoving) {
+                        var frameFresh = false;
+                        if (typeof v.requestVideoFrameCallback === 'function') {
+                          if ((now - lastFrameCallbackTime) < 1800) frameFresh = true;
+                        }
+                        if (typeof v.getVideoPlaybackQuality === 'function') {
+                          try {
+                            var q = v.getVideoPlaybackQuality();
+                            if (q && typeof q.totalVideoFrames === 'number') {
+                              if (q.totalVideoFrames > lastTotalFrames) {
+                                frameFresh = true;
+                                lastTotalFrames = q.totalVideoFrames;
+                              }
+                            }
+                          } catch(e) {}
+                        }
+
+                        if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                          stallTicks++;
+                          if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                            isHealing = true;
+                            lastHealAt = now;
+                            stallTicks = 0;
+                            try {
+                              if (art && art.hls && typeof art.hls.recoverMediaError === 'function') {
+                                art.hls.recoverMediaError();
+                              }
+                              var nowP = v.currentTime;
+                              v.currentTime = nowP + 0.005;
+                              v._rvfcActive = false;
+                              trackFrameRender(v);
+                            } catch(err) {}
+                            finally { setTimeout(function() { isHealing = false; }, 800); }
+                          }
+                        } else {
+                          stallTicks = 0;
+                        }
+                      }
+                    }, 800);
+                  })();
 
                   window.addEventListener("message", function(e) {
                     if (!e.data) return;
@@ -3279,6 +3443,110 @@ process.on("uncaughtException", (err) => {
                 window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "network_offline" }, "*");
               } catch(err) {}
             });
+
+            // Monitor e Auto-Healer de Integridade Áudio/Vídeo (A/V Sync & Frame Freeze Recovery)
+            // Corrige automaticamente quando a voz/áudio continua mas a imagem do vídeo congela no navegador/GPU
+            (function initAVSyncAutoHealer() {
+              var lastFrameCallbackTime = Date.now();
+              var lastCheckedCurrentTime = 0;
+              var lastTotalFrames = 0;
+              var stallTicks = 0;
+              var isHealing = false;
+              var lastHealAt = 0;
+
+              function trackFrameRender(v) {
+                if (!v) return;
+                if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                  v._rvfcActive = true;
+                  function onFrame() {
+                    lastFrameCallbackTime = Date.now();
+                    if (v && !v.paused) {
+                      v.requestVideoFrameCallback(onFrame);
+                    } else if (v) {
+                      v._rvfcActive = false;
+                    }
+                  }
+                  try {
+                    v.requestVideoFrameCallback(onFrame);
+                  } catch(e) {
+                    v._rvfcActive = false;
+                  }
+                }
+              }
+
+              function checkAVHealth() {
+                var v = getVideoElement();
+                if (!v) return;
+
+                trackFrameRender(v);
+
+                if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                  stallTicks = 0;
+                  lastCheckedCurrentTime = v.currentTime || 0;
+                  return;
+                }
+
+                var now = Date.now();
+                var cur = v.currentTime || 0;
+                var audioMovingForward = cur > (lastCheckedCurrentTime + 0.35);
+                lastCheckedCurrentTime = cur;
+
+                if (audioMovingForward) {
+                  var frameIsFresh = false;
+
+                  if (typeof v.requestVideoFrameCallback === 'function') {
+                    if ((now - lastFrameCallbackTime) < 1800) {
+                      frameIsFresh = true;
+                    }
+                  }
+
+                  if (typeof v.getVideoPlaybackQuality === 'function') {
+                    try {
+                      var q = v.getVideoPlaybackQuality();
+                      if (q && typeof q.totalVideoFrames === 'number') {
+                        if (q.totalVideoFrames > lastTotalFrames) {
+                          frameIsFresh = true;
+                          lastTotalFrames = q.totalVideoFrames;
+                        }
+                      }
+                    } catch(e) {}
+                  }
+
+                  // Se o áudio está avançando há mais de 1.5s mas NENHUM frame de vídeo foi apresentado:
+                  if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                    stallTicks++;
+                    if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                      console.warn('[Play Infinity A/V Sync] Imagem congelada com áudio em reprodução detectada. Executando auto-healing instantâneo...');
+                      isHealing = true;
+                      lastHealAt = now;
+                      stallTicks = 0;
+
+                      try {
+                        var hls = (window.artInstance && window.artInstance.hls) || window.hls;
+                        if (hls && typeof hls.recoverMediaError === 'function') {
+                          try { hls.recoverMediaError(); } catch(he) {}
+                        }
+
+                        // Micro-nudge no decodificador de vídeo para desobstruir o pipeline da GPU sem perda de posição
+                        var nowPos = v.currentTime;
+                        v.currentTime = nowPos + 0.005;
+
+                        v._rvfcActive = false;
+                        trackFrameRender(v);
+                      } catch(err) {
+                        console.error('[Play Infinity A/V Recovery Error]:', err);
+                      } finally {
+                        setTimeout(function() { isHealing = false; }, 800);
+                      }
+                    }
+                  } else {
+                    stallTicks = 0;
+                  }
+                }
+              }
+
+              setInterval(checkAVHealth, 800);
+            })();
 
             // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
             var cleanArtNodes = function() {
@@ -4641,6 +4909,107 @@ process.on("uncaughtException", (err) => {
             sendStatus();
           }, 250);
 
+          // Monitor e Auto-Healer de Integridade Áudio/Vídeo para VIP Player (A/V Sync & Frame Freeze Recovery)
+          (function initAVSyncAutoHealerVIP() {
+            var lastFrameCallbackTime = Date.now();
+            var lastCheckedCurrentTime = 0;
+            var lastTotalFrames = 0;
+            var stallTicks = 0;
+            var isHealing = false;
+            var lastHealAt = 0;
+
+            function trackFrameRender(v) {
+              if (!v) return;
+              if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                v._rvfcActive = true;
+                function onFrame() {
+                  lastFrameCallbackTime = Date.now();
+                  if (v && !v.paused) {
+                    v.requestVideoFrameCallback(onFrame);
+                  } else if (v) {
+                    v._rvfcActive = false;
+                  }
+                }
+                try {
+                  v.requestVideoFrameCallback(onFrame);
+                } catch(e) {
+                  v._rvfcActive = false;
+                }
+              }
+            }
+
+            function checkAVHealth() {
+              var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
+              if (!v) return;
+
+              trackFrameRender(v);
+
+              if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                stallTicks = 0;
+                lastCheckedCurrentTime = v.currentTime || 0;
+                return;
+              }
+
+              var now = Date.now();
+              var cur = v.currentTime || 0;
+              var audioMovingForward = cur > (lastCheckedCurrentTime + 0.35);
+              lastCheckedCurrentTime = cur;
+
+              if (audioMovingForward) {
+                var frameIsFresh = false;
+
+                if (typeof v.requestVideoFrameCallback === 'function') {
+                  if ((now - lastFrameCallbackTime) < 1800) {
+                    frameIsFresh = true;
+                  }
+                }
+
+                if (typeof v.getVideoPlaybackQuality === 'function') {
+                  try {
+                    var q = v.getVideoPlaybackQuality();
+                    if (q && typeof q.totalVideoFrames === 'number') {
+                      if (q.totalVideoFrames > lastTotalFrames) {
+                        frameIsFresh = true;
+                        lastTotalFrames = q.totalVideoFrames;
+                      }
+                    }
+                  } catch(e) {}
+                }
+
+                if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                  stallTicks++;
+                  if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                    console.warn('[Play Infinity VIP Player] Imagem congelada com áudio em reprodução detectada. Executando auto-healing instantâneo...');
+                    isHealing = true;
+                    lastHealAt = now;
+                    stallTicks = 0;
+
+                    try {
+                      var hls = (window.artInstance && window.artInstance.hls) || window.hls;
+                      if (hls && typeof hls.recoverMediaError === 'function') {
+                        try { hls.recoverMediaError(); } catch(he) {}
+                      }
+
+                      var nowPos = v.currentTime;
+                      v.currentTime = nowPos + 0.005;
+
+                      v._rvfcActive = false;
+                      trackFrameRender(v);
+                    } catch(err) {
+                      console.error('[Play Infinity VIP Player A/V Recovery Error]:', err);
+                    } finally {
+                      setTimeout(function() { isHealing = false; }, 800);
+                    }
+                  }
+                } else {
+                  stallTicks = 0;
+                }
+              }
+            }
+
+            setInterval(checkAVHealth, 800);
+          })();
+
           window.addEventListener('message', function(e) {
             if (!e.data) return;
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
@@ -4779,6 +5148,425 @@ process.on("uncaughtException", (err) => {
         ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` 
         : `https://api.pomfy.stream/filme/${id}`;
       return res.redirect(302, baseUrl);
+    }
+  });
+
+  // ==========================================
+  // MIXDROP NATIVE STREAM & ARTPLAYER INTEGRATION
+  // ==========================================
+  const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string; title: string; expiresAt: number }>();
+
+  app.get("/api/mixdrop-stream", async (req, res) => {
+    try {
+      const rawUrl = String(req.query.url || "").trim();
+      if (!rawUrl) {
+        return res.status(400).send("Parâmetro 'url' é obrigatório.");
+      }
+
+      const safeCheck = validateSafeUrl(rawUrl);
+      if (!safeCheck.valid || !safeCheck.parsedUrl) {
+        return res.status(400).send("URL inválida ou não autorizada.");
+      }
+
+      const host = safeCheck.parsedUrl.hostname.toLowerCase();
+      const isMixdrop = host.includes("mixdrop.") || host.includes("mxdrop.");
+      if (!isMixdrop) {
+        return res.status(400).send("Domínio fornecido não pertence à rede MixDrop.");
+      }
+
+      const fileMatch = safeCheck.parsedUrl.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
+      const fileId = fileMatch ? fileMatch[1] : "";
+      if (!fileId) {
+        return res.status(400).send("ID de arquivo do MixDrop não encontrado.");
+      }
+
+      const cached = mixdropMemoryCache.get(fileId);
+      let videoUrl = "";
+      let posterUrl = "";
+      let pageTitle = "Play Infinity • MixDrop Stream";
+
+      if (cached && cached.expiresAt > Date.now() + 60000) {
+        videoUrl = cached.videoUrl;
+        posterUrl = cached.posterUrl;
+        pageTitle = cached.title || pageTitle;
+      } else {
+        const embedUrl = `https://${host}/e/${fileId}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        try {
+          const upstream = await fetch(embedUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (!upstream.ok) {
+            return res.status(502).send(`MixDrop retornou status HTTP ${upstream.status}`);
+          }
+
+          const html = await upstream.text();
+          const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+          if (!packerMatch) {
+            return res.status(502).send("Não foi possível desembalar os dados do player do MixDrop.");
+          }
+
+          const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
+          const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+          const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
+          const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
+
+          if (!wurlMatch || !wurlMatch[1]) {
+            return res.status(502).send("URL de vídeo não encontrada no player do MixDrop.");
+          }
+
+          videoUrl = wurlMatch[1];
+          if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+
+          if (posterMatch && posterMatch[1]) {
+            posterUrl = posterMatch[1];
+            if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
+          }
+
+          if (titleMatch && titleMatch[1]) {
+            pageTitle = titleMatch[1].trim();
+          }
+
+          mixdropMemoryCache.set(fileId, {
+            videoUrl,
+            posterUrl,
+            title: pageTitle,
+            expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          console.error("[MixDrop Scraper Error]:", fetchErr);
+          return res.status(502).send("Tempo limite ou erro ao contatar servidor de mídia MixDrop.");
+        }
+      }
+
+      // Roteia via /api/mixdrop-proxy para contornar bloqueios de Referer/CORS e habilitar Range streaming com 100% de confiabilidade
+      const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
+
+      return res.send(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+          <meta name="referrer" content="no-referrer">
+          <title>${pageTitle}</title>
+          <style>
+            html, body {
+              margin: 0;
+              padding: 0;
+              width: 100%;
+              height: 100%;
+              background: #000;
+              overflow: hidden;
+            }
+            #artplayer-container {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: #000;
+            }
+            video {
+              object-fit: contain !important;
+              width: 100% !important;
+              height: 100% !important;
+            }
+            .art-mask,
+            .art-top,
+            .art-bottom,
+            .art-controls,
+            .art-controls-left,
+            .art-controls-center,
+            .art-controls-right,
+            .art-state,
+            .art-loading,
+            .art-notice,
+            .art-settings,
+            .art-contextmenu,
+            .art-progress,
+            .btn, .button, [class*="ad"], [id*="ad"] {
+              display: none !important;
+              opacity: 0 !important;
+              visibility: hidden !important;
+              pointer-events: none !important;
+            }
+          </style>
+          <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+        </head>
+        <body>
+          <div id="artplayer-container"></div>
+          <script>
+            (function() {
+              var videoUrl = ${JSON.stringify(streamUrl)};
+              var posterUrl = ${JSON.stringify(posterUrl)};
+
+              var art = new Artplayer({
+                container: "#artplayer-container",
+                url: videoUrl,
+                type: "mp4",
+                poster: posterUrl || "",
+                autoplay: true,
+                muted: false,
+                playsInline: true,
+                controls: [],
+                theme: "#e50914"
+              });
+
+              window.artInstance = art;
+
+              function sendStatus() {
+                var v = art.video || document.querySelector("video");
+                if (!v) return;
+                var dur = v.duration || art.duration || 0;
+                var cur = v.currentTime || 0;
+                var bufferedEnd = 0;
+                if (v.buffered && v.buffered.length > 0) {
+                  bufferedEnd = v.buffered.end(v.buffered.length - 1);
+                }
+
+                try {
+                  window.parent.postMessage({
+                    type: "WATCHPLAY_STATUS",
+                    currentTime: cur,
+                    duration: dur,
+                    paused: !!v.paused,
+                    muted: !!v.muted,
+                    volume: typeof v.volume === "number" ? v.volume : 1,
+                    buffered: bufferedEnd,
+                    playbackRate: v.playbackRate || 1,
+                    readyState: v.readyState || 0
+                  }, "*");
+                } catch(e) {}
+              }
+
+              function notifyReady() {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_READY" }, "*");
+                } catch(e) {}
+                sendStatus();
+              }
+
+              function notifyEnded() {
+                try {
+                  window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+                } catch(e) {}
+              }
+
+              setInterval(sendStatus, 300);
+
+              // Auto-Healer A/V Sync para MixDrop
+              (function initAVSyncMixdrop() {
+                var lastFrameCallbackTime = Date.now();
+                var lastCheckedCurrentTime = 0;
+                var lastTotalFrames = 0;
+                var stallTicks = 0;
+                var isHealing = false;
+                var lastHealAt = 0;
+
+                function trackFrameRender(v) {
+                  if (!v) return;
+                  if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                    v._rvfcActive = true;
+                    function onFrame() {
+                      lastFrameCallbackTime = Date.now();
+                      if (v && !v.paused) {
+                        v.requestVideoFrameCallback(onFrame);
+                      } else if (v) {
+                        v._rvfcActive = false;
+                      }
+                    }
+                    try { v.requestVideoFrameCallback(onFrame); } catch(e) { v._rvfcActive = false; }
+                  }
+                }
+
+                setInterval(function() {
+                  var v = art.video || document.querySelector("video");
+                  if (!v) return;
+                  trackFrameRender(v);
+
+                  if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                    stallTicks = 0;
+                    lastCheckedCurrentTime = v.currentTime || 0;
+                    return;
+                  }
+
+                  var now = Date.now();
+                  var cur = v.currentTime || 0;
+                  var audioMoving = cur > (lastCheckedCurrentTime + 0.35);
+                  lastCheckedCurrentTime = cur;
+
+                  if (audioMoving) {
+                    var frameFresh = false;
+                    if (typeof v.requestVideoFrameCallback === 'function') {
+                      if ((now - lastFrameCallbackTime) < 1800) frameFresh = true;
+                    }
+                    if (typeof v.getVideoPlaybackQuality === 'function') {
+                      try {
+                        var q = v.getVideoPlaybackQuality();
+                        if (q && typeof q.totalVideoFrames === 'number') {
+                          if (q.totalVideoFrames > lastTotalFrames) {
+                            frameFresh = true;
+                            lastTotalFrames = q.totalVideoFrames;
+                          }
+                        }
+                      } catch(e) {}
+                    }
+
+                    if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                      stallTicks++;
+                      if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                        isHealing = true;
+                        lastHealAt = now;
+                        stallTicks = 0;
+                        try {
+                          var nowP = v.currentTime;
+                          v.currentTime = nowP + 0.005;
+                          v._rvfcActive = false;
+                          trackFrameRender(v);
+                        } catch(err) {}
+                        finally { setTimeout(function() { isHealing = false; }, 800); }
+                      }
+                    } else {
+                      stallTicks = 0;
+                    }
+                  }
+                }, 800);
+              })();
+
+              art.on("ready", function() {
+                notifyReady();
+                var v = art.video || document.querySelector("video");
+                if (v) {
+                  v.setAttribute("referrerpolicy", "no-referrer");
+                  v.setAttribute("playsinline", "true");
+                }
+              });
+
+              art.on("play", sendStatus);
+              art.on("pause", sendStatus);
+              art.on("timeupdate", sendStatus);
+              art.on("video:ended", notifyEnded);
+
+              window.addEventListener("message", function(e) {
+                if (!e.data) return;
+                var v = art.video || document.querySelector("video");
+
+                switch (e.data.type) {
+                  case "PLAY":
+                    if (art) art.play().catch(function() {});
+                    else if (v) v.play().catch(function() {});
+                    sendStatus();
+                    break;
+                  case "PAUSE":
+                    if (art) art.pause();
+                    else if (v) v.pause();
+                    sendStatus();
+                    break;
+                  case "TOGGLE_PLAY":
+                    if (art) art.toggle();
+                    else if (v) { v.paused ? v.play().catch(function() {}) : v.pause(); }
+                    sendStatus();
+                    break;
+                  case "SEEK":
+                  case "SEEK_ABSOLUTE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                    if (typeof t === "number" && !isNaN(t)) {
+                      if (art) art.currentTime = t;
+                      else if (v) v.currentTime = t;
+                      sendStatus();
+                    }
+                    break;
+                  case "SKIP_INTRO":
+                    var sec = Number(e.data.seconds) || 85;
+                    var cur = (v ? v.currentTime : 0) || 0;
+                    var maxD = (v && v.duration > 0 ? v.duration : 99999);
+                    var target = Math.max(0, Math.min(cur + sec, maxD - 5));
+                    if (art) art.currentTime = target;
+                    else if (v) v.currentTime = target;
+                    sendStatus();
+                    break;
+                  case "SET_VOLUME":
+                    if (typeof e.data.volume === "number") {
+                      if (art) art.volume = e.data.volume;
+                      else if (v) v.volume = e.data.volume;
+                      sendStatus();
+                    }
+                    break;
+                  case "SET_MUTED":
+                    if (art) art.muted = !e.data.muted;
+                    else if (v) v.muted = !e.data.muted;
+                    sendStatus();
+                    break;
+                  case "SET_PLAYBACK_RATE":
+                    if (typeof e.data.rate === "number") {
+                      if (art) art.playbackRate = e.data.rate;
+                      else if (v) v.playbackRate = e.data.rate;
+                      sendStatus();
+                    }
+                    break;
+                  case "REQUEST_STATUS":
+                    sendStatus();
+                    break;
+                }
+              });
+            })();
+          </script>
+        </body>
+        </html>
+      `);
+    } catch (err: any) {
+      console.error("[MixDrop Stream Error]:", err);
+      return res.status(500).send("Erro interno ao processar stream do MixDrop.");
+    }
+  });
+
+  // Proxy de streaming direto do MixDrop com suporte a Range bytes (fallback resiliente)
+  app.get("/api/mixdrop-proxy", async (req, res) => {
+    try {
+      const videoUrl = String(req.query.url || "").trim();
+      if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
+        return res.status(400).send("URL de vídeo inválida.");
+      }
+
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      };
+
+      if (req.headers.range) {
+        headers["Range"] = req.headers.range;
+      }
+
+      const upstream = await fetch(videoUrl, { headers });
+      res.status(upstream.status);
+
+      for (const [key, value] of upstream.headers.entries()) {
+        if (["content-type", "content-length", "content-range", "accept-ranges"].includes(key.toLowerCase())) {
+          res.setHeader(key, value);
+        }
+      }
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      if (!upstream.body) {
+        return res.end();
+      }
+
+      const { Readable } = await import("stream");
+      // @ts-ignore
+      Readable.fromWeb(upstream.body).pipe(res);
+    } catch (err: any) {
+      console.error("[MixDrop Proxy Error]:", err);
+      res.status(500).send("Erro no proxy do MixDrop");
     }
   });
 

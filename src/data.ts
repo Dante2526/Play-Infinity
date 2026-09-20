@@ -17,7 +17,7 @@ export const featured = {
   posterUrl:
     "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
   logoText: "HOMEM-ARANHA\nUM NOVO DIA",
-  playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+  playerUrl: "https://mxdrop.top/f/36nggdmqspmlg4",
 };
 
 export const featuredCarousel = [
@@ -130,7 +130,7 @@ export const top10 = [
     quality: "CAM" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
-    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+    playerUrl: "https://mxdrop.top/f/36nggdmqspmlg4",
   },
   {
     id: 533535,
@@ -182,7 +182,7 @@ export const releases = [
     quality: "CAM" as const,
     imageUrl:
       "https://image.tmdb.org/t/p/w500/x0nvYzQpyJc5pdT9lMnkMuYAg0O.jpg",
-    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+    playerUrl: "https://mxdrop.top/f/36nggdmqspmlg4",
   },
   {
     id: 533535,
@@ -767,7 +767,7 @@ export const mostWatched = [
     backdropUrl:
       "https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg",
     quality: "CAM" as const,
-    playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+    playerUrl: "https://mxdrop.top/f/36nggdmqspmlg4",
   },
   {
     id: 119051,
@@ -1076,7 +1076,7 @@ export const providerCatalogs: Record<string, CatalogItem[]> = {
       rating: "14",
       duration: "2h 23m",
       match: 99,
-      playerUrl: "https://v1.watchplay.shop/movie/tt22084616",
+      playerUrl: "https://mxdrop.top/f/36nggdmqspmlg4",
     },
     {
       id: 533535,
