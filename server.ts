@@ -891,8 +891,8 @@ process.on("uncaughtException", (err) => {
         categoryCounts[c.category] = (categoryCounts[c.category] || 0) + 1;
       });
 
-      // Se solicitado teste de funcionamento ativo dos links (validateStreams = true)
-      const validateStreams = req.body?.validateStreams !== false; // padrão: true
+      // Validação rápida: por padrão não bloqueia a resposta testando centenas de links (validateStreams = false)
+      const validateStreams = req.body?.validateStreams === true; // padrão: false para resposta instantânea
       let onlineCount = 0;
       let offlineCount = 0;
 
