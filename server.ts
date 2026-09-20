@@ -3893,18 +3893,45 @@ process.on("uncaughtException", (err) => {
 
       const finalUrl = upstreamRes.url || currentUrl;
       const contentType = upstreamRes.headers.get("content-type") || "";
-      const isM3U8 = rawUrl.includes(".m3u8") || 
-                     finalUrl.includes(".m3u8") ||
-                     contentType.includes("mpegurl") || 
-                     contentType.includes("application/x-mpegURL") ||
-                     contentType.includes("vnd.apple.mpegurl");
+      const isExplicitSegment = req.query.is_segment === "true" || isSegment;
+
+      let isM3U8 = !isExplicitSegment && (
+        req.query.is_manifest === "true" ||
+        rawUrl.includes(".m3u8") || 
+        finalUrl.includes(".m3u8") ||
+        contentType.includes("mpegurl") || 
+        contentType.includes("application/x-mpegURL") ||
+        contentType.includes("vnd.apple.mpegurl")
+      );
+
+      let upstreamText: string | null = null;
+      if (!isExplicitSegment && (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t"))) {
+        try {
+          const peekText = await upstreamRes.text();
+          if (peekText.includes("#EXTM3U")) {
+            isM3U8 = true;
+            upstreamText = peekText;
+          } else {
+            upstreamText = peekText;
+          }
+        } catch (_) {}
+      }
 
       if (isM3U8) {
-        const text = await upstreamRes.text();
+        const text = upstreamText !== null ? upstreamText : await upstreamRes.text();
+        if (!text.includes("#EXTM3U")) {
+          return res.status(502).send("Manifesto inválido recebido da fonte original");
+        }
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "public, max-age=2, immutable");
 
-        const lines = text.split("\n");
+        let cleanText = text;
+        const m3uIdx = cleanText.indexOf("#EXTM3U");
+        if (m3uIdx !== -1) {
+          cleanText = cleanText.slice(m3uIdx);
+        }
+
+        const lines = cleanText.split("\n");
         const filteredLines: string[] = [];
         let skipNextLine = false;
 
@@ -3914,6 +3941,10 @@ process.on("uncaughtException", (err) => {
           
           if (!trimmed) {
             filteredLines.push(line);
+            continue;
+          }
+
+          if (trimmed.startsWith("<") || trimmed.includes("</") || trimmed.includes("WARNING")) {
             continue;
           }
 
@@ -3945,11 +3976,13 @@ process.on("uncaughtException", (err) => {
         }
         const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
 
+        let lastTag = "";
         const rewritten = filteredLines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return line;
 
-          if (trimmed.includes('URI="')) {
+          if (trimmed.startsWith("#")) {
+            lastTag = trimmed.split(":")[0];
             return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
@@ -3961,34 +3994,39 @@ process.on("uncaughtException", (err) => {
             });
           }
 
-          if (trimmed.startsWith("#")) return trimmed;
-
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true`;
+            const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
+            const segParam = isStreamManifest ? "&is_manifest=true" : "&is_segment=true";
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}${segParam}`;
           } catch {
             return trimmed;
           }
         }).join("\n");
         
         const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
+        // Em live streaming contínuo com fragmentos curtos (2s), o manifesto M3U8 deve ser sempre ultra-fresco
         liveChunkCache.set(rawUrl, {
           buffer: rewrittenBuffer,
           contentType: "application/vnd.apple.mpegurl; charset=utf-8",
-          expires: Date.now() + 2500
+          expires: Date.now() + 500
         });
 
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         return res.send(rewrittenBuffer);
       }
 
       // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
       // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
-      if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
-        // Libera explicitamente o corpo upstream e o socket TCP para evitar vazamento de descritores/memória
-        try {
-          upstreamRes.body?.cancel().catch(() => {});
-        } catch (_) {}
+      if (!isExplicitSegment && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+        // Libera explicitamente o corpo upstream se ainda não foi lido
+        if (upstreamText === null) {
+          try {
+            upstreamRes.body?.cancel().catch(() => {});
+          } catch (_) {}
+        }
 
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -4005,40 +4043,19 @@ process.on("uncaughtException", (err) => {
       }
 
       let finalContentType = contentType || "video/MP2T";
-      if (req.query.is_segment === "true" || isSegment) {
+      if (isExplicitSegment && !contentType.includes("mpegurl")) {
         finalContentType = "video/MP2T";
       }
       res.setHeader("Content-Type", finalContentType);
-      res.setHeader("Cache-Control", "public, max-age=15");
+      res.setHeader("Cache-Control", "public, max-age=60, immutable");
 
-      if (upstreamRes.body) {
-        // Stream directly to HTTP response with cutoff protection for infinite TS live streams
+      if (upstreamText !== null) {
+        return res.send(Buffer.from(upstreamText, "utf-8"));
+      } else if (upstreamRes.body) {
+        // Transmite o segmento de vídeo de forma contínua e eficiente sem cortes artificiais
         const stream = Readable.fromWeb(upstreamRes.body as any);
-        const isContinuousTs = req.query.is_segment === "true" && (rawUrl.includes("up.kiwi") || finalUrl.endsWith(".ts") || contentType.includes("mp2t"));
-        let cutoff: NodeJS.Timeout | null = null;
         
-        if (isContinuousTs) {
-          cutoff = setTimeout(() => {
-            try {
-              stream.unpipe(res);
-              stream.destroy();
-              res.end();
-            } catch (_) {}
-          }, 6000);
-        }
-
-        const clearCutoff = () => {
-          if (cutoff) {
-            clearTimeout(cutoff);
-            cutoff = null;
-          }
-        };
-
-        stream.on("end", clearCutoff);
-        stream.on("close", clearCutoff);
-        stream.on("error", clearCutoff);
         res.on("close", () => {
-          clearCutoff();
           try {
             stream.destroy();
           } catch (_) {}

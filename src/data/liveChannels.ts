@@ -74,7 +74,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       },
       {
         name: 'Servidor 2 (HD)',
-        url: 'http://up.kiwi/351921603109/34939156/861.m3u8',
+        url: 'http://up.kiwi/351921603109/34939156/863.m3u8',
         isProxy: true
       }
     ]
@@ -162,18 +162,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
     servers: [
       {
-        name: 'Servidor 1 (FHD)',
-        url: 'http://up.kiwi/351921603109/34939156/296210.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 2 (HD)',
+        name: 'Servidor 1 (HD)',
         url: 'http://up.kiwi/351921603109/34939156/1221.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (HD Backup)',
+        name: 'Servidor 2 (HD Backup)',
         url: 'http://up.kiwi/351921603109/34939156/296209.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (FHD)',
+        url: 'http://up.kiwi/351921603109/34939156/296210.m3u8',
         isProxy: true
       }
     ]
@@ -195,11 +195,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2 (HD)',
         url: 'http://up.kiwi/351921603109/34939156/1226.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296212.m3u8',
         isProxy: true
       }
     ]
