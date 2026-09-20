@@ -2125,6 +2125,11 @@ const router = Router();
       // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
       // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
       if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+        // Libera explicitamente o corpo upstream e o socket TCP para evitar vazamento de descritores/memória
+        try {
+          upstreamRes.body?.cancel().catch(() => {});
+        } catch (_) {}
+
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         const seq = Math.floor(Date.now() / 4000);
@@ -2147,8 +2152,39 @@ const router = Router();
       res.setHeader("Cache-Control", "public, max-age=15");
 
       if (upstreamRes.body) {
-        // Stream directly to HTTP response to prevent holding large video segments in RAM
-        return Readable.fromWeb(upstreamRes.body as any).pipe(res);
+        // Stream directly to HTTP response with cutoff protection for infinite TS live streams
+        const stream = Readable.fromWeb(upstreamRes.body as any);
+        const isContinuousTs = req.query.is_segment === "true" && (rawUrl.includes("up.kiwi") || finalUrl.endsWith(".ts") || contentType.includes("mp2t"));
+        let cutoff: NodeJS.Timeout | null = null;
+        
+        if (isContinuousTs) {
+          cutoff = setTimeout(() => {
+            try {
+              stream.unpipe(res);
+              stream.destroy();
+              res.end();
+            } catch (_) {}
+          }, 6000);
+        }
+
+        const clearCutoff = () => {
+          if (cutoff) {
+            clearTimeout(cutoff);
+            cutoff = null;
+          }
+        };
+
+        stream.on("end", clearCutoff);
+        stream.on("close", clearCutoff);
+        stream.on("error", clearCutoff);
+        res.on("close", () => {
+          clearCutoff();
+          try {
+            stream.destroy();
+          } catch (_) {}
+        });
+
+        return stream.pipe(res);
       } else {
         const buffer = Buffer.from(await upstreamRes.arrayBuffer());
         return res.send(buffer);
