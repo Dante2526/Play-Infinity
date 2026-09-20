@@ -2166,6 +2166,14 @@ const router = Router();
 
       if (isM3U8) {
         const text = await upstreamRes.text();
+
+        // Validação estrita de M3U8: evita repassar HTML de erro (como 404 do Xtream) ou corpo vazio como playlist
+        if (!text.trimStart().startsWith("#EXTM3U") && !text.includes("#EXTM3U")) {
+          console.warn(`[live-stream-proxy] Upstream não-m3u8 recebido para ${rawUrl} (size=${text.length}, head=${text.slice(0, 50).replace(/\n/g, "\\n")})`);
+          liveChunkCache.delete(rawUrl);
+          return res.status(502).send("Upstream retornou conteúdo inválido (não-m3u8)");
+        }
+
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "public, max-age=2, immutable");
 
@@ -2241,11 +2249,13 @@ const router = Router();
         }).join("\n");
         
         const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
-        liveChunkCache.set(rawUrl, {
-          buffer: rewrittenBuffer,
-          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
-          expires: Date.now() + 2500
-        });
+        if (rewrittenBuffer.length > 0 && rewritten.includes("#EXTM3U")) {
+          liveChunkCache.set(rawUrl, {
+            buffer: rewrittenBuffer,
+            contentType: "application/vnd.apple.mpegurl; charset=utf-8",
+            expires: Date.now() + 2500
+          });
+        }
 
         return res.send(rewrittenBuffer);
       }
@@ -2264,9 +2274,9 @@ const router = Router();
         const manifest = [
           "#EXTM3U",
           "#EXT-X-VERSION:3",
-          "#EXT-X-TARGETDURATION:6",
+          "#EXT-X-TARGETDURATION:10",
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-          "#EXTINF:6.0,",
+          "#EXTINF:10.0,",
           `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
         ].join("\n");
         return res.send(manifest);
@@ -2286,13 +2296,14 @@ const router = Router();
         let cutoff: NodeJS.Timeout | null = null;
         
         if (isContinuousTs) {
+          // Não cortar fluxos ativos prematuramente: 30s de inatividade total
           cutoff = setTimeout(() => {
             try {
               stream.unpipe(res);
               stream.destroy();
               res.end();
             } catch (_) {}
-          }, 6000);
+          }, 30000);
         }
 
         const clearCutoff = () => {

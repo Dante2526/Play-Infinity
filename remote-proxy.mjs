@@ -147,6 +147,14 @@ app.get("/api/live-stream-proxy", async (req, res) => {
 
     if (isM3U8) {
       const text = upstreamText !== null ? upstreamText : await upstreamRes.text();
+
+      // Validação estrita de M3U8: impede que erros 404 em HTML ou corpos vazios sejam repassados como 200 m3u8
+      if (!text.trimStart().startsWith("#EXTM3U") && !text.includes("#EXTM3U")) {
+        console.warn(`[live-stream-proxy] Upstream não-m3u8 recebido para ${rawUrl} (size=${text.length})`);
+        liveChunkCache.delete(rawUrl);
+        return res.status(502).send("Upstream retornou conteúdo inválido (não-m3u8)");
+      }
+
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=2, immutable");
       
@@ -241,11 +249,13 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       const rewritten = mappedLines.join("\n");
       
       const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
-      liveChunkCache.set(rawUrl, {
-        buffer: rewrittenBuffer,
-        contentType: "application/vnd.apple.mpegurl; charset=utf-8",
-        expires: Date.now() + 2500
-      });
+      if (rewrittenBuffer.length > 0 && rewritten.includes("#EXTM3U")) {
+        liveChunkCache.set(rawUrl, {
+          buffer: rewrittenBuffer,
+          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
+          expires: Date.now() + 2500
+        });
+      }
 
       return res.send(rewrittenBuffer);
     }
@@ -261,9 +271,9 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       const manifest = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
-        "#EXT-X-TARGETDURATION:6",
+        "#EXT-X-TARGETDURATION:10",
         `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-        "#EXTINF:6.0,",
+        "#EXTINF:10.0,",
         `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
       ].join("\n");
       return res.send(manifest);

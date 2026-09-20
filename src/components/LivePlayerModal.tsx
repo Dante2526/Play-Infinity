@@ -290,10 +290,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           enableWorker: true,
           lowLatencyMode: false,
           liveDurationInfinity: true,
-          liveSyncDurationCount: 4, // 4 fragmentos (~8s) para garantir margem de buffer contínua
-          liveMaxLatencyDurationCount: 10,
-          maxBufferLength: 30, // Segundos mantidos no buffer
-          maxMaxBufferLength: 60, // Limite máximo absoluto
+          liveSyncDurationCount: 6, // 6 fragmentos dão margem de buffer ideal
+          liveMaxLatencyDurationCount: 12,
+          maxBufferLength: 40, // 40 segundos no buffer
+          maxMaxBufferLength: 90, // Limite máximo seguro
           maxBufferHole: 0.8, // Hls.js transpõe micro-gaps internamente sem travar
           highBufferWatchdogPeriod: 2,
           nudgeMaxRetry: 10,
@@ -304,7 +304,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           levelLoadingTimeOut: 20000,
           levelLoadingMaxRetry: 6,
           fragLoadingTimeOut: 25000,
-          fragLoadingMaxRetry: 12,
+          fragLoadingMaxRetry: 20, // Mais tolerância a segmentos oscilantes
           fragLoadingRetryDelay: 500,
           fragLoadingMaxRetryTimeout: 30000,
           capLevelToPlayerSize: false,
@@ -319,18 +319,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           if (!isMounted) return;
           setIsLoading(false);
           setIsBuffering(false);
-          setStreamHealth('online');
         };
 
         hls.on(Hls.Events.MANIFEST_LOADED, () => {
           if (!isMounted) return;
-          setStreamHealth('online');
+          // Não marcar 'online' prematuramente aqui - aguardar segmentos reais
         });
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (!isMounted) return;
-          failedServersRef.current.clear(); // Conexão bem-sucedida, reseta falhas prévias
-          setStreamHealth('online');
+          failedServersRef.current.clear();
 
           // Assegura volume inicial
           video.volume = 1.0;
@@ -358,7 +356,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.LEVEL_LOADED, () => {
           if (!isMounted) return;
-          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
@@ -376,12 +373,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.FRAG_LOADING, () => {
           if (!isMounted) return;
-          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.FRAG_LOADED, () => {
           if (!isMounted) return;
-          setStreamHealth('online');
           clearRecoveryTimeout();
           recoveryTimeout = setTimeout(() => {
             if (!isMounted) return;
@@ -395,12 +390,17 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
           if (!isMounted) return;
+          // Somente agora temos vídeo real adicionado ao buffer de reprodução
           setStreamHealth('online');
+          setIsLoading(false);
+          setIsBuffering(false);
         });
 
         hls.on(Hls.Events.BUFFER_APPENDED, () => {
           if (!isMounted) return;
           setStreamHealth('online');
+          setIsLoading(false);
+          setIsBuffering(false);
         });
 
         hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -517,17 +517,36 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     const initialTimeoutServerSwitchTimer = setTimeout(() => {
       if (!isMounted) return;
-      const hls = hlsRef.current;
-      // Só alterna se realmente não tiver carregado NENHUM nível de playlist e estiver inerte após o timeout
-      const hasLoadedLevels = hls && hls.levels && hls.levels.length > 0;
       const v = videoRef.current;
-      if (!hasLoadedLevels && v && v.readyState === 0) {
+      if (v && v.readyState === 0 && v.currentTime === 0) {
         if (channel.servers.length > 1) {
-          console.log('[LivePlayer] Timeout de conexão inicial (12s sem manifesto), alternando de servidor...');
+          console.log('[LivePlayer] Timeout de conexão inicial (10s sem decodificação de vídeo), alternando de servidor...');
           switchToNextServer('timeout de sintonia');
         }
       }
-    }, 12000);
+    }, 10000);
+
+    // Watchdog de Tela Preta Ativo: detecta manifesto mestre carregado com variante filha morta/zumbi (readyState === 0)
+    let blackScreenWatchdogTimer: NodeJS.Timeout | null = null;
+    const runBlackScreenWatchdog = () => {
+      blackScreenWatchdogTimer = setTimeout(() => {
+        if (!isMounted) return;
+        const v = videoRef.current;
+        const hls = hlsRef.current;
+        if (!v) return;
+
+        // Se o mestre parseou ou hls existe, mas o elemento de vídeo nunca recebeu frames em 8s (readyState 0 e currentTime 0)
+        if (v.readyState === 0 && v.currentTime === 0) {
+          if (channel.servers.length > 1) {
+            console.warn('[LivePlayer] Tela preta detectada (variante filha sem vídeo, readyState=0). Alternando para próximo servidor...');
+            switchToNextServer('tela preta pos-manifest');
+            return;
+          }
+        }
+        runBlackScreenWatchdog();
+      }, 8000);
+    };
+    runBlackScreenWatchdog();
 
     // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
@@ -666,6 +685,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       isMounted = false;
       clearTimeout(initialLoadingWatchdogTimer);
       clearTimeout(initialTimeoutServerSwitchTimer);
+      if (blackScreenWatchdogTimer) clearTimeout(blackScreenWatchdogTimer);
       if (bufferingDebounceTimer) clearTimeout(bufferingDebounceTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
