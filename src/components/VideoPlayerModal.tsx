@@ -169,6 +169,9 @@ export function VideoPlayerModal({
       target.includes("watchplay") ||
       target.includes("myembed") ||
       target.includes("playerflix") ||
+      target.includes("mixdrop") ||
+      target.includes("mxdrop") ||
+      target.includes("/api/mixdrop-stream") ||
       target.includes("/api/watchplayer-stream") ||
       target.includes("/api/myembed-stream") ||
       target.includes("/api/anime-stream") ||
@@ -574,10 +577,20 @@ export function VideoPlayerModal({
             `https://api.pomfy.stream/filme/${id}`,
           isMatch: (u: string) => u.includes("pomfy.stream"),
           name: "Pomfy Stream"
+        },
+        {
+          key: "srv_mixdrop",
+          label: "MixDrop HD (Dublado)",
+          badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
+          buildUrl: () => (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop")))
+            ? defaultUrl
+            : "https://mxdrop.top/f/36nggdmqspmlg4",
+          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
+          name: "MixDrop HD (Dublado)"
         }
       ];
     }
-  }, [isSeries, imdbId]);
+  }, [isSeries, imdbId, defaultUrl]);
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback((serverKey: string) => {
@@ -586,8 +599,8 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
-    // Para o VIP Player e Pomfy, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
-    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_pomfy");
+    // Para o VIP Player, Pomfy e MixDrop, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
+    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_pomfy" || serverKey === "srv_mixdrop");
     setError(null);
     const newUrl = isSeries
       ? srv.buildUrl(resolvedId, season, episode)
@@ -703,15 +716,23 @@ export function VideoPlayerModal({
         }
       }
 
-      // Inicialização do servidor estritamente com o WatchPlayer
+      // Inicialização do servidor: prioriza MixDrop para links dedicados ou filme Homem-Aranha, e WatchPlayer como padrão
       const setupInitialServer = async () => {
-        const targetServerKey = "srv_watchplay";
+        const isMixdropTarget =
+          (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/mixdrop-stream"))) ||
+          resolvedId === "969681" ||
+          imdbId === "tt22084616" ||
+          (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
+
+        const targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
         setSelectedServerKey(targetServerKey);
 
         const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
-        const targetUrl = isSeries 
-          ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
-          : targetSrv.buildUrl(resolvedId);
+        const targetUrl = isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))
+          ? defaultUrl
+          : isSeries 
+            ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+            : targetSrv.buildUrl(resolvedId);
 
         setUrlInput(targetUrl);
         handleExtract(targetUrl);
@@ -725,7 +746,7 @@ export function VideoPlayerModal({
     }
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId, servers]);
 
-  // Converte URLs do WatchPlayer para o endpoint com autoplay instantâneo (sem opções intermediárias)
+  // Converte URLs do WatchPlayer e MixDrop para endpoints otimizados com autoplay instantâneo e Skin Netflix
   const resolveStreamIframeUrl = (url: string) => {
     if (!url) return "";
     if (url.includes("watchplay.shop")) {
@@ -739,6 +760,9 @@ export function VideoPlayerModal({
     }
     if (url.includes("pomfy.stream")) {
       return url; // Retorna a URL direta do Pomfy
+    }
+    if (url.includes("mxdrop.") || url.includes("mixdrop.")) {
+      return `/api/mixdrop-stream?url=${encodeURIComponent(url)}`;
     }
     return url;
   };
@@ -757,6 +781,9 @@ export function VideoPlayerModal({
       "https://watchplay.shop",
       "https://api.pomfy.stream",
       "https://pomfy.stream",
+      "https://mxdrop.top",
+      "https://mixdrop.co",
+      "https://mixdrop.to",
       "https://player.videasy.to",
       "https://videasy.to",
       "https://superflixapi.top",
@@ -1021,9 +1048,12 @@ export function VideoPlayerModal({
     if (
       cleanUrl.startsWith("/api/watchplayer-stream") ||
       cleanUrl.startsWith("/api/myembed-stream") ||
+      cleanUrl.startsWith("/api/mixdrop-stream") ||
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("myembed.biz") ||
       cleanUrl.includes("playerflix.ink") ||
+      cleanUrl.includes("mixdrop.") ||
+      cleanUrl.includes("mxdrop.") ||
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
@@ -1667,13 +1697,18 @@ export function VideoPlayerModal({
                   transformOrigin: "center center",
                   transition: "transform 0.3s ease",
                 }}
-                fetchpriority="high"
+                fetchPriority="high"
                 allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock; accelerometer; gyroscope"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  if (selectedServerKey === "srv_vip" || selectedServerKey === "srv_pomfy") {
+                  if (
+                    selectedServerKey === "srv_vip" ||
+                    selectedServerKey === "srv_pomfy" ||
+                    selectedServerKey === "srv_mixdrop" ||
+                    activeIframeUrl?.includes("/api/mixdrop-stream")
+                  ) {
                     setTimeout(() => setPlayerSkinReady(true), 200);
                   }
                 }}

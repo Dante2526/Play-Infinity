@@ -122,7 +122,16 @@ const ALLOWED_STREAMING_DOMAINS = [
   "player.autoembed.cc",
   "speedracelight.com",
   "animesonlinecc.to",
-  "blogger.com"
+  "blogger.com",
+  "mixdrop.co",
+  "mixdrop.to",
+  "mixdrop.ch",
+  "mixdrop.bz",
+  "mixdrop.vc",
+  "mixdrop.ag",
+  "mxdrop.to",
+  "mxdrop.top",
+  "mxcontent.net"
 ];
 
 function isPrivateOrLocalIp(hostname: string): boolean {
