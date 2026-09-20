@@ -310,18 +310,49 @@ export function AdminPage({ onBack }: AdminPageProps) {
     }
 
     setCreateLoading(true);
+    let tempApp: any = null;
 
     try {
-      // 1. Cria a conta no Authentication (isso fará login automaticamente como o usuário)
-      const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, newPassword);
-      
-      // 2. Atualiza nome no perfil do Auth
+      const tempAppName = `createAuth_${Date.now()}`;
+      tempApp = initializeApp(firebaseConfig, tempAppName);
+      const tempAuth = getAuth(tempApp);
+
+      let userUid = "";
+
       try {
-        await updateProfile(userCredential.user, {
-          displayName: newName.trim()
-        });
-      } catch (pErr) {
-        console.warn("Falha ao atualizar displayName no Auth:", pErr);
+        // 1. Cria a conta no Authentication usando app secundário isolado
+        const userCredential = await createUserWithEmailAndPassword(tempAuth, cleanEmail, newPassword);
+        userUid = userCredential.user.uid;
+        
+        // 2. Atualiza nome no perfil do Auth
+        try {
+          await updateProfile(userCredential.user, {
+            displayName: newName.trim()
+          });
+        } catch (pErr) {
+          console.warn("Falha ao atualizar displayName no Auth:", pErr);
+        }
+      } catch (authErr: any) {
+        if (authErr.code === "auth/email-already-in-use") {
+          // Verifica se o usuário já possui cadastro ativo no banco de dados
+          const existingSnap = await getDocs(query(collection(db, "usuarios"), where("email", "==", cleanEmail)));
+          if (!existingSnap.empty) {
+            throw authErr;
+          }
+          // Caso a conta Auth exista mas estivesse órfã (sem registro em usuarios), tenta recuperar o UID
+          try {
+            const loginCred = await signInWithEmailAndPassword(tempAuth, cleanEmail, newPassword);
+            userUid = loginCred.user.uid;
+            try {
+              await updateProfile(loginCred.user, { displayName: newName.trim() });
+            } catch (e) {}
+          } catch (loginErr: any) {
+            // Se a senha for diferente da existente no Auth, informa que o e-mail já existe
+            throw authErr;
+          }
+        } else {
+          throw authErr;
+        }
       }
 
       // 3. Calcula data de expiração
@@ -356,7 +387,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       const valorNum = monthlyPrice === "13.00" ? 13.00 : 9.90;
       const valorTxt = monthlyPrice === "13.00" ? "13,00" : "9,90";
 
-      await setDoc(doc(db, "usuarios", userCredential.user.uid), {
+      await setDoc(doc(db, "usuarios", userUid), {
         email: cleanEmail,
         nome: newName.trim(),
         assinatura: "ATIVA",
@@ -369,14 +400,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
         senha: newPassword,
         criadoEm: new Date().toISOString()
       });
-
-      // 5. Desloga do Auth (para não ficar logado como cliente no navegador do Admin)
-      localStorage.removeItem("playinfinity_logged_in");
-      localStorage.removeItem("playinfinity_playback_history");
-      localStorage.removeItem("playinfinity_favorites");
-      localStorage.removeItem("playinfinity_watched_episodes");
-      localStorage.removeItem("playinfinity_watched_seasons");
-      await signOut(auth);
 
       setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso!${accessType === 'mensal' ? ` Mensalidade: R$ ${valorTxt}.` : ''} O acesso expira em: ${expireStr}`);
       setLastCreatedUser({
@@ -393,10 +416,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setMonthlyPrice("13.00");
       await loadStats();
     } catch (err: any) {
-      // Se falhar (ex: email já existe), desloga só por garantia
-      try { await signOut(auth); } catch(e){}
       setCreateError(getFriendlyErrorMessage(err, "Não foi possível criar o acesso do cliente."));
     } finally {
+      if (tempApp) {
+        try { await deleteApp(tempApp); } catch(e){}
+      }
       setCreateLoading(false);
     }
   };
