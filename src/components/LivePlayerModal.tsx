@@ -359,6 +359,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.FRAG_LOADED, () => {
           if (!isMounted) return;
+          setIsLoading(false);
+          setIsBuffering(false);
+          setStreamHealth('online');
           clearRecoveryTimeout();
           recoveryTimeout = setTimeout(() => {
             if (!isMounted) return;
@@ -368,6 +371,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             networkErrorCount = 0;
             mediaErrorCount = 0;
           }, 15000);
+        });
+
+        hls.on(Hls.Events.FRAG_BUFFERED, () => {
+          if (!isMounted) return;
+          setIsLoading(false);
+          setIsBuffering(false);
+          setStreamHealth('online');
+        });
+
+        hls.on(Hls.Events.BUFFER_APPENDED, () => {
+          if (!isMounted) return;
+          setIsLoading(false);
+          setIsBuffering(false);
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -460,6 +477,30 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     startHls();
 
+    // Watchdog de sintonia inicial: impede que a tela fique eternamente presa em "Sintonizando..."
+    const initialLoadingWatchdogTimer = setTimeout(() => {
+      if (!isMounted) return;
+      const v = videoRef.current;
+      if (v && (!v.paused || v.currentTime > 0 || v.readyState >= 2)) {
+        setIsLoading(false);
+        setIsBuffering(false);
+        setIsPlaying(true);
+        setStreamHealth('online');
+      } else if (hlsRef.current) {
+        console.log('[LivePlayer] Forçando recarga de fragmentos no watchdog inicial...');
+        hlsRef.current.startLoad();
+      }
+    }, 5000);
+
+    const initialTimeoutServerSwitchTimer = setTimeout(() => {
+      if (!isMounted) return;
+      const v = videoRef.current;
+      if (v && (v.paused && v.currentTime === 0 && v.readyState < 2)) {
+        console.log('[LivePlayer] Timeout de sintonia inicial (9s), alternando automaticamente de servidor...');
+        switchToNextServer('timeout de sintonia');
+      }
+    }, 9000);
+
     // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
     let recoveryAttemptTimer: NodeJS.Timeout | null = null;
@@ -541,6 +582,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         clearTimeout(recoveryAttemptTimer);
         recoveryAttemptTimer = null;
       }
+      setIsLoading(false);
       setIsBuffering(false);
       setIsPlaying(true);
       setStreamHealth('online');
@@ -552,14 +594,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         clearTimeout(bufferingDebounceTimer);
         bufferingDebounceTimer = null;
       }
+      setIsLoading(false);
       setIsBuffering(false);
       setIsPlaying(true);
+      setStreamHealth('online');
+    };
+
+    const handleCanPlay = () => {
+      if (!isMounted) return;
+      setIsLoading(false);
+      setIsBuffering(false);
       setStreamHealth('online');
     };
 
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('loadeddata', handleCanPlay);
 
     // Watchdog de recuperação de qualidade: o ABR nativo do hls.js só reavalia a banda
     // quando baixa fragmentos. Se a rede piorou, o buffer fica maior (modo baixa banda),
@@ -600,6 +652,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     return () => {
       isMounted = false;
+      clearTimeout(initialLoadingWatchdogTimer);
+      clearTimeout(initialTimeoutServerSwitchTimer);
       if (bufferingDebounceTimer) clearTimeout(bufferingDebounceTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
@@ -608,6 +662,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('loadeddata', handleCanPlay);
 
       if ((video as any)._nativeMetaHandler) {
         video.removeEventListener('loadedmetadata', (video as any)._nativeMetaHandler);
@@ -1015,9 +1071,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }}
           onPlay={() => {
             setIsPlaying(true);
+            setIsLoading(false);
+            setIsBuffering(false);
             if (videoRef.current && !videoRef.current.muted) {
               videoRef.current.volume = 1.0;
             }
+          }}
+          onPlaying={() => {
+            setIsPlaying(true);
+            setIsLoading(false);
+            setIsBuffering(false);
+          }}
+          onCanPlay={() => {
+            setIsLoading(false);
+            setIsBuffering(false);
+          }}
+          onLoadedData={() => {
+            setIsLoading(false);
+            setIsBuffering(false);
           }}
           onPause={() => setIsPlaying(false)}
         />
