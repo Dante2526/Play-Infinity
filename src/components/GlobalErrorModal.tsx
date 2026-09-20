@@ -22,19 +22,28 @@ declare global {
 }
 
 // Filtra mensagens inofensivas e ruídos de browser
-function isIgnorableError(message: string): boolean {
-  if (!message) return false;
-  const lower = message.toLowerCase();
-  if (lower.includes('[vite] failed to connect to websocket')) return true;
-  if (lower.includes('resizeobserver loop completed')) return true;
-  if (lower.includes('resizeobserver loop limit exceeded')) return true;
-  if (lower.includes('the user aborted a request')) return true;
-  if (lower.includes('aborterror')) return true;
-  if (lower.includes('permissions check failed')) return true;
-  if (lower.includes('requestfullscreen')) return true;
-  if (lower.includes('fullscreen request was denied')) return true;
-  if (lower.includes('orientation lock failed')) return true;
-  if (lower.includes('screen.orientation')) return true;
+function isIgnorableError(message?: string, stack?: string): boolean {
+  const combined = `${message || ''} ${stack || ''}`.toLowerCase();
+  if (!combined.trim()) return false;
+
+  // Ruídos de WebSocket e Vite HMR (normais no ambiente Cloud Run / Dev)
+  if (combined.includes('websocket closed without opened')) return true;
+  if (combined.includes('[vite] failed to connect to websocket')) return true;
+  if (combined.includes('@vite/client')) return true;
+  if (combined.includes('vite/client')) return true;
+
+  // Ruídos do ciclo de vida de mídia HTML5 / Browser
+  if (combined.includes('the play() request was interrupted')) return true;
+  if (combined.includes('resizeobserver loop completed')) return true;
+  if (combined.includes('resizeobserver loop limit exceeded')) return true;
+  if (combined.includes('the user aborted a request')) return true;
+  if (combined.includes('aborterror')) return true;
+  if (combined.includes('permissions check failed')) return true;
+  if (combined.includes('requestfullscreen')) return true;
+  if (combined.includes('fullscreen request was denied')) return true;
+  if (combined.includes('orientation lock failed')) return true;
+  if (combined.includes('screen.orientation')) return true;
+
   return false;
 }
 
@@ -65,7 +74,7 @@ export function GlobalErrorModal({ forcedError, onCloseForced }: GlobalErrorModa
   const activeError = forcedError || errorList[errorList.length - 1] || null;
 
   const pushNewError = (newErr: AppErrorInfo) => {
-    if (isIgnorableError(newErr.message)) return;
+    if (isIgnorableError(newErr.message, newErr.stack || newErr.context)) return;
     setErrorList(prev => {
       // Evita duplicar exatamente o mesmo erro em curto intervalo
       const last = prev[prev.length - 1];
@@ -80,6 +89,7 @@ export function GlobalErrorModal({ forcedError, onCloseForced }: GlobalErrorModa
 
   useEffect(() => {
     if (forcedError) {
+      if (isIgnorableError(forcedError.message, forcedError.stack)) return;
       setIsOpen(true);
     }
   }, [forcedError]);
@@ -88,12 +98,13 @@ export function GlobalErrorModal({ forcedError, onCloseForced }: GlobalErrorModa
     // 1. Escuta erros globais de runtime (JavaScript)
     const handleError = (event: ErrorEvent) => {
       const msg = event.message || (event.error && event.error.message) || 'Erro de execução desconhecido';
-      if (isIgnorableError(msg)) return;
+      const stack = event.error?.stack || `${event.filename}:${event.lineno}:${event.colno}`;
+      if (isIgnorableError(msg, stack)) return;
 
       const info: AppErrorInfo = {
         id: Math.random().toString(36).substring(2, 9),
         message: msg,
-        stack: event.error?.stack || `${event.filename}:${event.lineno}:${event.colno}`,
+        stack,
         type: 'Runtime Error',
         timestamp: new Date().toISOString(),
         url: window.location.href,
@@ -118,7 +129,7 @@ export function GlobalErrorModal({ forcedError, onCloseForced }: GlobalErrorModa
         msg = reason.message || reason.description || JSON.stringify(reason);
       }
 
-      if (isIgnorableError(msg)) return;
+      if (isIgnorableError(msg, stack)) return;
 
       const info: AppErrorInfo = {
         id: Math.random().toString(36).substring(2, 9),
@@ -148,7 +159,7 @@ export function GlobalErrorModal({ forcedError, onCloseForced }: GlobalErrorModa
         msg = error.message || error.description || JSON.stringify(error);
       }
 
-      if (isIgnorableError(msg)) return;
+      if (isIgnorableError(msg, stack)) return;
 
       const info: AppErrorInfo = {
         id: Math.random().toString(36).substring(2, 9),

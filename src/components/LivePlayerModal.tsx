@@ -244,7 +244,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     return () => window.removeEventListener('online', handleOnline);
   }, []);
 
-  // Determina a URL atual baseada no servidor selecionado
+  // Determina a URL atual baseada no servidor selecionado e status de proxy
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
   const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity-app.duckdns.org';
   const streamUrl = currentServer?.isProxy 
@@ -285,27 +285,28 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (Hls.isSupported()) {
         // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
-        // Otimizado para playlists deslizantes curtas (5-6 fragmentos de 2s)
+        // Otimizado para reprodução contínua e suave, com margem de segurança contra oscilações de sinal
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          liveSyncDurationCount: currentLowBandwidth ? 4 : 3, // 3 fragmentos (~6s da ponta ao vivo)
-          liveMaxLatencyDurationCount: currentLowBandwidth ? 8 : 6, // 6 fragmentos (~12s)
-          maxBufferLength: currentLowBandwidth ? 30 : 25, // Segundos mantidos no buffer
-          maxMaxBufferLength: currentLowBandwidth ? 60 : 50, // Limite máximo absoluto
-          maxBufferHole: 2.0, // Tolera e transpõe micro-gaps temporários entre fragmentos sem disparar stall
-          highBufferWatchdogPeriod: 1,
-          nudgeMaxRetry: 15,
-          nudgeOffset: 0.2,
-          backBufferLength: 8, // Mantém back buffer enxuto para evitar colisão com live sliding window
-          manifestLoadingTimeOut: 30000,
-          manifestLoadingMaxRetry: 10,
-          levelLoadingTimeOut: 30000,
-          levelLoadingMaxRetry: 8,
-          fragLoadingTimeOut: 35000,
-          fragLoadingMaxRetry: 15,
-          fragLoadingRetryDelay: 1000,
-          fragLoadingMaxRetryTimeout: 64000,
+          liveDurationInfinity: true,
+          liveSyncDurationCount: 4, // 4 fragmentos (~8s) para garantir margem de buffer contínua
+          liveMaxLatencyDurationCount: 10,
+          maxBufferLength: 30, // Segundos mantidos no buffer
+          maxMaxBufferLength: 60, // Limite máximo absoluto
+          maxBufferHole: 0.8, // Hls.js transpõe micro-gaps internamente sem travar
+          highBufferWatchdogPeriod: 2,
+          nudgeMaxRetry: 10,
+          nudgeOffset: 0.1,
+          backBufferLength: 6,
+          manifestLoadingTimeOut: 20000,
+          manifestLoadingMaxRetry: 8,
+          levelLoadingTimeOut: 20000,
+          levelLoadingMaxRetry: 6,
+          fragLoadingTimeOut: 25000,
+          fragLoadingMaxRetry: 12,
+          fragLoadingRetryDelay: 500,
+          fragLoadingMaxRetryTimeout: 30000,
           capLevelToPlayerSize: false,
           startLevel: -1
         });
@@ -411,10 +412,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 networkErrorCount += 1;
-                // TV ao vivo frequentemente tem pequenos engasgos ou chunks bloqueados.
-                // Tolerância alta com reconexão contínua antes de alternar de servidor
-                if (networkErrorCount <= 8) {
-                  console.log(`[LivePlayer] Recuperando erro de rede HLS silenciosamente (${networkErrorCount}/8)...`);
+                if (networkErrorCount <= 6) {
+                  console.log(`[LivePlayer] Recuperando erro de rede HLS silenciosamente (${networkErrorCount}/6)...`);
                   hls.startLoad();
                 } else {
                   console.log('[LivePlayer] Servidor instável ou desconectado, alternando automaticamente para próximo servidor...');
@@ -423,11 +422,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 break;
               case Hls.ErrorTypes.MEDIA_ERROR:
                 mediaErrorCount += 1;
-                // Canais FAST possuem descontinuidades constantes devido a ads ou alternância de codec.
-                // Permitir recuperação contínua para evitar interrupções
-                if (mediaErrorCount <= 12) {
-                  console.log(`[LivePlayer] Recuperando erro de mídia HLS silenciosamente (${mediaErrorCount}/12)...`);
+                if (mediaErrorCount === 1) {
+                  console.log('[LivePlayer] Recuperando erro de mídia HLS silenciosamente...');
                   hls.recoverMediaError();
+                } else if (mediaErrorCount <= 6) {
+                  hls.startLoad();
                 } else {
                   console.log('[LivePlayer] Erro de mídia persistente, alternando para próximo servidor...');
                   switchToNextServer('erro de midia persistente');
@@ -438,11 +437,15 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 break;
             }
           } else {
-             if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR) {
-               // Em micro-stalls, tenta desobstruir suavemente o buffer sem interromper
+             if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR || 
+                 data.details === Hls.ErrorDetails.BUFFER_NUDGE_ON_STALL ||
+                 data.details === (Hls.ErrorDetails as any).BUFFER_SEEK_OVER_HOLE ||
+                 data.details === (Hls.ErrorDetails as any).BUFFER_HOLE_ERR) {
+               // Em micro-stalls, recarrega fragmentos suavemente sem interromper a timeline
                try {
                  if (hls && !video.paused) {
                    hls.startLoad();
+                   video.play().catch(() => {});
                  }
                } catch (_) {}
              }
@@ -515,14 +518,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     const initialTimeoutServerSwitchTimer = setTimeout(() => {
       if (!isMounted) return;
       const hls = hlsRef.current;
-      // Só alterna se realmente não tiver carregado NENHUM nível de playlist e estiver inerte após 15s
+      // Só alterna se realmente não tiver carregado NENHUM nível de playlist e estiver inerte após o timeout
       const hasLoadedLevels = hls && hls.levels && hls.levels.length > 0;
       const v = videoRef.current;
-      if (!hasLoadedLevels && v && v.readyState === 0 && channel.servers.length > 1) {
-        console.log('[LivePlayer] Timeout de conexão inicial (15s sem manifesto), alternando de servidor...');
-        switchToNextServer('timeout de sintonia');
+      if (!hasLoadedLevels && v && v.readyState === 0) {
+        if (channel.servers.length > 1) {
+          console.log('[LivePlayer] Timeout de conexão inicial (12s sem manifesto), alternando de servidor...');
+          switchToNextServer('timeout de sintonia');
+        }
       }
-    }, 15000);
+    }, 12000);
 
     // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
@@ -530,35 +535,18 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     let bufferingDebounceTimer: NodeJS.Timeout | null = null;
 
     const handleWaiting = () => {
-      // Debounce suave antes de escurecer a tela e exibir aviso de buffering
+      // Debounce suave de 3.5s antes de exibir aviso de buffering (evita piscar em micro-pausas)
       if (!bufferingDebounceTimer) {
         bufferingDebounceTimer = setTimeout(() => {
           if (!isMounted) return;
           setIsBuffering(true);
-        }, 2200);
+        }, 3500);
       }
 
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
 
-      const v = videoRef.current;
-      if (v) {
-        // Verificação imediata de micro-gap no buffer (ex: corte de anúncio ou descontinuidade de timestamp)
-        try {
-          const buf = v.buffered;
-          for (let i = 0; i < buf.length; i++) {
-            const start = buf.start(i);
-            if (start > v.currentTime && start - v.currentTime <= 2.0) {
-              console.log(`[LivePlayer] Pulando micro-gap de buffer (${(start - v.currentTime).toFixed(2)}s)...`);
-              v.currentTime = start + 0.05;
-              v.play().catch(() => {});
-              return;
-            }
-          }
-        } catch (_) {}
-      }
-
-      // Tentativa de recuperação ativa aos 2.8 segundos para garantir fluxo contínuo
+      // Tentativa de recarga suave aos 4 segundos para destravar a fila de rede
       recoveryAttemptTimer = setTimeout(() => {
         if (!isMounted || !videoRef.current) return;
         const v = videoRef.current;
@@ -567,46 +555,17 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         }
         if (v.paused) {
           v.play().catch(() => {});
-        } else {
-          // Checa se há salto seguro para o liveSyncPosition
-          try {
-            if (hlsRef.current && hlsRef.current.liveSyncPosition) {
-              const livePos = hlsRef.current.liveSyncPosition;
-              if (livePos > 0 && Math.abs(v.currentTime - livePos) > 4) {
-                v.currentTime = livePos - 1;
-              }
-            }
-          } catch (_) {}
         }
-      }, 2800);
+      }, 4000);
 
-      // Se ficar congelado no buffering por mais de 18s seguidos, alterna automaticamente de servidor
+      // Se ficar congelado no buffering por mais de 35s seguidos, alterna para o próximo servidor se houver
       bufferStallTimer = setTimeout(() => {
         if (!isMounted) return;
-        console.log('[LivePlayer] Buffering prolongado (18s) detectado. Alternando automaticamente de servidor...');
-        switchToNextServer('buffering prolongado');
-      }, 18000);
-
-      const now = Date.now();
-      if (now - lastStallTimeRef.current < 20000) {
-        stallCountRef.current += 1;
-      } else {
-        stallCountRef.current = 1;
-      }
-      lastStallTimeRef.current = now;
-
-      // Se ocorrerem stalls sucessivos em rede instável, ativa buffer estendido automaticamente e silenciosamente
-      if (stallCountRef.current >= 2 && !isLowBandwidthModeRef.current) {
-        stallCountRef.current = 0;
-        isLowBandwidthModeRef.current = true;
-        setIsLowBandwidthMode(true);
-        if (hlsRef.current) {
-          hlsRef.current.config.liveSyncDurationCount = 6;
-          hlsRef.current.config.liveMaxLatencyDurationCount = 12;
-          hlsRef.current.config.maxBufferLength = 60;
-          hlsRef.current.config.maxMaxBufferLength = 120;
+        if (channel.servers.length > 1) {
+          console.log('[LivePlayer] Buffering persistente (35s) detectado. Alternando automaticamente...');
+          switchToNextServer('buffering prolongado');
         }
-      }
+      }, 35000);
     };
 
     const handlePlaying = () => {
@@ -653,32 +612,18 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('loadeddata', handleCanPlay);
 
-    // Watchdog de recuperação de qualidade: o ABR nativo do hls.js só reavalia a banda
-    // quando baixa fragmentos. Se a rede piorou, o buffer fica maior (modo baixa banda),
-    // o player passa a baixar fragmentos com menos frequência e a estimativa de banda
-    // "congela" no valor ruim — por isso a qualidade nunca volta sozinha, mesmo com a
-    // internet já normalizada. Este watchdog testa periodicamente se a conexão melhorou
-    // e força o hls.js a experimentar um nível de qualidade acima (1 fragmento, sem sair
-    // do modo Auto), além de desativar o modo de baixa banda e normalizar os buffers.
+    // Watchdog de recuperação de qualidade: desativa o modo de baixa banda e normaliza os buffers
+    // quando a rede estiver estável, deixando o ABR nativo gerenciar os níveis de vídeo suavemente
     const qualityRecoveryInterval = setInterval(async () => {
       if (!isMounted) return;
       const hls = hlsRef.current;
-      if (!hls || !hls.levels || hls.levels.length <= 1) return;
+      if (!hls) return;
 
       // Evita testar upgrade logo após um travamento recente
       if (Date.now() - lastStallTimeRef.current < 20000) return;
 
       const netQuality = await detectConnectionQuality(true); // força nova checagem, ignora cache
       if (!isMounted || netQuality !== 'fast') return;
-
-      const current = hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel;
-      if (current >= 0 && current < hls.levels.length - 1) {
-        console.log('[LivePlayer] Conexão recuperada, testando nível de qualidade superior...');
-        // nextAutoLevel testa 1 fragmento no nível acima sem tirar o player do modo Auto.
-        // Se o fragmento carregar bem, o hls.js segue naturalmente subindo a partir daí;
-        // se falhar/atrasar, o próprio ABR nativo já rebaixa de novo sozinho.
-        hls.nextAutoLevel = current + 1;
-      }
 
       if (isLowBandwidthModeRef.current) {
         hls.config.maxBufferLength = 30;
@@ -690,8 +635,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
     }, 20000);
 
-    // Watchdog de detecção de imagem congelada / tela preta (Frozen Frame / Black Screen Healer)
-    // Se o vídeo estiver com som ou em play mas o currentTime não avançar por 3s, força desobstrução e recovery
+    // Watchdog de detecção de inatividade de playback (sem alterar currentTime artificialmente)
     let lastObservedTime = -1;
     let frozenFrameTicks = 0;
     const frozenFrameInterval = setInterval(() => {
@@ -704,25 +648,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (v.currentTime > 0 && Math.abs(v.currentTime - lastObservedTime) < 0.05) {
         frozenFrameTicks += 1;
-        if (frozenFrameTicks === 2) {
-          console.log('[LivePlayer] Micro-congelamento detectado (3s). Realinhando borda ao vivo...');
+        if (frozenFrameTicks >= 3) {
+          console.log('[LivePlayer] Fluxo inerte detectado (9s). Desobstruindo fila de fragmentos...');
           if (hlsRef.current) {
-            hlsRef.current.startLoad();
-            const livePos = hlsRef.current.liveSyncPosition;
-            if (livePos && livePos > 0 && Math.abs(v.currentTime - livePos) > 3) {
-              v.currentTime = livePos - 0.5;
-            } else if (v.buffered.length > 0) {
-              const end = v.buffered.end(v.buffered.length - 1);
-              if (end > v.currentTime + 0.3) {
-                v.currentTime = end - 0.3;
-              }
-            }
-          }
-          v.play().catch(() => {});
-        } else if (frozenFrameTicks >= 4) {
-          console.log('[LivePlayer] Tela preta/congelamento persistente detectado (6s). Acionando recuperação de decodificador...');
-          if (hlsRef.current) {
-            hlsRef.current.recoverMediaError();
             hlsRef.current.startLoad();
           }
           v.play().catch(() => {});
@@ -732,7 +660,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         frozenFrameTicks = 0;
         lastObservedTime = v.currentTime;
       }
-    }, 1500);
+    }, 3000);
 
     return () => {
       isMounted = false;
@@ -1221,7 +1149,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       {/* Indicador Discreto de Buffering / Ajuste (Não bloqueia a tela nem tampa o vídeo) */}
       {!isMiniPlayer && !isLoading && isBuffering && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/70 border border-orange-500/30 backdrop-blur-md text-white text-xs font-medium shadow-lg pointer-events-none animate-in fade-in duration-300">
+        <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/80 border border-orange-500/40 backdrop-blur-md text-white text-xs font-medium shadow-xl pointer-events-none animate-in fade-in duration-300">
           <div className="w-3.5 h-3.5 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin shrink-0"></div>
           <span className="text-orange-300">Ajustando transmissão...</span>
         </div>
