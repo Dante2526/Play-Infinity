@@ -92,7 +92,8 @@ app.get("/api/live-stream-proxy", async (req, res) => {
     while (redirects < MAX_REDIRECTS) {
       upstreamRes = await fetch(currentUrl, {
         headers,
-        redirect: "manual"
+        redirect: "manual",
+        signal: AbortSignal.timeout(12000)
       });
 
       if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
@@ -183,8 +184,9 @@ app.get("/api/live-stream-proxy", async (req, res) => {
         skipNextLine = false;
 
         if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
+          // Permitimos o ABR cair ate 480p em redes instaveis para evitar travamentos
           const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
-          if (resMatch && parseInt(resMatch[1], 10) < 720) {
+          if (resMatch && parseInt(resMatch[1], 10) < 480) {
             skipNextLine = true;
             continue; 
           }
