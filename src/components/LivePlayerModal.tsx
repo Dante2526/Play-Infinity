@@ -322,13 +322,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         };
 
         hls.on(Hls.Events.MANIFEST_LOADED, () => {
-          clearLoadingState();
+          if (!isMounted) return;
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (!isMounted) return;
           failedServersRef.current.clear(); // Conexão bem-sucedida, reseta falhas prévias
-          clearLoadingState();
+          setStreamHealth('online');
 
           // Assegura volume inicial
           video.volume = 1.0;
@@ -355,12 +356,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
 
         hls.on(Hls.Events.LEVEL_LOADED, () => {
-          clearLoadingState();
+          if (!isMounted) return;
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
           if (!isMounted) return;
-          clearLoadingState();
           const level = hls.levels[data.level];
           if (level && level.height) {
             setActiveResolutionLabel(`${level.height}p`);
@@ -374,12 +375,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.FRAG_LOADING, () => {
           if (!isMounted) return;
-          clearLoadingState();
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.FRAG_LOADED, () => {
           if (!isMounted) return;
-          clearLoadingState();
+          setStreamHealth('online');
           clearRecoveryTimeout();
           recoveryTimeout = setTimeout(() => {
             if (!isMounted) return;
@@ -392,11 +393,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
 
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
-          clearLoadingState();
+          if (!isMounted) return;
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.BUFFER_APPENDED, () => {
-          clearLoadingState();
+          if (!isMounted) return;
+          setStreamHealth('online');
         });
 
         hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -488,22 +491,26 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     startHls();
 
-    // Watchdog de sintonia inicial: remove imediatamente o overlay de "Sintonizando..." em até 2s
+    // Watchdog de sintonia inicial: força tentativa de disparo de playback (autoplay) aos 2.5s sem esconder o spinner prematuramente
     const initialLoadingWatchdogTimer = setTimeout(() => {
       if (!isMounted) return;
-      setIsLoading(false);
-      setIsBuffering(false);
-      setStreamHealth('online');
       const v = videoRef.current;
-      if (v && v.paused && hlsRef.current) {
-        console.log('[LivePlayer] Tentando disparar reprodução no watchdog inicial...');
-        v.play().catch(() => {
-          v.muted = true;
-          setIsMuted(true);
-          v.play().catch(() => {});
-        });
+      if (v) {
+        if (v.readyState >= 2 || v.currentTime > 0) {
+          setIsLoading(false);
+          setIsBuffering(false);
+          setIsPlaying(true);
+        }
+        if (v.paused && hlsRef.current) {
+          console.log('[LivePlayer] Disparando playback pelo watchdog inicial...');
+          v.play().catch(() => {
+            v.muted = true;
+            setIsMuted(true);
+            v.play().catch(() => {});
+          });
+        }
       }
-    }, 2000);
+    }, 2500);
 
     const initialTimeoutServerSwitchTimer = setTimeout(() => {
       if (!isMounted) return;
