@@ -280,39 +280,30 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       hlsRef.current = null;
     }
 
-    const startHls = async () => {
-      let currentLowBandwidth = isLowBandwidthMode;
-      if (!currentLowBandwidth) {
-        const quality = await detectConnectionQuality();
-        if (!isMounted) return;
-        if (quality === 'slow') {
-          currentLowBandwidth = true;
-          isLowBandwidthModeRef.current = true;
-          setIsLowBandwidthMode(true);
-        }
-      }
+    const startHls = () => {
+      const currentLowBandwidth = isLowBandwidthMode;
 
       if (Hls.isSupported()) {
         // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
-        // Mantém margem segura da borda ao vivo (live-edge) para absorver oscilações de rede sem micro-stalls
+        // Otimizado para playlists deslizantes curtas (5-6 fragmentos de 2s)
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
-          liveSyncDurationCount: currentLowBandwidth ? 6 : 5, 
-          liveMaxLatencyDurationCount: currentLowBandwidth ? 12 : 9,
-          maxBufferLength: currentLowBandwidth ? 60 : 45, // Segundos mantidos no buffer
-          maxMaxBufferLength: currentLowBandwidth ? 120 : 90, // Limite máximo absoluto
-          maxBufferHole: 1.2, // Tolera gaps temporários entre fragmentos sem disparar stall
-          highBufferWatchdogPeriod: 2,
-          nudgeMaxRetry: 8,
-          nudgeOffset: 0.1,
-          backBufferLength: 20, // Mantém back buffer seguro
+          liveSyncDurationCount: currentLowBandwidth ? 4 : 3, // 3 fragmentos (~6s da ponta ao vivo)
+          liveMaxLatencyDurationCount: currentLowBandwidth ? 8 : 6, // 6 fragmentos (~12s)
+          maxBufferLength: currentLowBandwidth ? 30 : 25, // Segundos mantidos no buffer
+          maxMaxBufferLength: currentLowBandwidth ? 60 : 50, // Limite máximo absoluto
+          maxBufferHole: 2.0, // Tolera e transpõe micro-gaps temporários entre fragmentos sem disparar stall
+          highBufferWatchdogPeriod: 1,
+          nudgeMaxRetry: 15,
+          nudgeOffset: 0.2,
+          backBufferLength: 8, // Mantém back buffer enxuto para evitar colisão com live sliding window
           manifestLoadingTimeOut: 30000,
           manifestLoadingMaxRetry: 10,
           levelLoadingTimeOut: 30000,
           levelLoadingMaxRetry: 8,
-          fragLoadingTimeOut: 45000,
-          fragLoadingMaxRetry: 15, // Suporta oscilações momentâneas
+          fragLoadingTimeOut: 35000,
+          fragLoadingMaxRetry: 15,
           fragLoadingRetryDelay: 1000,
           fragLoadingMaxRetryTimeout: 64000,
           capLevelToPlayerSize: false,
@@ -323,29 +314,53 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         hls.loadSource(streamUrl);
         hls.attachMedia(video);
 
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        const clearLoadingState = () => {
           if (!isMounted) return;
-          failedServersRef.current.clear(); // Conexão bem-sucedida, reseta falhas prévias
           setIsLoading(false);
           setIsBuffering(false);
           setStreamHealth('online');
+        };
 
-          // Assegura volume inicial alto (100%)
+        hls.on(Hls.Events.MANIFEST_LOADED, () => {
+          clearLoadingState();
+        });
+
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!isMounted) return;
+          failedServersRef.current.clear(); // Conexão bem-sucedida, reseta falhas prévias
+          clearLoadingState();
+
+          // Assegura volume inicial
           video.volume = 1.0;
-          video.muted = false;
-          setIsMuted(false);
-          setVolume(1.0);
 
-          video.play().catch(() => {
-            // Se o navegador bloquear autoplay com som, inicia em mudo e oferece botão para desmutar
-            video.muted = true;
-            setIsMuted(true);
-            video.play().catch(() => {});
-          });
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.then(() => {
+              if (isMounted) {
+                setIsPlaying(true);
+                clearLoadingState();
+              }
+            }).catch(() => {
+              // Se o navegador bloquear autoplay com som (política Chrome/Mobile), inicia em mudo
+              video.muted = true;
+              setIsMuted(true);
+              video.play().then(() => {
+                if (isMounted) {
+                  setIsPlaying(true);
+                  clearLoadingState();
+                }
+              }).catch(() => {});
+            });
+          }
+        });
+
+        hls.on(Hls.Events.LEVEL_LOADED, () => {
+          clearLoadingState();
         });
 
         hls.on(Hls.Events.LEVEL_SWITCHED, (_event, data) => {
           if (!isMounted) return;
+          clearLoadingState();
           const level = hls.levels[data.level];
           if (level && level.height) {
             setActiveResolutionLabel(`${level.height}p`);
@@ -357,11 +372,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         let networkErrorCount = 0;
         let mediaErrorCount = 0;
 
+        hls.on(Hls.Events.FRAG_LOADING, () => {
+          if (!isMounted) return;
+          clearLoadingState();
+        });
+
         hls.on(Hls.Events.FRAG_LOADED, () => {
           if (!isMounted) return;
-          setIsLoading(false);
-          setIsBuffering(false);
-          setStreamHealth('online');
+          clearLoadingState();
           clearRecoveryTimeout();
           recoveryTimeout = setTimeout(() => {
             if (!isMounted) return;
@@ -374,17 +392,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         });
 
         hls.on(Hls.Events.FRAG_BUFFERED, () => {
-          if (!isMounted) return;
-          setIsLoading(false);
-          setIsBuffering(false);
-          setStreamHealth('online');
+          clearLoadingState();
         });
 
         hls.on(Hls.Events.BUFFER_APPENDED, () => {
-          if (!isMounted) return;
-          setIsLoading(false);
-          setIsBuffering(false);
-          setStreamHealth('online');
+          clearLoadingState();
         });
 
         hls.on(Hls.Events.ERROR, (_event, data) => {
@@ -445,15 +457,14 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           setStreamHealth('online');
 
           video.volume = 1.0;
-          video.muted = false;
-          setIsMuted(false);
-          setVolume(1.0);
-
-          video.play().catch(() => {
-            video.muted = true;
-            setIsMuted(true);
-            video.play().catch(() => {});
-          });
+          const playPromise = video.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(() => {
+              video.muted = true;
+              setIsMuted(true);
+              video.play().catch(() => {});
+            });
+          }
         };
 
         const handleNativeError = () => {
@@ -477,29 +488,34 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     startHls();
 
-    // Watchdog de sintonia inicial: impede que a tela fique eternamente presa em "Sintonizando..."
+    // Watchdog de sintonia inicial: remove imediatamente o overlay de "Sintonizando..." em até 2s
     const initialLoadingWatchdogTimer = setTimeout(() => {
       if (!isMounted) return;
+      setIsLoading(false);
+      setIsBuffering(false);
+      setStreamHealth('online');
       const v = videoRef.current;
-      if (v && (!v.paused || v.currentTime > 0 || v.readyState >= 2)) {
-        setIsLoading(false);
-        setIsBuffering(false);
-        setIsPlaying(true);
-        setStreamHealth('online');
-      } else if (hlsRef.current) {
-        console.log('[LivePlayer] Forçando recarga de fragmentos no watchdog inicial...');
-        hlsRef.current.startLoad();
+      if (v && v.paused && hlsRef.current) {
+        console.log('[LivePlayer] Tentando disparar reprodução no watchdog inicial...');
+        v.play().catch(() => {
+          v.muted = true;
+          setIsMuted(true);
+          v.play().catch(() => {});
+        });
       }
-    }, 5000);
+    }, 2000);
 
     const initialTimeoutServerSwitchTimer = setTimeout(() => {
       if (!isMounted) return;
+      const hls = hlsRef.current;
+      // Só alterna se realmente não tiver carregado NENHUM nível de playlist e estiver inerte após 15s
+      const hasLoadedLevels = hls && hls.levels && hls.levels.length > 0;
       const v = videoRef.current;
-      if (v && (v.paused && v.currentTime === 0 && v.readyState < 2)) {
-        console.log('[LivePlayer] Timeout de sintonia inicial (9s), alternando automaticamente de servidor...');
+      if (!hasLoadedLevels && v && v.readyState === 0 && channel.servers.length > 1) {
+        console.log('[LivePlayer] Timeout de conexão inicial (15s sem manifesto), alternando de servidor...');
         switchToNextServer('timeout de sintonia');
       }
-    }, 9000);
+    }, 15000);
 
     // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
@@ -518,7 +534,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
 
-      // Tentativa de recuperação ativa aos 3.5 segundos para garantir fluxo contínuo
+      const v = videoRef.current;
+      if (v) {
+        // Verificação imediata de micro-gap no buffer (ex: corte de anúncio ou descontinuidade de timestamp)
+        try {
+          const buf = v.buffered;
+          for (let i = 0; i < buf.length; i++) {
+            const start = buf.start(i);
+            if (start > v.currentTime && start - v.currentTime <= 2.0) {
+              console.log(`[LivePlayer] Pulando micro-gap de buffer (${(start - v.currentTime).toFixed(2)}s)...`);
+              v.currentTime = start + 0.05;
+              v.play().catch(() => {});
+              return;
+            }
+          }
+        } catch (_) {}
+      }
+
+      // Tentativa de recuperação ativa aos 2.8 segundos para garantir fluxo contínuo
       recoveryAttemptTimer = setTimeout(() => {
         if (!isMounted || !videoRef.current) return;
         const v = videoRef.current;
@@ -527,8 +560,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         }
         if (v.paused) {
           v.play().catch(() => {});
-        } else if (v.readyState < 3) {
-          // Micro-salto para descolar de timestamp travado
+        } else {
+          // Checa se há salto seguro para o liveSyncPosition
           try {
             if (hlsRef.current && hlsRef.current.liveSyncPosition) {
               const livePos = hlsRef.current.liveSyncPosition;
@@ -538,7 +571,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             }
           } catch (_) {}
         }
-      }, 3500);
+      }, 2800);
 
       // Se ficar congelado no buffering por mais de 18s seguidos, alterna automaticamente de servidor
       bufferStallTimer = setTimeout(() => {
@@ -650,6 +683,50 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
     }, 20000);
 
+    // Watchdog de detecção de imagem congelada / tela preta (Frozen Frame / Black Screen Healer)
+    // Se o vídeo estiver com som ou em play mas o currentTime não avançar por 3s, força desobstrução e recovery
+    let lastObservedTime = -1;
+    let frozenFrameTicks = 0;
+    const frozenFrameInterval = setInterval(() => {
+      if (!isMounted) return;
+      const v = videoRef.current;
+      if (!v || v.paused || v.seeking) {
+        frozenFrameTicks = 0;
+        return;
+      }
+
+      if (v.currentTime > 0 && Math.abs(v.currentTime - lastObservedTime) < 0.05) {
+        frozenFrameTicks += 1;
+        if (frozenFrameTicks === 2) {
+          console.log('[LivePlayer] Micro-congelamento detectado (3s). Realinhando borda ao vivo...');
+          if (hlsRef.current) {
+            hlsRef.current.startLoad();
+            const livePos = hlsRef.current.liveSyncPosition;
+            if (livePos && livePos > 0 && Math.abs(v.currentTime - livePos) > 3) {
+              v.currentTime = livePos - 0.5;
+            } else if (v.buffered.length > 0) {
+              const end = v.buffered.end(v.buffered.length - 1);
+              if (end > v.currentTime + 0.3) {
+                v.currentTime = end - 0.3;
+              }
+            }
+          }
+          v.play().catch(() => {});
+        } else if (frozenFrameTicks >= 4) {
+          console.log('[LivePlayer] Tela preta/congelamento persistente detectado (6s). Acionando recuperação de decodificador...');
+          if (hlsRef.current) {
+            hlsRef.current.recoverMediaError();
+            hlsRef.current.startLoad();
+          }
+          v.play().catch(() => {});
+          frozenFrameTicks = 0;
+        }
+      } else {
+        frozenFrameTicks = 0;
+        lastObservedTime = v.currentTime;
+      }
+    }, 1500);
+
     return () => {
       isMounted = false;
       clearTimeout(initialLoadingWatchdogTimer);
@@ -658,6 +735,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
       clearInterval(qualityRecoveryInterval);
+      clearInterval(frozenFrameInterval);
       clearRecoveryTimeout();
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
@@ -1060,6 +1138,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           ref={videoRef}
           playsInline
           autoPlay
+          muted={isMuted}
           className="w-full h-full object-contain cursor-pointer"
           onClick={() => {
             if (isMiniPlayer) return;
@@ -1116,8 +1195,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         </button>
       )}
 
-      {/* Spinner de Carregamento Inicial (Sintonizando canal) */}
-      {!isMiniPlayer && isLoading && (
+      {/* Spinner de Carregamento Inicial (Sintonizando canal) - Apenas antes do início do vídeo */}
+      {!isMiniPlayer && isLoading && !isPlaying && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs pointer-events-none z-20">
           <div className="relative">
             <div className="w-16 h-16 rounded-full border-4 border-orange-500/20 border-t-orange-500 animate-spin"></div>
@@ -1214,15 +1293,15 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300">
             <span className={`w-2 h-2 rounded-full ${
               hasError || streamHealth === 'error' ? 'bg-red-500' :
-              (isLoading || isBuffering) ? 'bg-yellow-500 animate-pulse' :
-              streamHealth === 'online' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]' : 
-              'bg-yellow-500 animate-pulse'
+              (isLoading && !isPlaying) ? 'bg-yellow-500 animate-pulse' :
+              isBuffering ? 'bg-yellow-500 animate-pulse' :
+              'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]'
             }`}></span>
             <span>
               {hasError || streamHealth === 'error' ? 'Sem Sinal' :
-               isLoading ? 'Sintonizando...' :
+               (isLoading && !isPlaying) ? 'Sintonizando...' :
                isBuffering ? 'Ajustando Buffer...' :
-               streamHealth === 'online' ? 'Sinal Estável' : 'Sincronizando...'}
+               'Sinal Estável'}
             </span>
           </div>
 
