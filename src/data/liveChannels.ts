@@ -373,13 +373,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'A maior emissora do país com jornalismo, novelas consagradas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (ge Fast Globo)',
+        name: 'Servidor 1 (Oficial HLS Direto)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: true
+        isProxy: false
       },
       {
         name: 'Servidor 2 (Proxy Play Infinity)',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 3 (Kiwi Alternativo)',
+        url: 'http://up.kiwi/351921603109/34939156/14.m3u8',
         isProxy: true
       }
     ]
