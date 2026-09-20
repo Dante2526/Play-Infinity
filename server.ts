@@ -3853,7 +3853,8 @@ process.on("uncaughtException", (err) => {
       while (redirects < MAX_REDIRECTS) {
         upstreamRes = await fetch(currentUrl, {
           headers,
-          redirect: "manual"
+          redirect: "manual",
+          signal: AbortSignal.timeout(12000)
         });
 
         if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
@@ -3923,9 +3924,9 @@ process.on("uncaughtException", (err) => {
           skipNextLine = false;
 
           if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
-            // Verifica a resolução e ignora 480p, 360p, etc.
+            // Permitimos o ABR cair até 480p em redes instáveis para evitar travamentos
             const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
-            if (resMatch && parseInt(resMatch[1], 10) < 720) {
+            if (resMatch && parseInt(resMatch[1], 10) < 480) {
               skipNextLine = true;
               continue; // Pula esta tag e a próxima linha (URI)
             }
