@@ -147,6 +147,9 @@ process.on("uncaughtException", (err) => {
   // ========================================================
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
+  import iptvRouter from "./server/routes/iptv";
+  app.use(iptvRouter);
+
   app.get("/api/extract-player", async (req, res) => {
     const targetUrl = req.query.url as string;
 
