@@ -285,30 +285,32 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (Hls.isSupported()) {
         // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
-        // Otimizado para reprodução contínua e suave, com margem de segurança contra oscilações de sinal
+        // Otimizado para reprodução contínua e estável para todos os 33 canais
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
           liveDurationInfinity: true,
-          liveSyncDurationCount: 6, // 6 fragmentos dão margem de buffer ideal
-          liveMaxLatencyDurationCount: 12,
-          maxBufferLength: 40, // 40 segundos no buffer
-          maxMaxBufferLength: 90, // Limite máximo seguro
-          maxBufferHole: 0.8, // Hls.js transpõe micro-gaps internamente sem travar
-          highBufferWatchdogPeriod: 2,
-          nudgeMaxRetry: 10,
-          nudgeOffset: 0.1,
-          backBufferLength: 6,
-          manifestLoadingTimeOut: 20000,
-          manifestLoadingMaxRetry: 8,
-          levelLoadingTimeOut: 20000,
-          levelLoadingMaxRetry: 6,
-          fragLoadingTimeOut: 25000,
-          fragLoadingMaxRetry: 20, // Mais tolerância a segmentos oscilantes
-          fragLoadingRetryDelay: 500,
-          fragLoadingMaxRetryTimeout: 30000,
+          startLevel: -1, // Seleção automática e segura para canais simples e multi-variantes
+          autoStartLoad: true,
           capLevelToPlayerSize: false,
-          startLevel: -1
+          // Buffers amplos para manter a reprodução suave mesmo com pequenas variações de rede
+          maxBufferLength: 40,
+          maxMaxBufferLength: 80,
+          backBufferLength: 20,
+          liveSyncDurationCount: 5,
+          liveMaxLatencyDurationCount: 12,
+          highBufferWatchdogPeriod: 2,
+          maxBufferHole: 0.5,
+          nudgeMaxRetry: 6,
+          nudgeOffset: 0.1,
+          manifestLoadingTimeOut: 25000,
+          manifestLoadingMaxRetry: 8,
+          levelLoadingTimeOut: 25000,
+          levelLoadingMaxRetry: 8,
+          fragLoadingTimeOut: 30000,
+          fragLoadingMaxRetry: 20,
+          fragLoadingRetryDelay: 800,
+          fragLoadingMaxRetryTimeout: 35000,
         });
 
         hlsRef.current = hls;
@@ -323,12 +325,39 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
         hls.on(Hls.Events.MANIFEST_LOADED, () => {
           if (!isMounted) return;
-          // Não marcar 'online' prematuramente aqui - aguardar segmentos reais
         });
 
-        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
           if (!isMounted) return;
           failedServersRef.current.clear();
+
+          // Padrão 720p: se o fluxo possuir múltiplas variantes de bitrate/resolução,
+          // seleciona preferencialmente a qualidade 720p para garantir fluidez máxima
+          if (data && data.levels && data.levels.length > 1) {
+            let targetIdx = -1;
+            let closestDiff = Infinity;
+            data.levels.forEach((lvl, idx) => {
+              const h = lvl.height || 0;
+              if (h === 720) {
+                targetIdx = idx;
+                closestDiff = 0;
+              } else if (h > 0 && Math.abs(h - 720) < closestDiff) {
+                closestDiff = Math.abs(h - 720);
+                targetIdx = idx;
+              }
+            });
+            if (targetIdx !== -1) {
+              try {
+                hls.currentLevel = targetIdx;
+                const chosen = data.levels[targetIdx];
+                if (chosen && chosen.height) {
+                  setActiveResolutionLabel(`${chosen.height}p HD`);
+                }
+              } catch (_) {}
+            }
+          } else {
+            setActiveResolutionLabel('720p HD');
+          }
 
           // Assegura volume inicial
           video.volume = 1.0;
@@ -518,35 +547,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     const initialTimeoutServerSwitchTimer = setTimeout(() => {
       if (!isMounted) return;
       const v = videoRef.current;
-      if (v && v.readyState === 0 && v.currentTime === 0) {
+      const hls = hlsRef.current;
+      const hasLevels = hls && hls.levels && hls.levels.length > 0;
+      // Dá tempo suficiente (18s) para conexões mais lentas antes de considerar servidor inoperante
+      if (v && v.readyState === 0 && v.currentTime === 0 && !hasLevels) {
         if (channel.servers.length > 1) {
-          console.log('[LivePlayer] Timeout de conexão inicial (10s sem decodificação de vídeo), alternando de servidor...');
+          console.log('[LivePlayer] Timeout de conexão inicial (18s sem dados), tentando próximo servidor...');
           switchToNextServer('timeout de sintonia');
         }
       }
-    }, 10000);
-
-    // Watchdog de Tela Preta Ativo: detecta manifesto mestre carregado com variante filha morta/zumbi (readyState === 0)
-    let blackScreenWatchdogTimer: NodeJS.Timeout | null = null;
-    const runBlackScreenWatchdog = () => {
-      blackScreenWatchdogTimer = setTimeout(() => {
-        if (!isMounted) return;
-        const v = videoRef.current;
-        const hls = hlsRef.current;
-        if (!v) return;
-
-        // Se o mestre parseou ou hls existe, mas o elemento de vídeo nunca recebeu frames em 8s (readyState 0 e currentTime 0)
-        if (v.readyState === 0 && v.currentTime === 0) {
-          if (channel.servers.length > 1) {
-            console.warn('[LivePlayer] Tela preta detectada (variante filha sem vídeo, readyState=0). Alternando para próximo servidor...');
-            switchToNextServer('tela preta pos-manifest');
-            return;
-          }
-        }
-        runBlackScreenWatchdog();
-      }, 8000);
-    };
-    runBlackScreenWatchdog();
+    }, 18000);
 
     // Detecção e recuperação ultra-rápida de travamentos (Buffer Stalls / Freeze Healer)
     let bufferStallTimer: NodeJS.Timeout | null = null;
@@ -685,7 +695,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       isMounted = false;
       clearTimeout(initialLoadingWatchdogTimer);
       clearTimeout(initialTimeoutServerSwitchTimer);
-      if (blackScreenWatchdogTimer) clearTimeout(blackScreenWatchdogTimer);
       if (bufferingDebounceTimer) clearTimeout(bufferingDebounceTimer);
       if (recoveryAttemptTimer) clearTimeout(recoveryAttemptTimer);
       if (bufferStallTimer) clearTimeout(bufferStallTimer);
@@ -934,6 +943,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   };
 
   const reloadStream = () => {
+    failedServersRef.current.clear();
     if (channel.servers.length > 1) {
       setSelectedServerIndex(prev => (prev + 1) % channel.servers.length);
     } else {
@@ -941,6 +951,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
     setIsLoading(true);
     setHasError(false);
+    setErrorMessage('');
     setStreamHealth('connecting');
   };
 

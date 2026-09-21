@@ -95,7 +95,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
   const [formCategory, setFormCategory] = useState<LiveChannel['category']>('Esportes');
   const [formStreamUrl, setFormStreamUrl] = useState<string>('');
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
-  const [formQuality, setFormQuality] = useState<'1080p' | '720p' | 'HD'>('1080p');
+  const [formQuality, setFormQuality] = useState<'1080p' | '720p' | 'HD'>('720p');
 
   // Carrega canais e favoritos ao montar
   const refreshChannels = () => {
@@ -188,14 +188,14 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
       setFormCategory(channelToEdit.category);
       setFormStreamUrl(channelToEdit.servers[0]?.url || '');
       setFormLogoUrl(channelToEdit.logo || '');
-      setFormQuality(channelToEdit.quality || '1080p');
+      setFormQuality(channelToEdit.quality || '720p');
     } else {
       setEditingChannel(null);
       setFormName('');
       setFormCategory('Esportes');
       setFormStreamUrl('');
       setFormLogoUrl('');
-      setFormQuality('1080p');
+      setFormQuality('720p');
     }
     setIsAddModalOpen(true);
   };

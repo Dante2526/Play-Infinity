@@ -2269,15 +2269,18 @@ const router = Router();
         } catch (_) {}
 
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        const seq = Math.floor(Date.now() / 4000);
+        res.setHeader("Cache-Control", "public, max-age=5");
+        
+        // MEDIA-SEQUENCE alinhado com EXTINF (ambos em segundos)
+        const EXTINF_SECONDS = 10;
+        const seq = Math.floor(Date.now() / 1000 / EXTINF_SECONDS);
         const manifest = [
           "#EXTM3U",
           "#EXT-X-VERSION:3",
-          "#EXT-X-TARGETDURATION:10",
+          `#EXT-X-TARGETDURATION:${EXTINF_SECONDS}`,
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-          "#EXTINF:10.0,",
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+          `#EXTINF:${EXTINF_SECONDS.toFixed(1)},`,
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true`
         ].join("\n");
         return res.send(manifest);
       }
@@ -2287,11 +2290,15 @@ const router = Router();
         finalContentType = "video/MP2T";
       }
       res.setHeader("Content-Type", finalContentType);
-      res.setHeader("Cache-Control", "public, max-age=15");
+      res.setHeader("Cache-Control", "no-cache, no-transform");
+      res.setHeader("X-Accel-Buffering", "no"); // Desabilita buffering intermediário do Nginx na VPS
 
       if (upstreamRes.body) {
-        // Stream directly to HTTP response with cutoff protection for infinite TS live streams
+        // Stream direto com alta taxa de transferência para streams de TV contínuos
         const stream = Readable.fromWeb(upstreamRes.body as any);
+        // Aumenta o highWaterMark do stream para 256KB evitando backpressure prematuro
+        (stream as any)._readableState.highWaterMark = 256 * 1024;
+
         const isContinuousTs = req.query.is_segment === "true" && (rawUrl.includes("up.kiwi") || finalUrl.endsWith(".ts") || contentType.includes("mp2t"));
         let cutoff: NodeJS.Timeout | null = null;
         
@@ -2323,7 +2330,18 @@ const router = Router();
           } catch (_) {}
         });
 
-        return stream.pipe(res);
+        // Leitura ativa com flush a cada chunk para evitar retenção de dados
+        stream.on("data", (chunk: Buffer) => {
+          if (!res.writableEnded) {
+            res.write(chunk);
+          }
+        });
+        stream.on("end", () => {
+          if (!res.writableEnded) {
+            res.end();
+          }
+        });
+        return;
       } else {
         const buffer = Buffer.from(await upstreamRes.arrayBuffer());
         return res.send(buffer);
