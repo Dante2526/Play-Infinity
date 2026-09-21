@@ -292,9 +292,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           autoStartLoad: true,
           capLevelToPlayerSize: true, // Evita baixar qualidade acima do necessário
           abrEwmaDefaultEstimate: 1500000, // Estimativa inicial de 1.5 Mbps (evita queda abrupta)
-          // Buffers menores e equilibrados: evitam o flush abrupto que causa tela preta
-          maxBufferLength: 20,
-          maxMaxBufferLength: 40,
+          // Buffers maiores para TV ao vivo (evita stalls em redes instáveis)
+          maxBufferLength: 60,
+          maxMaxBufferLength: 120,
           backBufferLength: 10,
           // Live sync com janela mais curta = menos chance de flush total
           liveSyncDurationCount: 3,
