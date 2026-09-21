@@ -262,8 +262,9 @@ app.get("/api/live-stream-proxy", async (req, res) => {
 
     if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      const seq = Math.floor(Date.now() / 4000);
+      res.setHeader("Cache-Control", "public, max-age=5");
+      const EXTINF_SECONDS = 10;
+      const seq = Math.floor(Date.now() / 1000 / EXTINF_SECONDS);
       const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
       const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity-app.duckdns.org";
       const finalProto = (host.includes("duckdns.org") || proto === "https") ? "https" : proto;
@@ -271,10 +272,10 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       const manifest = [
         "#EXTM3U",
         "#EXT-X-VERSION:3",
-        "#EXT-X-TARGETDURATION:10",
+        `#EXT-X-TARGETDURATION:${EXTINF_SECONDS}`,
         `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-        "#EXTINF:10.0,",
-        `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+        `#EXTINF:${EXTINF_SECONDS.toFixed(1)},`,
+        `${baseUrl}/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true`
       ].join("\n");
       return res.send(manifest);
     }
@@ -284,19 +285,62 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       finalContentType = "video/MP2T";
     }
     res.setHeader("Content-Type", finalContentType);
-    res.setHeader("Cache-Control", "public, max-age=15");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("X-Accel-Buffering", "no");
 
     if (upstreamText !== null) {
       return res.send(Buffer.from(upstreamText, "utf-8"));
     } else if (upstreamRes.body) {
-      return Readable.fromWeb(upstreamRes.body).pipe(res);
+      const stream = Readable.fromWeb(upstreamRes.body);
+      stream._readableState.highWaterMark = 256 * 1024;
+
+      const isContinuousTs = req.query.is_segment === "true" && (rawUrl.includes("up.kiwi") || finalUrl.endsWith(".ts") || contentType.includes("mp2t"));
+      let cutoff = null;
+      if (isContinuousTs) {
+        cutoff = setTimeout(() => {
+          try {
+            stream.unpipe(res);
+            stream.destroy();
+            res.end();
+          } catch (_) {}
+        }, 30000);
+      }
+
+      const clearCutoff = () => {
+        if (cutoff) {
+          clearTimeout(cutoff);
+          cutoff = null;
+        }
+      };
+
+      stream.on("end", clearCutoff);
+      stream.on("close", clearCutoff);
+      stream.on("error", clearCutoff);
+      res.on("close", () => {
+        clearCutoff();
+        try {
+          stream.destroy();
+        } catch (_) {}
+      });
+
+      stream.on("data", (chunk) => {
+        if (!res.writableEnded) {
+          res.write(chunk);
+        }
+      });
+      stream.on("end", () => {
+        if (!res.writableEnded) {
+          res.end();
+        }
+      });
+      return;
     } else {
       const buffer = Buffer.from(await upstreamRes.arrayBuffer());
       return res.send(buffer);
     }
   } catch (err) {
-    console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
-    return res.status(500).send("Proxy error");
+    console.warn("[Live Stream Proxy Warning]:", err?.message || err, "URL:", req.query?.url);
+    return res.status(502).send("Upstream stream unavailable");
   }
 });
 

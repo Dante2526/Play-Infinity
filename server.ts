@@ -4067,8 +4067,8 @@ process.on("uncaughtException", (err) => {
         return res.send(buffer);
       }
     } catch (err: any) {
-      console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
-      return res.status(500).send("Proxy error");
+      console.warn("[Live Stream Proxy Warning]:", err?.message || err, "URL:", req.query?.url);
+      return res.status(502).send("Upstream stream unavailable");
     }
   });
 
