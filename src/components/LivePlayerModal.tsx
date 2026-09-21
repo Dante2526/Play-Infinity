@@ -285,24 +285,27 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (Hls.isSupported()) {
         // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
-        // Otimizado para reprodução contínua e estável para todos os 33 canais
+        // ANTI-TELA-PRETA: ABR automático, buffers equilibrados, sem força de nível fixo
         const hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
           liveDurationInfinity: true,
-          startLevel: -1, // Seleção automática e segura para canais simples e multi-variantes
+          startLevel: -1,        // ABR automático — nunca forçar nível manualmente
           autoStartLoad: true,
-          capLevelToPlayerSize: false,
-          // Buffers amplos para manter a reprodução suave mesmo com pequenas variações de rede
-          maxBufferLength: 40,
-          maxMaxBufferLength: 80,
-          backBufferLength: 20,
-          liveSyncDurationCount: 5,
-          liveMaxLatencyDurationCount: 12,
-          highBufferWatchdogPeriod: 2,
-          maxBufferHole: 0.5,
-          nudgeMaxRetry: 6,
-          nudgeOffset: 0.1,
+          capLevelToPlayerSize: true, // Evita baixar qualidade acima do necessário
+          abrEwmaDefaultEstimate: 1500000, // Estimativa inicial de 1.5 Mbps (evita queda abrupta)
+          // Buffers menores e equilibrados: evitam o flush abrupto que causa tela preta
+          maxBufferLength: 20,
+          maxMaxBufferLength: 40,
+          backBufferLength: 10,
+          // Live sync com janela mais curta = menos chance de flush total
+          liveSyncDurationCount: 3,
+          liveMaxLatencyDurationCount: 8,
+          // watchdog mais conservador: não libera buffer de forma agressiva
+          highBufferWatchdogPeriod: 5,
+          maxBufferHole: 0.3,
+          nudgeMaxRetry: 10,
+          nudgeOffset: 0.2,
           manifestLoadingTimeOut: 25000,
           manifestLoadingMaxRetry: 8,
           levelLoadingTimeOut: 25000,
@@ -331,32 +334,18 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           if (!isMounted) return;
           failedServersRef.current.clear();
 
-          // Padrão 720p: se o fluxo possuir múltiplas variantes de bitrate/resolução,
-          // seleciona preferencialmente a qualidade 720p para garantir fluidez máxima
-          if (data && data.levels && data.levels.length > 1) {
-            let targetIdx = -1;
-            let closestDiff = Infinity;
-            data.levels.forEach((lvl, idx) => {
-              const h = lvl.height || 0;
-              if (h === 720) {
-                targetIdx = idx;
-                closestDiff = 0;
-              } else if (h > 0 && Math.abs(h - 720) < closestDiff) {
-                closestDiff = Math.abs(h - 720);
-                targetIdx = idx;
-              }
-            });
-            if (targetIdx !== -1) {
-              try {
-                hls.currentLevel = targetIdx;
-                const chosen = data.levels[targetIdx];
-                if (chosen && chosen.height) {
-                  setActiveResolutionLabel(`${chosen.height}p HD`);
-                }
-              } catch (_) {}
+          // ANTI-TELA-PRETA: NUNCA forçar currentLevel manualmente.
+          // Deixar ABR automático escolher. Forçar um nível causa flush de buffer → tela preta.
+          // Apenas loga a resolução disponível para o usuário.
+          if (data && data.levels && data.levels.length > 0) {
+            const highest = data.levels[data.levels.length - 1];
+            if (highest && highest.height) {
+              setActiveResolutionLabel(`Auto (até ${highest.height}p)`);
+            } else {
+              setActiveResolutionLabel('Auto');
             }
           } else {
-            setActiveResolutionLabel('720p HD');
+            setActiveResolutionLabel('Auto');
           }
 
           // Assegura volume inicial
@@ -677,8 +666,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
       if (v.currentTime > 0 && Math.abs(v.currentTime - lastObservedTime) < 0.05) {
         frozenFrameTicks += 1;
-        if (frozenFrameTicks >= 3) {
-          console.log('[LivePlayer] Fluxo inerte detectado (9s). Desobstruindo fila de fragmentos...');
+        // ANTI-TELA-PRETA: espera 15s de freeze antes de agir (antes eram 9s)
+        // Ação prematura causava re-load desnecessário que reiniciava o buffer → tela preta
+        if (frozenFrameTicks >= 5) {
+          console.log('[LivePlayer] Fluxo inerte detectado (15s). Desobstruindo fila de fragmentos...');
           if (hlsRef.current) {
             hlsRef.current.startLoad();
           }
