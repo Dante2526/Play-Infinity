@@ -261,6 +261,23 @@ app.get("/api/live-stream-proxy", async (req, res) => {
     }
 
     if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+      // Anti-máscara: se o upstream retornou HTML de erro (Xtream 404 "XC_VM - Debug Mode",
+      // página de login, etc.), NÃO gerar manifesto sintético fake — falhar explícito com 502.
+      // Sem isso, o proxy cria um m3u8 sintético apontando pra um segmento que também vai falhar,
+      // levando o hls.js a um loop de levelParsingError em vez de trocar de servidor.
+      if (upstreamText !== null && upstreamText.length > 0 && upstreamText.length < 8000 &&
+          !upstreamText.includes("#EXTM3U") && !upstreamText.includes("#EXTINF")) {
+        const looksLikeHtml = upstreamText.includes("<html") || upstreamText.includes("<!DOCTYPE") ||
+                              upstreamText.includes("XC_VM") || upstreamText.includes("Debug Mode") ||
+                              upstreamText.includes("<title>");
+        const looksLikeJson = upstreamText.trimStart().startsWith("{") || upstreamText.trimStart().startsWith("[");
+        if (looksLikeHtml || looksLikeJson) {
+          console.warn(`[live-stream-proxy] Upstream retornou conteúdo não-MPEG-TS em vez de stream contínuo (provável Xtream 404): ${rawUrl} (size=${upstreamText.length})`);
+          liveChunkCache.delete(rawUrl);
+          return res.status(502).send("Upstream indisponível (Xtream 404 ou página de erro)");
+        }
+      }
+
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
       res.setHeader("Cache-Control", "public, max-age=5");
       const EXTINF_SECONDS = 10;
