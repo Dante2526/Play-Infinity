@@ -425,6 +425,24 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           
           if (data.fatal) {
             console.warn('[LivePlayer HLS Fatal Error]:', data.type, data.details);
+            
+            // Atalho para erros fatais que não recuperam com startLoad()/recoverMediaError():
+            // - levelParsingError: proxy devolveu HTML em vez de m3u8 (Xtream 404 ou página de login)
+            // - manifestParsingError: idem, mestre inválido
+            // - levelLoadError: falha ao carregar variante após manifesto mestre válido
+            // Para esses, hls.startLoad() só vai re-fazer a mesma requisição falha em loop.
+            // Trocar de servidor imediatamente — sem contar 6 retries.
+            const unrecoverableDetails = [
+              Hls.ErrorDetails.LEVEL_PARSING_ERROR,
+              (Hls.ErrorDetails as any).MANIFEST_PARSING_ERROR,
+              (Hls.ErrorDetails as any).LEVEL_LOAD_ERROR,
+            ];
+            if (unrecoverableDetails.includes(data.details)) {
+              console.warn(`[LivePlayer] Erro fatal não-recuperável (${data.details}), alternando para próximo servidor imediatamente...`);
+              switchToNextServer(`erro fatal ${data.details}`);
+              return;
+            }
+            
             switch (data.type) {
               case Hls.ErrorTypes.NETWORK_ERROR:
                 networkErrorCount += 1;
