@@ -197,10 +197,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   // Função centralizada para alternar de servidor automaticamente em caso de queda ou erro
   const switchToNextServer = useCallback((reason?: string) => {
     if (channel.servers.length <= 1) {
-      setHasError(true);
-      setStreamHealth('error');
-      setIsLoading(false);
-      setErrorMessage('Transmissão ao vivo temporariamente indisponível.');
+      console.log(`[LivePlayer] Servidor único falhou (${reason}). Recarregando master playlist...`);
+      setReloadNonce(prev => prev + 1);
       return;
     }
 
@@ -582,6 +580,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         if (channel.servers.length > 1) {
           console.log('[LivePlayer] Buffering persistente (35s) detectado. Alternando automaticamente...');
           switchToNextServer('buffering prolongado');
+        } else {
+          console.log('[LivePlayer] Buffering persistente (35s) detectado. Recarregando playlist mestre...');
+          setReloadNonce(prev => prev + 1);
         }
       }, 35000);
     };
@@ -669,11 +670,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         // ANTI-TELA-PRETA: espera 15s de freeze antes de agir (antes eram 9s)
         // Ação prematura causava re-load desnecessário que reiniciava o buffer → tela preta
         if (frozenFrameTicks >= 5) {
-          console.log('[LivePlayer] Fluxo inerte detectado (15s). Desobstruindo fila de fragmentos...');
-          if (hlsRef.current) {
-            hlsRef.current.startLoad();
-          }
-          v.play().catch(() => {});
+          console.log('[LivePlayer] Fluxo inerte detectado (15s). Recarregando playlist mestre (possível token expirado)...');
+          setReloadNonce(prev => prev + 1);
           frozenFrameTicks = 0;
         }
       } else {
