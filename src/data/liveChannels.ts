@@ -27,13 +27,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/898.m3u8',
-        isProxy: true
+        url: '/api/iptv/898',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/896.m3u8',
-        isProxy: true
+        url: '/api/iptv/896',
+        isProxy: false
       }
     ]
   },
@@ -48,13 +48,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/863.m3u8',
-        isProxy: true
+        url: '/api/iptv/863',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/859.m3u8',
-        isProxy: true
+        url: '/api/iptv/859',
+        isProxy: false
       }
     ]
   },
@@ -69,18 +69,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/867.m3u8',
-        isProxy: true
+        url: '/api/iptv/867',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296309.m3u8',
-        isProxy: true
+        url: '/api/iptv/296309',
+        isProxy: false
       },
       {
         name: 'Servidor 3 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/865.m3u8',
-        isProxy: true
+        url: '/api/iptv/865',
+        isProxy: false
       }
     ]
   },
@@ -95,13 +95,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/296312.m3u8',
-        isProxy: true
+        url: '/api/iptv/296312',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/296311.m3u8',
-        isProxy: true
+        url: '/api/iptv/296311',
+        isProxy: false
       }
     ]
   },
@@ -116,18 +116,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/1228.m3u8',
-        isProxy: true
+        url: '/api/iptv/1228',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD 720p Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/1223.m3u8',
-        isProxy: true
+        url: '/api/iptv/1223',
+        isProxy: false
       },
       {
         name: 'Servidor 3 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/296211.m3u8',
-        isProxy: true
+        url: '/api/iptv/296211',
+        isProxy: false
       }
     ]
   },
@@ -142,18 +142,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/1221.m3u8',
-        isProxy: true
+        url: '/api/iptv/1221',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296209.m3u8',
-        isProxy: true
+        url: '/api/iptv/296209',
+        isProxy: false
       },
       {
         name: 'Servidor 3 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/296210.m3u8',
-        isProxy: true
+        url: '/api/iptv/296210',
+        isProxy: false
       }
     ]
   },
@@ -168,13 +168,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/1226.m3u8',
-        isProxy: true
+        url: '/api/iptv/1226',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/1224.m3u8',
-        isProxy: true
+        url: '/api/iptv/1224',
+        isProxy: false
       }
     ]
   },
@@ -189,18 +189,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: 'http://up.kiwi/351921603109/34939156/506.m3u8',
-        isProxy: true
+        url: '/api/iptv/506',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296355.m3u8',
-        isProxy: true
+        url: '/api/iptv/296355',
+        isProxy: false
       },
       {
         name: 'Servidor 3 (HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/296354.m3u8',
-        isProxy: true
+        url: '/api/iptv/296354',
+        isProxy: false
       }
     ]
   },
@@ -595,23 +595,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi HD Principal)',
-        url: 'http://up.kiwi/351921603109/34939156/296556.m3u8',
-        isProxy: true
+        url: '/api/iptv/296556',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (Kiwi HD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/497.m3u8',
-        isProxy: true
+        url: '/api/iptv/497',
+        isProxy: false
       },
       {
         name: 'Servidor 3 (Kiwi HD Alternativo)',
-        url: 'http://up.kiwi/351921603109/34939156/493.m3u8',
-        isProxy: true
+        url: '/api/iptv/493',
+        isProxy: false
       },
       {
         name: 'Servidor 4 (Kiwi SD Backup)',
-        url: 'http://up.kiwi/351921603109/34939156/296557.m3u8',
-        isProxy: true
+        url: '/api/iptv/296557',
+        isProxy: false
       }
     ]
   },
@@ -626,8 +626,8 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (Kiwi HD 720p Principal)',
-        url: 'http://up.kiwi/351921603109/34939156/296480.m3u8',
-        isProxy: true
+        url: '/api/iptv/296480',
+        isProxy: false
       },
       {
         name: 'Servidor 2 (Esportes Fast Backup)',
@@ -666,9 +666,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'O canal pioneiro em documentários sobre ciência, tecnologia, história e natureza.',
     servers: [
-      { name: 'Servidor 1 (Kiwi HD 720p)', url: 'http://up.kiwi/351921603109/34939156/342.m3u8', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD Backup)', url: 'http://up.kiwi/351921603109/34939156/296584.m3u8', isProxy: true },
-      { name: 'Servidor 3 (Kiwi Alternativo)', url: 'http://up.kiwi/351921603109/34939156/340.m3u8', isProxy: true }
+      { name: 'Servidor 1 (Kiwi HD 720p)', url: '/api/iptv/342', isProxy: false },
+      { name: 'Servidor 2 (Kiwi HD Backup)', url: '/api/iptv/296584', isProxy: false },
+      { name: 'Servidor 3 (Kiwi Alternativo)', url: '/api/iptv/340', isProxy: false }
     ]
   },
   {
@@ -680,8 +680,8 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'A história do mundo, grandes eventos e teorias fascinantes.',
     servers: [
-      { name: 'Servidor 1 (Kiwi HD 720p)', url: 'http://up.kiwi/351921603109/34939156/296605.m3u8', isProxy: true },
-      { name: 'Servidor 2 (NatGeo Doc HD Backup)', url: 'http://up.kiwi/351921603109/34939156/296584.m3u8', isProxy: true }
+      { name: 'Servidor 1 (Kiwi HD 720p)', url: '/api/iptv/296605', isProxy: false },
+      { name: 'Servidor 2 (NatGeo Doc HD Backup)', url: '/api/iptv/296584', isProxy: false }
     ]
   },
   {
@@ -693,9 +693,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'Programas focados na relação entre humanos e animais e na vida selvagem.',
     servers: [
-      { name: 'Servidor 1 (Kiwi HD 720p)', url: 'http://up.kiwi/351921603109/34939156/30.m3u8', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD Backup)', url: 'http://up.kiwi/351921603109/34939156/296564.m3u8', isProxy: true },
-      { name: 'Servidor 3 (Kiwi Alternativo)', url: 'http://up.kiwi/351921603109/34939156/28.m3u8', isProxy: true }
+      { name: 'Servidor 1 (Kiwi HD 720p)', url: '/api/iptv/30', isProxy: false },
+      { name: 'Servidor 2 (Kiwi HD Backup)', url: '/api/iptv/296564', isProxy: false },
+      { name: 'Servidor 3 (Kiwi Alternativo)', url: '/api/iptv/28', isProxy: false }
     ]
   },
   {
@@ -707,9 +707,9 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'Mistérios da vida real, crimes chocantes e grandes investigações forenses.',
     servers: [
-      { name: 'Servidor 1 (Kiwi HD 720p)', url: 'http://up.kiwi/351921603109/34939156/353.m3u8', isProxy: true },
-      { name: 'Servidor 2 (Kiwi HD Backup)', url: 'http://up.kiwi/351921603109/34939156/296570.m3u8', isProxy: true },
-      { name: 'Servidor 3 (Kiwi Alternativo)', url: 'http://up.kiwi/351921603109/34939156/351.m3u8', isProxy: true }
+      { name: 'Servidor 1 (Kiwi HD 720p)', url: '/api/iptv/353', isProxy: false },
+      { name: 'Servidor 2 (Kiwi HD Backup)', url: '/api/iptv/296570', isProxy: false },
+      { name: 'Servidor 3 (Kiwi Alternativo)', url: '/api/iptv/351', isProxy: false }
     ]
   }
 ];
