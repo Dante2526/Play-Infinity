@@ -5501,8 +5501,23 @@ app.use(encontreiLookupRouter);
 
                 switch (e.data.type) {
                   case "PLAY":
-                    if (art) art.play().catch(function() {});
-                    else if (v) v.play().catch(function() {});
+                    if (art) {
+                      art.play().catch(function() {
+                        console.log("[MixDrop] Play manual bloqueado, tentando mudo...");
+                        art.muted = true;
+                        art.play().then(function() {
+                          window.parent.postMessage({ type: "WATCHPLAY_STATUS", muted: true, paused: false, readyState: 4 }, "*");
+                          sendStatus();
+                        }).catch(function() {
+                          console.log("[MixDrop] Play mudo tambem bloqueado — precisa de clique dentro do proprio video.");
+                        });
+                      });
+                    } else if (v) {
+                      v.play().catch(function() {
+                        v.muted = true;
+                        v.play().catch(function() {});
+                      });
+                    }
                     sendStatus();
                     break;
                   case "PAUSE":
@@ -5511,9 +5526,24 @@ app.use(encontreiLookupRouter);
                     sendStatus();
                     break;
                   case "TOGGLE_PLAY":
-                    if (art) art.toggle();
-                    else if (v) { v.paused ? v.play().catch(function() {}) : v.pause(); }
-                    sendStatus();
+                    if (art) {
+                      if (art.playing) {
+                        art.pause();
+                        sendStatus();
+                      } else {
+                        art.play().catch(function() {
+                          art.muted = true;
+                          art.play().then(sendStatus).catch(function() {});
+                        });
+                      }
+                    } else if (v) {
+                      if (v.paused) {
+                        v.play().catch(function() { v.muted = true; v.play().catch(function() {}); });
+                      } else {
+                        v.pause();
+                      }
+                      sendStatus();
+                    }
                     break;
                   case "SEEK":
                   case "SEEK_ABSOLUTE":
