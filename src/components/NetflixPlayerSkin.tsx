@@ -148,6 +148,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Autoplay mudo pelo navegador (política de autoplay) — sugere um clique para ativar o som
+  const [autoplayMutedBanner, setAutoplayMutedBanner] = useState<boolean>(false);
+
   // Bloqueio de tela (Lock Mode da Netflix)
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [isLocking, setIsLocking] = useState<boolean>(false);
@@ -452,6 +455,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       if (!e.data || typeof e.data !== "object") return;
       if (!isTrustedMessageOrigin(e.origin, e.source)) return; // ignora mensagens de origens não confiáveis
       const msgType = e.data.type || e.data.event;
+      // Navegador bloqueou o autoplay com som e o embed iniciou mudo —
+      // avisa a skin para sugerir um clique do usuário (gesto confiável) que ativa o som.
+      if (msgType === "WATCHPLAY_AUTOPLAY_MUTED") {
+        setAutoplayMutedBanner(true);
+        return;
+      }
       if (
         msgType === "WATCHPLAY_STATUS" ||
         msgType === "PLAYER_STATUS" ||
@@ -525,6 +534,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
           };
         });
+
+        // Vídeo com som ativo → remove o aviso de som bloqueado
+        if (typeof data.muted === "boolean" && data.muted === false) {
+          setAutoplayMutedBanner(false);
+        }
       }
     };
 
@@ -535,6 +549,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       window.removeEventListener("message", handleMessage);
     };
   }, [sendCommand, isTrustedMessageOrigin, isSeekingTransition]);
+
+  // Ao trocar de episódio/temporada, reinicia o aviso de som bloqueado
+  useEffect(() => {
+    setAutoplayMutedBanner(false);
+  }, [episode, season]);
+
+  // Gesto do usuário (clique) habilita o som que o navegador bloqueou no autoplay
+  const handleEnableSound = useCallback(() => {
+    sendCommand({ type: "SET_MUTED", muted: false });
+    sendCommand({ type: "PLAY" });
+    setPlayerStatus((p) => ({ ...p, muted: false }));
+    setAutoplayMutedBanner(false);
+  }, [sendCommand]);
 
   // Sincronização periódica ativa com o iframe a cada 2.5s para manter o relógio fiel ao vídeo real
   useEffect(() => {
@@ -1096,6 +1123,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </div>
           <span className="text-xs font-black tabular-nums text-white">{touchHud.value}%</span>
         </div>
+      )}
+
+      {/* Aviso de Som Bloqueado pelo Navegador (autoplay mudo) — clique ativa o som */}
+      {autoplayMutedBanner && (
+        <button
+          onClick={handleEnableSound}
+          className="absolute bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2.5 rounded-full bg-black/90 border border-amber-400/50 text-white text-[11px] sm:text-xs font-bold shadow-2xl backdrop-blur-md hover:bg-neutral-900 hover:border-amber-400 transition-all active:scale-95 cursor-pointer animate-in fade-in slide-in-from-bottom-3 duration-300 pointer-events-auto max-w-[92%]"
+          title="Ativar som"
+        >
+          <VolumeX className="w-4 h-4 text-amber-400 shrink-0" />
+          <span className="truncate">Som bloqueado pelo navegador — toque para ativar</span>
+        </button>
       )}
 
       {/* Gradientes Suaves de Cinema (Superior e Inferior) */}
