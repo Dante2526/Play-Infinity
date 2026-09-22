@@ -5272,8 +5272,10 @@ app.use(encontreiLookupRouter);
         }
       }
 
-      // Roteia via /api/mixdrop-proxy para contornar bloqueios de Referer/CORS e habilitar Range streaming com 100% de confiabilidade
-      const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
+      // Usa URL direta — o token da CDN mxcontent.net é vinculado à sessão/IP que gerou a página.
+      // Proxiar via /api/mixdrop-proxy causava HTTP 403 porque o token pertence ao IP do browser,
+      // não ao IP do Render. O ArtPlayer acessa a CDN diretamente com sucesso.
+      const streamUrl = videoUrl;
 
       return res.send(`
         <!DOCTYPE html>
