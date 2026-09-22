@@ -1958,7 +1958,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               <span className="text-neutral-400 font-medium">Configuração Ativa:</span>
               <span className="font-bold text-white flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                {selectedAudio === "pt-BR" ? "Dublado BR" : "Inglês"} • Leg: {selectedSubtitle === "off" ? "Desativada" : "Português"}
+                {selectedAudio !== "en-US" ? "Dublado BR" : "Inglês"} • Leg: {selectedSubtitle === "off" ? "Desativada" : "Português"}
               </span>
             </div>
 

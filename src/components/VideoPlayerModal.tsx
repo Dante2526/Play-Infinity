@@ -181,7 +181,7 @@ export function VideoPlayerModal({
           if (ep?.mixdrop) {
             setMixdropFileId(ep.mixdrop);
             setMixdropIsHD(true);
-            console.log(`[MixDrop] fileId HD encontrado: ${ep.servers.mixdrop} (S${season}E${episode})`);
+            console.log(`[MixDrop] fileId HD encontrado: ${ep.mixdrop} (S${season}E${episode})`);
           } else {
             console.log(`[MixDrop] Nenhum fileId no catálogo para S${season}E${episode} — usando fallback`);
           }
@@ -191,7 +191,7 @@ export function VideoPlayerModal({
           if (movie?.mixdrop) {
             setMixdropFileId(movie.mixdrop);
             setMixdropIsHD(true);
-            console.log(`[MixDrop] fileId HD encontrado: ${movie.servers.mixdrop} (filme tmdb_id=${tmdbId})`);
+            console.log(`[MixDrop] fileId HD encontrado: ${movie.mixdrop} (filme tmdb_id=${tmdbId})`);
           } else {
             console.log(`[MixDrop] Nenhum fileId no catálogo para filme tmdb_id=${tmdbId} — usando fallback`);
           }
