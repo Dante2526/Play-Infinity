@@ -244,7 +244,24 @@ export default function App() {
   const [isAuthInitialized, setIsAuthInitialized] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
-  const { isPremium } = useSubscription();
+  const { isPremium, trial, loading: subscriptionLoading } = useSubscription();
+  const isTrialActive = trial.isTrialActive;
+
+  // Trava no prazo exato (teste de 30 min, ou acesso concedido de 30min/1h/4h/1dia/7dias/mensal):
+  // quando o acesso expira com o player aberto, para a reprodução na hora e reabre o
+  // modal de pagamento (sem a opção de teste, se já foi usado).
+  useEffect(() => {
+    if (
+      !subscriptionLoading &&
+      playerModal.isOpen &&
+      !isPremium &&
+      !isTrialActive &&
+      !isDevEnvironment
+    ) {
+      setPlayerModal((prev) => ({ ...prev, isOpen: false }));
+      setIsPaywallOpen(true);
+    }
+  }, [subscriptionLoading, isPremium, isTrialActive, playerModal.isOpen]);
 
   useEffect(() => {
     // Fallback de segurança para redes móveis lentas: não trava na tela preta por mais de 3s
@@ -479,7 +496,7 @@ export default function App() {
     posterUrl?: string,
     isAnime?: boolean
   ) => {
-    if (!isPremium && !isDevEnvironment) {
+    if (!isPremium && !isTrialActive && !isDevEnvironment) {
       setIsPaywallOpen(true);
       return;
     }

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useSubscription } from '../hooks/useSubscription';
+import { useSubscription, startTrial, TRIAL_DURATION_MS } from '../hooks/useSubscription';
 import { reportAppError } from './GlobalErrorModal';
 import { getFriendlyErrorMessage } from '../utils/errorTranslator';
 
@@ -20,6 +20,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  const [trialLoading, setTrialLoading] = useState(false);
+  const [trialError, setTrialError] = useState('');
   
   const [formData, setFormData] = useState({
     name: '',
@@ -35,7 +37,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     ccv: ''
   });
 
-  const { isPremium } = useSubscription();
+  const { isPremium, trial } = useSubscription();
+  const canUseTrial = trial.canUseTrial && !!auth.currentUser;
 
   useEffect(() => {
     if (isOpen && isPremium) {
@@ -231,6 +234,24 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     }
   };
 
+  const handleStartTrial = async () => {
+    setTrialLoading(true);
+    setTrialError('');
+    try {
+      const ok = await startTrial();
+      if (!ok) {
+        setTrialError('Não foi possível ativar o teste. Tente novamente em instantes.');
+        return;
+      }
+      // Recarrega para o app reler o acesso liberado (30 min) direto do Firebase
+      window.location.reload();
+    } catch (err: any) {
+      setTrialError(getFriendlyErrorMessage(err, 'Não foi possível ativar o teste. Tente novamente.'));
+    } finally {
+      setTrialLoading(false);
+    }
+  };
+
   const benefits = [
     { icon: <Zap size={20} className="text-yellow-400" />, text: "Sem popups, sem redirecionamentos chatos" },
     { icon: <ShieldCheck size={20} className="text-green-400" />, text: "Servidores ultrarrápidos e seguros" },
@@ -302,6 +323,32 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     Assinar agora por R$ {monthlyFeeText} <Crown size={18} className="sm:w-5 sm:h-5" />
                   </span>
                 </button>
+
+                {canUseTrial && (
+                  <div className="w-full mt-4 sm:mt-5">
+                    <div className="w-full h-px bg-white/10 mb-4 sm:mb-5" />
+                    {trialError && (
+                      <div className="mb-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs sm:text-sm w-full leading-relaxed">
+                        {trialError}
+                      </div>
+                    )}
+                    <button
+                      onClick={handleStartTrial}
+                      disabled={trialLoading}
+                      className="w-full py-3 sm:py-3.5 rounded-xl border border-dashed border-emerald-400/40 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 font-semibold text-sm sm:text-base transition-all cursor-pointer disabled:opacity-70 flex items-center justify-center gap-2"
+                    >
+                      {trialLoading ? (
+                        <div className="w-5 h-5 border-2 border-emerald-300/30 border-t-emerald-300 rounded-full animate-spin" />
+                      ) : (
+                        <Zap size={18} className="shrink-0" />
+                      )}
+                      {trialLoading ? "Ativando teste..." : `Testar grátis por ${Math.round(TRIAL_DURATION_MS / 60000)} minutos`}
+                    </button>
+                    <p className="text-zinc-500 text-[11px] sm:text-xs mt-2 text-center leading-relaxed">
+                      Acesso liberado por {Math.round(TRIAL_DURATION_MS / 60000)} minutos. Ao fim do teste, será necessário assinar para continuar assistindo.
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative p-4 sm:p-8 flex flex-col">
