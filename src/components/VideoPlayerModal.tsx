@@ -165,46 +165,43 @@ export function VideoPlayerModal({
   const [mixdropIsHD, setMixdropIsHD] = useState<boolean>(false);
 
   // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
-  // Prioriza Dublado. Se não achar, mixdropFileId fica null e usa fallback (pode ser cam).
-  // USA mediaType (prop, sempre disponível) em vez de isSeries (useMemo definido mais abaixo)
-  // Guard com useRef: impede lookup duplicado pro mesmo episódio (evita spam de console)
-  const lastLookupKeyRef = useRef<string>("");
+  // PADRÃO "LATEST WINS": se o estado oscilar (S1E5→S1E4→S1E5), só o
+  // lookup MAIS RECENTE aplica resultado. Lookups antigos são descartados.
+  const latestLookupRef = useRef<string>("");
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
-    // Guard: se já fizemos lookup pra este tmdb_id+season+episode, não repete
     const lookupKey = `${tmdbId}:${season}:${episode}`;
-    if (lastLookupKeyRef.current === lookupKey) return;
-    lastLookupKeyRef.current = lookupKey;
-    
-    setMixdropFileId(null);
-    setMixdropIsHD(false);
+    latestLookupRef.current = lookupKey; // Marca como o mais recente
 
     const seriesMode = mediaType === 'series';
+    const currentSeason = season;
+    const currentEpisode = episode;
+
     const lookupMixdrop = async () => {
       try {
+        let result: string | null = null;
         if (seriesMode) {
-          // Busca fileId do episódio específico no catálogo
-          const ep = await findEpisode(tmdbId, season, episode);
-          if (ep?.mixdrop) {
-            setMixdropFileId(ep.mixdrop);
-            setMixdropIsHD(true);
-            console.log(`[MixDrop] fileId HD encontrado: ${ep.mixdrop} (S${season}E${episode})`);
-          } else {
-            console.log(`[MixDrop] Nenhum fileId no catálogo para S${season}E${episode} — usando fallback`);
-          }
+          const ep = await findEpisode(tmdbId, currentSeason, currentEpisode);
+          if (ep?.mixdrop) result = ep.mixdrop;
         } else {
-          // Busca fileId do filme no catálogo
           const movie = await findMovieByTmdbId(tmdbId);
-          if (movie?.mixdrop) {
-            setMixdropFileId(movie.mixdrop);
-            setMixdropIsHD(true);
-            console.log(`[MixDrop] fileId HD encontrado: ${movie.mixdrop} (filme tmdb_id=${tmdbId})`);
-          } else {
-            console.log(`[MixDrop] Nenhum fileId no catálogo para filme tmdb_id=${tmdbId} — usando fallback`);
-          }
+          if (movie?.mixdrop) result = movie.mixdrop;
+        }
+        // SÓ aplica se este ainda for o lookup mais recente
+        if (latestLookupRef.current !== lookupKey) {
+          console.log(`[MixDrop] Lookup descartado (S${currentSeason}E${currentEpisode}) — pedido mais novo existe`);
+          return;
+        }
+        if (result) {
+          setMixdropFileId(result);
+          setMixdropIsHD(true);
+          console.log(`[MixDrop] fileId HD: ${result} (S${currentSeason}E${currentEpisode})`);
+        } else {
+          setMixdropFileId(null);
+          console.log(`[MixDrop] Sem fileId no catálogo (S${currentSeason}E${currentEpisode})`);
         }
       } catch (e) {
-        console.warn('[MixDrop] Erro ao buscar no catálogo encontrei.me:', e);
+        console.warn('[MixDrop] Erro:', e);
       }
     };
 
