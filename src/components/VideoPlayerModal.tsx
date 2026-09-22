@@ -825,6 +825,10 @@ export function VideoPlayerModal({
   // Converte URLs do WatchPlayer e MixDrop para endpoints otimizados com autoplay instantâneo e Skin Netflix
   const resolveStreamIframeUrl = (url: string) => {
     if (!url) return "";
+    // Guard: se já é um endpoint /api/, retorna direto — evita double-encoding
+    // Ex: /api/mixdrop-stream?url=https%3A%2F%2Fmxdrop.top%2Fe%2F{id}
+    // sem esse guard, o includes("mxdrop.") abaixo batia no query string e re-encodava
+    if (url.startsWith("/api/")) return url;
     if (url.includes("watchplay.shop")) {
       return `/api/watchplayer-stream?url=${encodeURIComponent(url)}`;
     }
