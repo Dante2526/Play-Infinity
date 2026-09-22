@@ -645,18 +645,20 @@ export function VideoPlayerModal({
     }
   }, [isSeries, imdbId, defaultUrl, mixdropFileId]);
 
-  // Quando o mixdropFileId chega do catálogo (11MB demora pra carregar no mobile),
-  // se o MixDrop já estiver selecionado, recarrega o iframe com o fileId correto
+  // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
+  // se o MixDrop já estiver selecionado, recarrega o iframe com o fileId correto.
+  // DEPS MÍNIMAS: só [mixdropFileId] — outras vars causam re-render em cascata e spam de console.
   useEffect(() => {
     if (!mixdropFileId || !isOpen) return;
     if (selectedServerKey !== "srv_mixdrop") return;
-    // Reconstroi a URL do MixDrop com o fileId correto que acabou de chegar
+    // Busca o servidor MixDrop (já recomputado pelo useMemo quando mixdropFileId mudou)
     const srv = servers.find(s => s.key === "srv_mixdrop");
     if (!srv) return;
     const newUrl = isSeries
       ? srv.buildUrl(resolvedId, season, episode)
       : srv.buildUrl(resolvedId);
     const resolvedNewUrl = resolveStreamIframeUrl(newUrl);
+    // Só recarrega se a URL mudou de verdade (evita recargas desnecessárias)
     if (resolvedNewUrl && resolvedNewUrl !== activeIframeUrl) {
       console.log(`[MixDrop] Recarregando iframe com fileId HD: ${mixdropFileId}`);
       transitionEpochRef.current = Date.now();
@@ -666,7 +668,8 @@ export function VideoPlayerModal({
       setActiveIframeUrl(resolvedNewUrl);
       setExtractedSource(newUrl);
     }
-  }, [mixdropFileId, selectedServerKey, isOpen, servers, isSeries, resolvedId, season, episode, activeIframeUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixdropFileId]); // SÓ mixdropFileId — outras vars causam loop
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback((serverKey: string) => {
