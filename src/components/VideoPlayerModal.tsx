@@ -167,8 +167,15 @@ export function VideoPlayerModal({
   // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
   // Prioriza Dublado. Se não achar, mixdropFileId fica null e usa fallback (pode ser cam).
   // USA mediaType (prop, sempre disponível) em vez de isSeries (useMemo definido mais abaixo)
+  // Guard com useRef: impede lookup duplicado pro mesmo episódio (evita spam de console)
+  const lastLookupKeyRef = useRef<string>("");
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
+    // Guard: se já fizemos lookup pra este tmdb_id+season+episode, não repete
+    const lookupKey = `${tmdbId}:${season}:${episode}`;
+    if (lastLookupKeyRef.current === lookupKey) return;
+    lastLookupKeyRef.current = lookupKey;
+    
     setMixdropFileId(null);
     setMixdropIsHD(false);
 
@@ -202,6 +209,7 @@ export function VideoPlayerModal({
     };
 
     lookupMixdrop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tmdbId, mediaType, season, episode]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
