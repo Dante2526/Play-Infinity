@@ -31,6 +31,33 @@ function syncWatchedToCloud(store: Record<string, boolean>) {
   }, 5000);
 }
 
+/** Descarta o debounce e envia as marcações pendentes para o Firebase imediatamente. */
+function flushPendingWatchedSync(): void {
+  if (!syncTimeout) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = null;
+
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const store = getStore();
+  setDoc(doc(db, "usuarios", user.uid), { episodiosAssistidos: store }, { merge: true })
+    .catch((e) => {
+      console.warn("[Firestore Sync] Falha no flush de episódios:", e);
+    });
+}
+
+// Garante que marcações ("vi esse EP") cheguem ao Firebase mesmo se o usuário
+// fechar o app dentro dos 5s do debounce (sincronização entre dispositivos).
+if (typeof window !== "undefined") {
+  const doFlush = () => flushPendingWatchedSync();
+  window.addEventListener("pagehide", doFlush);
+  window.addEventListener("beforeunload", doFlush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") doFlush();
+  });
+}
+
 export async function fetchWatchedFromCloud(): Promise<void> {
   const user = auth.currentUser;
   if (!user) return;

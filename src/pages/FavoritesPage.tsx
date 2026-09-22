@@ -91,7 +91,8 @@ import {
   getFavoriteIds,
   toggleFavorite,
   isItemFavorite,
-  getAllCatalogItems,
+  getStaticFavoriteItems,
+  resolveFavoriteItems,
   SERIES_EPISODE_SCHEDULE,
   getScheduleForFavorites
 } from "../services/favorites";
@@ -138,20 +139,29 @@ export function FavoritesPage({
   onNavigateToCalendar?: () => void
 }) {
   const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+  const [favoriteItems, setFavoriteItems] = useState<CatalogItem[]>(() => getStaticFavoriteItems(getFavoriteIds()));
   const [typeFilter, setTypeFilter] = useState<'all' | 'series' | 'movies'>('all');
+
+  // Resolve favoritos completos (catálogo estático + TMDB para itens fora do catálogo local)
+  useEffect(() => {
+    let mounted = true;
+    resolveFavoriteItems(favoriteIds).then(items => {
+      if (mounted) setFavoriteItems(items);
+    });
+    return () => { mounted = false; };
+  }, [favoriteIds]);
 
   useEffect(() => {
     const handleFavUpdate = (e: any) => {
-      setFavoriteIds(e.detail || getFavoriteIds());
+      const ids = e.detail || getFavoriteIds();
+      setFavoriteIds(ids);
+      setFavoriteItems(getStaticFavoriteItems(ids));
     };
     window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
     return () => {
       window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
     };
   }, []);
-
-  const allCatalogs = getAllCatalogItems();
-  const favoriteItems = allCatalogs.filter(item => favoriteIds.includes(item.id));
 
   const filteredItems = favoriteItems.filter(item => {
     if (typeFilter === 'series') return item.type === 'series';

@@ -1058,14 +1058,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
   const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
 
-  // Título e dados do episódio ativo
-  const currentEpData = episodesList?.find(e => e.episode_number === episode);
-  const currentEpName = currentEpData?.name || `Episódio ${episode}`;
-
-  // Formato do título central da Netflix: Série • S1:E1 "Pilot" ou Nome do Filme
-  const cleanTitle = isSeries && title ? title.replace(/\s*-\s*T\d+:E\d+.*$/i, '').trim() : title;
+  // Formato do título central da Netflix: S1:E1 ou Nome do Filme
   const topTitleText = isSeries
-    ? `${cleanTitle ? `${cleanTitle} • ` : ""}S${season}:E${episode} "${currentEpName}"`
+    ? `S${season}:E${episode}`
     : `"${title || "Filme"}"`;
 
   // Ocultar controles nativos em players externos é resolvido bloqueando eventos de ponteiro no iframe,

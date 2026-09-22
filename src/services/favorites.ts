@@ -1,6 +1,6 @@
 import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";;
 import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";;
-import { getDetails } from "./tmdb";
+import { getDetails, formatImageUrl, TMDBDetails } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -172,6 +172,77 @@ export const toggleFavorite = (itemId: number): boolean => {
 export const isItemFavorite = (itemId: number): boolean => {
   return getFavoriteIds().includes(itemId);
 };
+
+// Constrói um CatalogItem a partir dos detalhes do TMDB (para favoritos fora do catálogo estático)
+const buildCatalogItemFromTmdb = (details: TMDBDetails, type: 'movie' | 'series'): CatalogItem => ({
+  id: details.id,
+  tmdbId: details.id,
+  title: (details.title || details.name || "Sem título").toUpperCase(),
+  imageUrl: formatImageUrl(details.poster_path, 'w500'),
+  posterUrl: formatImageUrl(details.poster_path, 'w500'),
+  backdropUrl: formatImageUrl(details.backdrop_path || details.poster_path, 'original'),
+  type,
+  genres: (details.genres || []).map(g => g.name),
+  synopsis: details.overview || "Sem sinopse disponível em português.",
+  year: parseInt((details.release_date || details.first_air_date || "").substring(0, 4)) || 2026,
+  rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : "8.0 ★",
+  duration: type === 'series' ? "Série" : "Filme",
+  match: Math.min(99, Math.max(70, Math.round((details.vote_average || 7.5) * 10))),
+  playerUrl: type === 'series'
+    ? `https://v1.watchplay.shop/tvshow/${details.id}/1/1`
+    : `https://v1.watchplay.shop/movie/${details.id}`,
+  imdbId: details.imdb_id,
+});
+
+// Cache para não refazer chamadas ao TMDB a cada render/abertura do perfil
+const tmdbFavoriteCache = new Map<number, CatalogItem | null>();
+
+// Resolve favoritos contra o catálogo estático casando por id OU tmdbId
+export const getStaticFavoriteItems = (ids: number[]): CatalogItem[] => {
+  const allItems = getAllCatalogItems();
+  const idsNum = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+  return idsNum
+    .map(id => allItems.find(i => i.id === Number(id) || Number(i.tmdbId) === Number(id)))
+    .filter((i): i is CatalogItem => !!i);
+};
+
+// Resolve favoritos completos: estáticos primeiro, depois busca no TMDB os IDs que
+// não estão no catálogo local (ex: séries encontradas só via busca/direto).
+export async function resolveFavoriteItems(ids: number[]): Promise<CatalogItem[]> {
+  const idsNum = Array.from(new Set(ids.map(Number).filter(n => Number.isFinite(n) && n > 0)));
+  const staticItems = getStaticFavoriteItems(idsNum);
+  const foundIds = new Set<number>();
+  staticItems.forEach(i => { foundIds.add(Number(i.id)); if (i.tmdbId) foundIds.add(Number(i.tmdbId)); });
+
+  const missing = idsNum.filter(id => !foundIds.has(Number(id)));
+  if (missing.length === 0) return staticItems;
+
+  const dynamic = (await Promise.all(
+    missing.map(async (id): Promise<CatalogItem | null> => {
+      if (tmdbFavoriteCache.has(id)) return tmdbFavoriteCache.get(id) ?? null;
+      try {
+        const tv = await getDetails(id, 'tv');
+        if (tv && tv.id === id) {
+          const item = buildCatalogItemFromTmdb(tv, 'series');
+          tmdbFavoriteCache.set(id, item);
+          return item;
+        }
+      } catch { /* tenta como filme */ }
+      try {
+        const movie = await getDetails(id, 'movie');
+        if (movie && movie.id === id) {
+          const item = buildCatalogItemFromTmdb(movie, 'movie');
+          tmdbFavoriteCache.set(id, item);
+          return item;
+        }
+      } catch { /* não resolvível */ }
+      tmdbFavoriteCache.set(id, null);
+      return null;
+    })
+  )).filter((i): i is CatalogItem => !!i);
+
+  return [...staticItems, ...dynamic];
+}
 
 // Cronograma de episódios estáticos (apenas séries com episódios futuros confirmados oficialmente)
 export const SERIES_EPISODE_SCHEDULE: Record<number, Omit<SeriesScheduleEpisode, 'status'>[]> = {};

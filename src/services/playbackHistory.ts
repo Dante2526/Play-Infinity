@@ -1,4 +1,5 @@
 import { getAllCatalogItems } from "./favorites";
+import { getDetails } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 const CHAIR_PHOTO_ID = "photo-1489599849927-2ee91cede3ba";
@@ -167,6 +168,38 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
   }, 10000);
 }
 
+/** Descarta o debounce e envia o histórico pendente para o Firebase imediatamente. */
+function flushPendingHistorySync(): void {
+  if (!syncTimeout) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = null;
+
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const store = getStore();
+  const userRef = doc(db, "usuarios", user.uid);
+  updateDoc(userRef, { historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>) })
+    .catch((e: any) => {
+      if (e.code === 'not-found') {
+        return setDoc(doc(db, "usuarios", user.uid), { historicoReproducao: store }, { merge: true })
+          .catch(() => {});
+      }
+      console.warn("[Firestore Sync] Falha no flush do histórico:", e);
+    });
+}
+
+// Garante que o progresso final chegue ao Firebase mesmo se o usuário fechar
+// o app/tab dentro dos 10s do debounce (paradigma "parou no PC, continua no celular").
+if (typeof window !== "undefined") {
+  const doFlush = () => flushPendingHistorySync();
+  window.addEventListener("pagehide", doFlush);
+  window.addEventListener("beforeunload", doFlush);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") doFlush();
+  });
+}
+
 export async function fetchHistoryFromCloud(): Promise<void> {
   const user = auth.currentUser;
   if (!user) return;
@@ -180,9 +213,21 @@ export async function fetchHistoryFromCloud(): Promise<void> {
       const data = snap.data();
       const remoteHistory = data.historicoReproducao || data.playbackHistory;
       if (remoteHistory) {
-        // Mescla histórico da nuvem com o local
+        // Merge por chave com "último que atualizou vence" (evita que um dispositivo
+        // com progresso LOCAL mais novo seja regredido por dados remotos antigos).
         const local = getStore();
-        const merged = { ...local, ...remoteHistory };
+        const remoteMap: Record<string, PlaybackHistoryItem> = Array.isArray(remoteHistory)
+          ? Object.fromEntries((remoteHistory as PlaybackHistoryItem[]).map(item => [String(item.id), item]))
+          : remoteHistory as Record<string, PlaybackHistoryItem>;
+
+        const merged: Record<string, PlaybackHistoryItem> = {};
+        for (const key of new Set([...Object.keys(local), ...Object.keys(remoteMap)])) {
+          const a = local[key];
+          const b = remoteMap[key];
+          if (!a) { merged[key] = b; continue; }
+          if (!b) { merged[key] = a; continue; }
+          merged[key] = (b.updatedAt || 0) >= (a.updatedAt || 0) ? b : a;
+        }
         saveStore(merged);
       }
     }
@@ -199,6 +244,58 @@ function saveStore(store: Record<string, PlaybackHistoryItem>) {
   } catch (e) {
     console.error("Erro ao salvar histórico de reprodução:", e);
   }
+}
+
+// Cache por temporada: "última temporada da série" não muda com frequência.
+const seriesLastSeasonCache = new Map<number, Promise<{ season: number; episodeCount: number } | null>>();
+
+/** Descobre (via TMDB) se o episódio atual é o último da série — única situação
+ *  em que uma série deve sair do "Continue Assistindo" ao ser finalizada. */
+function fetchSeriesFinale(tmdbId: number): Promise<{ season: number; episodeCount: number } | null> {
+  const cached = seriesLastSeasonCache.get(tmdbId);
+  if (cached) return cached;
+
+  const promise = (async (): Promise<{ season: number; episodeCount: number } | null> => {
+    try {
+      const data: any = await getDetails(tmdbId, 'tv');
+      if (!data || !data.id) return null;
+      const seasons: any[] = (data.seasons || []).filter((s: any) => Number(s.season_number) > 0);
+      if (seasons.length === 0) return null;
+      seasons.sort((a: any, b: any) => Number(a.season_number) - Number(b.season_number));
+      const lastSeason = seasons[seasons.length - 1];
+      return {
+        season: Number(lastSeason.season_number),
+        episodeCount: Math.max(1, Number(lastSeason.episode_count) || 1),
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  seriesLastSeasonCache.set(tmdbId, promise);
+  return promise;
+}
+
+/** Remove a série do histórico/Continue Assistindo somente se o episódio finalizado
+ *  for o último da última temporada (séries com várias temporadas continuam lá). */
+function maybeRemoveFinishedSeries(item: { id: string | number; tmdbId?: number; season?: number; episode?: number }, key: string): void {
+  const tmdbId = Number(item.tmdbId || item.id);
+  const season = Number(item.season);
+  const episode = Number(item.episode);
+  if (!tmdbId || !season || !episode) return;
+
+  fetchSeriesFinale(tmdbId)
+    .then(finale => {
+      if (!finale) return;
+      if (season === finale.season && episode >= finale.episodeCount) {
+        const store = getStore();
+        if (store[key]) {
+          delete store[key];
+          saveStore(store);
+        }
+      }
+    })
+    .catch(() => {});
 }
 
 /**
@@ -231,11 +328,19 @@ export function savePlaybackProgress(item: {
   const key = makeHistoryKey(item.id, effectiveType, item.season, item.episode);
   const progressPercent = Math.min(100, Math.max(0, Math.round((item.currentTime / item.duration) * 100)));
 
-  // Se o usuário assistiu mais de 96% do vídeo, removemos do "Continuar Assistindo" para não ficar travado no final
+  // Conteúdo finalizado (>96%):
+  // - Filmes: sai do "Continue Assistindo" e do Firebase automaticamente.
+  // - Séries: só sai se o episódio atual for o ÚLTIMO episódio da ÚLTIMA temporada.
+  //   Final de temporada (com outras temporadas pela frente) ou episódio comum NÃO remove,
+  //   senão sumiria um item que o usuário ainda pode continuar.
   if (progressPercent >= 96) {
-    if (store[key]) {
-      delete store[key];
-      saveStore(store);
+    if (effectiveType !== 'series') {
+      if (store[key]) {
+        delete store[key];
+        saveStore(store);
+      }
+    } else {
+      maybeRemoveFinishedSeries(item, key);
     }
     return;
   }

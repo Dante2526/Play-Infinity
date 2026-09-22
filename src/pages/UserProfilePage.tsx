@@ -95,7 +95,8 @@ import {
   getFavoriteIds,
   toggleFavorite,
   isItemFavorite,
-  getAllCatalogItems,
+  getStaticFavoriteItems,
+  resolveFavoriteItems,
   SERIES_EPISODE_SCHEDULE,
   getScheduleForFavorites
 } from "../services/favorites";
@@ -374,8 +375,17 @@ export function UserProfilePage({
     };
   }, []);
 
-  const allItems = getAllCatalogItems();
-  const favoriteItems = allItems.filter(item => favoriteIds.includes(item.id));
+  const [favoriteItems, setFavoriteItems] = useState<CatalogItem[]>(() => getStaticFavoriteItems(getFavoriteIds()));
+
+  // Resolve favoritos completos (catálogo estático + TMDB para itens fora do catálogo local)
+  useEffect(() => {
+    let mounted = true;
+    resolveFavoriteItems(favoriteIds).then(items => {
+      if (mounted) setFavoriteItems(items);
+    });
+    return () => { mounted = false; };
+  }, [favoriteIds]);
+
   const followedSeries = favoriteItems.filter(item => item.type === 'series');
   const scheduledEpisodes = getScheduleForFavorites(favoriteIds);
   const thisWeekEpisodes = scheduledEpisodes.filter(e => e.airDate >= '2026-09-08' && e.airDate <= '2026-09-15');
