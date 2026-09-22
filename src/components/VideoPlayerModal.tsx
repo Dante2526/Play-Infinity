@@ -541,13 +541,14 @@ export function VideoPlayerModal({
           name: "VIP Player (Dublado PT-BR)"
         },
         {
-          key: "srv_pomfy",
-          label: "Pomfy Stream",
-          badge: "Pomfy Stream • Rápido",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://api.pomfy.stream/serie/${id}/${s}/${e}`,
-          isMatch: (u: string) => u.includes("pomfy.stream"),
-          name: "Pomfy Stream"
+          key: "srv_mixdrop",
+          label: "MixDrop HD (Dublado)",
+          badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
+          buildUrl: (id: string, s: number, e: number) => (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop")))
+            ? defaultUrl
+            : `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/` + (imdbId || id))}`,
+          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
+          name: "MixDrop HD (Dublado)"
         }
       ];
     } else {
@@ -570,15 +571,6 @@ export function VideoPlayerModal({
           name: "VIP Player (Dublado PT-BR)"
         },
         {
-          key: "srv_pomfy",
-          label: "Pomfy Stream",
-          badge: "Pomfy Stream • Rápido",
-          buildUrl: (id: string) => 
-            `https://api.pomfy.stream/filme/${id}`,
-          isMatch: (u: string) => u.includes("pomfy.stream"),
-          name: "Pomfy Stream"
-        },
-        {
           key: "srv_mixdrop",
           label: "MixDrop HD (Dublado)",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
@@ -599,8 +591,8 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
-    // Para o VIP Player, Pomfy e MixDrop, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
-    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_pomfy" || serverKey === "srv_mixdrop");
+    // Para o VIP Player e MixDrop, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
+    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_mixdrop");
     setError(null);
     const newUrl = isSeries
       ? srv.buildUrl(resolvedId, season, episode)
@@ -758,8 +750,8 @@ export function VideoPlayerModal({
       const targetType = parsed.isSeries ? "tv" : "movie";
       return `/api/myembed-stream?id=${targetId}&type=${targetType}&s=${parsed.season || season}&e=${parsed.episode || episode}&cb=${Date.now()}`;
     }
-    if (url.includes("pomfy.stream")) {
-      return url; // Retorna a URL direta do Pomfy
+    if (url.includes("pomfy_REMOVED.stream")) {
+      return url; // Removido - era do Pomfy
     }
     if (url.includes("mxdrop.") || url.includes("mixdrop.")) {
       return `/api/mixdrop-stream?url=${encodeURIComponent(url)}`;
@@ -779,8 +771,8 @@ export function VideoPlayerModal({
       window.location.origin,
       "https://v1.watchplay.shop",
       "https://watchplay.shop",
-      "https://api.pomfy.stream",
-      "https://pomfy.stream",
+      "https://api.NO_LONGER_USED.stream",
+      "https://NO_LONGER_USED.stream",
       "https://mxdrop.top",
       "https://mixdrop.co",
       "https://mixdrop.to",
@@ -1705,7 +1697,7 @@ export function VideoPlayerModal({
                   setIsLoading(false);
                   if (
                     selectedServerKey === "srv_vip" ||
-                    selectedServerKey === "srv_pomfy" ||
+                    
                     selectedServerKey === "srv_mixdrop" ||
                     activeIframeUrl?.includes("/api/mixdrop-stream")
                   ) {
