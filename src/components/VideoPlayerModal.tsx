@@ -571,13 +571,13 @@ export function VideoPlayerModal({
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
   }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
 
-  // Se o episódio atual não existir na lista de disponíveis, auto-ajusta para o último disponível
-  // EXCEÇÃO: quando MixDrop está selecionado, permite qualquer episódio (catálogo encontrei.me
-  // tem mais episódios que o TMDB lista — ex: Demon Slayer S1 tem 8 eps no encontrei.me mas só 7 no TMDB)
+  // Se o episódio atual não existir na lista de disponíveis, auto-ajusta para o último disponível.
+  // Isso SÓ faz sentido no WatchPlayer: é o único servidor de fato testado pelo /api/check-season.
+  // VIP Player e MixDrop têm catálogos mais amplos que o WatchPlayer — se o reset aqui rodar
+  // nesses servidores, reseta o EP clicado e dá o sintoma exato relatado ("cliquei no 21 e foi pro 18 sozinho").
   useEffect(() => {
+    if (selectedServerKey !== "srv_watchplay") return;
     if (isSeries && episodeNumbers.length > 0 && !episodeNumbers.includes(episode)) {
-      // Se MixDrop está selecionado e tem fileId, não reseta — deixa o usuário assistir
-      if (selectedServerKey === "srv_mixdrop" && mixdropFileId) return;
       const fallbackEp = episodeNumbers[episodeNumbers.length - 1];
       if (fallbackEp && fallbackEp !== episode) {
         setEpisode(fallbackEp);
