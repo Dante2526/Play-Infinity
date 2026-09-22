@@ -5272,10 +5272,10 @@ app.use(encontreiLookupRouter);
         }
       }
 
-      // Usa URL direta — o token da CDN mxcontent.net é vinculado à sessão/IP que gerou a página.
-      // Proxiar via /api/mixdrop-proxy causava HTTP 403 porque o token pertence ao IP do browser,
-      // não ao IP do Render. O ArtPlayer acessa a CDN diretamente com sucesso.
-      const streamUrl = videoUrl;
+      // Usa o PROXY — o token da CDN mxcontent.net é IP-locked (gerado pro IP do Render).
+      // Se passar URL direta pro navegador do usuário, a CDN retorna 403 (IP diferente).
+      // O proxy faz a request do MESMO IP que gerou o token (Render server), então funciona.
+      const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
 
       return res.send(`
         <!DOCTYPE html>
