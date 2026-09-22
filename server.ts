@@ -5495,30 +5495,51 @@ app.use(encontreiLookupRouter);
               art.on("timeupdate", sendStatus);
               art.on("video:ended", notifyEnded);
 
+              var _playBlocked = false; // Flag pra evitar loop de retry
+
+              // Overlay de play: quando navegador bloqueia autoplay, mostra botão grande.
+              // Clique direto no vídeo = gesto do usuário = play permitido.
+              function showPlayOverlay() {
+                if (document.getElementById("mixdrop-play-overlay")) return;
+                var overlay = document.createElement("div");
+                overlay.id = "mixdrop-play-overlay";
+                overlay.style.cssText = "position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;cursor:pointer;";
+                var btn = document.createElement("div");
+                btn.style.cssText = "width:80px;height:80px;border-radius:50%;background:#e50914;display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(229,9,20,0.5);";
+                btn.innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>';
+                overlay.appendChild(btn);
+                overlay.addEventListener("click", function() {
+                  art.muted = false;
+                  art.play().then(function() {
+                    _playBlocked = false;
+                    overlay.remove();
+                    sendStatus();
+                    console.log("[MixDrop] Play iniciado por clique do usuário");
+                  }).catch(function() {});
+                });
+                document.body.appendChild(overlay);
+              }
+
               window.addEventListener("message", function(e) {
                 if (!e.data) return;
                 var v = art.video || document.querySelector("video");
 
                 switch (e.data.type) {
                   case "PLAY":
+                    if (_playBlocked) return; // Já tentou e falhou — não tenta de novo
                     if (art) {
                       art.play().catch(function() {
-                        console.log("[MixDrop] Play manual bloqueado, tentando mudo...");
-                        art.muted = true;
-                        art.play().then(function() {
-                          window.parent.postMessage({ type: "WATCHPLAY_STATUS", muted: true, paused: false, readyState: 4 }, "*");
-                          sendStatus();
-                        }).catch(function() {
-                          console.log("[MixDrop] Play mudo tambem bloqueado — precisa de clique dentro do proprio video.");
-                        });
+                        _playBlocked = true;
+                        console.log("[MixDrop] Autoplay bloqueado — mostrando botao de clique");
+                        // Mostra overlay de play (clique direto no vídeo = gesto do usuário = permitido)
+                        showPlayOverlay();
+                        // Reporta UMA vez que está pausado (não repete)
+                        window.parent.postMessage({ type: "WATCHPLAY_STATUS", paused: true, readyState: 4 }, "*");
                       });
                     } else if (v) {
-                      v.play().catch(function() {
-                        v.muted = true;
-                        v.play().catch(function() {});
-                      });
+                      v.play().catch(function() { _playBlocked = true; showPlayOverlay(); });
                     }
-                    sendStatus();
+                    // NÃO chama sendStatus() aqui se play falhou — isso causa loop
                     break;
                   case "PAUSE":
                     if (art) art.pause();
@@ -5526,23 +5547,18 @@ app.use(encontreiLookupRouter);
                     sendStatus();
                     break;
                   case "TOGGLE_PLAY":
+                    if (_playBlocked) { showPlayOverlay(); return; }
                     if (art) {
                       if (art.playing) {
                         art.pause();
                         sendStatus();
                       } else {
                         art.play().catch(function() {
-                          art.muted = true;
-                          art.play().then(sendStatus).catch(function() {});
+                          _playBlocked = true;
+                          showPlayOverlay();
                         });
+                        sendStatus();
                       }
-                    } else if (v) {
-                      if (v.paused) {
-                        v.play().catch(function() { v.muted = true; v.play().catch(function() {}); });
-                      } else {
-                        v.pause();
-                      }
-                      sendStatus();
                     }
                     break;
                   case "SEEK":
