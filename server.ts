@@ -5474,6 +5474,18 @@ app.use(encontreiLookupRouter);
                   v.setAttribute("referrerpolicy", "no-referrer");
                   v.setAttribute("playsinline", "true");
                 }
+                // Autoplay com fallback: tenta com som, se navegador bloquear, tenta mudo
+                art.play().catch(function() {
+                  console.log("[MixDrop] Autoplay com som bloqueado pelo navegador, tentando mudo...");
+                  art.muted = true;
+                  art.play().then(function() {
+                    console.log("[MixDrop] Autoplay mudo funcionando — aguardando clique do usuário pra ativar som");
+                    // Avisa o parent que precisa de interação do usuário pra ativar som
+                    window.parent.postMessage({ type: "WATCHPLAY_STATUS", muted: true, paused: false, readyState: 4 }, "*");
+                  }).catch(function() {
+                    console.log("[MixDrop] Autoplay bloqueado mesmo mudo — esperando interação do usuário");
+                  });
+                });
               });
 
               art.on("play", sendStatus);
