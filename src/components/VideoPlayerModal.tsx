@@ -254,15 +254,6 @@ export function VideoPlayerModal({
   // Marca o timestamp da última troca de mídia/episódio para descartar mensagens residuais
   const transitionEpochRef = useRef<number>(0);
 
-  // True a partir do PRIMEIRO clique manual do usuário em um episódio/temporada.
-  // Bloqueia o auto-reset de episódio que pulava o EP escolhido.
-  const userSelectedEpisodeRef = useRef<boolean>(false);
-
-  // Nova mídia (aperto em outro card) → reseta o flag para permitir correção do EP inicial
-  useEffect(() => {
-    userSelectedEpisodeRef.current = false;
-  }, [tmdbId, mediaType]);
-
   // Configuração do Salto de Abertura Manual (Tecla S ou Botão)
   const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
     try {
@@ -579,21 +570,6 @@ export function VideoPlayerModal({
     }
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
   }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
-
-  // Se o episódio atual não existir na lista de disponíveis, auto-ajusta para o último disponível.
-  // Isso SÓ faz sentido para a ABERTURA (ex: "Continuar Assistindo" caiu num EP que saiu do ar).
-  // NUNCA para seleção manual: o usuário clicou num EP e o app trocava sozinho (sintoma relatado).
-  // O flag userSelectedEpisodeRef marca qualquer clique manual e bloqueia o reset.
-  useEffect(() => {
-    if (userSelectedEpisodeRef.current) return;
-    if (selectedServerKey !== "srv_watchplay") return;
-    if (isSeries && episodeNumbers.length > 0 && !episodeNumbers.includes(episode)) {
-      const fallbackEp = episodeNumbers[episodeNumbers.length - 1];
-      if (fallbackEp && fallbackEp !== episode) {
-        setEpisode(fallbackEp);
-      }
-    }
-  }, [episodeNumbers, isSeries, episode, selectedServerKey, mixdropFileId]);
 
   // Auto-scroll do botão do episódio ativo
   useEffect(() => {
@@ -1131,8 +1107,6 @@ export function VideoPlayerModal({
   // Handler to switch episode
   const handleEpisodeChange = async (newEpisode: number) => {
     if (newEpisode < 1) return;
-    // Seleção manual do usuário: desativa o auto-reset (não trocar o EP que ele escolheu)
-    userSelectedEpisodeRef.current = true;
     // Marca o episódio atual como assistido ao avançar
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
@@ -1167,8 +1141,6 @@ export function VideoPlayerModal({
 
   // Handler to switch season
   const handleSeasonChange = async (newSeason: number) => {
-    // Seleção manual do usuário: desativa o auto-reset
-    userSelectedEpisodeRef.current = true;
     // Marca o episódio atual como assistido ao mudar de temporada
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
