@@ -1788,8 +1788,9 @@ app.use(encontreiLookupRouter);
                       }
                       break;
                     case "SET_MUTED":
-                      if (art) art.muted = !e.data.muted;
-                      else if (v) v.muted = !e.data.muted;
+                    case "setMuted":
+                      if (art) art.muted = !!e.data.muted;
+                      else if (v) v.muted = !!e.data.muted;
                       sendStatus();
                       break;
                     case "REQUEST_STATUS":
@@ -2967,7 +2968,9 @@ app.use(encontreiLookupRouter);
                 if (v.paused && (v.readyState >= 1 || v.currentTime > 0)) {
                   v.play().catch(function() {
                     v.muted = true;
-                    v.play().catch(function() {});
+                    v.play().then(function() {
+                      try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+                    }).catch(function() {});
                   });
                 }
                 // Se já possui duração válida ou está reproduzindo, envia status e estabiliza
@@ -3095,7 +3098,9 @@ app.use(encontreiLookupRouter);
               if (v) {
                 v.play().catch(function() {
                   v.muted = true;
-                  v.play().catch(function() {});
+                  v.play().then(function() {
+                    try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+                  }).catch(function() {});
                 });
                 sendPlayerStatus(v);
               }
@@ -5484,6 +5489,7 @@ app.use(encontreiLookupRouter);
                     console.log("[MixDrop] Autoplay mudo funcionando — aguardando clique do usuário pra ativar som");
                     // Avisa o parent que precisa de interação do usuário pra ativar som
                     window.parent.postMessage({ type: "WATCHPLAY_STATUS", muted: true, paused: false, readyState: 4 }, "*");
+                    window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*");
                   }).catch(function() {
                     console.log("[MixDrop] Autoplay bloqueado mesmo mudo — esperando interação do usuário");
                   });
@@ -5587,8 +5593,9 @@ app.use(encontreiLookupRouter);
                     }
                     break;
                   case "SET_MUTED":
-                    if (art) art.muted = !e.data.muted;
-                    else if (v) v.muted = !e.data.muted;
+                  case "setMuted":
+                    if (art) art.muted = !!e.data.muted;
+                    else if (v) v.muted = !!e.data.muted;
                     sendStatus();
                     break;
                   case "SET_PLAYBACK_RATE":

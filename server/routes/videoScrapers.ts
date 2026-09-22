@@ -301,8 +301,9 @@ const router = Router();
                       }
                       break;
                     case "SET_MUTED":
-                      if (art) art.muted = !e.data.muted;
-                      else if (v) v.muted = !e.data.muted;
+                    case "setMuted":
+                      if (art) art.muted = !!e.data.muted;
+                      else if (v) v.muted = !!e.data.muted;
                       sendStatus();
                       break;
                     case "REQUEST_STATUS":
