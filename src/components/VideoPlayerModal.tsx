@@ -18,6 +18,7 @@ import {
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
+import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes } from "../services/episodeAvailability";
 
 interface VideoPlayerModalProps {
@@ -160,6 +161,46 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
+  const [mixdropFileId, setMixdropFileId] = useState<string | null>(null);
+  const [mixdropIsHD, setMixdropIsHD] = useState<boolean>(false);
+
+  // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
+  // Prioriza Dublado. Se não achar, mixdropFileId fica null e usa fallback (pode ser cam).
+  useEffect(() => {
+    if (!isOpen || !tmdbId) return;
+    setMixdropFileId(null);
+    setMixdropIsHD(false);
+
+    const lookupMixdrop = async () => {
+      try {
+        if (isSeries) {
+          // Busca fileId do episódio específico no catálogo
+          const ep = await findEpisode(tmdbId, season, episode);
+          if (ep?.servers?.mixdrop) {
+            setMixdropFileId(ep.servers.mixdrop);
+            setMixdropIsHD(true);
+            console.log(`[MixDrop] fileId HD encontrado: ${ep.servers.mixdrop} (S${season}E${episode})`);
+          } else {
+            console.log(`[MixDrop] Nenhum fileId no catálogo para S${season}E${episode} — usando fallback`);
+          }
+        } else {
+          // Busca fileId do filme no catálogo
+          const movie = await findMovieByTmdbId(tmdbId);
+          if (movie?.servers?.mixdrop) {
+            setMixdropFileId(movie.servers.mixdrop);
+            setMixdropIsHD(true);
+            console.log(`[MixDrop] fileId HD encontrado: ${movie.servers.mixdrop} (filme tmdb_id=${tmdbId})`);
+          } else {
+            console.log(`[MixDrop] Nenhum fileId no catálogo para filme tmdb_id=${tmdbId} — usando fallback`);
+          }
+        }
+      } catch (e) {
+        console.warn('[MixDrop] Erro ao buscar no catálogo encontrei.me:', e);
+      }
+    };
+
+    lookupMixdrop();
+  }, [isOpen, tmdbId, isSeries, season, episode]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
@@ -544,9 +585,18 @@ export function VideoPlayerModal({
           key: "srv_mixdrop",
           label: "MixDrop HD (Dublado)",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
-          buildUrl: (id: string, s: number, e: number) => (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop")))
-            ? defaultUrl
-            : `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/` + (imdbId || id))}`,
+          buildUrl: (id: string, s: number, e: number) => {
+            // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
+            if (mixdropFileId) {
+              return buildMixdropStreamUrl(mixdropFileId) || `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+            }
+            // Prioridade 2: defaultUrl se já é uma URL do MixDrop
+            if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
+              return defaultUrl;
+            }
+            // Prioridade 3: fallback (pode ser versão cam)
+            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+          },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop HD (Dublado)"
         }
@@ -574,15 +624,24 @@ export function VideoPlayerModal({
           key: "srv_mixdrop",
           label: "MixDrop HD (Dublado)",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
-          buildUrl: () => (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop")))
-            ? defaultUrl
-            : "https://mxdrop.top/f/36nggdmqspmlg4",
+          buildUrl: () => {
+            // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
+            if (mixdropFileId) {
+              return buildMixdropStreamUrl(mixdropFileId) || "https://mxdrop.top/f/36nggdmqspmlg4";
+            }
+            // Prioridade 2: defaultUrl se já é uma URL do MixDrop
+            if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
+              return defaultUrl;
+            }
+            // Prioridade 3: fallback (pode ser versão cam)
+            return "https://mxdrop.top/f/36nggdmqspmlg4";
+          },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop HD (Dublado)"
         }
       ];
     }
-  }, [isSeries, imdbId, defaultUrl]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId]);
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback((serverKey: string) => {
