@@ -166,14 +166,16 @@ export function VideoPlayerModal({
 
   // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
   // Prioriza Dublado. Se não achar, mixdropFileId fica null e usa fallback (pode ser cam).
+  // USA mediaType (prop, sempre disponível) em vez de isSeries (useMemo definido mais abaixo)
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
     setMixdropFileId(null);
     setMixdropIsHD(false);
 
+    const seriesMode = mediaType === 'series';
     const lookupMixdrop = async () => {
       try {
-        if (isSeries) {
+        if (seriesMode) {
           // Busca fileId do episódio específico no catálogo
           const ep = await findEpisode(tmdbId, season, episode);
           if (ep?.servers?.mixdrop) {
@@ -200,7 +202,7 @@ export function VideoPlayerModal({
     };
 
     lookupMixdrop();
-  }, [isOpen, tmdbId, isSeries, season, episode]);
+  }, [isOpen, tmdbId, mediaType, season, episode]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
