@@ -543,15 +543,19 @@ export function VideoPlayerModal({
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
   }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
 
-  // Se o episódio atual selecionado não existir na lista de disponíveis, auto-ajusta para o último disponível
+  // Se o episódio atual não existir na lista de disponíveis, auto-ajusta para o último disponível
+  // EXCEÇÃO: quando MixDrop está selecionado, permite qualquer episódio (catálogo encontrei.me
+  // tem mais episódios que o TMDB lista — ex: Demon Slayer S1 tem 8 eps no encontrei.me mas só 7 no TMDB)
   useEffect(() => {
     if (isSeries && episodeNumbers.length > 0 && !episodeNumbers.includes(episode)) {
+      // Se MixDrop está selecionado e tem fileId, não reseta — deixa o usuário assistir
+      if (selectedServerKey === "srv_mixdrop" && mixdropFileId) return;
       const fallbackEp = episodeNumbers[episodeNumbers.length - 1];
-      if (fallbackEp) {
+      if (fallbackEp && fallbackEp !== episode) {
         setEpisode(fallbackEp);
       }
     }
-  }, [episodeNumbers, isSeries, episode]);
+  }, [episodeNumbers, isSeries, episode, selectedServerKey, mixdropFileId]);
 
   // Auto-scroll do botão do episódio ativo
   useEffect(() => {
