@@ -129,6 +129,20 @@ function getStore(): Record<string, PlaybackHistoryItem> {
 // Timer para evitar spam de writes no Firestore (Debounce de 10s)
 let syncTimeout: any = null;
 
+/** Remove campos undefined/null recursivamente — Firestore rejeita undefined */
+function sanitizeForFirestore(obj: Record<string, any>): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    if (typeof v === 'object' && !Array.isArray(v)) {
+      out[k] = sanitizeForFirestore(v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
   if (syncTimeout) clearTimeout(syncTimeout);
   
@@ -140,7 +154,7 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
       const userRef = doc(db, "usuarios", user.uid);
       // Usamos updateDoc para sobrescrever completamente o campo historicoReproducao
       // sem afetar o resto do documento (setDoc com merge=true não deleta chaves removidas localmente).
-      await updateDoc(userRef, { historicoReproducao: store });
+      await updateDoc(userRef, { historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>) });
     } catch (e: any) {
       if (e.code === 'not-found') {
         // Se o documento não existir, criamos
