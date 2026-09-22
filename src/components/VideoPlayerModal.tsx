@@ -178,8 +178,8 @@ export function VideoPlayerModal({
         if (seriesMode) {
           // Busca fileId do episódio específico no catálogo
           const ep = await findEpisode(tmdbId, season, episode);
-          if (ep?.servers?.mixdrop) {
-            setMixdropFileId(ep.servers.mixdrop);
+          if (ep?.mixdrop) {
+            setMixdropFileId(ep.mixdrop);
             setMixdropIsHD(true);
             console.log(`[MixDrop] fileId HD encontrado: ${ep.servers.mixdrop} (S${season}E${episode})`);
           } else {
@@ -188,8 +188,8 @@ export function VideoPlayerModal({
         } else {
           // Busca fileId do filme no catálogo
           const movie = await findMovieByTmdbId(tmdbId);
-          if (movie?.servers?.mixdrop) {
-            setMixdropFileId(movie.servers.mixdrop);
+          if (movie?.mixdrop) {
+            setMixdropFileId(movie.mixdrop);
             setMixdropIsHD(true);
             console.log(`[MixDrop] fileId HD encontrado: ${movie.servers.mixdrop} (filme tmdb_id=${tmdbId})`);
           } else {

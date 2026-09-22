@@ -1,179 +1,110 @@
 /**
- * Catálogo do encontrei.me — 6.694 filmes + 27.629 episódios
- * Extraído via scraper com cookie Dante15 (válido até 21/Dez/2026)
+ * Catálogo do encontrei.me — lookup via backend (rápido, ~50ms)
  * 
- * Cada item tem: tmdb_id (pra sync TMDB) + mixdrop fileId (pra /api/mixdrop-stream)
- * 
- * O JSON é carregado lazy (só quando o usuário entra na seção de filmes).
- * Cacheado em memória pra não re-fetch.
+ * Em vez de baixar 11MB de JSON, faz 1 request pro endpoint:
+ *   GET /api/encontrei-lookup?tmdb_id=299534&type=movie
+ * Retorna: { mixdrop: "dk389z0xh7mezzz", audio: "Dublado" }
  */
 
-export interface EncontreiMovie {
-  video_id: number;
-  tmdb_id: number | null;
-  audio: 'Dublado' | 'Legendado' | null;
-  server_name: 'MixDrop';
-  servers: {
-    mixdrop?: string;
-    streamtape?: string;
-    byse?: string;
-    doodstream?: string;
-  };
+export interface EncontreiResult {
+  mixdrop: string | null;
+  streamtape: string | null;
+  byse: string | null;
+  doodstream: string | null;
+  audio: string;
+  server_name: string;
+  season?: number;
+  episode?: number;
 }
 
-export interface EncontreiEpisode {
-  episode_id: number;
-  serie_id: number;
-  season: number;
-  episode: number;
-  tmdb_id: number | null;
-  audio: 'Dublado' | 'Legendado' | null;
-  server_name: 'MixDrop';
-  servers: {
-    mixdrop?: string;
-    streamtape?: string;
-    byse?: string;
-    doodstream?: string;
-  };
-  source_url?: string;
-}
+// Cache em memória (key: "movie:tmdbId" ou "tv:tmdbId:season:episode")
+const _cache = new Map<string, EncontreiResult | null>();
 
-export interface EncontreiSerie {
-  serie_id: number;
-  slug: string;
-  source_url: string;
-}
-
-interface EncontreiCatalog {
-  metadata: {
-    scraped_at: string;
-    source: string;
-    stats: {
-      movies_total: number;
-      movies_with_tmdb: number;
-      movies_with_mixdrop: number;
-      episodes_total: number;
-      episodes_with_tmdb: number;
-      episodes_with_mixdrop: number;
-      series_total: number;
+/**
+ * Busca um filme por tmdb_id (rápido, ~50ms via backend).
+ */
+export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult | null> {
+  const cacheKey = `movie:${tmdbId}`;
+  if (_cache.has(cacheKey)) return _cache.get(cacheKey) || null;
+  
+  try {
+    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie`);
+    if (!res.ok) {
+      _cache.set(cacheKey, null);
+      return null;
+    }
+    const data = await res.json();
+    const result: EncontreiResult = {
+      mixdrop: data.mixdrop || null,
+      streamtape: data.streamtape || null,
+      byse: data.byse || null,
+      doodstream: data.doodstream || null,
+      audio: data.audio || 'Dublado',
+      server_name: 'MixDrop',
     };
-  };
-  movies: EncontreiMovie[];
-  series: EncontreiSerie[];
-  episodes: EncontreiEpisode[];
-}
-
-// Cache em memória
-let _catalog: EncontreiCatalog | null = null;
-let _loadingPromise: Promise<EncontreiCatalog> | null = null;
-
-/**
- * Carrega o catálogo lazy (só na primeira chamada).
- * O JSON está em /public/data/encontrei-catalog.json (~13MB, gzipped ~3MB).
- */
-export async function loadCatalog(): Promise<EncontreiCatalog> {
-  if (_catalog) return _catalog;
-  if (_loadingPromise) return _loadingPromise;
-  
-  _loadingPromise = fetch('/data/encontrei-catalog.json')
-    .then(r => r.json())
-    .then((data: EncontreiCatalog) => {
-      _catalog = data;
-      return data;
-    })
-    .catch(err => {
-      console.error('[encontreiCatalog] Erro ao carregar:', err);
-      _loadingPromise = null;
-      throw err;
-    });
-  
-  return _loadingPromise;
+    _cache.set(cacheKey, result);
+    return result;
+  } catch {
+    _cache.set(cacheKey, null);
+    return null;
+  }
 }
 
 /**
- * Busca um filme por tmdb_id.
- * Retorna o fileId do MixDrop + áudio.
- */
-export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiMovie | null> {
-  const cat = await loadCatalog();
-  const movie = cat.movies.find(m => m.tmdb_id === tmdbId);
-  if (!movie) return null;
-  return { ...movie, server_name: 'MixDrop' };
-}
-
-/**
- * Busca TODOS os episódios de uma série (por tmdb_id da série).
- * Retorna array de episódios com season/episode/fileId.
- */
-export async function findEpisodesBySeriesTmdbId(tmdbId: number): Promise<EncontreiEpisode[]> {
-  const cat = await loadCatalog();
-  return cat.episodes
-    .filter(e => e.tmdb_id === tmdbId)
-    .map(e => ({ ...e, server_name: 'MixDrop' as const }));
-}
-
-/**
- * Busca um episódio específico por tmdb_id da série + season + episode.
+ * Busca um episódio por tmdb_id + season + episode (rápido, ~50ms).
  */
 export async function findEpisode(
   tmdbId: number,
   season: number,
   episode: number
-): Promise<EncontreiEpisode | null> {
-  const cat = await loadCatalog();
-  const ep = cat.episodes.find(
-    e => e.tmdb_id === tmdbId && e.season === season && e.episode === episode
-  );
-  if (!ep) return null;
-  return { ...ep, server_name: 'MixDrop' };
+): Promise<EncontreiResult | null> {
+  const cacheKey = `tv:${tmdbId}:${season}:${episode}`;
+  if (_cache.has(cacheKey)) return _cache.get(cacheKey) || null;
+  
+  try {
+    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}`);
+    if (!res.ok) {
+      _cache.set(cacheKey, null);
+      return null;
+    }
+    const data = await res.json();
+    const result: EncontreiResult = {
+      mixdrop: data.mixdrop || null,
+      streamtape: data.streamtape || null,
+      byse: data.byse || null,
+      doodstream: data.doodstream || null,
+      audio: data.audio || 'Dublado',
+      server_name: 'MixDrop',
+      season: data.season,
+      episode: data.episode,
+    };
+    _cache.set(cacheKey, result);
+    return result;
+  } catch {
+    _cache.set(cacheKey, null);
+    return null;
+  }
 }
 
 /**
  * Constrói a URL do /api/mixdrop-stream pra um fileId.
- * O app passa essa URL pro iframe do VideoPlayerModal.
  */
 export function buildMixdropStreamUrl(fileId: string | undefined): string | null {
   if (!fileId) return null;
   return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${fileId}`)}`;
 }
 
-/**
- * Lista todos os filmes (pra popular a home/catalog).
- * Retorna array compacto com só o necessário pra display.
- */
-export async function getAllMovies(): Promise<Array<{
-  tmdb_id: number;
-  mixdrop_url: string;
+// Manter compatibilidade com interface antiga
+export interface EncontreiMovie {
+  servers: { mixdrop?: string };
   audio: string;
   server_name: string;
-}>> {
-  const cat = await loadCatalog();
-  return cat.movies
-    .filter(m => m.tmdb_id && m.servers.mixdrop)
-    .map(m => ({
-      tmdb_id: m.tmdb_id!,
-      mixdrop_url: buildMixdropStreamUrl(m.servers.mixdrop)!,
-      audio: m.audio || 'Dublado',
-      server_name: 'MixDrop',
-    }));
 }
 
-/**
- * Lista todas as séries únicas (por tmdb_id).
- */
-export async function getAllSeries(): Promise<Array<{
-  tmdb_id: number;
-  episodes_count: number;
-}>> {
-  const cat = await loadCatalog();
-  const seriesMap = new Map<number, number>();
-  for (const ep of cat.episodes) {
-    if (ep.tmdb_id) {
-      seriesMap.set(ep.tmdb_id, (seriesMap.get(ep.tmdb_id) || 0) + 1);
-    }
-  }
-  return Array.from(seriesMap.entries()).map(([tmdb_id, count]) => ({
-    tmdb_id,
-    episodes_count: count,
-  }));
+export interface EncontreiEpisode {
+  season: number;
+  episode: number;
+  servers: { mixdrop?: string };
+  audio: string;
+  server_name: string;
 }
