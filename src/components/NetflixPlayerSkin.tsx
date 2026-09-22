@@ -193,7 +193,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "pt-BR" : activeServerKey === "srv_pomfy" ? "pomfy" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   // Rastreamento se a abertura já foi pulada neste episódio
@@ -1882,39 +1882,39 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 </h4>
                 <div className="space-y-1.5">
                   <button
-                    onClick={() => onServerChange?.("srv_vip")}
+                    onClick={() => onServerChange?.("srv_watchplay")}
                     className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "pt-BR"
+                      selectedAudio === "watchplay"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Português [Dublado BR]</span>
-                    {selectedAudio === "pt-BR" && <Check className="w-4 h-4 text-black" />}
+                    <span>WatchPlayer</span>
+                    {selectedAudio === "watchplay" && <Check className="w-4 h-4 text-black" />}
                   </button>
 
                   <button
-                    onClick={() => onServerChange?.("srv_watchplay")}
+                    onClick={() => onServerChange?.("srv_mixdrop")}
                     className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "en-US"
+                      selectedAudio === "mixdrop"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Inglês [WatchPlayer]</span>
-                    {selectedAudio === "en-US" && <Check className="w-4 h-4 text-black" />}
+                    <span>MixDrop</span>
+                    {selectedAudio === "mixdrop" && <Check className="w-4 h-4 text-black" />}
                   </button>
-                  
+
                   <button
-                    onClick={() => onServerChange?.("srv_pomfy")}
+                    onClick={() => onServerChange?.("srv_vip")}
                     className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "pomfy"
+                      selectedAudio === "vip"
                         ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Alternativo [Pomfy]</span>
-                    {selectedAudio === "pomfy" && <Check className="w-4 h-4 text-black" />}
+                    <span>VIP Player</span>
+                    {selectedAudio === "vip" && <Check className="w-4 h-4 text-black" />}
                   </button>
                 </div>
               </div>

@@ -3099,73 +3099,9 @@ const router = Router();
   });
 
 // API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // Pomfy Stream Proxy Bypass (Vai direto para o Servidor 1)
-  router.get("/api/pomfy-stream", async (req, res) => {
-    try {
-      const { id, type, s, e } = req.query;
-      if (!id) {
-        return res.status(400).send("Faltando parâmetro 'id'.");
-      }
-      
-      const baseUrl = type === "tv" 
-        ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` 
-        : `https://api.pomfy.stream/filme/${id}`;
-        
-      // 1. Busca HTML do Pomfy para pegar o statusToken
-      const response = await fetch(baseUrl, {
-        headers: {
-          "Sec-Fetch-Dest": "iframe",
-          "Sec-Fetch-Mode": "navigate",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-      });
-      
-      if (!response.ok) {
-        return res.redirect(302, baseUrl); // Fallback
-      }
-      
-      const html = await response.text();
-      
-      // 2. Extrai o token com Regex (statusToken="...")
-      const tokenMatch = html.match(/statusToken="([^"]+)"/);
-      
-      if (tokenMatch && tokenMatch[1]) {
-        const token = tokenMatch[1];
-        
-        // 3. Resolve o URL direto via API play-token
-        const tokenUrl = `https://api.pomfy.stream/api/play-token?t=${token}`;
-        const tokenResp = await fetch(tokenUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "Referer": baseUrl
-          }
-        });
-        
-        if (tokenResp.ok) {
-          const json = await tokenResp.json();
-          // O JSON esperado tem byseUrl (Servidor 1)
-          const finalUrl = json.byseUrl || json.url || json.flyfileUrl;
-          if (finalUrl) {
-            return res.redirect(302, finalUrl);
-          }
-        }
-      }
-      
-      // Fallback
-      return res.redirect(302, baseUrl);
-    } catch (err: any) {
-      console.error("[Pomfy Proxy Error]:", err);
-      // Absolute fallback
-      const { id, type, s, e } = req.query;
-      const baseUrl = type === "tv" 
-        ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` 
-        : `https://api.pomfy.stream/filme/${id}`;
-      return res.redirect(302, baseUrl);
-    }
+  router.get("/api/pomfy-stream", (_req, res) => {
+    return res.status(410).json({ error: "Pomfy Stream foi descontinuado. Use MixDrop." });
   });
-
-// API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // Pomfy Stream Proxy Bypass (Vai direto para o Servidor 1)
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
   // Vite middleware for development
   
@@ -3177,7 +3113,6 @@ const router = Router();
   });
 
 // API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // Pomfy Stream Proxy Bypass (Vai direto para o Servidor 1)
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
   // Vite middleware for development
   

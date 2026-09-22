@@ -13,7 +13,6 @@ import { getFirestore, doc, setDoc } from "firebase/firestore";
 const router = Router();
 
 // API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // Pomfy Stream Proxy Bypass (Vai direto para o Servidor 1)
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
   router.get("/api/tmdb/*", async (req, res) => {
     try {
