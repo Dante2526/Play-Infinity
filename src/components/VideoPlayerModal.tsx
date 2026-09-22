@@ -165,13 +165,12 @@ export function VideoPlayerModal({
   const [mixdropIsHD, setMixdropIsHD] = useState<boolean>(false);
 
   // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
-  // PADRÃO "LATEST WINS": se o estado oscilar (S1E5→S1E4→S1E5), só o
-  // lookup MAIS RECENTE aplica resultado. Lookups antigos são descartados.
-  const latestLookupRef = useRef<string>("");
+  // PADRÃO CLEANUP: quando o estado muda (oscila), React chama o cleanup
+  // do effect anterior que seta cancelled=true → async descarta resultado.
+  // Garante que só o ÚLTIMO lookup aplica, mesmo com cache instantâneo.
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
-    const lookupKey = `${tmdbId}:${season}:${episode}`;
-    latestLookupRef.current = lookupKey; // Marca como o mais recente
+    let cancelled = false; // Closure — cleanup muda pra true
 
     const seriesMode = mediaType === 'series';
     const currentSeason = season;
@@ -187,25 +186,24 @@ export function VideoPlayerModal({
           const movie = await findMovieByTmdbId(tmdbId);
           if (movie?.mixdrop) result = movie.mixdrop;
         }
-        // SÓ aplica se este ainda for o lookup mais recente
-        if (latestLookupRef.current !== lookupKey) {
-          console.log(`[MixDrop] Lookup descartado (S${currentSeason}E${currentEpisode}) — pedido mais novo existe`);
-          return;
-        }
+        // Se o estado mudou enquanto esperávamos, descarta
+        if (cancelled) return;
         if (result) {
           setMixdropFileId(result);
           setMixdropIsHD(true);
           console.log(`[MixDrop] fileId HD: ${result} (S${currentSeason}E${currentEpisode})`);
         } else {
           setMixdropFileId(null);
-          console.log(`[MixDrop] Sem fileId no catálogo (S${currentSeason}E${currentEpisode})`);
+          console.log(`[MixDrop] Sem fileId (S${currentSeason}E${currentEpisode})`);
         }
       } catch (e) {
-        console.warn('[MixDrop] Erro:', e);
+        if (!cancelled) console.warn('[MixDrop] Erro:', e);
       }
     };
 
     lookupMixdrop();
+    // CLEANUP: React chama quando deps mudam → cancela este lookup
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tmdbId, mediaType, season, episode]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
