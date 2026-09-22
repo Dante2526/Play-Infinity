@@ -12,7 +12,7 @@ export interface ClientUser {
   name?: string;
   email: string;
   subscription: string;
-  accessType?: "mensal" | "teste" | "vitalicio" | "4horas" | "1dia";
+  accessType?: "mensal" | "teste" | "vitalicio" | "4horas" | "1dia" | "30min" | "7dias";
   monthlyFee?: string;
   expirationDate?: string;
   initialPassword?: string;
@@ -79,7 +79,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
-  const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia">("mensal");
+  const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia" | "30min" | "7dias">("mensal");
   const [monthlyPrice, setMonthlyPrice] = useState<"9.90" | "13.00">("13.00");
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
@@ -364,6 +364,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
         expirationDate = new Date();
         expirationDate.setHours(expirationDate.getHours() + 1);
         expireStr = "Em 1 hora (" + expirationDate.toLocaleTimeString('pt-BR') + ")";
+      } else if (accessType === "30min") {
+        expirationDate = new Date(Date.now() + 30 * 60 * 1000);
+        expireStr = "Em 30 minutos (" + expirationDate.toLocaleTimeString('pt-BR') + ")";
       } else if (accessType === "4horas") {
         expirationDate = new Date();
         expirationDate.setHours(expirationDate.getHours() + 4);
@@ -372,6 +375,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
         expirationDate = new Date();
         expirationDate.setHours(expirationDate.getHours() + 24);
         expireStr = "Em 1 dia (" + (expirationDate.toLocaleDateString('pt-BR') + " às " + expirationDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })) + ")";
+      } else if (accessType === "7dias") {
+        expirationDate = new Date();
+        expirationDate.setHours(expirationDate.getHours() + 168);
+        expireStr = "Em 7 dias (" + expirationDate.toLocaleDateString('pt-BR') + " às " + expirationDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ")";
       } else if (accessType === "vitalicio") {
         expirationDate = new Date();
         expirationDate.setFullYear(2099);
@@ -506,7 +513,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const applyQuickEditDuration = (
     hours: number | "vitalicio",
-    type: "teste" | "4horas" | "1dia" | "mensal" | "vitalicio"
+    type: "teste" | "4horas" | "1dia" | "mensal" | "vitalicio" | "30min" | "7dias"
   ) => {
     setEditAccessType(type);
     if (type === "vitalicio" || hours === "vitalicio") {
@@ -531,7 +538,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const applyFromNow = (
     hours: number,
-    type: "teste" | "4horas" | "1dia" | "mensal"
+    type: "teste" | "4horas" | "1dia" | "mensal" | "30min" | "7dias"
   ) => {
     setEditAccessType(type);
     const target = new Date(Date.now() + hours * 60 * 60 * 1000);
@@ -541,7 +548,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const handleQuickExtend = async (
     client: ClientUser, 
     hoursToAdd: number, 
-    newType: "teste" | "4horas" | "1dia" | "mensal"
+    newType: "teste" | "4horas" | "1dia" | "mensal" | "30min" | "7dias"
   ) => {
     setQuickExtendLoadingId(client.id);
     try {
@@ -570,7 +577,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         await updateDoc(doc(db, "users", client.id), updates);
       } catch(e) {}
 
-      const durationLabel = hoursToAdd === 1 ? "1 hora" : hoursToAdd === 4 ? "4 horas" : hoursToAdd === 24 ? "1 dia" : `${hoursToAdd} horas`;
+      const durationLabel = hoursToAdd === 0.5 ? "30 minutos" : hoursToAdd === 1 ? "1 hora" : hoursToAdd === 4 ? "4 horas" : hoursToAdd === 24 ? "1 dia" : hoursToAdd === 168 ? "7 dias" : `${hoursToAdd} horas`;
       setActionSuccessToast(`Acesso de "${client.name || client.email}" renovado com sucesso por mais ${durationLabel}!`);
       setTimeout(() => setActionSuccessToast(null), 4000);
 
@@ -915,7 +922,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     if (d.getFullYear() >= 2099) {
                       expireLabel = "Vitalício (Permanente)";
                     } else {
-                      expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' || client.accessType === '4horas' || client.accessType === '1dia' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
+                      expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' || client.accessType === '4horas' || client.accessType === '1dia' || client.accessType === '30min' || client.accessType === '7dias' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
                     }
                   }
 
@@ -950,15 +957,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
                               client.accessType === 'vitalicio'
                                 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                                : client.accessType === '30min'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                                 : client.accessType === 'teste'
                                 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                                 : client.accessType === '4horas'
                                 ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                                 : client.accessType === '1dia'
                                 ? 'bg-teal-500/20 text-teal-300 border border-teal-500/30'
+                                : client.accessType === '7dias'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                                 : 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                             }`}>
-                              {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === 'teste' ? 'Teste 1h' : client.accessType === '4horas' ? '4 Horas' : client.accessType === '1dia' ? '1 Dia' : 'Mensal'}
+                              {client.accessType === 'vitalicio' ? 'Vitalício' : client.accessType === '30min' ? '30 Min' : client.accessType === 'teste' ? 'Teste 1h' : client.accessType === '4horas' ? '4 Horas' : client.accessType === '1dia' ? '1 Dia' : client.accessType === '7dias' ? '7 Dias' : 'Mensal'}
                             </span>
 
                             {/* Badge Valor Mensalidade */}
@@ -1042,6 +1053,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           <button
                             type="button"
                             disabled={quickExtendLoadingId === client.id}
+                            onClick={() => handleQuickExtend(client, 0.5, "30min")}
+                            title="Dar +30 minutos de acesso (reativa imediatamente)"
+                            className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[11px] font-bold border border-emerald-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+30m"}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={quickExtendLoadingId === client.id}
                             onClick={() => handleQuickExtend(client, 1, "teste")}
                             title="Dar +1 hora de teste ao usuário (reativa imediatamente)"
                             className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
@@ -1065,6 +1085,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             className="px-2 py-1 bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 rounded-lg text-[11px] font-bold border border-teal-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
                           >
                             +1 Dia
+                          </button>
+                          <button
+                            type="button"
+                            disabled={quickExtendLoadingId === client.id}
+                            onClick={() => handleQuickExtend(client, 168, "7dias")}
+                            title="Mudar/dar 7 dias de acesso (reativa imediatamente)"
+                            className="px-2 py-1 bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-[11px] font-bold border border-cyan-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
+                          >
+                            +7 Dias
                           </button>
                         </div>
 
@@ -1152,6 +1181,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   type="button"
+                  onClick={() => setAccessType('30min')}
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                    accessType === '30min' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  30 Min
+                </button>
+                <button
+                  type="button"
                   onClick={() => setAccessType('teste')}
                   className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
                     accessType === 'teste' 
@@ -1182,6 +1222,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   }`}
                 >
                   1 Dia
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAccessType('7dias')}
+                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                    accessType === '7dias' 
+                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
+                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                  }`}
+                >
+                  7 Dias
                 </button>
                 <button
                   type="button"
@@ -1480,7 +1531,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 {/* Seleção do Tipo de Acesso / Duração */}
                 <div>
                   <span className="text-white/50 text-[11px] block mb-1.5 font-medium">Plano / Duração:</span>
-                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                  <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => applyFromNow(0.5, '30min')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === '30min'
+                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      30 Min
+                    </button>
                     <button
                       type="button"
                       onClick={() => applyFromNow(1, 'teste')}
@@ -1516,6 +1578,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => applyFromNow(168, '7dias')}
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
+                        editAccessType === '7dias'
+                          ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30'
+                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      7 Dias
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => applyFromNow(720, 'mensal')}
                       className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
                         editAccessType === 'mensal'
@@ -1528,7 +1601,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration('vitalicio', 'vitalicio')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all col-span-3 sm:col-span-1 ${
+                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
                         editAccessType === 'vitalicio'
                           ? 'bg-purple-500 text-white shadow-md shadow-purple-500/30'
                           : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
@@ -1546,6 +1619,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     Dar mais tempo (soma a partir de agora ou acrescenta):
                   </span>
                   <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration(0.5, '30min')}
+                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                    >
+                      +30 Min
+                    </button>
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(1, 'teste')}
@@ -1566,6 +1646,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       className="px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
                     >
                       +1 Dia (24h)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyQuickEditDuration(168, '7dias')}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                    >
+                      +7 Dias
                     </button>
                   </div>
                 </div>
