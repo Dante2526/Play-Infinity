@@ -12,6 +12,7 @@ export interface EncontreiMovie {
   video_id: number;
   tmdb_id: number | null;
   audio: 'Dublado' | 'Legendado' | null;
+  server_name: 'MixDrop';
   servers: {
     mixdrop?: string;
     streamtape?: string;
@@ -27,6 +28,7 @@ export interface EncontreiEpisode {
   episode: number;
   tmdb_id: number | null;
   audio: 'Dublado' | 'Legendado' | null;
+  server_name: 'MixDrop';
   servers: {
     mixdrop?: string;
     streamtape?: string;
@@ -94,7 +96,9 @@ export async function loadCatalog(): Promise<EncontreiCatalog> {
  */
 export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiMovie | null> {
   const cat = await loadCatalog();
-  return cat.movies.find(m => m.tmdb_id === tmdbId) || null;
+  const movie = cat.movies.find(m => m.tmdb_id === tmdbId);
+  if (!movie) return null;
+  return { ...movie, server_name: 'MixDrop' };
 }
 
 /**
@@ -103,7 +107,9 @@ export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiMovie 
  */
 export async function findEpisodesBySeriesTmdbId(tmdbId: number): Promise<EncontreiEpisode[]> {
   const cat = await loadCatalog();
-  return cat.episodes.filter(e => e.tmdb_id === tmdbId);
+  return cat.episodes
+    .filter(e => e.tmdb_id === tmdbId)
+    .map(e => ({ ...e, server_name: 'MixDrop' as const }));
 }
 
 /**
@@ -115,9 +121,11 @@ export async function findEpisode(
   episode: number
 ): Promise<EncontreiEpisode | null> {
   const cat = await loadCatalog();
-  return cat.episodes.find(
+  const ep = cat.episodes.find(
     e => e.tmdb_id === tmdbId && e.season === season && e.episode === episode
-  ) || null;
+  );
+  if (!ep) return null;
+  return { ...ep, server_name: 'MixDrop' };
 }
 
 /**
@@ -137,6 +145,7 @@ export async function getAllMovies(): Promise<Array<{
   tmdb_id: number;
   mixdrop_url: string;
   audio: string;
+  server_name: string;
 }>> {
   const cat = await loadCatalog();
   return cat.movies
@@ -145,6 +154,7 @@ export async function getAllMovies(): Promise<Array<{
       tmdb_id: m.tmdb_id!,
       mixdrop_url: buildMixdropStreamUrl(m.servers.mixdrop)!,
       audio: m.audio || 'Dublado',
+      server_name: 'MixDrop',
     }));
 }
 
