@@ -750,8 +750,8 @@ export function VideoPlayerModal({
       const targetType = parsed.isSeries ? "tv" : "movie";
       return `/api/myembed-stream?id=${targetId}&type=${targetType}&s=${parsed.season || season}&e=${parsed.episode || episode}&cb=${Date.now()}`;
     }
-    if (url.includes("pomfy_REMOVED.stream")) {
-      return url; // Removido - era do Pomfy
+    if (url.includes("REMOVED.stream")) {
+      return url; // Removido
     }
     if (url.includes("mxdrop.") || url.includes("mixdrop.")) {
       return `/api/mixdrop-stream?url=${encodeURIComponent(url)}`;
