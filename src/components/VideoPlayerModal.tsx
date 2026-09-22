@@ -161,51 +161,71 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
-  const [mixdropFileId, setMixdropFileId] = useState<string | null>(null);
-  const [mixdropIsHD, setMixdropIsHD] = useState<boolean>(false);
+  // === MixDrop: fileId por episódio ===
+  // Mapa (tv:{tmdbId}:{season}:{episode} | movie:{tmdbId}) → fileId.
+  // Evita reutilizar o fileId do episódio ANTERIOR na troca de EPs —
+  // causa raiz do oscilação E6/E5 no console e do EP não avançar.
+  const [mixdropFileIds, setMixdropFileIds] = useState<Record<string, string | null>>({});
+  const mixdropFileIdsRef = useRef(mixdropFileIds);
+  mixdropFileIdsRef.current = mixdropFileIds;
+  const mixdropLookupInflightRef = useRef<Set<string>>(new Set());
+  const mixdropFileId = useMemo(() => {
+    if (!tmdbId) return null;
+    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    return key in mixdropFileIds ? mixdropFileIds[key] : null;
+  }, [mixdropFileIds, tmdbId, mediaType, season, episode]);
 
-  // Busca fileId do MixDrop no catálogo encontrei.me (HD, sem marca d'água)
-  // PADRÃO CLEANUP: quando o estado muda (oscila), React chama o cleanup
-  // do effect anterior que seta cancelled=true → async descarta resultado.
-  // Garante que só o ÚLTIMO lookup aplica, mesmo com cache instantâneo.
+  // Resolve (e cacheia no mapa) o fileId do MixDrop de um episódio específico.
+  const lookupMixdropFileId = useCallback(
+    async (s: number, e: number): Promise<string | null> => {
+      if (!tmdbId) return null;
+      const seriesMode = mediaType === "series";
+      const key = seriesMode ? `tv:${tmdbId}:${s}:${e}` : `movie:${tmdbId}`;
+      if (key in mixdropFileIdsRef.current) return mixdropFileIdsRef.current[key];
+      if (mixdropLookupInflightRef.current.has(key)) return null;
+      mixdropLookupInflightRef.current.add(key);
+      try {
+        const res = seriesMode
+          ? await findEpisode(tmdbId, s, e)
+          : await findMovieByTmdbId(tmdbId);
+        const result = res?.mixdrop ?? null;
+        setMixdropFileIds(prev => ({ ...prev, [key]: result }));
+        return result;
+      } catch {
+        return null;
+      } finally {
+        mixdropLookupInflightRef.current.delete(key);
+      }
+    },
+    [tmdbId, mediaType]
+  );
+
+  // Busca o fileId do MixDrop do episódio atual no catálogo encontrei.me (HD, sem marca d'água)
   useEffect(() => {
     if (!isOpen || !tmdbId) return;
-    let cancelled = false; // Closure — cleanup muda pra true
+    let cancelled = false;
 
-    const seriesMode = mediaType === 'series';
-    const currentSeason = season;
-    const currentEpisode = episode;
+    const seriesMode = mediaType === "series";
+    const key = seriesMode ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+
+    // Se o fileId deste episódio já foi resolvido, nada a fazer (evita refetch/spam)
+    if (key in mixdropFileIdsRef.current) return;
 
     const lookupMixdrop = async () => {
-      try {
-        let result: string | null = null;
-        if (seriesMode) {
-          const ep = await findEpisode(tmdbId, currentSeason, currentEpisode);
-          if (ep?.mixdrop) result = ep.mixdrop;
-        } else {
-          const movie = await findMovieByTmdbId(tmdbId);
-          if (movie?.mixdrop) result = movie.mixdrop;
-        }
-        // Se o estado mudou enquanto esperávamos, descarta
-        if (cancelled) return;
-        if (result) {
-          setMixdropFileId(result);
-          setMixdropIsHD(true);
-          console.log(`[MixDrop] fileId HD: ${result} (S${currentSeason}E${currentEpisode})`);
-        } else {
-          setMixdropFileId(null);
-          console.log(`[MixDrop] Sem fileId (S${currentSeason}E${currentEpisode})`);
-        }
-      } catch (e) {
-        if (!cancelled) console.warn('[MixDrop] Erro:', e);
-      }
+      const result = await lookupMixdropFileId(season, episode);
+      if (cancelled) return;
+      console.log(
+        result
+          ? `[MixDrop] fileId HD: ${result} (S${season}E${episode})`
+          : `[MixDrop] Sem fileId (S${season}E${episode})`
+      );
     };
 
     lookupMixdrop();
     // CLEANUP: React chama quando deps mudam → cancela este lookup
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tmdbId, mediaType, season, episode]);
+  }, [isOpen, tmdbId, mediaType, season, episode, lookupMixdropFileId]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
@@ -403,6 +423,14 @@ export function VideoPlayerModal({
     if (parsed.id) return parsed.id;
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
+
+  // Fallback do MixDrop quando não há fileId no catálogo (versão cam)
+  const buildMixdropFallbackUrl = useCallback(() => {
+    if (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+      return defaultUrl;
+    }
+    return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || resolvedId}`)}`;
+  }, [defaultUrl, imdbId, resolvedId]);
 
   // Carregamento dinâmico de temporadas e episódios reais via TMDB
   const [seriesDetails, setSeriesDetails] = useState<TMDBDetails | null>(null);
@@ -647,6 +675,9 @@ export function VideoPlayerModal({
       ];
     }
   }, [isSeries, imdbId, defaultUrl, mixdropFileId]);
+  // Ref para leitura da lista de servidores sem forçar re-execução de effects
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
 
   // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
   // se o MixDrop já estiver selecionado, recarrega o iframe com o fileId correto.
@@ -672,10 +703,10 @@ export function VideoPlayerModal({
       setExtractedSource(newUrl);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mixdropFileId]); // SÓ mixdropFileId — outras vars causam loop
+  }, [mixdropFileId, season, episode]); // fileId + EP atual — closure sempre fresco
 
   // Handler para troca de servidor de forma transparente e silenciosa
-  const handleServerSwitch = useCallback((serverKey: string) => {
+  const handleServerSwitch = useCallback(async (serverKey: string) => {
     setSelectedServerKey(serverKey);
     const srv = servers.find(s => s.key === serverKey);
     if (!srv) return;
@@ -684,14 +715,25 @@ export function VideoPlayerModal({
     // Para o VIP Player e MixDrop, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
     setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_mixdrop");
     setError(null);
-    const newUrl = isSeries
-      ? srv.buildUrl(resolvedId, season, episode)
-      : srv.buildUrl(resolvedId);
+
+    let newUrl: string;
+    if (serverKey === "srv_mixdrop" && tmdbId) {
+      // Resolve o fileId do episódio ATUAL antes de montar a URL,
+      // para nunca tocar o embed do episódio anterior.
+      const fid = await lookupMixdropFileId(season, episode);
+      newUrl = fid
+        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+        : buildMixdropFallbackUrl();
+    } else {
+      newUrl = isSeries
+        ? srv.buildUrl(resolvedId, season, episode)
+        : srv.buildUrl(resolvedId);
+    }
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
     setIsLoading(false);
-  }, [servers, isSeries, resolvedId, season, episode]);
+  }, [servers, isSeries, resolvedId, season, episode, tmdbId, lookupMixdropFileId, buildMixdropFallbackUrl]);
 
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
@@ -809,7 +851,7 @@ export function VideoPlayerModal({
         const targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
         setSelectedServerKey(targetServerKey);
 
-        const targetSrv = servers.find(s => s.key === targetServerKey) || servers[0];
+        const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
         const targetUrl = isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))
           ? defaultUrl
           : isSeries 
@@ -826,7 +868,8 @@ export function VideoPlayerModal({
       setError(null);
       fallbackAttemptsRef.current.clear();
     }
-  }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId, servers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
   // Converte URLs do WatchPlayer e MixDrop para endpoints otimizados com autoplay instantâneo e Skin Netflix
   const resolveStreamIframeUrl = (url: string) => {
@@ -1072,7 +1115,7 @@ export function VideoPlayerModal({
   };
 
   // Handler to switch episode
-  const handleEpisodeChange = (newEpisode: number) => {
+  const handleEpisodeChange = async (newEpisode: number) => {
     if (newEpisode < 1) return;
     // Marca o episódio atual como assistido ao avançar
     if (isSeries && resolvedId) {
@@ -1088,15 +1131,26 @@ export function VideoPlayerModal({
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     fallbackAttemptsRef.current.clear();
+
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
-    const newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
+    let newUrl: string;
+    if (selectedServerKey === "srv_mixdrop" && tmdbId) {
+      // Resolve o fileId DESTE episódio antes de montar a URL —
+      // nunca reutiliza o fileId do episódio anterior (erro E4→E5→E6).
+      const fid = await lookupMixdropFileId(season, newEpisode);
+      newUrl = fid
+        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+        : buildMixdropFallbackUrl();
+    } else {
+      newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
+    }
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
 
   // Handler to switch season
-  const handleSeasonChange = (newSeason: number) => {
+  const handleSeasonChange = async (newSeason: number) => {
     // Marca o episódio atual como assistido ao mudar de temporada
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
@@ -1112,7 +1166,15 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     fallbackAttemptsRef.current.clear();
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
-    const newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
+    let newUrl: string;
+    if (selectedServerKey === "srv_mixdrop" && tmdbId) {
+      const fid = await lookupMixdropFileId(newSeason, 1);
+      newUrl = fid
+        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+        : buildMixdropFallbackUrl();
+    } else {
+      newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
+    }
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
