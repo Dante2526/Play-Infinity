@@ -127,7 +127,7 @@ router.get("/api/series-seasons-available", (req, res) => {
     }
     const seasons = _seriesSeasonsIndex.get(tmdbId);
     if (seasons && seasons.length > 0) {
-      res.setHeader("Cache-Control", "public, max-age=3600");
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       return res.json({
         success: true,
         hasCatalog: true,
@@ -135,7 +135,7 @@ router.get("/api/series-seasons-available", (req, res) => {
         seasons,
       });
     }
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.json({
       success: true,
       hasCatalog: false,
