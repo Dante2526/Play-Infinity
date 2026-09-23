@@ -6,6 +6,7 @@ import { initializeApp, deleteApp } from "firebase/app";
 import { auth, db, firebaseConfig } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
+import { TurnstileWidget } from "../components/TurnstileWidget";
 
 export interface ClientUser {
   id: string;
@@ -115,8 +116,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    setLoading(true);
 
     try {
       const q = query(
@@ -756,10 +757,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
               placeholder="Senha"
               required
             />
+
+            <TurnstileWidget
+              onVerify={() => {}}
+            />
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 rounded-[22px] transition-all mt-4 disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 rounded-[22px] transition-all mt-3 disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
             >
               {loading ? "Verificando..." : "Entrar no Painel"}
             </button>
