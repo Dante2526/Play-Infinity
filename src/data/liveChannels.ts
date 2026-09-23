@@ -40,7 +40,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       ,{
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiereclubes.html',
-        isEmbed: true
+        isEmbed: true,
         isProxy: false
       }
     ]
@@ -68,7 +68,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       ,{
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiere2.html',
-        isEmbed: true
+        isEmbed: true,
         isProxy: false
       }
     ]
@@ -101,7 +101,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       ,{
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiere3.html',
-        isEmbed: true
+        isEmbed: true,
         isProxy: false
       }
     ]
@@ -129,7 +129,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       ,{
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiere4.html',
-        isEmbed: true
+        isEmbed: true,
         isProxy: false
       }
     ]
