@@ -19,6 +19,7 @@ import {
 import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
+import { findStartflixEpisode, isStartflixAvailable } from "../services/startflixCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 
 interface VideoPlayerModalProps {
@@ -229,6 +230,39 @@ export function VideoPlayerModal({
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
+
+  // === Startflix (Ghosts e futuras séries) ===
+  // Resolve o embed_url (URL de iframe do player UPNS, sem X-Frame-Options) por episódio.
+  const [startflixEmbedUrl, setStartflixEmbedUrl] = useState<string | null>(null);
+  const [startflixAvailable, setStartflixAvailable] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isOpen || !tmdbId || mediaType !== "series") {
+      setStartflixEmbedUrl(null);
+      setStartflixAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const available = await isStartflixAvailable(tmdbId);
+      if (cancelled) return;
+      setStartflixAvailable(available);
+      if (!available) return;
+      if (season && episode) {
+        const result = await findStartflixEpisode(tmdbId, season, episode);
+        if (cancelled) return;
+        if (result?.functional && result.embed_url) {
+          console.log(`[Startflix] embed_url resolvido: S${season}E${episode} → ${result.embed_url.substring(0, 80)}`);
+          setStartflixEmbedUrl(result.embed_url);
+        } else {
+          setStartflixEmbedUrl(null);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, tmdbId, mediaType, season, episode]);
+
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
     const isIntegrated =
@@ -242,7 +276,9 @@ export function VideoPlayerModal({
       target.includes("/api/myembed-stream") ||
       target.includes("/api/anime-stream") ||
       target.includes("/api/vixsrc-stream") ||
-      target.includes("/api/live-stream-proxy");
+      target.includes("/api/live-stream-proxy") ||
+      target.includes("upns.xyz") ||  // Startflix (Ghosts)
+      target.includes("embedplayapiupn");  // Startflix variant
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput]);
@@ -686,7 +722,21 @@ export function VideoPlayerModal({
         }
       ];
     }
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId]);
+    
+    // Adiciona Startflix (Ghosts e futuras séries) se disponível
+    if (isSeries && startflixAvailable && startflixEmbedUrl) {
+      servers.push({
+        key: "srv_startflix",
+        label: "Startflix HD (Dublado)",
+        badge: "Startflix HD • Áudio Dublado PT-BR • Sem Anúncios",
+        buildUrl: () => startflixEmbedUrl,
+        isMatch: (u: string) => u.includes("upns.xyz") || u.includes("embedplayapiupn"),
+        name: "Startflix HD (Dublado)"
+      });
+    }
+    
+    return servers;
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
