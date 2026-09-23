@@ -21,12 +21,26 @@ let _catalog: any = null;
 let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
 
 function loadCatalog() {
-  if (_catalog) return;
+  if (_catalog && _episodeIndex.size > 0) return;
 
-  const catalogPath = path.join(process.cwd(), "public", "data", "startflix-catalog.json");
+  const possiblePaths = [
+    path.join(process.cwd(), "public", "data", "startflix-catalog.json"),
+    path.join(process.cwd(), "data", "startflix-catalog.json"),
+  ];
+
+  let raw = "";
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        raw = fs.readFileSync(p, "utf-8");
+        break;
+      } catch (_) {}
+    }
+  }
+
   try {
-    const raw = fs.readFileSync(catalogPath, "utf-8");
-    _catalog = JSON.parse(raw);
+    _catalog = raw ? JSON.parse(raw) : { series: [] };
+    _episodeIndex.clear();
 
     // Constrói índice pra lookup O(1)
     for (const series of _catalog.series || []) {
