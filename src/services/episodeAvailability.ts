@@ -80,7 +80,9 @@ export async function getAvailableSeasonsForSeries(
   }
 
   try {
-    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}`);
+    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}&_cb=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (res.ok) {
       const data = await res.json();
       if (data && data.success && data.hasCatalog && Array.isArray(data.seasons) && data.seasons.length > 0) {
