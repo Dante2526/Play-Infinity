@@ -79,6 +79,16 @@ process.on("uncaughtException", (err) => {
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.
   app.set('trust proxy', 1);
 
+  // Redirecionamento canônico automático: caso o usuário acesse pelo subdomínio onrender.com
+  app.use((req, res, next) => {
+    const host = req.headers.host || '';
+    if (host.includes('onrender.com')) {
+      const canonicalHost = 'play-infinity.stream';
+      return res.redirect(301, `https://${canonicalHost}${req.originalUrl || '/'}`);
+    }
+    next();
+  });
+
   // Hardening de Segurança via HTTP Headers (sem quebrar os iframes de players terceiros)
   app.use(helmet({
     frameguard: false, // Desativado propositalmente para não quebrar a incorporação dos iframes externos caso precisem transitar contexto
