@@ -35,6 +35,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         url: '/api/iptv/896',
         isProxy: false
       }
+
+      ,{
+        name: 'DASH (Sem Anúncios)',
+        url: '/api/bolodechocolate?canal=premiereclubes',
+        isProxy: false
+      }
     ]
   },
   {
@@ -54,6 +60,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2 (HD Alternativo)',
         url: '/api/iptv/859',
+        isProxy: false
+      }
+
+      ,{
+        name: 'DASH (Sem Anúncios)',
+        url: '/api/bolodechocolate?canal=premiere2',
         isProxy: false
       }
     ]
@@ -82,6 +94,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         url: '/api/iptv/865',
         isProxy: false
       }
+
+      ,{
+        name: 'DASH (Sem Anúncios)',
+        url: '/api/bolodechocolate?canal=premiere3',
+        isProxy: false
+      }
     ]
   },
   {
@@ -101,6 +119,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2 (HD Alternativo)',
         url: '/api/iptv/296311',
+        isProxy: false
+      }
+
+      ,{
+        name: 'DASH (Sem Anúncios)',
+        url: '/api/bolodechocolate?canal=premiere4',
         isProxy: false
       }
     ]
