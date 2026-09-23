@@ -1977,6 +1977,7 @@ export function VideoPlayerModal({
               availableSeasons={availableSeasons}
               activeServerKey={selectedServerKey}
               onServerChange={handleServerSwitch}
+              serversList={servers}
               onSeasonChange={handleSeasonChange}
               episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
               onClose={handleCloseModal}
