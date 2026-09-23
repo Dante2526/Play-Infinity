@@ -431,6 +431,43 @@ export class AppErrorBoundary extends (React.Component as any) {
       userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : ''
     };
     this.setState({ errorInfo: info });
+
+    // Auto-reload automático pra erros de "Failed to fetch dynamically imported module"
+    // (cache stale de chunks do Vite após deploy — resolve sozinho com reload)
+    const errMsg = (error.message || '').toLowerCase();
+    if (
+      errMsg.includes('failed to fetch dynamically imported module') ||
+      errMsg.includes('importing a module script') ||
+      errMsg.includes('loading chunk') ||
+      errMsg.includes('loading script') ||
+      (errMsg.includes('dynamic') && errMsg.includes('import'))
+    ) {
+      console.warn('[AppErrorBoundary] Chunk loading error detected — auto-reloading with cache-bust...');
+      // Pequeno delay pra não relodar em loop (backoff exponencial)
+      const lastReload = parseInt(sessionStorage.getItem('__chunkReloadAt') || '0', 10);
+      const now = Date.now();
+      if (now - lastReload > 10000) { // 10s cooldown
+        sessionStorage.setItem('__chunkReloadAt', String(now));
+        // Tenta limpar service worker caches (se tiver)
+        if ('caches' in window) {
+          caches.keys().then((keys) => {
+            keys.forEach((k) => caches.delete(k));
+            // Reload com cache-bust na URL pra forçar navegador refazer index.html
+            const sep = window.location.href.includes('?') ? '&' : '?';
+            const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
+            window.location.replace(newUrl);
+          }).catch(() => {
+            const sep = window.location.href.includes('?') ? '&' : '?';
+            const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
+            window.location.replace(newUrl);
+          });
+        } else {
+          const sep = window.location.href.includes('?') ? '&' : '?';
+          const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
+          window.location.replace(newUrl);
+        }
+      }
+    }
   }
 
   render() {
