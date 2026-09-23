@@ -19,6 +19,7 @@ const router = Router();
 let _catalog: any = null;
 let _movieIndex: Map<number, any> = new Map();
 let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
+let _seriesSeasonsIndex: Map<number, number[]> = new Map(); // key: tmdbId -> seasons array
 let _lastLoadedMtime = 0;
 
 function loadCatalog() {
@@ -56,6 +57,7 @@ function loadCatalog() {
     // Reconstrói índices pra lookup O(1)
     _movieIndex.clear();
     _episodeIndex.clear();
+    _seriesSeasonsIndex.clear();
     
     for (const movie of _catalog.movies || []) {
       if (movie.tmdb_id) {
@@ -63,19 +65,102 @@ function loadCatalog() {
       }
     }
     
+    const seriesSeasonsMap = new Map<number, Set<number>>();
     for (const ep of _catalog.episodes || []) {
       if (ep.tmdb_id && ep.season && ep.episode) {
         const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
         _episodeIndex.set(key, ep);
+        if (!seriesSeasonsMap.has(ep.tmdb_id)) {
+          seriesSeasonsMap.set(ep.tmdb_id, new Set());
+        }
+        seriesSeasonsMap.get(ep.tmdb_id)!.add(ep.season);
       }
     }
+
+    for (const [id, seasonsSet] of seriesSeasonsMap.entries()) {
+      _seriesSeasonsIndex.set(id, Array.from(seasonsSet).sort((a, b) => a - b));
+    }
     
-    console.log(`[encontrei-lookup] Catálogo carregado: ${_movieIndex.size} filmes, ${_episodeIndex.size} episódios indexados`);
+    console.log(`[encontrei-lookup] Catálogo carregado: ${_movieIndex.size} filmes, ${_episodeIndex.size} episódios, ${_seriesSeasonsIndex.size} séries indexadas`);
   } catch (err) {
     console.warn("[encontrei-lookup] Aviso ao processar catálogo:", err);
     _catalog = { movies: [], episodes: [] };
   }
 }
+
+/**
+ * Retorna as temporadas reais disponíveis no catálogo para uma série específica
+ * GET /api/series-seasons-available?tmdb_id=126027
+ */
+router.get("/api/series-seasons-available", (req, res) => {
+  try {
+    loadCatalog();
+    const tmdbId = parseInt(req.query.tmdb_id as string, 10);
+    if (!tmdbId) {
+      return res.status(400).json({ error: "tmdb_id é obrigatório" });
+    }
+    const seasons = _seriesSeasonsIndex.get(tmdbId);
+    if (seasons && seasons.length > 0) {
+      res.setHeader("Cache-Control", "public, max-age=3600");
+      return res.json({
+        success: true,
+        hasCatalog: true,
+        tmdbId,
+        seasons,
+      });
+    }
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    return res.json({
+      success: true,
+      hasCatalog: false,
+      tmdbId,
+      seasons: [],
+    });
+  } catch (err: any) {
+    console.error("[series-seasons-available] Erro:", err);
+    return res.status(500).json({ error: "Erro interno" });
+  }
+});
+
+/**
+ * Verifica uma lista de TMDB IDs e retorna quais possuem conteúdo reproduzível no catálogo
+ * GET /api/check-playable-batch?ids=19995,671,14424
+ * POST /api/check-playable-batch { ids: [19995, 671, 14424] }
+ */
+router.all("/api/check-playable-batch", (req, res) => {
+  try {
+    loadCatalog();
+    let ids: number[] = [];
+    if (req.method === "POST" && req.body && Array.isArray(req.body.ids)) {
+      ids = req.body.ids.map(Number).filter(Boolean);
+    } else if (req.query.ids) {
+      ids = String(req.query.ids).split(",").map(Number).filter(Boolean);
+    }
+
+    const playableMovieIds: number[] = [];
+    const playableSeriesIds: number[] = [];
+
+    for (const id of ids) {
+      if (_movieIndex.has(id)) {
+        playableMovieIds.push(id);
+      }
+      if (_seriesSeasonsIndex.has(id)) {
+        playableSeriesIds.push(id);
+      }
+    }
+
+    res.setHeader("Cache-Control", "public, max-age=1800");
+    return res.json({
+      success: true,
+      playableMovieIds,
+      playableSeriesIds,
+      playableIds: [...new Set([...playableMovieIds, ...playableSeriesIds])],
+    });
+  } catch (err: any) {
+    console.error("[check-playable-batch] Erro:", err);
+    return res.status(500).json({ error: "Erro interno" });
+  }
+});
 
 router.get("/api/encontrei-lookup", (req, res) => {
   try {

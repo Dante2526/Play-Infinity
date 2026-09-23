@@ -106,19 +106,19 @@ process.on("uncaughtException", (err) => {
   // PROTEÇÃO CONTRA DDOS (Camada de Aplicação)
   // ========================================================
   
-  // Limite Global: Protege a renderização estática e recursos
+  // Limite Global: Protege a renderização estática e recursos sem travar o usuário
   const globalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 500, // Permite 500 requisições por minuto por IP
+    max: 3000, // Permite 3000 requisições por minuto por IP
     message: "Muitas requisições deste IP, tente novamente em um minuto.",
     standardHeaders: true,
     legacyHeaders: false,
   });
 
-  // Limite Estrito para API: Protege rotas pesadas (scraping, proxies, etc)
+  // Limite para API geral (busca, metadados)
   const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 100, // Permite 100 requisições por minuto por IP para a API
+    max: 1200, // Permite 1200 requisições por minuto por IP para a API
     message: { success: false, error: "Limite de requisições excedido. A proteção anti-DDoS bloqueou este endereço temporariamente." },
     standardHeaders: true,
     legacyHeaders: false,
@@ -146,10 +146,26 @@ process.on("uncaughtException", (err) => {
     }
   }
 
-  
-  // Aplica proteção rigorosa apenas na API (exceto endpoints de streaming de vídeo/ao vivo que fazem requisições contínuas de fragmentos)
+  // Bypasses de streaming, players e catálogos para nunca bloquear reprodução de vídeos nem navegação de episódios
+  const streamingBypassPrefixes = [
+    "/live-stream-proxy",
+    "/anime/hls-proxy",
+    "/watchplayer-stream",
+    "/myembed-stream",
+    "/mixdrop-stream",
+    "/stream-proxy",
+    "/check-season",
+    "/encontrei/lookup",
+    "/encontrei-lookup",
+    "/series-seasons-available",
+    "/check-playable-batch",
+    "/downloads-catalog",
+    "/bolodechocolate",
+    "/download"
+  ];
+
   app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/live-stream-proxy") || req.path.startsWith("/anime/hls-proxy") || req.path.startsWith("/watchplayer-stream")) {
+    if (streamingBypassPrefixes.some(prefix => req.path.startsWith(prefix))) {
       return next();
     }
     return apiLimiter(req, res, next);

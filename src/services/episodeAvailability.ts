@@ -11,7 +11,92 @@ interface AvailableEpisodesResponse {
 
 // Cache em memória no cliente para transições ultra-rápidas
 const clientAvailabilityCache = new Map<string, { timestamp: number; episodes: number[] }>();
+const clientSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
+const clientPlayableCache = new Map<number, boolean>();
 const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutos
+
+/**
+ * Consulta em lote quais IDs possuem reprodução disponível no catálogo oficial
+ */
+export async function checkPlayableBatch(tmdbIds: number[]): Promise<Set<number>> {
+  const result = new Set<number>();
+  const toFetch: number[] = [];
+
+  for (const id of tmdbIds) {
+    if (clientPlayableCache.has(id)) {
+      if (clientPlayableCache.get(id)) {
+        result.add(id);
+      }
+    } else {
+      toFetch.push(id);
+    }
+  }
+
+  if (toFetch.length === 0) {
+    return result;
+  }
+
+  try {
+    const res = await fetch(`/api/check-playable-batch?ids=${toFetch.join(",")}`);
+    if (res.ok) {
+      const data = await res.json();
+      const playableList: number[] = data.playableIds || [];
+      const playableSet = new Set(playableList);
+
+      for (const id of toFetch) {
+        const isPlayable = playableSet.has(id);
+        clientPlayableCache.set(id, isPlayable);
+        if (isPlayable) {
+          result.add(id);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn("[episodeAvailability] Falha ao verificar batch de reprodução:", err);
+  }
+
+  return result;
+}
+
+/**
+ * Consulta a API do backend para saber quais temporadas de uma série
+ * realmente possuem episódios ativos e catalogados.
+ */
+export async function getAvailableSeasonsForSeries(
+  tmdbId: number | string,
+  fallbackSeasons: number[] = [1]
+): Promise<number[]> {
+  const idStr = String(tmdbId).trim();
+  if (!idStr || isNaN(Number(idStr))) {
+    return fallbackSeasons;
+  }
+
+  const cached = clientSeasonsCache.get(idStr);
+  if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
+    if (cached.seasons && cached.seasons.length > 0) {
+      return cached.seasons;
+    }
+    return fallbackSeasons;
+  }
+
+  try {
+    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.success && data.hasCatalog && Array.isArray(data.seasons) && data.seasons.length > 0) {
+        clientSeasonsCache.set(idStr, {
+          timestamp: Date.now(),
+          seasons: data.seasons,
+        });
+        return data.seasons;
+      }
+    }
+  } catch (err) {
+    console.warn("[episodeAvailability] Falha ao consultar temporadas disponíveis:", err);
+  }
+
+  return fallbackSeasons;
+}
 
 /**
  * Consulta a API do backend para saber quais episódios da temporada

@@ -19,7 +19,7 @@ import {
 import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
-import { getAvailableEpisodes } from "../services/episodeAvailability";
+import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -460,8 +460,30 @@ export function VideoPlayerModal({
     };
   }, [isOpen, isSeries, tmdbId, resolvedId]);
 
-  // Lista de temporadas válidas da série (filtra specials e temporadas sem episódios)
+  const [catalogSeasons, setCatalogSeasons] = useState<number[] | null>(null);
+
+  // Consulta se a série possui temporadas verificadas no servidor
+  useEffect(() => {
+    if (!isOpen || !isSeries) return;
+    const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numericId) return;
+
+    let isMounted = true;
+    getAvailableSeasonsForSeries(numericId).then((seasons) => {
+      if (isMounted && seasons && seasons.length > 0) {
+        setCatalogSeasons(seasons);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [isOpen, isSeries, tmdbId, resolvedId]);
+
+  // Lista de temporadas válidas da série (prioriza catálogo real ou TMDB válido)
   const availableSeasons = useMemo(() => {
+    if (catalogSeasons && catalogSeasons.length > 0) {
+      return catalogSeasons;
+    }
     if (seriesDetails?.seasons && seriesDetails.seasons.length > 0) {
       const valid = seriesDetails.seasons
         .filter(s => s.season_number > 0 && s.episode_count > 0)
@@ -470,8 +492,8 @@ export function VideoPlayerModal({
         return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
       }
     }
-    return [1, 2, 3, 4];
-  }, [seriesDetails]);
+    return [1];
+  }, [catalogSeasons, seriesDetails]);
 
   // Ajusta a temporada selecionada caso não exista na lista de temporadas reais
   useEffect(() => {
