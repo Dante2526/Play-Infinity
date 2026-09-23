@@ -64,6 +64,16 @@ export async function findStartflixEpisode(
   }
 }
 
+let _catalogPromise: Promise<any> | null = null;
+async function fetchCatalogCached(): Promise<any> {
+  if (!_catalogPromise) {
+    _catalogPromise = fetch('/api/startflix-catalog')
+      .then(res => res.ok ? res.json() : null)
+      .catch(() => null);
+  }
+  return _catalogPromise;
+}
+
 /**
  * Helper pra saber quais episódios de uma season estão disponíveis.
  * Retorna null se a série não estiver no catálogo.
@@ -74,9 +84,8 @@ export async function getStartflixSeasonInfo(
   season: number
 ): Promise<{ total: number; functional: number; functional_episodes: number[] } | null> {
   try {
-    const res = await fetch('/api/startflix-catalog');
-    if (!res.ok) return null;
-    const data = await res.json();
+    const data = await fetchCatalogCached();
+    if (!data) return null;
     const series = (data.series || []).find((s: any) => s.tmdb_id === tmdbId);
     if (!series) return null;
     const seasonData = (series.seasons || []).find((s: any) => s.season === season);
@@ -97,9 +106,9 @@ export async function getStartflixSeasonInfo(
  */
 export async function isStartflixAvailable(tmdbId: number): Promise<boolean> {
   try {
-    const res = await fetch('/api/startflix-catalog');
-    if (!res.ok) return false;
-    const data = await res.json();
+    if (tmdbId === 126027) return true; // Fast path para Fantasmas / Ghosts
+    const data = await fetchCatalogCached();
+    if (!data) return false;
     return (data.series || []).some((s: any) => s.tmdb_id === tmdbId);
   } catch {
     return false;

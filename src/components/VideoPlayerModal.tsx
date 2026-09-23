@@ -236,33 +236,6 @@ export function VideoPlayerModal({
   const [startflixEmbedUrl, setStartflixEmbedUrl] = useState<string | null>(null);
   const [startflixAvailable, setStartflixAvailable] = useState<boolean>(false);
 
-  useEffect(() => {
-    if (!isOpen || !tmdbId || mediaType !== "series") {
-      setStartflixEmbedUrl(null);
-      setStartflixAvailable(false);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      const available = await isStartflixAvailable(tmdbId);
-      if (cancelled) return;
-      setStartflixAvailable(available);
-      if (!available) return;
-      if (season && episode) {
-        const result = await findStartflixEpisode(tmdbId, season, episode);
-        if (cancelled) return;
-        if (result?.functional && result.embed_url) {
-          console.log(`[Startflix] embed_url resolvido: S${season}E${episode} → ${result.embed_url.substring(0, 80)}`);
-          setStartflixEmbedUrl(result.embed_url);
-        } else {
-          setStartflixEmbedUrl(null);
-        }
-      }
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tmdbId, mediaType, season, episode]);
-
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
     const isIntegrated =
@@ -459,6 +432,41 @@ export function VideoPlayerModal({
     if (parsed.id) return parsed.id;
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
+
+  useEffect(() => {
+    if (!isOpen || !isSeries) {
+      setStartflixEmbedUrl(null);
+      setStartflixAvailable(false);
+      return;
+    }
+    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numId) return;
+
+    if (numId === 126027) {
+      setStartflixAvailable(true);
+    } else {
+      isStartflixAvailable(numId).then((avail) => {
+        setStartflixAvailable(avail);
+      });
+    }
+
+    let cancelled = false;
+    if (season && episode) {
+      findStartflixEpisode(numId, season, episode).then((result) => {
+        if (cancelled) return;
+        if (result?.functional && result.embed_url) {
+          console.log(`[Startflix] embed_url resolvido: S${season}E${episode} → ${result.embed_url.substring(0, 80)}`);
+          setStartflixEmbedUrl(result.embed_url);
+        } else {
+          setStartflixEmbedUrl(null);
+        }
+      }).catch(() => {
+        if (!cancelled) setStartflixEmbedUrl(null);
+      });
+    }
+
+    return () => { cancelled = true; };
+  }, [isOpen, isSeries, tmdbId, resolvedId, season, episode]);
 
   // Fallback do MixDrop quando não há fileId no catálogo (versão cam)
   const buildMixdropFallbackUrl = useCallback(() => {
@@ -724,19 +732,26 @@ export function VideoPlayerModal({
     }
     
     // Adiciona Startflix (Ghosts e futuras séries) se disponível
-    if (isSeries && startflixAvailable && startflixEmbedUrl) {
+    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (isSeries && (startflixAvailable || numId === 126027 || resolvedId === "126027")) {
       servers.push({
         key: "srv_startflix",
         label: "Startflix HD (Dublado)",
         badge: "Startflix HD • Áudio Dublado PT-BR • Sem Anúncios",
-        buildUrl: () => startflixEmbedUrl,
-        isMatch: (u: string) => u.includes("upns.xyz") || u.includes("embedplayapiupn"),
+        buildUrl: (id: string, s?: number, e?: number) => {
+          if (startflixEmbedUrl && (!s || s === season) && (!e || e === episode)) {
+            return startflixEmbedUrl;
+          }
+          const effId = numId || (id && !isNaN(Number(id)) ? Number(id) : 126027);
+          return `/api/startflix-lookup?tmdb_id=${effId}&season=${s || season}&episode=${e || episode}`;
+        },
+        isMatch: (u: string) => u.includes("upns.xyz") || u.includes("embedplayapiupn") || u.includes("/api/startflix-lookup"),
         name: "Startflix HD (Dublado)"
       });
     }
     
     return servers;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl, tmdbId, resolvedId, season, episode]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
@@ -786,6 +801,17 @@ export function VideoPlayerModal({
       newUrl = fid
         ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
+    } else if (serverKey === "srv_startflix") {
+      const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+      if (numId) {
+        const startflixRes = await findStartflixEpisode(numId, season, episode);
+        newUrl = (startflixRes?.functional && startflixRes.embed_url)
+          ? startflixRes.embed_url
+          : srv.buildUrl(resolvedId, season, episode);
+      } else {
+        newUrl = srv.buildUrl(resolvedId, season, episode);
+      }
+      setPlayerSkinReady(true);
     } else {
       newUrl = isSeries
         ? srv.buildUrl(resolvedId, season, episode)
@@ -902,23 +928,38 @@ export function VideoPlayerModal({
         }
       }
 
-      // Inicialização do servidor: prioriza MixDrop para links dedicados ou filme Homem-Aranha, e WatchPlayer como padrão
+      // Inicialização do servidor: prioriza Startflix para temporadas 4/5 de Fantasmas, MixDrop para links dedicados, e WatchPlayer como padrão
       const setupInitialServer = async () => {
-        const isMixdropTarget =
-          (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/mixdrop-stream"))) ||
-          resolvedId === "969681" ||
-          imdbId === "tt22084616" ||
-          (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
+        const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+        const isStartflixTarget =
+          isSeries && (targetSeason >= 4) && (numId === 126027 || resolvedId === "126027" || startflixAvailable);
 
-        const targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
+        const isMixdropTarget =
+          !isStartflixTarget && (
+            (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/mixdrop-stream"))) ||
+            resolvedId === "969681" ||
+            imdbId === "tt22084616" ||
+            (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"))
+          );
+
+        const targetServerKey = isStartflixTarget ? "srv_startflix" : isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
         setSelectedServerKey(targetServerKey);
 
         const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
-        const targetUrl = isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))
-          ? defaultUrl
-          : isSeries 
+        let targetUrl: string;
+
+        if (isStartflixTarget && numId) {
+          const sfRes = await findStartflixEpisode(numId, targetSeason, targetEpisode);
+          targetUrl = (sfRes?.functional && sfRes.embed_url)
+            ? sfRes.embed_url
+            : targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode);
+        } else if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+          targetUrl = defaultUrl;
+        } else {
+          targetUrl = isSeries 
             ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
             : targetSrv.buildUrl(resolvedId);
+        }
 
         setUrlInput(targetUrl);
         handleExtract(targetUrl);
@@ -1206,6 +1247,17 @@ export function VideoPlayerModal({
       newUrl = fid
         ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
+    } else if (selectedServerKey === "srv_startflix") {
+      const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+      if (numId) {
+        const sfRes = await findStartflixEpisode(numId, season, newEpisode);
+        newUrl = (sfRes?.functional && sfRes.embed_url)
+          ? sfRes.embed_url
+          : activeServer.buildUrl(resolvedId, season, newEpisode);
+      } else {
+        newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
+      }
+      setPlayerSkinReady(true);
     } else {
       newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     }
@@ -1230,13 +1282,31 @@ export function VideoPlayerModal({
     setIsIntroActive(false);
     setPlayerSkinReady(false);
     fallbackAttemptsRef.current.clear();
-    const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
+
+    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    const shouldAutoStartflix = newSeason >= 4 && (numId === 126027 || resolvedId === "126027" || startflixAvailable);
+    const currentServerKey = shouldAutoStartflix ? "srv_startflix" : selectedServerKey;
+    if (shouldAutoStartflix && selectedServerKey !== "srv_startflix") {
+      setSelectedServerKey("srv_startflix");
+    }
+
+    const activeServer = servers.find(s => s.key === currentServerKey) || servers[0];
     let newUrl: string;
-    if (selectedServerKey === "srv_mixdrop" && tmdbId) {
+    if (currentServerKey === "srv_mixdrop" && tmdbId) {
       const fid = await lookupMixdropFileId(newSeason, 1);
       newUrl = fid
         ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
+    } else if (currentServerKey === "srv_startflix") {
+      if (numId) {
+        const sfRes = await findStartflixEpisode(numId, newSeason, 1);
+        newUrl = (sfRes?.functional && sfRes.embed_url)
+          ? sfRes.embed_url
+          : activeServer.buildUrl(resolvedId, newSeason, 1);
+      } else {
+        newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
+      }
+      setPlayerSkinReady(true);
     } else {
       newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     }
@@ -1918,7 +1988,10 @@ export function VideoPlayerModal({
                   setIsLoading(false);
                   if (
                     selectedServerKey === "srv_mixdrop" ||
-                    activeIframeUrl?.includes("/api/mixdrop-stream")
+                    selectedServerKey === "srv_startflix" ||
+                    activeIframeUrl?.includes("/api/mixdrop-stream") ||
+                    activeIframeUrl?.includes("upns.xyz") ||
+                    activeIframeUrl?.includes("embedplayapiupn")
                   ) {
                     setTimeout(() => setPlayerSkinReady(true), 200);
                   }
