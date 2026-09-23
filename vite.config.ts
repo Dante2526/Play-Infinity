@@ -15,13 +15,13 @@ export default defineConfig(() => {
     },
     css: {
       lightningcss: {
-        targets: browserslistToTargets(browserslist('>= 0.5%, last 3 versions, not dead, Chrome >= 60, Safari >= 12, iOS >= 12, Edge >= 79')),
+        targets: browserslistToTargets(browserslist('>= 0.5%, last 3 versions, not dead, Chrome >= 50, Safari >= 10, iOS >= 10, Edge >= 15')),
       },
     },
 
     build: {
       cssMinify: 'lightningcss' as const,
-      target: ['es2020', 'chrome69', 'safari12'],
+      target: 'es2020',
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.

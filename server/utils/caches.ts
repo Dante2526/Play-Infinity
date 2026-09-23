@@ -42,3 +42,9 @@ export const seasonAvailabilityCache = new LRUCache<string, { episodes: number[]
   max: 200,
   ttl: 1000 * 60 * 20, // 20 minutos
 });
+
+// 6. TMDB Response Cache - acelera o catálogo para Smart TVs e conexões lentas
+export const tmdbCache = new LRUCache<string, { status: number; data: any }>({
+  max: 400,
+  ttl: 1000 * 60 * 15, // 15 minutos
+});
