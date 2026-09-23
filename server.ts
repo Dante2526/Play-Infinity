@@ -176,9 +176,11 @@ process.on("uncaughtException", (err) => {
   import iptvRouter from "./server/routes/iptv";
 import encontreiLookupRouter from "./server/routes/encontreiLookup";
 import bolodechocolateRouter from "./server/routes/bolodechocolate";
+import startflixLookupRouter from "./server/routes/startflixLookup";
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
+app.use(startflixLookupRouter);
 
   app.get("/api/extract-player", async (req, res) => {
     const targetUrl = req.query.url as string;
