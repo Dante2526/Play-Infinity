@@ -4579,22 +4579,61 @@ app.use(encontreiLookupRouter);
       art.on("video:progress", sendStatus);
       art.on("video:ended", notifyEnded);
 
-      // Desmuta automaticamente no primeiro canplay — browser força muted em autoplay sem interação
+      // ─── Auto-play com som: estratégia multi-evento robusta ───────────────
+      // O browser bloqueia autoplay com som em iframes sem interação prévia.
+      // Iniciamos muted=true para o autoplay funcionar, e desmutamos assim que
+      // o vídeo começa a carregar — o clique do usuário no catálogo conta como
+      // gesto e propaga para o iframe dentro de ~1s.
+
       var _autoUnmuted = false;
-      art.on("video:canplay", function() {
-        if (_autoUnmuted) return;
-        _autoUnmuted = true;
+
+      function tryUnmute() {
         var v = art.video || document.querySelector("video");
-        if (v) {
-          try {
-            v.muted = false;
-            v.volume = 1;
-            art.muted = false;
-            art.volume = 1;
-          } catch(err) {}
-        }
+        if (!v) return;
+        try {
+          v.muted = false;
+          v.volume = 1;
+          if (art) { art.muted = false; art.volume = 1; }
+          _autoUnmuted = true;
+        } catch(e) {}
         sendStatus();
-      });
+      }
+
+      function tryAutoPlay() {
+        var v = art.video || document.querySelector("video");
+        if (!v || !v.paused) return;
+        try {
+          var p = v.play();
+          if (p && typeof p.catch === "function") {
+            p.catch(function() {
+              // Se play() falhou (bloqueio de autoplay), mantém muted e tenta com muted=true
+              try { v.muted = true; v.play().catch(function() {}); } catch(e) {}
+            });
+          }
+        } catch(e) {}
+      }
+
+      // Tenta desmutar em múltiplos momentos para garantir que o som não se perca
+      art.on("video:loadeddata",    function() { tryUnmute(); tryAutoPlay(); });
+      art.on("video:canplay",       function() { tryUnmute(); tryAutoPlay(); });
+      art.on("video:canplaythrough",function() { tryUnmute(); });
+      art.on("video:playing",       function() { tryUnmute(); });
+      art.on("video:play",          function() { tryUnmute(); });
+
+      // Timeouts escalonados — garante unmute mesmo se os eventos forem lentos
+      setTimeout(function() { tryUnmute(); tryAutoPlay(); }, 100);
+      setTimeout(function() { tryUnmute(); tryAutoPlay(); }, 500);
+      setTimeout(function() { tryUnmute(); }, 1500);
+      setTimeout(function() { tryUnmute(); }, 3000);
+
+      // Watchdog: verifica a cada 3s se o volume caiu e restaura
+      setInterval(function() {
+        var v = art.video || document.querySelector("video");
+        if (!v || v.paused) return;
+        if (v.muted || v.volume < 0.1) {
+          tryUnmute();
+        }
+      }, 3000);
 
       setInterval(sendStatus, 250);
 
