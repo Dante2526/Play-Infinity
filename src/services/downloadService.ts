@@ -24,17 +24,36 @@ export function sanitizeDownloadFileName(title: string, season?: number, episode
 }
 
 /**
+ * Gera URL de download direto via VPS Oracle para qualquer link MixDrop
+ */
+export function buildMixdropDownloadUrl(mixdropUrl: string, fileName: string): string {
+  return `${ORACLE_PROXY_BASE}/api/download?url=${encodeURIComponent(mixdropUrl)}&filename=${encodeURIComponent(fileName)}`;
+}
+
+/**
  * Verifica se um filme possui link MixDrop para download
  */
-export async function checkMovieDownloadAvailability(tmdbId: number, title: string): Promise<DownloadAvailability> {
+export async function checkMovieDownloadAvailability(tmdbId: number, title: string, directUrl?: string): Promise<DownloadAvailability> {
+  const fileName = sanitizeDownloadFileName(title);
+
+  // Se já tiver uma URL MixDrop direta no objeto
+  if (directUrl && (directUrl.includes("mixdrop.") || directUrl.includes("mxdrop."))) {
+    return {
+      available: true,
+      mixdropUrl: directUrl,
+      directDownloadUrl: buildMixdropDownloadUrl(directUrl, fileName),
+      fileName
+    };
+  }
+
   try {
     const data = await findMovieByTmdbId(tmdbId);
     if (data && data.mixdrop) {
-      const fileName = sanitizeDownloadFileName(title);
-      const directDownloadUrl = `${ORACLE_PROXY_BASE}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
+      const mixdropUrl = data.mixdrop.startsWith("http") ? data.mixdrop : `https://mxdrop.top/f/${data.mixdrop}`;
+      const directDownloadUrl = buildMixdropDownloadUrl(mixdropUrl, fileName);
       return {
         available: true,
-        mixdropUrl: data.mixdrop,
+        mixdropUrl,
         directDownloadUrl,
         fileName
       };
@@ -42,7 +61,7 @@ export async function checkMovieDownloadAvailability(tmdbId: number, title: stri
   } catch (err) {
     console.warn("[DownloadService] Erro ao verificar disponibilidade de filme:", err);
   }
-  return { available: false };
+  return { available: false, fileName };
 }
 
 /**
@@ -52,16 +71,28 @@ export async function checkEpisodeDownloadAvailability(
   tmdbId: number, 
   season: number, 
   episode: number, 
-  seriesTitle: string
+  seriesTitle: string,
+  directMixdropUrl?: string
 ): Promise<DownloadAvailability> {
+  const fileName = sanitizeDownloadFileName(seriesTitle, season, episode);
+
+  if (directMixdropUrl && (directMixdropUrl.includes("mixdrop.") || directMixdropUrl.includes("mxdrop."))) {
+    return {
+      available: true,
+      mixdropUrl: directMixdropUrl,
+      directDownloadUrl: buildMixdropDownloadUrl(directMixdropUrl, fileName),
+      fileName
+    };
+  }
+
   try {
     const data = await findEpisode(tmdbId, season, episode);
     if (data && data.mixdrop) {
-      const fileName = sanitizeDownloadFileName(seriesTitle, season, episode);
-      const directDownloadUrl = `${ORACLE_PROXY_BASE}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
+      const mixdropUrl = data.mixdrop.startsWith("http") ? data.mixdrop : `https://mxdrop.top/f/${data.mixdrop}`;
+      const directDownloadUrl = buildMixdropDownloadUrl(mixdropUrl, fileName);
       return {
         available: true,
-        mixdropUrl: data.mixdrop,
+        mixdropUrl,
         directDownloadUrl,
         fileName
       };
@@ -69,7 +100,7 @@ export async function checkEpisodeDownloadAvailability(
   } catch (err) {
     console.warn("[DownloadService] Erro ao verificar disponibilidade de episódio:", err);
   }
-  return { available: false };
+  return { available: false, fileName };
 }
 
 /**

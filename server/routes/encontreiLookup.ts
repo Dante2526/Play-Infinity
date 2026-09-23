@@ -15,33 +15,48 @@ import path from "path";
 
 const router = Router();
 
-// Cache do catálogo em memória (carrega 1x, serve pra sempre)
+// Cache do catálogo em memória (carrega 1x, serve pra sempre; recarrega se o arquivo for modificado ou se o índice estava vazio)
 let _catalog: any = null;
 let _movieIndex: Map<number, any> = new Map();
 let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
+let _lastLoadedMtime = 0;
 
 function loadCatalog() {
-  if (_catalog) return;
-  
   const possiblePaths = [
     path.join(process.cwd(), "public", "data", "encontrei-catalog.json"),
     path.join(process.cwd(), "data", "encontrei-catalog.json"),
   ];
 
   let raw = "";
+  let currentMtime = 0;
   for (const p of possiblePaths) {
     if (fs.existsSync(p)) {
       try {
+        const stat = fs.statSync(p);
+        currentMtime = stat.mtimeMs;
+        // Se já está carregado, com dados e o arquivo não mudou, usa o cache existente
+        if (_catalog && (_movieIndex.size > 0 || _episodeIndex.size > 0) && currentMtime <= _lastLoadedMtime) {
+          return;
+        }
         raw = fs.readFileSync(p, "utf-8");
         break;
       } catch (_) {}
     }
   }
 
+  // Se nenhum arquivo encontrado mas já temos cache válido, mantém
+  if (!raw && _catalog && (_movieIndex.size > 0 || _episodeIndex.size > 0)) {
+    return;
+  }
+
   try {
     _catalog = raw ? JSON.parse(raw) : { movies: [], episodes: [] };
+    _lastLoadedMtime = currentMtime;
     
-    // Constrói índices pra lookup O(1)
+    // Reconstrói índices pra lookup O(1)
+    _movieIndex.clear();
+    _episodeIndex.clear();
+    
     for (const movie of _catalog.movies || []) {
       if (movie.tmdb_id) {
         _movieIndex.set(movie.tmdb_id, movie);
