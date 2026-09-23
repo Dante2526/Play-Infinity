@@ -3993,11 +3993,15 @@ app.use(encontreiLookupRouter);
 
           if (trimmed.startsWith("#")) {
             lastTag = trimmed.split(":")[0];
-            return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
+            return trimmed.replace(/URI="([^"]+)"/g, (match, uri) => {
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
                 if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true"`;
+                // URI= em tags são sempre sub-playlists (EXT-X-MEDIA, EXT-X-KEY, etc.)
+                // Devem usar is_manifest=true para que o proxy reescreva as URLs internas
+                // (se usarmos is_segment=true, o proxy pula o rewriting e o HLS.js
+                // recebe URLs diretas de plosia*.xyz causando erros CORS)
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_manifest=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
