@@ -36,7 +36,8 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { checkPlayableBatch } from "../services/episodeAvailability";
 import { 
   searchMulti, 
   getDetails, 
@@ -154,7 +155,7 @@ export function GlobalSearchPage({
 
   const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
 
-  // Busca em tempo real com TMDB API
+  // Busca em tempo real com TMDB API e validação rigorosa de disponibilidade no catálogo
   React.useEffect(() => {
     if (!searchQuery.trim()) {
       setTmdbResults([]);
@@ -166,16 +167,34 @@ export function GlobalSearchPage({
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
+        const queryLower = searchQuery.toLowerCase().trim();
+        const localMatches = allCatalogs.filter(item => 
+          item.title.toLowerCase().includes(queryLower) && isMediaAvailable(item)
+        );
+
         const response = await searchMulti(searchQuery);
         if (!isMounted) return;
 
         if (response && response.results) {
-          // Converter TMDBItem em CatalogItem com capas e players reais
-          const formatted: CatalogItem[] = response.results
-            .filter(r => {
-              const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
-              return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
-            })
+          const rawMediaResults = response.results.filter(r => {
+            const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
+            return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
+          });
+
+          const idsToCheck = rawMediaResults.map(r => r.id).filter(Boolean);
+          const playableSet = await checkPlayableBatch(idsToCheck);
+          if (!isMounted) return;
+
+          // Local catalog IDs (animes, doramas, static collections)
+          const localCatalogIds = new Set([
+            ...allCatalogs.map(i => i.id),
+            ...WATCHPLAY_ANIME_IDS,
+            ...WATCHPLAY_DORAMA_IDS
+          ]);
+
+          // Filtrar estritamente apenas mídias que possuem streaming reproduzível
+          const formatted: CatalogItem[] = rawMediaResults
+            .filter(r => playableSet.has(r.id) || localCatalogIds.has(r.id))
             .map(r => {
               const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
               const title = r.title || r.name || "Sem título";
@@ -204,10 +223,25 @@ export function GlobalSearchPage({
               };
             });
 
-          setTmdbResults(formatted);
+          // Mescla resultados do TMDB verificados com os itens locais correspondentes
+          const seen = new Set<number>();
+          const combined: CatalogItem[] = [];
+
+          for (const item of [...localMatches, ...formatted]) {
+            if (!seen.has(item.id)) {
+              seen.add(item.id);
+              combined.push(item);
+            }
+          }
+
+          setTmdbResults(combined);
+        } else if (localMatches.length > 0) {
+          setTmdbResults(localMatches);
+        } else {
+          setTmdbResults([]);
         }
       } catch (err) {
-        console.warn("Erro ao buscar no TMDB:", err);
+        console.warn("Erro ao buscar no catálogo:", err);
       } finally {
         if (isMounted) setIsSearching(false);
       }
@@ -217,20 +251,15 @@ export function GlobalSearchPage({
       isMounted = false;
       clearTimeout(timeoutId);
     };
-  }, [searchQuery]);
+  }, [searchQuery, allCatalogs]);
 
   // Filtrar resultados por tipo (Todos, Filmes, Séries)
   const displayedResults = React.useMemo(() => {
-    let list = tmdbResults;
-    if (list.length === 0 && searchQuery.trim() !== '') {
-      // Fallback para itens locais
-      list = allCatalogs.filter(item => item.title.toLowerCase().includes(searchQuery.toLowerCase()));
-    }
-    list = list.filter(isMediaAvailable);
+    let list = tmdbResults.filter(isMediaAvailable);
     if (activeFilter === 'movie') return list.filter(i => i.type === 'movie');
     if (activeFilter === 'tv') return list.filter(i => i.type === 'series');
     return list;
-  }, [tmdbResults, searchQuery, activeFilter]);
+  }, [tmdbResults, activeFilter]);
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-28 px-4 md:px-12 bg-[#0a0a0a]">

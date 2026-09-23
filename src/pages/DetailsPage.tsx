@@ -36,7 +36,7 @@ import {
   Download
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { getAvailableEpisodes } from "../services/episodeAvailability";
+import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import { 
   checkMovieDownloadAvailability, 
   checkEpisodeDownloadAvailability, 
@@ -345,8 +345,27 @@ export function DetailsPage({
   const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
   const isDoramaItem = Boolean(item.isDorama || initialItem?.isDorama);
 
-  // Lista de temporadas disponíveis vindas do TMDB (ou fallback para [1, 2, 3, 4])
+  const [catalogSeasons, setCatalogSeasons] = useState<number[] | null>(null);
+
+  // Consulta se a série possui temporadas catalogadas no servidor
+  useEffect(() => {
+    if (!isSeries || !effectiveTmdbId) return;
+    let isMounted = true;
+    getAvailableSeasonsForSeries(effectiveTmdbId).then((seasons) => {
+      if (isMounted && seasons && seasons.length > 0) {
+        setCatalogSeasons(seasons);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, [isSeries, effectiveTmdbId]);
+
+  // Lista de temporadas disponíveis (prioriza catálogo real ou TMDB válido)
   const availableSeasons = React.useMemo(() => {
+    if (catalogSeasons && catalogSeasons.length > 0) {
+      return catalogSeasons;
+    }
     if (tmdbDetails?.seasons && tmdbDetails.seasons.length > 0) {
       const valid = tmdbDetails.seasons
         .filter(s => s.season_number > 0 && s.episode_count > 0)
@@ -355,8 +374,8 @@ export function DetailsPage({
         return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
       }
     }
-    return [1, 2, 3, 4];
-  }, [tmdbDetails]);
+    return [1];
+  }, [catalogSeasons, tmdbDetails]);
 
   // Se a temporada selecionada não existir na lista, seleciona a primeira disponível
   useEffect(() => {
