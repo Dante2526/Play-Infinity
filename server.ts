@@ -4474,12 +4474,18 @@ app.use(encontreiLookupRouter);
                   switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
                       _fatalNetworkRetries++;
-                      if (_fatalNetworkRetries <= 2) {
-                        // Tenta recuperar uma vez (ex: interrupção temporária de rede)
+                      var v = art.video || document.querySelector("video");
+                      var isPlaying = v && v.currentTime > 0 && !v.paused;
+                      if (isPlaying) {
+                        // Vídeo já está tocando — erros de rede são de tracks secundários (áudio/key)
+                        // Tenta recuperar sem acionar fallback
+                        try { hls.startLoad(); } catch(e) {}
+                        _fatalNetworkRetries = 0;
+                      } else if (_fatalNetworkRetries <= 2) {
+                        // Ainda não iniciou — tenta recuperar até 2x
                         hls.startLoad();
                       } else {
-                        // Após 3 falhas fatais de rede consecutivas (ex: CORS bloqueado pela CDN),
-                        // desiste e sinaliza fallback para o próximo servidor disponível
+                        // 3 falhas fatais sem o vídeo começar → stream indisponível de fato
                         hls.destroy();
                         try {
                           window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_hls_cors_blocked" }, "*");
