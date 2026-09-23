@@ -296,12 +296,17 @@ export function HomePage({
     // Sincronização automática de lançamentos reais (filmes, séries, animes, doramas e kids) no TMDB
     const fetchReleases = async () => {
       try {
-        const [animesRes, doramasRes, moviesRes, seriesRes] = await Promise.all([
+        const results = await Promise.allSettled([
           getAnimes(),
           getDoramas(),
           getMovieReleases(),
           getSeriesReleases()
         ]);
+
+        const animesRes = results[0].status === 'fulfilled' ? results[0].value : null;
+        const doramasRes = results[1].status === 'fulfilled' ? results[1].value : null;
+        const moviesRes = results[2].status === 'fulfilled' ? results[2].value : null;
+        const seriesRes = results[3].status === 'fulfilled' ? results[3].value : null;
 
         if (isMounted) {
           // Processamento dinâmico de Lançamentos (Filmes)

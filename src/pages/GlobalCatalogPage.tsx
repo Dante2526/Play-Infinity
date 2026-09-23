@@ -1,118 +1,21 @@
 
-import { FilterChip } from '../components/FilterChip';
 import React, { useState, useEffect, useRef } from "react";
-import { AnimatePresence } from "motion/react";
-import {
-  Play,
-  Bookmark,
-  BookmarkCheck,
-  Home,
-  Film,
-  Tv,
-  CalendarDays,
-  Calendar,
-  List as ListIcon,
-  Search,
-  Star,
-  StarHalf,
-  ArrowLeft,
-  ChevronLeft,
-  ChevronRight,
-  ThumbsUp,
-  MessageSquare,
-  Send,
-  Check,
-  Info,
-  Radio,
-  Loader2,
-  Sparkles,
-  Clock,
-  Layers,
-  X,
-  CheckCircle2,
-  ShieldCheck,
-  FileText,
-  Bell,
-  Mic,
-  MicOff
-} from "lucide-react";
-import { useVoiceSearch } from "../hooks/useVoiceSearch";
-
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { ChevronLeft, ChevronRight, Film, Play, SlidersHorizontal } from "lucide-react";
+import { FilterChip } from '../components/FilterChip';
+import { CatalogItem, checkIsCam, isMediaAvailable } from "../utils/mediaUtils";
 import { 
-  searchMulti, 
-  getDetails, 
-  getSeasonDetails, 
-  formatImageUrl, 
-  getGenreNames, 
-  getProviderSeries,
-  getProviderMovies,
   discoverMovies,
   discoverSeries,
+  getGenreNames,
   getGenreIdByName,
-  getMovieReleases,
-  getSeriesReleases,
-  getAnimes,
-  getDoramas,
-  FALLBACK_POSTER_IMAGE,
-  FALLBACK_BACKDROP_IMAGE,
-  TMDBItem, 
-  TMDBDetails, 
-  Season,
-  getTrending,
-  getTrailer,
-  TrailerVideo
+  formatImageUrl,
+  TMDBItem,
+  FALLBACK_POSTER_IMAGE
 } from "../services/tmdb";
-import { VideoPlayerModal } from "../components/VideoPlayerModal";
-
-function lazyWithRetry<T extends React.ComponentType<any>>(
-  componentImport: () => Promise<any>
-) {
-  return React.lazy(async () => {
-    try {
-      const module = await componentImport();
-      return { default: module.default || Object.values(module)[0] };
-    } catch (error) {
-      console.warn("[LazyRetry] Dynamic import failed, reloading page...", error);
-      const hasReloaded = sessionStorage.getItem("lazy-reload");
-      if (!hasReloaded) {
-        sessionStorage.setItem("lazy-reload", "true");
-        window.location.reload();
-      }
-      throw error;
-    }
-  });
-}
-
-const WebhookPanelModal = lazyWithRetry(() => import("../components/WebhookPanelModal"));
-const ReleaseCalendarPage = lazyWithRetry(() => import("../components/ReleaseCalendarPage"));
-const LiveTvPage = lazyWithRetry(() => import("../components/LiveTvPage"));
-const NotificationModal = lazyWithRetry(() => import("../components/NotificationModal"));
-import { VirtualRemote } from "../components/VirtualRemote";
-import {
-  getFavoriteIds,
-  toggleFavorite,
-  isItemFavorite,
-  getAllCatalogItems,
-  SERIES_EPISODE_SCHEDULE,
-  getScheduleForFavorites
-} from "../services/favorites";
-import {
-  getFavoriteEpisodeNotifications,
-  getReadNotificationIds
-} from "../services/notifications";
-import {
-  isEpisodeWatched,
-  toggleEpisodeWatched,
-  markSeasonWatched,
-  isSeasonFullyWatched,
-  getSeasonWatchedCount
-} from "../services/watchedEpisodes";
-import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "../services/playbackHistory";
-import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "../services/comments";
+import { getAllCatalogItems } from "../services/favorites";
+import { OnPlayHandler } from "../types";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
-const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
 
 const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, backdropUrl?: string) => {
   const target = e.currentTarget;
@@ -123,10 +26,6 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
     target.src = FALLBACK_POSTER;
   }
 };
-
-
-
-import { OnPlayHandler } from "../types";
 
 export function GlobalCatalogPage({ 
   type, 
@@ -143,7 +42,7 @@ export function GlobalCatalogPage({
   const initialLocalItems = allCatalogs.filter(item => item.type === typeFilter);
 
   const [items, setItems] = useState<CatalogItem[]>(initialLocalItems);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(initialLocalItems.length === 0);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(500);
   const [totalCount, setTotalCount] = useState<number>(10000);
@@ -369,7 +268,19 @@ export function GlobalCatalogPage({
               {items.map((item, idx) => (
                 <div 
                   key={`cat-${item.type}-${item.id}-${idx}`} 
-                  tabIndex={0} role="button" onClick={() => onItemClick(item.id, item)} 
+                  tabIndex={0} 
+                  role="button" 
+                  data-tv-focusable="true"
+                  onFocus={(e) => {
+                    e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || (e as any).keyCode === 13) {
+                      e.preventDefault();
+                      onItemClick(item.id, item);
+                    }
+                  }}
+                  onClick={() => onItemClick(item.id, item)} 
                   className="relative rounded-xl overflow-hidden shadow-lg border border-neutral-800 group cursor-pointer aspect-[2/3] hover:border-orange-500/50 hover:shadow-[0_0_20px_rgba(234,88,12,0.25)] transition-all duration-300"
                 >
                   <img 
@@ -442,7 +353,10 @@ export function GlobalCatalogPage({
 
               <div className="flex items-center gap-2">
                 <button
-                  tabIndex={0} role="button" onClick={() => {
+                  tabIndex={0} 
+                  role="button" 
+                  data-tv-focusable="true"
+                  onClick={() => {
                     setCurrentPage(p => Math.max(1, p - 1));
                     scrollToGrid();
                   }}
@@ -464,7 +378,10 @@ export function GlobalCatalogPage({
                     return (
                       <button
                         key={pageNum}
-                        tabIndex={0} role="button" onClick={() => {
+                        tabIndex={0} 
+                        role="button" 
+                        data-tv-focusable="true"
+                        onClick={() => {
                           setCurrentPage(pageNum);
                           scrollToGrid();
                         }}
@@ -481,7 +398,10 @@ export function GlobalCatalogPage({
                 </div>
 
                 <button
-                  tabIndex={0} role="button" onClick={() => {
+                  tabIndex={0} 
+                  role="button" 
+                  data-tv-focusable="true"
+                  onClick={() => {
                     setCurrentPage(p => Math.min(totalPages, p + 1));
                     scrollToGrid();
                   }}

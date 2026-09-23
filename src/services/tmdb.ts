@@ -126,12 +126,28 @@ const DEFAULT_SEASON: Season = {
 
 /**
  * Wrapper de requisição resiliente ao TMDB:
- * Valida res.ok, status HTTP (401/404/429) e JSON seguro com fallback.
+ * Valida res.ok, status HTTP (401/404/429), timeout estrito de 6s e JSON seguro com fallback.
  */
 async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
   // 1. Tenta a rota interna /api/tmdb (Express proxy seguro)
   try {
-    const res = await fetch(url, options);
+    let controller: AbortController | null = null;
+    let timeoutId: any = null;
+    if (typeof AbortController !== 'undefined') {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => {
+        try { controller?.abort(); } catch (e) {}
+      }, 6000);
+    }
+
+    const fetchOptions: RequestInit = {
+      ...options,
+      ...(controller ? { signal: controller.signal } : {})
+    };
+
+    const res = await fetch(url, fetchOptions);
+    if (timeoutId) clearTimeout(timeoutId);
+
     if (res.ok) {
       const data = await res.json();
       if (data && typeof data === "object") {
@@ -140,13 +156,15 @@ async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
         }
       }
     } else {
-      console.warn(`[TMDB Service] Proxy local retornou status ${res.status}. Ativando fallback de deploy...`);
+      console.warn(`[TMDB Service] Proxy local retornou status ${res.status}. Ativando fallback de dados...`);
     }
   } catch (err: any) {
-    console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}). Ativando fallback de deploy...`);
+    if (err?.name === 'AbortError') {
+      console.warn(`[TMDB Service] Requisição abortada por timeout de 6s (${url}). Ativando fallback instantâneo...`);
+    } else {
+      console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}). Ativando fallback...`);
+    }
   }
-
-
 
   return fallback;
 }

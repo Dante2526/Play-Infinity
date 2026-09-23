@@ -70,6 +70,9 @@ import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { auth, db } from "./services/firebase";
 import { isAiStudioOrDevEnvironment } from "./utils/envUtils";
+import { safeSessionStorage, safeLocalStorage } from "./utils/safeStorage";
+import { useSmartTV } from "./hooks/useSmartTV";
+
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
 ) {
@@ -79,9 +82,9 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
       return { default: module.default || Object.values(module)[0] };
     } catch (error) {
       console.warn("[LazyRetry] Dynamic import failed, reloading page...", error);
-      const hasReloaded = sessionStorage.getItem("lazy-reload");
+      const hasReloaded = safeSessionStorage.getItem("lazy-reload");
       if (!hasReloaded) {
-        sessionStorage.setItem("lazy-reload", "true");
+        safeSessionStorage.setItem("lazy-reload", "true");
         window.location.reload();
       }
       throw error;
@@ -154,33 +157,7 @@ export default function App() {
     previous?: any;
   };
 
-  // Smart TV Detection for Spatial Navigation
-  useEffect(() => {
-    const ua = navigator.userAgent.toLowerCase();
-    const isTV = /smarttv|tizen|webos|bravia|android tv|aftt|afts|aftm|vidaa|hisense|philips|panasonic/i.test(ua) || 
-                 navigator.platform.toLowerCase().includes('tv');
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-        document.body.classList.add('using-keyboard');
-      }
-    };
-    const handleMouseDown = () => {
-      document.body.classList.remove('using-keyboard');
-    };
-
-    if (isTV) {
-      document.body.classList.add('is-smart-tv');
-    }
-
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('mousedown', handleMouseDown);
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('mousedown', handleMouseDown);
-    };
-  }, []);
+  const { isSmartTV } = useSmartTV();
 
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (window.location.pathname.toUpperCase() === '/ADM') {
@@ -262,6 +239,42 @@ export default function App() {
       setIsPaywallOpen(true);
     }
   }, [subscriptionLoading, isPremium, isTrialActive, playerModal.isOpen]);
+
+  // Listener do botão "Voltar" do controle remoto de Smart TV
+  useEffect(() => {
+    const handleTvBack = () => {
+      if (playerModal.isOpen) {
+        setPlayerModal(prev => ({ ...prev, isOpen: false }));
+        return;
+      }
+      if (activeLiveChannel) {
+        closeLiveChannel();
+        return;
+      }
+      if (isAuthModalOpen) {
+        setIsAuthModalOpen(false);
+        return;
+      }
+      if (isPaywallOpen) {
+        setIsPaywallOpen(false);
+        return;
+      }
+      if (notificationModalOpen) {
+        setNotificationModalOpen(false);
+        return;
+      }
+      if (webhookModalOpen) {
+        setWebhookModalOpen(false);
+        return;
+      }
+      if (viewState.type !== 'home') {
+        navigateTo({ type: 'home' });
+      }
+    };
+
+    window.addEventListener('playinfinity:tv_back', handleTvBack);
+    return () => window.removeEventListener('playinfinity:tv_back', handleTvBack);
+  }, [playerModal.isOpen, activeLiveChannel, isAuthModalOpen, isPaywallOpen, notificationModalOpen, webhookModalOpen, viewState.type]);
 
   useEffect(() => {
     // Fallback de segurança para redes móveis lentas: não trava na tela preta por mais de 3s
