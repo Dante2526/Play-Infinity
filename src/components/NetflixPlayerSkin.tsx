@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -62,6 +62,12 @@ interface NetflixPlayerSkinProps {
   onToggleFullscreen: () => void;
   activeServerKey?: string;
   onServerChange?: (serverKey: string) => void;
+  serversList?: Array<{
+    key: string;
+    label: string;
+    name?: string;
+    badge?: string;
+  }>;
   iframeRef: React.RefObject<HTMLIFrameElement | null>;
   onBrightnessChange?: (brightness: number) => void;
   isCam?: boolean;
@@ -131,6 +137,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   passThroughClicks = false,
   activeServerKey = "srv_watchplay",
   onServerChange,
+  serversList,
 }) => {
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
@@ -196,8 +203,20 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_startflix" ? "startflix" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
+
+  const displayAudioServers = useMemo(() => {
+    if (serversList && serversList.length > 0) {
+      return serversList;
+    }
+    return [
+      { key: "srv_watchplay", label: "WatchPlayer" },
+      { key: "srv_mixdrop", label: "MixDrop HD" },
+      { key: "srv_vip", label: "VIP Player" },
+      { key: "srv_startflix", label: "Startflix HD (Dublado)" },
+    ];
+  }, [serversList]);
 
   // Rastreamento se a abertura já foi pulada neste episódio
   const [hasSkippedThisEpisode, setHasSkippedThisEpisode] = useState<boolean>(false);
@@ -1912,44 +1931,33 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               <div className="space-y-2">
                 <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5 px-0.5">
                   <Volume2 className="w-3.5 h-3.5 text-neutral-400" />
-                  Áudio
+                  Áudio / Servidor
                 </h4>
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => onServerChange?.("srv_watchplay")}
-                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "watchplay"
-                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
-                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
-                    }`}
-                  >
-                    <span>WatchPlayer</span>
-                    {selectedAudio === "watchplay" && <Check className="w-4 h-4 text-black" />}
-                  </button>
-
-                  <button
-                    onClick={() => onServerChange?.("srv_mixdrop")}
-                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "mixdrop"
-                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
-                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
-                    }`}
-                  >
-                    <span>MixDrop</span>
-                    {selectedAudio === "mixdrop" && <Check className="w-4 h-4 text-black" />}
-                  </button>
-
-                  <button
-                    onClick={() => onServerChange?.("srv_vip")}
-                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedAudio === "vip"
-                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
-                        : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
-                    }`}
-                  >
-                    <span>VIP Player</span>
-                    {selectedAudio === "vip" && <Check className="w-4 h-4 text-black" />}
-                  </button>
+                <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                  {displayAudioServers.map((srv) => {
+                    const isSelected = activeServerKey === srv.key;
+                    return (
+                      <button
+                        key={srv.key}
+                        onClick={() => onServerChange?.(srv.key)}
+                        className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                          isSelected
+                            ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                            : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
+                        }`}
+                      >
+                        <div className="flex flex-col pr-2">
+                          <span className="font-medium">{srv.label || srv.name || srv.key}</span>
+                          {srv.badge && (
+                            <span className={`text-[10px] line-clamp-1 ${isSelected ? "text-neutral-700" : "text-neutral-400"}`}>
+                              {srv.badge}
+                            </span>
+                          )}
+                        </div>
+                        {isSelected && <Check className="w-4 h-4 text-black shrink-0" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
