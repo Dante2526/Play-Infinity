@@ -448,23 +448,23 @@ export class AppErrorBoundary extends (React.Component as any) {
       const now = Date.now();
       if (now - lastReload > 10000) { // 10s cooldown
         sessionStorage.setItem('__chunkReloadAt', String(now));
-        // Tenta limpar service worker caches (se tiver)
-        if ('caches' in window) {
-          caches.keys().then((keys) => {
-            keys.forEach((k) => caches.delete(k));
-            // Reload com cache-bust na URL pra forçar navegador refazer index.html
-            const sep = window.location.href.includes('?') ? '&' : '?';
-            const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
-            window.location.replace(newUrl);
-          }).catch(() => {
-            const sep = window.location.href.includes('?') ? '&' : '?';
-            const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
-            window.location.replace(newUrl);
-          });
-        } else {
+        const doReload = () => {
           const sep = window.location.href.includes('?') ? '&' : '?';
           const newUrl = window.location.href.split(sep)[0] + sep + 'nocache=' + now;
           window.location.replace(newUrl);
+        };
+        // Tenta limpar service worker caches (se tiver) antes do reload
+        try {
+          const cacheApi = (window as any).caches;
+          if (cacheApi && typeof cacheApi.keys === 'function') {
+            cacheApi.keys().then((keys: string[]) => {
+              return Promise.all(keys.map((k: string) => cacheApi.delete(k)));
+            }).then(doReload).catch(doReload);
+          } else {
+            doReload();
+          }
+        } catch {
+          doReload();
         }
       }
     }
