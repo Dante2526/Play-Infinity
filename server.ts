@@ -4333,12 +4333,20 @@ app.use(bolodechocolateRouter);
         if (ajaxRes.ok) {
           const ajaxData = await ajaxRes.json();
           if (ajaxData && ajaxData.status && Array.isArray(ajaxData.data?.options)) {
-            // Regra Estrita: descarta servidores na lista negra (Superflix, sfapi, byse, streamberry)
+            // Regra Estrita: descarta servidores na lista negra (Superflix, sfapi, byse, streamberry, embedmovies)
             // e prioriza opções com dublagem brasileira (Dublado PT-BR)
             const validOptions = ajaxData.data.options
               .filter((opt: any) => {
                 const u = (opt.embed || "").toLowerCase();
-                return !u.includes("superflix") && !u.includes("sfapi") && !u.includes("byse") && !u.includes("streamberry");
+                return (
+                  !u.includes("superflix") &&
+                  !u.includes("sfapi") &&
+                  !u.includes("byse") &&
+                  !u.includes("streamberry") &&
+                  !u.includes("embedmovies") &&
+                  !u.includes("videasy") &&
+                  !u.includes("vidlink")
+                );
               })
               .sort((a: any, b: any) => {
                 const aLang = (a.lang || "").toLowerCase();
@@ -4848,7 +4856,10 @@ app.use(bolodechocolateRouter);
           lower.includes("painel administrativo") ||
           lower.includes("bem-vindo") ||
           lower.includes("bem vindo") ||
-          lower.includes("acesso protegido por sessão segura")
+          lower.includes("acesso protegido por sessão segura") ||
+          lower.includes("embedmovies.org") ||
+          lower.includes("embedmovies") ||
+          lower.includes("superflixapi")
         ) {
           return true;
         }
@@ -4857,6 +4868,37 @@ app.use(bolodechocolateRouter);
         }
         return false;
       };
+
+      const sendVipUnavailablePage = (reason: string = "no_valid_sources") => {
+        console.warn(`[MyEmbed Stream] Provedores VIP sem stream para ${resolvedId}. Emitindo VIP_UNAVAILABLE (${reason}).`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        return res.status(404).send(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <script>
+    try {
+      window.parent.postMessage({ 
+        type: "VIP_UNAVAILABLE", 
+        reason: "${reason}" 
+      }, "*");
+    } catch(e) {}
+  </script>
+</body>
+</html>`);
+      };
+
+      // Se o Ajax comprovadamente não retornou nenhuma opção válida/homologada (ex: apenas superflixapi ou lista vazia),
+      // emite imediatamente VIP_UNAVAILABLE para disparar o fallback para MixDrop/outro player homologado.
+      if (!ajaxHadValidSources) {
+        return sendVipUnavailablePage("no_valid_sources");
+      }
 
       let myembedRes = await fetch(targetUrl, {
         headers: {
@@ -4885,29 +4927,7 @@ app.use(bolodechocolateRouter);
         const fallbackHtml = await fallbackRes.text();
 
         if (looksBlocked(fallbackHtml, fallbackRes.status)) {
-          console.warn(`[MyEmbed Stream] Provedores VIP sem stream limpo para ${resolvedId}. Emitindo VIP_UNAVAILABLE.`);
-          res.setHeader("Content-Type", "text/html; charset=utf-8");
-          return res.status(404).send(`
-            <!DOCTYPE html>
-            <html lang="pt-BR">
-            <head>
-              <meta charset="utf-8">
-              <style>
-                html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-              </style>
-            </head>
-            <body>
-              <script>
-                try {
-                  window.parent.postMessage({ 
-                    type: "VIP_UNAVAILABLE", 
-                    reason: "no_valid_sources" 
-                  }, "*");
-                } catch(e) {}
-              </script>
-            </body>
-            </html>
-          `);
+          return sendVipUnavailablePage("no_valid_sources");
         }
 
         playerHtml = fallbackHtml;
@@ -4956,6 +4976,38 @@ app.use(bolodechocolateRouter);
           window.alert = function() {};
           window.confirm = function() { return false; };
           window.onbeforeunload = null;
+
+          // Detecção de marcas da lista negra e watchdog de início de reprodução
+          var vipWatchdogTicks = 0;
+          var vipStreamWatchdog = setInterval(function() {
+            vipWatchdogTicks++;
+            var textContent = document.body ? (document.body.innerText || "") : "";
+            var isFakeBrand = textContent.includes("embedmovies.org") || textContent.includes("embedmovies");
+            var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
+            var isPlaying = v && !v.paused && (v.currentTime > 0 || (v.readyState && v.readyState >= 2));
+
+            if (isFakeBrand) {
+              clearInterval(vipStreamWatchdog);
+              console.warn('[Play Infinity VIP] Marca fantasma embedmovies detectada. Emitindo VIP_UNAVAILABLE.');
+              try {
+                window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "embedmovies_detected" }, "*");
+              } catch(e) {}
+              return;
+            }
+
+            // Se após 3.5 segundos ainda não houver vídeo tocando e nenhum stream ativo
+            if (vipWatchdogTicks >= 7) {
+              if (!isPlaying) {
+                clearInterval(vipStreamWatchdog);
+                console.warn('[Play Infinity VIP] Stream não iniciou reprodução real. Emitindo VIP_UNAVAILABLE.');
+                try {
+                  window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "no_stream_playing" }, "*");
+                } catch(e) {}
+              } else {
+                clearInterval(vipStreamWatchdog);
+              }
+            }
+          }, 500);
 
           function sendStatus() {
             var v = document.querySelector('video');

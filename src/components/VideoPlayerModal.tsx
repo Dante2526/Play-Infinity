@@ -702,8 +702,8 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
-    // Para o VIP Player e MixDrop, liberamos a skin imediatamente sem esperar postMessage para não ficar em tela preta
-    setPlayerSkinReady(serverKey === "srv_vip" || serverKey === "srv_mixdrop");
+    // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
+    setPlayerSkinReady(serverKey === "srv_mixdrop");
     setError(null);
 
     let newUrl: string;
@@ -748,12 +748,12 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  // Watchdog inteligente de segurança: se o player demorar mais de 15s sem iniciar,
+  // Watchdog inteligente de segurança: se o player demorar mais de 6-10s sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = isAnimeMedia ? 15000 : (selectedServerKey === 'srv_vip' ? 14000 : 10000);
+    const timeoutDuration = isAnimeMedia ? 12000 : (selectedServerKey === 'srv_vip' ? 5500 : 8000);
     const timer = setTimeout(() => {
       if (!playerSkinReady && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -908,6 +908,9 @@ export function VideoPlayerModal({
       "https://superflixapi.top",
     ];
     if (allowedOrigins.includes(event.origin)) return true;
+    if (event.origin === "null" && iframeRef.current?.contentWindow && event.source === iframeRef.current.contentWindow) {
+      return true;
+    }
     if (iframeRef.current?.src) {
       try {
         const parsed = new URL(iframeRef.current.src, window.location.origin);
@@ -1842,8 +1845,6 @@ export function VideoPlayerModal({
                 onLoad={() => {
                   setIsLoading(false);
                   if (
-                    selectedServerKey === "srv_vip" ||
-                    
                     selectedServerKey === "srv_mixdrop" ||
                     activeIframeUrl?.includes("/api/mixdrop-stream")
                   ) {

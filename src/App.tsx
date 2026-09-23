@@ -33,7 +33,8 @@ import {
   FileText,
   Bell,
   Mic,
-  MicOff
+  MicOff,
+  ArrowDownToLine
 } from "lucide-react";
 import { useVoiceSearch } from "./hooks/useVoiceSearch";
 import { 
@@ -141,9 +142,11 @@ const DetailsPage = lazyWithRetry(() => import('./pages/DetailsPage').then(m => 
 const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearchPage').then(m => ({ default: m.GlobalSearchPage })));
 const UserProfilePage = lazyWithRetry(() => import('./pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
 const FavoritesPage = lazyWithRetry(() => import('./pages/FavoritesPage').then(m => ({ default: m.FavoritesPage })));
+const DownloadsPage = lazyWithRetry(() => import('./pages/DownloadsPage').then(m => ({ default: m.DownloadsPage })));
 const GlobalCatalogPage = lazyWithRetry(() => import('./pages/GlobalCatalogPage').then(m => ({ default: m.GlobalCatalogPage })));
 const ProviderPage = lazyWithRetry(() => import('./pages/ProviderPage').then(m => ({ default: m.ProviderPage })));
 import { NavItem } from './components/NavItem';
+import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
 
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
 
@@ -151,7 +154,7 @@ import { OnPlayHandler } from "./types";
 
 export default function App() {
   type ViewState = { 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'details' | 'live-tv' | 'admin';
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'downloads' | 'details' | 'live-tv' | 'admin';
     id?: string;
     itemData?: CatalogItem;
     previous?: any;
@@ -712,6 +715,14 @@ export default function App() {
             <CalendarDays className="w-3 h-3 lg:w-3.5 lg:h-3.5" />
             <span className="whitespace-nowrap">Calendário</span>
           </button>
+          <button 
+            onClick={() => navigateTo({ type: 'downloads' })} 
+            data-active-nav={viewState.type === 'downloads' ? 'true' : undefined}
+            className={`px-3 lg:px-5 py-1.5 lg:py-2 rounded-full text-xs lg:text-sm font-medium transition-all flex items-center gap-1 lg:gap-1.5 cursor-pointer ${viewState.type === 'downloads' ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30 shadow-[inset_0_1px_rgba(255,255,255,0.1)]' : 'hover:bg-white/10 text-neutral-300 hover:text-white'}`}
+          >
+            <ArrowDownToLine className="w-3 h-3 lg:w-3.5 lg:h-3.5 text-blue-400" />
+            <span className="whitespace-nowrap">Downloads</span>
+          </button>
         </nav>
 
         <div className="flex items-center gap-2 lg:gap-3 shrink-0 mr-1">
@@ -793,6 +804,20 @@ export default function App() {
             </button>
           )}
 
+          {/* BOTÃO DE DOWNLOADS (MOBILE) */}
+          <button 
+            tabIndex={0}
+            onClick={() => navigateTo({ type: 'downloads' })}
+            className={`p-2 rounded-full border active:scale-95 transition-all shadow-md cursor-pointer ${
+              viewState.type === 'downloads'
+                ? 'bg-blue-600/30 text-blue-400 border-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.5)]'
+                : 'bg-[#161616]/90 backdrop-blur-md border-white/10 text-neutral-300 hover:text-white'
+            }`}
+            title="Central de Downloads"
+          >
+            <ArrowDownToLine className="w-4 h-4 text-blue-400" />
+          </button>
+
           {/* BOTÃO DE NOTIFICAÇÕES (MOBILE) */}
           <button 
             tabIndex={0}
@@ -865,6 +890,8 @@ export default function App() {
         <UserProfilePage onNavigate={(type) => navigateTo({ type: type as any })} onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'favorites' ? (
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
+      ) : viewState.type === 'downloads' ? (
+        <DownloadsPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigate={(t) => navigateTo({ type: t as any })} />
       ) : viewState.type === 'admin' ? (
         
           <AdminPage onBack={() => {
@@ -883,7 +910,7 @@ export default function App() {
       </React.Suspense>
 
       {/* Footer Area */}
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'downloads' && (
       <footer className="pt-16 pb-24 lg:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
         <div className="font-black text-4xl tracking-tighter flex items-center mb-6">
           <span className="text-neutral-500">PLAY</span>
@@ -902,6 +929,7 @@ export default function App() {
             { label: "TV Ao Vivo", type: "live-tv" },
             { label: "Calendário", type: "calendar" },
             { label: "Favoritos", type: "favorites" },
+            { label: "Downloads", type: "downloads" },
             { label: "Buscar", type: "search" }
           ].map(btn => (
              <button 
@@ -991,6 +1019,7 @@ export default function App() {
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
       <GlobalErrorModal />
+      <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />
 
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
       <React.Suspense fallback={null}>

@@ -33,8 +33,7 @@ import {
   Bell,
   Mic,
   MicOff,
-  Download,
-  AlertCircle
+  Download
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes } from "../services/episodeAvailability";
@@ -194,14 +193,6 @@ export function DetailsPage({
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [episodeDownloads, setEpisodeDownloads] = useState<Record<number, DownloadAvailability>>({});
   const [downloadingEp, setDownloadingEp] = useState<number | null>(null);
-  const [downloadFeedback, setDownloadFeedback] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
-
-  const showDownloadFeedback = (message: string, type: "success" | "error" | "info" = "info") => {
-    setDownloadFeedback({ message, type });
-    setTimeout(() => {
-      setDownloadFeedback(null);
-    }, 5000);
-  };
 
   // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
   useEffect(() => {
@@ -652,51 +643,34 @@ export function DetailsPage({
                 {isSeries ? `Assistir Temporada ${selectedSeason}` : 'Assistir Filme'}
               </button>
 
-              {/* Botão Baixar Filme (MixDrop + Oracle VPS) */}
-              {!isSeries && (
+              {/* Botão Baixar Filme (Disponível via MixDrop + Oracle VPS) */}
+              {!isSeries && movieDownloadInfo?.available && movieDownloadInfo.directDownloadUrl && (
                 <button
                   type="button"
-                  onClick={async () => {
-                    if (isDownloading) return;
+                  onClick={() => {
+                    if (!movieDownloadInfo.directDownloadUrl) return;
                     setIsDownloading(true);
-                    try {
-                      let downloadUrl = movieDownloadInfo?.directDownloadUrl;
-                      let fileName = movieDownloadInfo?.fileName;
-
-                      if (!downloadUrl) {
-                        const targetId = Number(item.tmdbId || item.id);
-                        const directUrl = (item as any).playerUrl;
-                        const res = await checkMovieDownloadAvailability(targetId, item.title, directUrl);
-                        if (res.available && res.directDownloadUrl) {
-                          setMovieDownloadInfo(res);
-                          downloadUrl = res.directDownloadUrl;
-                          fileName = res.fileName;
-                        }
-                      }
-
-                      if (downloadUrl) {
-                        showDownloadFeedback("Iniciando download em alta definição...", "success");
-                        triggerDirectDownload(downloadUrl, fileName);
-                      } else {
-                        showDownloadFeedback("Download em alta definição via MixDrop temporariamente indisponível para este título.", "error");
-                      }
-                    } catch (err) {
-                      showDownloadFeedback("Não foi possível conectar ao servidor de download. Tente novamente.", "error");
-                    } finally {
-                      setTimeout(() => setIsDownloading(false), 2500);
-                    }
+                    triggerDirectDownload(movieDownloadInfo.directDownloadUrl, movieDownloadInfo.fileName, {
+                      tmdbId: item.tmdbId || item.id || itemId,
+                      title: item.title,
+                      type: "movie",
+                      posterUrl: item.posterUrl || item.imageUrl,
+                      backdropUrl: item.backdropUrl,
+                      quality: item.quality || "HD"
+                    });
+                    setTimeout(() => setIsDownloading(false), 4000);
                   }}
                   disabled={isDownloading}
-                  className="flex items-center justify-center gap-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 hover:text-emerald-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-emerald-500/40 hover:border-emerald-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                  className="flex items-center justify-center gap-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-blue-500/40 hover:border-blue-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
                   title="Baixar filme em alta definição direto para o seu dispositivo via MixDrop"
                 >
                   {isDownloading ? (
-                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-emerald-400" />
+                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-blue-400" />
                   ) : (
-                    <Download className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <Download className="w-4 h-4 md:w-5 md:h-5 text-blue-400 group-hover:scale-110 transition-transform" />
                   )}
-                  <span>{isDownloading ? "Verificando..." : "Baixar Filme"}</span>
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                  <span>{isDownloading ? "Iniciando..." : "Baixar Filme"}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
                     HD
                   </span>
                 </button>
@@ -1002,54 +976,39 @@ export function DetailsPage({
                           <Check className="w-4 h-4 stroke-[3] text-white transition-all" />
                         </button>
 
-                        {/* Botão de Download do Episódio (MixDrop + Oracle VPS) */}
-                        <button
-                          tabIndex={0}
-                          role="button"
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (downloadingEp === ep.ep) return;
-                            setDownloadingEp(ep.ep);
-                            try {
-                              let info = episodeDownloads[ep.ep];
-                              if (!info?.available || !info?.directDownloadUrl) {
-                                const tmdbNum = Number(effectiveTmdbId);
-                                const directUrl = (ep as any).playerUrl || (ep as any).url;
-                                info = await checkEpisodeDownloadAvailability(tmdbNum, selectedSeason, ep.ep, item.title, directUrl);
-                                if (info.available && info.directDownloadUrl) {
-                                  setEpisodeDownloads(prev => ({
-                                    ...prev,
-                                    [ep.ep]: info
-                                  }));
-                                }
-                              }
-
-                              if (info?.available && info?.directDownloadUrl) {
-                                showDownloadFeedback(`Iniciando download do Episódio ${ep.ep} em HD...`, "success");
-                                triggerDirectDownload(info.directDownloadUrl, info.fileName);
-                              } else {
-                                showDownloadFeedback(`Download em alta definição via MixDrop não encontrado para o Episódio ${ep.ep}.`, "error");
-                              }
-                            } catch (err) {
-                              showDownloadFeedback(`Erro ao conectar ao servidor de download para o Episódio ${ep.ep}.`, "error");
-                            } finally {
-                              setTimeout(() => setDownloadingEp(null), 2500);
-                            }
-                          }}
-                          disabled={downloadingEp === ep.ep}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer border shadow-sm ${
-                            episodeDownloads[ep.ep]?.available
-                              ? "bg-emerald-600/30 text-emerald-400 border-emerald-500/50 hover:bg-emerald-600 hover:text-white hover:scale-105 active:scale-95"
-                              : "bg-white/10 text-neutral-300 hover:bg-emerald-600 hover:text-white border-white/10 hover:border-emerald-500 hover:scale-105 active:scale-95"
-                          }`}
-                          title={`Baixar episódio ${ep.ep} em HD`}
-                        >
-                          {downloadingEp === ep.ep ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
-                          ) : (
-                            <Download className="w-3.5 h-3.5" />
-                          )}
-                        </button>
+                        {/* Botão de Download do Episódio (se disponível no MixDrop) */}
+                        {episodeDownloads[ep.ep]?.available && episodeDownloads[ep.ep]?.directDownloadUrl && (
+                          <button
+                            tabIndex={0}
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const info = episodeDownloads[ep.ep];
+                              if (!info?.directDownloadUrl) return;
+                              setDownloadingEp(ep.ep);
+                              triggerDirectDownload(info.directDownloadUrl, info.fileName, {
+                                tmdbId: item.tmdbId || item.id || itemId,
+                                title: item.title,
+                                type: "series",
+                                season: selectedSeason,
+                                episode: ep.ep,
+                                posterUrl: item.posterUrl || item.imageUrl,
+                                backdropUrl: item.backdropUrl,
+                                quality: "HD"
+                              });
+                              setTimeout(() => setDownloadingEp(null), 4000);
+                            }}
+                            disabled={downloadingEp === ep.ep}
+                            className="w-8 h-8 rounded-full bg-blue-500/10 hover:bg-blue-600 flex items-center justify-center text-blue-400 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-blue-500/30 hover:border-blue-500 shadow-sm"
+                            title={`Baixar episódio ${ep.ep} em HD (MixDrop)`}
+                          >
+                            {downloadingEp === ep.ep ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
 
                         {/* Botão de Play */}
                         <div 
@@ -1309,34 +1268,6 @@ export function DetailsPage({
                 </>
               );
             })()}
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notificação de Download */}
-      {downloadFeedback && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-md animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl shadow-2xl backdrop-blur-xl border ${
-            downloadFeedback.type === 'success'
-              ? 'bg-emerald-950/90 border-emerald-500/50 text-emerald-200'
-              : downloadFeedback.type === 'error'
-              ? 'bg-red-950/90 border-red-500/50 text-red-200'
-              : 'bg-neutral-900/90 border-neutral-700 text-neutral-200'
-          }`}>
-            {downloadFeedback.type === 'success' ? (
-              <Check className="w-5 h-5 text-emerald-400 shrink-0" />
-            ) : downloadFeedback.type === 'error' ? (
-              <AlertCircle className="w-5 h-5 text-red-400 shrink-0" />
-            ) : (
-              <Info className="w-5 h-5 text-cyan-400 shrink-0" />
-            )}
-            <p className="text-sm font-medium leading-snug">{downloadFeedback.message}</p>
-            <button
-              onClick={() => setDownloadFeedback(null)}
-              className="ml-auto text-current opacity-60 hover:opacity-100 p-1 transition-opacity cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )}
