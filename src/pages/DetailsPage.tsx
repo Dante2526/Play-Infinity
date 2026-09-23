@@ -32,10 +32,17 @@ import {
   FileText,
   Bell,
   Mic,
-  MicOff
+  MicOff,
+  Download
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes } from "../services/episodeAvailability";
+import { 
+  checkMovieDownloadAvailability, 
+  checkEpisodeDownloadAvailability, 
+  triggerDirectDownload, 
+  DownloadAvailability 
+} from "../services/downloadService";
 
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
 import { 
@@ -181,6 +188,11 @@ export function DetailsPage({
   const [selectedTrailerIndex, setSelectedTrailerIndex] = useState<number>(0);
   const [isTrailerModalOpen, setIsTrailerModalOpen] = useState<boolean>(false);
   const [loadingTrailer, setLoadingTrailer] = useState<boolean>(false);
+  const [movieDownloadInfo, setMovieDownloadInfo] = useState<DownloadAvailability | null>(null);
+  const [isCheckingDownload, setIsCheckingDownload] = useState<boolean>(false);
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+  const [episodeDownloads, setEpisodeDownloads] = useState<Record<number, DownloadAvailability>>({});
+  const [downloadingEp, setDownloadingEp] = useState<number | null>(null);
 
   // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
   useEffect(() => {
@@ -304,6 +316,30 @@ export function DetailsPage({
     return () => { isMounted = false; };
   }, [itemId, item.tmdbId]);
 
+  // Verificar disponibilidade de download para filmes via MixDrop
+  useEffect(() => {
+    let active = true;
+    if (item.type === 'movie') {
+      const targetId = Number(item.tmdbId || item.id);
+      if (targetId && !isNaN(targetId)) {
+        setIsCheckingDownload(true);
+        checkMovieDownloadAvailability(targetId, item.title)
+          .then(res => {
+            if (active) {
+              setMovieDownloadInfo(res);
+              setIsCheckingDownload(false);
+            }
+          })
+          .catch(() => {
+            if (active) setIsCheckingDownload(false);
+          });
+      }
+    } else {
+      setMovieDownloadInfo(null);
+    }
+    return () => { active = false; };
+  }, [item.type, item.id, item.tmdbId, item.title]);
+
   const isSeries = item.type === 'series';
   const effectiveTmdbId = item.tmdbId || item.id;
   const isAnimeItem = Boolean(item.isAnime || initialItem?.isAnime);
@@ -396,6 +432,34 @@ export function DetailsPage({
       };
     });
   }, [seasonData, verifiedAvailableEpisodes, selectedSeason, item.title, tmdbDetails]);
+
+  // Verificar disponibilidade de download dos episódios visíveis via MixDrop
+  useEffect(() => {
+    let active = true;
+    if (!isSeries || !effectiveTmdbId) return;
+
+    const tmdbNum = Number(effectiveTmdbId);
+    if (!tmdbNum || isNaN(tmdbNum)) return;
+
+    // Dispara checagem em background para os episódios da temporada
+    const epNumbers = currentEpisodes.map(e => e.ep);
+    if (epNumbers.length === 0) return;
+
+    // Checamos em lote suave para não sobrecarregar
+    epNumbers.forEach(async (epNum) => {
+      try {
+        const avail = await checkEpisodeDownloadAvailability(tmdbNum, selectedSeason, epNum, item.title);
+        if (active && avail.available) {
+          setEpisodeDownloads(prev => ({
+            ...prev,
+            [epNum]: avail
+          }));
+        }
+      } catch (_) {}
+    });
+
+    return () => { active = false; };
+  }, [isSeries, effectiveTmdbId, selectedSeason, currentEpisodes, item.title]);
 
   const totalSeasonEpisodes = currentEpisodes.length;
 
@@ -578,6 +642,32 @@ export function DetailsPage({
                 <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" />
                 {isSeries ? `Assistir Temporada ${selectedSeason}` : 'Assistir Filme'}
               </button>
+
+              {/* Botão Baixar Filme (Disponível via MixDrop + Oracle VPS) */}
+              {!isSeries && movieDownloadInfo?.available && movieDownloadInfo.directDownloadUrl && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!movieDownloadInfo.directDownloadUrl) return;
+                    setIsDownloading(true);
+                    triggerDirectDownload(movieDownloadInfo.directDownloadUrl, movieDownloadInfo.fileName);
+                    setTimeout(() => setIsDownloading(false), 4000);
+                  }}
+                  disabled={isDownloading}
+                  className="flex items-center justify-center gap-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 hover:text-emerald-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-emerald-500/40 hover:border-emerald-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                  title="Baixar filme em alta definição direto para o seu dispositivo via MixDrop"
+                >
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-emerald-400" />
+                  ) : (
+                    <Download className="w-4 h-4 md:w-5 md:h-5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                  )}
+                  <span>{isDownloading ? "Iniciando..." : "Baixar Filme"}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
+                    HD
+                  </span>
+                </button>
+              )}
 
               {/* Botão Assistir Trailer */}
               {(trailerVideosList.length > 0 || trailerVideo) && (() => {
@@ -878,6 +968,31 @@ export function DetailsPage({
                         >
                           <Check className="w-4 h-4 stroke-[3] text-white transition-all" />
                         </button>
+
+                        {/* Botão de Download do Episódio (se disponível no MixDrop) */}
+                        {episodeDownloads[ep.ep]?.available && episodeDownloads[ep.ep]?.directDownloadUrl && (
+                          <button
+                            tabIndex={0}
+                            role="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const info = episodeDownloads[ep.ep];
+                              if (!info?.directDownloadUrl) return;
+                              setDownloadingEp(ep.ep);
+                              triggerDirectDownload(info.directDownloadUrl, info.fileName);
+                              setTimeout(() => setDownloadingEp(null), 4000);
+                            }}
+                            disabled={downloadingEp === ep.ep}
+                            className="w-8 h-8 rounded-full bg-white/10 hover:bg-emerald-600 flex items-center justify-center text-neutral-300 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/10 hover:border-emerald-500 shadow-sm"
+                            title={`Baixar episódio ${ep.ep} em HD (MixDrop)`}
+                          >
+                            {downloadingEp === ep.ep ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                        )}
 
                         {/* Botão de Play */}
                         <div 
