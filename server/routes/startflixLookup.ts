@@ -1,48 +1,48 @@
 /**
  * Endpoint: GET /api/startflix-lookup?tmdb_id=126027&season=4&episode=23
  *
- * Lookup do catálogo startflix (Ghosts e futuras séries).
- * Retorna: { embed_url, player_type, player_id, audio }
+ * LIVE FETCH ARCHITECTURE:
+ * Em vez de cachear embed_url no JSON (token expira em dias/semanas no UPNS),
+ * guardamos SÓ o episode_id (estável) no catálogo. Na hora que o user clica play,
+ * fazemos LIVE FETCH em painel-aso.sbs/episodio/{episode_id} → pegamos o
+ * embed_url ATUAL (token fresco). Cache em memória 5min pra evitar spam.
  *
- * O frontend usa o embed_url como src de <iframe> no VideoPlayerModal.
- * Funciona porque embedplayapiupn.upns.xyz NÃO tem X-Frame-Options.
+ * Vantagens:
+ * - Sempre usa o token MAIS RECENTE do painel
+ * - Se painel re-add video com novo token, funciona automático
+ * - Não precisa re-scrapar catálogo quando UPNS remove
  *
- * Catálogo: public/data/startflix-catalog.json
- * (gerado por scripts/scan_startflix_ghosts.py — rode de novo pra atualizar)
+ * Catálogo: public/data/startflix-catalog.json (só episode_id, sem embed_url)
  */
 import { Router } from "express";
-import fs from "fs";
-import path from "path";
 
 const router = Router();
 
-// Cache do catálogo em memória (carrega 1x, serve pra sempre)
+// Cache do catálogo em memória (carrega 1x)
 let _catalog: any = null;
 let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
 
+// Cache de embed_urls fresh (5 min TTL)
+const _embedCache: Map<string, {
+  embed_url: string;
+  player_type: string;
+  functional: boolean;
+  expires: number;
+}> = new Map();
+
+const EMBED_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
 function loadCatalog() {
-  if (_catalog && _episodeIndex.size > 0) return;
+  if (_catalog) return;
 
-  const possiblePaths = [
-    path.join(process.cwd(), "public", "data", "startflix-catalog.json"),
-    path.join(process.cwd(), "data", "startflix-catalog.json"),
-  ];
-
-  let raw = "";
-  for (const p of possiblePaths) {
-    if (fs.existsSync(p)) {
-      try {
-        raw = fs.readFileSync(p, "utf-8");
-        break;
-      } catch (_) {}
-    }
-  }
-
+  const fs = require("fs");
+  const path = require("path");
+  const catalogPath = path.join(process.cwd(), "public", "data", "startflix-catalog.json");
   try {
-    _catalog = raw ? JSON.parse(raw) : { series: [] };
-    _episodeIndex.clear();
+    const raw = fs.readFileSync(catalogPath, "utf-8");
+    _catalog = JSON.parse(raw);
 
-    // Constrói índice pra lookup O(1)
+    // Constrói índice pra lookup O(1) por (tmdb_id, season, episode)
     for (const series of _catalog.series || []) {
       const tmdbId = series.tmdb_id;
       for (const season of series.seasons || []) {
@@ -64,7 +64,47 @@ function loadCatalog() {
   }
 }
 
-router.get("/api/startflix-lookup", (req, res) => {
+// Extrai players do HTML retornado por painel-aso.sbs/episodio/{id}
+function extractPlayers(html: string): Array<{ source: string; type: string; id: string }> {
+  const players: Array<{ source: string; type: string; id: string }> = [];
+
+  // Pattern: <button ... data-source="..." ... data-type="..." ... data-id="...">
+  const buttonPattern = /<button\b[^>]*\bdata-source="([^"]+)"[^>]*>/g;
+  let match;
+  while ((match = buttonPattern.exec(html)) !== null) {
+    const buttonHtml = match[0];
+    const source = match[1];
+    const typeMatch = buttonHtml.match(/data-type="([^"]+)"/);
+    const idMatch = buttonHtml.match(/data-id="([^"]+)"/);
+    players.push({
+      source,
+      type: typeMatch?.[1] || 'iframe',
+      id: idMatch?.[1] || '',
+    });
+  }
+
+  return players;
+}
+
+// Escolhe o melhor player: prefere upns.xyz (sem X-Frame-Options)
+function pickBestPlayer(players: Array<{ source: string; type: string; id: string }>) {
+  if (players.length === 0) return null;
+
+  // Prioridade 1: UPNS (testado sem X-Frame-Options)
+  const upns = players.find(p =>
+    p.source.includes('upns.xyz') || p.source.includes('embedplayapiupn')
+  );
+  if (upns) return { ...upns, functional: true };
+
+  // Prioridade 2: iframe genérico (pode ou não funcionar)
+  const iframe = players.find(p => p.type === 'iframe');
+  if (iframe) return { ...iframe, functional: false };
+
+  // Última opção
+  return { ...players[0], functional: false };
+}
+
+router.get("/api/startflix-lookup", async (req, res) => {
   try {
     loadCatalog();
 
@@ -92,22 +132,138 @@ router.get("/api/startflix-lookup", (req, res) => {
       });
     }
 
-    // Verifica se o player é funcional (upns.xyz funciona; playembedapi não)
-    const isFunctional = ep.embed_url?.includes("upns.xyz");
+    // Verifica cache em memória (5 min) — evita spam no painel-aso
+    const cacheKey = `embed:${ep.episode_id}`;
+    const cached = _embedCache.get(cacheKey);
+    if (cached && cached.expires > Date.now()) {
+      return res.json({
+        embed_url: cached.embed_url,
+        player_type: cached.player_type,
+        player_id: ep.episode_id,
+        audio: ep.audio || "Dublado",
+        series_title: ep.series_title,
+        functional: cached.functional,
+        cached: true,
+      });
+    }
 
-    // Headers pra cache do navegador (1 hora)
-    res.setHeader("Cache-Control", "public, max-age=3600");
-    return res.json({
-      embed_url: ep.embed_url,
-      player_type: ep.player_type,
-      player_id: ep.player_id,
-      audio: ep.audio || "Dublado",
-      series_title: ep.series_title,
-      functional: !!isFunctional,
-      not_functional_reason: isFunctional
-        ? null
-        : "Este episódio só tem player playembedapi.site (X-Frame-Options bloqueia iframe). Catálogo precisa ser re-scrapeado quando CF liberar.",
-    });
+    // LIVE FETCH: pega embed_url ATUAL do painel-aso
+    const painelUrl = `https://www.painel-aso.sbs/episodio/${ep.episode_id}`;
+    const referer = `https://www.painel-aso.sbs/embed/${tmdbId}`;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+      const upstream = await fetch(painelUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+          'Referer': referer,
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!upstream.ok) {
+        // Fallback: usa embed_url do catálogo (pode estar morto, mas é melhor que nada)
+        if (ep.embed_url) {
+          return res.json({
+            embed_url: ep.embed_url,
+            player_type: ep.player_type || 'iframe',
+            player_id: ep.episode_id,
+            audio: ep.audio || "Dublado",
+            series_title: ep.series_title,
+            functional: ep.embed_url.includes('upns.xyz'),
+            fallback: true,
+            fallback_reason: `painel-aso retornou ${upstream.status}`,
+          });
+        }
+        return res.status(502).json({ error: `painel-aso retornou ${upstream.status}` });
+      }
+
+      const html = await upstream.text();
+
+      // Verifica se Cloudflare bloqueou
+      if (html.includes('Just a moment') || html.includes('cf-mitigated') || html.length < 200) {
+        // Fallback: usa embed_url do catálogo
+        if (ep.embed_url) {
+          return res.json({
+            embed_url: ep.embed_url,
+            player_type: ep.player_type || 'iframe',
+            player_id: ep.episode_id,
+            audio: ep.audio || "Dublado",
+            series_title: ep.series_title,
+            functional: ep.embed_url.includes('upns.xyz'),
+            fallback: true,
+            fallback_reason: "Cloudflare bloqueou o painel-aso",
+          });
+        }
+        return res.status(502).json({ error: "Cloudflare bloqueou o painel-aso" });
+      }
+
+      // Extrai players do HTML
+      const players = extractPlayers(html);
+      const best = pickBestPlayer(players);
+
+      if (!best) {
+        // Fallback: usa embed_url do catálogo
+        if (ep.embed_url) {
+          return res.json({
+            embed_url: ep.embed_url,
+            player_type: ep.player_type || 'iframe',
+            player_id: ep.episode_id,
+            audio: ep.audio || "Dublado",
+            series_title: ep.series_title,
+            functional: ep.embed_url.includes('upns.xyz'),
+            fallback: true,
+            fallback_reason: "Painel não retornou players",
+          });
+        }
+        return res.status(404).json({ error: "Nenhum player encontrado no painel" });
+      }
+
+      // Atualiza cache em memória (5 min)
+      _embedCache.set(cacheKey, {
+        embed_url: best.source,
+        player_type: best.type,
+        functional: best.functional,
+        expires: Date.now() + EMBED_CACHE_TTL,
+      });
+
+      console.log(`[startflix-lookup] LIVE FETCH: S${season}E${episode} → ${best.source.substring(0, 80)}`);
+
+      return res.json({
+        embed_url: best.source,
+        player_type: best.type,
+        player_id: ep.episode_id,
+        audio: ep.audio || "Dublado",
+        series_title: ep.series_title,
+        functional: best.functional,
+        cached: false,
+      });
+    } catch (fetchErr: any) {
+      console.error("[startflix-lookup] Erro no LIVE FETCH:", fetchErr?.message);
+
+      // Fallback: usa embed_url do catálogo
+      if (ep.embed_url) {
+        return res.json({
+          embed_url: ep.embed_url,
+          player_type: ep.player_type || 'iframe',
+          player_id: ep.episode_id,
+          audio: ep.audio || "Dublado",
+          series_title: ep.series_title,
+          functional: ep.embed_url.includes('upns.xyz'),
+          fallback: true,
+          fallback_reason: `Erro ao fetchar painel: ${fetchErr?.message || 'unknown'}`,
+        });
+      }
+
+      return res.status(502).json({ error: "Erro ao contatar painel-aso" });
+    }
   } catch (err: any) {
     console.error("[startflix-lookup] Erro:", err);
     return res.status(500).json({ error: "Erro interno" });
@@ -131,7 +287,9 @@ router.get("/api/startflix-catalog", (req, res) => {
         seasons: s.seasons.map((sn: any) => ({
           season: sn.season,
           episode_count: sn.episodes.length,
-          functional_count: sn.episodes.filter((e: any) => e.embed_url?.includes("upns.xyz")).length,
+          functional_count: sn.episodes.filter((e: any) =>
+            e.embed_url?.includes("upns.xyz")
+          ).length,
         })),
       })),
     });
