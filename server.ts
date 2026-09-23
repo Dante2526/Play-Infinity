@@ -4511,7 +4511,7 @@ app.use(encontreiLookupRouter);
           }
         },
         autoplay: true,
-        muted: false,
+        muted: true,  // Inicia mudo para garantir autoplay (política do browser) — desmuta após canplay
         playsInline: true,
         hotkey: false,
         gesture: false,
@@ -4568,6 +4568,23 @@ app.use(encontreiLookupRouter);
       art.on("video:playing", sendStatus);
       art.on("video:progress", sendStatus);
       art.on("video:ended", notifyEnded);
+
+      // Desmuta automaticamente no primeiro canplay — browser força muted em autoplay sem interação
+      var _autoUnmuted = false;
+      art.on("video:canplay", function() {
+        if (_autoUnmuted) return;
+        _autoUnmuted = true;
+        var v = art.video || document.querySelector("video");
+        if (v) {
+          try {
+            v.muted = false;
+            v.volume = 1;
+            art.muted = false;
+            art.volume = 1;
+          } catch(err) {}
+        }
+        sendStatus();
+      });
 
       setInterval(sendStatus, 250);
 
