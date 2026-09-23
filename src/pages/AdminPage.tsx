@@ -672,14 +672,27 @@ export function AdminPage({ onBack }: AdminPageProps) {
           const tempAuth = getAuth(tempApp);
 
           const userCred = await signInWithEmailAndPassword(tempAuth, editingUser.email, oldPass);
+          
           if (trimmedPass && trimmedPass !== oldPass) {
             await updatePassword(userCred.user, trimmedPass);
           }
+          
           if (trimmedEmail !== editingUser.email) {
             await updateEmail(userCred.user, trimmedEmail);
           }
         } catch (authErr: any) {
           console.warn("[AdminPage] Falha ao sincronizar alteração no Firebase Auth:", authErr);
+          if (trimmedEmail !== editingUser.email) {
+            // Avisa o administrador se o Firebase rejeitou a troca de e-mail (ex: e-mail já em uso ou proteção do Firebase)
+            const msg = authErr?.code === "auth/email-already-in-use" 
+              ? "Este novo e-mail já está cadastrado em outra conta." 
+              : authErr?.code === "auth/requires-recent-login"
+              ? "O Firebase exigiu recadastro. Recomendado criar um novo usuário com o e-mail oficial."
+              : (authErr?.message || "Erro de sincronização de login.");
+            setEditError(`Aviso: Os dados foram salvos no painel, mas o login oficial no Firebase Auth falhou: ${msg}`);
+            setEditLoading(false);
+            return;
+          }
         } finally {
           if (tempApp) {
             try { await deleteApp(tempApp); } catch(e) {}

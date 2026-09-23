@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { X, Lock, Mail, AlertCircle, User } from "lucide-react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 import { reportAppError } from "./GlobalErrorModal";
@@ -80,6 +80,12 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, email.trim(), password);
         if (userCred.user) {
+          try {
+            await updateProfile(userCred.user, { displayName: name.trim() });
+          } catch (profileErr) {
+            console.warn("[Auth] Não foi possível salvar displayName nativo:", profileErr);
+          }
+
           await setDoc(doc(db, "usuarios", userCred.user.uid), {
             nome: name.trim(),
             email: email.trim(),
