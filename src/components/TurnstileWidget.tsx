@@ -60,7 +60,7 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
       try {
         const id = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
-          theme: theme,
+          theme: theme as "dark" | "light" | "auto",
           size: "normal",
           callback: (token: string) => {
             if (isMounted) onVerify(token);
