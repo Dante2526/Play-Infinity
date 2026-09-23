@@ -248,6 +248,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const streamUrl = currentServer?.isProxy 
     ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;
+  
+  // Detecta se é stream DASH (bolodechocolate) — usa dash.js em vez de hls.js
+  const isDashStream = currentServer?.url?.includes('/api/bolodechocolate') || false;
 
   // Inicializa e carrega o stream com Hls.js com ABR 100% automático baseado na conexão
   useEffect(() => {
@@ -276,6 +279,89 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     if (hlsRef.current) {
       hlsRef.current.destroy();
       hlsRef.current = null;
+    }
+    // Destrói instância dash.js prévia
+    if ((video as any)._dashPlayer) {
+      try { (video as any)._dashPlayer.reset(); } catch {}
+      delete (video as any)._dashPlayer;
+    }
+
+    // Se for stream DASH (bolodechocolate), usa dash.js com ClearKey DRM
+    if (isDashStream) {
+      const startDash = async () => {
+        try {
+          // 1. Busca o MPD URL + ClearKey do backend
+          const canal = new URLSearchParams(streamUrl.split('?')[1] || '').get('canal') || 'premiereclubes';
+          const res = await fetch(`/api/bolodechocolate?canal=${canal}`);
+          if (!res.ok) throw new Error(`Backend retornou ${res.status}`);
+          const data = await res.json();
+          if (!data.mpd_url) throw new Error('MPD URL não encontrado');
+          if (!isMounted) return;
+
+          // 2. Carrega dash.js dinamicamente
+          if (!(window as any).dashjs) {
+            await new Promise<void>((resolve, reject) => {
+              const script = document.createElement('script');
+              script.src = 'https://cdn.jsdelivr.net/npm/dashjs@4.7.4/dist/dash.all.min.js';
+              script.onload = () => resolve();
+              script.onerror = () => reject(new Error('Falha ao carregar dash.js'));
+              document.head.appendChild(script);
+            });
+          }
+          if (!isMounted) return;
+
+          // 3. Cria player dash.js com ClearKey DRM
+          const dashjs = (window as any).dashjs;
+          const player = dashjs.MediaPlayer().create();
+          (video as any)._dashPlayer = player;
+
+          // Configura ClearKey (DRM sem license server — key fornecida direto)
+          if (data.ck_id && data.ck_key) {
+            const kid = data.ck_id;
+            const key = data.ck_key;
+            // ClearKey needs key in base64 format
+            const kidB64 = btoa(kid.match(/.{2}/g)?.map((h: string) => String.fromCharCode(parseInt(h, 16))).join('') || '');
+            const keyB64 = btoa(key.match(/.{2}/g)?.map((h: string) => String.fromCharCode(parseInt(h, 16))).join('') || '');
+            player.setProtectionData({
+              'org.w3.clearkey': {
+                clearkeys: { [kid]: key }
+              }
+            });
+          }
+
+          player.initialize(video, data.mpd_url, true); // autoplay=true
+          console.log(`[LivePlayer] DASH inicializado: ${data.mpd_url.substring(0, 80)}...`);
+
+          // Eventos para atualizar UI (igual hls.js faz)
+          player.on('streamInitialized', () => {
+            if (!isMounted) return;
+            setStreamHealth('online');
+            setIsLoading(false);
+            setIsBuffering(false);
+            video.play().catch(() => {
+              video.muted = true;
+              video.play().catch(() => {});
+            });
+          });
+          player.on('error', (e: any) => {
+            if (!isMounted) return;
+            console.warn('[LivePlayer] DASH error:', e);
+          });
+
+          video.addEventListener('waiting', () => setIsBuffering(true));
+          video.addEventListener('playing', () => { setIsBuffering(false); setIsLoading(false); setStreamHealth('online'); });
+          video.addEventListener('timeupdate', () => { setIsLoading(false); setIsBuffering(false); });
+          video.addEventListener('canplay', () => { setIsLoading(false); setStreamHealth('online'); });
+        } catch (err: any) {
+          if (!isMounted) return;
+          console.error('[LivePlayer] DASH init error:', err);
+          setHasError(true);
+          setStreamHealth('error');
+          setErrorMessage('Não foi possível carregar o stream DASH.');
+        }
+      };
+      startDash();
+      return;
     }
 
     const startHls = () => {
@@ -728,7 +814,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         hlsRef.current = null;
       }
     };
-  }, [streamUrl, channel.id, selectedServerIndex, reloadNonce]);
+  }, [streamUrl, channel.id, selectedServerIndex, reloadNonce, isDashStream]);
 
   // Autoplay / Pause listener
   const togglePlay = () => {
