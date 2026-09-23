@@ -3727,6 +3727,58 @@ app.use(startflixLookupRouter);
         });
       }
 
+      // 1. Verifica se a temporada já possui episódios no catálogo Startflix ou Encontrei
+      const numericId = parseInt(tmdbId, 10);
+      const catalogEpisodeNumbers = new Set<number>();
+
+      try {
+        // Startflix
+        const startflixPath = path.join(process.cwd(), "public", "data", "startflix-catalog.json");
+        if (fs.existsSync(startflixPath)) {
+          const sfData = JSON.parse(fs.readFileSync(startflixPath, "utf-8"));
+          const sfSeries = (sfData.series || []).find((s: any) => s.tmdb_id === numericId);
+          if (sfSeries) {
+            const sfSeason = (sfSeries.seasons || []).find((s: any) => s.season === season);
+            if (sfSeason && sfSeason.episodes) {
+              for (const ep of sfSeason.episodes) {
+                if (ep.embed_url && (ep.embed_url.includes("upns.xyz") || ep.embed_url.includes("embedplayapiupn"))) {
+                  if (typeof ep.episode === "number") {
+                    catalogEpisodeNumbers.add(ep.episode);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Encontrei (MixDrop)
+        const encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+        if (fs.existsSync(encontreiPath)) {
+          const encData = JSON.parse(fs.readFileSync(encontreiPath, "utf-8"));
+          for (const ep of encData.episodes || []) {
+            if (ep.tmdb_id === numericId && ep.season === season && typeof ep.episode === "number") {
+              catalogEpisodeNumbers.add(ep.episode);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[check-season] Aviso ao checar catálogos locais:", err);
+      }
+
+      // Se temos episódios no catálogo (ex: Startflix / MixDrop), já sabemos que são funcionais
+      if (catalogEpisodeNumbers.size > 0) {
+        const sortedEps = Array.from(catalogEpisodeNumbers).sort((a, b) => a - b);
+        seasonAvailabilityCache.set(cacheKey, { episodes: sortedEps, timestamp: Date.now() });
+        return res.json({
+          success: true,
+          id: tmdbId,
+          season,
+          availableEpisodes: sortedEps,
+          totalAvailable: sortedEps.length,
+          cached: false,
+        });
+      }
+
       // Mesma heurística já usada em /api/watchplayer-stream para detectar quando o
       // WatchPlayer devolve uma página de "não encontrado" / login em vez do player real.
       const isCheckUnavailable = (content: string, url: string, status: number): boolean => {
