@@ -316,11 +316,25 @@ export default function App() {
     let isSubscribed = true;
     const userRef = doc(db, "usuarios", currentUser.uid);
 
+    // Variável para dar carência de alguns segundos para contas recém-criadas
+    // antes de considerar que o documento realmente não existe
+    let notFoundCount = 0;
+
     const unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
       if (!isSubscribed) return;
 
-      // Se o documento não existir em 'usuarios', verifica se ainda está em 'users'
+      // Se o documento não existir em 'usuarios', verifica se ainda está em 'users' ou 'administradores'
       if (!snap.exists()) {
+        notFoundCount++;
+        // Se a conta for recém-criada (ex: menos de 45 segundos), não desloga na hora por condição de corrida
+        const userCreationTime = currentUser.metadata?.creationTime ? new Date(currentUser.metadata.creationTime).getTime() : 0;
+        const isRecentlyCreated = (Date.now() - userCreationTime) < 45000;
+        
+        if (isRecentlyCreated && notFoundCount < 3) {
+          console.warn("[Auth] Documento ainda não detectado para conta recente, aguardando propagação...");
+          return;
+        }
+
         try {
           const { getDoc } = await import("firebase/firestore");
           const legacySnap = await getDoc(doc(db, "users", currentUser.uid));
@@ -332,7 +346,17 @@ export default function App() {
             }
             return;
           }
+
+          const adminSnap = await getDoc(doc(db, "administradores", currentUser.uid));
+          if (adminSnap.exists()) {
+            return; // É administrador, não desloga
+          }
         } catch (e) {}
+
+        // Se ainda for recém-criado, não encerra a sessão precipitadamente
+        if (isRecentlyCreated) {
+          return;
+        }
 
         console.warn("[Auth] Conta revogada ou removida do banco de dados. Encerrando sessão...");
         localStorage.removeItem("playinfinity_logged_in");
