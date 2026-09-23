@@ -113,6 +113,18 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
     blockedAt: "2026-09"
   },
   {
+    id: "embedmovies",
+    name: "EmbedMovies / Fake Embeds",
+    keys: ["embedmovies", "srv_embedmovies"],
+    patterns: [
+      /embedmovies\.(org|net|com|top|cc)/i,
+      "embedmovies.org",
+      "embedmovies"
+    ],
+    reason: "Player fantasma sem stream de vídeo real, exibindo apenas imagem estática e marca d'água",
+    blockedAt: "2026-09"
+  },
+  {
     id: "generic_scrapers",
     name: "Scrapers / Iframe Hubs Genéricos",
     keys: ["vidsrc", "multiembed", "embed.su"],

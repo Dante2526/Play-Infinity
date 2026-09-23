@@ -35,7 +35,8 @@ import {
   MicOff,
   KeyRound,
   Lock,
-  AlertCircle
+  AlertCircle,
+  ArrowDownToLine
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
@@ -566,6 +567,12 @@ export function UserProfilePage({
           </h3>
           
           {[
+            { 
+              label: 'Meus Downloads', 
+              desc: 'Filmes e episódios baixados no seu dispositivo',
+              icon: <ArrowDownToLine className="w-5 h-5 text-blue-400" />,
+              onClick: () => onNavigate('downloads') 
+            },
             { 
               label: 'Minha Lista de Favoritos', 
               desc: `${favoriteItems.length} títulos salvos`,

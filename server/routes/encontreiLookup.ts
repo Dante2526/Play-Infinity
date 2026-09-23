@@ -140,4 +140,74 @@ router.get("/api/encontrei-lookup", (req, res) => {
   }
 });
 
+/**
+ * Endpoint para a Área de Downloads:
+ * Retorna os IDs dos filmes e séries que possuem download ativo (MixDrop)
+ * GET /api/downloads-catalog?limit=50&offset=0&type=all|movie|tv
+ */
+router.get("/api/downloads-catalog", (req, res) => {
+  try {
+    loadCatalog();
+    if (!_catalog) {
+      return res.status(503).json({ error: "Catálogo não disponível" });
+    }
+
+    const type = (req.query.type as string) || "all";
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+    const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
+    const movieItems: { tmdbId: number; type: "movie"; mixdrop: string; audio: string }[] = [];
+    if (type === "all" || type === "movie") {
+      for (const m of _catalog.movies || []) {
+        if (m.tmdb_id && m.servers?.mixdrop) {
+          movieItems.push({
+            tmdbId: m.tmdb_id,
+            type: "movie",
+            mixdrop: m.servers.mixdrop,
+            audio: m.audio || "Dublado"
+          });
+        }
+      }
+    }
+
+    const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
+    if (type === "all" || type === "tv" || type === "series") {
+      for (const ep of _catalog.episodes || []) {
+        if (ep.tmdb_id && ep.servers?.mixdrop) {
+          const current = seriesMap.get(ep.tmdb_id) || {
+            tmdbId: ep.tmdb_id,
+            type: "series",
+            totalEpisodes: 0,
+            seasons: [],
+            audio: ep.audio || "Dublado"
+          };
+          current.totalEpisodes += 1;
+          if (ep.season && !current.seasons.includes(ep.season)) {
+            current.seasons.push(ep.season);
+          }
+          seriesMap.set(ep.tmdb_id, current);
+        }
+      }
+    }
+
+    const seriesItems = Array.from(seriesMap.values());
+    const allItems = [...movieItems, ...seriesItems];
+    const total = allItems.length;
+    const paginated = allItems.slice(offset, offset + limit);
+
+    res.setHeader("Cache-Control", "public, max-age=1800");
+    return res.json({
+      total,
+      totalMovies: movieItems.length,
+      totalSeries: seriesItems.length,
+      limit,
+      offset,
+      items: paginated
+    });
+  } catch (err: any) {
+    console.error("[downloads-catalog] Erro:", err);
+    return res.status(500).json({ error: "Erro interno ao carregar catálogo de downloads" });
+  }
+});
+
 export default router;
