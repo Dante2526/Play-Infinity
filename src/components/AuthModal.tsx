@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 import { reportAppError } from "./GlobalErrorModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
+import { TurnstileWidget } from "./TurnstileWidget";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -21,6 +22,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -237,10 +239,20 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
               </div>
             </div>
 
+            {/* Verificação Cloudflare Turnstile */}
+            <TurnstileWidget
+              onVerify={(token) => {
+                setTurnstileToken(token);
+                setError("");
+              }}
+              onError={() => setTurnstileToken(null)}
+              onExpire={() => setTurnstileToken(null)}
+            />
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-4 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] cursor-pointer"
+              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] cursor-pointer"
               style={{ borderRadius: '22px' }}
             >
               {loading ? "Aguarde..." : (isLogin ? "Entrar" : "Criar Conta")}
