@@ -18,6 +18,7 @@
 - **Código do Proxy na VPS:** `/home/ubuntu/proxy.mjs` (gerenciado via PM2 como `video-proxy` na porta interna 8080)
 - **Health Check:** `https://play-infinity-app.duckdns.org/api/health` (Retorna `{"status":"ok",...}`)
 - **Stream Proxy Endpoint:** `https://play-infinity-app.duckdns.org/api/live-stream-proxy?url=...`
+- **Download Proxy Endpoint:** `https://play-infinity-app.duckdns.org/api/download?url=...&filename=...`
 
 ---
 

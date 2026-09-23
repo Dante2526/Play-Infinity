@@ -361,6 +361,157 @@ app.get("/api/live-stream-proxy", async (req, res) => {
   }
 });
 
+// Cache em memória para resolução de links MixDrop na VPS Oracle
+const mixdropDownloadCache = new Map();
+
+/**
+ * Endpoint de download de mídia via Oracle VPS
+ * Extrai o arquivo .mp4 real do MixDrop e transmite direto para o navegador com cabeçalho de download
+ */
+app.get("/api/download", async (req, res) => {
+  try {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "*");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).end();
+    }
+
+    const rawUrl = String(req.query.url || "").trim();
+    const customFilename = String(req.query.filename || "").trim();
+
+    if (!rawUrl) {
+      return res.status(400).send("Parâmetro 'url' é obrigatório.");
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(rawUrl);
+    } catch {
+      return res.status(400).send("URL inválida.");
+    }
+
+    const host = parsed.hostname.toLowerCase();
+    const isMixdrop = host.includes("mixdrop.") || host.includes("mxdrop.");
+    if (!isMixdrop) {
+      return res.status(400).send("Apenas fontes MixDrop são suportadas para download.");
+    }
+
+    const fileMatch = parsed.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
+    const fileId = fileMatch ? fileMatch[1] : "";
+    if (!fileId) {
+      return res.status(400).send("ID de arquivo MixDrop não encontrado.");
+    }
+
+    let videoDirectUrl = "";
+    let pageTitle = "PlayInfinity_Media";
+    const cached = mixdropDownloadCache.get(fileId);
+
+    if (cached && cached.expiresAt > Date.now() + 60000) {
+      videoDirectUrl = cached.videoUrl;
+      pageTitle = cached.title || pageTitle;
+    } else {
+      const embedUrl = `https://${host}/e/${fileId}`;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+      try {
+        const upstream = await fetch(embedUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!upstream.ok) {
+          return res.status(502).send(`MixDrop retornou status ${upstream.status}`);
+        }
+
+        const html = await upstream.text();
+        const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+        if (!packerMatch) {
+          return res.status(502).send("Não foi possível desembalar os dados do MixDrop.");
+        }
+
+        const unpacked = new Function("return " + packerMatch[0].slice(4))();
+        const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+        const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
+
+        if (!wurlMatch || !wurlMatch[1]) {
+          return res.status(502).send("Arquivo direto não encontrado no MixDrop.");
+        }
+
+        videoDirectUrl = wurlMatch[1];
+        if (videoDirectUrl.startsWith("//")) videoDirectUrl = "https:" + videoDirectUrl;
+
+        if (titleMatch && titleMatch[1]) {
+          pageTitle = titleMatch[1].trim();
+        }
+
+        mixdropDownloadCache.set(fileId, {
+          videoUrl: videoDirectUrl,
+          title: pageTitle,
+          expiresAt: Date.now() + 3 * 60 * 60 * 1000,
+        });
+      } catch (scrapErr) {
+        clearTimeout(timeoutId);
+        console.error("[MixDrop Scraper Error]:", scrapErr?.message || scrapErr);
+        return res.status(502).send("Falha ao resolver arquivo no MixDrop.");
+      }
+    }
+
+    // Nome final do arquivo
+    const finalFilename = customFilename || `${pageTitle.replace(/[^\w\s.-]/gi, "_")}.mp4`;
+
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Referer": `https://${host}/`,
+    };
+
+    if (req.headers.range) {
+      headers["Range"] = req.headers.range;
+    }
+
+    const mediaRes = await fetch(videoDirectUrl, { headers });
+
+    res.status(mediaRes.status);
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(finalFilename)}"`);
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+
+    const contentLength = mediaRes.headers.get("content-length");
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+
+    const contentRange = mediaRes.headers.get("content-range");
+    if (contentRange) res.setHeader("Content-Range", contentRange);
+
+    const acceptRanges = mediaRes.headers.get("accept-ranges");
+    if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
+
+    if (!mediaRes.body) {
+      return res.end();
+    }
+
+    const stream = Readable.fromWeb(mediaRes.body);
+    stream.pipe(res);
+
+    res.on("close", () => {
+      try {
+        stream.destroy();
+      } catch (_) {}
+    });
+  } catch (err) {
+    console.error("[Download Proxy Error]:", err?.message || err);
+    if (!res.headersSent) {
+      res.status(500).send("Erro ao processar download.");
+    }
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Video proxy running on port ${PORT}`);
 });

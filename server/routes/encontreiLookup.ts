@@ -23,10 +23,23 @@ let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
 function loadCatalog() {
   if (_catalog) return;
   
-  const catalogPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+  const possiblePaths = [
+    path.join(process.cwd(), "public", "data", "encontrei-catalog.json"),
+    path.join(process.cwd(), "data", "encontrei-catalog.json"),
+  ];
+
+  let raw = "";
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        raw = fs.readFileSync(p, "utf-8");
+        break;
+      } catch (_) {}
+    }
+  }
+
   try {
-    const raw = fs.readFileSync(catalogPath, "utf-8");
-    _catalog = JSON.parse(raw);
+    _catalog = raw ? JSON.parse(raw) : { movies: [], episodes: [] };
     
     // Constrói índices pra lookup O(1)
     for (const movie of _catalog.movies || []) {
@@ -44,7 +57,8 @@ function loadCatalog() {
     
     console.log(`[encontrei-lookup] Catálogo carregado: ${_movieIndex.size} filmes, ${_episodeIndex.size} episódios indexados`);
   } catch (err) {
-    console.error("[encontrei-lookup] Erro ao carregar catálogo:", err);
+    console.warn("[encontrei-lookup] Aviso ao processar catálogo:", err);
+    _catalog = { movies: [], episodes: [] };
   }
 }
 
