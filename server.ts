@@ -4468,13 +4468,26 @@ app.use(encontreiLookupRouter);
                   sendStatus();
                 }
               });
+              var _fatalNetworkRetries = 0;
               hls.on(Hls.Events.ERROR, function(event, data) {
                 if (data && data.fatal) {
                   switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                      hls.startLoad();
+                      _fatalNetworkRetries++;
+                      if (_fatalNetworkRetries <= 2) {
+                        // Tenta recuperar uma vez (ex: interrupção temporária de rede)
+                        hls.startLoad();
+                      } else {
+                        // Após 3 falhas fatais de rede consecutivas (ex: CORS bloqueado pela CDN),
+                        // desiste e sinaliza fallback para o próximo servidor disponível
+                        hls.destroy();
+                        try {
+                          window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_hls_cors_blocked" }, "*");
+                        } catch(e) {}
+                      }
                       break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
+                      _fatalNetworkRetries = 0;
                       hls.recoverMediaError();
                       break;
                     default:
