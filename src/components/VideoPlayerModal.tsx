@@ -2047,12 +2047,6 @@ export function VideoPlayerModal({
             )}
 
             {/* Player Oficial Estilo Netflix Cinematográfico */}
-            {/* Quando o player for startflix (iframe UPNS externo), NÃO renderiza a NetflixPlayerSkin
-                porque o iframe UPNS tem controles próprios que aparecem ATRÁS da skin transparente
-                (botão de Play do UPNS visível no centro, conflitando com a skin).
-                A Netflix skin não consegue controlar o UPNS via postMessage (cross-origin, sem API).
-                Solução: deixar o UPNS player usar seus próprios controles, sem overlay da skin. */}
-            {selectedServerKey !== "srv_startflix" && !activeIframeUrl?.includes("upns.xyz") && !activeIframeUrl?.includes("embedplayapiupn") && (
             <NetflixPlayerSkin
               mediaId={resolvedId}
               tmdbId={tmdbId}
@@ -2090,7 +2084,6 @@ export function VideoPlayerModal({
               isMiniPlayer={isMiniPlayer}
               passThroughClicks={false}
             />
-            )}
           </div>
         </div>
 
