@@ -250,7 +250,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     : currentServer?.url;
   
   // Detecta se é stream DASH (bolodechocolate) — usa dash.js em vez de hls.js
-  const isDashStream = currentServer?.url?.includes('/api/bolodechocolate') || false;
+  const isDashStream = currentServer?.url?.includes("/api/bolodechocolate") || false;
+  const isEmbedStream = currentServer?.isEmbed || false;
 
   // Inicializa e carrega o stream com Hls.js com ABR 100% automático baseado na conexão
   useEffect(() => {
@@ -262,6 +263,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     const video = videoRef.current;
     if (!video || !streamUrl) return;
+    if (isEmbedStream) { setStreamHealth("online"); setIsLoading(false); return; }
 
     let recoveryTimeout: NodeJS.Timeout | null = null;
     const clearRecoveryTimeout = () => {
@@ -1193,6 +1195,15 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }
           className="flex items-center justify-center bg-black overflow-hidden select-none"
         >
+        {currentServer?.isEmbed ? (
+          <iframe
+            src={currentServer.url}
+            className="w-full h-full object-contain"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            style={{ border: 0, background: 'black' }}
+            referrerPolicy="no-referrer"
+          />
+        ) : (
         <video
           ref={videoRef}
           playsInline
@@ -1230,6 +1241,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }}
           onPause={() => setIsPlaying(false)}
         />
+        )}
 
         {/* Spinner compacto do mini player, sem textos (não cabem no espaço reduzido) */}
         {isMiniPlayer && (isLoading || isBuffering) && (
