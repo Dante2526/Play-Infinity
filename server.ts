@@ -159,6 +159,8 @@ process.on("uncaughtException", (err) => {
     "/encontrei-lookup",
     "/series-seasons-available",
     "/check-playable-batch",
+    "/startflix-lookup",
+    "/startflix-catalog",
     "/downloads-catalog",
     "/bolodechocolate",
     "/download"
