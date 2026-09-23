@@ -650,14 +650,23 @@ export function VideoPlayerModal({
 
   // Servidores oficiais homologados: WatchPlayer Oficial e VIP Player (Dublado PT-BR)
   const servers = useMemo(() => {
+    let list: Array<{
+      key: string;
+      label: string;
+      badge?: string;
+      buildUrl: (id: string, s?: number, e?: number) => string;
+      isMatch: (u: string) => boolean;
+      name: string;
+    }> = [];
+
     if (isSeries) {
-      return [
+      list = [
         {
           key: "srv_watchplay",
           label: "WatchPlayer Oficial",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
-          buildUrl: (id: string, s: number, e: number) => 
-            `https://v1.watchplay.shop/tvshow/${id}/${s}/${e}`,
+          buildUrl: (id: string, s?: number, e?: number) => 
+            `https://v1.watchplay.shop/tvshow/${id}/${s || 1}/${e || 1}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer Oficial"
         },
@@ -665,8 +674,8 @@ export function VideoPlayerModal({
           key: "srv_vip",
           label: "VIP Player (Dublado PT-BR)",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
-          buildUrl: (id: string, s: number, e: number) => 
-            `/api/myembed-stream?id=${id}&type=tv&s=${s}&e=${e}&cb=${Date.now()}`,
+          buildUrl: (id: string, s?: number, e?: number) => 
+            `/api/myembed-stream?id=${id}&type=tv&s=${s || 1}&e=${e || 1}&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
         },
@@ -674,7 +683,7 @@ export function VideoPlayerModal({
           key: "srv_mixdrop",
           label: "MixDrop HD (Dublado)",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
-          buildUrl: (id: string, s: number, e: number) => {
+          buildUrl: (id: string, s?: number, e?: number) => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
             if (mixdropFileId) {
               return buildMixdropStreamUrl(mixdropFileId) || `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
@@ -691,7 +700,7 @@ export function VideoPlayerModal({
         }
       ];
     } else {
-      return [
+      list = [
         {
           key: "srv_watchplay",
           label: "WatchPlayer Oficial",
@@ -734,7 +743,7 @@ export function VideoPlayerModal({
     // Adiciona Startflix (Ghosts e futuras séries) se disponível
     const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
     if (isSeries && (startflixAvailable || numId === 126027 || resolvedId === "126027")) {
-      servers.push({
+      list.push({
         key: "srv_startflix",
         label: "Startflix HD (Dublado)",
         badge: "Startflix HD • Áudio Dublado PT-BR • Sem Anúncios",
@@ -750,7 +759,7 @@ export function VideoPlayerModal({
       });
     }
     
-    return servers;
+    return list;
   }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl, tmdbId, resolvedId, season, episode]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
