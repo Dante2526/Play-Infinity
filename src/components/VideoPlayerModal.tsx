@@ -236,6 +236,12 @@ export function VideoPlayerModal({
   const [startflixEmbedUrl, setStartflixEmbedUrl] = useState<string | null>(null);
   const [startflixAvailable, setStartflixAvailable] = useState<boolean>(false);
 
+  // Helper para normalizar URL de embed do Startflix (UPNS player)
+  const toStartflixBridgeUrl = (url: string) => {
+    if (!url) return "";
+    return extractSrcFromInput(url);
+  };
+
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
     `/api/native-player?url=${encodeURIComponent(mp4Url)}`;
@@ -249,7 +255,9 @@ export function VideoPlayerModal({
       target.includes("mixdrop") ||
       target.includes("mxdrop") ||
       target.includes("embedplayapiupn") ||
-      target.includes("/api/startflix-player") ||
+      target.includes("upns.xyz") ||
+      target.includes("upns") ||
+      target.includes("/api/startflix") ||
       target.includes("/api/native-player") ||
       target.includes("/api/mixdrop-stream") ||
       target.includes("/api/watchplayer-stream") ||
