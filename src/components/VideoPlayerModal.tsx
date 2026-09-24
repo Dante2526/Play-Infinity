@@ -236,6 +236,10 @@ export function VideoPlayerModal({
   const [startflixEmbedUrl, setStartflixEmbedUrl] = useState<string | null>(null);
   const [startflixAvailable, setStartflixAvailable] = useState<boolean>(false);
 
+  // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
+  const toNativeBridgeUrl = (mp4Url: string) =>
+    `/api/native-player?url=${encodeURIComponent(mp4Url)}`;
+
   const isExternalPlayer = useMemo(() => {
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
     const isIntegrated =
@@ -244,14 +248,15 @@ export function VideoPlayerModal({
       target.includes("playerflix") ||
       target.includes("mixdrop") ||
       target.includes("mxdrop") ||
+      target.includes("embedplayapiupn") ||
+      target.includes("/api/startflix-player") ||
+      target.includes("/api/native-player") ||
       target.includes("/api/mixdrop-stream") ||
       target.includes("/api/watchplayer-stream") ||
       target.includes("/api/myembed-stream") ||
       target.includes("/api/anime-stream") ||
       target.includes("/api/vixsrc-stream") ||
-      target.includes("/api/live-stream-proxy") ||
-      target.includes("upns.xyz") ||  // Startflix (Ghosts)
-      target.includes("embedplayapiupn");  // Startflix variant
+      target.includes("/api/live-stream-proxy");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput]);
@@ -433,14 +438,29 @@ export function VideoPlayerModal({
     return isSeries ? "66732" : "tt22084616";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
+  const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
+
   useEffect(() => {
-    if (!isOpen || !isSeries) {
+    if (!isOpen) return;
+
+    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    if (!numId) return;
+
+    // Check Nixplay availability
+    fetch(`/api/nixplay-check?tmdb_id=${numId}&type=${isSeries ? 'series' : 'movie'}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data && typeof data.available === 'boolean') {
+          setNixplayAvailable(data.available);
+        }
+      })
+      .catch(() => setNixplayAvailable(false));
+
+    if (!isSeries) {
       setStartflixEmbedUrl(null);
       setStartflixAvailable(false);
       return;
     }
-    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
-    if (!numId) return;
 
     if (numId === 126027) {
       setStartflixAvailable(true);
@@ -456,7 +476,7 @@ export function VideoPlayerModal({
         if (cancelled) return;
         if (result?.functional && result.embed_url) {
           console.log(`[Startflix] embed_url resolvido: S${season}E${episode} → ${result.embed_url.substring(0, 80)}`);
-          setStartflixEmbedUrl(result.embed_url);
+          setStartflixEmbedUrl(toStartflixBridgeUrl(result.embed_url));
         } else {
           setStartflixEmbedUrl(null);
         }
@@ -680,6 +700,24 @@ export function VideoPlayerModal({
           name: "VIP Player (Dublado PT-BR)"
         },
         {
+          key: "srv_nixplay",
+          label: "Nixplay HD (Premium)",
+          badge: "Nixplay Premium • Áudio Dublado PT-BR • Skin Netflix",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            let tmdb = tmdbId || id;
+            if (String(tmdb).startsWith('tt')) {
+              // Try to fallback to id if tmdbId wasn't passed and id is purely numeric
+              tmdb = !String(id).startsWith('tt') ? id : tmdb;
+            }
+            const ss = String(s || 1).padStart(3, '0');
+            const ee = String(e || 1).padStart(3, '0');
+            const streamId = `${tmdb}${ss}${ee}`;
+            return toNativeBridgeUrl(`https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`);
+          },
+          isMatch: (u: string) => u.includes("nixplay.lat"),
+          name: "Nixplay HD (Premium)"
+        },
+        {
           key: "srv_mixdrop",
           label: "MixDrop HD (Dublado)",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
@@ -717,6 +755,20 @@ export function VideoPlayerModal({
             `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player (Dublado PT-BR)"
+        },
+        {
+          key: "srv_nixplay",
+          label: "Nixplay HD (Premium)",
+          badge: "Nixplay Premium • Áudio Dublado PT-BR • Skin Netflix",
+          buildUrl: (id: string) => {
+            let tmdb = tmdbId || id;
+            if (String(tmdb).startsWith('tt')) {
+              tmdb = !String(id).startsWith('tt') ? id : tmdb;
+            }
+            return toNativeBridgeUrl(`https://nixplay.lat/movie/testelogado-vods/GwXanZ3Dj/${tmdb}.mp4`);
+          },
+          isMatch: (u: string) => u.includes("nixplay.lat"),
+          name: "Nixplay HD (Premium)"
         },
         {
           key: "srv_mixdrop",
@@ -758,9 +810,12 @@ export function VideoPlayerModal({
         name: "Startflix HD (Dublado)"
       });
     }
-    
+    if (!nixplayAvailable) {
+      list = list.filter(s => s.key !== "srv_nixplay");
+    }
+
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl, tmdbId, resolvedId, season, episode]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, startflixAvailable, startflixEmbedUrl, tmdbId, resolvedId, season, episode, nixplayAvailable]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
@@ -815,7 +870,7 @@ export function VideoPlayerModal({
       if (numId) {
         const startflixRes = await findStartflixEpisode(numId, season, episode);
         newUrl = (startflixRes?.functional && startflixRes.embed_url)
-          ? startflixRes.embed_url
+          ? toStartflixBridgeUrl(startflixRes.embed_url)
           : srv.buildUrl(resolvedId, season, episode);
       } else {
         newUrl = srv.buildUrl(resolvedId, season, episode);
@@ -960,7 +1015,7 @@ export function VideoPlayerModal({
         if (isStartflixTarget && numId) {
           const sfRes = await findStartflixEpisode(numId, targetSeason, targetEpisode);
           targetUrl = (sfRes?.functional && sfRes.embed_url)
-            ? sfRes.embed_url
+            ? toStartflixBridgeUrl(sfRes.embed_url)
             : targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode);
         } else if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
@@ -1261,7 +1316,7 @@ export function VideoPlayerModal({
       if (numId) {
         const sfRes = await findStartflixEpisode(numId, season, newEpisode);
         newUrl = (sfRes?.functional && sfRes.embed_url)
-          ? sfRes.embed_url
+          ? toStartflixBridgeUrl(sfRes.embed_url)
           : activeServer.buildUrl(resolvedId, season, newEpisode);
       } else {
         newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
@@ -1310,7 +1365,7 @@ export function VideoPlayerModal({
       if (numId) {
         const sfRes = await findStartflixEpisode(numId, newSeason, 1);
         newUrl = (sfRes?.functional && sfRes.embed_url)
-          ? sfRes.embed_url
+          ? toStartflixBridgeUrl(sfRes.embed_url)
           : activeServer.buildUrl(resolvedId, newSeason, 1);
       } else {
         newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
@@ -1346,6 +1401,11 @@ export function VideoPlayerModal({
       cleanUrl.includes("playerflix.ink") ||
       cleanUrl.includes("mixdrop.") ||
       cleanUrl.includes("mxdrop.") ||
+      cleanUrl.includes("/api/startflix-lookup") ||
+      cleanUrl.startsWith("/api/native-player") ||
+      cleanUrl.includes("nixplay.lat") ||
+      cleanUrl.includes("upns.xyz") ||
+      cleanUrl.includes("embedplayapiupn") ||
       cleanUrl.endsWith(".mp4")
     ) {
       setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
@@ -1998,9 +2058,12 @@ export function VideoPlayerModal({
                   if (
                     selectedServerKey === "srv_mixdrop" ||
                     selectedServerKey === "srv_startflix" ||
+                    selectedServerKey === "srv_nixplay" ||
                     activeIframeUrl?.includes("/api/mixdrop-stream") ||
                     activeIframeUrl?.includes("upns.xyz") ||
-                    activeIframeUrl?.includes("embedplayapiupn")
+                    activeIframeUrl?.includes("embedplayapiupn") ||
+                    activeIframeUrl?.includes("/api/native-player") ||
+                    activeIframeUrl?.includes("nixplay")
                   ) {
                     setTimeout(() => setPlayerSkinReady(true), 200);
                   }

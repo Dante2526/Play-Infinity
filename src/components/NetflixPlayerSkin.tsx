@@ -203,7 +203,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_startflix" ? "startflix" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_startflix" ? "startflix" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   const displayAudioServers = useMemo(() => {
@@ -922,7 +922,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const handleProgressBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (isLocked || playerStatus.duration <= 0) return;
-    if (e.cancelable) e.preventDefault();
+    // Removido e.preventDefault() para evitar warning "Unable to preventDefault inside passive event listener"
     const touch = e.touches[0];
     if (!touch) return;
     wasPlayingBeforeScrubRef.current = !playerStatus.paused;
