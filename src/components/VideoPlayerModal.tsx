@@ -247,17 +247,17 @@ export function VideoPlayerModal({
     `/api/native-player?url=${encodeURIComponent(mp4Url)}`;
 
   const isExternalPlayer = useMemo(() => {
+    if (selectedServerKey === "srv_startflix") return true;
     const target = (activeIframeUrl || urlInput || "").toLowerCase();
+    if (target.includes("upns.xyz") || target.includes("embedplayapiupn") || target.includes("upns")) {
+      return true;
+    }
     const isIntegrated =
       target.includes("watchplay") ||
       target.includes("myembed") ||
       target.includes("playerflix") ||
       target.includes("mixdrop") ||
       target.includes("mxdrop") ||
-      target.includes("embedplayapiupn") ||
-      target.includes("upns.xyz") ||
-      target.includes("upns") ||
-      target.includes("/api/startflix") ||
       target.includes("/api/native-player") ||
       target.includes("/api/mixdrop-stream") ||
       target.includes("/api/watchplayer-stream") ||
@@ -267,7 +267,7 @@ export function VideoPlayerModal({
       target.includes("/api/live-stream-proxy");
 
     return !isIntegrated;
-  }, [activeIframeUrl, urlInput]);
+  }, [activeIframeUrl, urlInput, selectedServerKey]);
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
@@ -2058,7 +2058,7 @@ export function VideoPlayerModal({
                   transition: "transform 0.3s ease",
                 }}
                 fetchPriority="high"
-                allow="autoplay; encrypted-media; picture-in-picture; fullscreen; screen-wake-lock; accelerometer; gyroscope"
+                allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
@@ -2153,7 +2153,7 @@ export function VideoPlayerModal({
               onToggleAspectRatio={handleToggleAspectRatio}
               onTogglePiP={handleToggleMiniPlayer}
               isMiniPlayer={isMiniPlayer}
-              passThroughClicks={false}
+              passThroughClicks={isExternalPlayer || selectedServerKey === "srv_startflix"}
             />
           </div>
         </div>

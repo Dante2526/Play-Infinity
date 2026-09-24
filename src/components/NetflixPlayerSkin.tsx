@@ -629,7 +629,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
 
     if (
-      !playerStatus.paused &&
+      (!playerStatus.paused || isExternalPlayer) &&
       !isScrubbing &&
       !isDraggingBrightness &&
       !isDraggingVolume &&
@@ -639,11 +639,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     ) {
       hideTimerRef.current = setTimeout(() => {
         setControlsVisible(false);
-      }, 2800);
+      }, isExternalPlayer ? 3500 : 2800);
     }
   }, [
     isLocked,
     playerStatus.paused,
+    isExternalPlayer,
     isScrubbing,
     isDraggingBrightness,
     isDraggingVolume,
@@ -653,21 +654,37 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   ]);
 
   useEffect(() => {
+    if (isExternalPlayer) {
+      handleUserActivity();
+      return;
+    }
     if (playerStatus.paused) {
       setControlsVisible(true);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     } else {
       handleUserActivity();
     }
-  }, [playerStatus.paused, handleUserActivity]);
+  }, [playerStatus.paused, handleUserActivity, isExternalPlayer]);
 
   useEffect(() => {
     const handleWindowMouseMove = () => {
       handleUserActivity();
     };
+    const handleWindowTouch = (e: TouchEvent) => {
+      const touch = e.touches[0];
+      if (touch) {
+        const h = window.innerHeight || 500;
+        // Se tocar perto do topo (header) ou da base, acorda os controles do skin
+        if (touch.clientY < h * 0.25 || touch.clientY > h * 0.75) {
+          handleUserActivity();
+        }
+      }
+    };
     window.addEventListener("mousemove", handleWindowMouseMove, { passive: true });
+    window.addEventListener("touchstart", handleWindowTouch, { passive: true });
     return () => {
       window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("touchstart", handleWindowTouch);
     };
   }, [handleUserActivity]);
 
@@ -1210,10 +1227,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         <div className="w-8 sm:w-10 pointer-events-none"></div>
 
         {/* Centro: Título formatado S1:E1 "Pilot" com Centralização Absoluta Perfeita */}
-        <div className="absolute left-1/2 -translate-x-1/2 top-2.5 sm:top-4 bottom-0 flex items-center justify-center pointer-events-none max-w-[50%] sm:max-w-[65%] px-2 z-10">
+        <div className="absolute left-1/2 -translate-x-1/2 top-2.5 sm:top-4 bottom-0 flex items-center justify-center pointer-events-none max-w-[50%] sm:max-w-[65%] px-2 z-10 gap-2">
           <span className="text-white text-xs sm:text-sm md:text-base font-semibold tracking-wide drop-shadow truncate block text-center">
             {topTitleText}
           </span>
+          {isExternalPlayer && (
+            <span className="hidden xs:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shrink-0">
+              Controles Nativos
+            </span>
+          )}
         </div>
 
         {/* Direita: Botão Aspect Ratio (Apenas em Tela Cheia) + Botão PiP + Botão Girar Tela + Botão Tela Cheia + Botão Fechar X */}
@@ -1430,7 +1452,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         </div>
       )}
 
-      {!passThroughClicks && (
+      {!passThroughClicks && !isExternalPlayer && (
         <div
           className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
             controlsVisible && !isLocked
@@ -1503,7 +1525,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
       {/* Barra de Progresso Fina e Contínua na Borda (quando controles completos estão ocultos) */}
-      {!isMiniPlayer && !controlsVisible && !isLocked && hasValidDuration && (
+      {!isMiniPlayer && !isExternalPlayer && !controlsVisible && !isLocked && hasValidDuration && (
         <div className="absolute bottom-0 left-0 right-0 z-20 h-1 bg-black/40 pointer-events-none transition-opacity duration-300">
           <div
             className="h-full bg-white/25 absolute top-0 left-0 bottom-0 transition-all duration-150"
@@ -1528,73 +1550,77 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           }}
           onClick={(e) => e.stopPropagation()}
         >
-        {/* LINHA DA TIMELINE (SCRUBBER) */}
-        <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1 sm:mb-2">
-          {/* Tempo Decorrido Atual à Esquerda */}
-          <span className="text-white/90 text-[11px] sm:text-xs font-medium tabular-nums select-none shrink-0 drop-shadow min-w-[34px] text-right">
-            {formatTime(displayCurrentTime)}
-          </span>
+        {/* LINHA DA TIMELINE (SCRUBBER) - apenas para players integrados */}
+        {!isExternalPlayer && (
+          <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1 sm:mb-2">
+            {/* Tempo Decorrido Atual à Esquerda */}
+            <span className="text-white/90 text-[11px] sm:text-xs font-medium tabular-nums select-none shrink-0 drop-shadow min-w-[34px] text-right">
+              {formatTime(displayCurrentTime)}
+            </span>
 
-          <div
-            ref={progressBarRef}
-            onMouseMove={handleProgressBarMouseMove}
-            onMouseLeave={() => setHoverTime(null)}
-            onMouseDown={handleProgressBarMouseDown}
-            onTouchStart={handleProgressBarTouchStart}
-            className="relative flex-1 py-3 -my-3 h-10 flex items-center cursor-pointer group touch-none select-none"
-          >
-            {/* Tooltip de Prévia ao passar o mouse */}
-            {hoverTime !== null && (
-              <div
-                className="absolute -top-7 -translate-x-1/2 z-30 px-2 py-0.5 rounded bg-black/90 border border-white/20 text-white text-[10px] sm:text-[11px] font-medium shadow-xl pointer-events-none"
-                style={{ left: `${hoverPosPercent}%` }}
-              >
-                {formatTime(hoverTime)}
+            <div
+              ref={progressBarRef}
+              onMouseMove={handleProgressBarMouseMove}
+              onMouseLeave={() => setHoverTime(null)}
+              onMouseDown={handleProgressBarMouseDown}
+              onTouchStart={handleProgressBarTouchStart}
+              className="relative flex-1 py-3 -my-3 h-10 flex items-center cursor-pointer group touch-none select-none"
+            >
+              {/* Tooltip de Prévia ao passar o mouse */}
+              {hoverTime !== null && (
+                <div
+                  className="absolute -top-7 -translate-x-1/2 z-30 px-2 py-0.5 rounded bg-black/90 border border-white/20 text-white text-[10px] sm:text-[11px] font-medium shadow-xl pointer-events-none"
+                  style={{ left: `${hoverPosPercent}%` }}
+                >
+                  {formatTime(hoverTime)}
+                </div>
+              )}
+
+              {/* Trilho cinza de fundo */}
+              <div className="relative w-full h-1 sm:h-1.5 bg-neutral-600/70 rounded-full overflow-hidden">
+                {/* Barra de Buffer */}
+                <div
+                  className="absolute top-0 bottom-0 left-0 bg-white/30"
+                  style={{ width: `${bufferedPercent}%` }}
+                />
+                {/* Barra Vermelha Netflix */}
+                <div
+                  className="absolute top-0 bottom-0 left-0 bg-[#E50914]"
+                  style={{ width: `${playedPercent}%` }}
+                />
               </div>
-            )}
 
-            {/* Trilho cinza de fundo */}
-            <div className="relative w-full h-1 sm:h-1.5 bg-neutral-600/70 rounded-full overflow-hidden">
-              {/* Barra de Buffer */}
+              {/* Knob Redondo Vermelho da Netflix (Thumb) */}
               <div
-                className="absolute top-0 bottom-0 left-0 bg-white/30"
-                style={{ width: `${bufferedPercent}%` }}
-              />
-              {/* Barra Vermelha Netflix */}
-              <div
-                className="absolute top-0 bottom-0 left-0 bg-[#E50914]"
-                style={{ width: `${playedPercent}%` }}
+                className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[#E50914] shadow-md shadow-black/80 pointer-events-none transition-transform ${
+                  isScrubbing ? "w-5 h-5 scale-125 ring-4 ring-[#E50914]/30" : "w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:scale-125"
+                }`}
+                style={{ left: `${playedPercent}%` }}
               />
             </div>
 
-            {/* Knob Redondo Vermelho da Netflix (Thumb) */}
-            <div
-              className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[#E50914] shadow-md shadow-black/80 pointer-events-none transition-transform ${
-                isScrubbing ? "w-5 h-5 scale-125 ring-4 ring-[#E50914]/30" : "w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:scale-125"
-              }`}
-              style={{ left: `${playedPercent}%` }}
-            />
+            {/* Tempo Restante / Total à Direita (ex: -48:04 ou --:--) */}
+            <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5 min-w-[34px]">
+              {hasValidDuration ? (remainingTime > 0 ? `-${formatTime(remainingTime)}` : formatTime(duration)) : "--:--"}
+            </span>
           </div>
-
-          {/* Tempo Restante / Total à Direita (ex: -48:04 ou --:--) */}
-          <span className="text-white/90 text-[11px] sm:text-xs font-normal tabular-nums select-none shrink-0 drop-shadow flex items-center gap-1.5 min-w-[34px]">
-            {hasValidDuration ? (remainingTime > 0 ? `-${formatTime(remainingTime)}` : formatTime(duration)) : "--:--"}
-          </span>
-        </div>
+        )}
 
         {/* LINHA DE AÇÕES INFERIORES: DISCRETA, ELEGANTE E PROPORCIONAL EM TELAS MÓVEIS E DESKTOP */}
         <div className="w-full flex items-center justify-center gap-3 xs:gap-4 sm:gap-7 md:gap-11 text-white text-xs px-2">
-          {/* 1. Velocidade */}
-          <button
-            onClick={() => setShowSpeedMenu(true)}
-            className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
-            title="Velocidade de reprodução"
-          >
-            <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
-            <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
-              Velocidade ({playerStatus.playbackRate}x)
-            </span>
-          </button>
+          {/* 1. Velocidade (Apenas em player integrado) */}
+          {!isExternalPlayer && (
+            <button
+              onClick={() => setShowSpeedMenu(true)}
+              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
+              title="Velocidade de reprodução"
+            >
+              <Gauge className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
+                Velocidade ({playerStatus.playbackRate}x)
+              </span>
+            </button>
+          )}
 
           {/* 2. Bloquear Tela (Apenas em Tela Cheia) */}
           {isFullscreen && (
