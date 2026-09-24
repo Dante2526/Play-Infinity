@@ -17,6 +17,7 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
+import { isNixplayAvailable } from "../services/nixplayCatalog";
 
 const router = Router();
 
@@ -273,7 +274,8 @@ router.get("/api/startflix-lookup", async (req, res) => {
       name: err?.name,
       type: typeof err
     });
-import { isNixplayAvailable } from "../services/nixplayCatalog";
+  }
+});
 
 // Verifica instantaneamente se um filme/série existe no catálogo local cacheado do Nixplay
 router.get("/api/nixplay-check", (req, res) => {
