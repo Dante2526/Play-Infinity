@@ -5914,7 +5914,10 @@ app.use(startflixLookupRouter);
     });
   });
 
+  import { loadNixplayCatalog } from "./server/services/nixplayCatalog";
+
   async function startServer() {
+    loadNixplayCatalog().catch(err => console.error("[Boot] Erro nixplay catalog:", err));
     if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       const viteName = "vite";
       const { createServer: createViteServer } = await import(viteName);

@@ -33,8 +33,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/533535",
-    "views": 170,
-    "lastWatched": "2026-09-12T01:30:22.696Z"
+    "views": 176,
+    "lastWatched": "2026-09-24T02:27:53.166Z"
   },
   {
     "id": 93405,
@@ -392,5 +392,17 @@
     "playerUrl": "https://v1.watchplay.shop/movie/1284041",
     "views": 1,
     "lastWatched": "2026-09-18T23:41:25.836Z"
+  },
+  {
+    "id": 126027,
+    "tmdbId": 126027,
+    "title": "Fantasmas - T4:E1 Paciência",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/126027/4/1",
+    "views": 8,
+    "lastWatched": "2026-09-24T00:31:53.222Z"
   }
 ]
