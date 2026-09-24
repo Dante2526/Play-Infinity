@@ -77,32 +77,6 @@ function loadCatalog() {
       }
     }
 
-    // Carrega também temporadas funcionais do Startflix
-    const startflixPath = path.join(process.cwd(), "public", "data", "startflix-catalog.json");
-    if (fs.existsSync(startflixPath)) {
-      try {
-        const startflixRaw = fs.readFileSync(startflixPath, "utf-8");
-        const startflixJson = JSON.parse(startflixRaw);
-        for (const s of startflixJson.series || []) {
-          if (s.tmdb_id) {
-            if (!seriesSeasonsMap.has(s.tmdb_id)) {
-              seriesSeasonsMap.set(s.tmdb_id, new Set());
-            }
-            for (const sn of s.seasons || []) {
-              if (sn.season && sn.episodes && sn.episodes.length > 0) {
-                const hasFunctional = sn.episodes.some((e: any) => e.embed_url && e.embed_url.includes("upns.xyz"));
-                if (hasFunctional) {
-                  seriesSeasonsMap.get(s.tmdb_id)!.add(sn.season);
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("[encontrei-lookup] Aviso ao carregar startflix-catalog:", err);
-      }
-    }
-
     for (const [id, seasonsSet] of seriesSeasonsMap.entries()) {
       _seriesSeasonsIndex.set(id, Array.from(seasonsSet).sort((a, b) => a - b));
     }

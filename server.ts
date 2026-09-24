@@ -159,8 +159,6 @@ process.on("uncaughtException", (err) => {
     "/encontrei-lookup",
     "/series-seasons-available",
     "/check-playable-batch",
-    "/startflix-lookup",
-    "/startflix-catalog",
     "/downloads-catalog",
     "/bolodechocolate",
     "/download"
@@ -178,11 +176,11 @@ process.on("uncaughtException", (err) => {
   import iptvRouter from "./server/routes/iptv";
 import encontreiLookupRouter from "./server/routes/encontreiLookup";
 import bolodechocolateRouter from "./server/routes/bolodechocolate";
-import startflixLookupRouter from "./server/routes/startflixLookup";
+import nixplayRouter from "./server/routes/nixplayRoutes";
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
-app.use(startflixLookupRouter);
+app.use(nixplayRouter);
 
   app.get("/api/extract-player", async (req, res) => {
     const targetUrl = req.query.url as string;
@@ -3727,30 +3725,11 @@ app.use(startflixLookupRouter);
         });
       }
 
-      // 1. Verifica se a temporada já possui episódios no catálogo Startflix ou Encontrei
+      // 1. Verifica se a temporada já possui episódios no catálogo Encontrei (MixDrop)
       const numericId = parseInt(tmdbId, 10);
       const catalogEpisodeNumbers = new Set<number>();
 
       try {
-        // Startflix
-        const startflixPath = path.join(process.cwd(), "public", "data", "startflix-catalog.json");
-        if (fs.existsSync(startflixPath)) {
-          const sfData = JSON.parse(fs.readFileSync(startflixPath, "utf-8"));
-          const sfSeries = (sfData.series || []).find((s: any) => s.tmdb_id === numericId);
-          if (sfSeries) {
-            const sfSeason = (sfSeries.seasons || []).find((s: any) => s.season === season);
-            if (sfSeason && sfSeason.episodes) {
-              for (const ep of sfSeason.episodes) {
-                if (ep.embed_url && (ep.embed_url.includes("upns.xyz") || ep.embed_url.includes("embedplayapiupn"))) {
-                  if (typeof ep.episode === "number") {
-                    catalogEpisodeNumbers.add(ep.episode);
-                  }
-                }
-              }
-            }
-          }
-        }
-
         // Encontrei (MixDrop)
         const encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
         if (fs.existsSync(encontreiPath)) {
@@ -3765,7 +3744,7 @@ app.use(startflixLookupRouter);
         console.warn("[check-season] Aviso ao checar catálogos locais:", err);
       }
 
-      // Se temos episódios no catálogo (ex: Startflix / MixDrop), já sabemos que são funcionais
+      // Se temos episódios no catálogo (ex: MixDrop), já sabemos que são funcionais
       if (catalogEpisodeNumbers.size > 0) {
         const sortedEps = Array.from(catalogEpisodeNumbers).sort((a, b) => a - b);
         seasonAvailabilityCache.set(cacheKey, { episodes: sortedEps, timestamp: Date.now() });
