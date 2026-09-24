@@ -1,0 +1,11 @@
+name = "play-infinity-proxy"
+main = "superflix-proxy.js"
+compatibility_date = "2024-09-01"
+
+# Depois do deploy, o Worker fica acessível em:
+# https://play-infinity-proxy.<seu-subdominio>.workers.dev/api/proxy?url=<encoded>
+#
+# Plano FREE (100k requests/dia, sem custo, sem cartão):
+# - Resolves Cloudflare anti-bot pra TODOS sites da whitelist
+# - Cache de 5min em memória reduz load
+# - Whitelist de hostnames (não é open proxy)

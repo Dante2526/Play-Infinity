@@ -298,4 +298,64 @@ router.get("/api/startflix-catalog", (req, res) => {
   }
 });
 
+// Endpoint de TESTE pra validar Cloudflare Worker
+// GET /api/proxy-test?url=<target-url>
+// Se WORKER_PROXY_URL estiver setado, fetchar via Worker (passa em CF).
+// Caso contrário, tenta fetch direto (vai falhar pra sites CF-protected).
+router.get("/api/proxy-test", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  const targetUrl = String(req.query.url || "").trim();
+  if (!targetUrl) {
+    return res.status(400).json({ error: "Parâmetro 'url' é obrigatório" });
+  }
+
+  const workerProxyUrl = process.env.WORKER_PROXY_URL;
+  const useWorker = !!workerProxyUrl;
+
+  const fetchUrl = useWorker
+    ? `${workerProxyUrl}?url=${encodeURIComponent(targetUrl)}`
+    : targetUrl;
+
+  try {
+    console.log(`[proxy-test] ${useWorker ? 'VIA WORKER' : 'DIRETO'}: ${targetUrl}`);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+    const upstream = await fetch(fetchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const body = await upstream.text();
+    const isCFBlocked = body.includes('Attention Required') || body.includes('Just a moment');
+
+    // Extrai title se tiver
+    const titleMatch = body.match(/<title>([^<]+)<\/title>/i);
+    const title = titleMatch ? titleMatch[1].trim() : null;
+
+    return res.json({
+      target_url: targetUrl,
+      via_worker: useWorker,
+      worker_url: workerProxyUrl || null,
+      status: upstream.status,
+      body_size: body.length,
+      title,
+      cloudflare_blocked: isCFBlocked,
+      sample: body.substring(0, 500),
+    });
+  } catch (err: any) {
+    return res.status(502).json({
+      error: 'Erro ao fetchar URL',
+      detail: err.message,
+      target_url: targetUrl,
+      via_worker: useWorker,
+    });
+  }
+});
+
 export default router;
