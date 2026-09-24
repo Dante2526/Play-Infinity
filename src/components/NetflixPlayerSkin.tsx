@@ -139,6 +139,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onServerChange,
   serversList,
 }) => {
+  const isEffectiveExternal = Boolean(isExternalPlayer || passThroughClicks);
+
   // Estado do player via postMessage
   const [playerStatus, setPlayerStatus] = useState<NetflixPlayerStatus>({
     currentTime: 0,
@@ -203,7 +205,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_startflix" ? "startflix" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   const displayAudioServers = useMemo(() => {
@@ -214,7 +216,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       { key: "srv_watchplay", label: "WatchPlayer" },
       { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_vip", label: "VIP Player" },
-      { key: "srv_startflix", label: "Startflix HD (Dublado)" },
     ];
   }, [serversList]);
 
@@ -629,7 +630,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
 
     if (
-      (!playerStatus.paused || isExternalPlayer) &&
+      (!playerStatus.paused || isEffectiveExternal) &&
       !isScrubbing &&
       !isDraggingBrightness &&
       !isDraggingVolume &&
@@ -639,12 +640,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     ) {
       hideTimerRef.current = setTimeout(() => {
         setControlsVisible(false);
-      }, isExternalPlayer ? 3500 : 2800);
+      }, isEffectiveExternal ? 3500 : 2800);
     }
   }, [
     isLocked,
     playerStatus.paused,
-    isExternalPlayer,
+    isEffectiveExternal,
     isScrubbing,
     isDraggingBrightness,
     isDraggingVolume,
@@ -654,7 +655,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   ]);
 
   useEffect(() => {
-    if (isExternalPlayer) {
+    if (isEffectiveExternal) {
       handleUserActivity();
       return;
     }
@@ -664,7 +665,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     } else {
       handleUserActivity();
     }
-  }, [playerStatus.paused, handleUserActivity, isExternalPlayer]);
+  }, [playerStatus.paused, handleUserActivity, isEffectiveExternal]);
 
   useEffect(() => {
     const handleWindowMouseMove = () => {
@@ -1128,9 +1129,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {/* Clique simples no fundo para Play/Pause e Gestos Touch Mobile */}
       <div
         className={`absolute inset-0 z-0 touch-none ${
-          isExternalPlayer || passThroughClicks ? "pointer-events-none" : "cursor-default pointer-events-auto"
+          isEffectiveExternal ? "pointer-events-none" : "cursor-default pointer-events-auto"
         }`}
-        onDoubleClick={isExternalPlayer || passThroughClicks ? undefined : onToggleFullscreen}
+        onDoubleClick={isEffectiveExternal ? undefined : onToggleFullscreen}
       />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
@@ -1175,7 +1176,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         }`}
       >
         <div className="absolute top-0 left-0 right-0 h-28 sm:h-36 bg-gradient-to-b from-black/90 via-black/50 to-transparent" />
-        {!isExternalPlayer && (
+        {!isEffectiveExternal && (
           <div className="absolute bottom-0 left-0 right-0 h-36 sm:h-44 bg-gradient-to-t from-black/95 via-black/60 to-transparent" />
         )}
       </div>
@@ -1231,7 +1232,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           <span className="text-white text-xs sm:text-sm md:text-base font-semibold tracking-wide drop-shadow truncate block text-center">
             {topTitleText}
           </span>
-          {isExternalPlayer && (
+          {isEffectiveExternal && (
             <span className="hidden xs:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 shadow-sm shrink-0">
               Controles Nativos
             </span>
@@ -1326,7 +1327,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2. CONTROLE VERTICAL DE BRILHO DA NETFLIX (SOL À ESQUERDA)
           Exibido apenas quando estiver em TELA CHEIA (isFullscreen)
           ======================================================== */}
-      {isFullscreen && !isExternalPlayer && isTouchDevice && (
+      {isFullscreen && !isEffectiveExternal && isTouchDevice && (
         <div
           ref={brightnessBarRef}
           onMouseDown={handleBrightnessMouseDown}
@@ -1375,7 +1376,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           2.1 CONTROLE VERTICAL DE SOM DA NETFLIX (LADO OPOSTO - DIREITA)
           Exibido apenas quando estiver em TELA CHEIA (isFullscreen), idêntico ao Brilho
           ======================================================== */}
-      {isFullscreen && !isExternalPlayer && isTouchDevice && (
+      {isFullscreen && !isEffectiveExternal && isTouchDevice && (
         <div
           ref={volumeBarRef}
           onMouseDown={handleVolumeMouseDown}
@@ -1452,7 +1453,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         </div>
       )}
 
-      {!passThroughClicks && !isExternalPlayer && (
+      {!isEffectiveExternal && (
         <div
           className={`absolute inset-0 flex items-center justify-center gap-5 xs:gap-8 sm:gap-16 md:gap-24 z-20 pointer-events-none transition-all duration-300 ${
             controlsVisible && !isLocked
@@ -1525,7 +1526,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
       {/* Barra de Progresso Fina e Contínua na Borda (quando controles completos estão ocultos) */}
-      {!isMiniPlayer && !isExternalPlayer && !controlsVisible && !isLocked && hasValidDuration && (
+      {!isMiniPlayer && !isEffectiveExternal && !controlsVisible && !isLocked && hasValidDuration && (
         <div className="absolute bottom-0 left-0 right-0 z-20 h-1 bg-black/40 pointer-events-none transition-opacity duration-300">
           <div
             className="h-full bg-white/25 absolute top-0 left-0 bottom-0 transition-all duration-150"
@@ -1551,7 +1552,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           onClick={(e) => e.stopPropagation()}
         >
         {/* LINHA DA TIMELINE (SCRUBBER) - apenas para players integrados */}
-        {!isExternalPlayer && (
+        {!isEffectiveExternal && (
           <div className="px-3 sm:px-6 md:px-8 w-full flex items-center gap-2.5 sm:gap-4 mb-1 sm:mb-2">
             {/* Tempo Decorrido Atual à Esquerda */}
             <span className="text-white/90 text-[11px] sm:text-xs font-medium tabular-nums select-none shrink-0 drop-shadow min-w-[34px] text-right">
@@ -1609,7 +1610,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         {/* LINHA DE AÇÕES INFERIORES: DISCRETA, ELEGANTE E PROPORCIONAL EM TELAS MÓVEIS E DESKTOP */}
         <div className="w-full flex items-center justify-center gap-3 xs:gap-4 sm:gap-7 md:gap-11 text-white text-xs px-2">
           {/* 1. Velocidade (Apenas em player integrado) */}
-          {!isExternalPlayer && (
+          {!isEffectiveExternal && (
             <button
               onClick={() => setShowSpeedMenu(true)}
               className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"

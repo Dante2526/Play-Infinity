@@ -9,7 +9,6 @@ Worker que resolve **TODOS** os sites Cloudflare-protected de uma vez. Cloudflar
 - ✅ `vizer.autos` (filmes/séries)
 - ✅ `encontrei.me` (catálogo Mixdrop)
 - ✅ `redecanais.in` / `redecanais.to` (filmes/séries)
-- ✅ `painel-aso.sbs` (startflix fallback)
 
 ## Deploy (5 min, grátis, sem cartão)
 

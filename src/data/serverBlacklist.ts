@@ -135,6 +135,20 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
     ],
     reason: "Invasão de popups, rastreadores terceiros e quebra de política de privacidade",
     blockedAt: "2026-09"
+  },
+  {
+    id: "starflix",
+    name: "Starflix / Startflix",
+    keys: ["srv_starflix", "starflix", "srv_startflix", "startflix"],
+    patterns: [
+      /starflix/i,
+      /startflix/i,
+      /painel-aso\.sbs/i,
+      "starflix",
+      "startflix"
+    ],
+    reason: "Removido por solicitação do usuário e incompatibilidade com os reprodutores homologados",
+    blockedAt: "2026-09"
   }
 ];
 

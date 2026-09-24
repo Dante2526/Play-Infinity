@@ -24,6 +24,7 @@
      - `AutoEmbed`
      - `Consumet` / `AnimeFire` (iframes externos não-oficiais)
      - `Vidsrc`, `MultiEmbed`, `Embed.su`
+     - `Starflix` / `Startflix` / `painel-aso.sbs`
    - **Consulte sempre o arquivo:** [`src/data/serverBlacklist.ts`](file:///c:/Users/nayla/.antigravity/Play-Infinity/src/data/serverBlacklist.ts).
    - Qualquer domínio, rota ou provedor que conste na lista negra **JAMAIS** deve ser reativado ou reintroduzido no catálogo.
 
