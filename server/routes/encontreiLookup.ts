@@ -1,13 +1,22 @@
 /**
- * Endpoint de lookup do catálogo encontrei.me
+ * Endpoint de lookup duplo catálogo: vizer-catalog.json (PRIMÁRIO, mais episódios)
+ *                                 + encontrei-catalog.json (FALLBACK, mais filmes)
  * 
- * Em vez do frontend baixar 11MB de JSON, faz 1 request rápida:
+ * Em vez do frontend baixar 11MB+26MB de JSON, faz 1 request rápida:
  *   GET /api/encontrei-lookup?tmdb_id=299534&type=movie
- *   GET /api/encontrei-lookup?tmdb_id=84958&type=tv&season=1&episode=1
+ *   GET /api/encontrei-lookup?tmdb_id=126027&type=tv&season=4&episode=1
  * 
- * Retorna: { mixdrop: "dk389z0xh7mezzz", audio: "Dublado" }
+ * Retorna: { mixdrop: "...", streamtape: "...", byse: "...", doodstream: "...", 
+ *            audio: "Dublado", source: "vizer|encontrei" }
  * 
- * O backend carrega o catálogo 1x (cacheado em memória) e serve lookups em <1ms.
+ * Backend carrega AMBOS catálogos 1x (cacheado em memória):
+ *   - vizer-catalog.json: 65.246 eps + 5.593 filmes (todos com Mixdrop, mais episódios)
+ *   - encontrei-catalog.json: 27.629 eps + 6.694 filmes (mais filmes)
+ * 
+ * Lookup order:
+ *   1. Procura em vizer-catalog (mais episódios, prioridade)
+ *   2. Se não achar, procura em encontrei-catalog (mais filmes)
+ *   3. Se não achar em nenhum, retorna 404
  */
 import { Router } from "express";
 import fs from "fs";
@@ -15,17 +24,32 @@ import path from "path";
 
 const router = Router();
 
-// Cache do catálogo em memória (carrega 1x, serve pra sempre; recarrega se o arquivo for modificado ou se o índice estava vazio)
-let _catalog: any = null;
-let _movieIndex: Map<number, any> = new Map();
-let _episodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
-let _seriesSeasonsIndex: Map<number, number[]> = new Map(); // key: tmdbId -> seasons array
-let _lastLoadedMtime = 0;
+// Catálogo encontrei (fallback, mais filmes)
+let _encontreiCatalog: any = null;
+let _encontreiMovieIndex: Map<number, any> = new Map();
+let _encontreiEpisodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
+let _encontreiSeriesSeasonsIndex: Map<number, number[]> = new Map();
+let _encontreiLastMtime = 0;
 
-function loadCatalog() {
+// Catálogo vizer (PRIMÁRIO, mais episódios)
+let _vizerCatalog: any = null;
+let _vizerMovieIndex: Map<number, any> = new Map();
+let _vizerEpisodeIndex: Map<string, any> = new Map();
+let _vizerSeriesSeasonsIndex: Map<number, number[]> = new Map();
+let _vizerLastMtime = 0;
+
+function tryLoadCatalog(
+  filename: string,
+  catalogRef: { value: any },
+  movieIndexRef: Map<number, any>,
+  episodeIndexRef: Map<string, any>,
+  seasonsIndexRef: Map<number, number[]>,
+  mtimeRef: { value: number },
+  logName: string,
+): boolean {
   const possiblePaths = [
-    path.join(process.cwd(), "public", "data", "encontrei-catalog.json"),
-    path.join(process.cwd(), "data", "encontrei-catalog.json"),
+    path.join(process.cwd(), "public", "data", filename),
+    path.join(process.cwd(), "data", filename),
   ];
 
   let raw = "";
@@ -35,9 +59,9 @@ function loadCatalog() {
       try {
         const stat = fs.statSync(p);
         currentMtime = stat.mtimeMs;
-        // Se já está carregado, com dados e o arquivo não mudou, usa o cache existente
-        if (_catalog && (_movieIndex.size > 0 || _episodeIndex.size > 0) && currentMtime <= _lastLoadedMtime) {
-          return;
+        // Se já carregado e não mudou, mantém
+        if (catalogRef.value && (movieIndexRef.size > 0 || episodeIndexRef.size > 0) && currentMtime <= mtimeRef.value) {
+          return true;
         }
         raw = fs.readFileSync(p, "utf-8");
         break;
@@ -45,31 +69,35 @@ function loadCatalog() {
     }
   }
 
-  // Se nenhum arquivo encontrado mas já temos cache válido, mantém
-  if (!raw && _catalog && (_movieIndex.size > 0 || _episodeIndex.size > 0)) {
-    return;
+  if (!raw) {
+    return false;
   }
 
   try {
-    _catalog = raw ? JSON.parse(raw) : { movies: [], episodes: [] };
-    _lastLoadedMtime = currentMtime;
+    catalogRef.value = JSON.parse(raw);
+    mtimeRef.value = currentMtime;
     
-    // Reconstrói índices pra lookup O(1)
-    _movieIndex.clear();
-    _episodeIndex.clear();
-    _seriesSeasonsIndex.clear();
+    movieIndexRef.clear();
+    episodeIndexRef.clear();
+    seasonsIndexRef.clear();
     
-    for (const movie of _catalog.movies || []) {
+    for (const movie of catalogRef.value.movies || []) {
       if (movie.tmdb_id) {
-        _movieIndex.set(movie.tmdb_id, movie);
+        // Se já existe (duplicado), mantém o primeiro
+        if (!movieIndexRef.has(movie.tmdb_id)) {
+          movieIndexRef.set(movie.tmdb_id, movie);
+        }
       }
     }
     
     const seriesSeasonsMap = new Map<number, Set<number>>();
-    for (const ep of _catalog.episodes || []) {
+    for (const ep of catalogRef.value.episodes || []) {
       if (ep.tmdb_id && ep.season && ep.episode) {
         const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
-        _episodeIndex.set(key, ep);
+        // Se já existe (duplicado), mantém o primeiro
+        if (!episodeIndexRef.has(key)) {
+          episodeIndexRef.set(key, ep);
+        }
         if (!seriesSeasonsMap.has(ep.tmdb_id)) {
           seriesSeasonsMap.set(ep.tmdb_id, new Set());
         }
@@ -78,33 +106,52 @@ function loadCatalog() {
     }
 
     for (const [id, seasonsSet] of seriesSeasonsMap.entries()) {
-      _seriesSeasonsIndex.set(id, Array.from(seasonsSet).sort((a, b) => a - b));
+      seasonsIndexRef.set(id, Array.from(seasonsSet).sort((a, b) => a - b));
     }
     
-    console.log(`[encontrei-lookup] Catálogo carregado: ${_movieIndex.size} filmes, ${_episodeIndex.size} episódios, ${_seriesSeasonsIndex.size} séries indexadas`);
+    console.log(`[${logName}] Catálogo carregado: ${movieIndexRef.size} filmes, ${episodeIndexRef.size} episódios, ${seasonsIndexRef.size} séries`);
+    return true;
   } catch (err) {
-    console.warn("[encontrei-lookup] Aviso ao processar catálogo:", err);
-    _catalog = { movies: [], episodes: [] };
+    console.warn(`[${logName}] Erro ao processar:`, err);
+    return false;
   }
 }
 
-// Cache de temporadas verificadas em memória (evita re-sondar servidores externos repetidamente)
-const _verifiedSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
-const VERIFIED_SEASONS_CACHE_TTL = 20 * 60 * 1000; // 20 minutos
+function loadCatalogs() {
+  // Carrega vizer (primário) primeiro
+  tryLoadCatalog(
+    "vizer-catalog.json",
+    { get value() { return _vizerCatalog; }, set value(v) { _vizerCatalog = v; } },
+    _vizerMovieIndex,
+    _vizerEpisodeIndex,
+    _vizerSeriesSeasonsIndex,
+    { get value() { return _vizerLastMtime; }, set value(v) { _vizerLastMtime = v; } },
+    "vizer-lookup",
+  );
+  // Carrega encontrei (fallback) segundo
+  tryLoadCatalog(
+    "encontrei-catalog.json",
+    { get value() { return _encontreiCatalog; }, set value(v) { _encontreiCatalog = v; } },
+    _encontreiMovieIndex,
+    _encontreiEpisodeIndex,
+    _encontreiSeriesSeasonsIndex,
+    { get value() { return _encontreiLastMtime; }, set value(v) { _encontreiLastMtime = v; } },
+    "encontrei-lookup",
+  );
+}
 
-/**
- * Retorna as temporadas reais disponíveis com episódios reproduzíveis nos servidores homologados.
- * GET /api/series-seasons-available?tmdb_id=126027&candidate_seasons=1,2,3,4,5,6
- */
+// Cache de temporadas verificadas em memória
+const _verifiedSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
+const VERIFIED_SEASONS_CACHE_TTL = 20 * 60 * 1000;
+
 router.get("/api/series-seasons-available", async (req, res) => {
   try {
-    loadCatalog();
+    loadCatalogs();
     const tmdbId = parseInt(req.query.tmdb_id as string, 10);
     if (!tmdbId) {
       return res.status(400).json({ error: "tmdb_id é obrigatório" });
     }
 
-    // 1. Extrai lista de temporadas candidatas
     let candidateSeasons: number[] = [];
     if (req.query.candidate_seasons) {
       candidateSeasons = String(req.query.candidate_seasons)
@@ -113,16 +160,17 @@ router.get("/api/series-seasons-available", async (req, res) => {
         .filter(n => !isNaN(n) && n > 0);
     }
 
-    const localCatalogSeasons = _seriesSeasonsIndex.get(tmdbId) || [];
+    // Junta temporadas dos DOIS catálogos (vizer + encontrei)
+    const vizerSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
+    const encontreiSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
+    
     if (candidateSeasons.length === 0) {
       candidateSeasons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     }
 
-    // Deduplica e ordena
-    const candidates = Array.from(new Set([...candidateSeasons, ...localCatalogSeasons])).sort((a, b) => a - b);
+    const candidates = Array.from(new Set([...candidateSeasons, ...vizerSeasons, ...encontreiSeasons])).sort((a, b) => a - b);
     const cacheKey = `${tmdbId}:${candidates.join(",")}`;
 
-    // 2. Verifica cache em memória para este conjunto exato de candidatas
     const cached = _verifiedSeasonsCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -134,14 +182,13 @@ router.get("/api/series-seasons-available", async (req, res) => {
       });
     }
 
-    // 3. Testa disponibilidade de cada temporada em paralelo
+    // Pra cada temporada candidata, verifica se tem em vizer OU encontrei
     const checkSeasonPlayable = async (season: number): Promise<boolean> => {
-      // Se já consta no catálogo local com episódios, é garantido
-      if (localCatalogSeasons.includes(season)) {
+      // 1. Catálogo local (vizer + encontrei)
+      if (vizerSeasons.includes(season) || encontreiSeasons.includes(season)) {
         return true;
       }
-
-      // Sonda Nixplay HD (Episódio 1 da temporada)
+      // 2. Sonda Nixplay HD
       try {
         const ss = String(season).padStart(3, "0");
         const streamId = `${tmdbId}${ss}001`;
@@ -157,8 +204,7 @@ router.get("/api/series-seasons-available", async (req, res) => {
           return true;
         }
       } catch {}
-
-      // Sonda WatchPlayer Oficial (Episódio 1 da temporada)
+      // 3. Sonda WatchPlayer
       try {
         const wpUrl = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/1`;
         const controller = new AbortController();
@@ -182,12 +228,9 @@ router.get("/api/series-seasons-available", async (req, res) => {
             lower.includes("série não encontrada") ||
             text.length < 300
           );
-          if (!isBad) {
-            return true;
-          }
+          if (!isBad) return true;
         }
       } catch {}
-
       return false;
     };
 
@@ -200,7 +243,6 @@ router.get("/api/series-seasons-available", async (req, res) => {
 
     const verified = checks.filter(c => c.available).map(c => c.season);
 
-    // Se encontramos temporadas verificadas com vídeo real
     if (verified.length > 0) {
       _verifiedSeasonsCache.set(cacheKey, {
         timestamp: Date.now(),
@@ -216,12 +258,13 @@ router.get("/api/series-seasons-available", async (req, res) => {
       });
     }
 
-    // Fallback de segurança se nenhuma respondeu (ex: timeout de rede simultâneo)
-    const fallback = localCatalogSeasons.length > 0 ? localCatalogSeasons : [1];
+    // Fallback
+    const localSeasons = [...vizerSeasons, ...encontreiSeasons];
+    const fallback = localSeasons.length > 0 ? Array.from(new Set(localSeasons)).sort((a, b) => a - b) : [1];
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.json({
       success: true,
-      hasCatalog: localCatalogSeasons.length > 0,
+      hasCatalog: localSeasons.length > 0,
       tmdbId,
       seasons: fallback,
     });
@@ -231,14 +274,9 @@ router.get("/api/series-seasons-available", async (req, res) => {
   }
 });
 
-/**
- * Verifica uma lista de TMDB IDs e retorna quais possuem conteúdo reproduzível no catálogo
- * GET /api/check-playable-batch?ids=19995,671,14424
- * POST /api/check-playable-batch { ids: [19995, 671, 14424] }
- */
 router.all("/api/check-playable-batch", (req, res) => {
   try {
-    loadCatalog();
+    loadCatalogs();
     let ids: number[] = [];
     if (req.method === "POST" && req.body && Array.isArray(req.body.ids)) {
       ids = req.body.ids.map(Number).filter(Boolean);
@@ -250,10 +288,11 @@ router.all("/api/check-playable-batch", (req, res) => {
     const playableSeriesIds: number[] = [];
 
     for (const id of ids) {
-      if (_movieIndex.has(id)) {
+      // Em qualquer um dos catálogos
+      if (_vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id)) {
         playableMovieIds.push(id);
       }
-      if (_seriesSeasonsIndex.has(id)) {
+      if (_vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id)) {
         playableSeriesIds.push(id);
       }
     }
@@ -273,11 +312,7 @@ router.all("/api/check-playable-batch", (req, res) => {
 
 router.get("/api/encontrei-lookup", (req, res) => {
   try {
-    loadCatalog();
-    
-    if (!_catalog) {
-      return res.status(503).json({ error: "Catálogo não disponível" });
-    }
+    loadCatalogs();
     
     const tmdbId = parseInt(req.query.tmdb_id as string, 10);
     const type = (req.query.type as string) || "movie";
@@ -291,41 +326,77 @@ router.get("/api/encontrei-lookup", (req, res) => {
     let result: any = null;
     
     if (type === "tv" || type === "series") {
-      // Lookup de episódio
+      // Lookup de episódio: PRIMEIRO vizer (mais eps), DEPOIS encontrei
       const key = `${tmdbId}:${season}:${episode}`;
-      const ep = _episodeIndex.get(key);
-      if (ep) {
+      
+      // 1. Tenta vizer primeiro
+      const vizerEp = _vizerEpisodeIndex.get(key);
+      if (vizerEp && vizerEp.servers?.mixdrop) {
         result = {
-          mixdrop: ep.servers?.mixdrop || null,
-          streamtape: ep.servers?.streamtape || null,
-          byse: ep.servers?.byse || null,
-          doodstream: ep.servers?.doodstream || null,
-          audio: ep.audio || "Dublado",
+          mixdrop: vizerEp.servers.mixdrop,
+          streamtape: vizerEp.servers.streamtape || null,
+          byse: vizerEp.servers.byse || null,
+          doodstream: vizerEp.servers.doodstream || null,
+          audio: vizerEp.audio || "Dublado",
           server_name: "MixDrop",
-          season: ep.season,
-          episode: ep.episode,
+          season: vizerEp.season,
+          episode: vizerEp.episode,
+          source: "vizer",
         };
       }
+      
+      // 2. Se vizer não tem, tenta encontrei
+      if (!result) {
+        const encontreiEp = _encontreiEpisodeIndex.get(key);
+        if (encontreiEp && encontreiEp.servers?.mixdrop) {
+          result = {
+            mixdrop: encontreiEp.servers.mixdrop,
+            streamtape: encontreiEp.servers.streamtape || null,
+            byse: encontreiEp.servers.byse || null,
+            doodstream: encontreiEp.servers.doodstream || null,
+            audio: encontreiEp.audio || "Dublado",
+            server_name: "MixDrop",
+            season: encontreiEp.season,
+            episode: encontreiEp.episode,
+            source: "encontrei",
+          };
+        }
+      }
     } else {
-      // Lookup de filme
-      const movie = _movieIndex.get(tmdbId);
-      if (movie) {
+      // Lookup de filme: PRIMEIRO vizer, DEPOIS encontrei (encontrei tem mais filmes)
+      const vizerMovie = _vizerMovieIndex.get(tmdbId);
+      if (vizerMovie && vizerMovie.servers?.mixdrop) {
         result = {
-          mixdrop: movie.servers?.mixdrop || null,
-          streamtape: movie.servers?.streamtape || null,
-          byse: movie.servers?.byse || null,
-          doodstream: movie.servers?.doodstream || null,
-          audio: movie.audio || "Dublado",
+          mixdrop: vizerMovie.servers.mixdrop,
+          streamtape: vizerMovie.servers.streamtape || null,
+          byse: vizerMovie.servers.byse || null,
+          doodstream: vizerMovie.servers.doodstream || null,
+          audio: vizerMovie.audio || "Dublado",
           server_name: "MixDrop",
+          source: "vizer",
         };
+      }
+      
+      if (!result) {
+        const encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+        if (encontreiMovie && encontreiMovie.servers?.mixdrop) {
+          result = {
+            mixdrop: encontreiMovie.servers.mixdrop,
+            streamtape: encontreiMovie.servers.streamtape || null,
+            byse: encontreiMovie.servers.byse || null,
+            doodstream: encontreiMovie.servers.doodstream || null,
+            audio: encontreiMovie.audio || "Dublado",
+            server_name: "MixDrop",
+            source: "encontrei",
+          };
+        }
       }
     }
     
     if (!result) {
-      return res.status(404).json({ error: "Não encontrado no catálogo", tmdb_id: tmdbId });
+      return res.status(404).json({ error: "Não encontrado nos catálogos (vizer + encontrei)", tmdb_id: tmdbId });
     }
     
-    // Headers pra cache do navegador (1 hora)
     res.setHeader("Cache-Control", "public, max-age=3600");
     return res.json(result);
   } catch (err: any) {
@@ -334,56 +405,100 @@ router.get("/api/encontrei-lookup", (req, res) => {
   }
 });
 
-/**
- * Endpoint para a Área de Downloads:
- * Retorna os IDs dos filmes e séries que possuem download ativo (MixDrop)
- * GET /api/downloads-catalog?limit=50&offset=0&type=all|movie|tv
- */
 router.get("/api/downloads-catalog", (req, res) => {
   try {
-    loadCatalog();
-    if (!_catalog) {
-      return res.status(503).json({ error: "Catálogo não disponível" });
-    }
+    loadCatalogs();
 
     const type = (req.query.type as string) || "all";
     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
     const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
 
-    const movieItems: { tmdbId: number; type: "movie"; mixdrop: string; audio: string }[] = [];
+    // Junta filmes dos DOIS catálogos (vizer + encontrei), dedup por tmdbId
+    const movieMap = new Map<number, { tmdbId: number; type: "movie"; mixdrop: string; audio: string }>();
+    
     if (type === "all" || type === "movie") {
-      for (const m of _catalog.movies || []) {
-        if (m.tmdb_id && m.servers?.mixdrop) {
-          movieItems.push({
-            tmdbId: m.tmdb_id,
-            type: "movie",
-            mixdrop: m.servers.mixdrop,
-            audio: m.audio || "Dublado"
-          });
-        }
-      }
-    }
-
-    const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
-    if (type === "all" || type === "tv" || type === "series") {
-      for (const ep of _catalog.episodes || []) {
-        if (ep.tmdb_id && ep.servers?.mixdrop) {
-          const current = seriesMap.get(ep.tmdb_id) || {
-            tmdbId: ep.tmdb_id,
-            type: "series",
-            totalEpisodes: 0,
-            seasons: [],
-            audio: ep.audio || "Dublado"
-          };
-          current.totalEpisodes += 1;
-          if (ep.season && !current.seasons.includes(ep.season)) {
-            current.seasons.push(ep.season);
+      // Vizer primeiro
+      if (_vizerCatalog) {
+        for (const m of _vizerCatalog.movies || []) {
+          if (m.tmdb_id && m.servers?.mixdrop && !movieMap.has(m.tmdb_id)) {
+            movieMap.set(m.tmdb_id, {
+              tmdbId: m.tmdb_id,
+              type: "movie" as const,
+              mixdrop: m.servers.mixdrop,
+              audio: m.audio || "Dublado"
+            });
           }
-          seriesMap.set(ep.tmdb_id, current);
+        }
+      }
+      // Encontrei como fallback
+      if (_encontreiCatalog) {
+        for (const m of _encontreiCatalog.movies || []) {
+          if (m.tmdb_id && m.servers?.mixdrop && !movieMap.has(m.tmdb_id)) {
+            movieMap.set(m.tmdb_id, {
+              tmdbId: m.tmdb_id,
+              type: "movie" as const,
+              mixdrop: m.servers.mixdrop,
+              audio: m.audio || "Dublado"
+            });
+          }
         }
       }
     }
 
+    // Junta séries dos DOIS catálogos, dedup por tmdbId
+    const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
+    
+    if (type === "all" || type === "tv" || type === "series") {
+      // Vizer
+      if (_vizerCatalog) {
+        for (const ep of _vizerCatalog.episodes || []) {
+          if (ep.tmdb_id && ep.servers?.mixdrop) {
+            const current = seriesMap.get(ep.tmdb_id) || {
+              tmdbId: ep.tmdb_id,
+              type: "series" as const,
+              totalEpisodes: 0,
+              seasons: [] as number[],
+              audio: ep.audio || "Dublado"
+            };
+            current.totalEpisodes += 1;
+            if (ep.season && !current.seasons.includes(ep.season)) {
+              current.seasons.push(ep.season);
+            }
+            seriesMap.set(ep.tmdb_id, current);
+          }
+        }
+      }
+      // Encontrei (eps que não tem em vizer)
+      if (_encontreiCatalog) {
+        for (const ep of _encontreiCatalog.episodes || []) {
+          if (ep.tmdb_id && ep.servers?.mixdrop) {
+            const existing = seriesMap.get(ep.tmdb_id);
+            if (existing) {
+              // Se já existe, só incrementa se a season/episode não tiver sido contada
+              // (pra não duplicar eps que existem nos dois catálogos)
+              const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
+              const inVizer = _vizerEpisodeIndex.has(key);
+              if (!inVizer) {
+                existing.totalEpisodes += 1;
+                if (ep.season && !existing.seasons.includes(ep.season)) {
+                  existing.seasons.push(ep.season);
+                }
+              }
+            } else {
+              seriesMap.set(ep.tmdb_id, {
+                tmdbId: ep.tmdb_id,
+                type: "series" as const,
+                totalEpisodes: 1,
+                seasons: ep.season ? [ep.season] : [],
+                audio: ep.audio || "Dublado"
+              });
+            }
+          }
+        }
+      }
+    }
+
+    const movieItems = Array.from(movieMap.values());
     const seriesItems = Array.from(seriesMap.values());
     const allItems = [...movieItems, ...seriesItems];
     const total = allItems.length;
