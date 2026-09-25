@@ -329,72 +329,82 @@ router.get("/api/encontrei-lookup", (req, res) => {
       // Lookup de episódio: PRIMEIRO vizer (mais eps), DEPOIS encontrei
       const key = `${tmdbId}:${season}:${episode}`;
       
-      // 1. Tenta vizer primeiro
       const vizerEp = _vizerEpisodeIndex.get(key);
-      if (vizerEp && vizerEp.servers?.mixdrop) {
-        result = {
-          mixdrop: vizerEp.servers.mixdrop,
-          streamtape: vizerEp.servers.streamtape || null,
-          byse: vizerEp.servers.byse || null,
-          doodstream: vizerEp.servers.doodstream || null,
-          audio: vizerEp.audio || "Dublado",
-          server_name: "MixDrop",
-          season: vizerEp.season,
-          episode: vizerEp.episode,
-          source: "vizer",
-        };
-      }
-      
-      // 2. Se vizer não tem, tenta encontrei
-      if (!result) {
-        const encontreiEp = _encontreiEpisodeIndex.get(key);
-        if (encontreiEp && encontreiEp.servers?.mixdrop) {
-          result = {
-            mixdrop: encontreiEp.servers.mixdrop,
-            streamtape: encontreiEp.servers.streamtape || null,
-            byse: encontreiEp.servers.byse || null,
-            doodstream: encontreiEp.servers.doodstream || null,
-            audio: encontreiEp.audio || "Dublado",
-            server_name: "MixDrop",
-            season: encontreiEp.season,
-            episode: encontreiEp.episode,
-            source: "encontrei",
-          };
+      const encontreiEp = _encontreiEpisodeIndex.get(key);
+
+      let bestEp = null;
+      let bestSource = "";
+
+      if (vizerEp && vizerEp.servers?.mixdrop && encontreiEp && encontreiEp.servers?.mixdrop) {
+        // Ambos têm o episódio no MixDrop. Priorizamos Dublado.
+        if (vizerEp.audio !== "Dublado" && encontreiEp.audio === "Dublado") {
+          bestEp = encontreiEp;
+          bestSource = "encontrei";
+        } else {
+          bestEp = vizerEp;
+          bestSource = "vizer";
         }
+      } else if (vizerEp && vizerEp.servers?.mixdrop) {
+        bestEp = vizerEp;
+        bestSource = "vizer";
+      } else if (encontreiEp && encontreiEp.servers?.mixdrop) {
+        bestEp = encontreiEp;
+        bestSource = "encontrei";
+      }
+
+      if (bestEp) {
+        result = {
+          mixdrop: bestEp.servers.mixdrop,
+          streamtape: bestEp.servers.streamtape || null,
+          byse: bestEp.servers.byse || null,
+          doodstream: bestEp.servers.doodstream || null,
+          audio: bestEp.audio || "Dublado",
+          server_name: "MixDrop",
+          season: bestEp.season,
+          episode: bestEp.episode,
+          source: bestSource,
+        };
       }
     } else {
-      // Lookup de filme: PRIMEIRO vizer, DEPOIS encontrei (encontrei tem mais filmes)
+      // Lookup de filme: PRIMEIRO vizer, DEPOIS encontrei
       const vizerMovie = _vizerMovieIndex.get(tmdbId);
-      if (vizerMovie && vizerMovie.servers?.mixdrop) {
-        result = {
-          mixdrop: vizerMovie.servers.mixdrop,
-          streamtape: vizerMovie.servers.streamtape || null,
-          byse: vizerMovie.servers.byse || null,
-          doodstream: vizerMovie.servers.doodstream || null,
-          audio: vizerMovie.audio || "Dublado",
-          server_name: "MixDrop",
-          source: "vizer",
-        };
-      }
-      
-      if (!result) {
-        const encontreiMovie = _encontreiMovieIndex.get(tmdbId);
-        if (encontreiMovie && encontreiMovie.servers?.mixdrop) {
-          result = {
-            mixdrop: encontreiMovie.servers.mixdrop,
-            streamtape: encontreiMovie.servers.streamtape || null,
-            byse: encontreiMovie.servers.byse || null,
-            doodstream: encontreiMovie.servers.doodstream || null,
-            audio: encontreiMovie.audio || "Dublado",
-            server_name: "MixDrop",
-            source: "encontrei",
-          };
+      const encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+
+      let bestMovie = null;
+      let bestSource = "";
+
+      if (vizerMovie && vizerMovie.servers?.mixdrop && encontreiMovie && encontreiMovie.servers?.mixdrop) {
+        // Ambos têm o filme no MixDrop. Priorizamos Dublado.
+        if (vizerMovie.audio !== "Dublado" && encontreiMovie.audio === "Dublado") {
+          bestMovie = encontreiMovie;
+          bestSource = "encontrei";
+        } else {
+          bestMovie = vizerMovie;
+          bestSource = "vizer";
         }
+      } else if (vizerMovie && vizerMovie.servers?.mixdrop) {
+        bestMovie = vizerMovie;
+        bestSource = "vizer";
+      } else if (encontreiMovie && encontreiMovie.servers?.mixdrop) {
+        bestMovie = encontreiMovie;
+        bestSource = "encontrei";
+      }
+
+      if (bestMovie) {
+        result = {
+          mixdrop: bestMovie.servers.mixdrop,
+          streamtape: bestMovie.servers.streamtape || null,
+          byse: bestMovie.servers.byse || null,
+          doodstream: bestMovie.servers.doodstream || null,
+          audio: bestMovie.audio || "Dublado",
+          server_name: "MixDrop",
+          source: bestSource,
+        };
       }
     }
     
     if (!result) {
-      return res.status(404).json({ error: "Não encontrado nos catálogos (vizer + encontrei)", tmdb_id: tmdbId });
+      return res.status(200).json({ error: "Não encontrado nos catálogos (vizer + encontrei)", tmdb_id: tmdbId });
     }
     
     res.setHeader("Cache-Control", "public, max-age=3600");

@@ -16,3 +16,10 @@ No arquivo `server.ts`, modificamos a tratativa de erros do bloco `mixdrop-strea
 
 ## Testes Realizados
 O arquivo TypeScript do servidor local foi verificado via `npx tsc --noEmit` para garantir ausÃªncia de erros sintÃ¡ticos (especialmente sobre escapes da RegEx do Packer).
+
+## Integração Catálogo Vizer (25/09/2026)
+- Identificado adição do catálogo izer-catalog.json.
+- Modificada a rota /api/encontrei-lookup em server/routes/encontreiLookup.ts.
+- Implementado 'Smart Merge' para quando filmes ou séries existirem em ambos os catálogos (Vizer e Encontrei).
+- Prioridade estabelecida: Áudio 'Dublado'. Se o Vizer for Legendado e o Encontrei Dublado, o Encontrei é servido, caso contrário o Vizer continua sendo o padrão.
+- Testado e validado com TypeScript.

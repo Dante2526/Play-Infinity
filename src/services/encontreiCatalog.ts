@@ -26,6 +26,7 @@ export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult
     const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie`);
     if (!res.ok) { _cache.set(cacheKey, null); return null; }
     const data = await res.json();
+    if (data.error) { _cache.set(cacheKey, null); return null; }
     const result: EncontreiResult = {
       mixdrop: data.mixdrop || null, streamtape: data.streamtape || null,
       byse: data.byse || null, doodstream: data.doodstream || null,
@@ -46,6 +47,7 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
     const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}`);
     if (!res.ok) { _cache.set(cacheKey, null); return null; }
     const data = await res.json();
+    if (data.error) { _cache.set(cacheKey, null); return null; }
     const result: EncontreiResult = {
       mixdrop: data.mixdrop || null, streamtape: data.streamtape || null,
       byse: data.byse || null, doodstream: data.doodstream || null,

@@ -1055,7 +1055,6 @@ export function VideoPlayerModal({
         if (
           (typeof data.duration === "number" && data.duration > 0) ||
           (typeof data.currentTime === "number" && data.currentTime > 0) ||
-          data.paused === false ||
           (typeof data.readyState === "number" && data.readyState >= 1)
         ) {
           // Se for transição recente (< 800ms), aguarda estabilização do novo frame

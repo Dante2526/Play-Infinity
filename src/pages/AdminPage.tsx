@@ -1498,9 +1498,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
       {/* Modal de Edição de Credenciais */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-3.5 sm:p-5 max-w-md w-full shadow-2xl relative overflow-hidden">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-3.5 sm:p-5 max-w-md w-full shadow-2xl relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
             {/* Cabeçalho do Modal */}
-            <div className="flex items-center justify-between gap-2 mb-2.5">
+            <div className="flex items-center justify-between gap-2 mb-2.5 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl shrink-0">
                   <Key className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -1519,21 +1519,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </button>
             </div>
 
-            {editSuccess && (
-              <div className="mb-2.5 py-1.5 px-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-xs font-medium">
-                ✅ {editSuccess}
-              </div>
-            )}
+            <div className="overflow-y-auto overflow-x-hidden pr-1 -mr-1 custom-scrollbar pb-1">
+              {editSuccess && (
+                <div className="mb-2.5 py-1.5 px-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-xs font-medium shrink-0">
+                  ✅ {editSuccess}
+                </div>
+              )}
 
-            {editError && (
-              <div className="mb-2.5 py-1.5 px-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium">
-                ❌ {editError}
-              </div>
-            )}
+              {editError && (
+                <div className="mb-2.5 py-1.5 px-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium shrink-0">
+                  ❌ {editError}
+                </div>
+              )}
 
-            <form onSubmit={handleSaveEdit} className="space-y-2.5">
-              {/* Nome e E-mail em 2 Colunas */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <form onSubmit={handleSaveEdit} className="space-y-2.5 shrink-0">
+                {/* Nome e E-mail em 2 Colunas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
                   <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Nome</label>
                   <input
@@ -1803,6 +1804,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

@@ -838,14 +838,14 @@ export function DetailsPage({
                   </span>
                 </div>
                 
-                <div className="flex items-center gap-2.5 shrink-0 flex-nowrap">
+                <div className="flex items-center gap-2.5 min-w-0 max-w-full">
                   {/* Botão Marcar Temporada como Vista (Largura padronizada sem layout shift) */}
                   <button
                     tabIndex={0} role="button" onClick={() => {
                       const fullyWatched = isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes);
                       markSeasonWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes, !fullyWatched);
                     }}
-                    className={`min-w-[125px] justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border backdrop-blur-sm active:scale-95 ${
+                    className={`shrink-0 justify-center px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 border backdrop-blur-sm active:scale-95 ${
                       isSeasonFullyWatched(effectiveTmdbId, selectedSeason, totalSeasonEpisodes)
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                         : "bg-white/5 text-neutral-300 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20"
@@ -859,7 +859,7 @@ export function DetailsPage({
                   </button>
 
                   {/* Seletor de Temporadas */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5 max-w-full">
+                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5 max-w-full min-w-0">
                     {availableSeasons.map(s => {
                       const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
                       const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, seasonEpCount);
