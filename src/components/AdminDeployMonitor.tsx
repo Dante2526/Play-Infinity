@@ -210,12 +210,22 @@ export function AdminDeployMonitor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action })
       });
-      const data = await res.json();
+      
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        if (!res.ok) {
+          throw new Error(`Servidor respondeu com status ${res.status} (${res.statusText || "Serviço reiniciando ou indisponível temporariamente"}).`);
+        }
+        throw new Error("Resposta em formato inesperado do servidor.");
+      }
 
       setTerminalOutput({
         title,
-        output: data.stdout || data.stderr || (data.success ? "Comando executado com sucesso." : "Falha na execução."),
-        code: data.code
+        output: data.stdout || data.stderr || (data.success ? "Comando executado com sucesso." : data.error || "Falha na execução."),
+        code: data.code ?? (data.success ? 0 : 1)
       });
 
       // Recarrega telemetria após a ação
