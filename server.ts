@@ -47,14 +47,15 @@ const PORT = 3000;
 // Configuração Firebase (Backend JS SDK bypass para Firestore)
 export let db: any = null;
 try {
-  const fbApp = initializeApp({
-    apiKey: process.env.VITE_FIREBASE_API_KEY,
-    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
-    projectId: process.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-    appId: process.env.VITE_FIREBASE_APP_ID,
-  });
+  const fbConfig = {
+    apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyAvv3XgTuTfUHUH8pRdRJ8XiH98uCUcSAs",
+    authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "play-infinity-63eaa.firebaseapp.com",
+    projectId: process.env.VITE_FIREBASE_PROJECT_ID || "play-infinity-63eaa",
+    storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "play-infinity-63eaa.firebasestorage.app",
+    messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "341774996820",
+    appId: process.env.VITE_FIREBASE_APP_ID || "1:341774996820:web:871c91206a157cce6ce4c1",
+  };
+  const fbApp = initializeApp(fbConfig);
   db = getFirestore(fbApp);
   console.log("[Firebase] Backend conectado ao Firestore.");
 } catch (e) {

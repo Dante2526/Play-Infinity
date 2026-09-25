@@ -334,7 +334,7 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
  * Consulta o histórico de execuções do GitHub Actions
  */
 adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
-  const repo = (req.query.repo as string) || process.env.GITHUB_REPOSITORY || "naylanmoreira/Play-Infinity";
+  const repo = (req.query.repo as string) || process.env.GITHUB_REPOSITORY || "Dante2526/Play-Infinity";
   const token = (req.query.token as string) || process.env.GITHUB_TOKEN || "";
 
   // Sanitiza repo formato owner/repo
@@ -343,7 +343,7 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
   if (parts.length < 2) {
     return res.status(400).json({
       success: false,
-      error: "Formato de repositório inválido. Utilize o formato: usuario/nome-do-repositorio (ex: naylanmoreira/Play-Infinity)"
+      error: "Formato de repositório inválido. Utilize o formato: usuario/nome-do-repositorio (ex: Dante2526/Play-Infinity)"
     });
   }
 
@@ -456,7 +456,8 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
  * Dispara um novo workflow_dispatch no GitHub Actions
  */
 adminOpsRouter.post("/github-trigger", async (req: Request, res: Response) => {
-  const { repo, token, branch = "main", workflow = "main.yml" } = req.body || {};
+  const { repo, branch = "main", workflow = "main.yml" } = req.body || {};
+  const token = (req.body?.token as string) || process.env.GITHUB_TOKEN || "";
 
   if (!token || !token.trim()) {
     return res.status(400).json({
