@@ -1069,7 +1069,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       </div>
 
                       {/* Informações e Controles */}
-                      <div className="flex flex-col sm:flex-row sm:flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-2.5 sm:gap-3 text-xs text-white/70 w-full xl:w-auto">
+                      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 text-xs text-white/70 w-full xl:w-auto">
                         {/* Linha de Senha e Vencimento */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
                           {/* Senha */}
@@ -1494,7 +1494,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       {/* Modal de Edição de Credenciais */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[90vh] overflow-y-auto styled-scrollbar">
             <button
               type="button"
               onClick={() => setEditingUser(null)}
