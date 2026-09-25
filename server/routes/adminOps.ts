@@ -262,7 +262,7 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
 
   switch (action) {
     case "restart-all":
-      commandToRun = "sudo pm2 restart all";
+      commandToRun = "(sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando de reinicialização enviado (PM2 restart all agendado).'";
       actionDescription = "Reiniciar todos os processos PM2 na VPS";
       break;
 
@@ -272,7 +272,7 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
       break;
 
     case "restart-app":
-      commandToRun = "sudo pm2 restart play-infinity-app";
+      commandToRun = "(sleep 1 && sudo pm2 restart play-infinity-app) > /dev/null 2>&1 & echo 'Comando de reinicialização enviado (play-infinity-app agendado).'";
       actionDescription = "Reiniciar aplicação web (play-infinity-app)";
       break;
 
@@ -294,10 +294,10 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
         echo "📦 Instalando dependências e gerando build..."
         npm run build || echo "Aviso no build"
         
-        echo "🔄 Reiniciando serviços PM2..."
-        sudo pm2 restart all
+        echo "🔄 Agendando reinicialização dos serviços PM2..."
+        (sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 &
         
-        echo "✅ Ação concluída com sucesso!"
+        echo "✅ Ação concluída com sucesso! Os serviços estão sendo atualizados."
       `;
       actionDescription = "Atualização manual via Git Pull e Build na VPS";
       break;
