@@ -385,7 +385,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       } else if (accessType === "vitalicio") {
         expirationDate = new Date();
         expirationDate.setFullYear(2099);
-        expireStr = "Vitalício (Permanente)";
+        expireStr = "Vitalício";
       } else {
         payDate = new Date(paymentDate + "T12:00:00");
         expirationDate = new Date(payDate);
@@ -982,7 +982,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   if (client.expirationDate) {
                     const d = new Date(client.expirationDate);
                     if (d.getFullYear() >= 2099) {
-                      expireLabel = "Vitalício (Permanente)";
+                      expireLabel = "Vitalício";
                     } else {
                       expireLabel = d.toLocaleDateString('pt-BR') + (client.accessType === 'teste' || client.accessType === '4horas' || client.accessType === '1dia' || client.accessType === '30min' || client.accessType === '7dias' ? ` às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : '');
                     }

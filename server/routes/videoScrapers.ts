@@ -1971,6 +1971,25 @@ const router = Router();
       };
 
       const checkEpisode = async (episode: number): Promise<boolean> => {
+        const checkNixplay = async (): Promise<boolean> => {
+          try {
+            const ss = String(season).padStart(3, "0");
+            const ee = String(episode).padStart(3, "0");
+            const streamId = `${tmdbId}${ss}${ee}`;
+            const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
+            const nController = new AbortController();
+            const nTimeout = setTimeout(() => nController.abort(), 3500);
+            const nixRes = await fetch(nixUrl, {
+              headers: { Range: "bytes=0-100" },
+              signal: nController.signal
+            });
+            clearTimeout(nTimeout);
+            return nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4";
+          } catch {
+            return false;
+          }
+        };
+
         const url = `https://v1.watchplay.shop/tvshow/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
         const commonHeaders = {
           "Referer": "https://v1.watchplay.shop/",
@@ -1991,30 +2010,30 @@ const router = Router();
             const loc = upstream.headers.get("location") || "";
             if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
               clearTimeout(timeoutId);
-              return false;
+              return await checkNixplay();
             }
             try {
               const redirectedUrl = new URL(loc, url).toString();
               upstream = await fetch(redirectedUrl, { headers: commonHeaders, signal: controller.signal });
             } catch {
               clearTimeout(timeoutId);
-              return false;
+              return await checkNixplay();
             }
           }
 
           if (upstream.status >= 400) {
             clearTimeout(timeoutId);
-            return false;
+            return await checkNixplay();
           }
 
           const html = await upstream.text();
           clearTimeout(timeoutId);
-          return !isCheckUnavailable(html, upstream.url || url, upstream.status);
+          const wpAvailable = !isCheckUnavailable(html, upstream.url || url, upstream.status);
+          if (wpAvailable) return true;
+          return await checkNixplay();
         } catch {
-          // Erro de rede/timeout ao checar: não temos certeza se está indisponível de
-          // verdade ou se foi só instabilidade momentânea -- por segurança, não escondemos
-          // o episódio nesse caso (evita sumir episódio real por um erro de rede pontual).
-          return true;
+          const nix = await checkNixplay();
+          return nix ? true : true;
         }
       };
 

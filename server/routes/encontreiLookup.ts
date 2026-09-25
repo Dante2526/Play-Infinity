@@ -88,33 +88,143 @@ function loadCatalog() {
   }
 }
 
+// Cache de temporadas verificadas em memória (evita re-sondar servidores externos repetidamente)
+const _verifiedSeasonsCache = new Map<number, { timestamp: number; seasons: number[] }>();
+const VERIFIED_SEASONS_CACHE_TTL = 20 * 60 * 1000; // 20 minutos
+
 /**
- * Retorna as temporadas reais disponíveis no catálogo para uma série específica
- * GET /api/series-seasons-available?tmdb_id=126027
+ * Retorna as temporadas reais disponíveis com episódios reproduzíveis nos servidores homologados.
+ * GET /api/series-seasons-available?tmdb_id=126027&candidate_seasons=1,2,3,4,5,6
  */
-router.get("/api/series-seasons-available", (req, res) => {
+router.get("/api/series-seasons-available", async (req, res) => {
   try {
     loadCatalog();
     const tmdbId = parseInt(req.query.tmdb_id as string, 10);
     if (!tmdbId) {
       return res.status(400).json({ error: "tmdb_id é obrigatório" });
     }
-    const seasons = _seriesSeasonsIndex.get(tmdbId);
-    if (seasons && seasons.length > 0) {
+
+    // 1. Verifica cache em memória
+    const cached = _verifiedSeasonsCache.get(tmdbId);
+    if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      return res.json({
+        success: true,
+        hasCatalog: cached.seasons.length > 0,
+        tmdbId,
+        seasons: cached.seasons,
+      });
+    }
+
+    // 2. Extrai lista de temporadas candidatas
+    let candidateSeasons: number[] = [];
+    if (req.query.candidate_seasons) {
+      candidateSeasons = String(req.query.candidate_seasons)
+        .split(",")
+        .map(n => parseInt(n.trim(), 10))
+        .filter(n => !isNaN(n) && n > 0);
+    }
+
+    const localCatalogSeasons = _seriesSeasonsIndex.get(tmdbId) || [];
+    if (candidateSeasons.length === 0) {
+      candidateSeasons = localCatalogSeasons.length > 0
+        ? [...localCatalogSeasons]
+        : [1, 2, 3, 4, 5, 6, 7, 8];
+    }
+
+    // Deduplica e ordena
+    const candidates = Array.from(new Set(candidateSeasons)).sort((a, b) => a - b);
+
+    // 3. Testa disponibilidade de cada temporada em paralelo
+    const checkSeasonPlayable = async (season: number): Promise<boolean> => {
+      // Se já consta no catálogo local com episódios, é garantido
+      if (localCatalogSeasons.includes(season)) {
+        return true;
+      }
+
+      // Sonda Nixplay HD (Episódio 1 da temporada)
+      try {
+        const ss = String(season).padStart(3, "0");
+        const streamId = `${tmdbId}${ss}001`;
+        const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 2500);
+        const nixRes = await fetch(nixUrl, {
+          headers: { Range: "bytes=0-100" },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+        if (nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4") {
+          return true;
+        }
+      } catch {}
+
+      // Sonda WatchPlayer Oficial (Episódio 1 da temporada)
+      try {
+        const wpUrl = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/1`;
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), 2500);
+        const wpRes = await fetch(wpUrl, {
+          headers: {
+            "Referer": "https://v1.watchplay.shop/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(t);
+        if (wpRes.status === 200) {
+          const text = await wpRes.text();
+          const lower = text.toLowerCase();
+          const isBad = (
+            lower.includes("404") ||
+            lower.includes("login-card") ||
+            lower.includes("login-page") ||
+            lower.includes("não encontrado") ||
+            lower.includes("série não encontrada") ||
+            text.length < 300
+          );
+          if (!isBad) {
+            return true;
+          }
+        }
+      } catch {}
+
+      return false;
+    };
+
+    const checks = await Promise.all(
+      candidates.map(async (s) => ({
+        season: s,
+        available: await checkSeasonPlayable(s),
+      }))
+    );
+
+    const verified = checks.filter(c => c.available).map(c => c.season);
+
+    // Se encontramos temporadas verificadas com vídeo real
+    if (verified.length > 0) {
+      _verifiedSeasonsCache.set(tmdbId, {
+        timestamp: Date.now(),
+        seasons: verified,
+      });
+
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       return res.json({
         success: true,
         hasCatalog: true,
         tmdbId,
-        seasons,
+        seasons: verified,
       });
     }
+
+    // Fallback de segurança se nenhuma respondeu (ex: timeout de rede simultâneo)
+    const fallback = localCatalogSeasons.length > 0 ? localCatalogSeasons : [1];
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.json({
       success: true,
-      hasCatalog: false,
+      hasCatalog: localCatalogSeasons.length > 0,
       tmdbId,
-      seasons: [],
+      seasons: fallback,
     });
   } catch (err: any) {
     console.error("[series-seasons-available] Erro:", err);
