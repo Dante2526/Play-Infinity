@@ -5942,6 +5942,9 @@ app.use("/api/admin", adminOpsRouter);
       const distPath = path.join(process.cwd(), "dist");
       if (fs.existsSync(distPath)) {
         app.get("*", (_req, res) => {
+          res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
           res.sendFile(path.join(distPath, "index.html"));
         });
       }
