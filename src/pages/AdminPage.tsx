@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -7,6 +7,7 @@ import { auth, db, firebaseConfig } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "../components/TurnstileWidget";
+import { AdminDeployMonitor } from "../components/AdminDeployMonitor";
 
 export interface ClientUser {
   id: string;
@@ -28,6 +29,7 @@ interface AdminPageProps {
 export function AdminPage({ onBack }: AdminPageProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(!!sessionStorage.getItem("adminSessionToken"));
+  const [adminSection, setAdminSection] = useState<"users" | "deploy">("users");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -820,6 +822,43 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </div>
         </div>
 
+        {/* Navegação entre Abas do Painel */}
+        <div className="flex items-center gap-3 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setAdminSection("users")}
+            className={`flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
+              adminSection === "users"
+                ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
+                : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Gestão de Usuários & Assinaturas
+            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-black/30 font-mono">
+              {usersList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAdminSection("deploy")}
+            className={`flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer relative ${
+              adminSection === "deploy"
+                ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
+                : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+            }`}
+          >
+            <Server className="w-4 h-4 text-emerald-400" />
+            Status de Deploy & VPS Oracle
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          </button>
+        </div>
+
+        {adminSection === "deploy" ? (
+          <AdminDeployMonitor />
+        ) : (
+          <>
         {/* Dashboard Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           
@@ -1435,7 +1474,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </form>
         </div>
 
-
+          </>
+        )}
 
       </div>
 
