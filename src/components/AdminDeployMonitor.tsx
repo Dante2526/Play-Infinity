@@ -95,12 +95,27 @@ interface GitHubRun {
   };
 }
 
+interface RunStep {
+  name: string;
+  status: "queued" | "in_progress" | "completed";
+  conclusion: "success" | "failure" | "cancelled" | "skipped" | null;
+}
+
+interface ActiveRunDetails {
+  currentStepName: string | null;
+  steps: RunStep[];
+  estimatedRemainingSeconds: number;
+  estimatedProgressPercent: number;
+}
+
 interface GitHubRunsResponse {
   success: boolean;
   repo: string;
   total_count: number;
   runs: GitHubRun[];
   latestFailedJobStep?: string | null;
+  averageDurationSeconds?: number;
+  activeRunDetails?: ActiveRunDetails | null;
   error?: string;
 }
 
@@ -127,6 +142,19 @@ export function AdminDeployMonitor() {
   const [githubLoading, setGithubLoading] = useState(false);
   const [githubError, setGithubError] = useState<string | null>(null);
   const [lastGithubRefresh, setLastGithubRefresh] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
+
+  // Ticker de 1 segundo para atualizar o cronômetro e a barra de progresso em tempo real quando houver deploy em andamento
+  useEffect(() => {
+    const isRunning = githubData?.runs?.[0]?.status === "in_progress" || githubData?.runs?.[0]?.status === "queued";
+    if (!isRunning) return;
+
+    const timer = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [githubData?.runs]);
 
   // Ações da VPS e Terminal Modal
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -148,15 +176,26 @@ export function AdminDeployMonitor() {
   // Carregar dados da VPS
   const fetchVpsData = useCallback(async () => {
     setVpsLoading(true);
-    setVpsError(null);
     try {
       const res = await fetch("/api/admin/vps-telemetry");
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        return;
+      }
+      const rawText = await res.text();
+      let data: VpsTelemetryData;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        return;
+      }
       if (!res.ok) throw new Error(`Status ${res.status}`);
-      const data: VpsTelemetryData = await res.json();
+      setVpsError(null);
       setVpsData(data);
       setLastVpsRefresh(new Date());
     } catch (err: any) {
-      setVpsError(err?.message || "Falha ao carregar telemetria da VPS");
+      if (!err?.message?.includes("JSON") && !err?.message?.includes("Failed to fetch")) {
+        setVpsError(err?.message || "Falha ao carregar telemetria da VPS");
+      }
     } finally {
       setVpsLoading(false);
     }
@@ -165,23 +204,37 @@ export function AdminDeployMonitor() {
   // Carregar histórico de deploys do GitHub Actions
   const fetchGithubRuns = useCallback(async () => {
     setGithubLoading(true);
-    setGithubError(null);
     try {
       const params = new URLSearchParams();
       if (githubRepo) params.set("repo", githubRepo);
       if (githubToken) params.set("token", githubToken);
 
       const res = await fetch(`/api/admin/github-runs?${params.toString()}`);
-      const data: GitHubRunsResponse = await res.json();
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        // Servidor reiniciando durante o deploy no PM2; mantém os dados na tela sem piscar erro
+        return;
+      }
+
+      const rawText = await res.text();
+      let data: GitHubRunsResponse;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        // Ignora respostas transitórias em HTML do Nginx durante o restart
+        return;
+      }
 
       if (!res.ok || !data.success) {
         throw new Error(data.error || `Erro ${res.status}`);
       }
 
+      setGithubError(null);
       setGithubData(data);
       setLastGithubRefresh(new Date());
     } catch (err: any) {
-      setGithubError(err?.message || "Falha ao consultar GitHub Actions");
+      if (!err?.message?.includes("JSON") && !err?.message?.includes("Failed to fetch")) {
+        setGithubError(err?.message || "Falha ao consultar GitHub Actions");
+      }
     } finally {
       setGithubLoading(false);
     }
@@ -192,14 +245,17 @@ export function AdminDeployMonitor() {
     fetchVpsData();
     fetchGithubRuns();
 
-    // Auto-refresh a cada 10 segundos para telemetria em tempo real
+    // Se o deploy estiver em execução na fila ou rodando, acelera para 4s para acompanhar os steps
+    const isRunning = githubData?.runs?.[0]?.status === "in_progress" || githubData?.runs?.[0]?.status === "queued";
+    const intervalMs = isRunning ? 4000 : 10000;
+
     const interval = setInterval(() => {
       fetchVpsData();
       fetchGithubRuns();
-    }, 10000);
+    }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [fetchVpsData, fetchGithubRuns]);
+  }, [fetchVpsData, fetchGithubRuns, githubData?.runs?.[0]?.status]);
 
   // Executar ação de manutenção na VPS (Reiniciar, Git pull & build)
   const handleVpsAction = async (action: "restart-all" | "restart-proxy" | "restart-app" | "git-pull-build", title: string) => {
@@ -281,6 +337,25 @@ export function AdminDeployMonitor() {
   };
 
   const latestRun = githubData?.runs && githubData.runs.length > 0 ? githubData.runs[0] : null;
+  const isDeployActive = latestRun?.status === "in_progress" || latestRun?.status === "queued";
+
+  // Cálculo de duração decorrida ao vivo
+  const liveElapsedSeconds = latestRun && isDeployActive
+    ? Math.max(0, Math.floor((currentTime - new Date(latestRun.created_at).getTime()) / 1000))
+    : (latestRun?.durationSeconds || 0);
+
+  // Média de duração calculada de builds anteriores ou padrão de 85s
+  const avgDuration = githubData?.averageDurationSeconds || 85;
+
+  // Tempo restante estimado
+  const liveRemainingSeconds = latestRun?.status === "queued"
+    ? avgDuration
+    : Math.max(5, avgDuration - liveElapsedSeconds);
+
+  // Porcentagem calculada para a barra de progresso (trava em 96% até ser finalizada)
+  const liveProgressPercent = latestRun?.status === "queued"
+    ? 6
+    : Math.min(96, Math.max(8, Math.round((liveElapsedSeconds / avgDuration) * 100)));
 
   // Formatação de data amigável
   const formatDateTime = (dateStr: string) => {
@@ -296,6 +371,15 @@ export function AdminDeployMonitor() {
     } catch {
       return dateStr;
     }
+  };
+
+  // Formatação amigável de duração (segundos -> m s)
+  const formatDuration = (seconds: number) => {
+    if (!seconds || seconds <= 0) return "0s";
+    if (seconds < 60) return `${seconds}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
   };
 
   return (
@@ -571,10 +655,17 @@ export function AdminDeployMonitor() {
                 <div className="p-3 bg-black/20 rounded-xl border border-white/5">
                   <span className="text-white/40 block mb-1 flex items-center gap-1">
                     <RotateCw className="w-3 h-3 text-blue-400" />
-                    Tempo de Execução
+                    {isDeployActive ? "Tempo Decorrido" : "Tempo de Execução"}
                   </span>
                   <span className="text-white font-bold text-sm">
-                    {latestRun.durationSeconds > 0 ? `${latestRun.durationSeconds}s` : "Em execução..."}
+                    {isDeployActive ? (
+                      <span className="text-amber-400 flex items-center gap-1.5 font-mono">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+                        {formatDuration(liveElapsedSeconds)}
+                      </span>
+                    ) : (
+                      formatDuration(latestRun.durationSeconds)
+                    )}
                   </span>
                 </div>
 
@@ -600,6 +691,98 @@ export function AdminDeployMonitor() {
                   </span>
                 </div>
               </div>
+
+              {/* Painel ao Vivo de Progresso e Tempo Restante (quando deploy estiver em andamento) */}
+              {isDeployActive && (
+                <div className="mt-4 p-4 sm:p-5 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border border-amber-500/30 rounded-2xl space-y-3.5 animate-fade-in shadow-[0_0_30px_rgba(245,158,11,0.08)]">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 bg-amber-500/20 text-amber-400 rounded-lg animate-spin">
+                        <RotateCw className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-400/90 block">
+                          Etapa em Execução
+                        </span>
+                        <span className="text-white font-bold text-sm">
+                          {githubData?.activeRunDetails?.currentStepName || (latestRun.status === "queued" ? "Preparando máquina virtual no GitHub..." : "Executando build e deploy na VPS...")}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2.5 text-xs">
+                      <div className="px-3 py-1.5 bg-black/40 rounded-xl border border-white/10 flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-orange-400" />
+                        <span className="text-white/60 text-[11px]">Previsão restante:</span>
+                        <strong className="text-amber-400 font-mono font-bold text-sm">
+                          ~{formatDuration(liveRemainingSeconds)}
+                        </strong>
+                      </div>
+                      <div className="px-3 py-1.5 bg-amber-500/20 text-amber-300 rounded-xl border border-amber-500/30 font-bold font-mono text-xs flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        {liveProgressPercent}%
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Barra de Progresso Visual */}
+                  <div className="space-y-1">
+                    <div className="relative w-full h-3 bg-black/50 rounded-full overflow-hidden border border-white/10 p-0.5">
+                      <div
+                        className="h-full bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-400 rounded-full transition-all duration-1000 ease-out shadow-[0_0_12px_rgba(245,158,11,0.5)]"
+                        style={{ width: `${liveProgressPercent}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-white/40 px-1 font-mono">
+                      <span>Início (0s)</span>
+                      <span>Média histórica: ~{formatDuration(avgDuration)}</span>
+                      <span>Conclusão</span>
+                    </div>
+                  </div>
+
+                  {/* Etapas / Steps do Workflow */}
+                  {githubData?.activeRunDetails?.steps && githubData.activeRunDetails.steps.length > 0 && (
+                    <div className="pt-1 border-t border-white/10">
+                      <span className="text-[10px] uppercase font-bold text-white/40 block mb-2">
+                        Passos do Pipeline (GitHub Actions):
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        {githubData.activeRunDetails.steps.map((st, idx) => {
+                          const isDone = st.status === "completed" && st.conclusion === "success";
+                          const isRunning = st.status === "in_progress";
+                          const isFailed = st.conclusion === "failure";
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium border transition-colors ${
+                                isDone
+                                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                                  : isRunning
+                                  ? "bg-amber-500/20 border-amber-500/50 text-amber-300 animate-pulse font-bold shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                                  : isFailed
+                                  ? "bg-red-500/20 border-red-500/40 text-red-300 font-bold"
+                                  : "bg-white/[0.03] border-white/5 text-white/40"
+                              }`}
+                            >
+                              {isDone ? (
+                                <CheckCircle2 className="w-3 h-3 text-emerald-400 shrink-0" />
+                              ) : isRunning ? (
+                                <RotateCw className="w-3 h-3 text-amber-400 animate-spin shrink-0" />
+                              ) : isFailed ? (
+                                <XCircle className="w-3 h-3 text-red-400 shrink-0" />
+                              ) : (
+                                <span className="w-1.5 h-1.5 rounded-full bg-white/20 shrink-0" />
+                              )}
+                              <span>{st.name}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Detalhes do Commit */}
               <div className="mt-4 p-3.5 bg-black/30 rounded-xl border border-white/5 flex items-start gap-3">

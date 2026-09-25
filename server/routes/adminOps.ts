@@ -388,7 +388,10 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
     const runs = (data.workflow_runs || []).map((run: any) => {
       const createdAt = new Date(run.created_at).getTime();
       const updatedAt = new Date(run.updated_at).getTime();
-      const durationSeconds = Math.max(0, Math.floor((updatedAt - createdAt) / 1000));
+      const isCompleted = run.status === "completed";
+      const durationSeconds = isCompleted
+        ? Math.max(0, Math.floor((updatedAt - createdAt) / 1000))
+        : Math.max(0, Math.floor((Date.now() - createdAt) / 1000));
 
       return {
         id: run.id,
@@ -414,6 +417,43 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
       };
     });
 
+    // Se houver deploy em andamento ou na fila, consultamos os jobs e steps em tempo real
+    let activeRunDetails: {
+      currentStepName: string | null;
+      steps: Array<{ name: string; status: string; conclusion: string | null }>;
+      estimatedRemainingSeconds: number;
+      estimatedProgressPercent: number;
+    } | null = null;
+
+    if (runs.length > 0 && (runs[0].status === "in_progress" || runs[0].status === "queued")) {
+      try {
+        const jobsUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/actions/runs/${runs[0].id}/jobs`;
+        const jobsRes = await fetch(jobsUrl, { headers });
+        if (jobsRes.ok) {
+          const jobsData: any = await jobsRes.json();
+          for (const job of jobsData.jobs || []) {
+            if (job.status === "in_progress" || job.status === "queued" || (job.steps && job.steps.length > 0)) {
+              const mappedSteps = (job.steps || []).map((s: any) => ({
+                name: s.name,
+                status: s.status, // "queued", "in_progress", "completed"
+                conclusion: s.conclusion // "success", "failure", null
+              }));
+              const runningStep = mappedSteps.find((s: any) => s.status === "in_progress");
+              activeRunDetails = {
+                currentStepName: runningStep?.name || (job.status === "queued" ? "Aguardando runner do GitHub..." : null),
+                steps: mappedSteps,
+                estimatedRemainingSeconds: 0,
+                estimatedProgressPercent: 0
+              };
+              break;
+            }
+          }
+        }
+      } catch (jobErr) {
+        console.warn("[AdminOps] Falha ao consultar steps do run em progresso:", jobErr);
+      }
+    }
+
     // Se a última execução falhou, buscamos os jobs para descobrir o passo exato do erro
     let latestFailedJobStep: string | null = null;
     if (runs.length > 0 && runs[0].conclusion === "failure") {
@@ -436,12 +476,28 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
       }
     }
 
+    // Calcular média histórica de deploys com sucesso para estimar tempo restante
+    const successfulRuns = runs.filter((r: any) => r.status === "completed" && r.conclusion === "success" && r.durationSeconds >= 20);
+    const averageDurationSeconds = successfulRuns.length > 0
+      ? Math.round(successfulRuns.reduce((acc: number, r: any) => acc + r.durationSeconds, 0) / successfulRuns.length)
+      : 85; // Média de ~85 segundos padrão
+
+    if (activeRunDetails && runs.length > 0) {
+      const elapsed = runs[0].durationSeconds;
+      activeRunDetails.estimatedRemainingSeconds = Math.max(5, averageDurationSeconds - elapsed);
+      activeRunDetails.estimatedProgressPercent = runs[0].status === "queued"
+        ? 5
+        : Math.min(95, Math.max(8, Math.round((elapsed / averageDurationSeconds) * 100)));
+    }
+
     return res.json({
       success: true,
       repo: cleanRepo,
       total_count: data.total_count || runs.length,
       runs,
-      latestFailedJobStep
+      latestFailedJobStep,
+      averageDurationSeconds,
+      activeRunDetails
     });
   } catch (fetchErr: any) {
     return res.status(500).json({
