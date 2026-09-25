@@ -501,7 +501,11 @@ export function VideoPlayerModal({
     if (!numericId) return;
 
     let isMounted = true;
-    getAvailableSeasonsForSeries(numericId).then((seasons) => {
+    const candidates = (seriesDetails?.seasons || [])
+      .filter(s => s.season_number > 0 && s.episode_count > 0)
+      .map(s => s.season_number);
+
+    getAvailableSeasonsForSeries(numericId, candidates).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {
         setCatalogSeasons(seasons);
       }
@@ -509,22 +513,19 @@ export function VideoPlayerModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, isSeries, tmdbId, resolvedId]);
+  }, [isOpen, isSeries, tmdbId, resolvedId, seriesDetails]);
 
-  // Lista de temporadas válidas da série (prioriza catálogo real ou TMDB válido)
+  // Lista de temporadas válidas da série (apenas as temporadas com episódios verificados e reproduzíveis)
   const availableSeasons = useMemo(() => {
     if (catalogSeasons && catalogSeasons.length > 0) {
       return catalogSeasons;
     }
-    if (seriesDetails?.seasons && seriesDetails.seasons.length > 0) {
-      const valid = seriesDetails.seasons
-        .filter(s => s.season_number > 0 && s.episode_count > 0)
-        .map(s => s.season_number);
-      if (valid.length > 0) {
-        return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
-      }
-    }
-    return [1];
+
+    const tmdbList = (seriesDetails?.seasons || [])
+      .filter(s => s.season_number > 0 && s.episode_count > 0)
+      .map(s => s.season_number);
+
+    return tmdbList.length > 0 ? tmdbList : [1];
   }, [catalogSeasons, seriesDetails]);
 
   // Ajusta a temporada selecionada caso não exista na lista de temporadas reais

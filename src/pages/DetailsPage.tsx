@@ -347,11 +347,15 @@ export function DetailsPage({
 
   const [catalogSeasons, setCatalogSeasons] = useState<number[] | null>(null);
 
-  // Consulta se a série possui temporadas catalogadas no servidor
+  // Consulta se a série possui temporadas verificadas com conteúdo reproduzível nos servidores
   useEffect(() => {
     if (!isSeries || !effectiveTmdbId) return;
     let isMounted = true;
-    getAvailableSeasonsForSeries(effectiveTmdbId).then((seasons) => {
+    const candidates = (tmdbDetails?.seasons || [])
+      .filter(s => s.season_number > 0 && s.episode_count > 0)
+      .map(s => s.season_number);
+
+    getAvailableSeasonsForSeries(effectiveTmdbId, candidates).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {
         setCatalogSeasons(seasons);
       }
@@ -359,22 +363,19 @@ export function DetailsPage({
     return () => {
       isMounted = false;
     };
-  }, [isSeries, effectiveTmdbId]);
+  }, [isSeries, effectiveTmdbId, tmdbDetails]);
 
-  // Lista de temporadas disponíveis (prioriza catálogo real ou TMDB válido)
+  // Lista de temporadas disponíveis (apenas as temporadas com episódios verificados e reproduzíveis)
   const availableSeasons = React.useMemo(() => {
     if (catalogSeasons && catalogSeasons.length > 0) {
       return catalogSeasons;
     }
-    if (tmdbDetails?.seasons && tmdbDetails.seasons.length > 0) {
-      const valid = tmdbDetails.seasons
-        .filter(s => s.season_number > 0 && s.episode_count > 0)
-        .map(s => s.season_number);
-      if (valid.length > 0) {
-        return Array.from(new Set(valid)).sort((a: number, b: number) => a - b);
-      }
-    }
-    return [1];
+
+    const tmdbList = (tmdbDetails?.seasons || [])
+      .filter(s => s.season_number > 0 && s.episode_count > 0)
+      .map(s => s.season_number);
+
+    return tmdbList.length > 0 ? tmdbList : [1];
   }, [catalogSeasons, tmdbDetails]);
 
   // Se a temporada selecionada não existir na lista, seleciona a primeira disponível

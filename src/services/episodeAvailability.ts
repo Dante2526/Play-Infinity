@@ -60,12 +60,13 @@ export async function checkPlayableBatch(tmdbIds: number[]): Promise<Set<number>
 
 /**
  * Consulta a API do backend para saber quais temporadas de uma série
- * realmente possuem episódios ativos e catalogados.
+ * realmente possuem episódios ativos e verificados nos servidores homologados.
  */
 export async function getAvailableSeasonsForSeries(
   tmdbId: number | string,
-  fallbackSeasons: number[] = [1]
+  candidateSeasons?: number[]
 ): Promise<number[]> {
+  const fallbackSeasons = candidateSeasons && candidateSeasons.length > 0 ? candidateSeasons : [1];
   const idStr = String(tmdbId).trim();
   if (!idStr || isNaN(Number(idStr))) {
     return fallbackSeasons;
@@ -80,12 +81,15 @@ export async function getAvailableSeasonsForSeries(
   }
 
   try {
-    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}&_cb=${Date.now()}`, {
+    const candidatesParam = candidateSeasons && candidateSeasons.length > 0
+      ? `&candidate_seasons=${encodeURIComponent(candidateSeasons.join(","))}`
+      : "";
+    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}${candidatesParam}&_cb=${Date.now()}`, {
       cache: "no-store",
     });
     if (res.ok) {
       const data = await res.json();
-      if (data && data.success && data.hasCatalog && Array.isArray(data.seasons) && data.seasons.length > 0) {
+      if (data && data.success && Array.isArray(data.seasons) && data.seasons.length > 0) {
         clientSeasonsCache.set(idStr, {
           timestamp: Date.now(),
           seasons: data.seasons,
