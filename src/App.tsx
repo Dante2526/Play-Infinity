@@ -748,18 +748,6 @@ export default function App() {
             )}
           </button>
 
-          {isDevEnvironment && (
-            <button 
-              type="button"
-              onClick={() => setIsAuthModalOpen(true)}
-              className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-[11px] font-semibold text-orange-400 select-none cursor-pointer hover:bg-orange-500/20 transition-all"
-              title="Ambiente Google AI Studio: Login automático desabilitado para testes rápidos. Clique aqui para abrir a tela de login manualmente."
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-              Modo Teste AI Studio
-            </button>
-          )}
-
           <button 
             tabIndex={0}
             role="button"
@@ -792,18 +780,6 @@ export default function App() {
         
         {/* AÇÕES NO CANTO SUPERIOR DIREITO (MOBILE) */}
         <div className="pointer-events-auto shrink-0 flex items-center gap-2">
-          {isDevEnvironment && (
-            <button 
-              type="button"
-              onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center gap-1 px-2 py-1 rounded-full bg-orange-500/10 border border-orange-500/30 text-[10px] font-semibold text-orange-400 select-none cursor-pointer"
-              title="Ambiente Google AI Studio (Testes): Toque para abrir login"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></span>
-              Teste
-            </button>
-          )}
-
           {/* BOTÃO DE DOWNLOADS (MOBILE) */}
           <button 
             tabIndex={0}

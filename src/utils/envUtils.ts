@@ -6,7 +6,7 @@
  * 
  * - No Google AI Studio (Cloud Run preview / dev): Desabilita a tela de bloqueio inicial
  *   de login para permitir testes rápidos e diretos de todas as funcionalidades.
- * - Na versão de Deploy (ex: Render, produção): A tela de login permanece 100% ativa e obrigatória.
+ * - Na versão de Produção: A tela de login permanece 100% ativa e obrigatória.
  */
 
 export function isAiStudioOrDevEnvironment(): boolean {
@@ -18,6 +18,14 @@ export function isAiStudioOrDevEnvironment(): boolean {
   }
 
   const hostname = window.location.hostname.toLowerCase();
+
+  // Se estiver em domínio público/oficial de produção, nunca é modo de teste dev
+  if (
+    hostname.includes("play-infinity") ||
+    hostname.includes("duckdns.org")
+  ) {
+    return false;
+  }
 
   // 1. Google AI Studio (Cloud Run containers ais-dev-*, ais-pre-*, run.app)
   if (
@@ -34,11 +42,6 @@ export function isAiStudioOrDevEnvironment(): boolean {
     hostname === "127.0.0.1" ||
     hostname.endsWith(".local")
   ) {
-    return true;
-  }
-
-  // 3. Vite em modo DEV
-  if (import.meta.env.DEV) {
     return true;
   }
 
