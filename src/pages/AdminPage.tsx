@@ -785,7 +785,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] pb-24 pt-20 px-4 sm:px-8 relative">
+    <div className="min-h-screen bg-[#0a0a0a] pb-10 sm:pb-16 pt-20 px-4 sm:px-8 relative">
       {/* Toast de Notificação de Renovação / Ação */}
       {actionSuccessToast && (
         <div className="fixed top-6 right-6 z-50 p-4 bg-emerald-600 text-white font-bold text-sm rounded-2xl shadow-2xl shadow-emerald-500/40 flex items-center gap-3 animate-fade-in border border-emerald-400/30">
@@ -823,19 +823,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
         </div>
 
         {/* Navegação entre Abas do Painel */}
-        <div className="flex items-center gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 overflow-x-auto no-scrollbar scroll-smooth">
+        <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 w-full">
           <button
             type="button"
             onClick={() => setAdminSection("users")}
-            className={`flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all cursor-pointer ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer w-full ${
               adminSection === "users"
                 ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
                 : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             }`}
           >
             <Users className="w-4 h-4 shrink-0" />
-            <span><span className="hidden md:inline">Gestão de </span>Usuários & Assinaturas</span>
-            <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-black/30 font-mono">
+            <span className="truncate">
+              <span className="hidden md:inline">Gestão de </span>Usuários<span className="hidden sm:inline"> & Assinaturas</span>
+            </span>
+            <span className="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs bg-black/30 font-mono shrink-0">
               {usersList.length}
             </span>
           </button>
@@ -843,14 +845,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <button
             type="button"
             onClick={() => setAdminSection("deploy")}
-            className={`flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all cursor-pointer relative ${
+            className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer relative w-full ${
               adminSection === "deploy"
                 ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
                 : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             }`}
           >
             <Server className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span><span className="hidden md:inline">Status de </span>Deploy & VPS Oracle</span>
+            <span className="truncate">
+              <span className="hidden md:inline">Status de </span>Deploy & VPS<span className="hidden lg:inline"> Oracle</span>
+            </span>
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
           </button>
         </div>
@@ -1221,41 +1225,41 @@ export function AdminPage({ onBack }: AdminPageProps) {
         )}
 
         {/* Cadastro Manual de Usuário (PIX) */}
-        <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-8 mb-12 shadow-xl relative z-10">
-          <h3 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-            <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl">
-              <Users className="w-5 h-5" />
+        <div className="mt-8 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-2xl sm:rounded-[28px] p-4 sm:p-6 lg:p-8 mb-6 sm:mb-8 shadow-xl relative z-10">
+          <h3 className="text-lg sm:text-xl font-bold text-white mb-1.5 flex items-center gap-2.5">
+            <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl shrink-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             Cadastrar Cliente Manualmente
           </h3>
-          <p className="text-white/50 text-sm mb-6 max-w-2xl">
+          <p className="text-white/50 text-xs sm:text-sm mb-4 max-w-2xl">
             Crie acessos para seus clientes. Escolha o tipo de acesso desejado e gere as credenciais instantaneamente.
           </p>
 
           {createSuccess && (
-            <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-[20px] text-green-400 font-medium">
+            <div className="mb-4 p-3 sm:p-4 bg-green-500/10 border border-green-500/20 rounded-xl sm:rounded-[20px] text-green-400 text-xs sm:text-sm font-medium">
               ✅ {createSuccess}
             </div>
           )}
           
           {createError && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 font-medium">
+            <div className="mb-4 p-3 sm:p-4 bg-red-500/10 border border-red-500/20 rounded-xl sm:rounded-[20px] text-red-400 text-xs sm:text-sm font-medium">
               ❌ {createError}
             </div>
           )}
 
-          <form onSubmit={handleCreateUser} className="space-y-5">
-            {/* Tipo de Acesso (Segmented Control) */}
+          <form onSubmit={handleCreateUser} className="space-y-4">
+            {/* Tipo de Acesso (Grade Compacta) */}
             <div>
-              <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">Tipo de Acesso</label>
-              <div className="flex flex-col sm:flex-row gap-2">
+              <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1.5 uppercase tracking-wider ml-1">Tipo de Acesso</label>
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => setAccessType('30min')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === '30min' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   30 Min
@@ -1263,10 +1267,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('teste')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === 'teste' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   1 Hora
@@ -1274,10 +1278,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('4horas')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === '4horas' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   4 Horas
@@ -1285,10 +1289,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('1dia')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === '1dia' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   1 Dia
@@ -1296,10 +1300,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('7dias')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === '7dias' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   7 Dias
@@ -1307,10 +1311,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('mensal')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === 'mensal' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   Mensal
@@ -1318,10 +1322,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <button
                   type="button"
                   onClick={() => setAccessType('vitalicio')}
-                  className={`flex-1 py-3 px-2 rounded-[22px] font-bold text-[11px] sm:text-xs transition-all ${
+                  className={`col-span-2 sm:col-span-1 py-2 sm:py-2.5 px-1 rounded-xl sm:rounded-[22px] font-bold text-xs sm:text-sm transition-all text-center ${
                     accessType === 'vitalicio' 
-                      ? 'bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)]' 
-                      : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80'
+                      ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   Vitalício
@@ -1331,45 +1335,45 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
             {/* Campos de Cadastro */}
             {accessType === 'mensal' ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                   <div>
-                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                       Nome do Cliente <span className="text-orange-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
-                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                       placeholder="Ex: João Silva"
                       required
                     />
                   </div>
 
                   <div>
-                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                       E-mail do Cliente <span className="text-orange-500">*</span>
                     </label>
                     <input
                       type="email"
                       value={newEmail}
                       onChange={(e) => setNewEmail(e.target.value)}
-                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                       placeholder="cliente@email.com"
                       required
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                       Senha Criada <span className="text-orange-500">*</span>
                     </label>
                     <input
                       type="text"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                      className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                       placeholder="Ex: 123456"
                       minLength={6}
                       required
@@ -1377,7 +1381,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                   <div>
                     <CustomDatePicker 
                       label="Data do Pagamento *"
@@ -1387,16 +1391,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   </div>
 
                   <div>
-                    <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                    <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                       Valor da Mensalidade <span className="text-orange-500">*</span>
                     </label>
                     <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={() => setMonthlyPrice("13.00")}
-                        className={`flex-1 h-[52px] rounded-[22px] font-bold text-sm transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 h-[42px] sm:h-[46px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
                           monthlyPrice === "13.00"
-                            ? "bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)] ring-2 ring-orange-400/50"
+                            ? "bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/50"
                             : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
                         }`}
                       >
@@ -1405,9 +1409,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       <button
                         type="button"
                         onClick={() => setMonthlyPrice("9.90")}
-                        className={`flex-1 h-[52px] rounded-[22px] font-bold text-sm transition-all flex items-center justify-center gap-1.5 ${
+                        className={`flex-1 h-[42px] sm:h-[46px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
                           monthlyPrice === "9.90"
-                            ? "bg-orange-500 text-white shadow-[0_4px_14px_rgba(234,88,12,0.4)] ring-2 ring-orange-400/50"
+                            ? "bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/50"
                             : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
                         }`}
                       >
@@ -1420,7 +1424,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     <button
                       type="submit"
                       disabled={createLoading}
-                      className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+                      className="w-full h-[42px] sm:h-[46px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-xs sm:text-sm rounded-xl sm:rounded-[20px] transition-all disabled:opacity-50 shadow-md shadow-orange-600/30"
                     >
                       {createLoading ? "Criando..." : "Criar Acesso"}
                     </button>
@@ -1428,44 +1432,44 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 <div>
-                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                     Nome do Cliente <span className="text-orange-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                     placeholder="Ex: João Silva"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                     E-mail do Cliente <span className="text-orange-500">*</span>
                   </label>
                   <input
                     type="email"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                     placeholder="cliente@email.com"
                     required
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider ml-2">
+                  <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1 uppercase tracking-wider ml-1">
                     Senha Criada <span className="text-orange-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 px-5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px] rounded-[22px]"
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-2 sm:py-2.5 px-3.5 text-white placeholder-white/30 focus:outline-none focus:ring-1 focus:ring-orange-500 transition-all font-medium text-xs sm:text-sm rounded-xl sm:rounded-[20px]"
                     placeholder="Ex: 123456"
                     minLength={6}
                     required
@@ -1476,7 +1480,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   <button
                     type="submit"
                     disabled={createLoading}
-                    className="w-full h-[52px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[15px] rounded-[22px] transition-all disabled:opacity-50 shadow-[0_4px_14px_rgba(234,88,12,0.4)]"
+                    className="w-full h-[42px] sm:h-[46px] bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-xs sm:text-sm rounded-xl sm:rounded-[20px] transition-all disabled:opacity-50 shadow-md shadow-orange-600/30"
                   >
                     {createLoading ? "Criando..." : "Criar Acesso"}
                   </button>
@@ -1493,79 +1497,87 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
       {/* Modal de Edição de Credenciais */}
       {editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative max-h-[90vh] overflow-y-auto styled-scrollbar">
-            <button
-              type="button"
-              onClick={() => setEditingUser(null)}
-              className="absolute top-5 right-5 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-orange-500/20 text-orange-500 rounded-2xl">
-                <Key className="w-6 h-6" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-3.5 sm:p-5 max-w-md w-full shadow-2xl relative overflow-hidden">
+            {/* Cabeçalho do Modal */}
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 bg-orange-500/20 text-orange-500 rounded-xl shrink-0">
+                  <Key className="w-4 h-4 sm:w-5 sm:h-5" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-white leading-tight">Editar Acesso</h3>
+                  <p className="text-xs text-white/50 truncate max-w-[200px] sm:max-w-xs">{editingUser.name || editingUser.email}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Editar Acesso</h3>
-                <p className="text-xs text-white/50">{editingUser.name || editingUser.email}</p>
-              </div>
+              <button
+                type="button"
+                onClick={() => setEditingUser(null)}
+                className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors shrink-0"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {editSuccess && (
-              <div className="mb-4 p-3.5 bg-green-500/10 border border-green-500/20 rounded-2xl text-green-400 text-sm font-medium">
+              <div className="mb-2.5 py-1.5 px-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-xs font-medium">
                 ✅ {editSuccess}
               </div>
             )}
 
             {editError && (
-              <div className="mb-4 p-3.5 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm font-medium">
+              <div className="mb-2.5 py-1.5 px-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-xs font-medium">
                 ❌ {editError}
               </div>
             )}
 
-            <form onSubmit={handleSaveEdit} className="space-y-4">
-              <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Nome</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
-                  placeholder="Nome do cliente (opcional)"
-                />
+            <form onSubmit={handleSaveEdit} className="space-y-2.5">
+              {/* Nome e E-mail em 2 Colunas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Nome</label>
+                  <input
+                    type="text"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
+                    placeholder="Nome (opcional)"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">E-mail</label>
+                  <input
+                    type="email"
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    required
+                    className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
+                    placeholder="cliente@email.com"
+                  />
+                </div>
               </div>
 
+              {/* Senha */}
               <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">E-mail</label>
-                <input
-                  type="email"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                  required
-                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium"
-                  placeholder="cliente@email.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Nova Senha</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider">Nova Senha</label>
+                  <span className="text-[10px] text-white/40">Vazio = manter atual</span>
+                </div>
                 <input
                   type="text"
                   value={editPassword}
                   onChange={(e) => setEditPassword(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 py-3 px-4 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-sm font-medium font-mono"
-                  placeholder="Mínimo 6 caracteres"
+                  className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-mono"
+                  placeholder="Digite nova senha ou mantenha atual"
                 />
-                <p className="text-[11px] text-white/40 mt-1">Deixe como está ou digite a nova senha desejada.</p>
               </div>
 
               {/* Programação de Tempo & Duração do Teste / Acesso */}
-              <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-3.5">
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-white/80 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <Timer className="w-4 h-4 text-orange-400" />
+                  <label className="text-white/80 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <Timer className="w-3.5 h-3.5 text-orange-400" />
                     Tempo de Uso / Duração
                   </label>
 
@@ -1573,14 +1585,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   {(() => {
                     if (editAccessType === "vitalicio") {
                       return (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                           Acesso Vitalício
                         </span>
                       );
                     }
                     if (!editExpirationDate) {
                       return (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-white/10 text-white/50">
+                        <span className="px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-white/10 text-white/50">
                           Sem data definida
                         </span>
                       );
@@ -1588,140 +1600,137 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     const exp = new Date(editExpirationDate).getTime();
                     const isExp = isNaN(exp) ? false : exp <= Date.now();
                     return (
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold ${
                         isExp 
                           ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse' 
                           : 'bg-green-500/20 text-green-400 border border-green-500/30'
                       }`}>
-                        {isExp ? 'Expirado no momento' : 'Válido / Ativo'}
+                        {isExp ? 'Expirado' : 'Válido / Ativo'}
                       </span>
                     );
                   })()}
                 </div>
 
-                {/* Seleção do Tipo de Acesso / Duração */}
-                <div>
-                  <span className="text-white/50 text-[11px] block mb-1.5 font-medium">Plano / Duração:</span>
-                  <div className="grid grid-cols-3 sm:grid-cols-7 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(0.5, '30min')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === '30min'
-                          ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      30 Min
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(1, 'teste')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === 'teste'
-                          ? 'bg-amber-500 text-white shadow-md shadow-amber-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      1h Teste
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(4, '4horas')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === '4horas'
-                          ? 'bg-orange-500 text-white shadow-md shadow-orange-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      4 Horas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(24, '1dia')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === '1dia'
-                          ? 'bg-teal-500 text-white shadow-md shadow-teal-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      1 Dia
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(168, '7dias')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === '7dias'
-                          ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      7 Dias
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyFromNow(720, 'mensal')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === 'mensal'
-                          ? 'bg-blue-500 text-white shadow-md shadow-blue-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      Mensal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => applyQuickEditDuration('vitalicio', 'vitalicio')}
-                      className={`py-2 px-2 rounded-xl text-xs font-bold transition-all ${
-                        editAccessType === 'vitalicio'
-                          ? 'bg-purple-500 text-white shadow-md shadow-purple-500/30'
-                          : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                      }`}
-                    >
-                      Vitalício
-                    </button>
-                  </div>
+                {/* Seleção de Duração / Plano em Grade Compacta */}
+                <div className="grid grid-cols-7 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(0.5, '30min')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === '30min'
+                        ? 'bg-emerald-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    30 Min
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(1, 'teste')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === 'teste'
+                        ? 'bg-amber-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    1h Teste
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(4, '4horas')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === '4horas'
+                        ? 'bg-orange-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    4 Horas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(24, '1dia')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === '1dia'
+                        ? 'bg-teal-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    1 Dia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(168, '7dias')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === '7dias'
+                        ? 'bg-cyan-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    7 Dias
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyFromNow(720, 'mensal')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === 'mensal'
+                        ? 'bg-blue-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    Mensal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyQuickEditDuration('vitalicio', 'vitalicio')}
+                    className={`py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all text-center truncate ${
+                      editAccessType === 'vitalicio'
+                        ? 'bg-purple-500 text-white shadow-sm'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    Vitalício
+                  </button>
                 </div>
 
-                {/* Ações de Extensão Rápida (Acrescentar mais tempo ao tempo restante/atual) */}
-                <div className="pt-2 border-t border-white/5">
-                  <span className="text-white/50 text-[11px] block mb-1.5 flex items-center gap-1 font-medium">
-                    <Plus className="w-3 h-3 text-orange-400" />
-                    Dar mais tempo (soma a partir de agora ou acrescenta):
+                {/* Extensão Rápida (+ Tempo) */}
+                <div className="flex items-center gap-1.5 pt-1.5 border-t border-white/5">
+                  <span className="text-white/40 text-[10px] font-bold shrink-0 flex items-center gap-0.5">
+                    <Plus className="w-2.5 h-2.5 text-orange-400" />
+                    Somar:
                   </span>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="grid grid-cols-5 gap-1 flex-1">
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(0.5, '30min')}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      className="py-1 px-1 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/20 text-[10px] font-bold text-center"
                     >
                       +30 Min
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(1, 'teste')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      className="py-1 px-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 text-[10px] font-bold text-center"
                     >
-                      +1h de Teste
+                      +1h
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(4, '4horas')}
-                      className="px-3 py-1.5 rounded-lg bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      className="py-1 px-1 rounded-md bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/20 text-[10px] font-bold text-center"
                     >
                       +4 Horas
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(24, '1dia')}
-                      className="px-3 py-1.5 rounded-lg bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      className="py-1 px-1 rounded-md bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/20 text-[10px] font-bold text-center"
                     >
-                      +1 Dia (24h)
+                      +1 Dia
                     </button>
                     <button
                       type="button"
                       onClick={() => applyQuickEditDuration(168, '7dias')}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-xs font-bold transition-all hover:scale-105 active:scale-95 flex items-center gap-1"
+                      className="py-1 px-1 rounded-md bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/20 text-[10px] font-bold text-center"
                     >
                       +7 Dias
                     </button>
@@ -1730,34 +1739,32 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                 {/* Campo Data e Hora de Expiração Programada */}
                 {editAccessType !== 'vitalicio' && (
-                  <div className="pt-2 border-t border-white/5">
-                    <label className="text-white/50 text-[11px] block mb-1 font-medium">
-                      Data e Horário de Expiração Programados:
+                  <div className="flex items-center gap-2 pt-1.5 border-t border-white/5">
+                    <label className="text-white/50 text-[10px] font-medium shrink-0">
+                      Expira em:
                     </label>
                     <input
                       type="datetime-local"
                       value={editExpirationDate}
                       onChange={(e) => setEditExpirationDate(e.target.value)}
-                      className="w-full bg-white/5 border border-white/10 py-2.5 px-3 text-white rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 text-xs font-mono"
+                      className="w-full bg-white/5 border border-white/10 py-1 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-[11px] font-mono"
                     />
-                    <p className="text-[10px] text-white/40 mt-1">
-                      Você pode digitar ou escolher no calendário qualquer data/hora desejada. Ao salvar com data futura, o status do usuário reativa para ATIVO automaticamente.
-                    </p>
                   </div>
                 )}
               </div>
 
+              {/* Opção de Preço Mensal */}
               {editAccessType === "mensal" && (
-                <div>
-                  <label className="block text-white/60 text-xs font-bold mb-2 uppercase tracking-wider">Valor da Mensalidade</label>
-                  <div className="flex gap-2">
+                <div className="flex items-center justify-between gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
+                  <label className="text-white/60 text-[10px] font-bold uppercase tracking-wider">Valor Mensal:</label>
+                  <div className="flex gap-1.5">
                     <button
                       type="button"
                       onClick={() => setEditMonthlyPrice("13.00")}
-                      className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all ${
+                      className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all ${
                         editMonthlyPrice === "13.00"
-                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
-                          : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "bg-white/5 text-white/60 hover:text-white"
                       }`}
                     >
                       R$ 13,00 (Padrão)
@@ -1765,10 +1772,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     <button
                       type="button"
                       onClick={() => setEditMonthlyPrice("9.90")}
-                      className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs transition-all ${
+                      className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all ${
                         editMonthlyPrice === "9.90"
-                          ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
-                          : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                          ? "bg-orange-500 text-white shadow-sm"
+                          : "bg-white/5 text-white/60 hover:text-white"
                       }`}
                     >
                       R$ 9,90
@@ -1777,20 +1784,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               )}
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-white/5">
+              {/* Botões de Ação */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
-                  className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-sm font-semibold transition-colors"
+                  className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white/70 hover:text-white text-xs font-semibold transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={editLoading}
-                  className="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-sm font-bold transition-all disabled:opacity-50 shadow-lg shadow-orange-600/30 flex items-center gap-2"
+                  className="px-4 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition-all disabled:opacity-50 shadow-md shadow-orange-600/30 flex items-center gap-1.5"
                 >
-                  {editLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  {editLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                   {editLoading ? "Salvando..." : "Salvar Alterações"}
                 </button>
               </div>

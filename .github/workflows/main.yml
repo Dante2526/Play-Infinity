@@ -8,42 +8,49 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    name: Deploy no Servidor Oracle Cloud
+    name: Build e Deploy no Play Infinity (Oracle VPS)
 
     steps:
-      - name: Conectar na VPS Oracle via SSH e Atualizar
-        uses: appleboy/ssh-action@v1.0.3
+      - name: 📥 Clonar Repositório
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js 20
+        uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.ORACLE_HOST || '147.15.57.146' }}
-          username: ${{ secrets.ORACLE_USER || 'ubuntu' }}
-          key: ${{ secrets.ORACLE_SSH_KEY }}
-          port: 22
-          script_stop: false
-          script: |
-            echo "🚀 Iniciando Deploy do Play Infinity na VPS Oracle..."
-            
-            if [ -d "/home/ubuntu/Play-Infinity" ]; then
-              cd /home/ubuntu/Play-Infinity
-            elif [ -d "/home/ubuntu/play-infinity" ]; then
-              cd /home/ubuntu/play-infinity
-            elif [ -d "/var/www/play-infinity" ]; then
-              cd /var/www/play-infinity
-            else
-              cd /home/ubuntu
-            fi
-            
-            echo "📥 Puxando últimas alterações do GitHub..."
-            git pull origin $(git branch --show-current || echo "main")
-            
-            echo "📦 Instalando dependências..."
-            npm install
-            
-            echo "🔨 Gerando build de produção..."
-            npm run build
-            
-            echo "🔄 Reiniciando serviços no PM2..."
-            pm2 restart all || echo "PM2 reiniciado"
-            
-            echo "✅ Deploy concluído com sucesso na VPS Oracle!"
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Instalar Dependências
+        run: npm ci || npm install
+
+      - name: 🔨 Compilar Aplicação (Vite Build)
+        run: npm run build
+
+      - name: 📦 Compactar arquivos de Deploy
+        run: |
+          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json
+
+      - name: 🔑 Configurar Chave SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts
+
+      - name: 🚀 Enviar Payload e Atualizar VPS
+        run: |
+          HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
+          USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
+          
+          # Enviar pacote compactado
+          scp /tmp/deploy-payload.tar.gz ${USER}@${HOST}:/home/ubuntu/app-deploy.tar.gz
+          
+          # Extrair e reiniciar PM2
+          ssh ${USER}@${HOST} << 'EOF'
+            tar -xzf /home/ubuntu/app-deploy.tar.gz -C /home/ubuntu/play-infinity/
+            sudo pm2 restart play-infinity-app || sudo pm2 restart all
+            echo "✅ Deploy concluído com sucesso!"
+          EOF
+
