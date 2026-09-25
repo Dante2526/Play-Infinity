@@ -126,4 +126,80 @@ Após salvar as configurações no DNS da Cloudflare:
 
 ---
 
+## 🤖 6. Deploy 100% Automático via GitHub Actions (CI/CD)
+
+Como o GitHub exige permissão direta do dono da conta para criar arquivos de automação (`.github/workflows`), siga estes 2 passos simples direto no site do GitHub:
+
+### Passo 1: Salvar a Chave SSH nas Secrets
+1. Vá no seu repositório no GitHub.
+2. Clique em **Settings** > **Secrets and variables** > **Actions**.
+3. Clique em **New repository secret**:
+   - **Name:** `ORACLE_SSH_KEY`
+   - **Secret:** *(Cole todo o conteúdo do arquivo `oracle-vps.key`)*
+4. Clique em **Add secret**.
+
+### Passo 2: Criar o arquivo de Deploy no GitHub
+1. No seu repositório, clique em **Add file** > **Create new file**.
+2. No campo do nome do arquivo, digite exatamente:  
+   `.github/workflows/deploy.yml`
+3. Cole o seguinte código no editor:
+```yaml
+name: Deploy Automático para Oracle VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy no Servidor Oracle Cloud
+
+    steps:
+      - name: Conectar na VPS Oracle via SSH e Atualizar
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_HOST || '147.15.57.146' }}
+          username: ${{ secrets.ORACLE_USER || 'ubuntu' }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: false
+          script: |
+            echo "🚀 Iniciando Deploy do Play Infinity na VPS Oracle..."
+            
+            # Localiza a pasta do projeto
+            if [ -d "/home/ubuntu/Play-Infinity" ]; then
+              cd /home/ubuntu/Play-Infinity
+            elif [ -d "/home/ubuntu/play-infinity" ]; then
+              cd /home/ubuntu/play-infinity
+            elif [ -d "/var/www/play-infinity" ]; then
+              cd /var/www/play-infinity
+            else
+              echo "⚠️ Verificando diretório home..."
+              cd /home/ubuntu
+            fi
+            
+            echo "📥 Puxando últimas alterações do GitHub..."
+            git pull origin $(git branch --show-current || echo "main")
+            
+            echo "📦 Instalando dependências..."
+            npm install
+            
+            echo "🔨 Gerando build de produção..."
+            npm run build
+            
+            echo "🔄 Reiniciando serviços no PM2..."
+            pm2 restart all || echo "PM2 reiniciado"
+            
+            echo "✅ Deploy concluído com sucesso na VPS Oracle!"
+```
+4. Clique no botão verde **Commit changes...** no canto superior direito.
+
+Pronto! A partir desse momento, qualquer alteração enviada para o GitHub atualizará o site e reiniciará o servidor automaticamente na VPS da Oracle.
+
+---
+
 *Documento gerado e atualizado para a versão de produção do Play Infinity.*
