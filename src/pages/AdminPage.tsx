@@ -823,18 +823,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
         </div>
 
         {/* Navegação entre Abas do Painel */}
-        <div className="flex items-center gap-3 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
+        <div className="flex items-center gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 overflow-x-auto no-scrollbar scroll-smooth">
           <button
             type="button"
             onClick={() => setAdminSection("users")}
-            className={`flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer ${
+            className={`flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all cursor-pointer ${
               adminSection === "users"
                 ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
                 : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             }`}
           >
-            <Users className="w-4 h-4" />
-            Gestão de Usuários & Assinaturas
+            <Users className="w-4 h-4 shrink-0" />
+            <span><span className="hidden md:inline">Gestão de </span>Usuários & Assinaturas</span>
             <span className="ml-1 px-2 py-0.5 rounded-full text-xs bg-black/30 font-mono">
               {usersList.length}
             </span>
@@ -843,15 +843,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <button
             type="button"
             onClick={() => setAdminSection("deploy")}
-            className={`flex items-center gap-2.5 px-5 py-2.5 rounded-2xl font-bold text-sm transition-all cursor-pointer relative ${
+            className={`flex items-center gap-2 sm:gap-2.5 px-4 sm:px-5 py-2.5 rounded-2xl font-bold text-xs sm:text-sm whitespace-nowrap shrink-0 transition-all cursor-pointer relative ${
               adminSection === "deploy"
                 ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
                 : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
             }`}
           >
-            <Server className="w-4 h-4 text-emerald-400" />
-            Status de Deploy & VPS Oracle
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <Server className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span><span className="hidden md:inline">Status de </span>Deploy & VPS Oracle</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
           </button>
         </div>
 
@@ -997,22 +997,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   return (
                     <div
                       key={client.id}
-                      className="bg-black/40 hover:bg-black/60 border border-white/5 hover:border-white/15 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                      className="bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-w-full overflow-hidden shadow-lg"
                     >
                       {/* Perfil & Identificação */}
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)] shrink-0">
+                      <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 max-w-full">
+                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-base sm:text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)] shrink-0 mt-0.5 sm:mt-0">
                           {initial}
                         </div>
 
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-white text-[15px] truncate">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <span className="font-bold text-white text-[15px] sm:text-[16px] truncate max-w-[180px] sm:max-w-none">
                               {client.name || "Sem nome informado"}
                             </span>
                             
                             {/* Badge Tipo de Acesso */}
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shrink-0 ${
                               client.accessType === 'vitalicio'
                                 ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
                                 : client.accessType === '30min'
@@ -1032,13 +1032,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                             {/* Badge Valor Mensalidade */}
                             {client.monthlyFee && (
-                              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
                                 R$ {client.monthlyFee}
                               </span>
                             )}
 
                             {/* Badge Status */}
-                            <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold shrink-0 ${
                               isActive
                                 ? 'bg-green-500/15 text-green-400 border border-green-500/30'
                                 : isExpiredClient
@@ -1050,13 +1050,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           </div>
 
                           {/* E-mail com cópia */}
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-1.5 mt-1 min-w-0">
                             <span className="text-white/60 text-xs font-mono truncate">{client.email}</span>
                             <button
                               type="button"
                               onClick={() => copyToClipboard(client.email, `email-${client.id}`)}
                               title="Copiar e-mail"
-                              className="text-white/40 hover:text-white p-1 hover:bg-white/10 rounded transition-colors"
+                              className="text-white/40 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors shrink-0 cursor-pointer"
                             >
                               {copiedKey === `email-${client.id}` ? (
                                 <Check className="w-3.5 h-3.5 text-green-400" />
@@ -1068,114 +1068,126 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         </div>
                       </div>
 
-                      {/* Senha, Vencimento & Ações */}
-                      <div className="flex flex-wrap items-center gap-3 lg:gap-4 text-xs text-white/70">
-                        {/* Senha */}
-                        <div className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
-                          <Key className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                          <span className="text-white/40">Senha:</span>
-                          {client.initialPassword ? (
+                      {/* Informações e Controles */}
+                      <div className="flex flex-col sm:flex-row sm:flex-wrap xl:flex-nowrap items-stretch sm:items-center gap-2.5 sm:gap-3 text-xs text-white/70 w-full xl:w-auto">
+                        {/* Linha de Senha e Vencimento */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
+                          {/* Senha */}
+                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between sm:justify-start gap-2 min-w-[130px]">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-mono font-bold text-orange-300">{client.initialPassword}</span>
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(client.initialPassword!, `pass-${client.id}`)}
-                                title="Copiar senha"
-                                className="text-white/40 hover:text-white p-0.5 hover:bg-white/10 rounded transition-colors"
-                              >
-                                {copiedKey === `pass-${client.id}` ? (
-                                  <Check className="w-3.5 h-3.5 text-green-400" />
-                                ) : (
-                                  <Copy className="w-3.5 h-3.5" />
-                                )}
-                              </button>
+                              <Key className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                              <span className="text-white/40 text-[11px] sm:text-xs">Senha:</span>
                             </div>
-                          ) : (
-                            <span className="text-white/30 italic text-[11px]">(Criptografada no Firebase)</span>
-                          )}
-                        </div>
+                            {client.initialPassword ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-mono font-bold text-orange-300 text-[12px]">{client.initialPassword}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(client.initialPassword!, `pass-${client.id}`)}
+                                  title="Copiar senha"
+                                  className="text-white/40 hover:text-white p-1 hover:bg-white/10 rounded-lg transition-colors shrink-0 cursor-pointer"
+                                >
+                                  {copiedKey === `pass-${client.id}` ? (
+                                    <Check className="w-3.5 h-3.5 text-green-400" />
+                                  ) : (
+                                    <Copy className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-white/30 italic text-[10px]">(Criptografada)</span>
+                            )}
+                          </div>
 
-                        {/* Vencimento */}
-                        <div className="bg-white/5 border border-white/5 rounded-xl px-3 py-2 flex items-center gap-2">
-                          <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
-                          <span className="text-white/40">Vence:</span>
-                          <span className="font-medium text-white/90">{expireLabel}</span>
+                          {/* Vencimento */}
+                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between sm:justify-start gap-2 min-w-[150px]">
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                              <span className="text-white/40 text-[11px] sm:text-xs">Vence:</span>
+                            </div>
+                            <span className="font-medium text-white/90 text-[11px] sm:text-xs truncate">{expireLabel}</span>
+                          </div>
                         </div>
 
                         {/* Ações Rápidas de Extensão de Tempo */}
-                        <div className="bg-white/5 border border-white/5 rounded-xl px-2.5 py-1.5 flex items-center gap-1.5">
-                          <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 mr-0.5">
-                            <Timer className="w-3.5 h-3.5 text-orange-400" />
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-2 sm:px-2.5 sm:py-1.5 flex items-center justify-between sm:justify-start gap-1.5 w-full sm:w-auto">
+                          <span className="text-white/40 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 mr-0.5 shrink-0">
+                            <Timer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                             Tempo:
                           </span>
-                          <button
-                            type="button"
-                            disabled={quickExtendLoadingId === client.id}
-                            onClick={() => handleQuickExtend(client, 0.5, "30min")}
-                            title="Dar +30 minutos de acesso (reativa imediatamente)"
-                            className="px-2 py-1 bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[11px] font-bold border border-emerald-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+30m"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={quickExtendLoadingId === client.id}
-                            onClick={() => handleQuickExtend(client, 1, "teste")}
-                            title="Dar +1 hora de teste ao usuário (reativa imediatamente)"
-                            className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[11px] font-bold border border-amber-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+1h"}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={quickExtendLoadingId === client.id}
-                            onClick={() => handleQuickExtend(client, 4, "4horas")}
-                            title="Mudar/dar 4 horas de acesso (reativa imediatamente)"
-                            className="px-2 py-1 bg-orange-500/15 hover:bg-orange-500/30 text-orange-300 rounded-lg text-[11px] font-bold border border-orange-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            +4h
-                          </button>
-                          <button
-                            type="button"
-                            disabled={quickExtendLoadingId === client.id}
-                            onClick={() => handleQuickExtend(client, 24, "1dia")}
-                            title="Mudar/dar 1 dia de acesso (reativa imediatamente)"
-                            className="px-2 py-1 bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 rounded-lg text-[11px] font-bold border border-teal-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            +1 Dia
-                          </button>
-                          <button
-                            type="button"
-                            disabled={quickExtendLoadingId === client.id}
-                            onClick={() => handleQuickExtend(client, 168, "7dias")}
-                            title="Mudar/dar 7 dias de acesso (reativa imediatamente)"
-                            className="px-2 py-1 bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-[11px] font-bold border border-cyan-500/30 transition-all hover:scale-105 active:scale-95 flex items-center gap-1 disabled:opacity-50"
-                          >
-                            +7 Dias
-                          </button>
+                          <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-center gap-1 w-full sm:w-auto">
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 0.5, "30min")}
+                              title="Dar +30 minutos de acesso (reativa imediatamente)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-emerald-500/15 hover:bg-emerald-500/30 text-emerald-300 rounded-lg text-[10px] sm:text-[11px] font-bold border border-emerald-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+30m"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 1, "teste")}
+                              title="Dar +1 hora de teste ao usuário (reativa imediatamente)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 rounded-lg text-[10px] sm:text-[11px] font-bold border border-amber-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              {quickExtendLoadingId === client.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "+1h"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 4, "4horas")}
+                              title="Mudar/dar 4 horas de acesso (reativa imediatamente)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-orange-500/15 hover:bg-orange-500/30 text-orange-300 rounded-lg text-[10px] sm:text-[11px] font-bold border border-orange-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              +4h
+                            </button>
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 24, "1dia")}
+                              title="Mudar/dar 1 dia de acesso (reativa imediatamente)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 rounded-lg text-[10px] sm:text-[11px] font-bold border border-teal-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              +1d
+                            </button>
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 168, "7dias")}
+                              title="Mudar/dar 7 dias de acesso (reativa imediatamente)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-cyan-500/15 hover:bg-cyan-500/30 text-cyan-300 rounded-lg text-[10px] sm:text-[11px] font-bold border border-cyan-500/30 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              +7d
+                            </button>
+                          </div>
                         </div>
 
-                        {/* Botão de Editar Credenciais */}
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEdit(client)}
-                          title="Editar e-mail e senha do cliente"
-                          className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 font-bold"
-                        >
-                          <Pencil className="w-4 h-4" />
-                          <span>Editar</span>
-                        </button>
+                        {/* Botões de Ação */}
+                        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+                          {/* Botão de Editar Credenciais */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(client)}
+                            title="Editar e-mail e senha do cliente"
+                            className="px-3.5 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/20"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Editar</span>
+                          </button>
 
-                        {/* Botão de Revogar Acesso */}
-                        <button
-                          type="button"
-                          onClick={() => handleRevokeDirect(client)}
-                          title="Revogar acesso do cliente"
-                          className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center gap-1.5 font-bold"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                          <span>Revogar</span>
-                        </button>
+                          {/* Botão de Revogar Acesso */}
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeDirect(client)}
+                            title="Revogar acesso do cliente"
+                            className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-red-500/20"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Revogar</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

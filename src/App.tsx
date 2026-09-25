@@ -280,10 +280,11 @@ export default function App() {
   }, [playerModal.isOpen, activeLiveChannel, isAuthModalOpen, isPaywallOpen, notificationModalOpen, webhookModalOpen, viewState.type]);
 
   useEffect(() => {
-    // Fallback de segurança para redes móveis lentas: não trava na tela preta por mais de 3s
+    // Fallback de segurança para redes móveis: aguarda até 8s se houver indício de login prévio
+    const wasLoggedIn = localStorage.getItem("playinfinity_logged_in") === "true";
     const authTimeout = setTimeout(() => {
       setIsAuthInitialized(true);
-    }, 3000);
+    }, wasLoggedIn ? 8000 : 3500);
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       clearTimeout(authTimeout);
@@ -310,7 +311,7 @@ export default function App() {
     };
   }, []);
 
-  // Monitora a existência do usuário no Firestore em tempo real
+  // Monitora a existência do usuário no Firestore em tempo real com proteção anti-falso-positivo para mobile
   useEffect(() => {
     if (!currentUser) return;
     // Se o admin estiver visualizando o painel administrativo, não deslogar
@@ -319,27 +320,48 @@ export default function App() {
     let isSubscribed = true;
     const userRef = doc(db, "usuarios", currentUser.uid);
 
-    // Variável para dar carência de alguns segundos para contas recém-criadas
-    // antes de considerar que o documento realmente não existe
-    let notFoundCount = 0;
+    // Contador de verificações para evitar deslogar por oscilação de rede móvel ou suspensão de aba
+    let missingConfirmations = 0;
 
-    const unsubscribeUserDoc = onSnapshot(userRef, async (snap) => {
+    const unsubscribeUserDoc = onSnapshot(userRef, { includeMetadataChanges: false }, async (snap) => {
       if (!isSubscribed) return;
 
-      // Se o documento não existir em 'usuarios', verifica se ainda está em 'users' ou 'administradores'
+      // Se o dispositivo estiver offline, não tenta revogar
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return;
+      }
+
+      // Se o snapshot veio do cache local sem dados do servidor durante transição de rede, ignora
+      if (snap.metadata?.fromCache && !snap.exists()) {
+        return;
+      }
+
+      // Se o documento não existir em 'usuarios', verifica coleções alternativas com confirmação
       if (!snap.exists()) {
-        notFoundCount++;
-        // Se a conta for recém-criada (ex: menos de 45 segundos), não desloga na hora por condição de corrida
+        missingConfirmations++;
+
+        // Exige pelo menos 3 leituras consecutivas confirmadas antes de revogar
+        if (missingConfirmations < 3) {
+          return;
+        }
+
+        // Se a conta for recém-criada (ex: menos de 60 segundos), não desloga por condição de corrida
         const userCreationTime = currentUser.metadata?.creationTime ? new Date(currentUser.metadata.creationTime).getTime() : 0;
-        const isRecentlyCreated = (Date.now() - userCreationTime) < 45000;
-        
-        if (isRecentlyCreated && notFoundCount < 3) {
-          console.warn("[Auth] Documento ainda não detectado para conta recente, aguardando propagação...");
+        const isRecentlyCreated = (Date.now() - userCreationTime) < 60000;
+        if (isRecentlyCreated) {
           return;
         }
 
         try {
           const { getDoc } = await import("firebase/firestore");
+          
+          // Re-checagem direta contra o Firestore
+          const directCheck = await getDoc(userRef);
+          if (directCheck.exists()) {
+            missingConfirmations = 0;
+            return;
+          }
+
           const legacySnap = await getDoc(doc(db, "users", currentUser.uid));
           if (legacySnap.exists()) {
             const data = legacySnap.data();
@@ -354,10 +376,8 @@ export default function App() {
           if (adminSnap.exists()) {
             return; // É administrador, não desloga
           }
-        } catch (e) {}
-
-        // Se ainda for recém-criado, não encerra a sessão precipitadamente
-        if (isRecentlyCreated) {
+        } catch (e) {
+          // Erro de rede na checagem - não desloga
           return;
         }
 
@@ -381,7 +401,8 @@ export default function App() {
         return;
       }
 
-      // Se existe, mantém o nome de exibição sincronizado
+      // Se existe, reseta o contador de ausência e mantém o nome sincronizado
+      missingConfirmations = 0;
       const data = snap.data();
       const name = data.nome || data.name || data.displayName;
       if (name && isSubscribed) {
@@ -971,10 +992,10 @@ export default function App() {
       </footer>
       )}
 
-      {/* MOBILE BOTTOM NAVIGATION (FLOATING DOCK) */}
+      {/* MOBILE BOTTOM NAVIGATION (iOS FROSTED GLASS DOCK) */}
       {viewState.type !== 'admin' && (
       <div className="lg:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
-        <nav className="bg-[#111111]/95 backdrop-blur-2xl border border-white/10 rounded-full px-2 py-1 flex items-center justify-around shadow-[0_20px_40px_-10px_rgba(0,0,0,0.8)] pointer-events-auto">
+        <nav className="relative bg-black/40 backdrop-blur-2xl backdrop-saturate-150 border border-white/15 rounded-full px-2 py-1.5 flex items-center justify-around shadow-[0_12px_36px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.2)] pointer-events-auto">
           <div className="flex items-center justify-between w-full">
             <NavItem onClick={() => navigateTo({ type: 'home' })} icon={<Home />} label="Início" isActive={viewState.type === 'home' || viewState.type === 'provider'} />
             <NavItem onClick={() => navigateTo({ type: 'movies' })} icon={<Film />} label="Filmes" isActive={viewState.type === 'movies'} />

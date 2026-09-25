@@ -107,7 +107,7 @@ interface GitHubRunsResponse {
 export function AdminDeployMonitor() {
   // Configurações do Repositório GitHub (persistidas no LocalStorage)
   const [githubRepo, setGithubRepo] = useState(() => {
-    return localStorage.getItem("admin_github_repo") || "naylanmoreira/Play-Infinity";
+    return localStorage.getItem("admin_github_repo") || "Dante2526/Play-Infinity";
   });
   const [githubToken, setGithubToken] = useState(() => {
     return localStorage.getItem("admin_github_token") || "";
