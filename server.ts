@@ -5979,7 +5979,19 @@ app.use("/api/admin", adminOpsRouter);
 
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {
-        console.log(`Server running on http://localhost:${PORT}`);
+        console.log(`\n  ➜  Local:   http://localhost:${PORT}`);
+        try {
+          const os = require("os");
+          const interfaces = os.networkInterfaces();
+          for (const name of Object.keys(interfaces)) {
+            for (const iface of interfaces[name]) {
+              if (iface.family === "IPv4" && !iface.internal) {
+                console.log(`  ➜  Network: http://${iface.address}:${PORT}`);
+              }
+            }
+          }
+        } catch (e) { /* ignore */ }
+        console.log("");
       });
       server.on("error", (err: any) => {
         console.error("[Server Listen Error]:", err);
