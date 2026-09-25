@@ -5399,6 +5399,24 @@ app.use("/api/admin", adminOpsRouter);
         return res.status(400).send("Domínio fornecido não pertence à rede MixDrop.");
       }
 
+      const sendFallbackHtml = (statusCode: number, message: string) => {
+        return res.status(statusCode).send(`
+          <!DOCTYPE html>
+          <html>
+          <head><meta charset="utf-8"></head>
+          <body style="background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;text-align:center;">
+            <script>
+              console.error("[MixDrop] Erro:", "${message}");
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "${message}" }, "*");
+              }
+            </script>
+            <div>${message}</div>
+          </body>
+          </html>
+        `);
+      };
+
       const fileMatch = safeCheck.parsedUrl.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
       const fileId = fileMatch ? fileMatch[1] : "";
       if (!fileId) {
@@ -5431,13 +5449,13 @@ app.use("/api/admin", adminOpsRouter);
           clearTimeout(timeoutId);
 
           if (!upstream.ok) {
-            return res.status(502).send(`MixDrop retornou status HTTP ${upstream.status}`);
+            return sendFallbackHtml(502, `MixDrop retornou status HTTP ${upstream.status}`);
           }
 
           const html = await upstream.text();
           const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
           if (!packerMatch) {
-            return res.status(502).send("Não foi possível desembalar os dados do player do MixDrop.");
+            return sendFallbackHtml(502, "Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
           }
 
           const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
@@ -5446,7 +5464,7 @@ app.use("/api/admin", adminOpsRouter);
           const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
 
           if (!wurlMatch || !wurlMatch[1]) {
-            return res.status(502).send("URL de vídeo não encontrada no player do MixDrop.");
+            return sendFallbackHtml(502, "URL de vídeo não encontrada no player do MixDrop.");
           }
 
           videoUrl = wurlMatch[1];
@@ -5470,7 +5488,7 @@ app.use("/api/admin", adminOpsRouter);
         } catch (fetchErr: any) {
           clearTimeout(timeoutId);
           console.error("[MixDrop Scraper Error]:", fetchErr);
-          return res.status(502).send("Tempo limite ou erro ao contatar servidor de mídia MixDrop.");
+          return sendFallbackHtml(502, "Tempo limite ou erro ao contatar servidor de mídia MixDrop.");
         }
       }
 
