@@ -522,7 +522,7 @@ adminOpsRouter.post("/github-trigger", async (req: Request, res: Response) => {
     });
   }
 
-  const cleanRepo = (repo || "naylanmoreira/Play-Infinity").replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+  const cleanRepo = (repo || process.env.GITHUB_REPO || "Dante2526/Play-Infinity").replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
   const [owner, repoName] = cleanRepo.split("/");
 
   if (!owner || !repoName) {
