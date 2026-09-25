@@ -1,0 +1,49 @@
+name: Deploy Automático para Oracle VPS
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy no Servidor Oracle Cloud
+
+    steps:
+      - name: Conectar na VPS Oracle via SSH e Atualizar
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.ORACLE_HOST || '147.15.57.146' }}
+          username: ${{ secrets.ORACLE_USER || 'ubuntu' }}
+          key: ${{ secrets.ORACLE_SSH_KEY }}
+          port: 22
+          script_stop: false
+          script: |
+            echo "🚀 Iniciando Deploy do Play Infinity na VPS Oracle..."
+            
+            if [ -d "/home/ubuntu/Play-Infinity" ]; then
+              cd /home/ubuntu/Play-Infinity
+            elif [ -d "/home/ubuntu/play-infinity" ]; then
+              cd /home/ubuntu/play-infinity
+            elif [ -d "/var/www/play-infinity" ]; then
+              cd /var/www/play-infinity
+            else
+              cd /home/ubuntu
+            fi
+            
+            echo "📥 Puxando últimas alterações do GitHub..."
+            git pull origin $(git branch --show-current || echo "main")
+            
+            echo "📦 Instalando dependências..."
+            npm install
+            
+            echo "🔨 Gerando build de produção..."
+            npm run build
+            
+            echo "🔄 Reiniciando serviços no PM2..."
+            pm2 restart all || echo "PM2 reiniciado"
+            
+            echo "✅ Deploy concluído com sucesso na VPS Oracle!"
