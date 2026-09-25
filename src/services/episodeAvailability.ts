@@ -72,7 +72,8 @@ export async function getAvailableSeasonsForSeries(
     return fallbackSeasons;
   }
 
-  const cached = clientSeasonsCache.get(idStr);
+  const cacheKey = `${idStr}:${(candidateSeasons || []).slice().sort((a, b) => a - b).join(",")}`;
+  const cached = clientSeasonsCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
     if (cached.seasons && cached.seasons.length > 0) {
       return cached.seasons;
@@ -90,7 +91,7 @@ export async function getAvailableSeasonsForSeries(
     if (res.ok) {
       const data = await res.json();
       if (data && data.success && Array.isArray(data.seasons) && data.seasons.length > 0) {
-        clientSeasonsCache.set(idStr, {
+        clientSeasonsCache.set(cacheKey, {
           timestamp: Date.now(),
           seasons: data.seasons,
         });

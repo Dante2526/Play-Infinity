@@ -355,7 +355,10 @@ export function DetailsPage({
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
 
-    getAvailableSeasonsForSeries(effectiveTmdbId, candidates).then((seasons) => {
+    // Se o TMDB ainda está carregando e não temos as temporadas candidatas, aguarda
+    if (loadingTmdb && candidates.length === 0) return;
+
+    getAvailableSeasonsForSeries(effectiveTmdbId, candidates.length > 0 ? candidates : undefined).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {
         setCatalogSeasons(seasons);
       }
@@ -363,7 +366,7 @@ export function DetailsPage({
     return () => {
       isMounted = false;
     };
-  }, [isSeries, effectiveTmdbId, tmdbDetails]);
+  }, [isSeries, effectiveTmdbId, tmdbDetails, loadingTmdb]);
 
   // Lista de temporadas disponíveis (apenas as temporadas com episódios verificados e reproduzíveis)
   const availableSeasons = React.useMemo(() => {
