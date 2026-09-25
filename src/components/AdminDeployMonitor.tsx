@@ -18,7 +18,6 @@ import {
   Play,
   RotateCw,
   Layers,
-  Settings,
   ShieldCheck,
   Check,
   ChevronRight,
@@ -120,16 +119,7 @@ interface GitHubRunsResponse {
 }
 
 export function AdminDeployMonitor() {
-  // Configurações do Repositório GitHub (persistidas no LocalStorage)
-  const [githubRepo, setGithubRepo] = useState(() => {
-    return localStorage.getItem("admin_github_repo") || "Dante2526/Play-Infinity";
-  });
-  const [githubToken, setGithubToken] = useState(() => {
-    return localStorage.getItem("admin_github_token") || "";
-  });
-  const [showConfig, setShowConfig] = useState(false);
-  const [tempRepo, setTempRepo] = useState(githubRepo);
-  const [tempToken, setTempToken] = useState(githubToken);
+  const githubRepo = "Dante2526/Play-Infinity";
 
   // Estados de Telemetria da VPS
   const [vpsData, setVpsData] = useState<VpsTelemetryData | null>(null);
@@ -161,17 +151,6 @@ export function AdminDeployMonitor() {
   const [terminalOutput, setTerminalOutput] = useState<{ title: string; output: string; code?: number } | null>(null);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [triggerSuccess, setTriggerSuccess] = useState<string | null>(null);
-
-  // Salvar configurações
-  const handleSaveConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    const clean = tempRepo.trim().replace(/^https?:\/\/github\.com\//, "");
-    setGithubRepo(clean);
-    setGithubToken(tempToken.trim());
-    localStorage.setItem("admin_github_repo", clean);
-    localStorage.setItem("admin_github_token", tempToken.trim());
-    setShowConfig(false);
-  };
 
   // Carregar dados da VPS
   const fetchVpsData = useCallback(async () => {
@@ -207,7 +186,6 @@ export function AdminDeployMonitor() {
     try {
       const params = new URLSearchParams();
       if (githubRepo) params.set("repo", githubRepo);
-      if (githubToken) params.set("token", githubToken);
 
       const res = await fetch(`/api/admin/github-runs?${params.toString()}`);
       if (res.status === 502 || res.status === 503 || res.status === 504) {
@@ -238,7 +216,7 @@ export function AdminDeployMonitor() {
     } finally {
       setGithubLoading(false);
     }
-  }, [githubRepo, githubToken]);
+  }, [githubRepo]);
 
   // Carregamento inicial e auto-refresh periódico
   useEffect(() => {
@@ -299,11 +277,6 @@ export function AdminDeployMonitor() {
 
   // Disparar deploy manual via GitHub Actions
   const handleTriggerDeploy = async () => {
-    if (!githubToken) {
-      setShowConfig(true);
-      return;
-    }
-
     setTriggerLoading(true);
     setTriggerSuccess(null);
     setGithubError(null);
@@ -314,7 +287,6 @@ export function AdminDeployMonitor() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo: githubRepo,
-          token: githubToken,
           branch: "main"
         })
       });
@@ -423,87 +395,8 @@ export function AdminDeployMonitor() {
             <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-red-400" : ""}`} />
             Reiniciar Serviços
           </button>
-
-          <button
-            onClick={() => setShowConfig(!showConfig)}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 active:scale-95 text-orange-400 rounded-xl text-xs font-semibold border border-orange-500/20 transition-all cursor-pointer"
-            title="Configurar Repositório e Token"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            Configurar Repo
-          </button>
         </div>
       </div>
-
-      {/* Modal / Acordeão de Configuração de Repositório */}
-      {showConfig && (
-        <form onSubmit={handleSaveConfig} className="bg-[#1c1c1e] border border-orange-500/30 rounded-[24px] p-6 shadow-2xl animate-fade-in space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-white/10">
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <Settings className="w-4 h-4 text-orange-500" />
-              Configurações de Acesso ao Repositório GitHub
-            </h3>
-            <button
-              type="button"
-              onClick={() => setShowConfig(false)}
-              className="text-white/40 hover:text-white text-xs"
-            >
-              Fechar
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-white/70 mb-1.5">
-                Repositório GitHub (usuario/repositorio)
-              </label>
-              <input
-                type="text"
-                value={tempRepo}
-                onChange={(e) => setTempRepo(e.target.value)}
-                placeholder="ex: naylanmoreira/Play-Infinity"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500 transition-all"
-                required
-              />
-              <p className="text-[11px] text-white/40 mt-1">
-                Nome exato do repositório no GitHub para consultar os Deploys.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-white/70 mb-1.5">
-                GitHub Personal Access Token (PAT) <span className="text-white/40">(Recomendado)</span>
-              </label>
-              <input
-                type="password"
-                value={tempToken}
-                onChange={(e) => setTempToken(e.target.value)}
-                placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500 transition-all"
-              />
-              <p className="text-[11px] text-white/40 mt-1">
-                Necessário para repositórios privados e para o botão de disparar novo deploy.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowConfig(false)}
-              className="px-4 py-2 text-white/60 hover:text-white text-xs font-semibold"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-            >
-              Salvar Configurações
-            </button>
-          </div>
-        </form>
-      )}
 
       {/* ======================================================== */}
       {/* SEÇÃO 1: STATUS DE DEPLOY DO GITHUB ACTIONS             */}
@@ -556,18 +449,9 @@ export function AdminDeployMonitor() {
         )}
 
         {githubError && (
-          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-semibold flex items-start gap-2.5 animate-fade-in">
-            <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p>{githubError}</p>
-              <button
-                type="button"
-                onClick={() => setShowConfig(true)}
-                className="text-xs text-orange-400 hover:underline font-bold"
-              >
-                Clique aqui para configurar repositório ou inserir Token de Acesso (PAT)
-              </button>
-            </div>
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-semibold flex items-center gap-2.5 animate-fade-in">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <p>{githubError}</p>
           </div>
         )}
 
