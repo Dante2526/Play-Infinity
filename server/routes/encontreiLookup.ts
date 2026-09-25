@@ -89,7 +89,7 @@ function loadCatalog() {
 }
 
 // Cache de temporadas verificadas em memória (evita re-sondar servidores externos repetidamente)
-const _verifiedSeasonsCache = new Map<number, { timestamp: number; seasons: number[] }>();
+const _verifiedSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
 const VERIFIED_SEASONS_CACHE_TTL = 20 * 60 * 1000; // 20 minutos
 
 /**
@@ -104,19 +104,7 @@ router.get("/api/series-seasons-available", async (req, res) => {
       return res.status(400).json({ error: "tmdb_id é obrigatório" });
     }
 
-    // 1. Verifica cache em memória
-    const cached = _verifiedSeasonsCache.get(tmdbId);
-    if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      return res.json({
-        success: true,
-        hasCatalog: cached.seasons.length > 0,
-        tmdbId,
-        seasons: cached.seasons,
-      });
-    }
-
-    // 2. Extrai lista de temporadas candidatas
+    // 1. Extrai lista de temporadas candidatas
     let candidateSeasons: number[] = [];
     if (req.query.candidate_seasons) {
       candidateSeasons = String(req.query.candidate_seasons)
@@ -127,13 +115,24 @@ router.get("/api/series-seasons-available", async (req, res) => {
 
     const localCatalogSeasons = _seriesSeasonsIndex.get(tmdbId) || [];
     if (candidateSeasons.length === 0) {
-      candidateSeasons = localCatalogSeasons.length > 0
-        ? [...localCatalogSeasons]
-        : [1, 2, 3, 4, 5, 6, 7, 8];
+      candidateSeasons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     }
 
     // Deduplica e ordena
-    const candidates = Array.from(new Set(candidateSeasons)).sort((a, b) => a - b);
+    const candidates = Array.from(new Set([...candidateSeasons, ...localCatalogSeasons])).sort((a, b) => a - b);
+    const cacheKey = `${tmdbId}:${candidates.join(",")}`;
+
+    // 2. Verifica cache em memória para este conjunto exato de candidatas
+    const cached = _verifiedSeasonsCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      return res.json({
+        success: true,
+        hasCatalog: cached.seasons.length > 0,
+        tmdbId,
+        seasons: cached.seasons,
+      });
+    }
 
     // 3. Testa disponibilidade de cada temporada em paralelo
     const checkSeasonPlayable = async (season: number): Promise<boolean> => {
@@ -203,7 +202,7 @@ router.get("/api/series-seasons-available", async (req, res) => {
 
     // Se encontramos temporadas verificadas com vídeo real
     if (verified.length > 0) {
-      _verifiedSeasonsCache.set(tmdbId, {
+      _verifiedSeasonsCache.set(cacheKey, {
         timestamp: Date.now(),
         seasons: verified,
       });
