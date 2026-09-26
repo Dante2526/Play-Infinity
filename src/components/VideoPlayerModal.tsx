@@ -1516,7 +1516,14 @@ export function VideoPlayerModal({
     if (!activeIframeUrl) return;
     
     // Constrói a URL absoluta, garantindo que o Web Video Caster consiga acessar
-    const absoluteUrl = new URL(activeIframeUrl, window.location.origin).href;
+    let targetUrl = activeIframeUrl;
+    
+    // Otimização: Se for mixdrop-stream, envia direto o proxy de vídeo (mp4) pra evitar que o Caster liste a página HTML inútil
+    if (targetUrl.includes('/api/mixdrop-stream')) {
+      targetUrl = targetUrl.replace('/api/mixdrop-stream', '/api/mixdrop-proxy');
+    }
+    
+    const absoluteUrl = new URL(targetUrl, window.location.origin).href;
     const isAndroid = /Android/i.test(navigator.userAgent);
     
     if (isAndroid) {
