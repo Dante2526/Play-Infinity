@@ -85,16 +85,19 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
         }
       }
 
-      setStatusMsg("Abrindo aplicativos externos...");
+      setStatusMsg("Abrindo aplicativo Cast to TV+...");
       const absoluteUrl = new URL(finalUrl, window.location.origin).href;
       
+      const castifyPackage = 'cast.video.screenmirroring.casttotv';
+      const fallbackUrl = `https://play.google.com/store/apps/details?id=${castifyPackage}`;
+      const intentPath = absoluteUrl.replace(/^https?:\/\//, '');
+      const intentUrl = `intent://${intentPath}#Intent;package=${castifyPackage};scheme=https;action=android.intent.action.VIEW;type=video/*;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end;`;
+
       if (Capacitor.isNativePlatform()) {
-        const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
         await RokuDiscovery.openIntent({ url: intentUrl });
       } else {
         const isAndroid = /android/i.test(navigator.userAgent || navigator.vendor || (window as any).opera);
         if (isAndroid) {
-          const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
           window.location.href = intentUrl;
         } else {
           window.open(absoluteUrl, '_blank');
@@ -214,7 +217,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
               </div>
               <div className="flex-1">
                 <div className="text-sm font-semibold text-neutral-200">App Externo de Transmissão</div>
-                <div className="text-[10px] text-neutral-400">Recomendado: BubbleUPnP (sem anúncio)</div>
+                <div className="text-[10px] text-neutral-400">Recomendado: Cast to TV+ Chromecast Roku TV</div>
               </div>
             </button>
 
