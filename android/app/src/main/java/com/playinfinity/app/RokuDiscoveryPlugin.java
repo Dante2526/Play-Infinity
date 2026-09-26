@@ -111,17 +111,31 @@ public class RokuDiscoveryPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                URL url = new URL("http://" + ip + ":8060/launch/15985?u=" + java.net.URLEncoder.encode(urlString, "UTF-8") + "&t=v");
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestMethod("POST");
-                conn.setConnectTimeout(5000);
-                conn.setReadTimeout(5000);
+                String encodedUrl = java.net.URLEncoder.encode(urlString, "UTF-8");
+                String[] endpoints = {
+                    "/input/15985?t=v&u=" + encodedUrl, // Play On Roku (clássico)
+                    "/input?t=v&u=" + encodedUrl,       // Play On Roku (alternativo)
+                    "/launch/15985?t=v&u=" + encodedUrl // Fallback para launch
+                };
                 
-                int responseCode = conn.getResponseCode();
-                Log.d(TAG, "Roku launch response: " + responseCode);
+                int responseCode = -1;
+                for (String endpoint : endpoints) {
+                    URL url = new URL("http://" + ip + ":8060" + endpoint);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("POST");
+                    conn.setConnectTimeout(3000);
+                    conn.setReadTimeout(3000);
+                    
+                    responseCode = conn.getResponseCode();
+                    Log.d(TAG, "Roku attempt " + endpoint + " -> " + responseCode);
+                    
+                    if (responseCode == 200) {
+                        break;
+                    }
+                }
                 
                 JSObject res = new JSObject();
-                res.put("success", true);
+                res.put("success", responseCode == 200);
                 res.put("status", responseCode);
                 call.resolve(res);
             } catch (Exception e) {

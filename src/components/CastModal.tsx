@@ -69,10 +69,13 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
       const absoluteUrl = new URL(targetUrl, window.location.origin).href;
       
       if (Capacitor.isNativePlatform()) {
-        await RokuDiscovery.launch({ ip, url: absoluteUrl });
+        const res = await RokuDiscovery.launch({ ip, url: absoluteUrl });
+        if (!res.success) {
+           throw new Error(`Roku recusou a conexão (Status: ${res.status}). Verifique se "Controle por apps móveis" está ativado nas configurações da Roku.`);
+        }
       } else {
         // Chamada ECP fallback para PWA (Pode falhar por Mixed Content)
-        const url = `http://${ip}:8060/launch/15985?u=${encodeURIComponent(absoluteUrl)}&t=v`;
+        const url = `http://${ip}:8060/input/15985?t=v&u=${encodeURIComponent(absoluteUrl)}`;
         await fetch(url, { method: 'POST', mode: 'no-cors' });
       }
       
