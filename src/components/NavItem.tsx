@@ -18,13 +18,13 @@ export function NavItem({
       data-tv-focusable="true"
       className={`relative flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-full transition-all duration-200 cursor-pointer select-none active:scale-95 ${
         isActive 
-          ? 'text-red-500 font-bold' 
+          ? 'text-orange-500 font-bold' 
           : 'text-white/60 hover:text-white'
       }`}
     >
       <div className={`p-1.5 rounded-full transition-all duration-200 ${
         isActive 
-          ? 'bg-red-500/20 text-red-500 shadow-[0_0_12px_rgba(239,68,68,0.35)] scale-105' 
+          ? 'bg-orange-500/20 text-orange-500 shadow-[0_0_12px_rgba(234,88,12,0.35)] scale-105' 
           : 'text-white/70 hover:text-white'
       }`}>
         {React.cloneElement(icon as React.ReactElement, {
@@ -32,7 +32,7 @@ export function NavItem({
         })}
       </div>
       <span className={`text-[10px] sm:text-[11px] mt-0.5 tracking-tight transition-colors ${
-        isActive ? 'font-bold text-red-500' : 'font-medium text-white/60'
+        isActive ? 'font-bold text-orange-500' : 'font-medium text-white/60'
       }`}>
         {label}
       </span>
