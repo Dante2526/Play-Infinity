@@ -37,7 +37,8 @@ import {
   Lock,
   AlertCircle,
   ArrowDownToLine,
-  Activity
+  Activity,
+  Gauge
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
@@ -584,9 +585,9 @@ export function UserProfilePage({
               onClick: () => onNavigate('favorites') 
             },
             { 
-              label: 'Teste de Velocidade (Internet)', 
+              label: 'Teste a velocidade da internet', 
               desc: 'Verifique se sua conexão está rápida para filmes',
-              icon: <Activity className="w-5 h-5 text-blue-500" />,
+              icon: <Gauge className="w-5 h-5 text-blue-500" />,
               onClick: () => setIsSpeedTestOpen(true)
             },
             { 
