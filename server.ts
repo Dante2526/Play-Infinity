@@ -5985,7 +5985,7 @@ app.use("/api/admin", adminOpsRouter);
           const interfaces = os.networkInterfaces();
           for (const name of Object.keys(interfaces)) {
             for (const iface of interfaces[name]) {
-              if (iface.family === "IPv4" && !iface.internal) {
+              if ((iface.family === "IPv4" || iface.family === 4) && !iface.internal) {
                 console.log(`  ➜  Network: http://${iface.address}:${PORT}`);
               }
             }

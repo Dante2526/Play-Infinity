@@ -1,5 +1,6 @@
 // Tailwind v3 handled by PostCSS
 import react from '@vitejs/plugin-react';
+import legacy from '@vitejs/plugin-legacy';
 import path from 'path';
 import { defineConfig } from 'vite';
 import browserslist from 'browserslist';
@@ -7,7 +8,13 @@ import { browserslistToTargets } from 'lightningcss';
 
 export default defineConfig(() => {
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      legacy({
+        targets: ['defaults', 'not IE 11', 'chrome >= 49', 'safari >= 10', 'ios >= 10', 'samsung >= 4'],
+        additionalLegacyPolyfills: ['regenerator-runtime/runtime']
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

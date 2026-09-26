@@ -1512,6 +1512,24 @@ export function VideoPlayerModal({
     }
   };
 
+  const handleCastRequest = () => {
+    if (!activeIframeUrl) return;
+    
+    // Constrói a URL absoluta, garantindo que o Web Video Caster consiga acessar
+    const absoluteUrl = new URL(activeIframeUrl, window.location.origin).href;
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (isAndroid) {
+      // Intent URL otimizado para Android (cai na Play Store se não tiver)
+      const intentUrl = `intent:${absoluteUrl}#Intent;package=com.instantbits.cast.webvideo;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Video")};end;`;
+      window.location.href = intentUrl;
+    } else {
+      // Custom URL scheme Universal/iOS
+      const iosUrl = `wvc-x-callback://open?url=${encodeURIComponent(absoluteUrl)}&title=${encodeURIComponent(title || "Video")}`;
+      window.location.href = iosUrl;
+    }
+  };
+
   const handleToggleMiniPlayer = () => {
     if (isMiniPlayer) {
       // Ao sair do modo mini-player para crescer de novo, vai DIRETO para tela cheia
@@ -2020,6 +2038,7 @@ export function VideoPlayerModal({
               onSeasonChange={handleSeasonChange}
               episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
               onClose={handleCloseModal}
+              onCastRequest={handleCastRequest}
               onEpisodeChange={handleEpisodeChange}
               onSkipIntro={() => handleSkipIntro()}
               skipDurationSeconds={skipDurationSeconds}
