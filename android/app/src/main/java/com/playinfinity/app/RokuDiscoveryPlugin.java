@@ -158,6 +158,23 @@ public class RokuDiscoveryPlugin extends Plugin {
             intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
             getContext().startActivity(intent);
             call.resolve();
+        } catch (android.content.ActivityNotFoundException e) {
+            try {
+                android.content.Intent originalIntent = android.content.Intent.parseUri(urlString, android.content.Intent.URI_INTENT_SCHEME);
+                String fallbackUrl = originalIntent.getStringExtra("browser_fallback_url");
+                if (fallbackUrl != null) {
+                    android.content.Intent fallbackIntent = new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(fallbackUrl));
+                    fallbackIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                    getContext().startActivity(fallbackIntent);
+                    call.resolve();
+                } else {
+                    Log.e(TAG, "Activity not found and no fallback url", e);
+                    call.reject("App not installed: " + e.getMessage(), e);
+                }
+            } catch (Exception ex) {
+                Log.e(TAG, "Error handling fallback intent", ex);
+                call.reject("Error opening fallback: " + ex.getMessage(), ex);
+            }
         } catch (Exception e) {
             Log.e(TAG, "Error opening intent", e);
             call.reject("Error opening intent: " + e.getMessage(), e);
