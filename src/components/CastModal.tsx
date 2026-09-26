@@ -90,7 +90,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
       
       if (Capacitor.isNativePlatform()) {
         const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
-        window.location.href = intentUrl;
+        await RokuDiscovery.openIntent({ url: intentUrl });
       } else {
         window.open(absoluteUrl, '_blank');
       }

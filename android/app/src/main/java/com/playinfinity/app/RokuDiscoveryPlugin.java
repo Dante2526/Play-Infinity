@@ -145,4 +145,22 @@ public class RokuDiscoveryPlugin extends Plugin {
             }
         }).start();
     }
+
+    @PluginMethod
+    public void openIntent(PluginCall call) {
+        String urlString = call.getString("url");
+        if (urlString == null) {
+            call.reject("Must provide url");
+            return;
+        }
+        try {
+            android.content.Intent intent = android.content.Intent.parseUri(urlString, android.content.Intent.URI_INTENT_SCHEME);
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            getContext().startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "Error opening intent", e);
+            call.reject("Error opening intent: " + e.getMessage(), e);
+        }
+    }
 }
