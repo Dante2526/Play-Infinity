@@ -591,7 +591,7 @@ export function UserProfilePage({
               onClick: () => setIsSpeedTestOpen(true)
             },
             { 
-              label: 'Calendário de Lançamentos de Episódios', 
+              label: 'Calendário de Lançamentos', 
               desc: `${followedSeries.length} séries seguidas • ${thisWeekEpisodes.length} lançamentos esta semana`,
               icon: <CalendarDays className="w-5 h-5 text-orange-500" />,
               onClick: () => onNavigate('calendar') 
