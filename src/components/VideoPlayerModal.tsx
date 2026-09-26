@@ -1517,17 +1517,8 @@ export function VideoPlayerModal({
 
   const handleCastRequest = async () => {
     if (!activeIframeUrl) return;
-
-    if (Capacitor.isNativePlatform()) {
-      try {
-        await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
-        await Chromecast.show();
-        return;
-      } catch (err) {
-        console.error("Erro no Chromecast nativo", err);
-      }
-    }
     
+    // Volta a usar o Web Video Caster por padrão no Android (Suporta Roku, DLNA e extração de HLS)
     // Constrói a URL absoluta, garantindo que o Web Video Caster consiga acessar
     let targetUrl = activeIframeUrl;
     
