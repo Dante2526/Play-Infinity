@@ -10,75 +10,77 @@ export const SpeedTestModal: React.FC<SpeedTestModalProps> = ({ onClose }) => {
   const [status, setStatus] = useState<'idle' | 'testing' | 'done' | 'error'>('idle');
   const [message, setMessage] = useState<string>('');
 
-  const testInternetSpeed = async () => {
+  const testInternetSpeed = () => {
     setStatus('testing');
     setSpeedMbps(0);
     setMessage('Medindo velocidade de download...');
 
-    try {
-      // 100MB de payload do Cloudflare (CDN super rápida)
-      const bytesToDownload = 100 * 1024 * 1024; 
-      const url = `https://speed.cloudflare.com/__down?bytes=${bytesToDownload}&v=${Date.now()}`;
-      
-      const controller = new AbortController();
-      // Teste rodará por 6 segundos ou até baixar os 100MB
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, 6000);
+    // 50MB de payload do Cloudflare (CDN super rápida)
+    const bytesToDownload = 50 * 1024 * 1024; 
+    const url = `https://speed.cloudflare.com/__down?bytes=${bytesToDownload}&v=${Date.now()}`;
+    
+    const xhr = new XMLHttpRequest();
+    const startTime = performance.now();
+    let receivedBytes = 0;
+    
+    // Teste rodará por 6 segundos ou até baixar os 50MB
+    let timerId = setTimeout(() => {
+        xhr.abort();
+    }, 6000);
 
-      const startTime = performance.now();
-      
-      const response = await fetch(url, { signal: controller.signal });
-      if (!response.body) throw new Error('ReadableStream not supported');
-      
-      const reader = response.body.getReader();
-      let receivedBytes = 0;
-      
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          if (value) {
-            receivedBytes += value.length;
-            const now = performance.now();
-            const duration = (now - startTime) / 1000;
-            if (duration > 0.3) { // Atualiza a UI a cada pequeno intervalo
-                const mbps = (receivedBytes * 8 / (1000 * 1000)) / duration; // Usando base decimal para rede
-                setSpeedMbps(Math.round(mbps));
-            }
-          }
+    xhr.open('GET', url, true);
+    
+    // Header para tentar evitar bloqueios de CORS em alguns WebViews mais antigos
+    xhr.setRequestHeader("Accept", "application/octet-stream");
+
+    xhr.onprogress = (event) => {
+        receivedBytes = event.loaded;
+        const now = performance.now();
+        const duration = (now - startTime) / 1000;
+        if (duration > 0.3) {
+            const mbps = (receivedBytes * 8 / (1000 * 1000)) / duration;
+            setSpeedMbps(Math.round(mbps));
         }
-      } catch (e: any) {
-         if (e.name !== 'AbortError') throw e;
-      }
-      
-      clearTimeout(timeoutId);
-      
-      const endTime = performance.now();
-      let durationSeconds = (endTime - startTime) / 1000;
-      if (durationSeconds < 0.1) durationSeconds = 0.1;
-      
-      const bitsLoaded = receivedBytes * 8;
-      const mbps = (bitsLoaded / (1000 * 1000)) / durationSeconds;
-      
-      const finalSpeed = Math.round(mbps);
-      setSpeedMbps(finalSpeed);
-      
-      if (finalSpeed < 5) {
-         setMessage("Sua internet não tá legal para streaming. Pode haver travamentos.");
-      } else if (finalSpeed < 25) {
-         setMessage("Sua internet está boa para streaming em Alta Qualidade.");
-      } else {
-         setMessage("Sua internet tá super veloz para streaming!");
-      }
-      setStatus('done');
-      
-    } catch (err) {
-      console.error("Erro no speed test:", err);
-      setStatus('error');
-      setMessage("Erro ao medir a velocidade. Verifique sua conexão.");
-    }
+    };
+
+    xhr.onloadend = () => {
+        clearTimeout(timerId);
+        
+        if (receivedBytes === 0) {
+            setStatus('error');
+            setMessage("Erro ao medir a velocidade. Verifique sua conexão.");
+            return;
+        }
+
+        const endTime = performance.now();
+        let durationSeconds = (endTime - startTime) / 1000;
+        if (durationSeconds < 0.1) durationSeconds = 0.1;
+        
+        const bitsLoaded = receivedBytes * 8;
+        const mbps = (bitsLoaded / (1000 * 1000)) / durationSeconds;
+        const finalSpeed = Math.round(mbps);
+
+        setSpeedMbps(finalSpeed);
+        
+        if (finalSpeed < 5) {
+           setMessage("Sua internet não tá legal para streaming. Pode haver travamentos.");
+        } else if (finalSpeed < 25) {
+           setMessage("Sua internet está boa para streaming em Alta Qualidade.");
+        } else {
+           setMessage("Sua internet tá super veloz para streaming!");
+        }
+        setStatus('done');
+    };
+
+    xhr.onerror = () => {
+        clearTimeout(timerId);
+        setStatus('error');
+        setMessage("Erro de rede. Verifique sua conexão.");
+    };
+
+    xhr.send();
   };
+
 
   useEffect(() => {
     testInternetSpeed();
