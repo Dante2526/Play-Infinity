@@ -1517,27 +1517,37 @@ export function VideoPlayerModal({
 
   const handleCastRequest = async () => {
     if (!activeIframeUrl) return;
-    
-    // Volta a usar o Web Video Caster por padrão no Android (Suporta Roku, DLNA e extração de HLS)
-    // Constrói a URL absoluta, garantindo que o Web Video Caster consiga acessar
+
+    // 1. Tenta API Nativa (AirPlay no iPhone acha a Roku. Android acha Chromecast)
+    const videos = document.querySelectorAll('video');
+    for (let i = 0; i < videos.length; i++) {
+      const video = videos[i] as any;
+      if (video.remote && typeof video.remote.prompt === 'function') {
+        try {
+          await video.remote.prompt();
+          return;
+        } catch (err: any) {
+          if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
+        }
+      }
+      if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
+        video.webkitShowPlaybackTargetPicker();
+        return;
+      }
+    }
+
+    // 2. Tenta abrir no player de vídeo padrão do celular (pode acionar apps de TV da Samsung/Roku/DLNA que o usuário tenha)
     let targetUrl = activeIframeUrl;
-    
-    // Otimização: Se for mixdrop-stream, envia direto o proxy de vídeo (mp4) pra evitar que o Caster liste a página HTML inútil
     if (targetUrl.includes('/api/mixdrop-stream')) {
       targetUrl = targetUrl.replace('/api/mixdrop-stream', '/api/mixdrop-proxy');
     }
-    
     const absoluteUrl = new URL(targetUrl, window.location.origin).href;
     const isAndroid = /Android/i.test(navigator.userAgent);
     
     if (isAndroid) {
-      // Intent URL otimizado para Android (cai na Play Store se não tiver)
-      const intentUrl = `intent:${absoluteUrl}#Intent;package=com.instantbits.cast.webvideo;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Video")};end;`;
+      // Intent genérico para vídeos (Vai abrir o seletor do Android perguntando qual app usar)
+      const intentUrl = `intent:${absoluteUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Video")};end;`;
       window.location.href = intentUrl;
-    } else {
-      // Custom URL scheme Universal/iOS
-      const iosUrl = `wvc-x-callback://open?url=${encodeURIComponent(absoluteUrl)}&title=${encodeURIComponent(title || "Video")}`;
-      window.location.href = iosUrl;
     }
   };
 

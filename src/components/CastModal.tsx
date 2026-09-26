@@ -24,17 +24,14 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
     }
   };
 
-  const handleWebVideoCaster = () => {
+  const handleExternalPlayer = () => {
     const targetUrl = streamUrl || currentUrl;
     const absoluteUrl = new URL(targetUrl, window.location.origin).href;
     const isAndroid = /Android/i.test(navigator.userAgent);
     
     if (isAndroid) {
-      const intentUrl = `intent:${absoluteUrl}#Intent;package=com.instantbits.cast.webvideo;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Live TV")};end;`;
+      const intentUrl = `intent:${absoluteUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Live TV")};end;`;
       window.location.href = intentUrl;
-    } else {
-      const iosUrl = `wvc-x-callback://open?url=${encodeURIComponent(absoluteUrl)}&title=${encodeURIComponent(title || "Live TV")}`;
-      window.location.href = iosUrl;
     }
     onClose();
   };
@@ -135,15 +132,15 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
             </button>
 
             <button
-              onClick={handleWebVideoCaster}
+              onClick={handleExternalPlayer}
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
                 <Cast className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-200">Web Video Caster (Recomendado)</div>
-                <div className="text-[10px] text-neutral-400">Funciona em Roku, DLNA, Apple TV e WebOS</div>
+                <div className="text-sm font-semibold text-neutral-200">Player Externo da TV (Samsung/LG/Roku)</div>
+                <div className="text-[10px] text-neutral-400">Abre o menu nativo para você escolher o app</div>
               </div>
             </button>
 
