@@ -38,8 +38,7 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
 
-  const siteKey =
-    (import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY as string) || "";
+  const siteKey = "0x4AAAAAAFBFFTIMlMATqr08";
 
   useEffect(() => {
     if (!siteKey) return;
