@@ -1,6 +1,5 @@
 // Tailwind v3 handled by PostCSS
 import react from '@vitejs/plugin-react';
-import legacy from '@vitejs/plugin-legacy';
 import path from 'path';
 import { defineConfig } from 'vite';
 import browserslist from 'browserslist';
@@ -8,13 +7,7 @@ import { browserslistToTargets } from 'lightningcss';
 
 export default defineConfig(() => {
   return {
-    plugins: [
-      react(),
-      legacy({
-        targets: ['defaults', 'not IE 11', 'chrome >= 49', 'safari >= 10', 'ios >= 10', 'samsung >= 4'],
-        additionalLegacyPolyfills: ['regenerator-runtime/runtime']
-      })
-    ],
+    plugins: [react()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
@@ -28,7 +21,7 @@ export default defineConfig(() => {
 
     build: {
       cssMinify: 'lightningcss' as const,
-      target: 'es2020',
+      target: 'es2015',
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
