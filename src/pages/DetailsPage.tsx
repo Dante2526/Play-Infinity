@@ -167,6 +167,7 @@ export function DetailsPage({
   const [seasonData, setSeasonData] = useState<Season | null>(null);
   const [loadingSeason, setLoadingSeason] = useState<boolean>(false);
   const [castUrl, setCastUrl] = useState<string | null>(null);
+  const [castMediaDetails, setCastMediaDetails] = useState<{ mediaType: 'movie' | 'series', tmdbId: number, imdbId?: string, season?: number, episode?: number } | undefined>(undefined);
   const commentTargetId = item.tmdbId || item.id || itemId;
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
@@ -709,6 +710,11 @@ export function DetailsPage({
                   onClick={() => {
                     const targetPlayerUrl = `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
                     setCastUrl(targetPlayerUrl);
+                    setCastMediaDetails({
+                      mediaType: 'movie',
+                      tmdbId: Number(effectiveTmdbId),
+                      imdbId: item.imdbId
+                    });
                   }}
                   className="flex items-center justify-center gap-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-orange-500/30 hover:border-orange-500/50 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
                   title="Transmitir para Smart TV"
@@ -1058,6 +1064,13 @@ export function DetailsPage({
                             e.stopPropagation();
                             const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
                             setCastUrl(epUrl);
+                            setCastMediaDetails({
+                              mediaType: 'series',
+                              tmdbId: Number(effectiveTmdbId),
+                              imdbId: item.imdbId,
+                              season: selectedSeason,
+                              episode: ep.ep
+                            });
                           }}
                           className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 hover:text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-orange-500/30 hover:border-orange-500 shadow-sm"
                           title="Transmitir este episódio"
@@ -1329,9 +1342,10 @@ export function DetailsPage({
 
       {castUrl && (
         <CastModal
-          onClose={() => setCastUrl(null)}
+          onClose={() => { setCastUrl(null); setCastMediaDetails(undefined); }}
           streamUrl={castUrl}
           title={item.title}
+          mediaDetails={castMediaDetails}
         />
       )}
     </div>
