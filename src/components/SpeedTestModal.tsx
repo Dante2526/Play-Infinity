@@ -15,9 +15,9 @@ export const SpeedTestModal: React.FC<SpeedTestModalProps> = ({ onClose }) => {
     setSpeedMbps(0);
     setMessage('Medindo velocidade de download...');
 
-    // 100MB de payload do Cloudflare (CDN super rápida)
+    // 100MB de payload direto do servidor local (evita problemas de CORS no WebView)
     const bytesToDownload = 100 * 1024 * 1024; 
-    const url = `https://speed.cloudflare.com/__down?bytes=${bytesToDownload}&v=${Date.now()}`;
+    const url = `${window.location.origin}/api/speedtest-down?bytes=${bytesToDownload}&v=${Date.now()}`;
     
     const xhr = new XMLHttpRequest();
     const startTime = performance.now();
