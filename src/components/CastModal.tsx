@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Cast, Tv, Smartphone, QrCode, MonitorUp, X, MonitorSmartphone, ChevronLeft, Copy, Check } from 'lucide-react';
+import { Cast, Tv, Smartphone, QrCode, MonitorUp, X, MonitorSmartphone, ChevronLeft, Copy, Check, Play } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { Chromecast } from 'capacitor-chromecast';
+
+import { registerPlugin } from '@capacitor/core';
+const ExternalPlayer = registerPlugin<any>('ExternalPlayer');
+const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
 
 interface CastModalProps {
   onClose: () => void;
@@ -13,6 +17,12 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  
+  // Roku States
+  const [showRoku, setShowRoku] = useState(false);
+  const [isSearchingRoku, setIsSearchingRoku] = useState(false);
+  const [rokuDevices, setRokuDevices] = useState<string[]>([]);
+  
   const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   const handleCopyLink = () => {
@@ -24,16 +34,74 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
     }
   };
 
-  const handleExternalPlayer = () => {
+  const handleExternalPlayer = async () => {
     const targetUrl = streamUrl || currentUrl;
     const absoluteUrl = new URL(targetUrl, window.location.origin).href;
-    const isAndroid = /Android/i.test(navigator.userAgent);
     
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await ExternalPlayer.open({ url: absoluteUrl, title: title || "Video" });
+        onClose();
+        return;
+      } catch (e) {
+        console.error("ExternalPlayer plugin failed", e);
+      }
+    }
+    
+    // Fallback original para PWA
+    const isAndroid = /Android/i.test(navigator.userAgent);
     if (isAndroid) {
       const intentUrl = `intent:${absoluteUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Live TV")};end;`;
       window.location.href = intentUrl;
     }
     onClose();
+  };
+
+  const handleRokuDiscovery = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      setStatusMsg("A busca por Roku só funciona no aplicativo instalado.");
+      return;
+    }
+    
+    setStatusMsg(null);
+    setShowQR(false);
+    setShowRoku(true);
+    setIsSearchingRoku(true);
+    setRokuDevices([]);
+    
+    try {
+      const result = await RokuDiscovery.discover();
+      if (result && result.devices && result.devices.length > 0) {
+        setRokuDevices(result.devices);
+      } else {
+        setStatusMsg("Nenhuma Roku encontrada na mesma rede Wi-Fi.");
+      }
+    } catch (e) {
+      console.error(e);
+      setStatusMsg("Erro ao buscar dispositivos Roku. Verifique o Wi-Fi.");
+    } finally {
+      setIsSearchingRoku(false);
+    }
+  };
+
+  const playOnRoku = async (ip: string) => {
+    setStatusMsg("Conectando à Roku...");
+    try {
+      const targetUrl = streamUrl || currentUrl;
+      const absoluteUrl = new URL(targetUrl, window.location.origin).href;
+      // Chamada ECP para o Roku Media Player (15985)
+      const url = `http://${ip}:8060/launch/15985?u=${encodeURIComponent(absoluteUrl)}&t=v`;
+      
+      await fetch(url, {
+        method: 'POST',
+        // O Roku geralmente não requer headers especiais para o ECP na rede local
+        mode: 'no-cors' 
+      });
+      
+      onClose();
+    } catch (e) {
+      setStatusMsg("Erro ao iniciar reprodução na Roku.");
+    }
   };
 
   const handleNativeCast = async () => {
@@ -116,7 +184,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
           </div>
         )}
 
-        {!showQR ? (
+        {!showQR && !showRoku ? (
           <div className="space-y-2 mt-3 text-left">
             <button
               onClick={handleNativeCast}
@@ -130,6 +198,19 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
                 <div className="text-[10px] text-neutral-400">Busca TVs na mesma rede Wi-Fi</div>
               </div>
             </button>
+            
+            <button
+              onClick={handleRokuDiscovery}
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
+                <Tv className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-neutral-200">Transmitir para Roku (Direto)</div>
+                <div className="text-[10px] text-neutral-400">Acha a Roku na rede e toca sem app</div>
+              </div>
+            </button>
 
             <button
               onClick={handleExternalPlayer}
@@ -139,7 +220,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
                 <Cast className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-200">Player Externo da TV (Samsung/LG/Roku)</div>
+                <div className="text-sm font-semibold text-neutral-200">Player Externo da TV (Outras TVs)</div>
                 <div className="text-[10px] text-neutral-400">Abre o menu nativo para você escolher o app</div>
               </div>
             </button>
@@ -159,16 +240,39 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
                 <div className="text-[10px] text-neutral-400">Abra instantaneamente no navegador da TV</div>
               </div>
             </button>
-
-            <div className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/40 border border-neutral-800 pointer-events-none opacity-85">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-                <MonitorSmartphone className="w-4 h-4 text-blue-400" />
+          </div>
+        ) : showRoku ? (
+          <div className="space-y-3 mt-2 text-left">
+            {isSearchingRoku ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                <span className="ml-3 text-sm text-neutral-300">Buscando Rokus na rede...</span>
               </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-300">Smart View / AirPlay</div>
-                <div className="text-[10px] text-neutral-500">Arraste a central de atalhos do seu celular</div>
+            ) : rokuDevices.length > 0 ? (
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {rokuDevices.map(ip => (
+                  <button
+                    key={ip}
+                    onClick={() => playOnRoku(ip)}
+                    className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors cursor-pointer"
+                  >
+                    <span className="text-sm text-neutral-200 font-semibold">Roku ({ip})</span>
+                    <Play className="w-4 h-4 text-purple-400" />
+                  </button>
+                ))}
               </div>
-            </div>
+            ) : (
+              <div className="text-center py-2 text-neutral-400 text-sm">
+                Nenhuma Roku encontrada.
+              </div>
+            )}
+            
+            <button
+              onClick={handleRokuDiscovery}
+              className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-xs font-semibold text-white transition-colors"
+            >
+              Tentar Novamente
+            </button>
           </div>
         ) : (
           <div className="space-y-3 mt-2">
