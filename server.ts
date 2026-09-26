@@ -5941,6 +5941,64 @@ app.use("/api/admin", adminOpsRouter);
     });
   });
 
+  // Endpoints para Teste de Velocidade Local (Resolve problemas de CORS/Bloqueio em WebViews)
+  app.get("/api/speedtest-down", (req, res) => {
+    try {
+      const bytesRaw = Number(req.query.bytes);
+      // Padrão de 25MB se não especificado, máximo de 200MB por requisição
+      const bytesToDownload = !isNaN(bytesRaw) && bytesRaw > 0 ? Math.min(bytesRaw, 200 * 1024 * 1024) : 25 * 1024 * 1024;
+      
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Length", bytesToDownload.toString());
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      const chunkSize = 64 * 1024; // 64KB por chunk
+      const chunk = Buffer.alloc(chunkSize, 0);
+      let bytesSent = 0;
+
+      const sendChunk = () => {
+        let canContinue = true;
+        while (bytesSent < bytesToDownload && canContinue) {
+          const toSend = Math.min(chunkSize, bytesToDownload - bytesSent);
+          if (toSend < chunkSize) {
+            canContinue = res.write(chunk.subarray(0, toSend));
+          } else {
+            canContinue = res.write(chunk);
+          }
+          bytesSent += toSend;
+        }
+
+        if (bytesSent >= bytesToDownload) {
+          res.end();
+        } else if (!canContinue) {
+          // Backpressure: espera o buffer esvaziar antes de continuar
+          res.once('drain', sendChunk);
+        }
+      };
+
+      req.on("close", () => {
+        bytesSent = bytesToDownload; // Aborta envio
+      });
+
+      sendChunk();
+    } catch (err) {
+      console.error("[SpeedTest Down Error]:", err);
+      if (!res.headersSent) res.status(500).send("Erro");
+    }
+  });
+
+  app.post("/api/speedtest-up", (req, res) => {
+    // Apenas recebe e descarta os dados
+    req.on("data", () => { /* descarta */ });
+    req.on("end", () => {
+      res.status(200).send("OK");
+    });
+    req.on("error", () => {
+      if (!res.headersSent) res.status(500).send("Error");
+    });
+  });
+
   import { loadNixplayCatalog } from "./server/services/nixplayCatalog";
 
   async function startServer() {
