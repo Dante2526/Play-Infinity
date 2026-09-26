@@ -389,17 +389,19 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                                     Estreia Hoje ({ep.airTime})
                                   </span>
                                 ) : isSeasonEnded ? (
-                                  <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                  <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 shrink-0 max-w-full overflow-hidden">
                                     <CheckCircle2 className="w-3 h-3 text-indigo-400 shrink-0" />
-                                    <span>Temporada Concluída</span>
-                                    <span className="hidden sm:inline">• Aguardando Nova Temporada</span>
+                                    <span className="truncate sm:hidden">Temp. Concluída</span>
+                                    <span className="hidden sm:inline truncate">Temporada Concluída</span>
+                                    <span className="hidden md:inline shrink-0">• Aguardando</span>
                                   </span>
                                 ) : isSeriesEnded ? (
-                                  <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1 whitespace-nowrap shrink-0">
+                                  <span className="px-2 py-0.5 rounded-full bg-neutral-800 text-neutral-400 border border-neutral-700 text-[10px] font-bold flex items-center gap-1 shrink-0 max-w-full overflow-hidden">
                                     <CheckCircle2 className="w-3 h-3 text-neutral-500 shrink-0" />
-                                    <span>Série Concluída</span>
-                                    <span className="hidden sm:inline">(Finalizada)</span>
+                                    <span className="truncate">Série Concluída</span>
+                                    <span className="hidden md:inline shrink-0">(Finalizada)</span>
                                   </span>
+
                                 ) : isReleased ? (
                                   <span className="px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 text-[10px] font-semibold whitespace-nowrap shrink-0">
                                     Já Lançado
