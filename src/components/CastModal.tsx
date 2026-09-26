@@ -88,7 +88,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
       setStatusMsg("Abrindo aplicativo Cast to TV+...");
       const absoluteUrl = new URL(finalUrl, window.location.origin).href;
       
-      const castifyPackage = 'cast.video.screenmirroring.casttotv';
+      const castifyPackage = 'com.castify';
       const fallbackUrl = `https://play.google.com/store/apps/details?id=${castifyPackage}`;
       const intentPath = absoluteUrl.replace(/^https?:\/\//, '');
       const intentUrl = `intent://${intentPath}#Intent;package=${castifyPackage};scheme=https;action=android.intent.action.VIEW;type=video/*;S.browser_fallback_url=${encodeURIComponent(fallbackUrl)};end;`;
