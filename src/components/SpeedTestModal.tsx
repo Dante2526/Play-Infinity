@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Activity, Wifi, RefreshCcw, Loader2, AlertCircle, CheckCircle2, Zap } from 'lucide-react';
+import { X, Activity, Wifi, RefreshCcw, Loader2, AlertCircle, CheckCircle2, Zap, Gauge } from 'lucide-react';
 
 interface SpeedTestModalProps {
   onClose: () => void;
@@ -15,18 +15,18 @@ export const SpeedTestModal: React.FC<SpeedTestModalProps> = ({ onClose }) => {
     setSpeedMbps(0);
     setMessage('Medindo velocidade de download...');
 
-    // 50MB de payload do Cloudflare (CDN super rápida)
-    const bytesToDownload = 50 * 1024 * 1024; 
+    // 100MB de payload do Cloudflare (CDN super rápida)
+    const bytesToDownload = 100 * 1024 * 1024; 
     const url = `https://speed.cloudflare.com/__down?bytes=${bytesToDownload}&v=${Date.now()}`;
     
     const xhr = new XMLHttpRequest();
     const startTime = performance.now();
     let receivedBytes = 0;
     
-    // Teste rodará por 6 segundos ou até baixar os 50MB
+    // Teste rodará por 8 segundos ou até baixar os 100MB
     let timerId = setTimeout(() => {
         xhr.abort();
-    }, 6000);
+    }, 8000);
 
     xhr.open('GET', url, true);
     
@@ -109,7 +109,7 @@ export const SpeedTestModal: React.FC<SpeedTestModalProps> = ({ onClose }) => {
         </div>
 
         <div className="p-6 text-center space-y-6">
-          <div className="mx-auto w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500">
+          <div className="mx-auto w-16 h-16 rounded-full bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-500">
             {status === 'testing' ? (
               <Loader2 className="w-8 h-8 animate-spin" />
             ) : status === 'error' ? (
@@ -119,7 +119,7 @@ export const SpeedTestModal: React.FC<SpeedTestModalProps> = ({ onClose }) => {
             ) : status === 'done' && speedMbps >= 5 ? (
               <CheckCircle2 className="w-8 h-8 text-green-400" />
             ) : (
-              <Activity className="w-8 h-8 text-orange-400" />
+              <Gauge className="w-8 h-8 text-yellow-500" />
             )}
           </div>
 
