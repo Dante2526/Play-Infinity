@@ -455,8 +455,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             iframeRef.current.contentWindow.postMessage({ type: "SEEK", targetTime: t }, "*");
             iframeRef.current.contentWindow.postMessage({ type: "seek", time: t }, "*");
             iframeRef.current.contentWindow.postMessage({ action: "seek", time: t }, "*");
-          } else if (command.type === "SEEK_RELATIVE") {
-            iframeRef.current.contentWindow.postMessage({ type: "SEEK_RELATIVE", seconds: command.seconds }, "*");
           } else if (command.type === "SET_VOLUME") {
             iframeRef.current.contentWindow.postMessage({ type: "setVolume", volume: command.volume }, "*");
           } else if (command.type === "SET_MUTED") {
