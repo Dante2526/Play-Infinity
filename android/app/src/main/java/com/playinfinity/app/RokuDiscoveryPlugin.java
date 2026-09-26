@@ -14,6 +14,8 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -93,6 +95,38 @@ public class RokuDiscoveryPlugin extends Plugin {
                 if (lock.isHeld()) {
                     lock.release();
                 }
+            }
+        }).start();
+    }
+
+    @PluginMethod
+    public void launch(PluginCall call) {
+        String ip = call.getString("ip");
+        String urlString = call.getString("url");
+        
+        if (ip == null || urlString == null) {
+            call.reject("Must provide ip and url");
+            return;
+        }
+
+        new Thread(() -> {
+            try {
+                URL url = new URL("http://" + ip + ":8060/launch/15985?u=" + java.net.URLEncoder.encode(urlString, "UTF-8") + "&t=v");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("POST");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+                
+                int responseCode = conn.getResponseCode();
+                Log.d(TAG, "Roku launch response: " + responseCode);
+                
+                JSObject res = new JSObject();
+                res.put("success", true);
+                res.put("status", responseCode);
+                call.resolve(res);
+            } catch (Exception e) {
+                Log.e(TAG, "Error launching on Roku", e);
+                call.reject("Error launching on Roku: " + e.getMessage(), e);
             }
         }).start();
     }

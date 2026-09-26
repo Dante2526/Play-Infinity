@@ -67,18 +67,19 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
     try {
       const targetUrl = streamUrl || currentUrl;
       const absoluteUrl = new URL(targetUrl, window.location.origin).href;
-      // Chamada ECP para o Roku Media Player (15985)
-      const url = `http://${ip}:8060/launch/15985?u=${encodeURIComponent(absoluteUrl)}&t=v`;
       
-      await fetch(url, {
-        method: 'POST',
-        // O Roku geralmente não requer headers especiais para o ECP na rede local
-        mode: 'no-cors' 
-      });
+      if (Capacitor.isNativePlatform()) {
+        await RokuDiscovery.launch({ ip, url: absoluteUrl });
+      } else {
+        // Chamada ECP fallback para PWA (Pode falhar por Mixed Content)
+        const url = `http://${ip}:8060/launch/15985?u=${encodeURIComponent(absoluteUrl)}&t=v`;
+        await fetch(url, { method: 'POST', mode: 'no-cors' });
+      }
       
       onClose();
-    } catch (e) {
-      setStatusMsg("Erro ao iniciar reprodução na Roku.");
+    } catch (e: any) {
+      console.error(e);
+      setStatusMsg("Erro Roku: " + (e.message || "Não foi possível conectar."));
     }
   };
 
