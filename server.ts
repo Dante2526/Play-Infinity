@@ -2809,7 +2809,8 @@ app.use("/api/admin", adminOpsRouter);
           [class*="changeOptions"],
           [class*="players_select"],
           [class*="option"],
-          [id*="option"] {
+          [id*="option"],
+          .art-poster {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
@@ -2997,7 +2998,11 @@ app.use("/api/admin", adminOpsRouter);
                   if (node.nodeType !== 1) continue;
                   var cls = typeof node.className === 'string' ? node.className : '';
                   var tag = (node.tagName || '').toUpperCase();
-                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo
+                  // Remove poster padrao para evitar imagem de fundo (fundo cinza piscando)
+                  if (tag === 'VIDEO') {
+                    node.setAttribute('poster', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+                  }
+                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo para outras propriedades
                   if (cls.indexOf('art-video-player') !== -1 || tag === 'VIDEO') continue;
                   // Ocultar apenas elementos de overlay nativos desnecessários
                   if (

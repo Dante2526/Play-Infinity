@@ -184,6 +184,27 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     failedServersRef.current.clear();
   }, [channel.id]);
 
+  // Auto-hide controls
+  const resetControlsTimeout = useCallback(() => {
+    if (controlsTimeoutRef.current) {
+      clearTimeout(controlsTimeoutRef.current);
+    }
+    setShowControls(true);
+    controlsTimeoutRef.current = setTimeout(() => {
+      if (isPlaying && !isMiniPlayer) {
+        setShowControls(false);
+        setShowChannelList(false);
+      }
+    }, 4000);
+  }, [isPlaying, isMiniPlayer]);
+
+  useEffect(() => {
+    resetControlsTimeout();
+    return () => {
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+    };
+  }, [isPlaying, resetControlsTimeout]);
+
   // Notifica o app que o player ao vivo está aberto (para ocultar botões e controles flutuantes)
   useEffect(() => {
     document.body.classList.add('live-player-open');
@@ -1194,6 +1215,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               : { position: 'relative', width: '100%', height: '100%' }
           }
           className="flex items-center justify-center bg-black overflow-hidden select-none"
+          onMouseMove={resetControlsTimeout}
+          onTouchStart={resetControlsTimeout}
         >
         {currentServer?.isEmbed ? (
           <iframe
@@ -1209,13 +1232,15 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           playsInline
           autoPlay
           muted={isMuted}
+          poster="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
           className="w-full h-full object-contain cursor-pointer"
           onClick={() => {
             if (isMiniPlayer) return;
             if (isMuted) {
               toggleMute();
             } else {
-              togglePlay();
+              setShowControls(prev => !prev);
+              resetControlsTimeout();
             }
           }}
           onPlay={() => {
@@ -1360,8 +1385,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Status do stream */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300">
+          {/* Status do stream (Flutuante Centralizado) */}
+          <div className="absolute top-16 md:top-6 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300 pointer-events-none">
             <span className={`w-2 h-2 rounded-full ${
               hasError || streamHealth === 'error' ? 'bg-red-500' :
               (isLoading && !isPlaying) ? 'bg-yellow-500 animate-pulse' :
