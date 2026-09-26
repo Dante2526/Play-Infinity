@@ -92,7 +92,13 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
         const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
         await RokuDiscovery.openIntent({ url: intentUrl });
       } else {
-        window.open(absoluteUrl, '_blank');
+        const isAndroid = /android/i.test(navigator.userAgent || navigator.vendor || (window as any).opera);
+        if (isAndroid) {
+          const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
+          window.location.href = intentUrl;
+        } else {
+          window.open(absoluteUrl, '_blank');
+        }
       }
       
       setTimeout(() => {
