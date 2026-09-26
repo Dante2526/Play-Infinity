@@ -55,6 +55,11 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
       }
     }
 
+    if (!turnstileToken && import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY) {
+      setError("Por favor, resolva a verificação de segurança (Anti-Bot).");
+      return;
+    }
+
     setLoading(true);
 
     try {

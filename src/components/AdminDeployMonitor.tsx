@@ -953,29 +953,48 @@ export function AdminDeployMonitor() {
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {vpsData.vpsHardware.pm2Processes.map((proc) => (
-                  <div
-                    key={proc.name}
-                    className="p-4 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between text-xs"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2.5 h-2.5 rounded-full ${
-                        proc.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-red-500"
-                      }`}></div>
-                      <div>
-                        <span className="text-white font-bold block">{proc.name}</span>
-                        <span className="text-white/40 text-[11px] font-mono">
-                          Status: <strong className={proc.status === "online" ? "text-emerald-400" : "text-red-400"}>{proc.status}</strong>
-                        </span>
-                      </div>
-                    </div>
+                {vpsData.vpsHardware.pm2Processes.map((proc) => {
+                  const isGhost = proc.name === "video-proxy" && proc.status !== "online" && vpsData.proxyStatus.online;
+                  
+                  return (
+                    <div
+                      key={proc.name}
+                      className={`p-4 border rounded-2xl flex flex-col justify-between text-xs ${
+                        isGhost 
+                          ? "bg-red-500/10 border-red-500/30"
+                          : "bg-white/[0.02] border-white/10"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-2.5 h-2.5 rounded-full ${
+                            proc.status === "online" ? "bg-emerald-400 animate-pulse" : "bg-red-500"
+                          }`}></div>
+                          <div>
+                            <span className="text-white font-bold block">{proc.name}</span>
+                            <span className="text-white/40 text-[11px] font-mono">
+                              Status: <strong className={proc.status === "online" ? "text-emerald-400" : "text-red-400"}>{proc.status}</strong>
+                            </span>
+                          </div>
+                        </div>
 
-                    <div className="text-right font-mono">
-                      <span className="text-white block font-semibold">{proc.memoryMb} MB RAM</span>
-                      <span className="text-white/40 text-[11px]">{proc.cpuPercent}% CPU</span>
+                        <div className="text-right font-mono">
+                          <span className="text-white block font-semibold">{proc.memoryMb} MB RAM</span>
+                          <span className="text-white/40 text-[11px]">{proc.cpuPercent}% CPU</span>
+                        </div>
+                      </div>
+                      
+                      {isGhost && (
+                        <div className="mt-2 text-[11px] bg-red-500/20 text-red-300 p-2 rounded-xl flex gap-1.5 items-start">
+                          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>
+                            <strong>Processo fantasma detectado na porta 8080!</strong> O PM2 perdeu o controle, mas o proxy está rodando. Clique em <i>Reiniciar Apenas Proxy de TV</i> abaixo para corrigir.
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
