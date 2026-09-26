@@ -111,11 +111,12 @@ public class RokuDiscoveryPlugin extends Plugin {
 
         new Thread(() -> {
             try {
+                String format = call.getString("format", "mp4");
                 String encodedUrl = java.net.URLEncoder.encode(urlString, "UTF-8");
                 String[] endpoints = {
-                    "/input/15985?t=v&u=" + encodedUrl, // Play On Roku (clássico)
-                    "/input?t=v&u=" + encodedUrl,       // Play On Roku (alternativo)
-                    "/launch/15985?t=v&u=" + encodedUrl // Fallback para launch
+                    "/input/15985?t=v&videoFormat=" + format + "&u=" + encodedUrl, 
+                    "/input?t=v&videoFormat=" + format + "&u=" + encodedUrl,       
+                    "/launch/15985?t=v&videoFormat=" + format + "&u=" + encodedUrl 
                 };
                 
                 int responseCode = -1;
