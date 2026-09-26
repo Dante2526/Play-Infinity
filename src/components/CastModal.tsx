@@ -4,7 +4,6 @@ import { Capacitor } from '@capacitor/core';
 import { Chromecast } from 'capacitor-chromecast';
 
 import { registerPlugin } from '@capacitor/core';
-const ExternalPlayer = registerPlugin<any>('ExternalPlayer');
 const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
 
 interface CastModalProps {
@@ -34,28 +33,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
     }
   };
 
-  const handleExternalPlayer = async () => {
-    const targetUrl = streamUrl || currentUrl;
-    const absoluteUrl = new URL(targetUrl, window.location.origin).href;
-    
-    if (Capacitor.isNativePlatform()) {
-      try {
-        await ExternalPlayer.open({ url: absoluteUrl, title: title || "Video" });
-        onClose();
-        return;
-      } catch (e) {
-        console.error("ExternalPlayer plugin failed", e);
-      }
-    }
-    
-    // Fallback original para PWA
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    if (isAndroid) {
-      const intentUrl = `intent:${absoluteUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Live TV")};end;`;
-      window.location.href = intentUrl;
-    }
-    onClose();
-  };
+
 
   const handleRokuDiscovery = async () => {
     if (!Capacitor.isNativePlatform()) {
@@ -209,19 +187,6 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
               <div className="flex-1">
                 <div className="text-sm font-semibold text-neutral-200">Transmitir para Roku (Direto)</div>
                 <div className="text-[10px] text-neutral-400">Acha a Roku na rede e toca sem app</div>
-              </div>
-            </button>
-
-            <button
-              onClick={handleExternalPlayer}
-              className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
-            >
-              <div className="w-8 h-8 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
-                <Cast className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-200">Player Externo da TV (Outras TVs)</div>
-                <div className="text-[10px] text-neutral-400">Abre o menu nativo para você escolher o app</div>
               </div>
             </button>
 
