@@ -2056,13 +2056,7 @@ export function VideoPlayerModal({
           </div>
         </div>
 
-        {showCastModal && (
-          <CastModal 
-            onClose={() => setShowCastModal(false)}
-            streamUrl={activeIframeUrl || undefined}
-            title={title}
-          />
-        )}
+        {/* CastModal removido do VideoPlayerModal, agora reside apenas na DetailsPage */}
       </div>
     </div>
   );

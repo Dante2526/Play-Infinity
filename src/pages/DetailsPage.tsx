@@ -33,7 +33,8 @@ import {
   Bell,
   Mic,
   MicOff,
-  Download
+  Download,
+  Cast
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
@@ -72,6 +73,7 @@ import {
   TrailerVideo
 } from "../services/tmdb";
 import { VideoPlayerModal } from "../components/VideoPlayerModal";
+import { CastModal } from "../components/CastModal";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -164,6 +166,7 @@ export function DetailsPage({
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonData, setSeasonData] = useState<Season | null>(null);
   const [loadingSeason, setLoadingSeason] = useState<boolean>(false);
+  const [castUrl, setCastUrl] = useState<string | null>(null);
   const commentTargetId = item.tmdbId || item.id || itemId;
   const [commentText, setCommentText] = useState("");
   const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
@@ -699,6 +702,22 @@ export function DetailsPage({
                 </button>
               )}
 
+              {/* Botão Transmitir Filme para a TV */}
+              {!isSeries && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetPlayerUrl = `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
+                    setCastUrl(targetPlayerUrl);
+                  }}
+                  className="flex items-center justify-center gap-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-orange-500/30 hover:border-orange-500/50 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                  title="Transmitir para Smart TV"
+                >
+                  <Cast className="w-4 h-4 md:w-5 md:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
+                  <span>Transmitir</span>
+                </button>
+              )}
+
               {/* Botão Assistir Trailer */}
               {(trailerVideosList.length > 0 || trailerVideo) && (() => {
                 const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
@@ -1033,6 +1052,19 @@ export function DetailsPage({
                           </button>
                         )}
 
+                        {/* Botão de Transmitir */}
+                        <div 
+                          tabIndex={0} role="button" onClick={(e) => {
+                            e.stopPropagation();
+                            const epUrl = `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`;
+                            setCastUrl(epUrl);
+                          }}
+                          className="w-8 h-8 rounded-full bg-orange-500/10 flex items-center justify-center text-orange-400 hover:text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-orange-500/30 hover:border-orange-500 shadow-sm"
+                          title="Transmitir este episódio"
+                        >
+                          <Cast className="w-3.5 h-3.5" />
+                        </div>
+
                         {/* Botão de Play */}
                         <div 
                           tabIndex={0} role="button" onClick={() => {
@@ -1293,6 +1325,14 @@ export function DetailsPage({
             })()}
           </div>
         </div>
+      )}
+
+      {castUrl && (
+        <CastModal
+          onClose={() => setCastUrl(null)}
+          streamUrl={castUrl}
+          title={item.title}
+        />
       )}
     </div>
   );

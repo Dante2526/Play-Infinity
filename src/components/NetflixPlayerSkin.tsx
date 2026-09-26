@@ -1282,19 +1282,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
           </button>
 
-          {/* Botão de Transmitir (Cast) */}
-          {onCastRequest && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onCastRequest();
-              }}
-              className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10 focus:outline-none focus:ring-0 outline-none"
-              title="Transmitir para TV"
-            >
-              <Cast className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
-            </button>
-          )}
+          {/* Botão de Transmitir removido e movido para a interface principal (DetailsPage) */}
 
           <button
             onClick={(e) => {
