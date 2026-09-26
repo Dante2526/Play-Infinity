@@ -102,13 +102,25 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
             const data = await jsonRes.json();
             if (data.videoUrl) {
               finalUrl = data.videoUrl;
+            } else {
+              throw new Error("Vídeo não encontrado no MixDrop.");
             }
+          } else {
+            throw new Error("Fonte de vídeo indisponível no catálogo (MixDrop falhou).");
           }
+        } else {
+          throw new Error("Não foi possível gerar a rota de extração do vídeo.");
+        }
+      } else {
+        // Se não tivermos mediaDetails, vamos avisar o usuário que Roku precisa de um arquivo cru
+        if (finalUrl.includes('watchplay.shop') || finalUrl.includes('vip')) {
+           throw new Error("Este servidor usa player protegido (HTML). A Roku requer a URL direta do vídeo. Tente abrir o filme e transmitir pelo servidor MixDrop.");
         }
       }
 
       setStatusMsg("Iniciando reprodução na TV...");
       const absoluteUrl = new URL(finalUrl, window.location.origin).href;
+      alert("URL enviada para Roku: " + absoluteUrl);
       
       if (Capacitor.isNativePlatform()) {
         const res = await RokuDiscovery.launch({ ip, url: absoluteUrl });
