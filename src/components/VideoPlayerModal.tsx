@@ -20,7 +20,8 @@ import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
-
+import { Capacitor } from '@capacitor/core';
+import { Chromecast } from 'capacitor-chromecast';
 interface VideoPlayerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1514,8 +1515,18 @@ export function VideoPlayerModal({
     }
   };
 
-  const handleCastRequest = () => {
+  const handleCastRequest = async () => {
     if (!activeIframeUrl) return;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
+        await Chromecast.show();
+        return;
+      } catch (err) {
+        console.error("Erro no Chromecast nativo", err);
+      }
+    }
     
     // Constrói a URL absoluta, garantindo que o Web Video Caster consiga acessar
     let targetUrl = activeIframeUrl;

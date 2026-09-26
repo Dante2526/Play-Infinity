@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.5.2",
+    "@capacitor/status-bar": "^8.0.3",
     "@consumet/extensions": "^1.8.8",
     "@vitejs/plugin-react": "^5.0.4",
     "capacitor-chromecast": "^8.2.0",
