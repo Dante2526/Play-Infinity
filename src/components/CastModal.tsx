@@ -23,7 +23,7 @@ interface CastModalProps {
   mediaDetails?: CastMediaDetails;
 }
 
-export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title }) => {
+export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title, mediaDetails }) => {
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
