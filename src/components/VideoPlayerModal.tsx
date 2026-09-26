@@ -883,6 +883,7 @@ export function VideoPlayerModal({
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
       if (autoFullscreen) {
         setIsWidescreen(true);
+        const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
         const elem = document.documentElement;
         const requestFS =
           elem.requestFullscreen ||
@@ -890,7 +891,7 @@ export function VideoPlayerModal({
           (elem as any).mozRequestFullScreen ||
           (elem as any).msRequestFullscreen;
 
-        if (requestFS && !document.fullscreenElement) {
+        if (requestFS && !document.fullscreenElement && !isSmartTV) {
           try {
             const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
             if (fsPromise && typeof fsPromise.catch === "function") {
@@ -920,7 +921,7 @@ export function VideoPlayerModal({
           setIsRotated(false);
         }
 
-        if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+        if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
           try {
             const lockPromise = (screen.orientation as any).lock("landscape");
             if (lockPromise && typeof lockPromise.then === "function") {
@@ -1469,6 +1470,7 @@ export function VideoPlayerModal({
       setIsWidescreen(true);
 
       // 1. Tenta tela cheia nativa do navegador IMEDIATAMENTE no clique síncrono com navigationUI: 'hide'
+      const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
       const elem = document.documentElement;
       const requestFS =
         elem.requestFullscreen ||
@@ -1476,7 +1478,7 @@ export function VideoPlayerModal({
         (elem as any).mozRequestFullScreen ||
         (elem as any).msRequestFullscreen;
 
-      if (requestFS) {
+      if (requestFS && !isSmartTV) {
         try {
           await requestFS.call(elem, { navigationUI: "hide" });
         } catch {
@@ -1497,7 +1499,7 @@ export function VideoPlayerModal({
       }
 
       // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+      if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
         try {
           const lockPromise = (screen.orientation as any).lock("landscape");
           if (lockPromise && typeof lockPromise.then === "function") {
@@ -1601,6 +1603,8 @@ export function VideoPlayerModal({
 
   if (!isOpen) return null;
 
+  const isSmartTV = typeof navigator !== 'undefined' && /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
+
   return (
     <div
       ref={miniContainerRef}
@@ -1622,7 +1626,7 @@ export function VideoPlayerModal({
           : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
               isExpanded 
                 ? "p-0 m-0 bg-black w-full h-full overflow-hidden" 
-                : "p-2 sm:p-4 md:p-6 bg-black/90 backdrop-blur-xl"
+                : `p-2 sm:p-4 md:p-6 bg-black/95 ${!isSmartTV ? "backdrop-blur-xl" : ""}`
             }`
       }
     >

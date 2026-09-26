@@ -267,8 +267,8 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
       break;
 
     case "restart-proxy":
-      commandToRun = "sudo pm2 restart video-proxy";
-      actionDescription = "Reiniciar serviço do Proxy de TV (video-proxy)";
+      commandToRun = "sudo fuser -k 8080/tcp || true; sudo pm2 restart video-proxy";
+      actionDescription = "Reiniciar serviço do Proxy de TV (e eliminar processos fantasmas)";
       break;
 
     case "restart-app":

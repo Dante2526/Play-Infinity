@@ -912,8 +912,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span className="font-bold">Assistindo Agora</span>
             </div>
             <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
-            <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-orange-500 animate-ping"></span>
+            <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-2">
+              <span className="relative flex h-2 w-2 ml-1">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+              </span>
               Ativos nos últimos 5 minutos
             </p>
           </div>

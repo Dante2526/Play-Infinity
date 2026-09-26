@@ -1281,20 +1281,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           >
             <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
           </button>
-          {isFullscreen && onToggleRotate && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleRotate();
-              }}
-              className={`p-1.5 sm:p-2 transition-colors cursor-pointer rounded-full hover:bg-white/10 ${
-                isRotated ? "text-orange-500 bg-orange-500/20" : "text-white/90 hover:text-white"
-              }`}
-              title={isRotated ? "Restaurar Orientação Normal (0°)" : "Girar Tela (90° Paisagem Widescreen)"}
-            >
-              <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
-            </button>
-          )}
 
           {/* Botão de Transmitir (Cast) */}
           {onCastRequest && (
