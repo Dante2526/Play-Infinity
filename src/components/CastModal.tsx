@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Cast, Tv, Smartphone, QrCode, MonitorUp, X, MonitorSmartphone, ChevronLeft, Copy, Check } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { Chromecast } from 'capacitor-chromecast';
 
 interface CastModalProps {
   onClose: () => void;
@@ -23,6 +25,17 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
   const handleNativeCast = async () => {
     setStatusMsg(null);
     try {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
+          await Chromecast.show();
+          onClose();
+          return;
+        } catch (err) {
+          console.error("Chromecast Native Error", err);
+        }
+      }
+
       // 1. Tentar Remote Playback API nativa nos elementos de vídeo presentes (Chrome Android / iOS Safari AirPlay)
       const videos = document.querySelectorAll('video');
       for (let i = 0; i < videos.length; i++) {
@@ -33,13 +46,9 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
             onClose();
             return;
           } catch (err: any) {
-            // Se o usuário apenas cancelou o seletor da TV
-            if (err?.name === 'NotFoundError' || err?.name === 'AbortError') {
-              return;
-            }
+            if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
           }
         }
-        // Suporte a AirPlay em dispositivos Apple (Safari / iOS)
         if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
           video.webkitShowPlaybackTargetPicker();
           onClose();
@@ -54,13 +63,10 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
           onClose();
           return;
         } catch (err: any) {
-          if (err?.name === 'NotFoundError' || err?.name === 'AbortError') {
-            return;
-          }
+          if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
         }
       }
 
-      // 3. Fallback explicativo se o browser mobile estiver rodando em iframe ou sem bridge local
       setStatusMsg("Restrição de Navegador: Para proteger direitos autorais, o Chrome/Safari no celular bloqueia transmissões diretas de players protegidos. Use o Código QR abaixo para abrir direto na TV ou arraste a barra do seu celular e use o 'Smart View'/'Transmitir Tela'.");
     } catch (e) {
       setStatusMsg("Dispositivo de transmissão não localizado. Conecte na mesma rede Wi-Fi da Smart TV.");

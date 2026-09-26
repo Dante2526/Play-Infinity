@@ -73,6 +73,8 @@ import { auth, db } from "./services/firebase";
 import { isAiStudioOrDevEnvironment } from "./utils/envUtils";
 import { safeSessionStorage, safeLocalStorage } from "./utils/safeStorage";
 import { useSmartTV } from "./hooks/useSmartTV";
+import { Capacitor } from "@capacitor/core";
+import { StatusBar } from "@capacitor/status-bar";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -231,17 +233,28 @@ export default function App() {
   // quando o acesso expira com o player aberto, para a reprodução na hora e reabre o
   // modal de pagamento (sem a opção de teste, se já foi usado).
   useEffect(() => {
-    if (
-      !subscriptionLoading &&
-      playerModal.isOpen &&
-      !isPremium &&
-      !isTrialActive &&
-      !isDevEnvironment
-    ) {
+    if (!subscriptionLoading && playerModal.isOpen && !isPremium && !isTrialActive && !isDevEnvironment) {
       setPlayerModal((prev) => ({ ...prev, isOpen: false }));
       setIsPaywallOpen(true);
     }
   }, [subscriptionLoading, isPremium, isTrialActive, playerModal.isOpen]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const handleFullscreen = async () => {
+      if (document.fullscreenElement) {
+        await StatusBar.hide().catch(() => {});
+      } else {
+        await StatusBar.show().catch(() => {});
+      }
+    };
+    document.addEventListener('fullscreenchange', handleFullscreen);
+    document.addEventListener('webkitfullscreenchange', handleFullscreen);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreen);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreen);
+    };
+  }, []);
 
   // Listener do botão "Voltar" do controle remoto de Smart TV
   useEffect(() => {
