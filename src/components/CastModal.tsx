@@ -157,8 +157,6 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
         }
       }
-
-      setStatusMsg("Restrição de Navegador: Para proteger direitos autorais, o Chrome/Safari no celular bloqueia transmissões diretas de players protegidos. Use o Código QR abaixo para abrir direto na TV ou arraste a barra do seu celular e use o 'Smart View'/'Transmitir Tela'.");
     } catch (e) {
       setStatusMsg("Dispositivo de transmissão não localizado. Conecte na mesma rede Wi-Fi da Smart TV.");
     }
@@ -195,18 +193,20 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
 
         {!showQR ? (
           <div className="space-y-2 mt-3 text-left">
-            <button
-              onClick={handleNativeCast}
-              className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
-            >
-              <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
-                <MonitorUp className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
-              </div>
-              <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-200">Transmitir (Chromecast / Google Cast)</div>
-                <div className="text-[10px] text-neutral-400">Busca TVs na mesma rede Wi-Fi</div>
-              </div>
-            </button>
+            {Capacitor.isNativePlatform() && (
+              <button
+                onClick={handleNativeCast}
+                className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
+                  <MonitorUp className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-semibold text-neutral-200">Transmitir (Chromecast / Google Cast)</div>
+                  <div className="text-[10px] text-neutral-400">Busca TVs na mesma rede Wi-Fi</div>
+                </div>
+              </button>
+            )}
             
             <button
               onClick={handleExternalPlayer}
@@ -245,6 +245,12 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
                 <div className="text-sm font-semibold text-neutral-300">AirPlay (iPhone) / Smart View</div>
                 <div className="text-[10px] text-neutral-500">Arraste a central de atalhos do seu celular</div>
               </div>
+            </div>
+
+            <div className="mt-4 text-center px-1">
+              <p className="text-[10px] leading-tight text-neutral-500 font-medium">
+                Dica: Arraste a barra do seu celular e use a Smart View ou Transmitir Tela.
+              </p>
             </div>
           </div>
         ) : (
