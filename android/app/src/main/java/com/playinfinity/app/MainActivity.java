@@ -7,7 +7,6 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        registerPlugin(ExternalPlayerPlugin.class);
         registerPlugin(RokuDiscoveryPlugin.class);
     }
 }
