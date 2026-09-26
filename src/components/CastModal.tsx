@@ -54,9 +54,9 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
       } else {
         setStatusMsg("Nenhuma Roku encontrada na mesma rede Wi-Fi.");
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      setStatusMsg("Erro ao buscar dispositivos Roku. Verifique o Wi-Fi.");
+      setStatusMsg("Erro Roku: " + (e.message || "Verifique o Wi-Fi."));
     } finally {
       setIsSearchingRoku(false);
     }
@@ -206,11 +206,11 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
               </div>
             </button>
 
-            <div className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/40 border border-neutral-800 pointer-events-none opacity-85">
-              <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
+            <div className="w-full flex flex-col items-center gap-1.5 p-3 rounded-xl bg-neutral-800/40 border border-neutral-800 pointer-events-none opacity-85 text-center mt-1">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/15 flex items-center justify-center">
                 <MonitorSmartphone className="w-4 h-4 text-blue-400" />
               </div>
-              <div className="flex-1">
+              <div>
                 <div className="text-sm font-semibold text-neutral-300">AirPlay (iPhone) / Smart View</div>
                 <div className="text-[10px] text-neutral-500">Arraste a central de atalhos do seu celular</div>
               </div>

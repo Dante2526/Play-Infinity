@@ -53,6 +53,7 @@ public class RokuDiscoveryPlugin extends Plugin {
                 byte[] sendData = SEARCH_MESSAGE.getBytes();
                 DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address, SSDP_PORT);
                 
+                socket.setBroadcast(true);
                 socket.send(sendPacket);
                 Log.d(TAG, "M-SEARCH sent for roku:ecp");
 
@@ -84,7 +85,7 @@ public class RokuDiscoveryPlugin extends Plugin {
 
             } catch (Exception e) {
                 Log.e(TAG, "SSDP Error", e);
-                call.reject("Error during discovery", e);
+                call.reject(e.getMessage() != null ? e.getMessage() : "Unknown SSDP Error", e);
             } finally {
                 if (socket != null && !socket.isClosed()) {
                     socket.close();
