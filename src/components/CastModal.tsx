@@ -5,9 +5,11 @@ import { Chromecast } from 'capacitor-chromecast';
 
 interface CastModalProps {
   onClose: () => void;
+  streamUrl?: string;
+  title?: string;
 }
 
-export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
+export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title }) => {
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -20,6 +22,21 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
         setTimeout(() => setCopied(false), 2500);
       }).catch(() => {});
     }
+  };
+
+  const handleWebVideoCaster = () => {
+    const targetUrl = streamUrl || currentUrl;
+    const absoluteUrl = new URL(targetUrl, window.location.origin).href;
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    
+    if (isAndroid) {
+      const intentUrl = `intent:${absoluteUrl}#Intent;package=com.instantbits.cast.webvideo;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Live TV")};end;`;
+      window.location.href = intentUrl;
+    } else {
+      const iosUrl = `wvc-x-callback://open?url=${encodeURIComponent(absoluteUrl)}&title=${encodeURIComponent(title || "Live TV")}`;
+      window.location.href = iosUrl;
+    }
+    onClose();
   };
 
   const handleNativeCast = async () => {
@@ -114,6 +131,19 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose }) => {
               <div className="flex-1">
                 <div className="text-sm font-semibold text-neutral-200">Transmitir (Chromecast / Google Cast)</div>
                 <div className="text-[10px] text-neutral-400">Busca TVs na mesma rede Wi-Fi</div>
+              </div>
+            </button>
+
+            <button
+              onClick={handleWebVideoCaster}
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-yellow-500/15 flex items-center justify-center shrink-0">
+                <Cast className="w-4 h-4 text-yellow-400 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-neutral-200">Web Video Caster (Recomendado)</div>
+                <div className="text-[10px] text-neutral-400">Funciona em Roku, DLNA, Apple TV e WebOS</div>
               </div>
             </button>
 
