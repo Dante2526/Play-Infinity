@@ -6,10 +6,21 @@ import { Chromecast } from 'capacitor-chromecast';
 import { registerPlugin } from '@capacitor/core';
 const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
 
+import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from '../services/encontreiCatalog';
+
+export interface CastMediaDetails {
+  mediaType: 'movie' | 'series';
+  tmdbId: number;
+  imdbId?: string;
+  season?: number;
+  episode?: number;
+}
+
 interface CastModalProps {
   onClose: () => void;
   streamUrl?: string;
   title?: string;
+  mediaDetails?: CastMediaDetails;
 }
 
 export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title }) => {
@@ -65,8 +76,39 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title 
   const playOnRoku = async (ip: string) => {
     setStatusMsg("Conectando à Roku...");
     try {
-      const targetUrl = streamUrl || currentUrl;
-      const absoluteUrl = new URL(targetUrl, window.location.origin).href;
+      let finalUrl = streamUrl || currentUrl;
+
+      // Se temos os detalhes da mídia, tentamos extrair o MP4/M3U8 cru do MixDrop
+      if (mediaDetails) {
+        setStatusMsg("Buscando fonte de vídeo...");
+        let mixdropFileId: string | null = null;
+
+        if (mediaDetails.mediaType === 'series' && mediaDetails.season && mediaDetails.episode) {
+          const res = await findEpisode(mediaDetails.tmdbId, mediaDetails.season, mediaDetails.episode);
+          mixdropFileId = res?.mixdrop || null;
+        } else {
+          const res = await findMovieByTmdbId(mediaDetails.tmdbId);
+          mixdropFileId = res?.mixdrop || null;
+        }
+
+        const baseMixdrop = mixdropFileId 
+          ? buildMixdropStreamUrl(mixdropFileId)
+          : `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${mediaDetails.imdbId || mediaDetails.tmdbId}`)}`;
+
+        if (baseMixdrop) {
+          // Buscamos o JSON do backend que contém a proxyUrl crua
+          const jsonRes = await fetch(`${baseMixdrop}&format=json`);
+          if (jsonRes.ok) {
+            const data = await jsonRes.json();
+            if (data.videoUrl) {
+              finalUrl = data.videoUrl;
+            }
+          }
+        }
+      }
+
+      setStatusMsg("Iniciando reprodução na TV...");
+      const absoluteUrl = new URL(finalUrl, window.location.origin).href;
       
       if (Capacitor.isNativePlatform()) {
         const res = await RokuDiscovery.launch({ ip, url: absoluteUrl });

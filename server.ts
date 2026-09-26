@@ -5517,6 +5517,13 @@ app.use("/api/admin", adminOpsRouter);
       // O proxy faz a request do MESMO IP que gerou o token (Render server), então funciona.
       const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
 
+      if (req.query.format === 'json') {
+        const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
+        const originHost = req.headers.host;
+        const fullProxyUrl = `${isHttps ? 'https' : 'http'}://${originHost}${streamUrl}`;
+        return res.json({ videoUrl: fullProxyUrl });
+      }
+
       return res.send(`
         <!DOCTYPE html>
         <html lang="pt-BR">
