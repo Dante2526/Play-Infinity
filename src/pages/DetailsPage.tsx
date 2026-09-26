@@ -874,10 +874,12 @@ export function DetailsPage({
           {isSeries && (
             <div className="bg-[#121212] border border-neutral-800/80 rounded-2xl p-6 space-y-5 shadow-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-                <div className="flex items-center gap-2 shrink-0">
-                  <Tv className="w-5 h-5 text-orange-500" />
-                  <h3 className="text-lg font-bold text-white">Episódios & Temporadas</h3>
-                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-neutral-800 text-neutral-300 font-medium">
+                <div className="flex items-start sm:items-center justify-between sm:justify-start gap-2 w-full sm:w-auto">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Tv className="w-5 h-5 text-orange-500 shrink-0" />
+                    <h3 className="text-lg font-bold text-white leading-tight">Episódios & Temporadas</h3>
+                  </div>
+                  <span className="text-[11px] px-2.5 py-1 rounded-full bg-neutral-800 text-neutral-300 font-medium whitespace-nowrap shrink-0">
                     {getSeasonWatchedCount(effectiveTmdbId, selectedSeason, totalSeasonEpisodes)} de {totalSeasonEpisodes} assistidos
                   </span>
                 </div>

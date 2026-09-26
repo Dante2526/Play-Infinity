@@ -684,8 +684,8 @@ export default function App() {
         {/* Top Branding (Visível apenas na tela de bloqueio) */}
         <div className="relative z-10 w-full py-6 px-8 flex justify-between items-center">
           <div className="font-black text-2xl tracking-tighter flex items-center select-none">
-            <span className="text-white">PLAY</span>
-            <span className="text-orange-500 ml-1">INFINITY</span>
+            <span className="text-white">Play</span>
+            <span className="text-orange-500 ml-1">Infinity</span>
           </div>
         </div>
 
@@ -708,7 +708,7 @@ export default function App() {
           className="font-black text-lg lg:text-2xl tracking-tighter flex items-center shrink-0 ml-1 lg:ml-2 cursor-pointer select-none outline-none"
           onClick={() => navigateTo({ type: 'home' })}
         >
-          <span className="text-orange-500">Play</span><span className="text-orange-400 ml-1">Infinity</span>
+          <span className="text-white">Play</span><span className="text-orange-500 ml-1">Infinity</span>
         </div>
 
         <nav className="flex items-center gap-0.5 lg:gap-1 bg-black/40 p-1 lg:p-1.5 rounded-full border border-white/5">
@@ -808,7 +808,7 @@ export default function App() {
           className="font-black text-xl tracking-tighter flex items-center drop-shadow-md cursor-pointer pointer-events-auto shrink-0 select-none bg-transparent border-0 p-0 outline-none"
           onClick={() => navigateTo({ type: 'home' })}
         >
-          <span className="text-orange-500">Play</span><span className="text-orange-400 ml-1">Infinity</span>
+          <span className="text-white">Play</span><span className="text-orange-500 ml-1">Infinity</span>
         </div>
         
         {/* AÇÕES NO CANTO SUPERIOR DIREITO (MOBILE) */}
@@ -922,7 +922,7 @@ export default function App() {
       {viewState.type !== 'admin' && viewState.type !== 'downloads' && (
       <footer className="pt-16 pb-24 lg:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
         <div className="font-black text-4xl tracking-tighter flex items-center mb-6">
-          <span className="text-orange-500">Play</span><span className="text-orange-400 ml-2">Infinity</span>
+          <span className="text-white">Play</span><span className="text-orange-500 ml-1">Infinity</span>
         </div>
         
         <p className="text-neutral-500 text-sm max-w-md mx-auto mb-8 px-4">
