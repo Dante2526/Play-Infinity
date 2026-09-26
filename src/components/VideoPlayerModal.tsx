@@ -6,7 +6,8 @@ import {
   SkipForward, RotateCcw, PictureInPicture2
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
-import { checkIsCam } from "../utils/mediaUtils";;
+import { CastModal } from "./CastModal";
+import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
 import { 
   isEpisodeWatched, 
@@ -143,6 +144,7 @@ export function VideoPlayerModal({
   posterUrl,
 }: VideoPlayerModalProps) {
   const isCamMovie = isCam || checkIsCam(title, quality);
+  const [showCastModal, setShowCastModal] = useState(false);
   const isAnimeMedia = Boolean(
     isAnime ||
     (title && /anime|naruto|dragon ball|one piece|bleach|attack on titan|jujutsu|demon slayer|death note|boruto|hunter x hunter|solo leveling/i.test(title))
@@ -1515,40 +1517,8 @@ export function VideoPlayerModal({
     }
   };
 
-  const handleCastRequest = async () => {
-    if (!activeIframeUrl) return;
-
-    // 1. Tenta API Nativa (AirPlay no iPhone acha a Roku. Android acha Chromecast)
-    const videos = document.querySelectorAll('video');
-    for (let i = 0; i < videos.length; i++) {
-      const video = videos[i] as any;
-      if (video.remote && typeof video.remote.prompt === 'function') {
-        try {
-          await video.remote.prompt();
-          return;
-        } catch (err: any) {
-          if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
-        }
-      }
-      if (typeof video.webkitShowPlaybackTargetPicker === 'function') {
-        video.webkitShowPlaybackTargetPicker();
-        return;
-      }
-    }
-
-    // 2. Tenta abrir no player de vídeo padrão do celular (pode acionar apps de TV da Samsung/Roku/DLNA que o usuário tenha)
-    let targetUrl = activeIframeUrl;
-    if (targetUrl.includes('/api/mixdrop-stream')) {
-      targetUrl = targetUrl.replace('/api/mixdrop-stream', '/api/mixdrop-proxy');
-    }
-    const absoluteUrl = new URL(targetUrl, window.location.origin).href;
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    
-    if (isAndroid) {
-      // Intent genérico para vídeos (Vai abrir o seletor do Android perguntando qual app usar)
-      const intentUrl = `intent:${absoluteUrl}#Intent;action=android.intent.action.VIEW;type=video/*;S.title=${encodeURIComponent(title || "Video")};end;`;
-      window.location.href = intentUrl;
-    }
+  const handleCastRequest = () => {
+    setShowCastModal(true);
   };
 
   const handleToggleMiniPlayer = () => {
@@ -2086,8 +2056,13 @@ export function VideoPlayerModal({
           </div>
         </div>
 
-
-
+        {showCastModal && (
+          <CastModal 
+            onClose={() => setShowCastModal(false)}
+            streamUrl={activeIframeUrl || undefined}
+            title={title}
+          />
+        )}
       </div>
     </div>
   );

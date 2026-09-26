@@ -1289,7 +1289,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 e.stopPropagation();
                 onCastRequest();
               }}
-              className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
+              className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10 focus:outline-none focus:ring-0 outline-none"
               title="Transmitir para TV"
             >
               <Cast className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
@@ -1488,7 +1488,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               e.stopPropagation();
               handleTogglePlay();
             }}
-            className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none shadow-none ${
+            className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none ${
               controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
             }`}
             title={playerStatus.paused ? "Reproduzir" : "Pausar"}
