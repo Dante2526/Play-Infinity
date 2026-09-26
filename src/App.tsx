@@ -137,7 +137,7 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 };
 
 
-const HomePage = lazyWithRetry(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+import { HomePage } from './pages/HomePage';
 const DetailsPage = lazyWithRetry(() => import('./pages/DetailsPage').then(m => ({ default: m.DetailsPage })));
 const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearchPage').then(m => ({ default: m.GlobalSearchPage })));
 const UserProfilePage = lazyWithRetry(() => import('./pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })));

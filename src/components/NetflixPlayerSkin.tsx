@@ -54,6 +54,7 @@ interface NetflixPlayerSkinProps {
     still_path?: string;
   }>;
   onClose: () => void;
+  onCastRequest?: () => void;
   onEpisodeChange?: (newEpisode: number) => void;
   onSkipIntro: () => void;
   skipDurationSeconds: number;
@@ -111,6 +112,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onSeasonChange,
   episodesList,
   onClose,
+  onCastRequest,
   onEpisodeChange,
   onSkipIntro,
   skipDurationSeconds,
@@ -1291,6 +1293,20 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               title={isRotated ? "Restaurar Orientação Normal (0°)" : "Girar Tela (90° Paisagem Widescreen)"}
             >
               <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
+            </button>
+          )}
+
+          {/* Botão de Transmitir (Cast) */}
+          {onCastRequest && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onCastRequest();
+              }}
+              className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
+              title="Transmitir para TV"
+            >
+              <Cast className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8]" />
             </button>
           )}
 
