@@ -51,10 +51,11 @@
 
 ---
 
-## 4. Infraestrutura de Streaming de TV ao Vivo (VPS Oracle Cloud)
+## 4. Infraestrutura Geral e Hosting (VPS Oracle Cloud)
 
-> **IMPORTANTE PARA TODOS OS AGENTES:**  
-> O projeto possui uma VPS dedicada na **Oracle Cloud Infrastructure (OCI - São Paulo)** para hospedar o proxy de streaming de TV ao vivo, evitando estourar a franquia de 100 GB/mês do Render.
+> **IMPORTANTE PARA TODOS OS AGENTES: PAREM DE MENCIONAR VERCEL OU RENDER.**  
+> O projeto inteiro (frontend, backend e proxy de streaming de TV ao vivo) é hospedado em uma VPS dedicada na **Oracle Cloud Infrastructure (OCI - São Paulo)**.
+> NUNCA sugira ao usuário para "atualizar na Vercel" ou "atualizar no Render". Use sempre "VPS Oracle".
 
 1. **Dados da VPS Oracle:**
    - **IP Público:** `147.15.57.146` (Região: São Paulo - AS31898 Oracle)
@@ -72,14 +73,14 @@
 
 3. **Status Atual:**
    - A VPS na Oracle está **ONLINE, 100% OPERACIONAL e com certificado SSL HTTPS ativo**.
-   - Zero consumo da franquia de 100 GB do Render para TV ao vivo.
+   - Zero limitações de banda para o frontend, backend e TV ao vivo.
    - Veja o documento completo em [`ORACLE_PROXY.md`](./ORACLE_PROXY.md).
 
 ---
 
 ## 5. Arquitetura de Streaming de VOD (Filmes, Séries e Animes)
 
-- O tráfego de VOD viaja diretamente da **CDN de origem para o navegador do cliente** (não consome banda do Render nem da VPS).
+- O tráfego de VOD viaja diretamente da **CDN de origem para o navegador do cliente** (não consome banda da VPS Oracle).
 - A interface é controlada via `NetflixPlayerSkin.tsx` comunicando-se por `postMessage`.
 - O sistema possui **Watchdog em Dois Níveis** (Macro no modal com fallback automático; Micro na skin para buffer suave sem reiniciar o vídeo).
 - Os endpoints de backend (`/api/watchplayer-stream` e `/api/anime/hls-proxy`) possuem **timeouts estritos com `AbortController`**, detecção de cancelamento de conexão (`req.on('close')`), sondagem paralela de variantes via `Promise.any` e cache de prefixos funcionais em memória (`watchPlayerWorkingPrefixCache`).
