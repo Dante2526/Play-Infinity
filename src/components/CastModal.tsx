@@ -28,11 +28,6 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   
-  // Roku States
-  const [showRoku, setShowRoku] = useState(false);
-  const [isSearchingRoku, setIsSearchingRoku] = useState(false);
-  const [rokuDevices, setRokuDevices] = useState<string[]>([]);
-  
   const currentUrl = typeof window !== 'undefined' ? window.location.href : '';
 
   const handleCopyLink = () => {
@@ -46,41 +41,13 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
 
 
 
-  const handleRokuDiscovery = async () => {
-    if (!Capacitor.isNativePlatform()) {
-      setStatusMsg("A busca por Roku só funciona no aplicativo instalado.");
-      return;
-    }
-    
-    setStatusMsg(null);
-    setShowQR(false);
-    setShowRoku(true);
-    setIsSearchingRoku(true);
-    setRokuDevices([]);
-    
-    try {
-      const result = await RokuDiscovery.discover();
-      if (result && result.devices && result.devices.length > 0) {
-        setRokuDevices(result.devices);
-      } else {
-        setStatusMsg("Nenhuma Roku encontrada na mesma rede Wi-Fi.");
-      }
-    } catch (e: any) {
-      console.error(e);
-      setStatusMsg("Erro Roku: " + (e.message || "Verifique o Wi-Fi."));
-    } finally {
-      setIsSearchingRoku(false);
-    }
-  };
-
-  const playOnRoku = async (ip: string) => {
-    setStatusMsg("Conectando à Roku...");
+  const handleExternalPlayer = async () => {
+    setStatusMsg("Buscando link direto do vídeo...");
     try {
       let finalUrl = streamUrl || currentUrl;
 
       // Se temos os detalhes da mídia, tentamos extrair o MP4/M3U8 cru do MixDrop
       if (mediaDetails) {
-        setStatusMsg("Buscando fonte de vídeo...");
         let mixdropFileId: string | null = null;
 
         if (mediaDetails.mediaType === 'series' && mediaDetails.season && mediaDetails.episode) {
@@ -103,40 +70,37 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
             if (data.videoUrl) {
               finalUrl = data.videoUrl;
             } else {
-              throw new Error("Vídeo não encontrado no MixDrop.");
+              throw new Error("Vídeo não encontrado no servidor.");
             }
           } else {
-            throw new Error("Fonte de vídeo indisponível no catálogo (MixDrop falhou).");
+            throw new Error("Fonte de vídeo indisponível no catálogo.");
           }
         } else {
           throw new Error("Não foi possível gerar a rota de extração do vídeo.");
         }
       } else {
-        // Se não tivermos mediaDetails, vamos avisar o usuário que Roku precisa de um arquivo cru
+        // Se não tivermos mediaDetails, avisamos
         if (finalUrl.includes('watchplay.shop') || finalUrl.includes('vip')) {
-           throw new Error("Este servidor usa player protegido (HTML). A Roku requer a URL direta do vídeo. Tente abrir o filme e transmitir pelo servidor MixDrop.");
+           throw new Error("Este servidor usa player protegido (HTML). Abra o filme e transmita pelo servidor MixDrop.");
         }
       }
 
-      setStatusMsg("Iniciando reprodução na TV...");
+      setStatusMsg("Abrindo aplicativos externos...");
       const absoluteUrl = new URL(finalUrl, window.location.origin).href;
-      const format = absoluteUrl.includes('.m3u8') ? 'hls' : 'mp4';
       
       if (Capacitor.isNativePlatform()) {
-        const res = await RokuDiscovery.launch({ ip, url: absoluteUrl, format });
-        if (!res.success) {
-           throw new Error(`Roku recusou a conexão (Status: ${res.status}). Verifique se "Controle por apps móveis" está ativado nas configurações da Roku.`);
-        }
+        const intentUrl = `intent://${absoluteUrl.replace(/^https?:\/\//, '')}#Intent;scheme=https;action=android.intent.action.VIEW;type=video/*;end;`;
+        window.location.href = intentUrl;
       } else {
-        // Chamada ECP fallback para PWA (Pode falhar por Mixed Content)
-        const url = `http://${ip}:8060/input/15985?t=v&videoFormat=${format}&u=${encodeURIComponent(absoluteUrl)}`;
-        await fetch(url, { method: 'POST', mode: 'no-cors' });
+        window.open(absoluteUrl, '_blank');
       }
       
-      onClose();
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (e: any) {
       console.error(e);
-      setStatusMsg("Erro Roku: " + (e.message || "Não foi possível conectar."));
+      setStatusMsg("Erro: " + (e.message || "Não foi possível abrir."));
     }
   };
 
@@ -220,7 +184,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           </div>
         )}
 
-        {!showQR && !showRoku ? (
+        {!showQR ? (
           <div className="space-y-2 mt-3 text-left">
             <button
               onClick={handleNativeCast}
@@ -236,15 +200,15 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
             </button>
             
             <button
-              onClick={handleRokuDiscovery}
+              onClick={handleExternalPlayer}
               className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-lg bg-purple-500/15 flex items-center justify-center shrink-0">
                 <Tv className="w-4 h-4 text-purple-400 group-hover:scale-110 transition-transform" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold text-neutral-200">Transmitir para Roku (Direto)</div>
-                <div className="text-[10px] text-neutral-400">Acha a Roku na rede e toca sem app</div>
+                <div className="text-sm font-semibold text-neutral-200">App Externo de Transmissão</div>
+                <div className="text-[10px] text-neutral-400">Recomendado: BubbleUPnP (sem anúncio)</div>
               </div>
             </button>
 
@@ -273,39 +237,6 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
                 <div className="text-[10px] text-neutral-500">Arraste a central de atalhos do seu celular</div>
               </div>
             </div>
-          </div>
-        ) : showRoku ? (
-          <div className="space-y-3 mt-2 text-left">
-            {isSearchingRoku ? (
-              <div className="flex items-center justify-center py-4">
-                <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                <span className="ml-3 text-sm text-neutral-300">Buscando Rokus na rede...</span>
-              </div>
-            ) : rokuDevices.length > 0 ? (
-              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                {rokuDevices.map(ip => (
-                  <button
-                    key={ip}
-                    onClick={() => playOnRoku(ip)}
-                    className="w-full flex items-center justify-between p-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 transition-colors cursor-pointer"
-                  >
-                    <span className="text-sm text-neutral-200 font-semibold">Roku ({ip})</span>
-                    <Play className="w-4 h-4 text-purple-400" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-2 text-neutral-400 text-sm">
-                Nenhuma Roku encontrada.
-              </div>
-            )}
-            
-            <button
-              onClick={handleRokuDiscovery}
-              className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-xs font-semibold text-white transition-colors"
-            >
-              Tentar Novamente
-            </button>
           </div>
         ) : (
           <div className="space-y-3 mt-2">
