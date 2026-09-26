@@ -995,11 +995,6 @@ export function DetailsPage({
                             <h4 className={`text-sm font-bold transition-colors truncate max-w-full ${watched ? "text-neutral-300 opacity-80" : "text-white group-hover:text-orange-400"}`}>
                               {ep.name}
                             </h4>
-                            {watched && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 whitespace-nowrap shrink-0">
-                                Assistido
-                              </span>
-                            )}
                           </div>
                           <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed">{ep.desc}</p>
                         </div>
