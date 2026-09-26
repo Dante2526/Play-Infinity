@@ -8,8 +8,16 @@
   <!-- Body of Ouroboros -->
   <path d="M 60 15 
            A 45 45 0 1 1 15 60
-           A 45 45 0 0 1 50 16" 
+           A 45 45 0 0 1 45 18" 
         fill="none" stroke="url(#g)" stroke-width="12" stroke-linecap="round"/>
+  
   <!-- Head of Ouroboros eating the tail -->
-  <polygon points="45,5 70,16 45,27" fill="#ea580c" />
+  <path d="M 40 8 C 55 2, 72 8, 65 16 C 58 24, 45 28, 38 22 C 30 16, 30 12, 40 8 Z" fill="#ea580c" />
+  
+  <!-- Snake Eyes -->
+  <circle cx="50" cy="12" r="1.5" fill="#161616" />
+  <circle cx="50" cy="20" r="1.5" fill="#161616" />
+
+  <!-- Play Button -->
+  <path d="M 46 36 L 46 84 L 84 60 Z" fill="url(#g)" />
 </svg>
