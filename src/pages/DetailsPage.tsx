@@ -644,8 +644,9 @@ export function DetailsPage({
               )}
             </div>
 
-            {/* Ações de Reprodução */}
-            <div className="flex items-center gap-3 md:gap-4 flex-wrap mb-2">
+            {/* Ações de Reprodução e Opções */}
+            <div className="flex flex-col gap-3 md:gap-4 mb-2 max-w-xl">
+              {/* Botão Principal: Assistir */}
               <button 
                 onClick={() => onPlay?.(
                   item.title, 
@@ -664,100 +665,118 @@ export function DetailsPage({
                   item.posterUrl || displayPoster,
                   isAnimeItem
                 )}
-                className="flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
+                className="w-full sm:w-fit min-w-[280px] flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
                 <Play className="w-5 h-5 md:w-6 md:h-6 fill-current" />
                 {isSeries ? `Assistir Temporada ${selectedSeason}` : 'Assistir Filme'}
               </button>
 
-              {/* Botão Baixar Filme (Disponível via MixDrop + Oracle VPS) */}
-              {!isSeries && movieDownloadInfo?.available && movieDownloadInfo.directDownloadUrl && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!movieDownloadInfo.directDownloadUrl) return;
-                    setIsDownloading(true);
-                    triggerDirectDownload(movieDownloadInfo.directDownloadUrl, movieDownloadInfo.fileName, {
-                      tmdbId: item.tmdbId || item.id || itemId,
-                      title: item.title,
-                      type: "movie",
-                      posterUrl: item.posterUrl || item.imageUrl,
-                      backdropUrl: item.backdropUrl,
-                      quality: item.quality || "HD"
-                    });
-                    setTimeout(() => setIsDownloading(false), 4000);
-                  }}
-                  disabled={isDownloading}
-                  className="flex items-center justify-center gap-2.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-blue-500/40 hover:border-blue-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
-                  title="Baixar filme em alta definição direto para o seu dispositivo via MixDrop"
-                >
-                  {isDownloading ? (
-                    <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin text-blue-400" />
-                  ) : (
-                    <Download className="w-4 h-4 md:w-5 md:h-5 text-blue-400 group-hover:scale-110 transition-transform" />
-                  )}
-                  <span>{isDownloading ? "Iniciando..." : "Baixar Filme"}</span>
-                  <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
-                    HD
-                  </span>
-                </button>
-              )}
+              {/* Botões Secundários: Grid de 2 ou 3 colunas para organização */}
+              <div className="flex flex-wrap items-center gap-3 w-full">
+                
+                {/* Botão Baixar Filme (Disponível via MixDrop + Oracle VPS) */}
+                {!isSeries && (
+                  isCheckingDownload ? (
+                    <button disabled className="flex items-center justify-center gap-2.5 bg-blue-600/10 text-blue-400/50 font-bold py-3.5 px-6 rounded-full text-sm border border-blue-500/20 cursor-not-allowed backdrop-blur-md">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verificando...</span>
+                    </button>
+                  ) : movieDownloadInfo?.available && movieDownloadInfo.directDownloadUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!movieDownloadInfo.directDownloadUrl) return;
+                        setIsDownloading(true);
+                        triggerDirectDownload(movieDownloadInfo.directDownloadUrl, movieDownloadInfo.fileName, {
+                          tmdbId: item.tmdbId || item.id || itemId,
+                          title: item.title,
+                          type: "movie",
+                          posterUrl: item.posterUrl || item.imageUrl,
+                          backdropUrl: item.backdropUrl,
+                          quality: item.quality || "HD"
+                        });
+                        setTimeout(() => setIsDownloading(false), 4000);
+                      }}
+                      disabled={isDownloading}
+                      className="flex items-center justify-center gap-2 bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 hover:text-blue-300 font-bold py-3.5 px-6 rounded-full transition-all text-sm border border-blue-500/40 hover:border-blue-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                      title="Baixar filme em alta definição"
+                    >
+                      {isDownloading ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                      ) : (
+                        <Download className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                      )}
+                      <span>{isDownloading ? "Iniciando..." : "Baixar"}</span>
+                      <span className="px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] font-black uppercase">
+                        HD
+                      </span>
+                    </button>
+                  ) : null
+                )}
 
-              {/* Botão Transmitir Filme para a TV */}
-              {!isSeries && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const targetPlayerUrl = `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
-                    setCastUrl(targetPlayerUrl);
-                    setCastMediaDetails({
-                      mediaType: 'movie',
-                      tmdbId: Number(effectiveTmdbId),
-                      imdbId: item.imdbId
-                    });
-                  }}
-                  className="flex items-center justify-center gap-2.5 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-orange-500/30 hover:border-orange-500/50 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
-                  title="Transmitir para Smart TV"
-                >
-                  <Cast className="w-4 h-4 md:w-5 md:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
-                  <span>Transmitir</span>
-                </button>
-              )}
-
-              {/* Botão Assistir Trailer */}
-              {(trailerVideosList.length > 0 || trailerVideo) && (() => {
-                const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
-                if (!activeTrailer) return null;
-                return (
-                  <button 
-                    tabIndex={0} 
-                    role="button" 
-                    onClick={() => setIsTrailerModalOpen(true)}
-                    className="flex items-center justify-center gap-2.5 bg-white/10 hover:bg-white/20 text-white font-bold py-3.5 md:py-4 px-6 md:px-8 rounded-full transition-all text-sm md:text-base border border-white/20 hover:border-white/40 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
-                    title="Assistir trailer oficial em alta definição"
+                {/* Botão Transmitir Filme para a TV */}
+                {!isSeries && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const targetPlayerUrl = `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
+                      setCastUrl(targetPlayerUrl);
+                      setCastMediaDetails({
+                        mediaType: 'movie',
+                        tmdbId: Number(effectiveTmdbId),
+                        imdbId: item.imdbId
+                      });
+                    }}
+                    className="flex items-center justify-center gap-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 font-bold py-3.5 px-6 rounded-full transition-all text-sm border border-orange-500/30 hover:border-orange-500/50 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                    title="Transmitir para Smart TV"
                   >
-                    <Film className="w-4 h-4 md:w-5 md:h-5 text-orange-400 group-hover:scale-110 transition-transform" />
-                    <span>Trailer</span>
-                    {activeTrailer.isDubbed ? (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase tracking-wider">
-                        Dublado
-                      </span>
-                    ) : activeTrailer.isSubtitled ? (
-                      <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase tracking-wider">
-                        Legendado
-                      </span>
-                    ) : null}
+                    <Cast className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+                    <span>Transmitir</span>
                   </button>
-                );
-              })()}
+                )}
 
-              <button 
-                onClick={handleToggleFavorite}
-                className={`w-12 h-12 md:w-14 md:h-14 shrink-0 flex items-center justify-center rounded-full transition-all border backdrop-blur-md cursor-pointer ${isFavorite ? 'bg-orange-600/30 border-orange-500 text-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.4)]' : 'bg-neutral-900/60 hover:bg-neutral-800 border-white/10 text-neutral-400 hover:text-white'}`}
-                title={isFavorite ? "Remover dos Favoritos / Deixar de Seguir" : "Adicionar aos Favoritos e Calendário"}
-              >
-                {isFavorite ? <BookmarkCheck className="w-5 h-5 md:w-6 md:h-6 fill-current" /> : <Bookmark className="w-5 h-5 md:w-6 md:h-6" />}
-              </button>
+                {/* Botão Assistir Trailer */}
+                {loadingTrailer ? (
+                  <button disabled className="flex items-center justify-center gap-2 bg-white/5 text-white/40 font-bold py-3.5 px-6 rounded-full text-sm border border-white/10 cursor-not-allowed backdrop-blur-md">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Trailer...</span>
+                  </button>
+                ) : (trailerVideosList.length > 0 || trailerVideo) ? (
+                  (() => {
+                    const activeTrailer = trailerVideosList[selectedTrailerIndex] || trailerVideo;
+                    return (
+                      <button 
+                        tabIndex={0} 
+                        role="button" 
+                        onClick={() => setIsTrailerModalOpen(true)}
+                        className="flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold py-3.5 px-6 rounded-full transition-all text-sm border border-white/20 hover:border-white/40 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                        title="Assistir trailer oficial"
+                      >
+                        <Film className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+                        <span>Trailer</span>
+                        {activeTrailer?.isDubbed ? (
+                          <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[9px] font-black uppercase">
+                            Dub
+                          </span>
+                        ) : activeTrailer?.isSubtitled ? (
+                          <span className="px-1.5 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] font-black uppercase">
+                            Leg
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })()
+                ) : null}
+
+                {/* Botão Favorito */}
+                <button 
+                  onClick={handleToggleFavorite}
+                  className={`w-12 h-12 shrink-0 flex items-center justify-center rounded-full transition-all border backdrop-blur-md cursor-pointer ${isFavorite ? 'bg-orange-600/30 border-orange-500 text-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.4)]' : 'bg-neutral-900/60 hover:bg-neutral-800 border-white/10 text-neutral-400 hover:text-white'}`}
+                  title={isFavorite ? "Remover dos Favoritos / Deixar de Seguir" : "Adicionar aos Favoritos"}
+                >
+                  {isFavorite ? <BookmarkCheck className="w-5 h-5 fill-current" /> : <Bookmark className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
           </div>
         </div>

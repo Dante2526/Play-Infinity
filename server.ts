@@ -2532,6 +2532,39 @@ app.use("/api/admin", adminOpsRouter);
         `);
       }
 
+      // 0.05 Filtro de Idioma: Detecta se o WatchPlayer retornou a versão Legendada / Inglês
+      // Se for Legendado, aciona o fallback silencioso do frontend para buscar a versão Dublada nos outros servidores (VIP/NixPlay/MixDrop).
+      const isLegendado = html.includes('MyPlayerAudio="Legendado"') || 
+                          html.includes("MyPlayerAudio='Legendado'") ||
+                          html.includes('MyPlayerAudio="Inglês"') ||
+                          html.includes("MyPlayerAudio='Inglês'");
+
+      if (isLegendado) {
+        console.warn(`[WatchPlayer Stream]: Versão Legendada/Inglês detectada (${effectiveTargetUrl}). Acionando fallback para buscar versão PT-BR.`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <style>
+              html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+            </style>
+          </head>
+          <body>
+            <script>
+              try {
+                window.parent.postMessage({ 
+                  type: "WATCHPLAY_UNAVAILABLE", 
+                  reason: "english_language"
+                }, "*");
+              } catch(e) {}
+            </script>
+          </body>
+          </html>
+        `);
+      }
+
       // 0.0 Se o WatchPlayer retornou uma página de escolha de players intermediária (ex: "Escolha uma opção de player"),
       // auto-seleciona a opção prioritária (Dublado PT-BR / ?player=0) no próprio servidor de forma invisível
       if (

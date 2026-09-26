@@ -655,25 +655,25 @@ export function VideoPlayerModal({
       list = [
         {
           key: "srv_watchplay",
-          label: "WatchPlayer Oficial",
+          label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s?: number, e?: number) => 
             `https://v1.watchplay.shop/tvshow/${id}/${s || 1}/${e || 1}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "WatchPlayer Oficial"
+          name: "WatchPlayer"
         },
         {
           key: "srv_vip",
-          label: "VIP Player (Dublado PT-BR)",
+          label: "VIP Player",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string, s?: number, e?: number) => 
             `/api/myembed-stream?id=${id}&type=tv&s=${s || 1}&e=${e || 1}&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
-          name: "VIP Player (Dublado PT-BR)"
+          name: "VIP Player"
         },
         {
           key: "srv_nixplay",
-          label: "Nixplay HD (Premium)",
+          label: "Nixplay",
           badge: "Nixplay Premium • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: (id: string, s?: number, e?: number) => {
             let tmdb = tmdbId || id;
@@ -687,11 +687,11 @@ export function VideoPlayerModal({
             return toNativeBridgeUrl(`https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`);
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
-          name: "Nixplay HD (Premium)"
+          name: "Nixplay"
         },
         {
           key: "srv_mixdrop",
-          label: "MixDrop HD (Dublado)",
+          label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: (id: string, s?: number, e?: number) => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
@@ -706,31 +706,31 @@ export function VideoPlayerModal({
             return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
-          name: "MixDrop HD (Dublado)"
+          name: "MixDrop"
         }
       ];
     } else {
       list = [
         {
           key: "srv_watchplay",
-          label: "WatchPlayer Oficial",
+          label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
-          name: "WatchPlayer Oficial"
+          name: "WatchPlayer"
         },
         {
           key: "srv_vip",
-          label: "VIP Player (Dublado PT-BR)",
+          label: "VIP Player",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string) => 
             `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
-          name: "VIP Player (Dublado PT-BR)"
+          name: "VIP Player"
         },
         {
           key: "srv_nixplay",
-          label: "Nixplay HD (Premium)",
+          label: "Nixplay",
           badge: "Nixplay Premium • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: (id: string) => {
             let tmdb = tmdbId || id;
@@ -740,11 +740,11 @@ export function VideoPlayerModal({
             return toNativeBridgeUrl(`https://nixplay.lat/movie/testelogado-vods/GwXanZ3Dj/${tmdb}.mp4`);
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
-          name: "Nixplay HD (Premium)"
+          name: "Nixplay"
         },
         {
           key: "srv_mixdrop",
-          label: "MixDrop HD (Dublado)",
+          label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: () => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
@@ -759,7 +759,7 @@ export function VideoPlayerModal({
             return "https://mxdrop.top/f/36nggdmqspmlg4";
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
-          name: "MixDrop HD (Dublado)"
+          name: "MixDrop"
         }
       ];
     }
