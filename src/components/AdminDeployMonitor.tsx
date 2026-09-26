@@ -721,6 +721,8 @@ export function AdminDeployMonitor() {
                         <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
                       ) : run.conclusion === "failure" ? (
                         <XCircle className="w-4 h-4 text-red-400 shrink-0" />
+                      ) : run.conclusion === "cancelled" || run.conclusion === "skipped" ? (
+                        <XCircle className="w-4 h-4 text-neutral-500 shrink-0" />
                       ) : (
                         <RotateCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
                       )}
