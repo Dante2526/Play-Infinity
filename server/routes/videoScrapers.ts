@@ -279,6 +279,10 @@ const router = Router();
                     case "SEEK_ABSOLUTE":
                       var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                       if (typeof t === "number" && !isNaN(t)) {
+                        var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
+                        if (activeHls && typeof activeHls.startLoad === "function") {
+                          try { activeHls.startLoad(t); } catch(err) {}
+                        }
                         if (art) art.currentTime = t;
                         else if (v) v.currentTime = t;
                         sendStatus();
@@ -646,6 +650,10 @@ const router = Router();
                       case "SEEK_ABSOLUTE":
                         var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
+                          var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
+                          if (activeHls && typeof activeHls.startLoad === "function") {
+                            try { activeHls.startLoad(t); } catch(err) {}
+                          }
                           if (art) art.currentTime = t;
                           else if (v) v.currentTime = t;
                           sendStatus();
@@ -1231,7 +1239,7 @@ const router = Router();
                 cfg.backBufferLength = 90; // Libera imediatamente segmentos passados da memória
                 cfg.maxBufferSize = 100 * 1000 * 1000;
                 cfg.maxBufferHole = 0.5;
-                cfg.nudgeOffset = 0.15; // Nudge automático para transpor gaps de keyframe
+                cfg.nudgeOffset = 0.3; // Aumentado de 0.15 → 0.3 pra corrigir desync audio/video apóps seek
                 cfg.nudgeMaxRetry = 6;
                 cfg.maxFragLookUpTolerance = 0.25;
                 cfg.highBufferWatchdogPeriod = 1.5;

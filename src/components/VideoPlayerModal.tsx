@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import Hls from "hls.js";
 import { 
   X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
   Check, Sparkles, Radio, ShieldCheck,
   Tv, Film, ChevronLeft, ChevronRight, ChevronDown, Layers, Maximize2, Minimize2, FastForward,
-  SkipForward, RotateCcw, PictureInPicture2
+  SkipForward, RotateCcw, PictureInPicture2, Pause
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
@@ -233,6 +234,128 @@ export function VideoPlayerModal({
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
 
+  // === Seriesflix HD (vidsrc): <video> + hls.js ===
+  const vidsrcVideoRef = useRef<HTMLVideoElement | null>(null);
+  const vidsrcHlsRef = useRef<Hls | null>(null);
+  const [vidsrcPlaying, setVidsrcPlaying] = useState(false);
+  const [vidsrcCurrentTime, setVidsrcCurrentTime] = useState(0);
+  const [vidsrcDuration, setVidsrcDuration] = useState(0);
+  const [vidsrcBuffering, setVidsrcBuffering] = useState(false);
+
+  // Inicializa hls.js quando srv_vidsrc é selecionado
+  useEffect(() => {
+    if (selectedServerKey !== "srv_vidsrc" || !activeIframeUrl) {
+      // Cleanup
+      if (vidsrcHlsRef.current) {
+        vidsrcHlsRef.current.destroy();
+        vidsrcHlsRef.current = null;
+      }
+      return;
+    }
+
+    const video = vidsrcVideoRef.current;
+    if (!video) return;
+
+    // Cleanup anterior
+    if (vidsrcHlsRef.current) {
+      vidsrcHlsRef.current.destroy();
+      vidsrcHlsRef.current = null;
+    }
+
+    setIsLoading(true);
+    setVidsrcBuffering(true);
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        enableWorker: true,
+      });
+      vidsrcHlsRef.current = hls;
+      hls.loadSource(activeIframeUrl);
+      hls.attachMedia(video);
+
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setIsLoading(false);
+        setVidsrcBuffering(false);
+        video.play().then(() => {
+          setVidsrcPlaying(true);
+          setPlayerSkinReady(true);
+        }).catch(() => {
+          // Autoplay bloqueado — user precisa clicar
+        });
+      });
+
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) {
+          console.warn("[vidsrc] HLS fatal:", data.type, data.details);
+          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+            hls.startLoad();
+          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+            hls.recoverMediaError();
+          }
+        }
+      });
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari nativo
+      video.src = activeIframeUrl;
+      video.addEventListener("loadedmetadata", () => {
+        setIsLoading(false);
+        setVidsrcBuffering(false);
+        video.play().then(() => setVidsrcPlaying(true)).catch(() => {});
+      });
+    }
+
+    return () => {
+      if (vidsrcHlsRef.current) {
+        vidsrcHlsRef.current.destroy();
+        vidsrcHlsRef.current = null;
+      }
+    };
+  }, [selectedServerKey, activeIframeUrl]);
+
+  // Listeners do video element
+  useEffect(() => {
+    const video = vidsrcVideoRef.current;
+    if (!video || selectedServerKey !== "srv_vidsrc") return;
+
+    const onPlay = () => { setVidsrcPlaying(true); setIsLoading(false); };
+    const onPause = () => setVidsrcPlaying(false);
+    const onTimeUpdate = () => setVidsrcCurrentTime(video.currentTime);
+    const onDurationChange = () => setVidsrcDuration(video.duration || 0);
+    const onWaiting = () => setVidsrcBuffering(true);
+    const onPlaying = () => { setVidsrcBuffering(false); setIsLoading(false); };
+
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("durationchange", onDurationChange);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("playing", onPlaying);
+
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("durationchange", onDurationChange);
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("playing", onPlaying);
+    };
+  }, [selectedServerKey, activeIframeUrl]);
+
+  const toggleVidsrcPlay = useCallback(() => {
+    const video = vidsrcVideoRef.current;
+    if (!video) return;
+    if (video.paused) video.play();
+    else video.pause();
+  }, []);
+
+  const vidsrcSeek = useCallback((pct: number) => {
+    const video = vidsrcVideoRef.current;
+    if (!video || !video.duration) return;
+    video.currentTime = (pct / 100) * video.duration;
+  }, []);
+
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
     `/api/native-player?url=${encodeURIComponent(mp4Url)}`;
@@ -258,7 +381,9 @@ export function VideoPlayerModal({
       activeLower.includes("/api/myembed-stream") ||
       activeLower.includes("/api/anime-stream") ||
       activeLower.includes("/api/vixsrc-stream") ||
-      activeLower.includes("/api/live-stream-proxy");
+      activeLower.includes("/api/live-stream-proxy") ||
+      activeLower.includes("/api/vidsrc-stream") ||
+      activeLower.includes("/api/vidsrc-proxy");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput, selectedServerKey]);
@@ -764,6 +889,19 @@ export function VideoPlayerModal({
       ];
     }
     
+    // Adiciona Seriesflix HD (vidsrc.sh decrypt + proxy) — usa hls.js + Netflix skin 100%
+    if (isSeries && tmdbId) {
+      list.push({
+        key: "srv_vidsrc",
+        label: "Seriesflix HD (Dublado)",
+        badge: "Seriesflix HD • Stream decifrado • Skin Netflix 100%",
+        buildUrl: (id: string, s?: number, e?: number) =>
+          `/api/vidsrc-player?tmdb=${tmdbId}&season=${s || season || 1}&episode=${e || episode || 1}`,
+        isMatch: (u: string) => u.includes("/api/vidsrc-player") || u.includes("/api/vidsrc-stream") || u.includes("/api/vidsrc-proxy"),
+        name: "Seriesflix HD (Dublado)"
+      });
+    }
+    
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
     }
@@ -808,7 +946,7 @@ export function VideoPlayerModal({
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop");
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_vidsrc");
     setError(null);
 
     let newUrl: string;
