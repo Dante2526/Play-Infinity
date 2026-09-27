@@ -131,6 +131,34 @@ async function isAdminToken(req: Request): Promise<boolean> {
   }
 
   try {
+    const { getAdminDb } = await import("../firebaseAdmin");
+    const adminDb = getAdminDb();
+    
+    if (adminDb) {
+      // Usando Firebase Admin (sem restrições de regras)
+      const docRef = adminDb.collection("administradores").doc(token);
+      const docSnap = await docRef.get();
+      if (docSnap.exists) {
+        return true;
+      }
+      
+      if (token.includes("@")) {
+        const querySnap = await adminDb.collection("administradores")
+          .where("email", "==", token.trim().toLowerCase())
+          .get();
+        if (!querySnap.empty) return true;
+      }
+      
+      const emailSnap = await adminDb.collection("administradores")
+        .where("email", "==", token.trim())
+        .get();
+      if (!emailSnap.empty) return true;
+      
+      console.warn("[server-blocks] Auth falhou via Admin SDK: token não localizado em administradores:", token);
+      return false;
+    }
+
+    // Fallback para Client SDK se o Admin não estiver disponível
     const { db } = await import("../../src/services/firebase");
     if (!db) {
       console.warn("[server-blocks] Auth falhou: db do Firestore não inicializado");
