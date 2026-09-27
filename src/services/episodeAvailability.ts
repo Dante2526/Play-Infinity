@@ -10,10 +10,12 @@ interface AvailableEpisodesResponse {
 }
 
 // Cache em memória no cliente para transições ultra-rápidas
+// TTL curto pra evitar problema de cache stale quando catálogo server-side ganha
+// temporadas novas (ex: T5 do Ghosts adicionado depois do cache populado)
 const clientAvailabilityCache = new Map<string, { timestamp: number; episodes: number[] }>();
 const clientSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
 const clientPlayableCache = new Map<number, boolean>();
-const CLIENT_CACHE_TTL = 15 * 60 * 1000; // 15 minutos
+const CLIENT_CACHE_TTL = 3 * 60 * 1000; // 3 minutos (reduzido de 15min)
 
 /**
  * Consulta em lote quais IDs possuem reprodução disponível no catálogo oficial
