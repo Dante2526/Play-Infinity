@@ -178,11 +178,13 @@ process.on("uncaughtException", (err) => {
 import encontreiLookupRouter from "./server/routes/encontreiLookup";
 import bolodechocolateRouter from "./server/routes/bolodechocolate";
 import nixplayRouter from "./server/routes/nixplayRoutes";
+import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import { adminOpsRouter } from "./server/routes/adminOps";
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
+app.use(vidsrcRouter);
 app.use("/api/admin", adminOpsRouter);
 
   app.get("/api/extract-player", async (req, res) => {
