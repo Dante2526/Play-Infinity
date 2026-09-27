@@ -10,6 +10,8 @@ import { resolveVixsrcStream, resolveDirectAnimeStream } from "../../server";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { checkVidsrcSeason } from "./vidsrcRoutes";
+import { checkVipSeason, checkVizerSeason } from "./encontreiLookup";
 
 const router = Router();
 
@@ -1945,8 +1947,9 @@ const router = Router();
         return res.status(400).json({ success: false, error: "Parâmetros 'tmdbId' e 'season' são obrigatórios." });
       }
 
+      const forceRefresh = req.query.force_refresh === "true" || req.query.force_refresh === "1" || Boolean(req.query._cb);
       const cacheKey = `${tmdbId}_${season}_${count}`;
-      const cached = seasonAvailabilityCache.get(cacheKey);
+      const cached = !forceRefresh ? seasonAvailabilityCache.get(cacheKey) : null;
       if (cached) {
         return res.json({
           success: true,
@@ -1998,6 +2001,24 @@ const router = Router();
           }
         };
 
+        const fallbackCheck = async (): Promise<boolean> => {
+          const nix = await checkNixplay();
+          if (nix) return true;
+          try {
+            const vizerOk = await checkVizerSeason(tmdbId, season);
+            if (vizerOk) return true;
+          } catch {}
+          try {
+            const vipOk = await checkVipSeason(tmdbId, season);
+            if (vipOk) return true;
+          } catch {}
+          try {
+            const vsOk = await checkVidsrcSeason(tmdbId, season);
+            if (vsOk) return true;
+          } catch {}
+          return false;
+        };
+
         const url = `https://v1.watchplay.shop/tvshow/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
         const commonHeaders = {
           "Referer": "https://v1.watchplay.shop/",
@@ -2018,30 +2039,29 @@ const router = Router();
             const loc = upstream.headers.get("location") || "";
             if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
               clearTimeout(timeoutId);
-              return await checkNixplay();
+              return await fallbackCheck();
             }
             try {
               const redirectedUrl = new URL(loc, url).toString();
               upstream = await fetch(redirectedUrl, { headers: commonHeaders, signal: controller.signal });
             } catch {
               clearTimeout(timeoutId);
-              return await checkNixplay();
+              return await fallbackCheck();
             }
           }
 
           if (upstream.status >= 400) {
             clearTimeout(timeoutId);
-            return await checkNixplay();
+            return await fallbackCheck();
           }
 
           const html = await upstream.text();
           clearTimeout(timeoutId);
           const wpAvailable = !isCheckUnavailable(html, upstream.url || url, upstream.status);
           if (wpAvailable) return true;
-          return await checkNixplay();
+          return await fallbackCheck();
         } catch {
-          const nix = await checkNixplay();
-          return nix ? true : true;
+          return await fallbackCheck();
         }
       };
 

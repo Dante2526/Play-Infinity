@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   Ban,
   Layers,
+  Pencil,
 } from "lucide-react";
 
 interface ServerBlock {
@@ -122,6 +123,11 @@ export function ServerBlocksAdmin() {
 
   // Filter in active blocks
   const [blocksFilter, setBlocksFilter] = useState("");
+
+  // Edit reason states
+  const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
+  const [editingReasonText, setEditingReasonText] = useState<string>("");
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const getAdminToken = () => sessionStorage.getItem("adminSessionToken") || "";
 
@@ -331,6 +337,45 @@ export function ServerBlocksAdmin() {
     }
   };
 
+  const handleStartEditReason = (block: ServerBlock) => {
+    setEditingBlockId(block.id);
+    setEditingReasonText(block.reason || "");
+    setError(null);
+  };
+
+  const handleCancelEditReason = () => {
+    setEditingBlockId(null);
+    setEditingReasonText("");
+  };
+
+  const handleSaveEditReason = async (blockId: string) => {
+    setSavingEdit(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/server-blocks/${encodeURIComponent(blockId)}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": getAdminToken(),
+        },
+        body: JSON.stringify({ reason: editingReasonText.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      setBlocks(prev => prev.map(b => b.id === blockId ? { ...b, reason: editingReasonText.trim() } : b));
+      setEditingBlockId(null);
+      setEditingReasonText("");
+      setSuccess("Motivo do bloqueio atualizado com sucesso!");
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      setError(err.message || "Erro ao atualizar motivo.");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // Agrupa os bloqueios existentes por TMDB ID
   const groupedByTmdb = useMemo(() => {
     const filtered = blocksFilter.trim()
@@ -482,18 +527,18 @@ export function ServerBlocksAdmin() {
 
                         {/* Detalhes do item */}
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-white text-sm font-semibold truncate group-hover:text-orange-400 transition-colors">
                               {r.title}
                             </span>
-                            {/* Badge do Tipo (Série ou Filme) */}
+                            {/* Badge do Tipo (Série ou Filme) - Menor e perfeitamente alinhado */}
                             {isTv ? (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                              <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 leading-none">
                                 <Tv className="w-2.5 h-2.5" />
                                 Série
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                              <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30 leading-none">
                                 <Film className="w-2.5 h-2.5" />
                                 Filme
                               </span>
@@ -501,15 +546,15 @@ export function ServerBlocksAdmin() {
                           </div>
 
                           {hasOriginal && (
-                            <div className="text-white/40 text-xs truncate">
+                            <div className="text-white/40 text-xs truncate mt-0.5">
                               Título original: {r.original_title}
                             </div>
                           )}
 
-                          <div className="text-white/40 text-xs mt-0.5 flex items-center gap-2">
-                            {year && <span>{year}</span>}
+                          <div className="text-white/40 text-xs mt-0.5 flex items-center gap-1.5 flex-wrap">
+                            {year && <span className="whitespace-nowrap">{year}</span>}
                             <span>•</span>
-                            <span className="font-mono text-[11px] text-white/50">TMDB #{r.id}</span>
+                            <span className="font-mono text-[11px] text-white/50 whitespace-nowrap">TMDB #{r.id}</span>
                           </div>
                         </div>
                       </button>
@@ -520,8 +565,8 @@ export function ServerBlocksAdmin() {
             </div>
           ) : (
             /* Card do Conteúdo Selecionado (dispensa campos manuais de ID e Tipo) */
-            <div className="p-3.5 sm:p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
-              <div className="flex items-center gap-3.5 min-w-0">
+            <div className="p-3.5 sm:p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3.5 min-w-0 flex-1">
                 {selectedMedia.posterPath ? (
                   <img
                     src={`https://image.tmdb.org/t/p/w92${selectedMedia.posterPath}`}
@@ -537,37 +582,44 @@ export function ServerBlocksAdmin() {
                     )}
                   </div>
                 )}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
+                <div className="min-w-0 flex-1 flex flex-col justify-center">
+                  <div className="flex items-center gap-2 min-w-0 flex-wrap">
                     <h4 className="text-white text-base font-bold truncate">
                       {selectedMedia.title}
                     </h4>
                     {selectedMedia.contentType === "series" ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/25 text-purple-200 border border-purple-500/40">
-                        <Tv className="w-3 h-3" />
-                        Série de TV
+                      <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 leading-none">
+                        <Tv className="w-2.5 h-2.5" />
+                        Série
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/25 text-sky-200 border border-sky-500/40">
-                        <Film className="w-3 h-3" />
+                      <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/20 text-sky-300 border border-sky-500/30 leading-none">
+                        <Film className="w-2.5 h-2.5" />
                         Filme
                       </span>
                     )}
                   </div>
 
                   {selectedMedia.originalTitle && (
-                    <p className="text-white/50 text-xs truncate">
+                    <p className="text-white/50 text-xs truncate mt-0.5">
                       Original: {selectedMedia.originalTitle}
                     </p>
                   )}
 
-                  <div className="flex items-center gap-2 text-white/50 text-xs mt-1">
-                    {selectedMedia.releaseYear && <span>{selectedMedia.releaseYear}</span>}
-                    <span>•</span>
-                    <span className="font-mono text-orange-300">TMDB #{selectedMedia.id}</span>
-                    <span>•</span>
-                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                      <Check className="w-3 h-3" /> Tipo identificado
+                  {/* Informações sem quebra de linha */}
+                  <div className="flex items-center gap-2 text-white/50 text-xs mt-1.5 flex-wrap">
+                    {selectedMedia.releaseYear && (
+                      <>
+                        <span className="whitespace-nowrap">{selectedMedia.releaseYear}</span>
+                        <span className="text-white/20">•</span>
+                      </>
+                    )}
+                    <span className="font-mono text-orange-300 whitespace-nowrap">
+                      TMDB #{selectedMedia.id}
+                    </span>
+                    <span className="text-white/20">•</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1 whitespace-nowrap">
+                      <Check className="w-3 h-3 shrink-0" /> Tipo identificado
                     </span>
                   </div>
                 </div>
@@ -576,7 +628,7 @@ export function ServerBlocksAdmin() {
               <button
                 type="button"
                 onClick={handleClearSelected}
-                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                className="self-end sm:self-center shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                 title="Buscar outro título"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
@@ -653,7 +705,7 @@ export function ServerBlocksAdmin() {
             value={fReason}
             onChange={(e) => setFReason(e.target.value)}
             rows={2}
-            placeholder="Ex: Este servidor estava com áudio original em inglês; outros servidores possuem versão dublada PT-BR"
+            placeholder="Ex: Áudio em inglês, travamentos ou fora do ar"
             className="w-full px-3.5 py-2.5 bg-black/40 border border-white/10 focus:border-orange-500/70 rounded-2xl text-white placeholder-white/30 text-sm focus:outline-none transition-all resize-none"
           />
         </div>
@@ -779,40 +831,116 @@ export function ServerBlocksAdmin() {
                           })
                         : "";
 
+                      const isEditingThis = editingBlockId === b.id;
+
                       return (
                         <div
                           key={b.id}
-                          className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
+                          className="px-4 py-3 hover:bg-white/5 transition-colors space-y-2"
                         >
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1.5">
-                                <Ban className="w-3 h-3 text-red-400" />
-                                Servidor {serverName} ignorado
-                              </span>
-                              {dateStr && (
-                                <span className="text-white/40 text-[11px]">
-                                  {dateStr}
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1.5">
+                                  <Ban className="w-3 h-3 text-red-400 shrink-0" />
+                                  Servidor {serverName} ignorado
                                 </span>
-                              )}
+                                {dateStr && (
+                                  <span className="text-white/40 text-[11px] whitespace-nowrap">
+                                    {dateStr}
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
-                            {b.reason && (
-                              <p className="text-white/60 text-xs mt-1.5 leading-relaxed bg-black/30 p-2 rounded-xl border border-white/5">
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditReason(b)}
+                                className="p-2 text-white/40 hover:text-orange-400 hover:bg-orange-500/10 rounded-xl transition-colors cursor-pointer"
+                                title="Editar motivo do bloqueio"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBlock(b.id, `"${b.title}" no servidor ${serverName}`)}
+                                className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
+                                title="Desbloquear servidor para este título"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Seção do Motivo ou Formulário de Edição */}
+                          {isEditingThis ? (
+                            <div className="mt-2 p-3 bg-black/50 border border-orange-500/40 rounded-xl space-y-2.5">
+                              <label className="text-xs font-semibold text-orange-300 flex items-center gap-1.5">
+                                <Pencil className="w-3 h-3" />
+                                Editar motivo do bloqueio
+                              </label>
+                              <textarea
+                                value={editingReasonText}
+                                onChange={(e) => setEditingReasonText(e.target.value)}
+                                rows={2}
+                                placeholder="Ex: Áudio em inglês, travamentos ou fora do ar"
+                                className="w-full px-3 py-2 bg-black/60 border border-white/20 focus:border-orange-500 rounded-lg text-white placeholder-white/30 text-xs focus:outline-none transition-all resize-none"
+                                autoFocus
+                              />
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={handleCancelEditReason}
+                                  disabled={savingEdit}
+                                  className="px-3 py-1.5 text-xs text-white/60 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleSaveEditReason(b.id)}
+                                  disabled={savingEdit}
+                                  className="px-3 py-1.5 text-xs font-semibold text-white bg-orange-600 hover:bg-orange-500 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                                >
+                                  {savingEdit ? (
+                                    <>
+                                      <Loader2 className="w-3 h-3 animate-spin" />
+                                      <span>Salvando...</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Check className="w-3.5 h-3.5" />
+                                      <span>Salvar motivo</span>
+                                    </>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ) : b.reason ? (
+                            <div className="text-white/70 text-xs leading-relaxed bg-black/30 p-2.5 rounded-xl border border-white/5 flex items-start justify-between gap-2 group/reason">
+                              <p className="min-w-0 flex-1">
                                 <span className="text-white/40 font-semibold">Motivo: </span>
                                 {b.reason}
                               </p>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBlock(b.id, `"${b.title}" no servidor ${serverName}`)}
-                            className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer shrink-0"
-                            title="Desbloquear servidor para este título"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEditReason(b)}
+                                className="text-white/30 hover:text-orange-400 transition-colors p-1 rounded hover:bg-white/5 cursor-pointer shrink-0"
+                                title="Editar este motivo"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditReason(b)}
+                              className="text-white/30 hover:text-orange-300 text-[11px] flex items-center gap-1.5 transition-colors cursor-pointer py-0.5"
+                            >
+                              <Plus className="w-3 h-3" /> Adicionar motivo do bloqueio
+                            </button>
+                          )}
                         </div>
                       );
                     })}

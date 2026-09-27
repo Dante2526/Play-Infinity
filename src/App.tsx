@@ -1034,8 +1034,12 @@ export default function App() {
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
       <GlobalErrorModal />
-      <WhatsNewModal />
-      <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />
+      {viewState.type !== 'admin' && (
+        <>
+          <WhatsNewModal />
+          <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />
+        </>
+      )}
 
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
       <React.Suspense fallback={null}>

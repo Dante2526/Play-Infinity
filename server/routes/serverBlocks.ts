@@ -295,4 +295,41 @@ router.delete("/api/admin/server-blocks/:id", async (req: Request, res: Response
   }
 });
 
+/**
+ * PATCH /api/admin/server-blocks/:id
+ * Atualiza o motivo de um bloqueio existente
+ * Body: { reason: string }
+ * Header: x-admin-token
+ */
+router.patch("/api/admin/server-blocks/:id", async (req: Request, res: Response) => {
+  try {
+    if (!(await isAdminToken(req))) {
+      return res.status(401).json({ error: "Não autorizado" });
+    }
+    const id = req.params.id;
+    if (!id) {
+      return res.status(400).json({ error: "id obrigatório" });
+    }
+
+    const { reason } = req.body || {};
+    ensureLoaded();
+
+    const block = _blocks.find(b => b.id === id);
+    if (!block) {
+      return res.status(404).json({ error: "Block não encontrado" });
+    }
+
+    block.reason = typeof reason === "string" ? reason.trim() : "";
+    persistBlocks();
+
+    return res.json({
+      success: true,
+      block,
+    });
+  } catch (err: any) {
+    console.error("[server-blocks] PATCH error:", err);
+    return res.status(500).json({ error: "Erro interno" });
+  }
+});
+
 export default router;
