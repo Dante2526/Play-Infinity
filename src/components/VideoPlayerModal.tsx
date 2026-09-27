@@ -68,6 +68,17 @@ function extractSrcFromInput(input: string): string {
 }
 
 const SUPERFLIX_REGEX = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
+
+/**
+ * Lista de TMDB IDs cujo servidor WatchPlayer deve ser IGNORADO.
+ * Motivo: conteúdo ainda não disponível no WatchPlayer (ex: filme "F1: O Filme"
+ * com Brad Pitt lançado em 2025; "Homem-Aranha: Um Novo Dia" previsto p/ 2026).
+ * Os demais servidores (MixDrop, VIP, Nixplay, Seriesflix HD) continuam disponíveis.
+ */
+const WATCHPLAY_BLOCKED_TMDB_IDS = new Set<number>([
+  911430,  // F1: O Filme (Brad Pitt, 2025)
+  969681,  // Homem-Aranha: Um Novo Dia (2026)
+]);
 export function isSuperflixUrl(url: string): boolean {
   if (!url) return false;
   const lower = url.toLowerCase();
@@ -905,6 +916,12 @@ export function VideoPlayerModal({
     
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
+    }
+
+    // Ignora WatchPlayer para filmes específicos que ainda não estão disponíveis lá.
+    // Outros servidores (MixDrop, VIP, Nixplay, Seriesflix HD) continuam disponíveis.
+    if (tmdbId && WATCHPLAY_BLOCKED_TMDB_IDS.has(Number(tmdbId))) {
+      list = list.filter(s => s.key !== "srv_watchplay");
     }
 
     return list;

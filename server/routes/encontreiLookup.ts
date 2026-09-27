@@ -109,7 +109,14 @@ function tryLoadCatalog(
       seasonsIndexRef.set(id, Array.from(seasonsSet).sort((a, b) => a - b));
     }
     
-    console.log(`[${logName}] Catálogo carregado: ${movieIndexRef.size} filmes, ${episodeIndexRef.size} episódios, ${seasonsIndexRef.size} séries`);
+    // INVALIDA cache de temporadas verificadas: o catálogo mudou, então os
+    // resultados em cache (20min) podem estar desatualizados. Próxima
+    // chamada do /api/series-seasons-available vai re-sondar com catálogo novo.
+    // Issue real: Ghosts (126027) tinha T5 adicionado no catálogo mas o cache
+    // de servidor retornava [1,2,3,4] (sem T5) por 20min após atualização.
+    _verifiedSeasonsCache.clear();
+    
+    console.log(`[${logName}] Catálogo carregado: ${movieIndexRef.size} filmes, ${episodeIndexRef.size} episódios, ${seasonsIndexRef.size} séries (cache de temporadas invalidado)`);
     return true;
   } catch (err) {
     console.warn(`[${logName}] Erro ao processar:`, err);
