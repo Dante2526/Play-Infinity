@@ -604,11 +604,11 @@ app.use("/api/admin", adminOpsRouter);
       const subPayload: any = {
         customer: customerId,
         billingType, // "CREDIT_CARD" ou "UNDEFINED"
-        value: 9.90,
+        value: req.body.value ? Number(req.body.value) : 9.90,
         nextDueDate: nextDueDate.toISOString().split('T')[0],
         cycle: "MONTHLY",
-        description: "Play Infinity Premium",
-        externalReference: userId // MANDATÓRIO: Identifica o usuário no webhook!
+        description: req.body.description || "Play Infinity Premium",
+        externalReference: req.body.externalReference || userId // MANDATÓRIO: Identifica o usuário no webhook!
       };
 
       if (billingType === "CREDIT_CARD") {
@@ -673,7 +673,14 @@ app.use("/api/admin", adminOpsRouter);
 
       // O Asaas envia um 'externalReference' que nós injetamos na assinatura
       if (payment && payment.externalReference && db) {
-        const userId = payment.externalReference;
+        let userId = payment.externalReference;
+        let isPlusUpgrade = false;
+
+        if (userId.includes("|PLUS")) {
+          userId = userId.split("|")[0];
+          isPlusUpgrade = true;
+        }
+
         const userRef = doc(db, "usuarios", userId);
         
         // Se pagou (Pix/Boleto) ou o cartão foi confirmado
@@ -682,14 +689,21 @@ app.use("/api/admin", adminOpsRouter);
           const nextMonth = new Date(now);
           nextMonth.setMonth(now.getMonth() + 1);
           
-          await setDoc(userRef, { 
+          const updateData: any = { 
             assinatura: "ATIVA",
             subscriptionId: payment.subscription || "",
             dataPagamento: now.toISOString(),
             dataExpiracao: nextMonth.toISOString(),
             ultimoAcesso: now.toISOString()
-          }, { merge: true });
-          console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId}`);
+          };
+
+          if (isPlusUpgrade) {
+            updateData.plano = "plus";
+            updateData.valorMensalidade = 20.00;
+          }
+
+          await setDoc(userRef, updateData, { merge: true });
+          console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId} (Plus: ${isPlusUpgrade})`);
         } 
         // Se a assinatura atrasou ou o pagamento foi estornado/recusado
         else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
@@ -6073,12 +6087,84 @@ app.use("/api/admin", adminOpsRouter);
       }
     }
 
-    app.use((err: any, req: any, res: any, next: any) => { 
-      console.error("Global Express Error:", err); 
-      if (!res.headersSent) {
-        res.status(500).send("Global Express Error: " + (err.message || err)); 
+  // API: Encontrar Servidor Disponível para Transmissão
+  app.get("/api/find-cast-source", async (req, res) => {
+    try {
+      const tmdbId = req.query.tmdbId as string;
+      const mediaType = req.query.mediaType as string;
+      const season = req.query.season as string;
+      const episode = req.query.episode as string;
+
+      if (!tmdbId || !mediaType) {
+        return res.status(400).json({ success: false, error: "Parâmetros obrigatórios faltando" });
       }
-    });
+
+      // Mesma heurística do watchplayer para checar página não encontrada
+      const isCheckUnavailable = (content: string, url: string, status: number): boolean => {
+        if (status >= 400) return true;
+        const lowerUrl = (url || "").toLowerCase();
+        if (lowerUrl.includes("/login") || lowerUrl.includes("/admin") || lowerUrl.includes("/painel")) return true;
+        const lower = (content || "").toLowerCase();
+        return (
+          lower.includes("login-card") ||
+          lower.includes("login-page") ||
+          lower.includes("entrar | myplayer") ||
+          lower.includes("painel administrativo") ||
+          (lower.includes("myplayer") && (lower.includes("bem-vindo") || lower.includes("bem vindo"))) ||
+          lower.includes("série não encontrada") ||
+          lower.includes("serie não encontrada") ||
+          lower.includes("filme não encontrado") ||
+          lower.includes("acesso protegido")
+        );
+      };
+
+      const checkUrl = async (url: string) => {
+        try {
+          const controller = new AbortController();
+          const id = setTimeout(() => controller.abort(), 4000);
+          const response = await fetch(url, {
+            signal: controller.signal,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Referer": new URL(url).origin
+            }
+          });
+          clearTimeout(id);
+          const text = await response.text();
+          return !isCheckUnavailable(text, url, response.status);
+        } catch (e) {
+          return false;
+        }
+      };
+
+      // 1. Tentar WatchPlayer
+      const movieId = req.query.imdbId ? req.query.imdbId as string : tmdbId;
+      const wpUrl = `https://v1.watchplay.shop/${mediaType === "movie" ? "movie" : "tvshow"}/${mediaType === "movie" ? movieId : tmdbId}${mediaType === "series" ? `/${season}/${episode}` : ""}`;
+      const isWpOk = await checkUrl(wpUrl);
+      if (isWpOk) {
+        return res.json({ success: true, url: wpUrl, source: "watchplayer" });
+      }
+
+      // 2. Tentar VIP Player
+      const vipId = mediaType === "series" ? `${tmdbId}-${season}-${episode}` : tmdbId;
+      const vipUrl = `https://myfilmes.vip/api/player?id=${vipId}`;
+      const isVipOk = await checkUrl(vipUrl);
+      if (isVipOk) {
+        return res.json({ success: true, url: vipUrl, source: "vip" });
+      }
+
+      return res.json({ success: false, error: "Nenhum servidor direto retornou player válido" });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  app.use((err: any, req: any, res: any, next: any) => { 
+    console.error("Global Express Error:", err); 
+    if (!res.headersSent) {
+      res.status(500).send("Global Express Error: " + (err.message || err)); 
+    }
+  });
 
     if (!process.env.VERCEL) {
       const server = app.listen(PORT, "0.0.0.0", () => {

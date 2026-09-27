@@ -45,9 +45,10 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
     setStatusMsg("Buscando link direto do vídeo...");
     try {
       let finalUrl = streamUrl || currentUrl;
+      const isDefaultWatchplay = finalUrl.includes("watchplay.shop") || !streamUrl;
 
-      // Se temos os detalhes da mídia, tentamos extrair o MP4/M3U8 cru do MixDrop
-      if (mediaDetails) {
+      // Se temos os detalhes da mídia e estamos no player padrão, buscamos a melhor fonte disponível
+      if (mediaDetails && isDefaultWatchplay) {
         let mixdropFileId: string | null = null;
 
         if (mediaDetails.mediaType === 'series' && mediaDetails.season && mediaDetails.episode) {
@@ -62,26 +63,36 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           ? buildMixdropStreamUrl(mixdropFileId)
           : `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${mediaDetails.imdbId || mediaDetails.tmdbId}`)}`;
 
+        let gotMixdrop = false;
         if (baseMixdrop) {
-          // Buscamos o JSON do backend que contém a proxyUrl crua
-          const jsonRes = await fetch(`${baseMixdrop}&format=json`);
-          if (jsonRes.ok) {
-            const data = await jsonRes.json();
-            if (data.videoUrl) {
-              finalUrl = data.videoUrl;
-            } else {
-              throw new Error("Vídeo não encontrado no servidor.");
+          try {
+            const jsonRes = await fetch(`${baseMixdrop}&format=json`);
+            if (jsonRes.ok) {
+              const data = await jsonRes.json();
+              if (data.videoUrl) {
+                finalUrl = data.videoUrl;
+                gotMixdrop = true;
+              }
             }
-          } else {
-            throw new Error("Fonte de vídeo indisponível no catálogo.");
+          } catch (e) {
+            console.warn("Falha ao buscar MixDrop", e);
           }
-        } else {
-          throw new Error("Não foi possível gerar a rota de extração do vídeo.");
         }
-      } else {
-        // Se não tivermos mediaDetails, avisamos
-        if (finalUrl.includes('watchplay.shop') || finalUrl.includes('vip')) {
-           throw new Error("Este servidor usa player protegido (HTML). Abra o filme e transmita pelo servidor MixDrop.");
+
+        // Se MixDrop falhar, usa a API automática para testar WatchPlayer e VIP Player e pegar o que estiver online
+        if (!gotMixdrop) {
+          try {
+            const qs = `tmdbId=${mediaDetails.tmdbId}&imdbId=${mediaDetails.imdbId || ''}&mediaType=${mediaDetails.mediaType}&season=${mediaDetails.season || ''}&episode=${mediaDetails.episode || ''}`;
+            const serverRes = await fetch(`/api/find-cast-source?${qs}`);
+            if (serverRes.ok) {
+              const data = await serverRes.json();
+              if (data.success && data.url) {
+                finalUrl = data.url;
+              }
+            }
+          } catch (e) {
+            console.warn("Falha no Auto-Router de Cast", e);
+          }
         }
       }
 
