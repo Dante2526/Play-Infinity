@@ -5959,16 +5959,18 @@ app.use("/api/admin", adminOpsRouter);
   });
 
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
-  app.get("/api/tmdb/*", async (req, res) => {
+  app.get(["/api/tmdb", "/api/tmdb/*"], async (req, res) => {
     try {
-      const tmdbPath = req.params[0];
+      const tmdbPath = (req.params as any)[0] || (req.query.path as string) || "";
       const query = new URLSearchParams(req.query as any);
+      query.delete("path");
       
       const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
 
       query.set("api_key", apiKey);
       
-      const url = `https://api.themoviedb.org/3/${tmdbPath}?${query.toString()}`;
+      const cleanPath = tmdbPath.replace(/^\/+/, "");
+      const url = `https://api.themoviedb.org/3/${cleanPath}?${query.toString()}`;
       const response = await fetch(url, {
         headers: { "accept": "application/json" }
       });

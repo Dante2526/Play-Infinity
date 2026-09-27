@@ -26,14 +26,90 @@ const CORS = {
   "Access-Control-Expose-Headers": "Content-Length, Content-Range, Accept-Ranges",
 };
 
-// Whitelist de domínios que o proxy pode acessar
-const ALLOWED_HOSTS = ["comityofcognomen.site", "data.vidsrc.sh"];
+// Whitelist dinâmica de domínios que o proxy pode acessar
+const allowedHostsSet = new Set<string>([
+  "comityofcognomen.site",
+  "data.vidsrc.sh",
+  "vidsrc.sh",
+  "cloudorchestranova.com",
+]);
+
+function isAllowedVidsrcHost(hostname: string): boolean {
+  if (allowedHostsSet.has(hostname)) return true;
+  // Bloqueia IPs privados/locais (anti-SSRF)
+  if (
+    hostname === "localhost" ||
+    hostname.startsWith("127.") ||
+    hostname.startsWith("10.") ||
+    hostname.startsWith("192.168.") ||
+    hostname.startsWith("172.16.") ||
+    hostname.startsWith("169.254.")
+  ) {
+    return false;
+  }
+  // Permite domínios de streaming da infraestrutura do vidsrc
+  return (
+    hostname.endsWith(".site") ||
+    hostname.endsWith(".space") ||
+    hostname.endsWith(".online") ||
+    hostname.endsWith(".top") ||
+    hostname.endsWith(".sh") ||
+    hostname.endsWith("cloudorchestranova.com") ||
+    hostname.endsWith("vidsrc.sh")
+  );
+}
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 // ===== Cache em memória (5 min) =====
 const streamCache = new Map<string, { m3u8: string; expires: number }>();
 const STREAM_CACHE_TTL = 5 * 60 * 1000;
+
+// ===== Cache de Tokens de Autorização por Origin (evita erro 429 Too Many Requests) =====
+const tokenCache = new Map<string, { token: string; expires: number }>();
+
+async function getOriginToken(origin: string): Promise<string> {
+  const cached = tokenCache.get(origin);
+  if (cached && cached.expires > Date.now()) {
+    return cached.token;
+  }
+
+  // Tenta obter novo token com retry e tratamento de 429
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const resp = await fetch(`${origin}/generate.php`, {
+        headers: { "User-Agent": UA },
+      });
+      const text = (await resp.text()).trim();
+
+      if (resp.ok && text.startsWith("eyJ")) {
+        // JWT válido — cacheia por 2 horas (expiração real do token é 4h)
+        tokenCache.set(origin, {
+          token: text,
+          expires: Date.now() + 2 * 60 * 60 * 1000,
+        });
+        return text;
+      }
+
+      if (resp.status === 429 && cached?.token) {
+        console.warn(`[vidsrc] 429 Too Many Requests em ${origin}/generate.php. Reutilizando token em cache.`);
+        return cached.token;
+      }
+    } catch (err: any) {
+      console.warn(`[vidsrc] Falha ao obter token de ${origin} (tentativa ${attempt}):`, err.message);
+    }
+
+    if (attempt < 2) {
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+  }
+
+  if (cached?.token) {
+    return cached.token;
+  }
+
+  throw new Error(`Falha ao obter token de autorização de ${origin}`);
+}
 
 // ===== Função: cadeia completa de decrypt =====
 async function getRewrittenM3u8(tmdb: string, season: string, episode: string): Promise<string> {
@@ -86,10 +162,16 @@ async function getRewrittenM3u8(tmdb: string, season: string, episode: string): 
   const urls = txt.split("\n").filter((s) => s.trim());
   if (!urls.length) throw new Error("no decrypted URLs");
 
-  // 6. Token (VPS IP)
+  // Registra os hosts descriptografados na whitelist dinâmica
+  for (const u of urls) {
+    try {
+      allowedHostsSet.add(new URL(u).hostname);
+    } catch {}
+  }
+
+  // 6. Token com cache e proteção anti-429
   const origin = new URL(urls[0]).origin;
-  const tokenResp = await fetch(`${origin}/generate.php`, { headers: { "User-Agent": UA } });
-  const token = (await tokenResp.text()).trim();
+  const token = await getOriginToken(origin);
 
   // 7. Fetch master.m3u8 (VPS IP + token)
   const masterUrl = urls[0] + (urls[0].includes("?") ? "&" : "?") + "token=" + token;
@@ -179,7 +261,8 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
     }
 
     // Whitelist check
-    if (!ALLOWED_HOSTS.some((h) => parsed.hostname === h)) {
+    if (!isAllowedVidsrcHost(parsed.hostname)) {
+      console.warn(`[vidsrc-proxy] Host não permitido: ${parsed.hostname}`);
       return res.status(403).json({ error: "host not allowed" });
     }
 
@@ -228,6 +311,9 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
     // Senão: segmento binário — proxy bytes
     res.setHeader("Cache-Control", "public, max-age=3600");
     const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length > 0 && buf[0] === 0x47) {
+      res.setHeader("Content-Type", "video/mp2t");
+    }
     return res.send(buf);
   } catch (err: any) {
     console.error("[vidsrc-proxy] Error:", err.message);
