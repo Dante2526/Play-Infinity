@@ -889,7 +889,7 @@ export function DetailsPage({
                     <h3 className="text-lg font-bold text-white leading-tight">Episódios & Temporadas</h3>
                   </div>
                   <span className="text-[11px] px-2.5 py-1 rounded-full bg-neutral-800 text-neutral-300 font-medium whitespace-nowrap shrink-0">
-                    {getSeasonWatchedCount(effectiveTmdbId, selectedSeason, totalSeasonEpisodes)} de {totalSeasonEpisodes} assistidos
+                    {/* Removido: contador "X de Y assistidos" */}
                   </span>
                 </div>
                 
