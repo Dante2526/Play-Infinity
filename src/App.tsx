@@ -147,8 +147,10 @@ const FavoritesPage = lazyWithRetry(() => import('./pages/FavoritesPage').then(m
 const DownloadsPage = lazyWithRetry(() => import('./pages/DownloadsPage').then(m => ({ default: m.DownloadsPage })));
 const GlobalCatalogPage = lazyWithRetry(() => import('./pages/GlobalCatalogPage').then(m => ({ default: m.GlobalCatalogPage })));
 const ProviderPage = lazyWithRetry(() => import('./pages/ProviderPage').then(m => ({ default: m.ProviderPage })));
+const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.default })));
 import { NavItem } from './components/NavItem';
 import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
+import { WhatsNewModal } from './components/WhatsNewModal';
 
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
 
@@ -156,7 +158,7 @@ import { OnPlayHandler } from "./types";
 
 export default function App() {
   type ViewState = { 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'downloads' | 'details' | 'live-tv' | 'admin';
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'downloads' | 'details' | 'live-tv' | 'admin' | 'privacy';
     id?: string;
     itemData?: CatalogItem;
     previous?: any;
@@ -165,8 +167,11 @@ export default function App() {
   const { isSmartTV } = useSmartTV();
 
   const [viewState, setViewState] = useState<ViewState>(() => {
-    if (window.location.pathname.toUpperCase() === '/ADM') {
+    if (window.location.pathname.toUpperCase().includes('/ADM')) {
       return { type: 'admin' };
+    }
+    if (window.location.pathname.toUpperCase().includes('/PRIVACY') || window.location.pathname.toUpperCase().includes('/PRIVACIDADE')) {
+      return { type: 'privacy' };
     }
     if (window.history.state && window.history.state.type) {
       return window.history.state;
@@ -901,6 +906,8 @@ export default function App() {
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
       ) : viewState.type === 'downloads' ? (
         <DownloadsPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigate={(t) => navigateTo({ type: t as any })} />
+      ) : viewState.type === 'privacy' ? (
+        <PrivacyPolicyPage />
       ) : viewState.type === 'admin' ? (
         
           <AdminPage onBack={() => {
@@ -1027,6 +1034,7 @@ export default function App() {
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
       <GlobalErrorModal />
+      <WhatsNewModal />
       <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />
 
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
