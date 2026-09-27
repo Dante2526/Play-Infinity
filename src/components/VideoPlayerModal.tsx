@@ -383,7 +383,8 @@ export function VideoPlayerModal({
       activeLower.includes("/api/vixsrc-stream") ||
       activeLower.includes("/api/live-stream-proxy") ||
       activeLower.includes("/api/vidsrc-stream") ||
-      activeLower.includes("/api/vidsrc-proxy");
+      activeLower.includes("/api/vidsrc-proxy") ||
+      activeLower.includes("/api/vidsrc-player");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput, selectedServerKey]);

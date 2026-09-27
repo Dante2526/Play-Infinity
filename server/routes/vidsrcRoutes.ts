@@ -261,7 +261,7 @@ router.get("/api/vidsrc-player", async (req, res) => {
 </head>
 <body>
 <div id="loader"><div class="spinner"></div></div>
-<video id="v" playsinline controls></video>
+<video id="v" playsinline></video>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <script>
 var video=document.getElementById('v'),loader=document.getElementById('loader');
