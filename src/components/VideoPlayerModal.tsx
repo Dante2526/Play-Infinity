@@ -69,16 +69,37 @@ function extractSrcFromInput(input: string): string {
 
 const SUPERFLIX_REGEX = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
 
+// Cache em memória dos server blocks por tmdbId (evita refetch em cada reabertura)
+// TTL 2min — admin faz mudança no painel, usuário vê em até 2min
+const _serverBlocksCache = new Map<number, { timestamp: number; keys: Set<string> }>();
+const SERVER_BLOCKS_CACHE_TTL = 2 * 60 * 1000;
+
 /**
- * Lista de TMDB IDs cujo servidor WatchPlayer deve ser IGNORADO.
- * Motivo: conteúdo ainda não disponível no WatchPlayer (ex: filme "F1: O Filme"
- * com Brad Pitt lançado em 2025; "Homem-Aranha: Um Novo Dia" previsto p/ 2026).
- * Os demais servidores (MixDrop, VIP, Nixplay, Seriesflix HD) continuam disponíveis.
+ * Busca lista de server_keys bloqueados para um tmdbId.
+ * Retorna Set vazio se não há blocks ou se fetch falha.
  */
-const WATCHPLAY_BLOCKED_TMDB_IDS = new Set<number>([
-  911430,  // F1: O Filme (Brad Pitt, 2025)
-  969681,  // Homem-Aranha: Um Novo Dia (2026)
-]);
+async function fetchBlockedServers(tmdbId: number | string | undefined): Promise<Set<string>> {
+  if (!tmdbId) return new Set();
+  const id = Number(tmdbId);
+  if (isNaN(id)) return new Set();
+
+  const cached = _serverBlocksCache.get(id);
+  if (cached && Date.now() - cached.timestamp < SERVER_BLOCKS_CACHE_TTL) {
+    return cached.keys;
+  }
+
+  try {
+    const res = await fetch(`/api/server-blocks?tmdb_id=${id}`, { cache: "no-store" });
+    if (!res.ok) return cached?.keys || new Set();
+    const data = await res.json();
+    const keys = new Set<string>(data.blockedServerKeys || []);
+    _serverBlocksCache.set(id, { timestamp: Date.now(), keys });
+    return keys;
+  } catch {
+    return cached?.keys || new Set();
+  }
+}
+
 export function isSuperflixUrl(url: string): boolean {
   if (!url) return false;
   const lower = url.toLowerCase();
@@ -402,6 +423,8 @@ export function VideoPlayerModal({
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
+  // Lista de server_keys bloqueados para o tmdbId atual (vindos do painel admin)
+  const [blockedServerKeys, setBlockedServerKeys] = useState<Set<string>>(new Set());
   // Controle do overlay anti-flash: permanece preto até a skin estética estar pronta
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
   // Marca o timestamp da última troca de mídia/episódio para descartar mensagens residuais
@@ -595,6 +618,23 @@ export function VideoPlayerModal({
       })
       .catch(() => setNixplayAvailable(false));
   }, [isOpen, isSeries, tmdbId, resolvedId]);
+
+  // Busca blocks dinâmicos (admin panel) pra esse tmdbId
+  // Atualiza em até 2min (cache client-side) — admin faz mudança no painel,
+  // usuário vê a mudança em até 2min sem precisar reabrir o app.
+  useEffect(() => {
+    if (!isOpen) return;
+    const numId = tmdbId ? Number(tmdbId) : null;
+    if (!numId || isNaN(numId)) {
+      setBlockedServerKeys(new Set());
+      return;
+    }
+    let cancelled = false;
+    fetchBlockedServers(numId).then(keys => {
+      if (!cancelled) setBlockedServerKeys(keys);
+    });
+    return () => { cancelled = true; };
+  }, [isOpen, tmdbId]);
 
   // Fallback do MixDrop quando não há fileId no catálogo (versão cam)
   const buildMixdropFallbackUrl = useCallback(() => {
@@ -918,14 +958,14 @@ export function VideoPlayerModal({
       list = list.filter(s => s.key !== "srv_nixplay");
     }
 
-    // Ignora WatchPlayer para filmes específicos que ainda não estão disponíveis lá.
-    // Outros servidores (MixDrop, VIP, Nixplay, Seriesflix HD) continuam disponíveis.
-    if (tmdbId && WATCHPLAY_BLOCKED_TMDB_IDS.has(Number(tmdbId))) {
-      list = list.filter(s => s.key !== "srv_watchplay");
+    // Aplica blocks dinâmicos vindos do painel admin (Firestore/painel via /api/server-blocks)
+    // O admin pode bloquear qualquer server_key pra esse tmdbId (ex: srv_watchplay pra F1).
+    if (blockedServerKeys.size > 0) {
+      list = list.filter(s => !blockedServerKeys.has(s.key));
     }
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, blockedServerKeys]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
