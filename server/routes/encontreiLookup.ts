@@ -62,6 +62,46 @@ export async function checkVipSeason(
 // Mapeamento global de TMDB ID -> Serie ID do Vizer/Encontrei
 const _tmdbToSerieIdMap = new Map<number, number>();
 
+// Mapeamento global de TMDB ID -> Movie Video ID do Vizer (pra resolveVizerMovie)
+// Carregado de public/data/vizer-movie-ids.json
+const _tmdbToVizerMovieIdMap = new Map<number, number>();
+let _vizerMovieIdsLoaded = false;
+let _vizerMovieIdsMtime = 0;
+
+/** Carrega o arquivo de mapeamento TMDB → vizer_movie_id (uma vez, em memória) */
+function loadVizerMovieIds() {
+  const possiblePaths = [
+    path.join(process.cwd(), "public", "data", "vizer-movie-ids.json"),
+    path.join(process.cwd(), "data", "vizer-movie-ids.json"),
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        const stat = fs.statSync(p);
+        const mtime = stat.mtimeMs;
+        if (_vizerMovieIdsLoaded && mtime <= _vizerMovieIdsMtime) return;
+        const raw = fs.readFileSync(p, "utf-8");
+        const map: Record<string, number> = JSON.parse(raw);
+        _tmdbToVizerMovieIdMap.clear();
+        for (const [k, v] of Object.entries(map)) {
+          const tmdb = parseInt(k, 10);
+          const vid = parseInt(String(v), 10);
+          if (!isNaN(tmdb) && !isNaN(vid)) {
+            _tmdbToVizerMovieIdMap.set(tmdb, vid);
+          }
+        }
+        _vizerMovieIdsLoaded = true;
+        _vizerMovieIdsMtime = mtime;
+        console.log(`[vizer-movie-ids] ${_tmdbToVizerMovieIdMap.size} mapeamentos TMDB→vizer_movie_id carregados`);
+        return;
+      } catch (err) {
+        console.warn("[vizer-movie-ids] Erro ao carregar:", err);
+        return;
+      }
+    }
+  }
+}
+
 // Cache de temporadas verificadas no Vizer Live (TTL 30 min)
 const vizerSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
 const VIZER_SEASON_TTL = 30 * 60 * 1000;
@@ -205,6 +245,84 @@ export async function resolveVizerEpisode(
       server_name: "MixDrop",
       season,
       episode,
+      source: "vizer-live",
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve um FILME on-demand no Vizer.beauty (espelho de resolveVizerEpisode
+ * mas pra filmes em vez de episódios).
+ *
+ * Fluxo:
+ * 1. Carrega mapeamento TMDB → vizer_movie_id (de public/data/vizer-movie-ids.json)
+ * 2. AJAX em /do=playerData?id={vizer_movie_id}
+ * 3. Extrai mixdrop/streamtape/byse/doodstream de servers_dub + servers_leg
+ * 4. Salva no _vizerMovieIndex em memória (próxima busca é instantânea)
+ *
+ * Use case: filme existe no encontrei-catalog mas mixdrop fileId morreu
+ * (Mixdrop apagou o arquivo). Esse resolver re-busca o fileId atual do Vizer.
+ *
+ * @returns { mixdrop, streamtape, byse, doodstream, audio, server_name, source: "vizer-live" }
+ *          ou null se Vizer não tem o filme ou AJAX falhou.
+ */
+export async function resolveVizerMovie(tmdbId: number) {
+  loadVizerMovieIds();
+  const vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  if (!vizerMovieId) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3500);
+    const pUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vizerMovieId}`;
+    const pRes = await fetch(pUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+        "Referer": `https://www.vizer.beauty/filmes/online/x-${vizerMovieId}/`,
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!pRes.ok) return null;
+    const pData = await pRes.json();
+    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+
+    let mixdrop: string | null = null;
+    let streamtape: string | null = null;
+    let byse: string | null = null;
+    let doodstream: string | null = null;
+
+    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
+      const [, k, v] = match;
+      if (k === "mixdrop") mixdrop = v;
+      else if (k === "streamtape") streamtape = v;
+      else if (k === "byse") byse = v;
+      else if (k === "doodstream") doodstream = v;
+    }
+
+    if (!mixdrop) return null;
+
+    const movieObj = {
+      video_id: vizerMovieId,
+      tmdb_id: tmdbId,
+      audio: pData.current_audio || "Dublado",
+      servers: { mixdrop, streamtape, byse, doodstream },
+    };
+
+    // Cache no índice em memória (próxima busca = instantânea)
+    _vizerMovieIndex.set(tmdbId, movieObj);
+
+    return {
+      mixdrop,
+      streamtape,
+      byse,
+      doodstream,
+      audio: movieObj.audio,
+      server_name: "MixDrop",
       source: "vizer-live",
     };
   } catch {
@@ -653,6 +771,16 @@ router.get("/api/encontrei-lookup", async (req, res) => {
           server_name: "MixDrop",
           source: bestSource,
         };
+      } else {
+        // Se não estava em nenhum catálogo estático, resolve on-demand do Vizer Live
+        // (subsui o backup estático vizer-catalog.json que foi deletado — equivalente
+        // funcional ao resolveVizerEpisode mas pra filmes).
+        // Caso de uso: filme tinha no encontrei, mas mixdrop fileId morreu e o Vizer
+        // ainda tem o filme com fileId atualizado.
+        const live = await resolveVizerMovie(tmdbId);
+        if (live) {
+          result = live;
+        }
       }
     }
     
