@@ -20,6 +20,7 @@ import {
   Layers,
   Pencil,
 } from "lucide-react";
+import { auth } from "../services/firebase";
 
 interface ServerBlock {
   id: string;
@@ -129,7 +130,14 @@ export function ServerBlocksAdmin() {
   const [editingReasonText, setEditingReasonText] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const getAdminToken = () => sessionStorage.getItem("adminSessionToken") || "";
+  const getAdminToken = () => {
+    return (
+      sessionStorage.getItem("adminSessionToken") ||
+      sessionStorage.getItem("adminEmail") ||
+      auth?.currentUser?.email ||
+      ""
+    );
+  };
 
   const loadBlocks = useCallback(async () => {
     setLoading(true);
