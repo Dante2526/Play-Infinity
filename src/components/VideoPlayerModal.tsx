@@ -2055,7 +2055,6 @@ export function VideoPlayerModal({
             />
           </div>
         </div>
-
         {/* CastModal removido do VideoPlayerModal, agora reside apenas na DetailsPage */}
       </div>
     </div>

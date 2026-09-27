@@ -30,6 +30,8 @@ function parseTrialTimestamp(value: any): number | null {
 interface DerivedUserStatus {
   isPremium: boolean;
   trial: TrialStatus;
+  isPlus: boolean;
+  isVitalicio: boolean;
 }
 
 function deriveStatus(data: any): DerivedUserStatus {
@@ -52,6 +54,9 @@ function deriveStatus(data: any): DerivedUserStatus {
   const hasUsedTrial = trialUntil !== null;
   const isTrialActive = hasUsedTrial && trialUntil! > Date.now();
 
+  const isPlus = data.plano === "plus";
+  const isVitalicio = data.tipoAcesso === "vitalicio" || data.tipoAcesso === "vitalício";
+
   return {
     isPremium,
     trial: {
@@ -60,6 +65,8 @@ function deriveStatus(data: any): DerivedUserStatus {
       hasUsedTrial,
       canUseTrial: !hasUsedTrial && !isPremium,
     },
+    isPlus,
+    isVitalicio,
   };
 }
 
@@ -89,6 +96,8 @@ export function useSubscription() {
   const isDev = isAiStudioOrDevEnvironment();
   const [isPremium, setIsPremium] = useState<boolean>(isDev);
   const [trial, setTrial] = useState<TrialStatus>(NO_TRIAL);
+  const [isPlus, setIsPlus] = useState<boolean>(false);
+  const [isVitalicio, setIsVitalicio] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(!isDev);
 
   useEffect(() => {
@@ -140,6 +149,8 @@ export function useSubscription() {
       const status = deriveStatus(data);
       setIsPremium(status.isPremium);
       setTrial(status.trial);
+      setIsPlus(status.isPlus);
+      setIsVitalicio(status.isVitalicio);
       scheduleExpiryCheck(data);
     };
 
@@ -190,6 +201,8 @@ export function useSubscription() {
               clearExpiryTimer();
               setIsPremium(isDev);
               setTrial(NO_TRIAL);
+              setIsPlus(false);
+              setIsVitalicio(false);
               setLoading(false);
             }
           },
@@ -198,6 +211,8 @@ export function useSubscription() {
             clearExpiryTimer();
             setIsPremium(isDev);
             setTrial(NO_TRIAL);
+            setIsPlus(false);
+            setIsVitalicio(false);
             setLoading(false);
           }
         );
@@ -210,6 +225,8 @@ export function useSubscription() {
         clearExpiryTimer();
         setIsPremium(isDev);
         setTrial(NO_TRIAL);
+        setIsPlus(false);
+        setIsVitalicio(false);
         setLoading(false);
       }
     });
@@ -221,5 +238,5 @@ export function useSubscription() {
     };
   }, []);
 
-  return { isPremium, trial, loading };
+  return { isPremium, trial, isPlus, isVitalicio, loading };
 }
