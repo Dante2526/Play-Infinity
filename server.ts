@@ -15,6 +15,8 @@ import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvaila
 import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS } from "./server/utils/helpers";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
+import { checkVidsrcSeason } from "./server/routes/vidsrcRoutes";
+import { checkVipSeason, checkVizerSeason } from "./server/routes/encontreiLookup";
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
 }
@@ -3771,8 +3773,9 @@ app.use("/api/admin", adminOpsRouter);
         return res.status(400).json({ success: false, error: "Parâmetros 'tmdbId' e 'season' são obrigatórios." });
       }
 
+      const forceRefresh = req.query.force_refresh === "true" || req.query.force_refresh === "1" || Boolean(req.query._cb);
       const cacheKey = `${tmdbId}_${season}_${count}`;
-      const cached = seasonAvailabilityCache.get(cacheKey);
+      const cached = !forceRefresh ? seasonAvailabilityCache.get(cacheKey) : null;
       if (cached) {
         return res.json({
           success: true,
@@ -3858,6 +3861,24 @@ app.use("/api/admin", adminOpsRouter);
           }
         };
 
+        const fallbackCheck = async (): Promise<boolean> => {
+          const nix = await checkNixplay();
+          if (nix) return true;
+          try {
+            const vizerOk = await checkVizerSeason(numericId, season);
+            if (vizerOk) return true;
+          } catch {}
+          try {
+            const vipOk = await checkVipSeason(numericId, season);
+            if (vipOk) return true;
+          } catch {}
+          try {
+            const vsOk = await checkVidsrcSeason(numericId, season);
+            if (vsOk) return true;
+          } catch {}
+          return false;
+        };
+
         const url = `https://v1.watchplay.shop/${prefix}/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
         const commonHeaders = {
           "Referer": "https://v1.watchplay.shop/",
@@ -3878,31 +3899,29 @@ app.use("/api/admin", adminOpsRouter);
             const loc = upstream.headers.get("location") || "";
             if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
               clearTimeout(timeoutId);
-              return await checkNixplay();
+              return await fallbackCheck();
             }
             try {
               const redirectedUrl = new URL(loc, url).toString();
               upstream = await fetch(redirectedUrl, { headers: commonHeaders, signal: controller.signal });
             } catch {
               clearTimeout(timeoutId);
-              return await checkNixplay();
+              return await fallbackCheck();
             }
           }
 
           if (upstream.status >= 400) {
             clearTimeout(timeoutId);
-            return await checkNixplay();
+            return await fallbackCheck();
           }
 
           const html = await upstream.text();
           clearTimeout(timeoutId);
           const wpAvailable = !isCheckUnavailable(html, upstream.url || url, upstream.status);
           if (wpAvailable) return true;
-          return await checkNixplay();
+          return await fallbackCheck();
         } catch {
-          // Erro de rede ao checar WatchPlayer: tenta Nixplay, ou não esconde se houve erro geral
-          const nix = await checkNixplay();
-          return nix ? true : true;
+          return await fallbackCheck();
         }
       };
 

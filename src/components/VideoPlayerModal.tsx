@@ -1018,19 +1018,30 @@ export function VideoPlayerModal({
           imdbId === "tt22084616" ||
           (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
 
-        const targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
-        setSelectedServerKey(targetServerKey);
-
-        const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
+        let targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
         let targetUrl: string;
 
-        if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+        if (isSeries && targetSeason >= 5 && (String(tmdbId) === "126027" || String(resolvedId) === "126027")) {
+          // Fantasmas T5 está homologada no MixDrop (Dublado PT-BR do Vizer) e no Seriesflix HD
+          const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
+          if (fid) {
+            targetServerKey = "srv_mixdrop";
+            targetUrl = buildMixdropStreamUrl(fid) || "";
+          } else {
+            targetServerKey = "srv_vidsrc";
+            const vsSrv = serversRef.current.find(s => s.key === "srv_vidsrc") || serversRef.current[0];
+            targetUrl = vsSrv.buildUrl(resolvedId, targetSeason, targetEpisode);
+          }
+        } else if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
         } else {
+          const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
           targetUrl = isSeries 
             ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
             : targetSrv.buildUrl(resolvedId);
         }
+
+        setSelectedServerKey(targetServerKey);
 
         setUrlInput(targetUrl);
         handleExtract(targetUrl);
@@ -1342,9 +1353,15 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     fallbackAttemptsRef.current.clear();
 
-    const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
+    let targetKey = selectedServerKey;
+    if ((String(tmdbId) === "126027" || String(resolvedId) === "126027") && newSeason >= 5 && selectedServerKey === "srv_watchplay") {
+      targetKey = "srv_mixdrop";
+      setSelectedServerKey("srv_mixdrop");
+    }
+
+    const activeServer = servers.find(s => s.key === targetKey) || servers[0];
     let newUrl: string;
-    if (selectedServerKey === "srv_mixdrop" && tmdbId) {
+    if (targetKey === "srv_mixdrop" && tmdbId) {
       const fid = await lookupMixdropFileId(newSeason, 1);
       newUrl = fid
         ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()

@@ -1,0 +1,22 @@
+[
+  {
+    "id": "911430_srv_watchplay",
+    "tmdbId": 911430,
+    "serverKey": "srv_watchplay",
+    "contentType": "movie",
+    "title": "F1: O Filme",
+    "reason": "Versão WatchPlayer estava em inglês; outras fontes têm PT-BR",
+    "blockedAt": "2026-09-27T19:32:12.052Z",
+    "blockedBy": "system-seed"
+  },
+  {
+    "id": "969681_srv_watchplay",
+    "tmdbId": 969681,
+    "serverKey": "srv_watchplay",
+    "contentType": "movie",
+    "title": "Homem-Aranha: Um Novo Dia",
+    "reason": "Versão WatchPlayer estava em inglês; outras fontes têm PT-BR",
+    "blockedAt": "2026-09-27T19:32:12.052Z",
+    "blockedBy": "system-seed"
+  }
+]

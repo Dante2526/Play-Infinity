@@ -45,6 +45,11 @@ export function WhatsNewModal() {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
+    // Nunca exibir na rota de administração (/adm ou /admin)
+    if (typeof window !== 'undefined' && window.location.pathname.toUpperCase().includes('/ADM')) {
+      return;
+    }
+
     // Show only once
     const hasSeen = safeLocalStorage.getItem(`whats_new_${WHATS_NEW_VERSION}`);
     if (!hasSeen) {

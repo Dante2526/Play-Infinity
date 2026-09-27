@@ -21,8 +21,196 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
+import { checkVidsrcSeason } from "./vidsrcRoutes";
 
 const router = Router();
+
+// Cache de temporadas verificadas no VIP Player (TTL 30 min)
+const vipSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
+const VIP_SEASON_TTL = 30 * 60 * 1000;
+
+export async function checkVipSeason(
+  tmdb: string | number,
+  season: string | number
+): Promise<boolean> {
+  const key = `${tmdb}:${season}`;
+  const cached = vipSeasonCache.get(key);
+  if (cached && Date.now() - cached.timestamp < VIP_SEASON_TTL) {
+    return cached.ok;
+  }
+  try {
+    const port = process.env.PORT || 3000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=tv&s=${season}&e=1`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      vipSeasonCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+    const html = await res.text();
+    const ok = html.includes("var hlsUrl =") || html.includes("embedplayer") || html.includes("master.m3u8");
+    vipSeasonCache.set(key, { ok, timestamp: Date.now() });
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+// Mapeamento global de TMDB ID -> Serie ID do Vizer/Encontrei
+const _tmdbToSerieIdMap = new Map<number, number>();
+
+// Cache de temporadas verificadas no Vizer Live (TTL 30 min)
+const vizerSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
+const VIZER_SEASON_TTL = 30 * 60 * 1000;
+
+export async function checkVizerSeason(
+  tmdb: string | number,
+  season: string | number
+): Promise<boolean> {
+  const numericTmdb = typeof tmdb === "number" ? tmdb : parseInt(String(tmdb), 10);
+  const numericSeason = typeof season === "number" ? season : parseInt(String(season), 10);
+  if (!numericTmdb || isNaN(numericTmdb)) return false;
+
+  loadCatalogs();
+  const serieId = _tmdbToSerieIdMap.get(numericTmdb);
+  if (!serieId) return false;
+
+  const key = `${numericTmdb}:${numericSeason}`;
+  const cached = vizerSeasonCache.get(key);
+  if (cached && Date.now() - cached.timestamp < VIZER_SEASON_TTL) {
+    return cached.ok;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+    const url = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      vizerSeasonCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+    const data = await res.json();
+    const ok = Array.isArray(data.episodes) && data.episodes.length > 0;
+    vizerSeasonCache.set(key, { ok, timestamp: Date.now() });
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveVizerEpisode(
+  tmdbId: number,
+  season: number,
+  episode: number
+) {
+  loadCatalogs();
+  const serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) return null;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+    const listUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
+    const res = await fetch(listUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const eps = data.episodes || [];
+    if (!eps.length) return null;
+
+    const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+    if (!target) return null;
+
+    const vidMatch = target.url.match(/-(\d+)\/?$/);
+    if (!vidMatch) return null;
+    const vid = vidMatch[1];
+
+    const pController = new AbortController();
+    const pTimeout = setTimeout(() => pController.abort(), 3500);
+    const pUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vid}`;
+    const pRes = await fetch(pUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "X-Requested-With": "XMLHttpRequest",
+        "Accept": "application/json",
+      },
+      signal: pController.signal,
+    });
+    clearTimeout(pTimeout);
+    if (!pRes.ok) return null;
+    const pData = await pRes.json();
+    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+
+    let mixdrop: string | null = null;
+    let streamtape: string | null = null;
+    let byse: string | null = null;
+    let doodstream: string | null = null;
+
+    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
+      const [, k, v] = match;
+      if (k === "mixdrop") mixdrop = v;
+      else if (k === "streamtape") streamtape = v;
+      else if (k === "byse") byse = v;
+      else if (k === "doodstream") doodstream = v;
+    }
+
+    if (!mixdrop) return null;
+
+    const epObj = {
+      episode_id: parseInt(vid, 10),
+      serie_id: serieId,
+      season,
+      episode,
+      tmdb_id: tmdbId,
+      audio: pData.current_audio || "Dublado",
+      servers: { mixdrop, streamtape, byse, doodstream },
+      source_url: target.url,
+    };
+
+    // Cache no índice em memória
+    const key = `${tmdbId}:${season}:${episode}`;
+    _encontreiEpisodeIndex.set(key, epObj);
+
+    // Atualiza temporadas conhecidas
+    const curSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
+    if (!curSeasons.includes(season)) {
+      _encontreiSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
+    }
+
+    return {
+      mixdrop,
+      streamtape,
+      byse,
+      doodstream,
+      audio: epObj.audio,
+      server_name: "MixDrop",
+      season,
+      episode,
+      source: "vizer-live",
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Catálogo encontrei (fallback, mais filmes)
 let _encontreiCatalog: any = null;
@@ -92,6 +280,9 @@ function tryLoadCatalog(
     
     const seriesSeasonsMap = new Map<number, Set<number>>();
     for (const ep of catalogRef.value.episodes || []) {
+      if (ep.tmdb_id && ep.serie_id && !_tmdbToSerieIdMap.has(ep.tmdb_id)) {
+        _tmdbToSerieIdMap.set(ep.tmdb_id, ep.serie_id);
+      }
       if (ep.tmdb_id && ep.season && ep.episode) {
         const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
         // Se já existe (duplicado), mantém o primeiro
@@ -227,6 +418,11 @@ router.get("/api/series-seasons-available", async (req, res) => {
     // Sonda network só pras seasons que não estão no catálogo e não estão em cache
     if (!probeCached && seasonsToProbe.length > 0) {
       const probeSeason = async (season: number): Promise<boolean> => {
+        // 0. Sonda Vizer Live (MixDrop Dublado)
+        try {
+          const vizerOk = await checkVizerSeason(tmdbId, season);
+          if (vizerOk) return true;
+        } catch {}
         // 1. Sonda Nixplay HD
         try {
           const ss = String(season).padStart(3, "0");
@@ -269,6 +465,16 @@ router.get("/api/series-seasons-available", async (req, res) => {
             );
             if (!isBad) return true;
           }
+        } catch {}
+        // 3. Sonda VIP Player
+        try {
+          const vipOk = await checkVipSeason(tmdbId, season);
+          if (vipOk) return true;
+        } catch {}
+        // 4. Sonda Seriesflix HD (vidsrc)
+        try {
+          const vsOk = await checkVidsrcSeason(tmdbId, season);
+          if (vsOk) return true;
         } catch {}
         return false;
       };
@@ -351,7 +557,7 @@ router.all("/api/check-playable-batch", (req, res) => {
   }
 });
 
-router.get("/api/encontrei-lookup", (req, res) => {
+router.get("/api/encontrei-lookup", async (req, res) => {
   try {
     loadCatalogs();
     
@@ -405,6 +611,12 @@ router.get("/api/encontrei-lookup", (req, res) => {
           episode: bestEp.episode,
           source: bestSource,
         };
+      } else {
+        // Se não estava no catálogo em memória, busca on-demand do Vizer Live
+        const live = await resolveVizerEpisode(tmdbId, season, episode);
+        if (live) {
+          result = live;
+        }
       }
     } else {
       // Lookup de filme: PRIMEIRO vizer, DEPOIS encontrei

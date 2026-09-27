@@ -456,4 +456,78 @@ window.addEventListener('message',function(e){
   return res.send(html);
 });
 
+// Cache de verificação de temporada no vidsrc (TTL 30 min)
+const vidsrcSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
+const VIDSRC_SEASON_TTL = 30 * 60 * 1000;
+
+export async function checkVidsrcSeason(
+  tmdb: string | number,
+  season: string | number
+): Promise<boolean> {
+  const key = `${tmdb}:${season}`;
+  const cached = vidsrcSeasonCache.get(key);
+  if (cached && Date.now() - cached.timestamp < VIDSRC_SEASON_TTL) {
+    return cached.ok;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    const r1 = await fetch(
+      `https://vidsrc.sh/vs_src.php?type=tv&id=${tmdb}&season=${season}&episode=1`,
+      {
+        headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" },
+        signal: controller.signal,
+      }
+    );
+    const d1 = await r1.json();
+    if (!d1.src) {
+      clearTimeout(timeout);
+      vidsrcSeasonCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+
+    const r2 = await fetch(d1.src, {
+      headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" },
+      signal: controller.signal,
+    });
+    const h2 = await r2.text();
+    const pm = h2.match(/"playerUrl":"([^"]+)"/);
+    if (!pm) {
+      clearTimeout(timeout);
+      vidsrcSeasonCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+    const playerUrl = "https://cloudorchestranova.com" + pm[1].replace(/\\u0026/g, "&");
+
+    const r3 = await fetch(playerUrl, {
+      headers: { "User-Agent": UA, Referer: d1.src },
+      signal: controller.signal,
+    });
+    const h3 = await r3.text();
+    const sbm = h3.match(/"streamBase":"([^"]+)"/);
+    if (!sbm) {
+      clearTimeout(timeout);
+      vidsrcSeasonCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+    const streamBase = sbm[1].replace(/\\u0026/g, "&");
+
+    const streamApiUrl = `${streamBase}&season=${season}&episode=1&stream_urls`;
+    const r4 = await fetch(streamApiUrl, {
+      headers: { "User-Agent": UA, Accept: "application/json" },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    const d4 = await r4.json();
+    const hasStreams = Boolean(d4.data?.stream_urls);
+
+    vidsrcSeasonCache.set(key, { ok: hasStreams, timestamp: Date.now() });
+    return hasStreams;
+  } catch {
+    return false;
+  }
+}
+
 export default router;
