@@ -946,7 +946,7 @@ export function VideoPlayerModal({
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_vidsrc");
+    setPlayerSkinReady(serverKey === "srv_mixdrop");
     setError(null);
 
     let newUrl: string;
@@ -2104,11 +2104,13 @@ export function VideoPlayerModal({
                   if (
                     selectedServerKey === "srv_mixdrop" ||
                     selectedServerKey === "srv_nixplay" ||
+                    selectedServerKey === "srv_vidsrc" ||
                     activeIframeUrl?.includes("/api/mixdrop-stream") ||
                     activeIframeUrl?.includes("/api/native-player") ||
+                    activeIframeUrl?.includes("/api/vidsrc-player") ||
                     activeIframeUrl?.includes("nixplay")
                   ) {
-                    setTimeout(() => setPlayerSkinReady(true), 200);
+                    setTimeout(() => setPlayerSkinReady(true), 500);
                   }
                 }}
                 onError={() => handleSilentFallback()}
