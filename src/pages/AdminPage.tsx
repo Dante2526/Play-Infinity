@@ -47,12 +47,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
         
         if (docSnap.exists()) {
           setIsAdmin(true);
+          sessionStorage.setItem("adminEmail", docSnap.data()?.email || "");
         } else {
           sessionStorage.removeItem("adminSessionToken");
+          sessionStorage.removeItem("adminEmail");
           setIsAdmin(false);
         }
       } catch (err) {
         sessionStorage.removeItem("adminSessionToken");
+        sessionStorage.removeItem("adminEmail");
         setIsAdmin(false);
       } finally {
         setIsCheckingAuth(false);
@@ -134,6 +137,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         const adminDoc = querySnapshot.docs[0];
         setIsAdmin(true);
         sessionStorage.setItem("adminSessionToken", adminDoc.id);
+        sessionStorage.setItem("adminEmail", adminDoc.data()?.email || email);
         // Tenta autenticar no Auth também, caso as regras do Firestore exijam request.auth
         try {
           const { signInWithEmailAndPassword } = await import("firebase/auth");
@@ -813,6 +817,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             <button 
               onClick={() => {
                 sessionStorage.removeItem("adminSessionToken");
+                sessionStorage.removeItem("adminEmail");
                 setIsAdmin(false);
               }}
               className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"

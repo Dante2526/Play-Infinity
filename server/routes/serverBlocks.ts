@@ -114,31 +114,62 @@ function persistBlocks(): void {
 }
 
 /**
- * Verifica token de admin consultando Firestore "administradores" via SDK admin.
- * Como este projeto usa Firebase client SDK no backend (server.ts inicializa db),
- * usamos db.collection("administradores").doc(token).get() — não precisa de Admin SDK.
- *
- * Caso o token seja "system-seed" (deploy script), permite operação (não usar em prod).
+ * Verifica token de admin consultando Firestore "administradores".
+ * Suporta tanto o document ID (armazenado em adminSessionToken)
+ * quanto o e-mail de um administrador cadastrado.
  */
 async function isAdminToken(req: Request): Promise<boolean> {
   const token = req.header(ADMIN_TOKEN_HEADER);
-  if (!token) return false;
+  if (!token) {
+    console.warn("[server-blocks] Auth falhou: header x-admin-token ausente");
+    return false;
+  }
 
-  // Bypass apenas para scripts de deploy automatizados (não exibir no client)
+  // Bypass apenas para scripts de deploy automatizados em ambiente não-produção
   if (token === "system-seed" && process.env.NODE_ENV !== "production") {
     return true;
   }
 
   try {
-    // db é exportado por server.ts (.Firebase backend SDK)
-    const { db } = await import("../../server");
-    if (!db) return false;
-    // Como server.ts exporta db com client SDK do Firebase JS, usamos getDoc via dynamic import
-    const { getDoc, doc } = await import("firebase/firestore");
-    const snap = await getDoc(doc(db, "administradores", token));
-    return snap.exists();
+    const { db } = await import("../../src/services/firebase");
+    if (!db) {
+      console.warn("[server-blocks] Auth falhou: db do Firestore não inicializado");
+      return false;
+    }
+    const { getDoc, doc, collection, query, where, getDocs } = await import("firebase/firestore");
+
+    // 1. Checa por ID do documento na coleção administradores (fluxo padrão do painel)
+    const docSnap = await getDoc(doc(db, "administradores", token));
+    if (docSnap.exists()) {
+      return true;
+    }
+
+    // 2. Se for um e-mail, busca pelo campo 'email'
+    if (token.includes("@")) {
+      const q = query(
+        collection(db, "administradores"),
+        where("email", "==", token.trim().toLowerCase())
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        return true;
+      }
+    }
+
+    // 3. Fallback genérico: busca se qualquer admin possui esse email ou uid
+    const qEmail = query(
+      collection(db, "administradores"),
+      where("email", "==", token.trim())
+    );
+    const snapEmail = await getDocs(qEmail);
+    if (!snapEmail.empty) {
+      return true;
+    }
+
+    console.warn("[server-blocks] Auth falhou: token não localizado em administradores:", token);
+    return false;
   } catch (err) {
-    console.warn("[server-blocks] Auth check falhou:", err);
+    console.warn("[server-blocks] Auth check falhou com erro:", err);
     return false;
   }
 }
