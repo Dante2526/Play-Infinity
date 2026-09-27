@@ -148,11 +148,26 @@ function loadCatalogs() {
 }
 
 // Cache de temporadas verificadas em memória
+// Apenas para PROBES (seasons não presentes no catálogo). Seasons do catálogo
+// são sempre derivadas live do índice em memória — nunca cached.
 const _verifiedSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
-const VERIFIED_SEASONS_CACHE_TTL = 20 * 60 * 1000;
+const VERIFIED_SEASONS_CACHE_TTL = 5 * 60 * 1000; // 5min (reduzido de 20min)
 
 router.get("/api/series-seasons-available", async (req, res) => {
   try {
+    // force_refresh=true limpa cache de probes pra essa série
+    // (útil pra debug sem precisar reiniciar VPS)
+    const forceRefresh = req.query.force_refresh === "true" || req.query.force_refresh === "1";
+    if (forceRefresh) {
+      // Limpa TODAS as entradas de probe cache dessa série (qualquer set de seasons)
+      const keysToDelete: string[] = [];
+      for (const key of _verifiedSeasonsCache.keys()) {
+        if (key.startsWith(`${parseInt(req.query.tmdb_id as string, 10)}:probe:`)) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach(k => _verifiedSeasonsCache.delete(k));
+    }
     loadCatalogs();
     const tmdbId = parseInt(req.query.tmdb_id as string, 10);
     if (!tmdbId) {
@@ -166,114 +181,133 @@ router.get("/api/series-seasons-available", async (req, res) => {
         .map(n => parseInt(n.trim(), 10))
         .filter(n => !isNaN(n) && n > 0);
     }
-
-    // Junta temporadas dos DOIS catálogos (vizer + encontrei)
-    const vizerSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
-    const encontreiSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
-    
     if (candidateSeasons.length === 0) {
       candidateSeasons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     }
 
-    const candidates = Array.from(new Set([...candidateSeasons, ...vizerSeasons, ...encontreiSeasons])).sort((a, b) => a - b);
-    const cacheKey = `${tmdbId}:${candidates.join(",")}`;
+    // ============================================================================
+    // ARQUITETURA ANTI-CACHE-STALE:
+    // ============================================================================
+    // 1. catalogSeasons: sempre derivado do índice em memória (vizer + encontrei).
+    //    O índice é recarregado quando o arquivo do catálogo muda (mtime check
+    //    em tryLoadCatalog). Portanto, sempre que o catálogo ganha uma temporada
+    //    nova (ex: T5 do Ghosts adicionado), ela aparece imediatamente no
+    //    próximo request — sem depender de cache invalidation.
+    //
+    // 2. probedSeasons: seasons que NÃO estão no catálogo mas são candidates
+    //    (ex: T6 do Ghosts que o TMDB anuncia mas o catálogo ainda não tem).
+    //    Essas exigem sondagem network (Nixplay + WatchPlayer) — lento, faz
+    //    sentido cachear. Mas o cache só guarda RESULTADO DE PROBE, não o
+    //    resultado de catálogo. Então mesmo se o cache ficar velho, ele só
+    //    afeta seasons que não estão no catálogo — nunca esconde catalogSeasons.
+    // ============================================================================
 
-    const cached = _verifiedSeasonsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      return res.json({
-        success: true,
-        hasCatalog: cached.seasons.length > 0,
-        tmdbId,
-        seasons: cached.seasons,
-      });
-    }
+    const vizerSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
+    const encontreiSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
+    const catalogSeasons = Array.from(
+      new Set([...vizerSeasons, ...encontreiSeasons])
+    ).sort((a, b) => a - b);
 
-    // Pra cada temporada candidata, verifica se tem em vizer OU encontrei
-    const checkSeasonPlayable = async (season: number): Promise<boolean> => {
-      // 1. Catálogo local (vizer + encontrei)
-      if (vizerSeasons.includes(season) || encontreiSeasons.includes(season)) {
-        return true;
-      }
-      // 2. Sonda Nixplay HD
-      try {
-        const ss = String(season).padStart(3, "0");
-        const streamId = `${tmdbId}${ss}001`;
-        const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 2500);
-        const nixRes = await fetch(nixUrl, {
-          headers: { Range: "bytes=0-100" },
-          signal: controller.signal,
-        });
-        clearTimeout(t);
-        if (nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4") {
-          return true;
-        }
-      } catch {}
-      // 3. Sonda WatchPlayer
-      try {
-        const wpUrl = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/1`;
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), 2500);
-        const wpRes = await fetch(wpUrl, {
-          headers: {
-            "Referer": "https://v1.watchplay.shop/",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-          },
-          signal: controller.signal,
-        });
-        clearTimeout(t);
-        if (wpRes.status === 200) {
-          const text = await wpRes.text();
-          const lower = text.toLowerCase();
-          const isBad = (
-            lower.includes("404") ||
-            lower.includes("login-card") ||
-            lower.includes("login-page") ||
-            lower.includes("não encontrado") ||
-            lower.includes("série não encontrada") ||
-            text.length < 300
-          );
-          if (!isBad) return true;
-        }
-      } catch {}
-      return false;
-    };
-
-    const checks = await Promise.all(
-      candidates.map(async (s) => ({
-        season: s,
-        available: await checkSeasonPlayable(s),
-      }))
+    // Seasons que precisam de probe network (estão em candidates mas NÃO em catálogo)
+    const seasonsToProbe = candidateSeasons.filter(
+      s => !catalogSeasons.includes(s)
     );
 
-    const verified = checks.filter(c => c.available).map(c => c.season);
+    // Cache só pra probes (TTL 20min)
+    const probeCacheKey = `${tmdbId}:probe:${seasonsToProbe.join(",")}`;
+    let probedSeasons: number[] = [];
+    let probeCached = false;
 
-    if (verified.length > 0) {
-      _verifiedSeasonsCache.set(cacheKey, {
+    const cached = _verifiedSeasonsCache.get(probeCacheKey);
+    if (cached && Date.now() - cached.timestamp < VERIFIED_SEASONS_CACHE_TTL) {
+      probedSeasons = cached.seasons;
+      probeCached = true;
+    }
+
+    // Sonda network só pras seasons que não estão no catálogo e não estão em cache
+    if (!probeCached && seasonsToProbe.length > 0) {
+      const probeSeason = async (season: number): Promise<boolean> => {
+        // 1. Sonda Nixplay HD
+        try {
+          const ss = String(season).padStart(3, "0");
+          const streamId = `${tmdbId}${ss}001`;
+          const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 2500);
+          const nixRes = await fetch(nixUrl, {
+            headers: { Range: "bytes=0-100" },
+            signal: controller.signal,
+          });
+          clearTimeout(t);
+          if (nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4") {
+            return true;
+          }
+        } catch {}
+        // 2. Sonda WatchPlayer
+        try {
+          const wpUrl = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/1`;
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 2500);
+          const wpRes = await fetch(wpUrl, {
+            headers: {
+              "Referer": "https://v1.watchplay.shop/",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(t);
+          if (wpRes.status === 200) {
+            const text = await wpRes.text();
+            const lower = text.toLowerCase();
+            const isBad = (
+              lower.includes("404") ||
+              lower.includes("login-card") ||
+              lower.includes("login-page") ||
+              lower.includes("não encontrado") ||
+              lower.includes("série não encontrada") ||
+              text.length < 300
+            );
+            if (!isBad) return true;
+          }
+        } catch {}
+        return false;
+      };
+
+      const probes = await Promise.all(
+        seasonsToProbe.map(async (s) => ({
+          season: s,
+          available: await probeSeason(s),
+        }))
+      );
+      probedSeasons = probes.filter(p => p.available).map(p => p.season);
+
+      _verifiedSeasonsCache.set(probeCacheKey, {
         timestamp: Date.now(),
-        seasons: verified,
-      });
-
-      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      return res.json({
-        success: true,
-        hasCatalog: true,
-        tmdbId,
-        seasons: verified,
+        seasons: probedSeasons,
       });
     }
 
-    // Fallback
-    const localSeasons = [...vizerSeasons, ...encontreiSeasons];
-    const fallback = localSeasons.length > 0 ? Array.from(new Set(localSeasons)).sort((a, b) => a - b) : [1];
+    // Resultado final: catálogo (sempre live) + probes (cached ou fresco)
+    const verified = Array.from(
+      new Set([...catalogSeasons, ...probedSeasons])
+    ).sort((a, b) => a - b);
+
+    // Fallback se nada encontrado
+    const finalSeasons = verified.length > 0 ? verified : [1];
+
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     return res.json({
       success: true,
-      hasCatalog: localSeasons.length > 0,
+      hasCatalog: catalogSeasons.length > 0 || probedSeasons.length > 0,
       tmdbId,
-      seasons: fallback,
+      seasons: finalSeasons,
+      // Debug info (opcional — pode ajudar a diagnosticar futuros problemas)
+      _debug: {
+        catalogSeasons,
+        probedSeasons,
+        probeCached,
+        seasonsToProbe,
+      },
     });
   } catch (err: any) {
     console.error("[series-seasons-available] Erro:", err);
