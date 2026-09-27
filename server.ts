@@ -173,6 +173,17 @@ process.on("uncaughtException", (err) => {
     }
     return apiLimiter(req, res, next);
   });
+
+  // Rota explícita para a página de privacidade (SPA Fallback imediato)
+  app.get(["/privacy", "/privacidade"], (req, res, next) => {
+    const distPath = path.join(process.cwd(), "dist");
+    if (fs.existsSync(distPath)) {
+      res.sendFile(path.join(distPath, "index.html"));
+    } else {
+      next(); // Passa para o Vite em dev mode
+    }
+  });
+
   // ========================================================
 
   // API 1: Extract player from external page URL (e.g. encontrei.info, etc.)
