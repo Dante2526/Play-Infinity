@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   Check,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Info
 } from "lucide-react";
 
@@ -118,6 +120,52 @@ interface GitHubRunsResponse {
   error?: string;
 }
 
+/**
+ * Extrai o título limpo do commit e separa o corpo detalhado (se houver),
+ * evitando blocos de texto gigantes que quebram o layout no celular.
+ */
+function parseCommitMessage(rawMessage: string) {
+  if (!rawMessage) return { title: "Sem descrição", body: "" };
+  const clean = rawMessage.trim().replace(/^"|"$/g, "");
+
+  // 1. Tenta quebrar na primeira quebra de linha (\r ou \n)
+  const newlineMatch = clean.match(/^([^\r\n]+)(?:[\r\n]+([\s\S]*))?$/);
+  if (newlineMatch && newlineMatch[2]?.trim()) {
+    return {
+      title: newlineMatch[1].trim(),
+      body: newlineMatch[2].trim(),
+    };
+  }
+
+  // 2. Se for uma linha única mas contiver separador comum (ex: " == ")
+  if (clean.includes(" == ")) {
+    const parts = clean.split(" == ");
+    return {
+      title: parts[0].trim(),
+      body: "== " + parts.slice(1).join(" == ").trim(),
+    };
+  }
+
+  // 3. Se for muito longa (> 110 caracteres) sem quebra de linha
+  if (clean.length > 110) {
+    const sentenceEnd = clean.search(/[.!?](?:\s+|$)/);
+    if (sentenceEnd !== -1 && sentenceEnd < 130) {
+      return {
+        title: clean.slice(0, sentenceEnd + 1).trim(),
+        body: clean.slice(sentenceEnd + 1).trim(),
+      };
+    }
+    const cutIndex = clean.lastIndexOf(" ", 105);
+    const splitPoint = cutIndex > 40 ? cutIndex : 95;
+    return {
+      title: clean.slice(0, splitPoint).trim() + "...",
+      body: clean.slice(splitPoint).trim(),
+    };
+  }
+
+  return { title: clean, body: "" };
+}
+
 export function AdminDeployMonitor() {
   const githubRepo = "Dante2526/Play-Infinity";
 
@@ -133,6 +181,7 @@ export function AdminDeployMonitor() {
   const [githubError, setGithubError] = useState<string | null>(null);
   const [lastGithubRefresh, setLastGithubRefresh] = useState<Date | null>(null);
   const [currentTime, setCurrentTime] = useState(() => Date.now());
+  const [expandCommitDetails, setExpandCommitDetails] = useState(false);
 
   // Ticker de 1 segundo para atualizar o cronômetro e a barra de progresso em tempo real quando houver deploy em andamento
   useEffect(() => {
@@ -673,18 +722,67 @@ export function AdminDeployMonitor() {
               )}
 
               {/* Detalhes do Commit */}
-              <div className="mt-4 p-3.5 bg-black/30 rounded-xl border border-white/5 flex items-start gap-3">
-                <GitCommit className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
-                <div className="text-xs">
-                  <span className="text-white/50">Mensagem da alteração enviada:</span>
-                  <p className="text-white font-semibold text-sm mt-0.5">
-                    "{latestRun.commit.message}"
-                  </p>
-                  <span className="text-white/40 text-[11px] mt-1 block">
-                    Autor: {latestRun.commit.author}
-                  </span>
-                </div>
-              </div>
+              {(() => {
+                const commitInfo = parseCommitMessage(latestRun.commit.message);
+                return (
+                  <div className="mt-4 p-4 bg-black/35 rounded-2xl border border-white/5 space-y-2.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-2.5 min-w-0">
+                        <div className="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg shrink-0 mt-0.5">
+                          <GitCommit className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[11px] uppercase tracking-wider font-bold text-white/40 block">
+                            Mensagem da alteração enviada:
+                          </span>
+                          <h4 className="text-white font-bold text-sm sm:text-base mt-0.5 leading-snug break-words">
+                            "{commitInfo.title}"
+                          </h4>
+                        </div>
+                      </div>
+
+                      {commitInfo.body && (
+                        <button
+                          type="button"
+                          onClick={() => setExpandCommitDetails(!expandCommitDetails)}
+                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          {expandCommitDetails ? (
+                            <>
+                              <ChevronUp className="w-3.5 h-3.5 text-orange-400" />
+                              <span className="hidden sm:inline">Recolher</span>
+                            </>
+                          ) : (
+                            <>
+                              <ChevronDown className="w-3.5 h-3.5 text-orange-400" />
+                              <span className="text-orange-300">Ver detalhes</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Detalhes expandidos formatados em bloco rolável */}
+                    {expandCommitDetails && commitInfo.body && (
+                      <div className="mt-2.5 p-3.5 bg-black/60 border border-white/10 rounded-xl max-h-60 overflow-y-auto font-mono text-[11px] text-white/70 leading-relaxed whitespace-pre-wrap select-text animate-fade-in shadow-inner">
+                        {commitInfo.body}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 pt-1 border-t border-white/5 text-white/40 text-[11px] flex-wrap">
+                      <span>
+                        Autor: <strong className="text-white/70">{latestRun.commit.author}</strong>
+                      </span>
+                      {latestRun.head_sha && (
+                        <>
+                          <span>•</span>
+                          <span className="font-mono text-orange-400/80">commit {latestRun.head_sha.slice(0, 7)}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Alerta de Erro com Passo Específico */}
               {latestRun.conclusion === "failure" && (
@@ -727,16 +825,16 @@ export function AdminDeployMonitor() {
                         <RotateCw className="w-4 h-4 text-amber-400 animate-spin shrink-0" />
                       )}
 
-                      <div>
-                        <div className="text-white font-medium">
-                          {run.commit.message.substring(0, 70)}{run.commit.message.length > 70 ? "..." : ""}
+                      <div className="min-w-0 flex-1">
+                        <div className="text-white font-medium truncate">
+                          {parseCommitMessage(run.commit.message).title}
                         </div>
                         <div className="text-white/40 text-[11px] flex items-center gap-2 mt-0.5">
                           <span>{formatDateTime(run.created_at)}</span>
                           <span>•</span>
                           <span>{run.actor.login}</span>
                           <span>•</span>
-                          <span className="font-mono">{run.head_sha}</span>
+                          <span className="font-mono text-orange-400/70">{run.head_sha.slice(0, 7)}</span>
                         </div>
                       </div>
                     </div>

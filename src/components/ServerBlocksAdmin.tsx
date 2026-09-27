@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   Search,
   Trash2,
@@ -10,9 +10,14 @@ import {
   Film,
   Tv,
   RefreshCw,
-  ChevronDown,
-  Check,
   X,
+  RotateCcw,
+  Check,
+  Calendar,
+  Sparkles,
+  ShieldCheck,
+  Ban,
+  Layers,
 } from "lucide-react";
 
 interface ServerBlock {
@@ -26,56 +31,68 @@ interface ServerBlock {
   blockedBy: string;
 }
 
-// Servidores suportados — chave, label, cor e descrição
-interface ServerDef {
+interface SelectedMedia {
+  id: number;
+  title: string;
+  originalTitle?: string;
+  releaseYear?: string;
+  posterPath?: string | null;
+  contentType: "movie" | "series";
+}
+
+interface ServerOption {
   key: string;
   label: string;
-  short: string;
-  accent: string; // tailwind classes for the badge
+  badge: string;
+  badgeColor: string;
   description: string;
 }
 
-const SERVER_DEFS: ServerDef[] = [
+const HOMOLOGATED_SERVERS: ServerOption[] = [
   {
     key: "srv_watchplay",
     label: "WatchPlayer",
-    short: "WP",
-    accent: "bg-blue-500/20 text-blue-300 border-blue-500/40",
-    description: "Servidor principal oficial",
-  },
-  {
-    key: "srv_mixdrop",
-    label: "MixDrop",
-    short: "MD",
-    accent: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
-    description: "MixDrop VIP HD",
+    badge: "Oficial",
+    badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+    description: "Player padrão do app (CDN direta)",
   },
   {
     key: "srv_vip",
     label: "VIP Player",
-    short: "VIP",
-    accent: "bg-amber-500/20 text-amber-300 border-amber-500/40",
-    description: "Player sanitizado via myembed",
+    badge: "Dublado PT-BR",
+    badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    description: "Fontes prioritárias com áudio nacional",
+  },
+  {
+    key: "srv_mixdrop",
+    label: "MixDrop",
+    badge: "Secundário",
+    badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    description: "Player alternativo de alta velocidade",
   },
   {
     key: "srv_nixplay",
     label: "Nixplay",
-    short: "NX",
-    accent: "bg-purple-500/20 text-purple-300 border-purple-500/40",
-    description: "Nixplay Premium MP4",
+    badge: "Acervo",
+    badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    description: "Catálogo complementar homologado",
   },
   {
     key: "srv_vidsrc",
     label: "Seriesflix HD",
-    short: "SF",
-    accent: "bg-rose-500/20 text-rose-300 border-rose-500/40",
-    description: "Vidsrc.sh decifrado",
+    badge: "Séries / Multi",
+    badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+    description: "Stream multi-episódios para séries",
   },
 ];
 
-const SERVER_MAP: Record<string, ServerDef> = Object.fromEntries(
-  SERVER_DEFS.map((s) => [s.key, s])
-) as Record<string, ServerDef>;
+const SERVER_LABELS: Record<string, string> = {
+  srv_watchplay: "WatchPlayer",
+  srv_vip: "VIP Player",
+  srv_mixdrop: "MixDrop",
+  srv_nixplay: "Nixplay",
+  srv_vidsrc: "Seriesflix HD",
+};
 
 export function ServerBlocksAdmin() {
   const [blocks, setBlocks] = useState<ServerBlock[]>([]);
@@ -83,31 +100,29 @@ export function ServerBlocksAdmin() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Form state — TMDB ID e Tipo são automáticos (vindos da busca)
-  const [fTmdbId, setFTmdbId] = useState<number | null>(null);
+  // Form states
+  const [selectedMedia, setSelectedMedia] = useState<SelectedMedia | null>(null);
   const [fServerKey, setFServerKey] = useState<string>("srv_watchplay");
-  const [fContentType, setFContentType] = useState<"movie" | "series">("movie");
-  const [fTitle, setFTitle] = useState<string>("");
   const [fReason, setFReason] = useState<string>("");
   const [saving, setSaving] = useState(false);
 
-  // Busca por TMDB ID (autocomplete via TMDB proxy)
+  // Search state (busca por nome/título)
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<
-    Array<{
-      id: number;
-      title: string;
-      release_date?: string;
-      poster_path?: string;
-      media_type?: string;
-      overview?: string;
-    }>
-  >([]);
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: number;
+    title: string;
+    original_title?: string;
+    release_date?: string;
+    poster_path?: string | null;
+    media_type: "movie" | "tv";
+  }>>([]);
   const [searching, setSearching] = useState(false);
-  const [serverDropdownOpen, setServerDropdownOpen] = useState(false);
-  const serverDropdownRef = useRef<HTMLDivElement>(null);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
 
-  // Carrega token de admin do sessionStorage
+  // Filter in active blocks
+  const [blocksFilter, setBlocksFilter] = useState("");
+
   const getAdminToken = () => sessionStorage.getItem("adminSessionToken") || "";
 
   const loadBlocks = useCallback(async () => {
@@ -120,7 +135,7 @@ export function ServerBlocksAdmin() {
       if (data.success) {
         setBlocks(data.blocks || []);
       } else {
-        setError(data.error || "Falha ao carregar blocks");
+        setError(data.error || "Falha ao carregar bloqueios");
       }
     } catch (err: any) {
       setError(err.message);
@@ -133,91 +148,79 @@ export function ServerBlocksAdmin() {
     loadBlocks();
   }, [loadBlocks]);
 
-  // Fecha dropdown de servidor quando clica fora
+  // Fecha o dropdown de autocomplete ao clicar fora
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (
-        serverDropdownRef.current &&
-        !serverDropdownRef.current.contains(e.target as Node)
-      ) {
-        setServerDropdownOpen(false);
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setIsSearchOpen(false);
       }
-    };
-    if (serverDropdownOpen) {
-      document.addEventListener("mousedown", handler);
-      return () => document.removeEventListener("mousedown", handler);
     }
-  }, [serverDropdownOpen]);
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
-  // Busca no TMDB via /api/tmdb (proxy que oculta a chave)
-  const handleSearch = useCallback(async () => {
-    const q = searchQuery.trim();
+  // Busca no TMDB unificada (multi: filmes e séries)
+  const executeSearch = useCallback(async (queryText: string) => {
+    const q = queryText.trim();
     if (q.length < 2) {
       setSearchResults([]);
+      setIsSearchOpen(false);
       return;
     }
     setSearching(true);
     try {
-      // Tenta como número primeiro (TMDB ID direto) — pra debug, mas mantém
-      const asNum = parseInt(q, 10);
-      if (!isNaN(asNum) && /^\d+$/.test(q)) {
-        // Tenta como movie primeiro, depois como tv
-        const r1 = await fetch(`/api/tmdb?path=movie/${asNum}&language=pt-BR`);
-        if (r1.ok) {
-          const d = await r1.json();
-          if (d.id) {
-            setSearchResults([
-              {
-                id: d.id,
-                title: d.title || d.name || `TMDB ${d.id}`,
-                release_date: d.release_date,
-                poster_path: d.poster_path,
-                media_type: "movie",
-                overview: d.overview,
-              },
-            ]);
-            return;
-          }
+      // Se for apenas número, pesquisa direto pelo ID do TMDB
+      if (/^\d+$/.test(q)) {
+        const idNum = parseInt(q, 10);
+        // Tenta buscar como série primeiro ou filme
+        const [movieRes, tvRes] = await Promise.allSettled([
+          fetch(`/api/tmdb/movie/${idNum}?language=pt-BR`).then((r) => (r.ok ? r.json() : null)),
+          fetch(`/api/tmdb/tv/${idNum}?language=pt-BR`).then((r) => (r.ok ? r.json() : null)),
+        ]);
+
+        const results: any[] = [];
+        if (tvRes.status === "fulfilled" && tvRes.value && tvRes.value.id) {
+          const d = tvRes.value;
+          results.push({
+            id: d.id,
+            title: d.name || d.original_name || `Série #${d.id}`,
+            original_title: d.original_name,
+            release_date: d.first_air_date,
+            poster_path: d.poster_path,
+            media_type: "tv",
+          });
         }
-        // Tenta como tv
-        const r2 = await fetch(`/api/tmdb?path=tv/${asNum}&language=pt-BR`);
-        if (r2.ok) {
-          const d = await r2.json();
-          if (d.id) {
-            setSearchResults([
-              {
-                id: d.id,
-                title: d.name || d.title || `TMDB ${d.id}`,
-                release_date: d.first_air_date,
-                poster_path: d.poster_path,
-                media_type: "tv",
-                overview: d.overview,
-              },
-            ]);
-            return;
-          }
+        if (movieRes.status === "fulfilled" && movieRes.value && movieRes.value.id) {
+          const d = movieRes.value;
+          results.push({
+            id: d.id,
+            title: d.title || d.original_title || `Filme #${d.id}`,
+            original_title: d.original_title,
+            release_date: d.release_date,
+            poster_path: d.poster_path,
+            media_type: "movie",
+          });
         }
-        setSearchResults([]);
+        setSearchResults(results);
+        setIsSearchOpen(results.length > 0);
       } else {
-        // Busca por título (multi — inclui tv e movie)
-        const r = await fetch(
-          `/api/tmdb?path=search/multi&query=${encodeURIComponent(q)}&language=pt-BR&page=1`
-        );
-        if (r.ok) {
-          const d = await r.json();
-          const results = (d.results || [])
+        // Busca textual por nome (ex: "Fantasmas", "Ghosts", "F1", "Wandinha")
+        const res = await fetch(`/api/tmdb/search/multi?query=${encodeURIComponent(q)}&language=pt-BR&page=1`);
+        if (res.ok) {
+          const data = await res.json();
+          const items = (data.results || [])
             .filter((r: any) => r.media_type === "movie" || r.media_type === "tv")
-            .sort((a: any, b: any) => (b.popularity || 0) - (a.popularity || 0))
             .slice(0, 10)
             .map((r: any) => ({
               id: r.id,
               title: r.title || r.name,
+              original_title: r.original_title || r.original_name,
               release_date: r.release_date || r.first_air_date,
               poster_path: r.poster_path,
-              media_type: r.media_type,
-              overview: r.overview,
+              media_type: r.media_type as "movie" | "tv",
             }));
-          setSearchResults(results);
+          setSearchResults(items);
+          setIsSearchOpen(items.length > 0);
         }
       }
     } catch (err) {
@@ -225,45 +228,53 @@ export function ServerBlocksAdmin() {
     } finally {
       setSearching(false);
     }
-  }, [searchQuery]);
+  }, []);
 
-  // Debounce search
+  // Debounce da busca
   useEffect(() => {
-    const t = setTimeout(handleSearch, 350);
-    return () => clearTimeout(t);
-  }, [handleSearch]);
+    const timer = setTimeout(() => {
+      if (searchQuery.trim().length >= 2) {
+        executeSearch(searchQuery);
+      } else {
+        setSearchResults([]);
+        setIsSearchOpen(false);
+      }
+    }, 320);
+    return () => clearTimeout(timer);
+  }, [searchQuery, executeSearch]);
 
-  // Quando seleciona um resultado da busca, preenche o form automaticamente
-  const selectResult = (r: typeof searchResults[number]) => {
-    setFTmdbId(r.id);
-    setFTitle(r.title || "");
-    setFContentType((r.media_type as "movie" | "series") || "movie");
+  // Ao selecionar um filme ou série da busca por nome
+  const handleSelectMedia = (item: typeof searchResults[number]) => {
+    setSelectedMedia({
+      id: item.id,
+      title: item.title,
+      originalTitle: item.original_title !== item.title ? item.original_title : undefined,
+      releaseYear: item.release_date ? item.release_date.slice(0, 4) : undefined,
+      posterPath: item.poster_path,
+      contentType: item.media_type === "tv" ? "series" : "movie",
+    });
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearchOpen(false);
+    setError(null);
+  };
+
+  const handleClearSelected = () => {
+    setSelectedMedia(null);
     setSearchQuery("");
     setSearchResults([]);
   };
 
-  // Limpa seleção atual (volta pra estado inicial)
-  const clearSelection = () => {
-    setFTmdbId(null);
-    setFTitle("");
-    setFContentType("movie");
-    setFReason("");
-  };
-
   const handleAddBlock = async () => {
+    if (!selectedMedia) {
+      setError("Por favor, busque e selecione um filme ou série pelo nome.");
+      return;
+    }
+
     setError(null);
     setSuccess(null);
-
-    if (!fTmdbId || fTmdbId <= 0) {
-      setError("Selecione um filme/série da busca antes de salvar");
-      return;
-    }
-    if (!fTitle.trim()) {
-      setError("Título não preenchido");
-      return;
-    }
-
     setSaving(true);
+
     try {
       const res = await fetch("/api/admin/server-blocks", {
         method: "POST",
@@ -272,32 +283,36 @@ export function ServerBlocksAdmin() {
           "x-admin-token": getAdminToken(),
         },
         body: JSON.stringify({
-          tmdbId: fTmdbId,
+          tmdbId: selectedMedia.id,
           serverKey: fServerKey,
-          contentType: fContentType,
-          title: fTitle.trim(),
+          contentType: selectedMedia.contentType,
+          title: selectedMedia.title,
           reason: fReason.trim(),
         }),
       });
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      setSuccess(
-        `Bloqueio adicionado: ${fTitle} → ${SERVER_MAP[fServerKey]?.label || fServerKey}`
-      );
-      clearSelection();
+
+      const serverName = SERVER_LABELS[fServerKey] || fServerKey;
+      setSuccess(`Bloqueio ativado com sucesso: "${selectedMedia.title}" terá o servidor ${serverName} ignorado.`);
+      
+      // Reseta formulário mantendo seletor pronto para o próximo
+      setSelectedMedia(null);
+      setFReason("");
       await loadBlocks();
-      setTimeout(() => setSuccess(null), 4000);
+      setTimeout(() => setSuccess(null), 5000);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Erro ao salvar bloqueio de servidor.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteBlock = async (id: string, label: string) => {
-    if (!confirm(`Remover bloqueio: ${label}?`)) return;
+    if (!confirm(`Remover bloqueio de ${label}? O servidor voltará a ser consultado para este título.`)) return;
     setError(null);
     try {
       const res = await fetch(`/api/admin/server-blocks/${encodeURIComponent(id)}`, {
@@ -308,38 +323,47 @@ export function ServerBlocksAdmin() {
       if (!res.ok || !data.success) {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
-      setSuccess("Bloqueio removido");
+      setSuccess("Bloqueio removido com sucesso!");
       await loadBlocks();
-      setTimeout(() => setSuccess(null), 3000);
+      setTimeout(() => setSuccess(null), 3500);
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || "Erro ao remover bloqueio.");
     }
   };
 
-  // Agrupa por TMDB ID pra facilitar visualização
-  const groupedByTmdb = React.useMemo(() => {
+  // Agrupa os bloqueios existentes por TMDB ID
+  const groupedByTmdb = useMemo(() => {
+    const filtered = blocksFilter.trim()
+      ? blocks.filter(
+          (b) =>
+            b.title.toLowerCase().includes(blocksFilter.toLowerCase()) ||
+            (SERVER_LABELS[b.serverKey] || "").toLowerCase().includes(blocksFilter.toLowerCase()) ||
+            String(b.tmdbId).includes(blocksFilter.trim())
+        )
+      : blocks;
+
     const map = new Map<number, ServerBlock[]>();
-    for (const b of blocks) {
+    for (const b of filtered) {
       if (!map.has(b.tmdbId)) map.set(b.tmdbId, []);
       map.get(b.tmdbId)!.push(b);
     }
     return Array.from(map.entries()).sort((a, b) => a[0] - b[0]);
-  }, [blocks]);
+  }, [blocks, blocksFilter]);
 
-  const selectedServer = SERVER_MAP[fServerKey];
+  const selectedServerInfo = HOMOLOGATED_SERVERS.find((s) => s.key === fServerKey);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="p-2.5 bg-orange-500/20 text-orange-400 rounded-xl">
-            <Server className="w-6 h-6" />
+            <Ban className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-white">Conteúdo Bloqueado por Servidor</h2>
+            <h2 className="text-xl font-bold text-white">Bloqueio de Servidor por Conteúdo</h2>
             <p className="text-sm text-white/50">
-              Ignora um servidor específico para um filme/série — outros servidores continuam disponíveis
+              Ignore um servidor problemático para um filme ou série específico — os outros servidores homologados continuam ativos
             </p>
           </div>
         </div>
@@ -353,237 +377,345 @@ export function ServerBlocksAdmin() {
         </button>
       </div>
 
-      {/* Success / Error banners */}
+      {/* Mensagens de Sucesso ou Erro */}
       {success && (
-        <div className="flex items-center gap-2 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-300 text-sm">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
-          {success}
+        <div className="flex items-center gap-2 p-3.5 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl text-emerald-300 text-sm animate-fade-in">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-400" />
+          <span>{success}</span>
         </div>
       )}
       {error && (
-        <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 text-sm">
-          <AlertCircle className="w-5 h-5 shrink-0" />
-          {error}
+        <div className="flex items-center gap-2 p-3.5 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-300 text-sm animate-fade-in">
+          <AlertCircle className="w-5 h-5 shrink-0 text-red-400" />
+          <span>{error}</span>
         </div>
       )}
 
-      {/* Add form */}
-      <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-2xl p-5 space-y-4">
-        <h3 className="text-sm font-bold text-white/80 uppercase tracking-wide">
-          Adicionar Novo Bloqueio
-        </h3>
-
-        {/* === BUSCA POR NOME === */}
-        {/* Se já tem um resultado selecionado, mostra ele; senão mostra o input de busca */}
-        {fTmdbId ? (
-          // Card do item selecionado
-          <div className="flex items-center gap-3 p-3 bg-orange-500/10 border border-orange-500/30 rounded-xl">
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="p-2 bg-orange-500/20 rounded-lg shrink-0">
-                {fContentType === "series" ? (
-                  <Tv className="w-4 h-4 text-orange-400" />
-                ) : (
-                  <Film className="w-4 h-4 text-orange-400" />
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-white font-semibold text-sm truncate">{fTitle}</div>
-                <div className="text-white/40 text-xs">
-                  TMDB {fTmdbId} • {fContentType === "series" ? "Série" : "Filme"}
-                </div>
-              </div>
-            </div>
-            <button
-              onClick={clearSelection}
-              className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors cursor-pointer shrink-0"
-              title="Limpar seleção"
-            >
-              <X className="w-4 h-4" />
-            </button>
+      {/* CARD PRINCIPAL: Adicionar Novo Bloqueio */}
+      <div className="bg-[#1c1c1e]/70 border border-white/10 backdrop-blur-xl rounded-[28px] p-5 sm:p-6 space-y-6 shadow-2xl">
+        <div className="flex items-center justify-between border-b border-white/5 pb-4">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-2.5 w-2.5 rounded-full bg-orange-500"></span>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              Adicionar Novo Bloqueio de Servidor
+            </h3>
           </div>
-        ) : (
-          // Input de busca
-          <div className="relative">
-            <label className="block text-xs font-semibold text-white/60 mb-1.5">
-              Buscar filme ou série pelo nome
-            </label>
+          <span className="text-xs text-white/40 font-medium hidden sm:inline">
+            Busque pelo nome • Tipo detectado automaticamente
+          </span>
+        </div>
+
+        {/* ETAPA 1: Busca pelo Nome */}
+        <div className="space-y-2" ref={searchContainerRef}>
+          <label className="block text-xs font-semibold text-white/70">
+            1. Buscar filme ou série pelo nome
+          </label>
+
+          {!selectedMedia ? (
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40" />
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 pointer-events-none" />
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Ex: F1, Homem-Aranha, Fantasmas..."
-                className="w-full pl-10 pr-3 py-3 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500/50"
-                autoComplete="off"
-                autoFocus
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => {
+                  if (searchResults.length > 0) setIsSearchOpen(true);
+                }}
+                placeholder="Digite o título (ex: Fantasmas, Ghosts, Wandinha, Avatar, F1...)"
+                className="w-full pl-10 pr-10 py-3 bg-black/40 border border-white/15 focus:border-orange-500/70 rounded-2xl text-white placeholder-white/30 text-sm focus:outline-none transition-all"
               />
-              {searching && (
-                <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/40 animate-spin" />
-              )}
-            </div>
-            {/* Autocomplete dropdown */}
-            {searchResults.length > 0 && (
-              <div className="absolute z-30 mt-1 w-full bg-[#1c1c1e] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-80 overflow-y-auto">
-                {searchResults.map((r) => (
-                  <button
-                    key={`${r.media_type}-${r.id}`}
-                    onClick={() => selectResult(r)}
-                    className="w-full flex items-center gap-3 p-2.5 hover:bg-white/5 text-left transition-colors border-b border-white/5 last:border-0"
-                  >
-                    {r.poster_path ? (
-                      <img
-                        src={`https://image.tmdb.org/t/p/w45${r.poster_path}`}
-                        alt=""
-                        className="w-9 h-12 rounded object-cover shrink-0"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-9 h-12 bg-white/5 rounded flex items-center justify-center shrink-0">
-                        {r.media_type === "tv" ? (
-                          <Tv className="w-4 h-4 text-white/30" />
-                        ) : (
-                          <Film className="w-4 h-4 text-white/30" />
-                        )}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="text-white text-sm font-semibold truncate">{r.title}</div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span
-                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                            r.media_type === "tv"
-                              ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
-                              : "bg-blue-500/20 text-blue-300 border-blue-500/40"
-                          }`}
-                        >
-                          {r.media_type === "tv" ? "SÉRIE" : "FILME"}
-                        </span>
-                        <span className="text-white/40 text-xs">
-                          {r.release_date ? r.release_date.slice(0, 4) : "—"} • TMDB {r.id}
-                        </span>
-                      </div>
-                      {r.overview && (
-                        <p className="text-white/40 text-xs mt-1 line-clamp-2">{r.overview}</p>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-            {searchResults.length === 0 && searchQuery.length >= 2 && !searching && (
-              <p className="text-white/40 text-xs mt-2 pl-1">
-                Nenhum resultado. Tente outro nome.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* === DROPDOWN CUSTOM DE SERVIDOR (não-nativo) === */}
-        <div ref={serverDropdownRef} className="relative">
-          <label className="block text-xs font-semibold text-white/60 mb-1.5">
-            Servidor a bloquear
-          </label>
-          <button
-            type="button"
-            onClick={() => setServerDropdownOpen((o) => !o)}
-            disabled={!fTmdbId}
-            className={`w-full flex items-center justify-between gap-3 px-3 py-3 bg-black/40 border rounded-xl text-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              serverDropdownOpen
-                ? "border-orange-500/60"
-                : "border-white/10 hover:border-white/20"
-            }`}
-          >
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              {selectedServer ? (
-                <>
-                  <span
-                    className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border font-bold text-xs shrink-0 ${selectedServer.accent}`}
-                  >
-                    {selectedServer.short}
-                  </span>
-                  <div className="min-w-0 flex-1 text-left">
-                    <div className="text-white font-semibold text-sm truncate">
-                      {selectedServer.label}
-                    </div>
-                    <div className="text-white/40 text-xs truncate">
-                      {selectedServer.description}
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <span className="text-white/40">Selecione um servidor</span>
-              )}
-            </div>
-            <ChevronDown
-              className={`w-4 h-4 text-white/40 shrink-0 transition-transform ${
-                serverDropdownOpen ? "rotate-180" : ""
-              }`}
-            />
-          </button>
-
-          {/* Dropdown menu */}
-          {serverDropdownOpen && (
-            <div className="absolute z-30 mt-1 w-full bg-[#1c1c1e] border border-white/10 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
-              {SERVER_DEFS.map((s) => (
+              {searching ? (
+                <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-orange-400 animate-spin" />
+              ) : searchQuery ? (
                 <button
-                  key={s.key}
                   type="button"
                   onClick={() => {
-                    setFServerKey(s.key);
-                    setServerDropdownOpen(false);
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setIsSearchOpen(false);
                   }}
-                  className={`w-full flex items-center gap-3 p-3 hover:bg-white/5 text-left transition-colors border-b border-white/5 last:border-0 ${
-                    fServerKey === s.key ? "bg-white/5" : ""
-                  }`}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-white/40 hover:text-white rounded-full hover:bg-white/10"
                 >
-                  <span
-                    className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border font-bold text-xs shrink-0 ${s.accent}`}
-                  >
-                    {s.short}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-white font-semibold text-sm truncate">{s.label}</div>
-                    <div className="text-white/40 text-xs truncate">{s.description}</div>
-                  </div>
-                  {fServerKey === s.key && (
-                    <Check className="w-4 h-4 text-orange-400 shrink-0" />
-                  )}
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              ))}
+              ) : null}
+
+              {/* Lista suspensa com resultados da busca */}
+              {isSearchOpen && searchResults.length > 0 && (
+                <div className="absolute z-40 mt-2 w-full bg-[#1c1c1e] border border-white/15 rounded-2xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-white/5">
+                  <div className="px-3.5 py-2 bg-black/40 text-[11px] font-semibold text-white/40 uppercase tracking-wider flex items-center justify-between">
+                    <span>Resultados encontrados ({searchResults.length})</span>
+                    <span>Clique para selecionar</span>
+                  </div>
+                  {searchResults.map((r) => {
+                    const isTv = r.media_type === "tv";
+                    const year = r.release_date ? r.release_date.slice(0, 4) : "";
+                    const hasOriginal = r.original_title && r.original_title !== r.title;
+
+                    return (
+                      <button
+                        key={`${r.media_type}-${r.id}`}
+                        type="button"
+                        onClick={() => handleSelectMedia(r)}
+                        className="w-full flex items-center gap-3.5 p-3 hover:bg-white/10 text-left transition-colors cursor-pointer group"
+                      >
+                        {/* Poster */}
+                        {r.poster_path ? (
+                          <img
+                            src={`https://image.tmdb.org/t/p/w92${r.poster_path}`}
+                            alt=""
+                            className="w-10 h-14 rounded-lg object-cover shrink-0 shadow-md border border-white/10 group-hover:scale-105 transition-transform"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-10 h-14 bg-white/5 rounded-lg flex items-center justify-center shrink-0 border border-white/5">
+                            {isTv ? (
+                              <Tv className="w-5 h-5 text-purple-400/60" />
+                            ) : (
+                              <Film className="w-5 h-5 text-sky-400/60" />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Detalhes do item */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-white text-sm font-semibold truncate group-hover:text-orange-400 transition-colors">
+                              {r.title}
+                            </span>
+                            {/* Badge do Tipo (Série ou Filme) */}
+                            {isTv ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                                <Tv className="w-2.5 h-2.5" />
+                                Série
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/40">
+                                <Film className="w-2.5 h-2.5" />
+                                Filme
+                              </span>
+                            )}
+                          </div>
+
+                          {hasOriginal && (
+                            <div className="text-white/40 text-xs truncate">
+                              Título original: {r.original_title}
+                            </div>
+                          )}
+
+                          <div className="text-white/40 text-xs mt-0.5 flex items-center gap-2">
+                            {year && <span>{year}</span>}
+                            <span>•</span>
+                            <span className="font-mono text-[11px] text-white/50">TMDB #{r.id}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Card do Conteúdo Selecionado (dispensa campos manuais de ID e Tipo) */
+            <div className="p-3.5 sm:p-4 bg-orange-500/10 border border-orange-500/30 rounded-2xl flex items-center justify-between gap-3 flex-wrap sm:flex-nowrap">
+              <div className="flex items-center gap-3.5 min-w-0">
+                {selectedMedia.posterPath ? (
+                  <img
+                    src={`https://image.tmdb.org/t/p/w92${selectedMedia.posterPath}`}
+                    alt=""
+                    className="w-12 h-16 rounded-xl object-cover shrink-0 shadow-lg border border-orange-500/30"
+                  />
+                ) : (
+                  <div className="w-12 h-16 bg-white/5 rounded-xl flex items-center justify-center shrink-0 border border-white/10">
+                    {selectedMedia.contentType === "series" ? (
+                      <Tv className="w-6 h-6 text-purple-400" />
+                    ) : (
+                      <Film className="w-6 h-6 text-sky-400" />
+                    )}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-white text-base font-bold truncate">
+                      {selectedMedia.title}
+                    </h4>
+                    {selectedMedia.contentType === "series" ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-purple-500/25 text-purple-200 border border-purple-500/40">
+                        <Tv className="w-3 h-3" />
+                        Série de TV
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-500/25 text-sky-200 border border-sky-500/40">
+                        <Film className="w-3 h-3" />
+                        Filme
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedMedia.originalTitle && (
+                    <p className="text-white/50 text-xs truncate">
+                      Original: {selectedMedia.originalTitle}
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-2 text-white/50 text-xs mt-1">
+                    {selectedMedia.releaseYear && <span>{selectedMedia.releaseYear}</span>}
+                    <span>•</span>
+                    <span className="font-mono text-orange-300">TMDB #{selectedMedia.id}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3" /> Tipo identificado
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleClearSelected}
+                className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                title="Buscar outro título"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Trocar título
+              </button>
             </div>
           )}
         </div>
 
-        {/* Motivo */}
-        <div>
-          <label className="block text-xs font-semibold text-white/60 mb-1.5">
-            Motivo (opcional — para registro)
+        {/* ETAPA 2: Seletor de Servidor Customizado (100% interno, NADA de select nativo do navegador) */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-semibold text-white/70">
+              2. Qual servidor você quer ignorar para este conteúdo?
+            </label>
+            <span className="text-[11px] text-white/40">
+              Selecione o provedor abaixo
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {HOMOLOGATED_SERVERS.map((server) => {
+              const isSelected = fServerKey === server.key;
+
+              return (
+                <button
+                  key={server.key}
+                  type="button"
+                  onClick={() => setFServerKey(server.key)}
+                  className={`relative p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                    isSelected
+                      ? "bg-orange-500/15 border-orange-500 ring-2 ring-orange-500/30 shadow-lg shadow-orange-500/10 text-white"
+                      : "bg-black/40 border-white/10 hover:border-white/20 hover:bg-white/5 text-white/70 hover:text-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${
+                          isSelected
+                            ? "border-orange-500 bg-orange-500"
+                            : "border-white/30 bg-transparent"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-2.5 h-2.5 text-black stroke-[3]" />}
+                      </div>
+                      <span className="font-bold text-sm text-white truncate">
+                        {server.label}
+                      </span>
+                    </div>
+
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0 ${server.badgeColor}`}
+                    >
+                      {server.badge}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-white/50 leading-relaxed">
+                    {server.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ETAPA 3: Motivo do bloqueio (opcional) */}
+        <div className="space-y-1.5">
+          <label className="block text-xs font-semibold text-white/70">
+            3. Motivo do bloqueio (opcional — para seu histórico de controle)
           </label>
           <textarea
             value={fReason}
             onChange={(e) => setFReason(e.target.value)}
             rows={2}
-            placeholder="Ex: Versão WatchPlayer estava em inglês; outras fontes têm PT-BR"
-            className="w-full px-3 py-2.5 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 text-sm focus:outline-none focus:border-orange-500/50 resize-none"
+            placeholder="Ex: Este servidor estava com áudio original em inglês; outros servidores possuem versão dublada PT-BR"
+            className="w-full px-3.5 py-2.5 bg-black/40 border border-white/10 focus:border-orange-500/70 rounded-2xl text-white placeholder-white/30 text-sm focus:outline-none transition-all resize-none"
           />
         </div>
 
-        <button
-          onClick={handleAddBlock}
-          disabled={saving || !fTmdbId}
-          className="flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl transition-colors cursor-pointer shadow-lg shadow-orange-600/20"
-        >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-          Adicionar Bloqueio
-        </button>
+        {/* Botão de Ação */}
+        <div>
+          <button
+            type="button"
+            onClick={handleAddBlock}
+            disabled={saving || !selectedMedia}
+            className={`w-full py-3.5 px-6 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              selectedMedia && !saving
+                ? "bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white shadow-xl shadow-orange-600/25 hover:scale-[1.01]"
+                : "bg-white/5 text-white/30 border border-white/5 cursor-not-allowed"
+            }`}
+          >
+            {saving ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Gravando bloqueio no servidor...</span>
+              </>
+            ) : !selectedMedia ? (
+              <>
+                <Search className="w-4 h-4 text-white/40" />
+                <span>1º Busque e selecione um filme ou série pelo nome acima</span>
+              </>
+            ) : (
+              <>
+                <Plus className="w-4 h-4 stroke-[2.5]" />
+                <span>
+                  Bloquear {selectedServerInfo?.label || "Servidor"} em "{selectedMedia.title}"
+                </span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Blocks list */}
-      <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-2xl p-5">
-        <h3 className="text-sm font-bold text-white/80 uppercase tracking-wide mb-4">
-          Bloqueios Ativos ({blocks.length})
-        </h3>
+      {/* LISTA DE BLOQUEIOS ATIVOS */}
+      <div className="bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-5 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2.5">
+            <Layers className="w-5 h-5 text-orange-400" />
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+              Bloqueios Ativos no Catálogo ({blocks.length})
+            </h3>
+          </div>
+
+          {/* Campo de filtro nos bloqueios existentes */}
+          {blocks.length > 0 && (
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/40" />
+              <input
+                type="text"
+                value={blocksFilter}
+                onChange={(e) => setBlocksFilter(e.target.value)}
+                placeholder="Filtrar por título ou servidor..."
+                className="w-full pl-9 pr-3 py-1.5 bg-black/40 border border-white/10 rounded-xl text-white placeholder-white/30 text-xs focus:outline-none focus:border-orange-500/50"
+              />
+            </div>
+          )}
+        </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -591,75 +723,93 @@ export function ServerBlocksAdmin() {
           </div>
         ) : blocks.length === 0 ? (
           <div className="text-center py-12 text-white/40 text-sm">
-            Nenhum bloqueio ativo. Busque um filme/série acima para começar.
+            Nenhum servidor bloqueado atualmente. Quando precisar ignorar uma fonte em algum título, adicione no formulário acima.
+          </div>
+        ) : groupedByTmdb.length === 0 ? (
+          <div className="text-center py-8 text-white/40 text-xs">
+            Nenhum bloqueio encontrado com o filtro "{blocksFilter}".
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {groupedByTmdb.map(([tmdbId, blocksForTmdb]) => {
-              const contentType = blocksForTmdb[0].contentType;
+              const first = blocksForTmdb[0];
+              const isSeries = first.contentType === "series";
+
               return (
                 <div
                   key={tmdbId}
-                  className="border border-white/5 rounded-xl overflow-hidden"
+                  className="border border-white/10 rounded-2xl overflow-hidden bg-black/20"
                 >
-                  {/* Header do grupo */}
-                  <div className="bg-black/30 px-4 py-2.5 flex items-center gap-3">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      {contentType === "series" ? (
-                        <Tv className="w-4 h-4 text-orange-400 shrink-0" />
+                  {/* Cabeçalho do Grupo (Filme / Série) */}
+                  <div className="bg-white/5 px-4 py-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {isSeries ? (
+                        <div className="p-1.5 bg-purple-500/20 text-purple-300 rounded-lg shrink-0">
+                          <Tv className="w-4 h-4" />
+                        </div>
                       ) : (
-                        <Film className="w-4 h-4 text-orange-400 shrink-0" />
+                        <div className="p-1.5 bg-sky-500/20 text-sky-300 rounded-lg shrink-0">
+                          <Film className="w-4 h-4" />
+                        </div>
                       )}
-                      <span className="text-white font-semibold text-sm truncate">
-                        {blocksForTmdb[0].title || "—"}
+                      <span className="text-white font-bold text-sm truncate">
+                        {first.title || `TMDB #${tmdbId}`}
+                      </span>
+                      <span className="text-[10px] font-semibold text-white/50 px-2 py-0.5 rounded-full bg-white/5">
+                        {isSeries ? "Série" : "Filme"}
                       </span>
                     </div>
+
                     <span className="text-white/40 text-xs font-mono shrink-0">
-                      TMDB {tmdbId}
+                      TMDB #{tmdbId}
                     </span>
                   </div>
-                  {/* Lista de servers bloqueados pra esse TMDB */}
+
+                  {/* Lista de servidores ignorados para este conteúdo */}
                   <div className="divide-y divide-white/5">
                     {blocksForTmdb.map((b) => {
-                      const srv = SERVER_MAP[b.serverKey];
+                      const serverName = SERVER_LABELS[b.serverKey] || b.serverKey;
+                      const dateStr = b.blockedAt
+                        ? new Date(b.blockedAt).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "";
+
                       return (
                         <div
                           key={b.id}
-                          className="flex items-center gap-3 px-4 py-3 hover:bg-white/5"
+                          className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/5 transition-colors"
                         >
-                          <div className="flex-1 min-w-0">
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              {srv ? (
-                                <span
-                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${srv.accent}`}
-                                >
-                                  <span className="font-mono">{srv.short}</span>
-                                  {srv.label}
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/30">
-                                  {b.serverKey}
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30 flex items-center gap-1.5">
+                                <Ban className="w-3 h-3 text-red-400" />
+                                Servidor {serverName} ignorado
+                              </span>
+                              {dateStr && (
+                                <span className="text-white/40 text-[11px]">
+                                  {dateStr}
                                 </span>
                               )}
-                              <span className="text-white/40 text-xs">
-                                {new Date(b.blockedAt).toLocaleString("pt-BR")}
-                              </span>
                             </div>
+
                             {b.reason && (
-                              <p className="text-white/60 text-xs mt-1.5 leading-relaxed">
+                              <p className="text-white/60 text-xs mt-1.5 leading-relaxed bg-black/30 p-2 rounded-xl border border-white/5">
+                                <span className="text-white/40 font-semibold">Motivo: </span>
                                 {b.reason}
                               </p>
                             )}
                           </div>
+
                           <button
-                            onClick={() =>
-                              handleDeleteBlock(
-                                b.id,
-                                `${b.title} → ${srv?.label || b.serverKey}`
-                              )
-                            }
-                            className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
-                            title="Remover bloqueio"
+                            type="button"
+                            onClick={() => handleDeleteBlock(b.id, `"${b.title}" no servidor ${serverName}`)}
+                            className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer shrink-0"
+                            title="Desbloquear servidor para este título"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
