@@ -2336,8 +2336,9 @@ app.use("/api/admin", adminOpsRouter);
     }
   });
 
-  // Cache em memória para rota/prefixo funcional de séries do WatchPlayer (/tvshow/, /series/, /serie/)
-  const watchPlayerWorkingPrefixCache = new Map<string, string>();
+  // Cache em memória para rota/prefixo funcional de séries do WatchPlayer (/tvshow/, /series/, /serie/) com TTL de 24h
+  const watchPlayerWorkingPrefixCache = new Map<string, { prefix: string; timestamp: number }>();
+  const PREFIX_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas em milissegundos
 
   // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   app.get("/api/watchplayer-stream", async (req, res) => {
@@ -2394,8 +2395,9 @@ app.use("/api/admin", adminOpsRouter);
       const seriesId = seriesKeyMatch ? seriesKeyMatch[2] : null;
       const currentPrefix = seriesKeyMatch ? seriesKeyMatch[1] : null;
 
-      if (seriesId && currentPrefix && watchPlayerWorkingPrefixCache.has(seriesId)) {
-        const cachedPrefix = watchPlayerWorkingPrefixCache.get(seriesId)!;
+      const cached = seriesId ? watchPlayerWorkingPrefixCache.get(seriesId) : null;
+      if (seriesId && currentPrefix && cached && (Date.now() - cached.timestamp < PREFIX_CACHE_TTL)) {
+        const cachedPrefix = cached.prefix;
         if (cachedPrefix !== currentPrefix) {
           effectiveTargetUrl = effectiveTargetUrl.replace(`/${currentPrefix}/`, `/${cachedPrefix}/`);
         }
@@ -2528,7 +2530,7 @@ app.use("/api/admin", adminOpsRouter);
             if (seriesId) {
               const matchedWinner = winner.url.match(/\/(tvshow|series|serie)\//);
               if (matchedWinner) {
-                watchPlayerWorkingPrefixCache.set(seriesId, matchedWinner[1]);
+                watchPlayerWorkingPrefixCache.set(seriesId, { prefix: matchedWinner[1], timestamp: Date.now() });
               }
             }
           } catch (e) {
@@ -3851,7 +3853,8 @@ app.use("/api/admin", adminOpsRouter);
         );
       };
 
-      const prefix = watchPlayerWorkingPrefixCache.get(tmdbId) || "tvshow";
+      const cachedPrefixObj = watchPlayerWorkingPrefixCache.get(tmdbId);
+      const prefix = (cachedPrefixObj && (Date.now() - cachedPrefixObj.timestamp < PREFIX_CACHE_TTL)) ? cachedPrefixObj.prefix : "tvshow";
       const checkEpisode = async (episode: number): Promise<boolean> => {
         const checkNixplay = async (): Promise<boolean> => {
           try {
