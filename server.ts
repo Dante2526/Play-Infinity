@@ -3800,7 +3800,7 @@ app.use("/api/admin", adminOpsRouter);
         });
       }
 
-      // 1. Verifica se a temporada já possui episódios no catálogo Encontrei (MixDrop)
+      // 1. Verifica se a temporada possui episódios no catálogo Encontrei (MixDrop)
       const numericId = parseInt(tmdbId, 10);
       const catalogEpisodeNumbers = new Set<number>();
 
@@ -3819,8 +3819,8 @@ app.use("/api/admin", adminOpsRouter);
         console.warn("[check-season] Aviso ao checar catálogos locais:", err);
       }
 
-      // Se temos episódios no catálogo (ex: MixDrop), já sabemos que são funcionais
-      if (catalogEpisodeNumbers.size > 0) {
+      // Se temos todos os episódios solicitados já no catálogo local, podemos retornar direto
+      if (catalogEpisodeNumbers.size >= count) {
         const sortedEps = Array.from(catalogEpisodeNumbers).sort((a, b) => a - b);
         seasonAvailabilityCache.set(cacheKey, { episodes: sortedEps, timestamp: Date.now() });
         return res.json({
@@ -3952,9 +3952,14 @@ app.use("/api/admin", adminOpsRouter);
       });
       await Promise.all(workers);
 
-      const availableEpisodes = isAvailable
-        .map((ok, idx) => (ok ? idx + 1 : null))
-        .filter((n): n is number => n !== null);
+      const availableEpisodes = Array.from(
+        new Set([
+          ...Array.from(catalogEpisodeNumbers),
+          ...isAvailable
+            .map((ok, idx) => (ok ? idx + 1 : null))
+            .filter((n): n is number => n !== null)
+        ])
+      ).sort((a, b) => a - b);
 
       seasonAvailabilityCache.set(cacheKey, { episodes: availableEpisodes, timestamp: Date.now() });
 

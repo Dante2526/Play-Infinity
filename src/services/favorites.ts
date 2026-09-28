@@ -331,6 +331,31 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
             seriesStatus: data.status,
             nextAirDate: airDate
           });
+
+          // Se também houver um último episódio recém-lançado (últimos 30 dias), adiciona aos resultados para notificações e histórico
+          if (lastEp && lastEp.air_date && lastEp.air_date <= todayStr && (lastEp.season_number !== nextEp.season_number || lastEp.episode_number !== nextEp.episode_number)) {
+            results.push({
+              id: `tmdb-last-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
+              seriesId: id,
+              seriesTitle,
+              seriesPoster,
+              seriesBackdrop,
+              provider,
+              seasonNumber: lastEp.season_number,
+              episodeNumber: lastEp.episode_number,
+              episodeTitle: lastEp.name || `Episódio ${lastEp.episode_number}`,
+              synopsis: lastEp.overview || "Episódio lançado recentemente.",
+              airDate: lastEp.air_date,
+              airTime: "22:00",
+              dayOfWeek: getDayOfWeekFromDate(lastEp.air_date),
+              playerUrl: `https://v1.watchplay.shop/tvshow/${tmdbId}/${lastEp.season_number}/${lastEp.episode_number}`,
+              tmdbId,
+              imdbId: localItem?.imdbId,
+              status: lastEp.air_date === todayStr ? 'today' : 'released',
+              seriesStatus: data.status,
+              lastAirDate: lastEp.air_date
+            });
+          }
         } 
         // Caso 2: Não há próximo episódio agendado (temporada finalizada ou série encerrada)
         else if (lastEp) {
@@ -386,11 +411,13 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
   });
 };
 
-// Obter episódios com fallback síncrono inicial
+// Obter episódios com fallback síncrono inicial + cache dinâmico do TMDB
 export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEpisode[] => {
   const todayStr = new Date().toISOString().split('T')[0];
   const episodes: SeriesScheduleEpisode[] = [];
+  const addedIds = new Set<string>();
 
+  // 1. Carrega episódios estáticos pré-configurados
   favoriteIds.forEach(id => {
     const seriesEpisodes = SERIES_EPISODE_SCHEDULE[id];
     if (seriesEpisodes && seriesEpisodes.length > 0) {
@@ -406,9 +433,35 @@ export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEp
           ...ep,
           status
         });
+        addedIds.add(ep.id);
       });
     }
   });
+
+  // 2. Mescla com os episódios dinâmicos salvos no cache do TMDB
+  try {
+    const cached = localStorage.getItem("playinfinity_schedule_cache_v2");
+    if (cached) {
+      const dynamicList: SeriesScheduleEpisode[] = JSON.parse(cached);
+      if (Array.isArray(dynamicList)) {
+        dynamicList.forEach(ep => {
+          if (favoriteIds.includes(ep.seriesId) && !addedIds.has(ep.id)) {
+            let status: 'released' | 'today' | 'upcoming' = ep.status as any || 'upcoming';
+            if (ep.airDate === todayStr) {
+              status = 'today';
+            } else if (ep.airDate < todayStr) {
+              status = 'released';
+            }
+            episodes.push({
+              ...ep,
+              status
+            });
+            addedIds.add(ep.id);
+          }
+        });
+      }
+    }
+  } catch (e) {}
 
   episodes.sort((a, b) => a.airDate.localeCompare(b.airDate) || a.airTime.localeCompare(b.airTime));
   return episodes;
