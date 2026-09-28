@@ -79,6 +79,13 @@ const HOMOLOGATED_SERVERS: ServerOption[] = [
     badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
     description: "Catálogo complementar homologado",
   },
+  {
+    key: "srv_vidsrc",
+    label: "Seriesflix HD",
+    badge: "Vidsrc",
+    badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+    description: "Provedor Vidsrc/Seriesflix",
+  },
 ];
 
 const SERVER_LABELS: Record<string, string> = {
@@ -86,6 +93,7 @@ const SERVER_LABELS: Record<string, string> = {
   srv_vip: "VIP Player",
   srv_mixdrop: "MixDrop",
   srv_nixplay: "Nixplay",
+  srv_vidsrc: "Seriesflix HD",
 };
 
 export function ServerBlocksAdmin() {
