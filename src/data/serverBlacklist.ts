@@ -127,9 +127,8 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
   {
     id: "generic_scrapers",
     name: "Scrapers / Iframe Hubs Genéricos",
-    keys: ["vidsrc", "multiembed", "embed.su"],
+    keys: ["multiembed", "embed.su"],
     patterns: [
-      /vidsrc/i,
       /multiembed/i,
       /embed\.su/i
     ],

@@ -193,7 +193,6 @@ import bolodechocolateRouter from "./server/routes/bolodechocolate";
 import nixplayRouter from "./server/routes/nixplayRoutes";
 import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
-import vizerExtractorRouter from "./server/routes/vizerExtractor";
 import { adminOpsRouter } from "./server/routes/adminOps";
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
@@ -201,7 +200,6 @@ app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
 app.use(vidsrcRouter);
 app.use(serverBlocksRouter);
-app.use(vizerExtractorRouter);
 app.use("/api/admin", adminOpsRouter);
 
   app.get("/api/extract-player", async (req, res) => {
