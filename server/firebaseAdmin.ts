@@ -1,14 +1,15 @@
-import admin from "firebase-admin";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore, Firestore } from "firebase-admin/firestore";
 import path from "path";
 import fs from "fs";
 
-let adminDb: admin.firestore.Firestore | null = null;
+let adminDb: Firestore | null = null;
 
-export function getAdminDb(): admin.firestore.Firestore | null {
+export function getAdminDb(): Firestore | null {
   if (adminDb) return adminDb;
 
   try {
-    if (!admin.apps.length) {
+    if (getApps().length === 0) {
       const possiblePaths = [
         path.join(process.cwd(), "secrets", "firebase-service-account.json"),
         path.join(process.cwd(), "firebase-service-account.json")
@@ -24,14 +25,14 @@ export function getAdminDb(): admin.firestore.Firestore | null {
 
       if (serviceAccountPath) {
         const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
+        initializeApp({
+          credential: cert(serviceAccount)
         });
         console.log("[Firebase Admin] Inicializado com sucesso usando arquivo de credencial.");
       } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount)
+        initializeApp({
+          credential: cert(serviceAccount)
         });
         console.log("[Firebase Admin] Inicializado usando variável de ambiente.");
       } else {
@@ -40,7 +41,7 @@ export function getAdminDb(): admin.firestore.Firestore | null {
       }
     }
     
-    adminDb = admin.firestore();
+    adminDb = getFirestore();
     return adminDb;
   } catch (error) {
     console.error("[Firebase Admin] Erro ao inicializar:", error);
