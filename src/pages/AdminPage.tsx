@@ -1001,7 +1001,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             const q = searchTerm.toLowerCase();
             return (
               (u.name && u.name.toLowerCase().includes(q)) ||
-              u.email.toLowerCase().includes(q) ||
+              (u.email && u.email.toLowerCase().includes(q)) ||
               (u.accessType && u.accessType.toLowerCase().includes(q))
             );
           }).length === 0 ? (
@@ -1018,7 +1018,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   const q = searchTerm.toLowerCase();
                   return (
                     (u.name && u.name.toLowerCase().includes(q)) ||
-                    u.email.toLowerCase().includes(q) ||
+                    (u.email && u.email.toLowerCase().includes(q)) ||
                     (u.accessType && u.accessType.toLowerCase().includes(q))
                   );
                 })
