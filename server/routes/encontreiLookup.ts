@@ -224,6 +224,7 @@ export async function resolveVizerEpisode(
       audio: pData.current_audio || "Dublado",
       servers: { mixdrop, streamtape, byse, doodstream },
       source_url: target.url,
+      _fetchedAt: Date.now()
     };
 
     // Cache no índice em memória
@@ -311,6 +312,7 @@ export async function resolveVizerMovie(tmdbId: number) {
       tmdb_id: tmdbId,
       audio: pData.current_audio || "Dublado",
       servers: { mixdrop, streamtape, byse, doodstream },
+      _fetchedAt: Date.now()
     };
 
     // Cache no índice em memória (próxima busca = instantânea)
@@ -694,8 +696,20 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       // Lookup de episódio: PRIMEIRO vizer (mais eps), DEPOIS encontrei
       const key = `${tmdbId}:${season}:${episode}`;
       
-      const vizerEp = _vizerEpisodeIndex.get(key);
-      const encontreiEp = _encontreiEpisodeIndex.get(key);
+      const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      
+      let vizerEp = _vizerEpisodeIndex.get(key);
+      if (vizerEp && vizerEp._fetchedAt && (now - vizerEp._fetchedAt > VIZER_ON_DEMAND_TTL)) {
+        _vizerEpisodeIndex.delete(key);
+        vizerEp = undefined;
+      }
+      
+      let encontreiEp = _encontreiEpisodeIndex.get(key);
+      if (encontreiEp && encontreiEp._fetchedAt && (now - encontreiEp._fetchedAt > VIZER_ON_DEMAND_TTL)) {
+        _encontreiEpisodeIndex.delete(key);
+        encontreiEp = undefined;
+      }
 
       let bestEp = null;
       let bestSource = "";
@@ -738,8 +752,20 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       }
     } else {
       // Lookup de filme: PRIMEIRO vizer, DEPOIS encontrei
-      const vizerMovie = _vizerMovieIndex.get(tmdbId);
-      const encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+      const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1000;
+      const now = Date.now();
+      
+      let vizerMovie = _vizerMovieIndex.get(tmdbId);
+      if (vizerMovie && vizerMovie._fetchedAt && (now - vizerMovie._fetchedAt > VIZER_ON_DEMAND_TTL)) {
+        _vizerMovieIndex.delete(tmdbId);
+        vizerMovie = undefined;
+      }
+      
+      let encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+      if (encontreiMovie && encontreiMovie._fetchedAt && (now - encontreiMovie._fetchedAt > VIZER_ON_DEMAND_TTL)) {
+        _encontreiMovieIndex.delete(tmdbId);
+        encontreiMovie = undefined;
+      }
 
       let bestMovie = null;
       let bestSource = "";
