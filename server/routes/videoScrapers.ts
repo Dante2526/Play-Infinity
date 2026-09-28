@@ -1961,6 +1961,40 @@ const router = Router();
         });
       }
 
+      // 1. Verifica se a temporada possui episódios no catálogo Encontrei (MixDrop)
+      const numericId = parseInt(tmdbId, 10);
+      const catalogEpisodeNumbers = new Set<number>();
+
+      try {
+        const fsModule = await import("fs");
+        const pathModule = await import("path");
+        const encontreiPath = pathModule.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+        if (fsModule.existsSync(encontreiPath)) {
+          const encData = JSON.parse(fsModule.readFileSync(encontreiPath, "utf-8"));
+          for (const ep of encData.episodes || []) {
+            if (ep.tmdb_id === numericId && ep.season === season && typeof ep.episode === "number") {
+              catalogEpisodeNumbers.add(ep.episode);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("[check-season] Aviso ao checar catálogos locais:", err);
+      }
+
+      // Se temos todos os episódios solicitados já no catálogo local, podemos retornar direto
+      if (catalogEpisodeNumbers.size >= count) {
+        const sortedEps = Array.from(catalogEpisodeNumbers).sort((a, b) => a - b);
+        seasonAvailabilityCache.set(cacheKey, { episodes: sortedEps, timestamp: Date.now() });
+        return res.json({
+          success: true,
+          id: tmdbId,
+          season,
+          availableEpisodes: sortedEps,
+          totalAvailable: sortedEps.length,
+          cached: false,
+        });
+      }
+
       // Mesma heurística já usada em /api/watchplayer-stream para detectar quando o
       // WatchPlayer devolve uma página de "não encontrado" / login em vez do player real.
       const isCheckUnavailable = (content: string, url: string, status: number): boolean => {
@@ -2078,9 +2112,14 @@ const router = Router();
       });
       await Promise.all(workers);
 
-      const availableEpisodes = isAvailable
-        .map((ok, idx) => (ok ? idx + 1 : null))
-        .filter((n): n is number => n !== null);
+      const availableEpisodes = Array.from(
+        new Set([
+          ...Array.from(catalogEpisodeNumbers),
+          ...isAvailable
+            .map((ok, idx) => (ok ? idx + 1 : null))
+            .filter((n): n is number => n !== null)
+        ])
+      ).sort((a, b) => a - b);
 
       seasonAvailabilityCache.set(cacheKey, { episodes: availableEpisodes, timestamp: Date.now() });
 

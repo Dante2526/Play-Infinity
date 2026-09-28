@@ -1,4 +1,4 @@
-import { getFavoriteIds, getScheduleForFavorites, SeriesScheduleEpisode } from "./favorites";
+import { getFavoriteIds, getScheduleForFavorites, fetchDynamicScheduleForFavorites, SeriesScheduleEpisode } from "./favorites";
 import { isEpisodeWatched } from "./watchedEpisodes";
 
 export interface EpisodeNotification {
@@ -20,6 +20,38 @@ export interface EpisodeNotification {
 }
 
 const READ_NOTIFICATIONS_STORAGE_KEY = "playinfinity_read_notifications";
+const SCHEDULE_CACHE_KEY = "playinfinity_schedule_cache_v2";
+
+let isSyncingDynamicSchedule = false;
+let lastDynamicSyncTime = 0;
+const DYNAMIC_SYNC_THROTTLE = 2 * 60 * 1000; // 2 minutos
+
+/**
+ * Dispara uma sincronização em background do cronograma real de episódios do TMDB
+ * para as séries seguidas pelo usuário, atualizando o cache e emitindo evento
+ */
+export const syncNotificationsInBackground = (favoriteIds: number[]) => {
+  if (!favoriteIds || favoriteIds.length === 0) return;
+  const now = Date.now();
+  if (isSyncingDynamicSchedule || now - lastDynamicSyncTime < DYNAMIC_SYNC_THROTTLE) return;
+
+  isSyncingDynamicSchedule = true;
+  lastDynamicSyncTime = now;
+
+  fetchDynamicScheduleForFavorites(favoriteIds)
+    .then(episodes => {
+      if (episodes && episodes.length > 0) {
+        try {
+          localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(episodes));
+          window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
+        } catch (e) {}
+      }
+    })
+    .catch(() => {})
+    .finally(() => {
+      isSyncingDynamicSchedule = false;
+    });
+};
 
 export const getReadNotificationIds = (): string[] => {
   try {
@@ -78,6 +110,9 @@ const formatReleasedAgo = (airDate: string): string => {
  */
 export const getFavoriteEpisodeNotifications = (favoriteIds: number[]): EpisodeNotification[] => {
   if (!favoriteIds || favoriteIds.length === 0) return [];
+
+  // Dispara checagem em background de novos episódios caso o cache precise de atualização
+  syncNotificationsInBackground(favoriteIds);
 
   const readIds = new Set(getReadNotificationIds());
   const allScheduled = getScheduleForFavorites(favoriteIds);
