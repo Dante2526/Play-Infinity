@@ -208,7 +208,6 @@ const VALID_SERVER_KEYS = new Set([
   "srv_mixdrop",
   "srv_vip",
   "srv_nixplay",
-  "srv_vidsrc",
 ]);
 
 // ============================================================================
