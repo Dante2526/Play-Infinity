@@ -50,7 +50,7 @@ export function getFriendlyErrorMessage(err: any, defaultMessage = "Ocorreu um e
       return "Permissão negada. Você não tem autorização para realizar esta ação no banco de dados.";
 
     case "unavailable":
-      return "O serviço está temporariamente indisponível. Aguarde alguns instantes e tente novamente.";
+      return "O serviço está temporariamente indisponível ou sem conexão com a internet. Aguarde alguns instantes e tente novamente.";
 
     case "not-found":
       return "O registro ou usuário solicitado não foi encontrado.";
@@ -59,6 +59,9 @@ export function getFriendlyErrorMessage(err: any, defaultMessage = "Ocorreu um e
   // 2. Detecção por substrings em mensagens brutas (ex: "Firebase: Error (auth/invalid-email)")
   const lowerMsg = rawMsg.toLowerCase();
 
+  if (lowerMsg.includes("client is offline") || lowerMsg.includes("offline")) {
+    return "Você está sem conexão com a internet. Verifique sua rede (Wi-Fi ou dados móveis) e tente novamente.";
+  }
   if (lowerMsg.includes("auth/invalid-email") || lowerMsg.includes("invalid-email")) {
     return "Formato de e-mail inválido. Verifique se não há espaços, pontos antes do '@' (como '01.@') ou caracteres inválidos.";
   }

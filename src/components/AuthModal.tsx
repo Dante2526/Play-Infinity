@@ -72,17 +72,29 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
         const userCred = await signInWithEmailAndPassword(auth, email.trim(), password);
         // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)
-        let userSnap = await getDoc(doc(db, "usuarios", userCred.user.uid));
-        if (!userSnap.exists()) {
-          userSnap = await getDoc(doc(db, "users", userCred.user.uid));
-        }
-        if (!userSnap.exists()) {
-          userSnap = await getDoc(doc(db, "administradores", userCred.user.uid));
-        }
-        if (!userSnap.exists()) {
-          await signOut(auth);
-          localStorage.removeItem("playinfinity_logged_in");
-          throw new Error("Sua conta foi desativada ou removida. Entre em contato com o suporte.");
+        try {
+          let userSnap = await getDoc(doc(db, "usuarios", userCred.user.uid));
+          if (!userSnap.exists()) {
+            userSnap = await getDoc(doc(db, "users", userCred.user.uid));
+          }
+          if (!userSnap.exists()) {
+            userSnap = await getDoc(doc(db, "administradores", userCred.user.uid));
+          }
+          if (!userSnap.exists()) {
+            await signOut(auth);
+            localStorage.removeItem("playinfinity_logged_in");
+            throw new Error("Sua conta foi desativada ou removida. Entre em contato com o suporte.");
+          }
+        } catch (docErr: any) {
+          if (
+            docErr?.message?.toLowerCase().includes("client is offline") ||
+            docErr?.code === "unavailable" ||
+            (typeof navigator !== 'undefined' && !navigator.onLine)
+          ) {
+            console.warn("[Auth] Não foi possível verificar documento do usuário por estar offline:", docErr);
+          } else {
+            throw docErr;
+          }
         }
       } else {
         const userCred = await createUserWithEmailAndPassword(auth, email.trim(), password);
@@ -126,7 +138,22 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
     } catch (err: any) {
       const friendly = getFriendlyErrorMessage(err, "Erro na autenticação. Tente novamente.");
       setError(friendly);
-      if (err.code !== "auth/invalid-credential" && err.code !== "auth/user-not-found" && err.code !== "auth/wrong-password" && err.code !== "auth/invalid-email") {
+      const isExpectedAuthOrNetworkError =
+        err.code === "auth/invalid-credential" ||
+        err.code === "auth/invalid-login-credentials" ||
+        err.code === "auth/user-not-found" ||
+        err.code === "auth/wrong-password" ||
+        err.code === "auth/invalid-email" ||
+        err.code === "auth/email-already-in-use" ||
+        err.code === "auth/weak-password" ||
+        err.code === "auth/too-many-requests" ||
+        err.code === "auth/network-request-failed" ||
+        err.code === "unavailable" ||
+        (err.message && err.message.toLowerCase().includes("client is offline")) ||
+        (err.message && err.message.toLowerCase().includes("offline")) ||
+        (typeof navigator !== 'undefined' && !navigator.onLine);
+
+      if (!isExpectedAuthOrNetworkError) {
         reportAppError(err, 'Autenticação / Conta de Usuário');
       }
     } finally {

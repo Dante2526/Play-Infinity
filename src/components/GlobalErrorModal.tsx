@@ -32,6 +32,18 @@ function isIgnorableError(message?: string, stack?: string): boolean {
   if (combined.includes('@vite/client')) return true;
   if (combined.includes('vite/client')) return true;
 
+  // Ruídos de desconexão de rede ou cliente offline (não são bugs do código)
+  if (combined.includes('client is offline')) return true;
+  if (combined.includes('failed to get document because the client is offline')) return true;
+  if (combined.includes('network-request-failed')) return true;
+  if (combined.includes('network error')) return true;
+  if (combined.includes('net::err_internet_disconnected')) return true;
+  if (combined.includes('net::err_network_changed')) return true;
+  if (combined.includes('the internet connection appears to be offline')) return true;
+  if (combined.includes('the network connection was lost')) return true;
+  if (combined.includes('failed to fetch') && typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  if (combined.includes('load failed') && typeof navigator !== 'undefined' && !navigator.onLine) return true;
+
   // Ruídos do ciclo de vida de mídia HTML5 / Browser
   if (combined.includes('the play() request was interrupted')) return true;
   if (combined.includes('resizeobserver loop completed')) return true;
