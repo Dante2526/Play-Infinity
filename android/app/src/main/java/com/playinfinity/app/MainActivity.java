@@ -5,6 +5,7 @@ import android.os.Build;
 import android.app.PictureInPictureParams;
 import android.util.Rational;
 import com.getcapacitor.BridgeActivity;
+import android.content.res.Configuration;
 
 public class MainActivity extends BridgeActivity {
     public static boolean isVideoPlaying = false;
@@ -30,6 +31,19 @@ public class MainActivity extends BridgeActivity {
                     e.printStackTrace();
                 }
             }
+        }
+    }
+
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        try {
+            if (this.bridge != null) {
+                String data = "{ \"isPiP\": " + isInPictureInPictureMode + " }";
+                this.bridge.triggerWindowJSEvent("pipModeChanged", data);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 }
