@@ -298,9 +298,7 @@ export function VideoPlayerModal({
       activeLower.includes("/api/live-stream-proxy") ||
       activeLower.includes("/api/vidsrc-stream") ||
       activeLower.includes("/api/vidsrc-proxy") ||
-      activeLower.includes("/api/vidsrc-player") ||
-      activeLower.includes("/api/nuvix-player") ||
-      activeLower.includes("/api/nuvix-stream");
+      activeLower.includes("/api/vidsrc-player");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput, selectedServerKey]);
@@ -857,27 +855,6 @@ export function VideoPlayerModal({
       });
     }
 
-    // Adiciona Nuvix (sidecarracers.com) — m3u8 direto, sem decrypt, com Netflix skin
-    // Catálogo: 10k+ filmes, 6k+ séries, animes, novelas — todos dublados PT-BR
-    if (title) {
-      list.push({
-        key: "srv_nuvix",
-        label: "Nuvix HD (Dublado)",
-        badge: "Nuvix • 100k+ títulos • Dublado PT-BR • Skin Netflix",
-        buildUrl: (id: string, s?: number, e?: number) => {
-          const type = isSeries ? "series" : "movie";
-          // Pra séries, passa title + type + season + episode
-          if (isSeries) {
-            const sStr = s || season || 1;
-            const eStr = e || episode || 1;
-            return `/api/nuvix-player?title=${encodeURIComponent(title)}&type=series&s=${sStr}&e=${eStr}`;
-          }
-          return `/api/nuvix-player?title=${encodeURIComponent(title)}&type=movie`;
-        },
-        isMatch: (u: string) => u.includes("/api/nuvix-player") || u.includes("/api/nuvix-stream"),
-        name: "Nuvix HD (Dublado)"
-      });
-    }
     
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
@@ -2115,11 +2092,9 @@ export function VideoPlayerModal({
                     selectedServerKey === "srv_mixdrop" ||
                     selectedServerKey === "srv_nixplay" ||
                     selectedServerKey === "srv_vidsrc" ||
-                    selectedServerKey === "srv_nuvix" ||
                     activeIframeUrl?.includes("/api/mixdrop-stream") ||
                     activeIframeUrl?.includes("/api/native-player") ||
                     activeIframeUrl?.includes("/api/vidsrc-player") ||
-                    activeIframeUrl?.includes("/api/nuvix-player") ||
                     activeIframeUrl?.includes("nixplay")
                   ) {
                     setTimeout(() => setPlayerSkinReady(true), 500);
