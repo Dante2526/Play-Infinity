@@ -196,6 +196,7 @@ export default function App() {
     imageUrl?: string;
     backdropUrl?: string;
     posterUrl?: string;
+    serverKey?: string;
   }>({
     isOpen: false,
     title: "",
@@ -573,7 +574,8 @@ export default function App() {
     imageUrl?: string,
     backdropUrl?: string,
     posterUrl?: string,
-    isAnime?: boolean
+    isAnime?: boolean,
+    serverKey?: string
   ) => {
     if (!isPremium && !isTrialActive && !isDevEnvironment) {
       setIsPaywallOpen(true);
@@ -640,7 +642,8 @@ export default function App() {
       autoFullscreen,
       imageUrl,
       backdropUrl,
-      posterUrl
+      posterUrl,
+      serverKey
     });
 
     // Registra reprodução para o Top 10 Mais Assistidos dos usuários
@@ -1062,6 +1065,7 @@ export default function App() {
             imageUrl={playerModal.imageUrl}
             backdropUrl={playerModal.backdropUrl}
             posterUrl={playerModal.posterUrl}
+            initialServerKey={playerModal.serverKey}
           />
         )}
 

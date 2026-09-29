@@ -108,6 +108,7 @@ export interface PlaybackHistoryItem {
   playerUrl?: string;
   quality?: string;
   isCam?: boolean;
+  serverKey?: string;
   updatedAt: number;
 }
 
@@ -318,6 +319,7 @@ export function savePlaybackProgress(item: {
   playerUrl?: string;
   quality?: string;
   isCam?: boolean;
+  serverKey?: string;
 }): void {
   if (!item.id || !item.duration || item.duration <= 0 || item.currentTime < 2) {
     return;
@@ -373,6 +375,7 @@ export function savePlaybackProgress(item: {
     playerUrl: item.playerUrl || existing?.playerUrl,
     quality: item.quality || existing?.quality,
     isCam: item.isCam ?? existing?.isCam,
+    serverKey: item.serverKey || existing?.serverKey,
     updatedAt: Date.now(),
   };
 

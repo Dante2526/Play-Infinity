@@ -85,3 +85,11 @@
 - Os endpoints de backend (`/api/watchplayer-stream` e `/api/anime/hls-proxy`) possuem **timeouts estritos com `AbortController`**, detecção de cancelamento de conexão (`req.on('close')`), sondagem paralela de variantes via `Promise.any` e cache de prefixos funcionais em memória (`watchPlayerWorkingPrefixCache`).
 - Consulte a documentação completa e detalhada em [`VOD_ARCHITECTURE.md`](./VOD_ARCHITECTURE.md).
 
+---
+
+## 6. Compilação Android (APK / AAB) e Picture-in-Picture
+
+- O aplicativo mobile é construído usando **Capacitor** integrando o site web.
+- A compilação (APK e AAB para Play Store) é orquestrada automaticamente pelo **GitHub Actions** em `.github/workflows/build-android.yml`.
+- Modificações no frontend (React/Vite) refletem imediatamente no app sem precisar de atualizações na Play Store (exceto se houver mudanças em permissões ou plugins nativos).
+- Para o Picture-in-Picture (PiP) nativo flutuar no sistema operacional (fora do app), o Capacitor utiliza o plugin local `PiPPlugin` e `MainActivity.java` monitora `onUserLeaveHint`.

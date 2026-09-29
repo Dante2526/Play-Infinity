@@ -13,5 +13,6 @@ export type OnPlayHandler = (
   imageUrl?: string,
   backdropUrl?: string,
   posterUrl?: string,
-  isAnime?: boolean
+  isAnime?: boolean,
+  serverKey?: string
 ) => void;

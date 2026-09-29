@@ -247,7 +247,8 @@ export function HomePage({
       season: item.season,
       episodeNumber: item.episode,
       quality: item.quality || catalogItem?.quality,
-      isCam: item.isCam || catalogItem?.quality === 'CAM'
+      isCam: item.isCam || catalogItem?.quality === 'CAM',
+      serverKey: item.serverKey
     };
   };
 

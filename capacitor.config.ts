@@ -7,6 +7,17 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://play-infinity.stream',
     cleartext: true
+  },
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 1500,
+      launchAutoHide: true,
+      backgroundColor: "#000000",
+      showSpinner: true,
+      splashFullScreen: true,
+      splashImmersive: true,
+      spinnerColor: "#E50914"
+    }
   }
 };
 

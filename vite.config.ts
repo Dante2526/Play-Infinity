@@ -22,6 +22,15 @@ export default defineConfig(() => {
     build: {
       cssMinify: 'lightningcss' as const,
       target: 'es2015',
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor_react: ['react', 'react-dom'],
+            vendor_firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            vendor_player: ['hls.js']
+          }
+        }
+      }
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
