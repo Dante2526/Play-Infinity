@@ -348,14 +348,35 @@ export function VideoPlayerModal({
 
   // Controle do Status Bar Nativo no Android
   useEffect(() => {
+    let enforceInterval: NodeJS.Timeout;
+
+    const enforceStatusBarHidden = () => {
+      if (Capacitor.isNativePlatform() && isOpen && isExpanded && !isMiniPlayer) {
+        StatusBar.hide().catch(() => {});
+      }
+    };
+
     if (Capacitor.isNativePlatform()) {
       if (isOpen && isExpanded && !isMiniPlayer) {
         StatusBar.hide().catch(() => {});
+        
+        // Adiciona listeners para garantir que a status bar suma se o usuário 
+        // puxou a barra de notificações e ela ficou "presa"
+        window.addEventListener("pointerdown", enforceStatusBarHidden);
+        window.addEventListener("touchstart", enforceStatusBarHidden, { passive: true });
+        
+        // Também verifica periodicamente a cada 2 segundos se a status bar reapareceu
+        // para esconder automaticamente, imitando o IMMERSIVE_STICKY nativo
+        enforceInterval = setInterval(enforceStatusBarHidden, 2500);
       } else {
         StatusBar.show().catch(() => {});
       }
     }
     return () => {
+      window.removeEventListener("pointerdown", enforceStatusBarHidden);
+      window.removeEventListener("touchstart", enforceStatusBarHidden);
+      if (enforceInterval) clearInterval(enforceInterval);
+
       if (Capacitor.isNativePlatform()) {
         StatusBar.show().catch(() => {});
       }
