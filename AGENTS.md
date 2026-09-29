@@ -93,3 +93,11 @@
 - A compilação (APK e AAB para Play Store) é orquestrada automaticamente pelo **GitHub Actions** em `.github/workflows/build-android.yml`.
 - Modificações no frontend (React/Vite) refletem imediatamente no app sem precisar de atualizações na Play Store (exceto se houver mudanças em permissões ou plugins nativos).
 - Para o Picture-in-Picture (PiP) nativo flutuar no sistema operacional (fora do app), o Capacitor utiliza o plugin local `PiPPlugin` e `MainActivity.java` monitora `onUserLeaveHint`.
+
+---
+
+## 7. Controle de Versão e Lançamento (Play Store)
+
+- **Versionamento Automático:** Toda vez que for necessário gerar um novo APK ou AAB para a Google Play Store, o agente DEVE incrementar automaticamente o `versionCode` (e `versionName` quando aplicável) no arquivo `android/app/build.gradle`.
+- **Prevenção de Erros na Loja:** A Google Play Console rejeita pacotes com códigos de versão já utilizados. O controle rígido desta numeração é responsabilidade da IA.
+- **Autorização Explícita:** NUNCA execute o commit/push para a branch `main` (que dispara o GitHub Actions para compilação do AAB) sem ANTES pedir autorização explícita do usuário. Pergunte sempre: "Deseja que eu envie para o GitHub Actions para gerar o novo AAB?".
