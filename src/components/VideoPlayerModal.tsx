@@ -309,6 +309,10 @@ export function VideoPlayerModal({
   const [blockedServerKeys, setBlockedServerKeys] = useState<Set<string>>(new Set());
   // Controle do overlay anti-flash: permanece preto até a skin estética estar pronta
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
+  // Controle de visibilidade do iframe: oculta o iframe nativo (com botões feios/gigantes) até o vídeo começar a rodar
+  const [iframeVisible, setIframeVisible] = useState<boolean>(false);
+  // Controle de Picture-in-Picture nativo do Android
+  const [isNativePiP, setIsNativePiP] = useState<boolean>(false);
   // Marca o timestamp da última troca de mídia/episódio para descartar mensagens residuais
   const transitionEpochRef = useRef<number>(0);
 
@@ -597,6 +601,49 @@ export function VideoPlayerModal({
   }, [isOpen, isSeries, tmdbId, resolvedId, seriesDetails]);
 
   // Lista de temporadas válidas da série (apenas as temporadas com episódios verificados e reproduzíveis)
+  // Garante que o fundo da página inteira seja preto enquanto o modal estiver aberto (evita flashes brancos)
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.backgroundColor = "black";
+      document.documentElement.style.backgroundColor = "black";
+    } else {
+      document.body.style.backgroundColor = "";
+      document.documentElement.style.backgroundColor = "";
+    }
+    return () => {
+      document.body.style.backgroundColor = "";
+      document.documentElement.style.backgroundColor = "";
+    };
+  }, [isOpen]);
+
+  // Escuta o evento de Picture-in-Picture nativo do Android (emitido pelo MainActivity.java via Capacitor)
+  useEffect(() => {
+    const handlePiPChange = (e: any) => {
+      let isPiP = false;
+      if (e?.detail?.isPiP !== undefined) {
+        isPiP = e.detail.isPiP;
+      } else if (e?.isPiP !== undefined) {
+        isPiP = e.isPiP;
+      }
+
+      setIsNativePiP(isPiP);
+
+      if (isPiP) {
+        // Se entrou no PiP nativo do Android, desfaz a rotação forçada e tela cheia interna
+        // Isso evita que o vídeo fique "cortado" dentro da janela do PiP
+        setIsRotated(false);
+        setIsWidescreen(false);
+        setIsFullscreen(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+
+    window.addEventListener("pipModeChanged", handlePiPChange);
+    return () => window.removeEventListener("pipModeChanged", handlePiPChange);
+  }, []);
+
   const availableSeasons = useMemo(() => {
     if (catalogSeasons && catalogSeasons.length > 0) {
       return catalogSeasons;
@@ -907,6 +954,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
     setPlayerSkinReady(serverKey === "srv_mixdrop");
+    setIframeVisible(false);
     setError(null);
 
     let newUrl: string;
@@ -978,6 +1026,7 @@ export function VideoPlayerModal({
       setError(null);
       setIsLoading(true);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
+      setIframeVisible(false); // Oculta iframe até rodar
       fallbackAttemptsRef.current.clear();
       hasSeekedInitialTimeRef.current = false;
 
@@ -1189,6 +1238,15 @@ export function VideoPlayerModal({
             } catch (err) {}
           }
         }
+
+        // Revela o iframe (remove opacity-0) apenas quando o vídeo começou a tocar, para esconder botões nativos gigantes
+        if (
+          (typeof data.currentTime === "number" && data.currentTime > 0.1) ||
+          data.paused === false ||
+          (typeof data.readyState === "number" && data.readyState >= 3)
+        ) {
+          setIframeVisible(true);
+        }
       }
 
       const isEnded = event.data.type === "WATCHPLAY_VIDEO_ENDED" ||
@@ -1221,6 +1279,7 @@ export function VideoPlayerModal({
               setEpisode(1);
               setIsIntroActive(false);
               setPlayerSkinReady(false);
+              setIframeVisible(false);
               fallbackAttemptsRef.current.clear();
               
               const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
@@ -1343,6 +1402,7 @@ export function VideoPlayerModal({
     setEpisode(newEpisode);
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
+    setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
 
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
@@ -1377,6 +1437,7 @@ export function VideoPlayerModal({
     setEpisode(1);
     setIsIntroActive(false);
     setPlayerSkinReady(false);
+    setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
 
     let targetKey = selectedServerKey;
@@ -2073,6 +2134,7 @@ export function VideoPlayerModal({
                 className="w-full h-full border-0 bg-black"
                 style={{
                   backgroundColor: "#000000",
+                  opacity: iframeVisible ? 1 : 0,
                   transform:
                     aspectRatio === "cover"
                       ? "scale(1.35)"
@@ -2080,7 +2142,7 @@ export function VideoPlayerModal({
                       ? "scale(1.0, 1.25)"
                       : "none",
                   transformOrigin: "center center",
-                  transition: "transform 0.3s ease",
+                  transition: "transform 0.3s ease, opacity 0.5s ease",
                 }}
                 fetchPriority="high"
                 allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
@@ -2142,8 +2204,9 @@ export function VideoPlayerModal({
             )}
 
             {/* Player Oficial Estilo Netflix Cinematográfico */}
-            <NetflixPlayerSkin
-              mediaId={resolvedId}
+            <div className={`absolute inset-0 pointer-events-none ${isNativePiP ? 'hidden' : ''}`}>
+              <NetflixPlayerSkin
+                mediaId={resolvedId}
               tmdbId={tmdbId}
               imdbId={imdbId}
               title={title}
@@ -2180,6 +2243,7 @@ export function VideoPlayerModal({
               isMiniPlayer={isMiniPlayer}
               passThroughClicks={isExternalPlayer}
             />
+            </div>
           </div>
         </div>
         {/* CastModal removido do VideoPlayerModal, agora reside apenas na DetailsPage */}
