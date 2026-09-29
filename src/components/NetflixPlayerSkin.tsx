@@ -210,7 +210,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_nuvix" ? "nuvix" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
   const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
 
   const displayAudioServers = useMemo(() => {
@@ -222,7 +222,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_vip", label: "VIP Player" },
       { key: "srv_vidsrc", label: "Seriesflix HD" },
-      { key: "srv_nuvix", label: "Nuvix HD" },
     ];
   }, [serversList]);
 

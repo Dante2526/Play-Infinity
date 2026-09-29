@@ -86,13 +86,6 @@ const HOMOLOGATED_SERVERS: ServerOption[] = [
     badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
     description: "Provedor Vidsrc/Seriesflix",
   },
-  {
-    key: "srv_nuvix",
-    label: "Nuvix HD",
-    badge: "Nuvix",
-    badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    description: "100k+ títulos dublados PT-BR (m3u8 direto, sem decrypt)",
-  },
 ];
 
 const SERVER_LABELS: Record<string, string> = {
@@ -101,7 +94,6 @@ const SERVER_LABELS: Record<string, string> = {
   srv_mixdrop: "MixDrop",
   srv_nixplay: "Nixplay",
   srv_vidsrc: "Seriesflix HD",
-  srv_nuvix: "Nuvix HD",
 };
 
 export function ServerBlocksAdmin() {
