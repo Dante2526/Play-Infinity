@@ -27,6 +27,9 @@ import {
   Loader2,
 } from "lucide-react";
 import { savePlaybackProgress } from "../services/playbackHistory";
+import { Capacitor, registerPlugin } from "@capacitor/core";
+
+const PiP = registerPlugin<any>("PiP");
 
 export interface NetflixPlayerStatus {
   currentTime: number;
@@ -295,6 +298,18 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     lastRealStatusAtRef.current = Date.now();
   }, [episode, season, mediaId]);
 
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      PiP.setPlayingStatus({ isPlaying: !playerStatus.paused }).catch(() => {});
+    }
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        PiP.setPlayingStatus({ isPlaying: false }).catch(() => {});
+      }
+    };
+  }, [playerStatus.paused]);
+
+
   // Gestos Touch Mobile Verticais (Esquerda = Brilho, Direita = Volume)
   const touchStartYRef = useRef<number | null>(null);
   const touchStartXRef = useRef<number | null>(null);
@@ -431,9 +446,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         backdropUrl,
         posterUrl,
         quality,
+        serverKey: activeServerKey,
       });
     }
-  }, [playerStatus.currentTime, playerStatus.duration, mediaId, tmdbId, imdbId, title, isSeries, season, episode, imageUrl, backdropUrl, posterUrl, quality]);
+  }, [playerStatus.currentTime, playerStatus.duration, mediaId, tmdbId, imdbId, title, isSeries, season, episode, imageUrl, backdropUrl, posterUrl, quality, activeServerKey]);
 
   // Envia comandos universais para o iframe (compatível com WatchPlayer, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
@@ -1516,18 +1532,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           Barra vermelha + botões com espaçamento amplo (sem botão Share)
           ======================================================== */}
       {/* Barra de Progresso Fina e Contínua na Borda (quando controles completos estão ocultos) */}
-      {!isMiniPlayer && !isEffectiveExternal && !controlsVisible && !isLocked && hasValidDuration && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 h-1 bg-black/40 pointer-events-none transition-opacity duration-300">
-          <div
-            className="h-full bg-white/25 absolute top-0 left-0 bottom-0 transition-all duration-150"
-            style={{ width: `${bufferedPercent}%` }}
-          />
-          <div
-            className="h-full bg-[#E50914] absolute top-0 left-0 bottom-0 transition-all duration-150"
-            style={{ width: `${playedPercent}%` }}
-          />
-        </div>
-      )}
+
 
       {!isMiniPlayer && (
         <div

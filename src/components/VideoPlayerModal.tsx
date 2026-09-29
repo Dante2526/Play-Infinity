@@ -23,6 +23,8 @@ import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/t
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
+import { StatusBar } from '@capacitor/status-bar';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { Chromecast } from 'capacitor-chromecast';
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -42,6 +44,7 @@ interface VideoPlayerModalProps {
   imageUrl?: string;
   backdropUrl?: string;
   posterUrl?: string;
+  initialServerKey?: string;
 }
 
 function formatTime(sec: number): string {
@@ -175,6 +178,7 @@ export function VideoPlayerModal({
   imageUrl,
   backdropUrl,
   posterUrl,
+  initialServerKey,
 }: VideoPlayerModalProps) {
   const isCamMovie = isCam || checkIsCam(title, quality);
   const [showCastModal, setShowCastModal] = useState(false);
@@ -264,7 +268,7 @@ export function VideoPlayerModal({
   }, [isOpen, tmdbId, mediaType, season, episode, lookupMixdropFileId]);
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>("srv_watchplay");
+  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_watchplay");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
@@ -340,6 +344,22 @@ export function VideoPlayerModal({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [, setWatchedUpdateTick] = useState(0);
 
+  // Controle do Status Bar Nativo no Android
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      if (isOpen && isExpanded && !isMiniPlayer) {
+        StatusBar.hide().catch(() => {});
+      } else {
+        StatusBar.show().catch(() => {});
+      }
+    }
+    return () => {
+      if (Capacitor.isNativePlatform()) {
+        StatusBar.show().catch(() => {});
+      }
+    };
+  }, [isOpen, isExpanded, isMiniPlayer]);
+
   // Modo de Proporção / Aspect Ratio: Padrão (contain), Preencher / Zoom (cover), Esticar (stretch)
   const [aspectRatio, setAspectRatio] = useState<"contain" | "cover" | "stretch">("contain");
   const handleToggleAspectRatio = () => {
@@ -365,10 +385,13 @@ export function VideoPlayerModal({
         (document as any).msFullscreenElement
       );
       setIsFullscreen(isCurrentlyFullscreen);
+
       if (!isCurrentlyFullscreen) {
         setIsWidescreen(false);
         setIsRotated(false);
-        if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+        if (Capacitor.isNativePlatform()) {
+          ScreenOrientation.unlock().catch(() => {});
+        } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
           try {
             (screen.orientation as any).unlock();
           } catch (e) {}
@@ -1022,7 +1045,9 @@ export function VideoPlayerModal({
           setIsRotated(false);
         }
 
-        if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
+        if (Capacitor.isNativePlatform()) {
+          ScreenOrientation.lock({ orientation: 'landscape' }).then(() => setIsRotated(false)).catch(() => {});
+        } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
           try {
             const lockPromise = (screen.orientation as any).lock("landscape");
             if (lockPromise && typeof lockPromise.then === "function") {
@@ -1472,7 +1497,9 @@ export function VideoPlayerModal({
         }
       } catch (e) {}
     }
-    if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+    if (Capacitor.isNativePlatform()) {
+      ScreenOrientation.unlock().catch(() => {});
+    } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
       try {
         (screen.orientation as any).unlock();
       } catch (e) {}
@@ -1579,7 +1606,9 @@ export function VideoPlayerModal({
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
       }
-      if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.unlock().catch(() => {});
+      } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
         } catch (e) {}
@@ -1617,7 +1646,11 @@ export function VideoPlayerModal({
       }
 
       // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
+          setIsRotated(false);
+        }).catch(() => {});
+      } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
         try {
           const lockPromise = (screen.orientation as any).lock("landscape");
           if (lockPromise && typeof lockPromise.then === "function") {

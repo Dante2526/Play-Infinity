@@ -668,7 +668,8 @@ export function DetailsPage({
                   item.imageUrl || displayPoster,
                   item.backdropUrl || displayBackdrop,
                   item.posterUrl || displayPoster,
-                  isAnimeItem
+                  isAnimeItem,
+                  item.serverKey
                 )}
                 className="w-full sm:w-fit min-w-[280px] flex items-center justify-center gap-3 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 md:py-4 px-8 md:px-10 rounded-full transition-all text-base md:text-lg shadow-[0_0_25px_rgba(234,88,12,0.5)] cursor-pointer hover:scale-105 active:scale-95"
               >
@@ -985,7 +986,8 @@ export function DetailsPage({
                             item.imageUrl || displayPoster,
                             item.backdropUrl || displayBackdrop,
                             item.posterUrl || displayPoster,
-                            isAnimeItem
+                            isAnimeItem,
+                            item.serverKey
                           );
                         }}
                       >
@@ -1128,7 +1130,8 @@ export function DetailsPage({
                               item.imageUrl || displayPoster,
                               item.backdropUrl || displayBackdrop,
                               item.posterUrl || displayPoster,
-                              isAnimeItem
+                              isAnimeItem,
+                              item.serverKey
                             );
                           }}
                           className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-orange-600 hover:scale-105 active:scale-95 transition-all cursor-pointer"
