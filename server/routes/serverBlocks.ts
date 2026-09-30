@@ -208,8 +208,7 @@ const VALID_SERVER_KEYS = new Set([
   "srv_mixdrop",
   "srv_vip",
   "srv_nixplay",
-  "srv_vidsrc",
-  "srv_nuvix", // Nuvix HD
+  "srv_vidsrc", // Nuvix HD
 ]);
 
 // ============================================================================

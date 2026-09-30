@@ -433,6 +433,35 @@ initHls('${streamUrl}');
 
 // Receber comandos da NetflixPlayerSkin
 window.addEventListener('message',function(e){
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
   if(!video)return;
   var cmd=e.data;
   if(!cmd||!cmd.type)return;
@@ -531,3 +560,4 @@ export async function checkVidsrcSeason(
 }
 
 export default router;
+
