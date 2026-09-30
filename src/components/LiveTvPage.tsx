@@ -87,7 +87,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
     setViewMode(mode);
     try {
       localStorage.setItem('playinfinity_live_view_mode', mode);
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
   };
 
   // Form states

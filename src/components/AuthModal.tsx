@@ -131,7 +131,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             name: (!isLogin && name.trim()) ? name.trim() : email.split('@')[0]
           });
           navigator.credentials.store(cred).catch(() => {});
-        } catch (credErr) {}
+        } catch(credErr){console.warn("Silenced error:", credErr);}
       }
 
       onClose(); // Autenticação com sucesso

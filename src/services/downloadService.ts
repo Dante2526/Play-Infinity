@@ -309,6 +309,6 @@ export function triggerDirectDownload(
   setTimeout(() => {
     try {
       document.body.removeChild(link);
-    } catch (_) {}
+    } catch(_){console.warn("Silenced error:", _);}
   }, 1000);
 }

@@ -44,7 +44,7 @@ export const syncNotificationsInBackground = (favoriteIds: number[]) => {
         try {
           localStorage.setItem(SCHEDULE_CACHE_KEY, JSON.stringify(episodes));
           window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
     })
     .catch(() => {})

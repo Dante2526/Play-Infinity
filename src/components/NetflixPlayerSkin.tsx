@@ -272,7 +272,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       if (origin === "null" && source && iframeRef.current) {
         try {
           if (source === iframeRef.current.contentWindow) return true;
-        } catch {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
       return false;
     },

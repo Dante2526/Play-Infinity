@@ -183,7 +183,7 @@ export function useSubscription() {
                     assinatura: "EXPIRADA",
                     subscription: "INACTIVE",
                   });
-                } catch (e) {}
+                } catch(e){console.warn("Silenced error:", e);}
               }
 
               setLoading(false);
@@ -197,7 +197,7 @@ export function useSubscription() {
                   setLoading(false);
                   return;
                 }
-              } catch (e) {}
+              } catch(e){console.warn("Silenced error:", e);}
               clearExpiryTimer();
               setIsPremium(isDev);
               setTrial(NO_TRIAL);

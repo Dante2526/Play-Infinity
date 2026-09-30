@@ -461,7 +461,7 @@ export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEp
         });
       }
     }
-  } catch (e) {}
+  } catch(e){console.warn("Silenced error:", e);}
 
   episodes.sort((a, b) => a.airDate.localeCompare(b.airDate) || a.airTime.localeCompare(b.airTime));
   return episodes;
