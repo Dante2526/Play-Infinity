@@ -148,6 +148,17 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
     ],
     reason: "Removido por solicitação do usuário e incompatibilidade com os reprodutores homologados",
     blockedAt: "2026-09"
+  },
+  {
+    id: "seriesflix_vidsrc",
+    name: "Seriesflix HD (Vidsrc)",
+    keys: ["srv_vidsrc", "vidsrc"],
+    patterns: [
+      /vidsrc/i,
+      /opalescentoblivion/i
+    ],
+    reason: "A infraestrutura original ativou proteção Cloudflare severa (Turnstile) bloqueando nosso proxy (403), e também está retornando 522 Connection Timed Out. O player está morto no momento.",
+    blockedAt: "2026-09"
   }
 ];
 

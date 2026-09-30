@@ -965,6 +965,9 @@ export function VideoPlayerModal({
       list = list.filter(s => !blockedServerKeys.has(s.key));
     }
 
+    // Aplica a lista negra permanente (hardcoded em src/data/serverBlacklist.ts)
+    list = list.filter(s => !isServerBlacklisted(s.key));
+
     return list;
   }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, blockedServerKeys]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
