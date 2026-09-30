@@ -1280,15 +1280,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           <span
             style={{
               display: "inline-block",
-              background: "rgba(0,0,0,0.72)",
+              background: "transparent",
               color: "#fff",
-              fontSize: "clamp(14px, 2.2vw, 22px)",
-              fontFamily: "Arial, sans-serif",
-              fontWeight: 500,
-              padding: "4px 12px",
-              borderRadius: "4px",
-              lineHeight: 1.4,
-              textShadow: "0 1px 4px rgba(0,0,0,0.9)",
+              fontSize: "clamp(18px, 3vw, 32px)",
+              fontFamily: '"Helvetica Neue", Helvetica, Arial, sans-serif',
+              fontWeight: 700,
+              padding: "0",
+              lineHeight: 1.25,
+              textShadow: "0px 0px 7px rgba(0,0,0,1), 0px 0px 5px rgba(0,0,0,1), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000",
               whiteSpace: "pre-line",
             }}
             dangerouslySetInnerHTML={{ __html: activeCue }}
