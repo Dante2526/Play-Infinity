@@ -8,8 +8,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/7RyHsO4yDXtBv1zUU3mTpHeQ0d5.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/299534",
-    "views": 197,
-    "lastWatched": "2026-09-16T02:02:46.360Z"
+    "views": 203,
+    "lastWatched": "2026-09-30T18:38:11.188Z"
   },
   {
     "id": 66732,
@@ -33,8 +33,8 @@
     "backdropUrl": "https://image.tmdb.org/t/p/original/yDHYTfA3R0jFYba16jBB1ef8oIt.jpg",
     "quality": "HD",
     "playerUrl": "https://v1.watchplay.shop/movie/533535",
-    "views": 176,
-    "lastWatched": "2026-09-24T02:27:53.166Z"
+    "views": 177,
+    "lastWatched": "2026-09-30T15:39:33.574Z"
   },
   {
     "id": 93405,
@@ -404,5 +404,77 @@
     "playerUrl": "https://v1.watchplay.shop/tvshow/126027/5/1",
     "views": 12,
     "lastWatched": "2026-09-25T20:54:56.917Z"
+  },
+  {
+    "id": 65942,
+    "tmdbId": 65942,
+    "title": "Re:ZERO -Starting Life in Another World- - T1:E1 O Fim do Começo e o Começo do Fim",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/65942/1/1",
+    "views": 3,
+    "lastWatched": "2026-09-30T18:39:28.766Z"
+  },
+  {
+    "id": 95479,
+    "tmdbId": 95479,
+    "title": "Jujutsu Kaisen - T1:E2 Por mim mesmo",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/95479/1/2",
+    "views": 1,
+    "lastWatched": "2026-09-30T14:12:45.389Z"
+  },
+  {
+    "id": 208493,
+    "tmdbId": 208493,
+    "title": "Ganhei um Poder Apelão em Outro Mundo e Agora Sou Imbatível no Mundo Real - T1:E1 Indo ao Outro Mund",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/208493/1/1",
+    "views": 2,
+    "lastWatched": "2026-09-30T14:26:56.950Z"
+  },
+  {
+    "id": 45950,
+    "tmdbId": 45950,
+    "title": "High School DxD - T1:E1 Eu Consegui Uma Namorada!",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/45950/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-30T14:28:02.463Z"
+  },
+  {
+    "id": 114477,
+    "tmdbId": 114477,
+    "title": "Harem in the Labyrinth of Another World - T1:E1 Encontro",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/114477/1/1",
+    "views": 2,
+    "lastWatched": "2026-09-30T14:43:17.185Z"
+  },
+  {
+    "id": 214540,
+    "tmdbId": 214540,
+    "title": "Dead Mount Death Play - T1:E1 A Reencarnação",
+    "type": "series",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "playerUrl": "https://v1.watchplay.shop/tvshow/214540/1/1",
+    "views": 1,
+    "lastWatched": "2026-09-30T18:39:55.464Z"
   }
 ]

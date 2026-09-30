@@ -43,7 +43,9 @@ const customStreams: StreamItem[] = [];
  */
 
 
+import { subtitlesRouter } from "./server/routes/subtitlesRoutes";
 export const app = express();
+app.use(subtitlesRouter);
 const PORT = 3000;
 
 // Configuração Firebase (Backend JS SDK bypass para Firestore)
@@ -193,7 +195,7 @@ import bolodechocolateRouter from "./server/routes/bolodechocolate";
 import nixplayRouter from "./server/routes/nixplayRoutes";
 import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
-import nuvixRouter from "./server/routes/nuvixRoutes";
+
 import { adminOpsRouter } from "./server/routes/adminOps";
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
@@ -201,7 +203,7 @@ app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
 app.use(vidsrcRouter);
 app.use(serverBlocksRouter);
-app.use(nuvixRouter);
+
 app.use("/api/admin", adminOpsRouter);
 
   app.get("/api/extract-player", async (req, res) => {
@@ -1809,6 +1811,35 @@ app.use("/api/admin", adminOpsRouter);
                 })();
 
                 window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                   if (!e.data) return;
                   var v = art.video || document.querySelector("video");
 
@@ -1830,7 +1861,8 @@ app.use("/api/admin", adminOpsRouter);
                       break;
                     case "SEEK":
                     case "SEEK_ABSOLUTE":
-                      var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                       if (typeof t === "number" && !isNaN(t)) {
                         if (art) art.currentTime = t;
                         else if (v) v.currentTime = t;
@@ -1989,6 +2021,35 @@ app.use("/api/admin", adminOpsRouter);
 
                   // Escuta comandos vindos da Skin Netflix
                   window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                     if (!e.data) return;
                     switch(e.data.type) {
                       case "PLAY":
@@ -2005,7 +2066,8 @@ app.use("/api/admin", adminOpsRouter);
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           curTime = Math.max(0, Math.min(t, dur));
                           sendStatus();
@@ -2256,6 +2318,35 @@ app.use("/api/admin", adminOpsRouter);
                   })();
 
                   window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                     if (!e.data) return;
                     var v = art.video || document.querySelector("video");
 
@@ -2277,7 +2368,8 @@ app.use("/api/admin", adminOpsRouter);
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           if (art) art.currentTime = t;
                           else if (v) v.currentTime = t;
@@ -3334,6 +3426,35 @@ app.use("/api/admin", adminOpsRouter);
 
             // Mensagens enviadas pela Skin Netflix VIP
             window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
               if (!e.data) return;
               var v = getVideoElement();
 
@@ -3356,7 +3477,8 @@ app.use("/api/admin", adminOpsRouter);
 
                 case "SEEK":
                 case "SEEK_ABSOLUTE":
-                  var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                   if (typeof t === "number" && !isNaN(t)) {
                     var maxDur = (v && v.duration > 0) ? v.duration : ((window.artInstance && window.artInstance.duration > 0) ? window.artInstance.duration : 99999);
                     var targetTime = Math.max(0, Math.min(t, maxDur - 0.5));
@@ -4876,6 +4998,35 @@ app.use("/api/admin", adminOpsRouter);
 
       // Ponte de comandos completos para a Skin Netflix
       window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
         if (!e.data) return;
         var v = art.video || document.querySelector("video");
         var msgType = e.data.type || e.data.action;
@@ -4902,7 +5053,8 @@ app.use("/api/admin", adminOpsRouter);
           case "SEEK":
           case "seek":
           case "SEEK_ABSOLUTE":
-            var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
             if (typeof t === "number" && !isNaN(t)) {
               if (art) {
                 try { art.seek = t; } catch(err) {}
@@ -5352,6 +5504,35 @@ app.use("/api/admin", adminOpsRouter);
           })();
 
           window.addEventListener('message', function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
             if (!e.data) return;
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
@@ -5865,6 +6046,35 @@ app.use("/api/admin", adminOpsRouter);
               }
 
               window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                 if (!e.data) return;
                 var v = art.video || document.querySelector("video");
 
@@ -5907,6 +6117,7 @@ app.use("/api/admin", adminOpsRouter);
                     break;
                   case "SEEK":
                   case "SEEK_ABSOLUTE":
+                  case "SEEK_RELATIVE":
                     var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                     if (typeof t === "number" && !isNaN(t)) {
                       if (art) art.currentTime = t;
@@ -6236,3 +6447,4 @@ app.use("/api/admin", adminOpsRouter);
   }
 
   startServer().catch(err => console.error("Server start error:", err));
+

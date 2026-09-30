@@ -392,9 +392,9 @@ export default function App() {
             return;
           }
 
-          const adminSnap = await getDoc(doc(db, "administradores", currentUser.uid));
-          if (adminSnap.exists()) {
-            return; // É administrador, não desloga
+          const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+          if (currentUser.email && adminEmails.includes(currentUser.email)) {
+            return; // É administrador (baseado no e-mail real do Auth), não desloga
           }
         } catch (e) {
           // Erro de rede na checagem - não desloga

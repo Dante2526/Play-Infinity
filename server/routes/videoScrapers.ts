@@ -279,6 +279,7 @@ const router = Router();
                       break;
                     case "SEEK":
                     case "SEEK_ABSOLUTE":
+                    case "SEEK_RELATIVE":
                       var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                       if (typeof t === "number" && !isNaN(t)) {
                         var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
@@ -460,6 +461,7 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
+                      case "SEEK_RELATIVE":
                         var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           curTime = Math.max(0, Math.min(t, dur));
@@ -650,6 +652,7 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
+                      case "SEEK_RELATIVE":
                         var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
@@ -3264,3 +3267,4 @@ const router = Router();
   });
 
 export default router;
+
