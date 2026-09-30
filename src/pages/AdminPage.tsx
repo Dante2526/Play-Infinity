@@ -114,6 +114,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
 
+  // Estado do Modal de Usuários Assistindo Agora
+  const [showActiveViewersModal, setShowActiveViewersModal] = useState(false);
+
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -935,19 +938,30 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </div>
 
           {/* Card 4: Watching Now */}
-          <div className="bg-gradient-to-br from-orange-600/20 to-orange-900/20 border border-orange-500/20 backdrop-blur-xl rounded-[28px] p-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] flex flex-col relative overflow-hidden">
+          <div 
+            onClick={() => setShowActiveViewersModal(true)}
+            role="button"
+            tabIndex={0}
+            title="Clique para ver os usuários assistindo agora"
+            className="bg-gradient-to-br from-orange-600/20 to-orange-900/20 hover:from-orange-600/30 hover:to-orange-900/30 border border-orange-500/20 hover:border-orange-500/40 backdrop-blur-xl rounded-[28px] p-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] flex flex-col relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+          >
             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
-            <div className="flex items-center gap-4 mb-4 text-white/90">
-              <div className="p-3 bg-orange-500 text-white rounded-[18px] shadow-lg animate-pulse">
-                <Activity className="w-6 h-6" />
+            <div className="flex items-center justify-between mb-4 text-white/90">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-orange-500 text-white rounded-[18px] shadow-lg animate-pulse">
+                  <Activity className="w-6 h-6" />
+                </div>
+                <span className="font-bold">Assistindo Agora</span>
               </div>
-              <span className="font-bold">Assistindo Agora</span>
+              <span className="text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
+                Ver lista
+              </span>
             </div>
             <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
             <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-2">
               <span className="relative flex h-2 w-2 ml-1">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
               </span>
               Ativos nos últimos 5 minutos
             </p>
@@ -1033,6 +1047,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     }
                   }
 
+                  // Verifica se o usuário está ativo/assistindo nos últimos 5 minutos
+                  const isOnlineNow = Boolean(
+                    client.lastActive &&
+                    (Date.now() - new Date(client.lastActive).getTime()) <= 5 * 60 * 1000
+                  );
+
                   return (
                     <div
                       key={client.id}
@@ -1040,8 +1060,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     >
                       {/* Perfil & Identificação */}
                       <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 max-w-full">
-                        <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-base sm:text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)] shrink-0 mt-0.5 sm:mt-0">
-                          {initial}
+                        <div className="relative shrink-0 mt-0.5 sm:mt-0">
+                          <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-base sm:text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)]">
+                            {initial}
+                          </div>
+                          {isOnlineNow && (
+                            <span 
+                              title="Assistindo agora"
+                              className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4"
+                            >
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-[#1c1c1e]"></span>
+                            </span>
+                          )}
                         </div>
 
                         <div className="min-w-0 flex-1">
@@ -1049,6 +1080,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             <span className="font-bold text-white text-[15px] sm:text-[16px] truncate max-w-[180px] sm:max-w-none">
                               {client.name || "Sem nome informado"}
                             </span>
+
+                            {/* Bolinha Verde + Tag de Assistindo Agora */}
+                            {isOnlineNow && (
+                              <span 
+                                title="Usuário com atividade recente nos últimos 5 minutos"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
+                              >
+                                <span className="relative flex h-2 w-2">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                <span>Assistindo agora</span>
+                              </span>
+                            )}
                             
                             {/* Badge Tipo de Acesso */}
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold uppercase tracking-wider shrink-0 ${
@@ -1839,6 +1884,90 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </button>
               </div>
             </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Usuários Assistindo Agora (Apenas Nome e Bolinha Verde) */}
+      {showActiveViewersModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+            <button
+              type="button"
+              onClick={() => setShowActiveViewersModal(false)}
+              className="absolute top-5 right-5 p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-full transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-orange-500 text-white rounded-2xl shadow-lg shadow-orange-500/30 animate-pulse">
+                <Activity className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                  <span>Assistindo Agora</span>
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    {stats.watchingNow}
+                  </span>
+                </h3>
+                <p className="text-xs text-white/50">Usuários com atividade nos últimos 5 minutos</p>
+              </div>
+            </div>
+
+            {/* Lista dos Usuários Ativos (Apenas Nome + Bolinha Verde) */}
+            <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {(() => {
+                const activeUsers = usersList.filter(u => 
+                  u.lastActive && (Date.now() - new Date(u.lastActive).getTime()) <= 5 * 60 * 1000
+                );
+
+                if (activeUsers.length === 0) {
+                  return (
+                    <div className="text-center py-8 text-white/40 text-sm">
+                      Nenhum usuário assistindo no momento.
+                    </div>
+                  );
+                }
+
+                return activeUsers.map(user => {
+                  const initial = (user.name || user.email || "U").trim().charAt(0).toUpperCase();
+                  return (
+                    <div 
+                      key={user.id}
+                      className="flex items-center justify-between p-3.5 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Avatar */}
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-bold text-white text-sm shrink-0 shadow-md">
+                          {initial}
+                        </div>
+                        {/* Apenas o Nome do Usuário */}
+                        <span className="font-bold text-white text-sm truncate">
+                          {user.name || user.email.split("@")[0] || "Usuário"}
+                        </span>
+                      </div>
+
+                      {/* Bolinha Verde */}
+                      <span className="relative flex h-3 w-3 shrink-0 ml-3" title="Online agora">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="mt-6 pt-4 border-t border-white/5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowActiveViewersModal(false)}
+                className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-sm transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
