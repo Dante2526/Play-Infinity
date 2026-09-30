@@ -259,6 +259,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // Estado dos cues VTT e cue ativa
   const [vttCues, setVttCues] = useState<VttCue[]>([]);
   const [activeCue, setActiveCue] = useState<string | null>(null);
+  const [subtitleOffset, setSubtitleOffset] = useState<number>(0);
 
   // Carrega e parseia o arquivo VTT quando subtitleUrl muda
   useEffect(() => {
@@ -272,10 +273,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // Atualiza cue ativa com base no currentTime do player
   useEffect(() => {
     if (!vttCues.length || selectedSubtitle !== "on") { setActiveCue(null); return; }
-    const t = playerStatus.currentTime;
+    const t = playerStatus.currentTime - subtitleOffset;
     const cue = vttCues.find(c => t >= c.start && t <= c.end);
     setActiveCue(cue ? cue.text : null);
-  }, [playerStatus.currentTime, vttCues, selectedSubtitle]);
+  }, [playerStatus.currentTime, vttCues, selectedSubtitle, subtitleOffset]);
 
   const displayAudioServers = useMemo(() => {
     if (serversList && serversList.length > 0) {
