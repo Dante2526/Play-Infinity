@@ -2108,6 +2108,36 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                     <span>Desativada</span>
                     {selectedSubtitle === "off" && <Check className="w-4 h-4 shrink-0 text-rose-400" />}
                   </button>
+
+                  {/* Controles de Sincronia de Legenda */}
+                  {selectedSubtitle === "on" && (
+                    <div className="mt-4 pt-3 border-t border-white/10">
+                      <p className="text-[10px] text-neutral-400 font-medium mb-2 uppercase tracking-wide">
+                        Sincronizar Legenda ({(subtitleOffset > 0 ? "+" : "") + subtitleOffset.toFixed(1)}s)
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setSubtitleOffset(prev => prev - 0.5)}
+                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                          title="Atrasar Legenda (-0.5s)"
+                        >
+                          <span className="text-sm font-bold">-0.5s</span>
+                          <span className="text-[9px] text-neutral-500">Atrasar</span>
+                        </button>
+                        <button
+                          onClick={() => setSubtitleOffset(prev => prev + 0.5)}
+                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                          title="Adiantar Legenda (+0.5s)"
+                        >
+                          <span className="text-sm font-bold">+0.5s</span>
+                          <span className="text-[9px] text-neutral-500">Adiantar</span>
+                        </button>
+                      </div>
+                      <div className="text-[9px] text-neutral-500 mt-2 text-center leading-tight">
+                        Se a voz vem antes da legenda, clique em Adiantar.
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
