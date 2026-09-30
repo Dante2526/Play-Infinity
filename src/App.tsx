@@ -71,7 +71,7 @@ import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { auth, db } from "./services/firebase";
 import { isAiStudioOrDevEnvironment } from "./utils/envUtils";
-import { safeSessionStorage, safeLocalStorage } from "./utils/safeStorage";
+import { safeSessionStorage, safeLocalStorage, clearLocalUserData } from "./utils/safeStorage";
 import { useSmartTV } from "./hooks/useSmartTV";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "@capacitor/status-bar";
@@ -322,6 +322,7 @@ export default function App() {
         fetchWatchedFromCloud(); // Baixa episódios assistidos
       } else {
         setUserDisplayName("");
+        clearLocalUserData();
       }
     });
     return () => {
@@ -401,11 +402,7 @@ export default function App() {
         }
 
         console.warn("[Auth] Conta revogada ou removida do banco de dados. Encerrando sessão...");
-        localStorage.removeItem("playinfinity_logged_in");
-        localStorage.removeItem("playinfinity_playback_history");
-        localStorage.removeItem("playinfinity_favorites");
-        localStorage.removeItem("playinfinity_watched_episodes");
-        localStorage.removeItem("playinfinity_watched_seasons");
+        clearLocalUserData();
         
         // Fecha player e paywall se estiverem abertos
         setPlayerModal(prev => ({ ...prev, isOpen: false }));

@@ -69,3 +69,36 @@ export const safeSessionStorage = {
     memoryStorage.delete(`session:${key}`);
   }
 };
+
+export function clearLocalUserData() {
+  const keysToRemove = [
+    "playinfinity_logged_in",
+    "playinfinity_playback_history",
+    "playinfinity_favorites",
+    "playinfinity_user_favorites",
+    "playinfinity_watched_episodes",
+    "playinfinity_watched_seasons",
+    "playinfinity_watched_v2",
+    "playinfinity_history_v2",
+    "playinfinity_schedule_cache",
+    "playinfinity_schedule_cache_v2",
+    "playinfinity_read_notifications",
+    "playinfinity_download_history"
+  ];
+  
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      keysToRemove.forEach(k => window.localStorage.removeItem(k));
+      for (let i = window.localStorage.length - 1; i >= 0; i--) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith("playinfinity_comments_")) {
+          window.localStorage.removeItem(key);
+        }
+      }
+    }
+  } catch(e) {
+    console.warn("Silenced error during clear:", e);
+  }
+  
+  keysToRemove.forEach(k => memoryStorage.delete(`local:${k}`));
+}
