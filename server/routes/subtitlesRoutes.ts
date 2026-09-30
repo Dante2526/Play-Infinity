@@ -45,6 +45,52 @@ function countVttCues(vtt: string): number {
   return (vtt.match(/\d{2}:\d{2}:\d{2}\.\d{3}\s+-->/g) || []).length;
 }
 
+// Padrões de crédito/watermark de tradutores que devem ser removidos
+const CREDIT_PATTERNS = [
+  /opensubtitles/i,
+  /legendas?\s+por\s+/i,
+  /traduz?[aã][oã]o?\s*:/i,
+  /traduz?ido\s+por\s+/i,
+  /synced\s+by\s+/i,
+  /sync[e]?\s*:\s*/i,
+  /corrected\s+by\s+/i,
+  /subtitles?\s+by\s+/i,
+  /encoded\s+by\s+/i,
+  /rip\s+by\s+/i,
+  /www\.[a-z0-9-]+\.(com|org|net|tv|io)/i,
+  /https?:\/\//i,
+  /\bsubscene\b/i,
+  /\baddic7ed\b/i,
+  /\bsubdb\b/i,
+  /\btvsubtitles\b/i,
+  /\[legendas?\]/i,
+  /suporte\s+em\s+/i,
+  /produced\s+by\s+/i,
+  /copyright\s*©?/i,
+];
+
+// Remove cues que contêm apenas texto de crédito/watermark
+function stripCreditCues(vtt: string): string {
+  const blocks = vtt.split(/\n\n+/);
+  const filtered = blocks.filter(block => {
+    // Mantém o cabeçalho WEBVTT sempre
+    if (block.trim().startsWith("WEBVTT")) return true;
+    // Só avalia blocos com timecode
+    if (!block.includes("-->")) return true;
+    const lines = block.trim().split("\n");
+    const arrowIdx = lines.findIndex(l => l.includes("-->"));
+    if (arrowIdx === -1) return true;
+    const textLines = lines.slice(arrowIdx + 1).filter(l => l.trim() !== "");
+    if (textLines.length === 0) return false;
+    // Remove o bloco se TODAS as linhas de texto forem créditos
+    const allCredits = textLines.every(line =>
+      CREDIT_PATTERNS.some(pattern => pattern.test(line.trim()))
+    );
+    return !allCredits;
+  });
+  return filtered.join("\n\n");
+}
+
 // Tenta baixar a legenda PT-BR de um resultado específico do SubtitleCat
 async function tryFetchSubtitleFromResult(resultHref: string): Promise<string | null> {
   try {
@@ -74,7 +120,7 @@ async function tryFetchSubtitleFromResult(resultHref: string): Promise<string | 
     if (!srtRes.ok) return null;
     const srtBuffer = await srtRes.arrayBuffer();
     const srtText = new TextDecoder("utf-8").decode(srtBuffer);
-    const vttText = srtToVtt(srtText);
+    const vttText = stripCreditCues(srtToVtt(srtText));
 
     if (countVttCues(vttText) < MIN_VALID_CUES) return null;
     return vttText;
