@@ -74,7 +74,7 @@ export function resolveMediaCovers(item: {
           img = backdrop || poster || found.imageUrl;
         }
       }
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
   }
 
   if (!img) {
@@ -435,7 +435,7 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
         cleanStore[String(item.id)] = item;
       });
       localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanStore));
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
   }
 
   return items.sort((a, b) => b.updatedAt - a.updatedAt);

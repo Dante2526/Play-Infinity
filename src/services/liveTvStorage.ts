@@ -9,7 +9,8 @@ export function getFavoriteChannelIds(): string[] {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
     return raw ? JSON.parse(raw) : ['premiere-clubes', 'ge-fast', 'globo'];
-  } catch {
+  } catch (err) {
+    console.error("Erro em liveTvStorage (getFavorites):", err);
     return ['premiere-clubes', 'ge-fast'];
   }
 }
@@ -30,7 +31,8 @@ export function getCustomChannels(): LiveChannel[] {
   try {
     const raw = localStorage.getItem(CUSTOM_CHANNELS_KEY);
     return raw ? JSON.parse(raw) : [];
-  } catch {
+  } catch (err) {
+    console.error("Erro em liveTvStorage (getCustomChannels):", err);
     return [];
   }
 }
@@ -101,7 +103,8 @@ export function getAllChannels(): LiveChannel[] {
 export function getLastPlayedChannelId(): string | null {
   try {
     return localStorage.getItem(LAST_CHANNEL_KEY);
-  } catch {
+  } catch (err) {
+    console.error("Erro em liveTvStorage (getLastPlayedChannelId):", err);
     return null;
   }
 }
@@ -109,7 +112,9 @@ export function getLastPlayedChannelId(): string | null {
 export function setLastPlayedChannelId(channelId: string): void {
   try {
     localStorage.setItem(LAST_CHANNEL_KEY, channelId);
-  } catch {}
+  } catch (err) {
+    console.error("Erro em liveTvStorage (setLastPlayedChannelId):", err);
+  }
 }
 
 /**

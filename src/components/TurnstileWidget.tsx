@@ -52,7 +52,7 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
       if (widgetIdRef.current) {
         try {
           window.turnstile.remove(widgetIdRef.current);
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
         widgetIdRef.current = null;
       }
 
@@ -106,7 +106,7 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
       if (widgetIdRef.current && window.turnstile) {
         try {
           window.turnstile.remove(widgetIdRef.current);
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
     };
   }, [siteKey, theme]);

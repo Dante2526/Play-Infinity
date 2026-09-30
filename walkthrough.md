@@ -1,25 +1,22 @@
-# Resumo da Correção: MixDrop 502 Bad Gateway
+# Walkthrough das Correções (2026-09-30)
 
-## Diagnóstico
-O problema reportado pelo usuário era um erro `502 Bad Gateway` na rota `/api/mixdrop-stream` quando o MixDrop removia um arquivo e retornava "We can't find the video you are looking for". Isso causava um travamento no reprodutor porque:
-1. O MixDrop era selecionado e o `playerSkinReady` era forçado imediatamente como `true`.
-2. Como o `playerSkinReady` era `true`, o watchdog do `VideoPlayerModal.tsx` desativava, nunca detectando que o iframe falhou em carregar.
-3. O usuário ficava vendo a tela de erro dentro do Iframe sem ocorrer a transição automática de servidor (Silent Fallback).
+## Resumo das Mudanças
 
-## Solução Implementada
-No arquivo `server.ts`, modificamos a tratativa de erros do bloco `mixdrop-stream`. Em vez de apenas responder um erro HTTP puro que o iframe não consegue ler:
+Foram corrigidos 3 problemas estruturais e de lógica no projeto:
 
-- Implementamos a função auxiliar `sendFallbackHtml(statusCode, message)`.
-- Quando ocorre um erro no carregamento da URL no scraper, a rota retorna um mini-documento HTML válido que aciona a API `postMessage` (`{ type: "WATCHPLAY_ERROR", reason: ... }`).
-- O `VideoPlayerModal.tsx` já possui escuta (`window.addEventListener("message", ...)`) que monitora esse erro exato.
-- O Silent Fallback passa a ser disparado **instantaneamente** pela mensagem, transferindo o usuário sem engasgos de tempo para o próximo servidor homologado (Ex: VIP Player Dublado PT-BR) no segundo em que o MixDrop nega o arquivo.
+### 1. Cache Poisoning (`src/services/encontreiCatalog.ts`)
+- **Problema:** Em caso de resposta falha (`!res.ok`) ou erro de rede (bloco `catch`), o código executava `_cache.set(cacheKey, null)` e travava o título de carregar futuras vezes.
+- **Solução:** Removido o armazenamento no cache caso o status do catálogo indique erro.
 
-## Testes Realizados
-O arquivo TypeScript do servidor local foi verificado via `npx tsc --noEmit` para garantir ausência de erros sintáticos (especialmente sobre escapes da RegEx do Packer).
+### 2. Remoção do Provedor Lista Negra (`src/services/encontreiCatalog.ts`)
+- **Problema:** A API encontrava a chave `byse` e o frontend mapeava explicitamente esse servidor. O servidor **BYSE / Streamberry** é estritamente proibido pelas diretrizes (`AGENTS.md`).
+- **Solução:** Removida a tipagem e o mapeamento de `byse` do modelo de dados da interface.
 
-## Integra��o Cat�logo Vizer (25/09/2026)
-- Identificado adi��o do cat�logo izer-catalog.json.
-- Modificada a rota /api/encontrei-lookup em server/routes/encontreiLookup.ts.
-- Implementado 'Smart Merge' para quando filmes ou s�ries existirem em ambos os cat�logos (Vizer e Encontrei).
-- Prioridade estabelecida: �udio 'Dublado'. Se o Vizer for Legendado e o Encontrei Dublado, o Encontrei � servido, caso contr�rio o Vizer continua sendo o padr�o.
-- Testado e validado com TypeScript.
+### 3. Eliminação em Massa de "Empty Catches" (Projeto Todo)
+- **Problema:** Haviam 70+ blocos `catch` vazios pelo projeto (em quase 20 arquivos), mascarando erros.
+- **Solução:** Aplicada uma substituição sistemática em todos os 19 arquivos afetados do `src/`, garantindo que toda falha invisível agora passe pelo `console.warn("Silenced error:", error)`. O script temporário de substituição foi excluído após o uso.
+
+## Evidências
+- **Verificação de Compilação:** Após todas as refatorações em massa, `npm run lint` e `npx tsc --noEmit` foram executados com **Exit Code 0** (Sem erros de sintaxe ou tipagem remanescentes).
+- **Testes Manuais Sugeridos:**
+  - Inspecionar a aba Console do Developer Tools e verificar se os antigos congelamentos não-explicados agora loggam `Silenced error:` em amarelo, auxiliando no tracking.

@@ -57,7 +57,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
       if (cached) {
         return JSON.parse(cached);
       }
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     return [];
   });
   const [loadingSchedule, setLoadingSchedule] = useState<boolean>(dynamicEpisodes.length === 0);
@@ -90,7 +90,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
           setDynamicEpisodes(episodes);
           try {
             localStorage.setItem(CACHE_KEY, JSON.stringify(episodes));
-          } catch (e) {}
+          } catch(e){console.warn("Silenced error:", e);}
         }
         setLoadingSchedule(false);
       }

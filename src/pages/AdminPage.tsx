@@ -34,30 +34,29 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const token = sessionStorage.getItem("adminSessionToken");
-      if (!token) {
-        setIsCheckingAuth(false);
-        return;
-      }
-
       try {
-        const { getDoc, doc } = await import("firebase/firestore");
-        const docRef = doc(db, "administradores", token);
-        const docSnap = await getDoc(docRef);
+        const { onAuthStateChanged } = await import("firebase/auth");
         
-        if (docSnap.exists()) {
-          setIsAdmin(true);
-          sessionStorage.setItem("adminEmail", docSnap.data()?.email || "");
-        } else {
-          sessionStorage.removeItem("adminSessionToken");
-          sessionStorage.removeItem("adminEmail");
-          setIsAdmin(false);
-        }
+        const unsubscribe = onAuthStateChanged(auth, (user) => {
+          unsubscribe(); // Só queremos o estado inicial
+          
+          const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+          
+          if (user && user.email && adminEmails.includes(user.email)) {
+            sessionStorage.setItem("adminEmail", user.email);
+            sessionStorage.setItem("adminSessionToken", user.uid);
+            setIsAdmin(true);
+          } else {
+            sessionStorage.removeItem("adminSessionToken");
+            sessionStorage.removeItem("adminEmail");
+            setIsAdmin(false);
+          }
+          setIsCheckingAuth(false);
+        });
       } catch (err) {
         sessionStorage.removeItem("adminSessionToken");
         sessionStorage.removeItem("adminEmail");
         setIsAdmin(false);
-      } finally {
         setIsCheckingAuth(false);
       }
     };
@@ -127,27 +126,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setLoading(true);
 
     try {
-      const q = query(
-        collection(db, "administradores"),
-        where("email", "==", email),
-        where("senha", "==", password)
-      );
-      const querySnapshot = await getDocs(q);
-
-      if (!querySnapshot.empty) {
-        const adminDoc = querySnapshot.docs[0];
+      const { signInWithEmailAndPassword } = await import("firebase/auth");
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+      if (userCredential.user.email && adminEmails.includes(userCredential.user.email)) {
         setIsAdmin(true);
-        sessionStorage.setItem("adminSessionToken", adminDoc.id);
-        sessionStorage.setItem("adminEmail", adminDoc.data()?.email || email);
-        // Tenta autenticar no Auth também, caso as regras do Firestore exijam request.auth
-        try {
-          const { signInWithEmailAndPassword } = await import("firebase/auth");
-          await signInWithEmailAndPassword(auth, email, password);
-        } catch (authErr) {
-          console.warn("Autenticação secundária no Firebase Auth dispensada:", authErr);
-        }
+        sessionStorage.setItem("adminSessionToken", userCredential.user.uid);
+        sessionStorage.setItem("adminEmail", userCredential.user.email);
       } else {
-        setError("Credenciais inválidas. Verifique o email e a senha.");
+        await auth.signOut();
+        setError("Acesso negado. Este e-mail não possui privilégios de administrador.");
       }
     } catch (err: any) {
       setError(getFriendlyErrorMessage(err, "Erro ao autenticar. Verifique suas credenciais."));
@@ -205,7 +194,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               assinatura: "EXPIRADA",
               subscription: "INACTIVE"
             });
-          } catch(e) {}
+          } catch(e){console.warn("Silenced error:", e);}
         }
 
         // Pessoas assistindo nos últimos 5 minutos
@@ -238,7 +227,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               valorMensalidade: assignedNum,
               valor: assignedTxt
             }).catch(() => {});
-          } catch(e) {}
+          } catch(e){console.warn("Silenced error:", e);}
         }
 
         list.push({
@@ -354,7 +343,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             userUid = loginCred.user.uid;
             try {
               await updateProfile(loginCred.user, { displayName: newName.trim() });
-            } catch (e) {}
+            } catch(e){console.warn("Silenced error:", e);}
           } catch (loginErr: any) {
             // Se a senha for diferente da existente no Auth, informa que o e-mail já existe
             throw authErr;
@@ -435,7 +424,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setCreateError(getFriendlyErrorMessage(err, "Não foi possível criar o acesso do cliente."));
     } finally {
       if (tempApp) {
-        try { await deleteApp(tempApp); } catch(e){}
+        try { await deleteApp(tempApp); } catch(e){console.warn("Silenced error:", e);}
       }
       setCreateLoading(false);
     }
@@ -449,7 +438,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     if (!confirmRevokeUser) return;
     try {
       await deleteDoc(doc(db, "usuarios", confirmRevokeUser.id));
-      try { await deleteDoc(doc(db, "users", confirmRevokeUser.id)); } catch(e){}
+      try { await deleteDoc(doc(db, "users", confirmRevokeUser.id)); } catch(e){console.warn("Silenced error:", e);}
       setRevokeSuccess(`Acesso de ${confirmRevokeUser.email} revogado com sucesso!`);
       await loadStats();
     } catch (err: any) {
@@ -482,8 +471,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
       for (const document of snap.docs) {
         await deleteDoc(document.ref);
-        try { await deleteDoc(doc(db, "usuarios", document.id)); } catch(e){}
-        try { await deleteDoc(doc(db, "users", document.id)); } catch(e){}
+        try { await deleteDoc(doc(db, "usuarios", document.id)); } catch(e){console.warn("Silenced error:", e);}
+        try { await deleteDoc(doc(db, "users", document.id)); } catch(e){console.warn("Silenced error:", e);}
       }
 
       setRevokeSuccess(`Acesso de ${revokeEmail} revogado com sucesso!`);
@@ -584,7 +573,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       await updateDoc(doc(db, "usuarios", client.id), updates);
       try {
         await updateDoc(doc(db, "users", client.id), updates);
-      } catch(e) {}
+      } catch(e){console.warn("Silenced error:", e);}
 
       const durationLabel = hoursToAdd === 0.5 ? "30 minutos" : hoursToAdd === 1 ? "1 hora" : hoursToAdd === 4 ? "4 horas" : hoursToAdd === 24 ? "1 dia" : hoursToAdd === 168 ? "7 dias" : `${hoursToAdd} horas`;
       setActionSuccessToast(`Acesso de "${client.name || client.email}" renovado com sucesso por mais ${durationLabel}!`);
@@ -669,7 +658,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       await updateDoc(doc(db, "usuarios", editingUser.id), updates);
       try {
         await updateDoc(doc(db, "users", editingUser.id), updates);
-      } catch(e) {}
+      } catch(e){console.warn("Silenced error:", e);}
 
       // 2. Se tiver senha anterior e for conhecida, sincroniza no Firebase Auth via app temporário
       const oldPass = editingUser.initialPassword;
@@ -704,7 +693,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
           }
         } finally {
           if (tempApp) {
-            try { await deleteApp(tempApp); } catch(e) {}
+            try { await deleteApp(tempApp); } catch(e){console.warn("Silenced error:", e);}
           }
         }
       }

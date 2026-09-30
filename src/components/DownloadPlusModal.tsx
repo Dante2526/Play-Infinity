@@ -128,7 +128,7 @@ export function DownloadPlusModal({ isOpen, onClose }: Props) {
       let data: any = null;
       try {
         data = JSON.parse(textData);
-      } catch (err) {}
+      } catch(err){console.warn("Silenced error:", err);}
 
       if (!data) throw new Error(`Resposta do servidor não é um JSON válido. Status: ${res.status}`);
       if (!data.success) throw new Error(data.error || 'Erro ao processar assinatura.');

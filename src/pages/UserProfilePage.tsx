@@ -239,7 +239,7 @@ export function UserProfilePage({
             senha: newPassword,
             senhaInicial: newPassword
           });
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
 
       setPasswordSuccess("Senha alterada com sucesso!");
@@ -263,8 +263,8 @@ export function UserProfilePage({
     setAvatarLoading(true);
     try {
       await updateProfile(auth.currentUser, { photoURL: url });
-      try { await updateDoc(doc(db, "usuarios", auth.currentUser.uid), { photoURL: url }); } catch (e) {}
-      try { await updateDoc(doc(db, "users", auth.currentUser.uid), { photoURL: url }); } catch (e) {}
+      try { await updateDoc(doc(db, "usuarios", auth.currentUser.uid), { photoURL: url }); } catch(e){console.warn("Silenced error:", e);}
+      try { await updateDoc(doc(db, "users", auth.currentUser.uid), { photoURL: url }); } catch(e){console.warn("Silenced error:", e);}
       setUserAvatar(url);
       setIsAvatarModalOpen(false);
     } catch (err) {

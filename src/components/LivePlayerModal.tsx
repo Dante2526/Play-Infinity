@@ -124,7 +124,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (_) {}
+    } catch(_){console.warn("Silenced error:", _);}
   };
 
   const handleMiniHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -151,7 +151,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         if (e.currentTarget.hasPointerCapture(e.pointerId)) {
           e.currentTarget.releasePointerCapture(e.pointerId);
         }
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
       setIsDragging(false);
     }
   };
@@ -305,7 +305,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
     // Destrói instância dash.js prévia
     if ((video as any)._dashPlayer) {
-      try { (video as any)._dashPlayer.reset(); } catch {}
+      try { (video as any)._dashPlayer.reset(); } catch (e) { console.warn("Falha ao resetar dashPlayer:", e); }
       delete (video as any)._dashPlayer;
     }
 
@@ -590,7 +590,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                    hls.startLoad();
                    video.play().catch(() => {});
                  }
-               } catch (_) {}
+               } catch(_){console.warn("Silenced error:", _);}
              }
           }
         });
@@ -919,7 +919,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (!isCurrentlyFullscreen && screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
     };
 
@@ -960,7 +960,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               if (fallbackPromise && typeof fallbackPromise.catch === "function") {
                 fallbackPromise.catch(() => {});
               }
-            } catch (_) {}
+            } catch(_){console.warn("Silenced error:", _);}
           });
         }
       } catch (_) {
@@ -969,7 +969,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           if (fallbackPromise && typeof fallbackPromise.catch === "function") {
             fallbackPromise.catch(() => {});
           }
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
     }
 
@@ -982,7 +982,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         if (lockPromise && typeof lockPromise.catch === "function") {
           lockPromise.catch(() => {});
         }
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
     }
 
     // Escuta a orientação real do aparelho continuamente (não é uma checagem única):
@@ -1028,20 +1028,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         } catch {
           try {
             await requestFS.call(elem);
-          } catch (_) {}
+          } catch(_){console.warn("Silenced error:", _);}
         }
       }
       setIsFullscreen(true);
       if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
         try {
           (screen.orientation as any).lock("landscape").catch(() => {});
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
     } else {
       if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
       try {
         if (document.exitFullscreen) {
@@ -1053,7 +1053,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         } else if ((document as any).msExitFullscreen) {
           await (document as any).msExitFullscreen();
         }
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
       setIsFullscreen(false);
     }
   };

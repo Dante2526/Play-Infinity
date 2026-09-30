@@ -123,7 +123,7 @@ function parseMediaFromUrl(url: string) {
         season: isNaN(season) ? 1 : season,
         episode: isNaN(episode) ? 1 : episode,
       };
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
   }
 
   const isSeries = url.includes("/tv/") || url.includes("/tvshow/") || url.includes("/serie") || url.includes("/series");
@@ -417,7 +417,7 @@ export function VideoPlayerModal({
         } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
           try {
             (screen.orientation as any).unlock();
-          } catch (e) {}
+          } catch(e){console.warn("Silenced error:", e);}
         }
       }
     };
@@ -449,7 +449,7 @@ export function VideoPlayerModal({
     if (typeof screen !== "undefined" && screen.orientation) {
       try {
         screen.orientation.addEventListener("change", handleOrientationOrResize);
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
     }
     return () => {
       window.removeEventListener("resize", handleOrientationOrResize);
@@ -457,7 +457,7 @@ export function VideoPlayerModal({
       if (typeof screen !== "undefined" && screen.orientation) {
         try {
           screen.orientation.removeEventListener("change", handleOrientationOrResize);
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
     };
   }, []);
@@ -1072,7 +1072,7 @@ export function VideoPlayerModal({
                   if (fallbackPromise && typeof fallbackPromise.catch === "function") {
                     fallbackPromise.catch(() => {});
                   }
-                } catch (_) {}
+                } catch(_){console.warn("Silenced error:", _);}
               });
             }
           } catch (_) {
@@ -1081,7 +1081,7 @@ export function VideoPlayerModal({
               if (fallbackPromise && typeof fallbackPromise.catch === "function") {
                 fallbackPromise.catch(() => {});
               }
-            } catch (_) {}
+            } catch(_){console.warn("Silenced error:", _);}
           }
         }
 
@@ -1102,7 +1102,7 @@ export function VideoPlayerModal({
                 setIsRotated(false);
               }).catch(() => {});
             }
-          } catch (_) {}
+          } catch(_){console.warn("Silenced error:", _);}
         }
       }
 
@@ -1206,7 +1206,7 @@ export function VideoPlayerModal({
       try {
         const parsed = new URL(iframeRef.current.src, window.location.origin);
         if (parsed.origin === event.origin) return true;
-      } catch {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
     return false;
   };
@@ -1256,7 +1256,7 @@ export function VideoPlayerModal({
               iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: initialTime }, "*");
               iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: initialTime }, "*");
               iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: initialTime }, "*");
-            } catch (err) {}
+            } catch(err){console.warn("Silenced error:", err);}
           }
         }
 
@@ -1293,7 +1293,7 @@ export function VideoPlayerModal({
               console.log(`[Player Auto-Next] Temporada ${season} encerrada. Passando para Temp ${nextSeason} Ep 1...`);
               
               if (resolvedId) markEpisodeWatched(resolvedId, season, episode, true);
-              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch {}
+              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch(e){console.warn("Silenced error:", e);}
               
               transitionEpochRef.current = Date.now();
               setSeason(nextSeason);
@@ -1363,7 +1363,7 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
-      } catch (e) {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
 
@@ -1381,7 +1381,7 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
-      } catch (e) {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
     setLastSkippedSeconds(null);
@@ -1396,14 +1396,14 @@ export function VideoPlayerModal({
     setSkipDurationSeconds(newSec);
     try {
       localStorage.setItem("playinfinity_skip_duration", String(newSec));
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({
           type: "SET_SKIP_DURATION",
           seconds: newSec,
         }, "*");
-      } catch (e) {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
   };
 
@@ -1417,7 +1417,7 @@ export function VideoPlayerModal({
     // Pausa imediatamente o áudio do player anterior para evitar ruído residual
     try {
       iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
 
     transitionEpochRef.current = Date.now();
     setEpisode(newEpisode);
@@ -1451,7 +1451,7 @@ export function VideoPlayerModal({
     }
     try {
       iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
-    } catch {}
+    } catch(e){console.warn("Silenced error:", e);}
 
     transitionEpochRef.current = Date.now();
     setSeason(newSeason);
@@ -1554,14 +1554,14 @@ export function VideoPlayerModal({
         } else if ((document as any).msExitFullscreen) {
           (document as any).msExitFullscreen();
         }
-      } catch (e) {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
     if (Capacitor.isNativePlatform()) {
       ScreenOrientation.unlock().catch(() => {});
     } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
       try {
         (screen.orientation as any).unlock();
-      } catch (e) {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
     setIsWidescreen(false);
     setIsRotated(false);
@@ -1624,7 +1624,7 @@ export function VideoPlayerModal({
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (_) {}
+    } catch(_){console.warn("Silenced error:", _);}
   };
 
   const handleMiniHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -1651,7 +1651,7 @@ export function VideoPlayerModal({
         if (e.currentTarget.hasPointerCapture(e.pointerId)) {
           e.currentTarget.releasePointerCapture(e.pointerId);
         }
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
       setIsDragging(false);
     }
   };
@@ -1670,7 +1670,7 @@ export function VideoPlayerModal({
       } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
     } else {
       setIsWidescreen(true);

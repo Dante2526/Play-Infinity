@@ -487,7 +487,7 @@ export function DetailsPage({
             [epNum]: avail
           }));
         }
-      } catch (_) {}
+      } catch(_){console.warn("Silenced error:", _);}
     });
 
     return () => { active = false; };

@@ -136,7 +136,7 @@ async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
     if (typeof AbortController !== 'undefined') {
       controller = new AbortController();
       timeoutId = setTimeout(() => {
-        try { controller?.abort(); } catch (e) {}
+        try { controller?.abort(); } catch(e){console.warn("Silenced error:", e);}
       }, 6000);
     }
 
@@ -375,7 +375,7 @@ export const getTrailerList = async (id: number, type: 'movie' | 'tv'): Promise<
         if (Array.isArray(ptData?.results)) {
           rawVideos.push(...ptData.results);
         }
-      } catch {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
 
     if (allRes && allRes.ok) {
@@ -384,7 +384,7 @@ export const getTrailerList = async (id: number, type: 'movie' | 'tv'): Promise<
         if (Array.isArray(allData?.results)) {
           rawVideos.push(...allData.results);
         }
-      } catch {}
+      } catch(e){console.warn("Silenced error:", e);}
     }
 
     // 2. Filtra estritamente vídeos do YouTube com chave válida

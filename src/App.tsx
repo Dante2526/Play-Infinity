@@ -456,7 +456,7 @@ export default function App() {
             ultimoAcesso: new Date().toISOString(),
             lastActive: new Date().toISOString()
           });
-        } catch (e) {}
+        } catch(e){console.warn("Silenced error:", e);}
       }
     };
     updatePresence();
@@ -603,7 +603,7 @@ export default function App() {
                 if (fallbackPromise && typeof fallbackPromise.catch === "function") {
                   fallbackPromise.catch(() => {});
                 }
-              } catch (_) {}
+              } catch(_){console.warn("Silenced error:", _);}
             });
           }
         } catch (_) {
@@ -612,7 +612,7 @@ export default function App() {
             if (fallbackPromise && typeof fallbackPromise.catch === "function") {
               fallbackPromise.catch(() => {});
             }
-          } catch (_) {}
+          } catch(_){console.warn("Silenced error:", _);}
         }
       }
 
@@ -622,7 +622,7 @@ export default function App() {
           if (lockPromise && typeof lockPromise.catch === "function") {
             lockPromise.catch(() => {});
           }
-        } catch (_) {}
+        } catch(_){console.warn("Silenced error:", _);}
       }
     }
 

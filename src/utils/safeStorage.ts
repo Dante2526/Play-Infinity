@@ -35,7 +35,7 @@ export const safeLocalStorage = {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem(key);
       }
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     memoryStorage.delete(`local:${key}`);
   }
 };
@@ -46,7 +46,7 @@ export const safeSessionStorage = {
       if (typeof window !== 'undefined' && window.sessionStorage) {
         return window.sessionStorage.getItem(key);
       }
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     return memoryStorage.get(`session:${key}`) ?? null;
   },
 
@@ -56,7 +56,7 @@ export const safeSessionStorage = {
         window.sessionStorage.setItem(key, value);
         return;
       }
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     memoryStorage.set(`session:${key}`, value);
   },
 
@@ -65,7 +65,7 @@ export const safeSessionStorage = {
       if (typeof window !== 'undefined' && window.sessionStorage) {
         window.sessionStorage.removeItem(key);
       }
-    } catch (e) {}
+    } catch(e){console.warn("Silenced error:", e);}
     memoryStorage.delete(`session:${key}`);
   }
 };

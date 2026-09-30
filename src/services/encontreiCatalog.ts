@@ -1,7 +1,6 @@
 export interface EncontreiResult {
   mixdrop: string | null;
   streamtape: string | null;
-  byse: string | null;
   doodstream: string | null;
   audio: string;
   server_name: string;
@@ -24,17 +23,17 @@ export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult
   }
   try {
     const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie`);
-    if (!res.ok) { _cache.set(cacheKey, null); return null; }
+    if (!res.ok) { return null; }
     const data = await res.json();
-    if (data.error) { _cache.set(cacheKey, null); return null; }
+    if (data.error) { return null; }
     const result: EncontreiResult = {
       mixdrop: data.mixdrop || null, streamtape: data.streamtape || null,
-      byse: data.byse || null, doodstream: data.doodstream || null,
+      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
     };
     _cache.set(cacheKey, result);
     return result;
-  } catch { _cache.set(cacheKey, null); return null; }
+  } catch { return null; }
 }
 
 export async function findEpisode(tmdbId: number, season: number, episode: number): Promise<EncontreiResult | null> {
@@ -45,18 +44,18 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
   }
   try {
     const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}`);
-    if (!res.ok) { _cache.set(cacheKey, null); return null; }
+    if (!res.ok) { return null; }
     const data = await res.json();
-    if (data.error) { _cache.set(cacheKey, null); return null; }
+    if (data.error) { return null; }
     const result: EncontreiResult = {
       mixdrop: data.mixdrop || null, streamtape: data.streamtape || null,
-      byse: data.byse || null, doodstream: data.doodstream || null,
+      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
       season: data.season, episode: data.episode,
     };
     _cache.set(cacheKey, result);
     return result;
-  } catch { _cache.set(cacheKey, null); return null; }
+  } catch { return null; }
 }
 
 export function buildMixdropStreamUrl(fileId: string | undefined): string | null {
