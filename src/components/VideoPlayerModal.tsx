@@ -1056,7 +1056,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || playerSkinReady || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = isAnimeMedia ? 12000 : (selectedServerKey === 'srv_vip' ? 5500 : 8000);
+    const timeoutDuration = isAnimeMedia ? 12000 : (selectedServerKey === 'srv_vip' ? 10000 : 8000);
     const timer = setTimeout(() => {
       if (!playerSkinReady && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
