@@ -184,7 +184,7 @@ export function VideoPlayerModal({
   const [showCastModal, setShowCastModal] = useState(false);
   const isAnimeMedia = Boolean(
     isAnime ||
-    (title && /anime|naruto|dragon ball|one piece|bleach|attack on titan|jujutsu|demon slayer|death note|boruto|hunter x hunter|solo leveling/i.test(title))
+    (title && /anime|naruto|dragon ball|one piece|bleach|attack on titan|jujutsu|demon slayer|death note|boruto|hunter x hunter|solo leveling|re:zero|re zero/i.test(title))
   );
   const [urlInput, setUrlInput] = useState(
     defaultUrl || "https://v1.watchplay.shop/tvshow/66732/1/1"
@@ -266,6 +266,7 @@ export function VideoPlayerModal({
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tmdbId, mediaType, season, episode, lookupMixdropFileId]);
+
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_watchplay");
@@ -527,6 +528,36 @@ export function VideoPlayerModal({
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
   const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
+
+  // Legenda PT-BR: URL do arquivo VTT gerado pelo backend
+  const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
+
+  const fetchSubtitleUrl = useCallback(async (currentSeason: number, currentEpisode: number) => {
+    if (!tmdbId) return;
+    const type = isSeries ? "tv" : "movie";
+    const params = new URLSearchParams({
+      tmdb: String(tmdbId),
+      type,
+      lang: "pt-BR",
+      ...(isSeries ? { season: String(currentSeason), episode: String(currentEpisode) } : {})
+    });
+    try {
+      const res = await fetch(`/api/subtitles?${params}`);
+      if (!res.ok) { setSubtitleUrl(null); return; }
+      const data = await res.json();
+      if (data?.url) setSubtitleUrl(data.url);
+      else setSubtitleUrl(null);
+    } catch {
+      setSubtitleUrl(null);
+    }
+  }, [tmdbId, isSeries]);
+
+  // Busca legenda PT-BR do backend sempre que o modal abre ou o episódio muda
+  useEffect(() => {
+    if (!isOpen || !tmdbId) return;
+    setSubtitleUrl(null);
+    fetchSubtitleUrl(season, episode);
+  }, [isOpen, tmdbId, season, episode, fetchSubtitleUrl]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -2263,6 +2294,7 @@ export function VideoPlayerModal({
               onTogglePiP={handleToggleMiniPlayer}
               isMiniPlayer={isMiniPlayer}
               passThroughClicks={isExternalPlayer}
+              subtitleUrl={subtitleUrl}
             />
             </div>
           </div>
