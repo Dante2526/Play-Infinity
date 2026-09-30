@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -90,8 +90,49 @@ interface NetflixPlayerSkinProps {
   onTogglePiP?: () => void;
   isMiniPlayer?: boolean;
   passThroughClicks?: boolean;
+  isAnime?: boolean;
+  subtitleUrl?: string | null;
 }
 
+interface VttCue {
+  start: number;
+  end: number;
+  text: string;
+}
+
+function timeToSeconds(t: string): number {
+  const parts = t.trim().split(":");
+  let h = 0, m = 0, s = 0;
+  if (parts.length === 3) {
+    h = parseFloat(parts[0]);
+    m = parseFloat(parts[1]);
+    s = parseFloat(parts[2]);
+  } else {
+    m = parseFloat(parts[0]);
+    s = parseFloat(parts[1]);
+  }
+  return h * 3600 + m * 60 + s;
+}
+
+function parseVtt(vttText: string): VttCue[] {
+  const cues: VttCue[] = [];
+  const text = vttText.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
+  const blocks = text.split(/\n\n+/);
+  for (const block of blocks) {
+    const lines = block.trim().split("\n");
+    const arrowIdx = lines.findIndex(l => l.includes("-->"));
+    if (arrowIdx === -1) continue;
+    const match = lines[arrowIdx].match(/^([\d:.,]+)\s+-->\s+([\d:.,]+)/);
+    if (!match) continue;
+    const start = timeToSeconds(match[1].replace(",", "."));
+    const end = timeToSeconds(match[2].replace(",", "."));
+    const textLines = lines.slice(arrowIdx + 1).filter(l => !l.startsWith("NOTE") && l.trim() !== "");
+    if (textLines.length === 0) continue;
+    const rawText = textLines.join("\n").replace(/<\d{2}:\d{2}[^>]*>/g, "");
+    cues.push({ start, end, text: rawText });
+  }
+  return cues;
+}
 function formatTime(sec: number): string {
   if (isNaN(sec) || sec < 0) return "00:00";
   const h = Math.floor(sec / 3600);
@@ -140,6 +181,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   onTogglePiP,
   isMiniPlayer = false,
   passThroughClicks = false,
+  isAnime = false,
+  subtitleUrl = null,
   activeServerKey = "srv_watchplay",
   onServerChange,
   serversList,
@@ -211,7 +254,28 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
   const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
-  const [selectedSubtitle, setSelectedSubtitle] = useState<string>("off");
+    const [selectedSubtitle, setSelectedSubtitle] = useState<string>(isAnime ? "on" : "off");
+
+  // Estado dos cues VTT e cue ativa
+  const [vttCues, setVttCues] = useState<VttCue[]>([]);
+  const [activeCue, setActiveCue] = useState<string | null>(null);
+
+  // Carrega e parseia o arquivo VTT quando subtitleUrl muda
+  useEffect(() => {
+    if (!subtitleUrl) { setVttCues([]); setActiveCue(null); return; }
+    fetch(subtitleUrl)
+      .then(r => r.text())
+      .then(text => setVttCues(parseVtt(text)))
+      .catch(() => setVttCues([]));
+  }, [subtitleUrl]);
+
+  // Atualiza cue ativa com base no currentTime do player
+  useEffect(() => {
+    if (!vttCues.length || selectedSubtitle !== "on") { setActiveCue(null); return; }
+    const t = playerStatus.currentTime;
+    const cue = vttCues.find(c => t >= c.start && t <= c.end);
+    setActiveCue(cue ? cue.text : null);
+  }, [playerStatus.currentTime, vttCues, selectedSubtitle]);
 
   const displayAudioServers = useMemo(() => {
     if (serversList && serversList.length > 0) {
@@ -1198,6 +1262,38 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         )}
       </div>
 
+      {/* ===== SUBTITLE OVERLAY ===== */}
+      {activeCue && selectedSubtitle === "on" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "15%",
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 30,
+            pointerEvents: "none",
+            textAlign: "center",
+            maxWidth: "80%",
+          }}
+        >
+          <span
+            style={{
+              display: "inline-block",
+              background: "rgba(0,0,0,0.72)",
+              color: "#fff",
+              fontSize: "clamp(14px, 2.2vw, 22px)",
+              fontFamily: "Arial, sans-serif",
+              fontWeight: 500,
+              padding: "4px 12px",
+              borderRadius: "4px",
+              lineHeight: 1.4,
+              textShadow: "0 1px 4px rgba(0,0,0,0.9)",
+              whiteSpace: "pre-line",
+            }}
+            dangerouslySetInnerHTML={{ __html: activeCue }}
+          />
+        </div>
+      )}
       {/* ========================================================
           MODO BLOQUEADO (LOCK MODE DA NETFLIX)
           ======================================================== */}
@@ -1990,39 +2086,30 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 </h4>
                 <div className="space-y-1.5">
                   <button
-                    onClick={() => setSelectedSubtitle("off")}
-                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedSubtitle === "off"
-                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                    onClick={() => setSelectedSubtitle("on")}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
+                      selectedSubtitle === "on"
+                        ? "bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 text-emerald-400 font-bold border-emerald-500/50 shadow-lg shadow-emerald-500/10"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Desativadas</span>
-                    {selectedSubtitle === "off" && <Check className="w-4 h-4 text-black" />}
+                    <span>Ativada</span>
+                    {selectedSubtitle === "on" && <Check className="w-4 h-4 shrink-0 text-emerald-400" />}
                   </button>
 
                   <button
-                    onClick={() => setSelectedSubtitle("pt-BR")}
-                    className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
-                      selectedSubtitle === "pt-BR"
-                        ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
+                    onClick={() => setSelectedSubtitle("off")}
+                    className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
+                      selectedSubtitle === "off"
+                        ? "bg-gradient-to-r from-rose-500/10 to-rose-500/5 text-rose-400 font-bold border-rose-500/50 shadow-lg shadow-rose-500/10"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                     }`}
                   >
-                    <span>Português (Brasil)</span>
-                    {selectedSubtitle === "pt-BR" && <Check className="w-4 h-4 text-black" />}
+                    <span>Desativada</span>
+                    {selectedSubtitle === "off" && <Check className="w-4 h-4 shrink-0 text-rose-400" />}
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* Status Informativo */}
-            <div className="px-3.5 py-2 rounded-xl bg-neutral-900/90 border border-neutral-800 flex items-center justify-between text-xs">
-              <span className="text-neutral-400 font-medium">Configuração Ativa:</span>
-              <span className="font-bold text-white flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                {selectedAudio !== "en-US" ? "Dublado BR" : "Inglês"} • Leg: {selectedSubtitle === "off" ? "Desativada" : "Português"}
-              </span>
             </div>
 
             {/* Botão de Fechar / Concluir */}
@@ -2038,3 +2125,4 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     </div>
   );
 };
+
