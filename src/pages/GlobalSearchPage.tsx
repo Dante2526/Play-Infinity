@@ -181,8 +181,15 @@ export function GlobalSearchPage({
             return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
           });
 
-          const idsToCheck = rawMediaResults.map(r => r.id).filter(Boolean);
-          const playableSet = await checkPlayableBatch(idsToCheck);
+          const itemsToCheck = rawMediaResults.map(r => {
+            const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
+            return {
+              id: r.id,
+              type: isTv ? ('tv' as const) : ('movie' as const)
+            };
+          }).filter(i => Boolean(i.id));
+
+          const playableSet = await checkPlayableBatch(itemsToCheck);
           if (!isMounted) return;
 
           // Local catalog IDs (animes, doramas, static collections)

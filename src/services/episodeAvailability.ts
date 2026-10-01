@@ -17,39 +17,52 @@ const clientSeasonsCache = new Map<string, { timestamp: number; seasons: number[
 const clientPlayableCache = new Map<number, boolean>();
 const CLIENT_CACHE_TTL = 3 * 60 * 1000; // 3 minutos (reduzido de 15min)
 
+export type PlayableCheckItem = number | { id: number; type?: 'movie' | 'tv' | 'series' };
+
 /**
  * Consulta em lote quais IDs possuem reprodução disponível no catálogo oficial
  */
-export async function checkPlayableBatch(tmdbIds: number[]): Promise<Set<number>> {
+export async function checkPlayableBatch(items: PlayableCheckItem[]): Promise<Set<number>> {
   const result = new Set<number>();
-  const toFetch: number[] = [];
+  const toFetchItems: { id: number; type?: string }[] = [];
 
-  for (const id of tmdbIds) {
+  for (const item of items) {
+    const id = typeof item === "number" ? item : item.id;
+    const type = typeof item === "object" ? item.type : undefined;
+    if (!id) continue;
+
     if (clientPlayableCache.has(id)) {
       if (clientPlayableCache.get(id)) {
         result.add(id);
       }
     } else {
-      toFetch.push(id);
+      toFetchItems.push({ id, type });
     }
   }
 
-  if (toFetch.length === 0) {
+  if (toFetchItems.length === 0) {
     return result;
   }
 
   try {
-    const res = await fetch(`/api/check-playable-batch?ids=${toFetch.join(",")}`);
+    const res = await fetch("/api/check-playable-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        items: toFetchItems,
+        ids: toFetchItems.map(i => i.id)
+      })
+    });
     if (res.ok) {
       const data = await res.json();
       const playableList: number[] = data.playableIds || [];
       const playableSet = new Set(playableList);
 
-      for (const id of toFetch) {
-        const isPlayable = playableSet.has(id);
-        clientPlayableCache.set(id, isPlayable);
+      for (const item of toFetchItems) {
+        const isPlayable = playableSet.has(item.id);
+        clientPlayableCache.set(item.id, isPlayable);
         if (isPlayable) {
-          result.add(id);
+          result.add(item.id);
         }
       }
     }
