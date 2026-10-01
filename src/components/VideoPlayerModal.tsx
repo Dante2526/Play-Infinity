@@ -1002,6 +1002,7 @@ export function VideoPlayerModal({
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback(async (serverKey: string) => {
+    mixdropAttemptRef.current = 1; // Reseta tentativa intra-servidor
     setSelectedServerKey(serverKey);
     const srv = servers.find(s => s.key === serverKey);
     if (!srv) return;
@@ -1033,8 +1034,29 @@ export function VideoPlayerModal({
 
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
+  const mixdropAttemptRef = useRef<number>(1);
 
   const handleSilentFallback = useCallback(() => {
+    // 1. Lógica intra-servidor para o MixDrop (Tentar Encontrei.me -> Vizer)
+    if (selectedServerKey === "srv_mixdrop" && mixdropAttemptRef.current === 1) {
+      const vizerUrl = defaultUrl;
+      const hasVizerMixdrop = vizerUrl && (vizerUrl.includes("mixdrop.") || vizerUrl.includes("mxdrop."));
+      
+      if (hasVizerMixdrop) {
+        console.warn("[VideoPlayerModal] MixDrop primário falhou. Tentando URL secundária do Vizer...");
+        mixdropAttemptRef.current = 2;
+        const newUrl = `/api/mixdrop-stream?url=${encodeURIComponent(vizerUrl)}`;
+        
+        transitionEpochRef.current = Date.now();
+        setIsLoading(true);
+        setError(null);
+        setUrlInput(vizerUrl);
+        setActiveIframeUrl(newUrl);
+        setExtractedSource(vizerUrl);
+        return; // Retorna cedo para não pular de servidor ainda
+      }
+    }
+
     fallbackAttemptsRef.current.add(selectedServerKey);
     // Identifica próximo servidor ainda não tentado
     const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
@@ -1049,7 +1071,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     setError("Este conteúdo ainda não está disponível nos servidores oficiais em versão Dublado PT-BR. Nossos servidores são atualizados constantemente.");
     setIsLoading(false);
-  }, [servers, selectedServerKey, handleServerSwitch]);
+  }, [servers, selectedServerKey, handleServerSwitch, defaultUrl]);
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
@@ -1083,6 +1105,7 @@ export function VideoPlayerModal({
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       setIframeVisible(false); // Oculta iframe até rodar
       fallbackAttemptsRef.current.clear();
+      mixdropAttemptRef.current = 1;
       hasSeekedInitialTimeRef.current = false;
 
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
@@ -1182,6 +1205,7 @@ export function VideoPlayerModal({
       setActiveIframeUrl(null);
       setError(null);
       fallbackAttemptsRef.current.clear();
+      mixdropAttemptRef.current = 1;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
@@ -1336,6 +1360,7 @@ export function VideoPlayerModal({
               setPlayerSkinReady(false);
               setIframeVisible(false);
               fallbackAttemptsRef.current.clear();
+              mixdropAttemptRef.current = 1;
               
               const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
               const newUrl = activeServer.buildUrl(resolvedId, nextSeason, 1);
@@ -1378,6 +1403,7 @@ export function VideoPlayerModal({
       if (error) {
         console.log("[VideoPlayerModal] Conexão restaurada. Tentando reconectar servidor automaticamente...");
         fallbackAttemptsRef.current.clear();
+        mixdropAttemptRef.current = 1;
         setError(null);
         setIsLoading(true);
         const srv = servers[0];
@@ -1459,6 +1485,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
+    mixdropAttemptRef.current = 1;
 
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     let newUrl: string;
@@ -1494,6 +1521,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
+    mixdropAttemptRef.current = 1;
 
     let targetKey = selectedServerKey;
     if ((String(tmdbId) === "126027" || String(resolvedId) === "126027") && newSeason >= 5 && selectedServerKey === "srv_watchplay") {
@@ -2230,6 +2258,7 @@ export function VideoPlayerModal({
                   <button
                     onClick={() => {
                       fallbackAttemptsRef.current.clear();
+                      mixdropAttemptRef.current = 1;
                       setError(null);
                       setIsLoading(true);
                       const srv = servers[0];
