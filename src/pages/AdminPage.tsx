@@ -200,8 +200,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           } catch(e){console.warn("Silenced error:", e);}
         }
 
-        // Pessoas assistindo nos últimos 5 minutos
-        if (data.lastActive || data.ultimoAcesso) {
+        // Pessoas assistindo nos últimos 5 minutos (exclui administradores)
+        const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+        const userEmailLower = (data.email || "").toLowerCase();
+        const isAdminUser = adminEmails.includes(userEmailLower);
+
+        if (!isAdminUser && (data.lastActive || data.ultimoAcesso)) {
           const lastActiveDate = new Date(data.lastActive || data.ultimoAcesso);
           if (lastActiveDate >= fiveMinutesAgo) {
             watchingNow++;
@@ -1047,8 +1051,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     }
                   }
 
-                  // Verifica se o usuário está ativo/assistindo nos últimos 5 minutos
+                  // Verifica se o usuário está ativo/assistindo nos últimos 5 minutos (ignora administradores)
+                  const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+                  const isUserAdmin = adminEmails.includes((client.email || "").toLowerCase());
                   const isOnlineNow = Boolean(
+                    !isUserAdmin &&
                     client.lastActive &&
                     (Date.now() - new Date(client.lastActive).getTime()) <= 5 * 60 * 1000
                   );
@@ -1919,9 +1926,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
             {/* Lista dos Usuários Ativos (Apenas Nome + Bolinha Verde) */}
             <div className="max-h-[360px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
               {(() => {
-                const activeUsers = usersList.filter(u => 
-                  u.lastActive && (Date.now() - new Date(u.lastActive).getTime()) <= 5 * 60 * 1000
-                );
+                const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+                const activeUsers = usersList.filter(u => {
+                  const isUserAdmin = adminEmails.includes((u.email || "").toLowerCase());
+                  return !isUserAdmin && u.lastActive && (Date.now() - new Date(u.lastActive).getTime()) <= 5 * 60 * 1000;
+                });
 
                 if (activeUsers.length === 0) {
                   return (
