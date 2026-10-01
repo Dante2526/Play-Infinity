@@ -436,9 +436,19 @@ export default function App() {
 
   const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || (isDevEnvironment ? 'DEV' : 'N')).trim().charAt(0).toUpperCase() || 'P';
 
-  // Heartbeat para rastrear "Pessoas Assistindo Agora"
+  // Heartbeat para rastrear "Pessoas Assistindo Agora" (Ignora administradores e tela de adm)
   useEffect(() => {
     if (!currentUser) return;
+    
+    // Lista de administradores para não constar como cliente assistindo
+    const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+    if (currentUser.email && adminEmails.includes(currentUser.email)) {
+      return;
+    }
+    if (viewState.type === 'admin') {
+      return;
+    }
+
     const updatePresence = async () => {
       try {
         const userRef = doc(db, "usuarios", currentUser.uid);
@@ -459,7 +469,7 @@ export default function App() {
     updatePresence();
     const interval = setInterval(updatePresence, 3 * 60000); // A cada 3 minutos
     return () => clearInterval(interval);
-  }, [currentUser]);
+  }, [currentUser, viewState.type]);
 
   // Carrega e atualiza a contagem de episódios novos das séries favoritas
   useEffect(() => {
