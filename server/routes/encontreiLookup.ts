@@ -37,13 +37,13 @@ export async function checkVipSeason(
 ): Promise<boolean> {
   const key = `${tmdb}:${season}`;
   const cached = vipSeasonCache.get(key);
-  if (cached && Date.now() - cached.timestamp < VIP_SEASON_TTL) {
+  if (cached && Date.now() - cached.timestamp < (cached.ok ? VIP_SEASON_TTL : 15000)) {
     return cached.ok;
   }
   try {
     const port = process.env.PORT || 3000;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    const timeout = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=tv&s=${season}&e=1`, {
       signal: controller.signal,
     });
@@ -57,6 +57,7 @@ export async function checkVipSeason(
     vipSeasonCache.set(key, { ok, timestamp: Date.now() });
     return ok;
   } catch {
+    vipSeasonCache.set(key, { ok: false, timestamp: Date.now() });
     return false;
   }
 }
@@ -66,13 +67,13 @@ export async function checkVipMovie(
 ): Promise<boolean> {
   const key = String(tmdb);
   const cached = vipMovieCache.get(key);
-  if (cached && Date.now() - cached.timestamp < VIP_SEASON_TTL) {
+  if (cached && Date.now() - cached.timestamp < (cached.ok ? VIP_SEASON_TTL : 15000)) {
     return cached.ok;
   }
   try {
     const port = process.env.PORT || 3000;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2500);
+    const timeout = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=movie`, {
       signal: controller.signal,
     });
@@ -86,6 +87,7 @@ export async function checkVipMovie(
     vipMovieCache.set(key, { ok, timestamp: Date.now() });
     return ok;
   } catch {
+    vipMovieCache.set(key, { ok: false, timestamp: Date.now() });
     return false;
   }
 }
@@ -611,28 +613,12 @@ router.get("/api/series-seasons-available", async (req, res) => {
     // Sonda network só pras seasons que não estão no catálogo e não estão em cache
     if (!probeCached && seasonsToProbe.length > 0) {
       const probeSeason = async (season: number): Promise<boolean> => {
-        // 0. Sonda Vizer Live (MixDrop Dublado)
+        // 1. Sonda VIP Player (Dublado PT-BR homologado, mais rápido)
         try {
-          const vizerOk = await checkVizerSeason(tmdbId, season);
-          if (vizerOk) return true;
+          const vipOk = await checkVipSeason(tmdbId, season);
+          if (vipOk) return true;
         } catch {}
-        // 1. Sonda Nixplay HD
-        try {
-          const ss = String(season).padStart(3, "0");
-          const streamId = `${tmdbId}${ss}001`;
-          const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
-          const controller = new AbortController();
-          const t = setTimeout(() => controller.abort(), 2500);
-          const nixRes = await fetch(nixUrl, {
-            headers: { Range: "bytes=0-100" },
-            signal: controller.signal,
-          });
-          clearTimeout(t);
-          if (nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4") {
-            return true;
-          }
-        } catch {}
-        // 2. Sonda WatchPlayer
+        // 2. Sonda WatchPlayer (Oficial homologado)
         try {
           const wpUrl = `https://v1.watchplay.shop/tvshow/${tmdbId}/${season}/1`;
           const controller = new AbortController();
@@ -659,12 +645,28 @@ router.get("/api/series-seasons-available", async (req, res) => {
             if (!isBad) return true;
           }
         } catch {}
-        // 3. Sonda VIP Player
+        // 3. Sonda Vizer Live (MixDrop Dublado)
         try {
-          const vipOk = await checkVipSeason(tmdbId, season);
-          if (vipOk) return true;
+          const vizerOk = await checkVizerSeason(tmdbId, season);
+          if (vizerOk) return true;
         } catch {}
-        // 4. Sonda Seriesflix HD (vidsrc)
+        // 4. Sonda Nixplay HD
+        try {
+          const ss = String(season).padStart(3, "0");
+          const streamId = `${tmdbId}${ss}001`;
+          const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`;
+          const controller = new AbortController();
+          const t = setTimeout(() => controller.abort(), 2000);
+          const nixRes = await fetch(nixUrl, {
+            headers: { Range: "bytes=0-100" },
+            signal: controller.signal,
+          });
+          clearTimeout(t);
+          if (nixRes.status === 206 && nixRes.headers.get("content-type") === "video/mp4") {
+            return true;
+          }
+        } catch {}
+        // 5. Sonda Seriesflix HD (vidsrc)
         try {
           const vsOk = await checkVidsrcSeason(tmdbId, season);
           if (vsOk) return true;
