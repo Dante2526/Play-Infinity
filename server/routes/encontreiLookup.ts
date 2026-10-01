@@ -732,8 +732,13 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       }
 
       if (bestEp) {
+        const mixdrop_encontrei = encontreiEp?.servers?.mixdrop || null;
+        const mixdrop_vizer = vizerEp?.servers?.mixdrop || null;
+
         result = {
           mixdrop: bestEp.servers.mixdrop,
+          mixdrop_encontrei,
+          mixdrop_vizer,
           streamtape: bestEp.servers.streamtape || null,
           byse: bestEp.servers.byse || null,
           doodstream: bestEp.servers.doodstream || null,
@@ -788,8 +793,15 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       }
 
       if (bestMovie) {
+        // Retornar ambos os IDs de fallback (encontrei e vizer) para que o player
+        // possa tentar o Vizer se o Encontrei falhar e vice-versa
+        const mixdrop_encontrei = encontreiMovie?.servers?.mixdrop || null;
+        const mixdrop_vizer = vizerMovie?.servers?.mixdrop || null;
+
         result = {
           mixdrop: bestMovie.servers.mixdrop,
+          mixdrop_encontrei,
+          mixdrop_vizer,
           streamtape: bestMovie.servers.streamtape || null,
           byse: bestMovie.servers.byse || null,
           doodstream: bestMovie.servers.doodstream || null,

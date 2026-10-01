@@ -208,12 +208,28 @@ export function VideoPlayerModal({
   const [mixdropFileIds, setMixdropFileIds] = useState<Record<string, string | null>>({});
   const mixdropFileIdsRef = useRef(mixdropFileIds);
   mixdropFileIdsRef.current = mixdropFileIds;
+  const [mixdropVizerFileIds, setMixdropVizerFileIds] = useState<Record<string, string | null>>({});
+  const mixdropVizerFileIdsRef = useRef(mixdropVizerFileIds);
+  mixdropVizerFileIdsRef.current = mixdropVizerFileIds;
+  const [mixdropEncontreiFileIds, setMixdropEncontreiFileIds] = useState<Record<string, string | null>>({});
   const mixdropLookupInflightRef = useRef<Set<string>>(new Set());
   const mixdropFileId = useMemo(() => {
     if (!tmdbId) return null;
     const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
     return key in mixdropFileIds ? mixdropFileIds[key] : null;
   }, [mixdropFileIds, tmdbId, mediaType, season, episode]);
+
+  const mixdropVizerFileId = useMemo(() => {
+    if (!tmdbId) return null;
+    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    return key in mixdropVizerFileIds ? mixdropVizerFileIds[key] : null;
+  }, [mixdropVizerFileIds, tmdbId, mediaType, season, episode]);
+
+  const mixdropEncontreiFileId = useMemo(() => {
+    if (!tmdbId) return null;
+    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    return key in mixdropEncontreiFileIds ? mixdropEncontreiFileIds[key] : null;
+  }, [mixdropEncontreiFileIds, tmdbId, mediaType, season, episode]);
 
   // Resolve (e cacheia no mapa) o fileId do MixDrop de um episódio específico.
   const lookupMixdropFileId = useCallback(
@@ -229,7 +245,11 @@ export function VideoPlayerModal({
           ? await findEpisode(tmdbId, s, e)
           : await findMovieByTmdbId(tmdbId);
         const result = res?.mixdrop ?? null;
+        const vizerResult = res?.mixdrop_vizer ?? null;
+        const encontreiResult = res?.mixdrop_encontrei ?? null;
         setMixdropFileIds(prev => ({ ...prev, [key]: result }));
+        setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
+        setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
         return result;
       } catch {
         return null;
@@ -1037,23 +1057,27 @@ export function VideoPlayerModal({
   const mixdropAttemptRef = useRef<number>(1);
 
   const handleSilentFallback = useCallback(() => {
-    // 1. Lógica intra-servidor para o MixDrop (Tentar Encontrei.me -> Vizer)
+    // 1. Fallback intra-servidor do MixDrop: se o primário falhou, tenta o outro catálogo
     if (selectedServerKey === "srv_mixdrop" && mixdropAttemptRef.current === 1) {
-      const vizerUrl = defaultUrl;
-      const hasVizerMixdrop = vizerUrl && (vizerUrl.includes("mixdrop.") || vizerUrl.includes("mxdrop."));
+      // Se o link primário veio do Vizer (mixdrop === mixdrop_vizer), tenta o Encontrei
+      // Se o link primário veio do Encontrei (mixdrop === mixdrop_encontrei), tenta o Vizer
+      const isPrimaryVizer = mixdropFileId && mixdropVizerFileId && mixdropFileId === mixdropVizerFileId;
+      const fallbackFileId = isPrimaryVizer ? mixdropEncontreiFileId : mixdropVizerFileId;
       
-      if (hasVizerMixdrop) {
-        console.warn("[VideoPlayerModal] MixDrop primário falhou. Tentando URL secundária do Vizer...");
-        mixdropAttemptRef.current = 2;
-        const newUrl = `/api/mixdrop-stream?url=${encodeURIComponent(vizerUrl)}`;
-        
-        transitionEpochRef.current = Date.now();
-        setIsLoading(true);
-        setError(null);
-        setUrlInput(vizerUrl);
-        setActiveIframeUrl(newUrl);
-        setExtractedSource(vizerUrl);
-        return; // Retorna cedo para não pular de servidor ainda
+      if (fallbackFileId && fallbackFileId !== mixdropFileId) {
+        const fallbackUrl = buildMixdropStreamUrl(fallbackFileId);
+        if (fallbackUrl) {
+          const fallbackSource = isPrimaryVizer ? "Encontrei" : "Vizer";
+          console.warn(`[VideoPlayerModal] MixDrop primário falhou. Tentando MixDrop do ${fallbackSource}...`);
+          mixdropAttemptRef.current = 2;
+          transitionEpochRef.current = Date.now();
+          setIsLoading(true);
+          setError(null);
+          setUrlInput(fallbackUrl);
+          setActiveIframeUrl(fallbackUrl);
+          setExtractedSource(fallbackUrl);
+          return; // Não pula de servidor ainda
+        }
       }
     }
 
@@ -1071,7 +1095,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     setError("Este conteúdo ainda não está disponível nos servidores oficiais em versão Dublado PT-BR. Nossos servidores são atualizados constantemente.");
     setIsLoading(false);
-  }, [servers, selectedServerKey, handleServerSwitch, defaultUrl]);
+  }, [servers, selectedServerKey, handleServerSwitch, mixdropFileId, mixdropVizerFileId, mixdropEncontreiFileId]);
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
