@@ -27,6 +27,8 @@ const router = Router();
 
 // Cache de temporadas verificadas no VIP Player (TTL 30 min)
 const vipSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
+const vipMovieCache = new Map<string, { ok: boolean; timestamp: number }>();
+const watchPlayerMovieCache = new Map<string, { ok: boolean; timestamp: number }>();
 const VIP_SEASON_TTL = 30 * 60 * 1000;
 
 export async function checkVipSeason(
@@ -54,6 +56,77 @@ export async function checkVipSeason(
     const ok = html.includes("var hlsUrl =") || html.includes("embedplayer") || html.includes("master.m3u8");
     vipSeasonCache.set(key, { ok, timestamp: Date.now() });
     return ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkVipMovie(
+  tmdb: string | number
+): Promise<boolean> {
+  const key = String(tmdb);
+  const cached = vipMovieCache.get(key);
+  if (cached && Date.now() - cached.timestamp < VIP_SEASON_TTL) {
+    return cached.ok;
+  }
+  try {
+    const port = process.env.PORT || 3000;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=movie`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      vipMovieCache.set(key, { ok: false, timestamp: Date.now() });
+      return false;
+    }
+    const html = await res.text();
+    const ok = html.includes("var hlsUrl =") || html.includes("embedplayer") || html.includes("master.m3u8");
+    vipMovieCache.set(key, { ok, timestamp: Date.now() });
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function checkWatchPlayerMovie(
+  tmdb: string | number
+): Promise<boolean> {
+  const key = String(tmdb);
+  const cached = watchPlayerMovieCache.get(key);
+  if (cached && Date.now() - cached.timestamp < VIP_SEASON_TTL) {
+    return cached.ok;
+  }
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`https://v1.watchplay.shop/movie/${tmdb}`, {
+      headers: {
+        "Referer": "https://v1.watchplay.shop/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    clearTimeout(timeout);
+    if (res.status === 200) {
+      const text = await res.text();
+      const lower = text.toLowerCase();
+      const isBad = (
+        lower.includes("404") ||
+        lower.includes("login-card") ||
+        lower.includes("login-page") ||
+        lower.includes("não encontrado") ||
+        lower.includes("filme não encontrado") ||
+        text.length < 300
+      );
+      const ok = !isBad;
+      watchPlayerMovieCache.set(key, { ok, timestamp: Date.now() });
+      return ok;
+    }
+    watchPlayerMovieCache.set(key, { ok: false, timestamp: Date.now() });
+    return false;
   } catch {
     return false;
   }
@@ -641,34 +714,142 @@ router.get("/api/series-seasons-available", async (req, res) => {
   }
 });
 
-router.all("/api/check-playable-batch", (req, res) => {
+const _playableProbeCache = new Map<number, { playable: boolean; type?: 'movie' | 'tv'; timestamp: number }>();
+const PLAYABLE_PROBE_TTL = 30 * 60 * 1000;
+
+router.all("/api/check-playable-batch", async (req, res) => {
   try {
     loadCatalogs();
-    let ids: number[] = [];
-    if (req.method === "POST" && req.body && Array.isArray(req.body.ids)) {
-      ids = req.body.ids.map(Number).filter(Boolean);
+    interface RequestItem {
+      id: number;
+      type?: 'movie' | 'tv' | 'series';
+    }
+    let items: RequestItem[] = [];
+
+    if (req.method === "POST" && req.body) {
+      if (Array.isArray(req.body.items)) {
+        items = req.body.items
+          .map((i: any) => ({
+            id: Number(i.id || i),
+            type: i.type ? (i.type === 'series' ? 'tv' : i.type) : undefined,
+          }))
+          .filter((i: RequestItem) => Boolean(i.id));
+      } else if (Array.isArray(req.body.ids)) {
+        items = req.body.ids.map(Number).filter(Boolean).map((id: number) => ({ id }));
+      }
     } else if (req.query.ids) {
-      ids = String(req.query.ids).split(",").map(Number).filter(Boolean);
+      const rawIds = String(req.query.ids).split(",").map(Number).filter(Boolean);
+      items = rawIds.map(id => ({ id }));
     }
 
     const playableMovieIds: number[] = [];
     const playableSeriesIds: number[] = [];
+    const unverifiedItems: RequestItem[] = [];
 
-    for (const id of ids) {
-      // Em qualquer um dos catálogos
+    const now = Date.now();
+
+    for (const item of items) {
+      const id = item.id;
+      let found = false;
+
+      // 1. Checa índice de filmes e séries locais
       if (_vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id)) {
         playableMovieIds.push(id);
+        found = true;
       }
       if (_vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id)) {
         playableSeriesIds.push(id);
+        found = true;
       }
+
+      // 2. Se já achou em catálogo estático, segue
+      if (found) continue;
+
+      // 3. Checa cache de sondagem em memória
+      const cached = _playableProbeCache.get(id);
+      if (cached && now - cached.timestamp < PLAYABLE_PROBE_TTL) {
+        if (cached.playable) {
+          if (cached.type === 'movie') playableMovieIds.push(id);
+          else playableSeriesIds.push(id);
+        }
+        continue;
+      }
+
+      unverifiedItems.push(item);
+    }
+
+    // 4. Sonda itens não encontrados em lote rápido (máximo 15 por requisição)
+    const itemsToProbe = unverifiedItems.slice(0, 15);
+    if (itemsToProbe.length > 0) {
+      await Promise.all(
+        itemsToProbe.map(async (item) => {
+          const id = item.id;
+          const isExplicitMovie = item.type === 'movie';
+          const isExplicitTv = item.type === 'tv' || item.type === 'series';
+
+          let isPlayable = false;
+          let verifiedType: 'movie' | 'tv' = isExplicitTv ? 'tv' : 'movie';
+
+          if (isExplicitTv) {
+            // Sonda VIP Player para Série (Season 1 Ep 1)
+            const vipOk = await checkVipSeason(id, 1);
+            if (vipOk) {
+              isPlayable = true;
+              verifiedType = 'tv';
+            }
+          } else if (isExplicitMovie) {
+            // Sonda VIP Player para Filme
+            const vipOk = await checkVipMovie(id);
+            if (vipOk) {
+              isPlayable = true;
+              verifiedType = 'movie';
+            } else {
+              const wpOk = await checkWatchPlayerMovie(id);
+              if (wpOk) {
+                isPlayable = true;
+                verifiedType = 'movie';
+              }
+            }
+          } else {
+            // Tipo não informado: testa TV primeiro
+            const vipTv = await checkVipSeason(id, 1);
+            if (vipTv) {
+              isPlayable = true;
+              verifiedType = 'tv';
+            } else {
+              const vipMovie = await checkVipMovie(id);
+              if (vipMovie) {
+                isPlayable = true;
+                verifiedType = 'movie';
+              } else {
+                const wpMovie = await checkWatchPlayerMovie(id);
+                if (wpMovie) {
+                  isPlayable = true;
+                  verifiedType = 'movie';
+                }
+              }
+            }
+          }
+
+          _playableProbeCache.set(id, {
+            playable: isPlayable,
+            type: verifiedType,
+            timestamp: now,
+          });
+
+          if (isPlayable) {
+            if (verifiedType === 'movie') playableMovieIds.push(id);
+            else playableSeriesIds.push(id);
+          }
+        })
+      );
     }
 
     res.setHeader("Cache-Control", "public, max-age=1800");
     return res.json({
       success: true,
-      playableMovieIds,
-      playableSeriesIds,
+      playableMovieIds: [...new Set(playableMovieIds)],
+      playableSeriesIds: [...new Set(playableSeriesIds)],
       playableIds: [...new Set([...playableMovieIds, ...playableSeriesIds])],
     });
   } catch (err: any) {
