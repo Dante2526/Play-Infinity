@@ -79,7 +79,8 @@ export async function checkPlayableBatch(items: PlayableCheckItem[]): Promise<Se
  */
 export async function getAvailableSeasonsForSeries(
   tmdbId: number | string,
-  candidateSeasons?: number[]
+  candidateSeasons?: number[],
+  forceRefresh?: boolean
 ): Promise<number[]> {
   const fallbackSeasons = candidateSeasons && candidateSeasons.length > 0 ? candidateSeasons : [1];
   const idStr = String(tmdbId).trim();
@@ -88,19 +89,19 @@ export async function getAvailableSeasonsForSeries(
   }
 
   const cacheKey = `${idStr}:${(candidateSeasons || []).slice().sort((a, b) => a - b).join(",")}`;
-  const cached = clientSeasonsCache.get(cacheKey);
+  const cached = !forceRefresh ? clientSeasonsCache.get(cacheKey) : null;
   if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
-    if (cached.seasons && cached.seasons.length > 0) {
+    if (cached.seasons && cached.seasons.length > 0 && (!candidateSeasons || cached.seasons.length >= candidateSeasons.length)) {
       return cached.seasons;
     }
-    return fallbackSeasons;
   }
 
   try {
     const candidatesParam = candidateSeasons && candidateSeasons.length > 0
       ? `&candidate_seasons=${encodeURIComponent(candidateSeasons.join(","))}`
       : "";
-    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}${candidatesParam}&_cb=${Date.now()}`, {
+    const refreshParam = forceRefresh ? "&force_refresh=true" : "";
+    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}${candidatesParam}${refreshParam}&_cb=${Date.now()}`, {
       cache: "no-store",
     });
     if (res.ok) {
