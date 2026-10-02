@@ -21,6 +21,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { auth } from "../services/firebase";
+import { adminFetch } from "../services/adminApi";
 
 interface ServerBlock {
   id: string;
@@ -290,7 +291,7 @@ export function ServerBlocksAdmin() {
     setSaving(true);
 
     try {
-      const res = await fetch("/api/admin/server-blocks", {
+      const res = await adminFetch("/api/admin/server-blocks", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -329,7 +330,7 @@ export function ServerBlocksAdmin() {
     if (!confirm(`Remover bloqueio de ${label}? O servidor voltará a ser consultado para este título.`)) return;
     setError(null);
     try {
-      const res = await fetch(`/api/admin/server-blocks/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/server-blocks/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: { "x-admin-token": getAdminToken() },
       });
@@ -360,7 +361,7 @@ export function ServerBlocksAdmin() {
     setSavingEdit(true);
     setError(null);
     try {
-      const res = await fetch(`/api/admin/server-blocks/${encodeURIComponent(blockId)}`, {
+      const res = await adminFetch(`/api/admin/server-blocks/${encodeURIComponent(blockId)}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
