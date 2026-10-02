@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
 
@@ -18,6 +19,9 @@ function getSshPrivateKey(): string | null {
   const possiblePaths = [
     path.join(process.cwd(), "oracle-vps.key"),
     path.join(process.cwd(), "secrets", "oracle-vps.key"),
+    "/home/ubuntu/play-infinity/secrets/oracle-vps.key",
+    "/home/ubuntu/.ssh/id_rsa",
+    "/home/ubuntu/.ssh/id_ed25519",
     "/etc/secrets/oracle-vps.key"
   ];
 
@@ -37,6 +41,37 @@ function getSshPrivateKey(): string | null {
   }
 
   return null;
+}
+
+/**
+ * Executa comandos localmente se estiver rodando dentro da VPS Ubuntu,
+ * ou via SSH se estiver rodando em ambiente externo (dev/staging).
+ */
+async function executeSystemOrSshCommand(command: string, timeoutMs = 25000): Promise<{ stdout: string; stderr: string; code: number }> {
+  // Detecta se estamos rodando diretamente no Linux da VPS Oracle
+  const isDirectOnVps = process.platform === "linux" && (
+    fs.existsSync("/home/ubuntu/play-infinity") ||
+    fs.existsSync("/home/ubuntu/.pm2") ||
+    process.cwd().includes("/home/ubuntu")
+  );
+
+  if (isDirectOnVps) {
+    try {
+      return await new Promise((resolve) => {
+        cpExec(command, { timeout: timeoutMs, maxBuffer: 10 * 1024 * 1024 }, (err, stdout, stderr) => {
+          resolve({
+            stdout: stdout ? stdout.toString() : "",
+            stderr: stderr ? stderr.toString() : "",
+            code: err ? (typeof err.code === "number" ? err.code : 1) : 0
+          });
+        });
+      });
+    } catch (localErr: any) {
+      console.warn("[AdminOps] Execução local falhou, tentando fallback SSH:", localErr?.message);
+    }
+  }
+
+  return executeSshCommand(command, timeoutMs);
 }
 
 /**
@@ -174,7 +209,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
 
   try {
     const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && sudo pm2 jlist`;
-    const sshResult = await executeSshCommand(sshCmd, 12000);
+    const sshResult = await executeSystemOrSshCommand(sshCmd, 12000);
     vpsHardware.hasSsh = true;
 
     const parts = sshResult.stdout.split("===DELIM_UPTIME===");
@@ -257,7 +292,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
 adminOpsRouter.get("/vps-bot-logs", async (_req: Request, res: Response) => {
   try {
     const command = "tail -n 30 /home/ubuntu/.pm2/logs/ampere-creator-out.log";
-    const result = await executeSshCommand(command, 15000);
+    const result = await executeSystemOrSshCommand(command, 15000);
     
     if (result.code !== 0 && !result.stdout) {
       throw new Error(result.stderr || `Comando retornou código ${result.code}`);
@@ -335,7 +370,7 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await executeSshCommand(commandToRun, 60000);
+    const result = await executeSystemOrSshCommand(commandToRun, 60000);
     return res.json({
       success: result.code === 0,
       action,
