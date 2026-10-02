@@ -35,20 +35,24 @@ jobs:
       - name: 🔑 Configurar Chave SSH
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts
+          printf "%s\n" "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle_key
+          chmod 600 ~/.ssh/oracle_key
+          cp ~/.ssh/oracle_key ~/.ssh/id_ed25519
+          cp ~/.ssh/oracle_key ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts || true
 
       - name: 🚀 Enviar Payload e Atualizar VPS
         run: |
           HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
           USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
+          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i ~/.ssh/oracle_key"
           
           # Enviar pacote compactado
-          scp /tmp/deploy-payload.tar.gz ${USER}@${HOST}:/home/ubuntu/app-deploy.tar.gz
+          scp $SSH_OPTS /tmp/deploy-payload.tar.gz ${USER}@${HOST}:/home/ubuntu/app-deploy.tar.gz
           
           # Extrair e reiniciar PM2
-          ssh ${USER}@${HOST} << 'EOF'
+          ssh $SSH_OPTS ${USER}@${HOST} << 'EOF'
             tar -xzf /home/ubuntu/app-deploy.tar.gz -C /home/ubuntu/play-infinity/
             sudo pm2 restart play-infinity-app || sudo pm2 restart all
             echo "✅ Deploy concluído com sucesso!"
