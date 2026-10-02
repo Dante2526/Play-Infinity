@@ -39,3 +39,4 @@
 **Resumo:**
 - **Integração do Bot Ampere (Oracle VPS):** Criado endpoint `/api/admin/vps-bot-logs` via SSH que lê em tempo real as últimas 30 linhas de log do bot `ampere-creator` (via PM2).
 - **Monitor do Robô Ampere:** Adicionada uma nova seção "Robô de Criação VPS (Ampere)" no componente `AdminDeployMonitor.tsx` do painel de administrador, renderizando um terminal ao vivo que acompanha as tentativas de criação da instância na Oracle Cloud.
+- **Precificação:** O valor da assinatura do **Plano Plus** foi reduzido de R$ 20,00 para R$ 17,00 no `DownloadPlusModal.tsx`.
