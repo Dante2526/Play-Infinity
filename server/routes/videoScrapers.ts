@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
-import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp } from "../utils/helpers";
+import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain } from "../utils/helpers";
 import { resolveVixsrcStream, resolveDirectAnimeStream } from "../../server";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
@@ -2153,7 +2153,28 @@ const router = Router();
 
   router.get("/api/live-stream-proxy", async (req, res) => {
     try {
-      res.setHeader("Access-Control-Allow-Origin", "*");
+      const origin = req.headers.origin as string | undefined;
+      const isAllowedOrigin = !origin ||
+        origin.includes("play-infinity") ||
+        origin.includes("duckdns.org") ||
+        origin.includes("localhost") ||
+        origin.includes("127.0.0.1") ||
+        origin.startsWith("capacitor://") ||
+        origin.startsWith("ionic://") ||
+        origin.includes("googleusercontent.com") ||
+        origin.includes("run.app");
+
+      if (origin) {
+        if (isAllowedOrigin) {
+          res.setHeader("Access-Control-Allow-Origin", origin);
+          res.setHeader("Access-Control-Allow-Credentials", "true");
+        } else {
+          return res.status(403).send("Acesso negado: Origem não autorizada.");
+        }
+      } else {
+        res.setHeader("Access-Control-Allow-Origin", "*");
+      }
+
       res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "*");
 
@@ -2175,8 +2196,13 @@ const router = Router();
         return res.status(403).send("Protocolo inválido.");
       }
 
-      if (isPrivateOrLocalIp(parsed.hostname)) {
+      // Proteção Anti-SSRF avançada com resolução DNS e validação de IPv4/IPv6
+      if (await isPrivateOrLocalHost(parsed.hostname)) {
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
+      }
+
+      if (!isAllowedLiveStreamingDomain(parsed.hostname)) {
+        return res.status(403).send("Domínio não autorizado para proxy de streaming.");
       }
 
       // Verifica cache em memória apenas para manifestos/playlists (.m3u8), sem acumular vídeos pesados na RAM
@@ -2193,8 +2219,7 @@ const router = Router();
 
       const headers: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "X-Forwarded-For": "177.100.100.1" // Spoof IP brasileiro para CDNs com geo-bloqueio (Amagi FAST, Pluto TV)
+        "Accept": "*/*"
       };
 
       if (req.query.referer) {
@@ -2227,8 +2252,12 @@ const router = Router();
             return res.status(403).send("Protocolo inválido no redirect.");
           }
 
-          if (isPrivateOrLocalIp(nextUrl.hostname)) {
+          if (await isPrivateOrLocalHost(nextUrl.hostname)) {
             return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
+          }
+
+          if (!isAllowedLiveStreamingDomain(nextUrl.hostname)) {
+            return res.status(403).send("Redirecionamento para domínio não autorizado.");
           }
 
           currentUrl = nextUrl.toString();

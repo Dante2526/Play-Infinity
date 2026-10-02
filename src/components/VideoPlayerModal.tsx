@@ -19,7 +19,7 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
-import { getDetails, getSeasonDetails, TMDBDetails, Season } from "../services/tmdb";
+import { getDetails, getSeasonDetails, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
@@ -631,23 +631,38 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!isOpen || !isSeries) return;
     const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
-    if (!numericId) return;
 
     let isMounted = true;
-    getDetails(numericId, 'tv')
-      .then(details => {
-        if (isMounted && details) {
-          setSeriesDetails(details);
+
+    const loadSeries = async () => {
+      try {
+        let targetId = numericId;
+        if (!targetId && title) {
+          const cleanTitle = title.split(/ - (?:T\d|Temporada)/i)[0].trim();
+          const searchRes = await searchMulti(cleanTitle);
+          const foundTv = searchRes.results?.find(r => r.media_type === 'tv' || (r.name && !r.title));
+          if (foundTv) {
+            targetId = foundTv.id;
+          }
         }
-      })
-      .catch(err => {
+
+        if (targetId) {
+          const details = await getDetails(targetId, 'tv');
+          if (isMounted && details) {
+            setSeriesDetails(details);
+          }
+        }
+      } catch (err) {
         console.warn("[VideoPlayerModal] Não foi possível carregar detalhes da série:", err);
-      });
+      }
+    };
+
+    loadSeries();
 
     return () => {
       isMounted = false;
     };
-  }, [isOpen, isSeries, tmdbId, resolvedId]);
+  }, [isOpen, isSeries, tmdbId, resolvedId, title]);
 
   const [catalogSeasons, setCatalogSeasons] = useState<number[] | null>(null);
 
@@ -662,7 +677,7 @@ export function VideoPlayerModal({
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
 
-    getAvailableSeasonsForSeries(numericId, candidates).then((seasons) => {
+    getAvailableSeasonsForSeries(numericId, candidates.length > 0 ? candidates : undefined).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {
         setCatalogSeasons(seasons);
       }
@@ -717,13 +732,15 @@ export function VideoPlayerModal({
   }, []);
 
   const availableSeasons = useMemo(() => {
-    if (catalogSeasons && catalogSeasons.length > 0) {
-      return catalogSeasons;
-    }
-
     const tmdbList = (seriesDetails?.seasons || [])
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
+
+    if (catalogSeasons && catalogSeasons.length > 0) {
+      // Une as temporadas verificadas com o catálogo TMDB para nunca sumir temporadas reais
+      const combined = Array.from(new Set([...catalogSeasons, ...tmdbList])).sort((a, b) => a - b);
+      return combined.length > 0 ? combined : [1];
+    }
 
     return tmdbList.length > 0 ? tmdbList : [1];
   }, [catalogSeasons, seriesDetails]);

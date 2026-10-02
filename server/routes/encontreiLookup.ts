@@ -43,7 +43,7 @@ export async function checkVipSeason(
   try {
     const port = process.env.PORT || 3000;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
+    const timeout = setTimeout(() => controller.abort(), 6000);
     const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=tv&s=${season}&e=1`, {
       signal: controller.signal,
     });
