@@ -251,6 +251,31 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/admin/vps-bot-logs
+ * Retorna os logs do robô de criação da VPS (ampere-creator) via SSH
+ */
+adminOpsRouter.get("/vps-bot-logs", async (_req: Request, res: Response) => {
+  try {
+    const command = "tail -n 30 /home/ubuntu/.pm2/logs/ampere-creator-out.log";
+    const result = await executeSshCommand(command, 15000);
+    
+    if (result.code !== 0 && !result.stdout) {
+      throw new Error(result.stderr || `Comando retornou código ${result.code}`);
+    }
+
+    res.json({
+      success: true,
+      logs: result.stdout || "Log vazio ou não encontrado."
+    });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Falha ao obter logs do robô na VPS"
+    });
+  }
+});
+
+/**
  * POST /api/admin/vps-action
  * Executa comandos seguros de manutenção e deploy na VPS Oracle
  */

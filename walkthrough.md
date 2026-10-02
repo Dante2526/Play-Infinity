@@ -33,3 +33,9 @@
 - **Issues:**
   - Nenhuma (Minor/Important/Critical issue encontrada). O design está de acordo com as restrições globais.
 - **Assessment:** Pronto e Implementado com sucesso.
+
+## 01/10/2026 - Monitoramento do Robô Ampere
+
+**Resumo:**
+- **Integração do Bot Ampere (Oracle VPS):** Criado endpoint `/api/admin/vps-bot-logs` via SSH que lê em tempo real as últimas 30 linhas de log do bot `ampere-creator` (via PM2).
+- **Monitor do Robô Ampere:** Adicionada uma nova seção "Robô de Criação VPS (Ampere)" no componente `AdminDeployMonitor.tsx` do painel de administrador, renderizando um terminal ao vivo que acompanha as tentativas de criação da instância na Oracle Cloud.

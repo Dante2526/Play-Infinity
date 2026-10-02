@@ -175,6 +175,11 @@ export function AdminDeployMonitor() {
   const [vpsError, setVpsError] = useState<string | null>(null);
   const [lastVpsRefresh, setLastVpsRefresh] = useState<Date | null>(null);
 
+  // Estados dos Logs do Bot
+  const [botLogs, setBotLogs] = useState<string | null>(null);
+  const [botLoading, setBotLoading] = useState(false);
+  const [botError, setBotError] = useState<string | null>(null);
+
   // Estados dos Deploys do GitHub Actions
   const [githubData, setGithubData] = useState<GitHubRunsResponse | null>(null);
   const [githubLoading, setGithubLoading] = useState(false);
@@ -229,6 +234,31 @@ export function AdminDeployMonitor() {
     }
   }, []);
 
+  // Carregar logs do Bot da Oracle
+  const fetchBotLogs = useCallback(async () => {
+    setBotLoading(true);
+    try {
+      const res = await fetch("/api/admin/vps-bot-logs");
+      if (res.status === 502 || res.status === 503 || res.status === 504) {
+        return;
+      }
+      const rawText = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        return;
+      }
+      if (!res.ok || !data.success) throw new Error(data.error || `Status ${res.status}`);
+      setBotError(null);
+      setBotLogs(data.logs);
+    } catch (err: any) {
+      setBotError(err?.message || "Falha ao carregar logs do robô");
+    } finally {
+      setBotLoading(false);
+    }
+  }, []);
+
   // Carregar histórico de deploys do GitHub Actions
   const fetchGithubRuns = useCallback(async () => {
     setGithubLoading(true);
@@ -271,6 +301,7 @@ export function AdminDeployMonitor() {
   useEffect(() => {
     fetchVpsData();
     fetchGithubRuns();
+    fetchBotLogs();
 
     // Se o deploy estiver em execução na fila ou rodando, acelera para 4s para acompanhar os steps
     const isRunning = githubData?.runs?.[0]?.status === "in_progress" || githubData?.runs?.[0]?.status === "queued";
@@ -279,10 +310,11 @@ export function AdminDeployMonitor() {
     const interval = setInterval(() => {
       fetchVpsData();
       fetchGithubRuns();
+      fetchBotLogs();
     }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [fetchVpsData, fetchGithubRuns, githubData?.runs?.[0]?.status]);
+  }, [fetchVpsData, fetchGithubRuns, fetchBotLogs, githubData?.runs?.[0]?.status]);
 
   // Executar ação de manutenção na VPS (Reiniciar, Git pull & build)
   const handleVpsAction = async (action: "restart-all" | "restart-proxy" | "restart-app" | "git-pull-build", title: string) => {
@@ -426,12 +458,13 @@ export function AdminDeployMonitor() {
             onClick={() => {
               fetchVpsData();
               fetchGithubRuns();
+              fetchBotLogs();
             }}
-            disabled={vpsLoading || githubLoading}
+            disabled={vpsLoading || githubLoading || botLoading}
             className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 active:scale-95 text-white/80 hover:text-white rounded-xl text-xs font-semibold border border-white/10 transition-all cursor-pointer disabled:opacity-50"
             title="Atualizar métricas agora"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${vpsLoading || githubLoading ? "animate-spin text-orange-400" : ""}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${vpsLoading || githubLoading || botLoading ? "animate-spin text-orange-400" : ""}`} />
             Atualizar
           </button>
 
@@ -1153,6 +1186,68 @@ export function AdminDeployMonitor() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ======================================================== */}
+      {/* SEÇÃO 3: ROBÔ DE CRIAÇÃO VPS (AMPERE)                    */}
+      {/* ======================================================== */}
+      <div className="bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl mt-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-green-500/20 text-green-400 rounded-xl">
+                <Terminal className="w-5 h-5" />
+              </div>
+              <h3 className="text-xl sm:text-2xl font-bold text-white leading-tight">
+                Robô de Criação VPS (Ampere)
+              </h3>
+            </div>
+            <p className="text-white/50 text-sm mt-1 ml-11">
+              Logs ao vivo do script <code>auto_create_ampere.py</code> rodando via PM2 na VPS da Oracle.
+            </p>
+          </div>
+
+          <button
+            onClick={fetchBotLogs}
+            disabled={botLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${botLoading ? "animate-spin text-green-400" : ""}`} />
+            {botLoading ? "Buscando logs..." : "Atualizar Logs"}
+          </button>
+        </div>
+
+        {botError && (
+          <div className="mb-4 p-4 bg-red-500/10 border border-red-500/30 rounded-2xl text-red-400 text-sm font-semibold flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <p>{botError}</p>
+          </div>
+        )}
+
+        <div className="bg-black/80 border border-white/10 rounded-2xl overflow-hidden shadow-inner">
+          <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border-b border-white/10">
+            <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
+            <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+            <span className="ml-2 text-xs font-mono text-white/40">ubuntu@oracle-vps: ~/.pm2/logs/ampere-creator-out.log</span>
+          </div>
+          <div className="p-4 overflow-x-auto overflow-y-auto max-h-[400px]">
+            {botLoading && !botLogs ? (
+              <div className="flex items-center gap-2 text-green-400/50 font-mono text-sm">
+                <RefreshCw className="w-4 h-4 animate-spin" /> Carregando logs do robô...
+              </div>
+            ) : botLogs ? (
+              <pre className="font-mono text-xs text-green-400 leading-relaxed break-all whitespace-pre-wrap">
+                {botLogs}
+              </pre>
+            ) : (
+              <div className="text-white/40 font-mono text-sm">Nenhum log encontrado.</div>
+            )}
+            <div className="mt-2 text-green-400 font-mono text-xs animate-pulse">
+              _
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Terminal Output Modal */}
