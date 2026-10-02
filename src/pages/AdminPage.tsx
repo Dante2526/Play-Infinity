@@ -1625,7 +1625,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       {/* Modal de Edição de Credenciais */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-2.5 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-3.5 sm:p-5 max-w-md w-full shadow-2xl relative flex flex-col max-h-[95vh] sm:max-h-[90vh]">
+          <div className="bg-[#1c1c1e] border border-white/10 rounded-2xl p-3.5 sm:p-5 max-w-md w-full shadow-2xl relative flex flex-col max-h-[85dvh] sm:max-h-[90vh]">
             {/* Cabeçalho do Modal */}
             <div className="flex items-center justify-between gap-2 mb-2.5 shrink-0">
               <div className="flex items-center gap-2.5 min-w-0">
@@ -1646,7 +1646,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </button>
             </div>
 
-            <div className="overflow-y-auto overflow-x-hidden pr-1 -mr-1 custom-scrollbar pb-1">
+            <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 min-h-0">
+              <div className="overflow-y-auto overflow-x-hidden pr-1 -mr-1 custom-scrollbar pb-1 flex-1 space-y-3 pt-1">
               {editSuccess && (
                 <div className="mb-2.5 py-1.5 px-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-xs font-medium shrink-0">
                   ✅ {editSuccess}
@@ -1659,7 +1660,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               )}
 
-              <form onSubmit={handleSaveEdit} className="space-y-2.5 shrink-0">
+              <div className="space-y-2.5 shrink-0">
                 {/* Nome e E-mail em 2 Colunas */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div>
@@ -1953,8 +1954,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </>
               )}
 
+                </div>
+              </div>
+
               {/* Botões de Ação */}
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <div className="flex items-center justify-end gap-2 pt-3 mt-3 border-t border-white/10 shrink-0">
                 <button
                   type="button"
                   onClick={() => setEditingUser(null)}
@@ -1972,7 +1976,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </button>
               </div>
             </form>
-            </div>
           </div>
         </div>
       )}
