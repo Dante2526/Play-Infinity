@@ -379,13 +379,14 @@ export function DetailsPage({
 
   // Lista de temporadas disponíveis (apenas as temporadas com episódios verificados e reproduzíveis)
   const availableSeasons = React.useMemo(() => {
-    if (catalogSeasons && catalogSeasons.length > 0) {
-      return catalogSeasons;
-    }
-
     const tmdbList = (tmdbDetails?.seasons || [])
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
+
+    if (catalogSeasons && catalogSeasons.length > 0) {
+      const combined = Array.from(new Set([...catalogSeasons, ...tmdbList])).sort((a, b) => a - b);
+      return combined.length > 0 ? combined : [1];
+    }
 
     return tmdbList.length > 0 ? tmdbList : [1];
   }, [catalogSeasons, tmdbDetails]);

@@ -12,7 +12,7 @@ import crypto from "crypto";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "./server/utils/caches";
-import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare } from "./server/utils/helpers";
+import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl, validateSafeUrlAsync, ALLOWED_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare } from "./server/utils/helpers";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { verifyFirebaseUserToken } from "./server/middlewares/requireAdminAuth";
@@ -977,8 +977,8 @@ app.use("/api/admin", adminOpsRouter);
           return res.status(403).json({ success: false, error: "Protocolo não permitido." });
         }
 
-        if (isPrivateOrLocalIp(parsedUrl.hostname)) {
-          return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança." });
+        if (await isPrivateOrLocalHost(parsedUrl.hostname)) {
+          return res.status(403).json({ success: false, error: "Acesso a endereços locais/privados bloqueado por segurança (Anti-SSRF)." });
         }
 
         // SSRF protection: allow M3U playlists, TXT files or trusted repositories
@@ -1137,10 +1137,10 @@ app.use("/api/admin", adminOpsRouter);
             try {
               const parsedStream = new URL(streamUrl);
               if (parsedStream.protocol !== "http:" && parsedStream.protocol !== "https:") throw new Error();
-              if (isPrivateOrLocalIp(parsedStream.hostname)) {
+              if (await isPrivateOrLocalHost(parsedStream.hostname)) {
                 channel.isOnline = false;
                 channel.status = "offline";
-                channel.error = "IP privado não permitido";
+                channel.error = "IP privado ou não autorizado (Anti-SSRF)";
                 offlineCount++;
                 return;
               }
@@ -4347,9 +4347,9 @@ app.use("/api/admin", adminOpsRouter);
         return res.status(403).send("Protocolo inválido.");
       }
 
-      // 2. Proteção Anti-SSRF e Allowlist estrita de domínios homologados
-      if (isPrivateOrLocalIp(parsed.hostname)) {
-        return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
+      // 2. Proteção Anti-SSRF (Resolução DNS ativa de IPv4/IPv6) e Allowlist de domínios homologados
+      if (await isPrivateOrLocalHost(parsed.hostname)) {
+        return res.status(403).send("Acesso a IP privado, local ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
       if (!isAllowedLiveStreamingDomain(parsed.hostname)) {
@@ -4405,7 +4405,7 @@ app.use("/api/admin", adminOpsRouter);
             return res.status(403).send("Protocolo inválido no redirect.");
           }
 
-          if (isPrivateOrLocalIp(nextUrl.hostname)) {
+          if (await isPrivateOrLocalHost(nextUrl.hostname)) {
             return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
           }
 
