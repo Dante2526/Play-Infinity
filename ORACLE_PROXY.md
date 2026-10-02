@@ -1,8 +1,8 @@
 # Documentação da Infraestrutura de Streaming (Oracle Cloud VPS)
 
 > **Status:** 🟢 ATIVO, OPERACIONAL E PROTEGIDO COM HTTPS (Let's Encrypt)  
-> **Domínio de Streaming:** `https://play-infinity-app.duckdns.org`  
-> **Objetivo:** Desafogar o limite de 100 GB/mês do Render e suportar alto tráfego simultâneo de TV ao vivo com a franquia de até 10 TB da Oracle Cloud Always Free.
+> **Domínio de Streaming:** `https://play-infinity.stream`  
+> **Objetivo:** Desafogar o limite do Render e suportar alto tráfego simultâneo de TV ao vivo com a franquia de até 10 TB da Oracle Cloud Always Free.
 
 ---
 
@@ -12,13 +12,13 @@
 - **Região:** São Paulo, Brasil (AS31898)
 - **IP Público:** `147.15.57.146`
 - **Portas Abertas:** `80` (HTTP com redirecionamento) e `443` (HTTPS)
-- **Domínio SSL/HTTPS:** `https://play-infinity-app.duckdns.org`
+- **Domínio SSL/HTTPS:** `https://play-infinity.stream` (com DNS direto via Cloudflare)
 - **Servidor Web Reverso:** Nginx com certificado automático Let's Encrypt (Certbot)
 - **Chave SSH:** `./oracle-vps.key`
 - **Código do Proxy na VPS:** `/home/ubuntu/proxy.mjs` (gerenciado via PM2 como `video-proxy` na porta interna 8080)
-- **Health Check:** `https://play-infinity-app.duckdns.org/api/health` (Retorna `{"status":"ok",...}`)
-- **Stream Proxy Endpoint:** `https://play-infinity-app.duckdns.org/api/live-stream-proxy?url=...`
-- **Download Proxy Endpoint:** `https://play-infinity-app.duckdns.org/api/download?url=...&filename=...`
+- **Health Check:** `https://play-infinity.stream/api/health` (Retorna `{"status":"ok",...}`)
+- **Stream Proxy Endpoint:** `https://play-infinity.stream/api/live-stream-proxy?url=...`
+- **Download Proxy Endpoint:** `https://play-infinity.stream/api/download?url=...&filename=...`
 
 ---
 
@@ -40,7 +40,7 @@
 - **Arquivo no Frontend:** `src/components/LivePlayerModal.tsx`
 - **Configuração:**
   ```typescript
-  const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity-app.duckdns.org';
+  const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity.stream';
   const streamUrl = currentServer?.isProxy 
     ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;

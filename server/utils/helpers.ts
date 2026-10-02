@@ -1,4 +1,5 @@
 
+import crypto from "crypto";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 
 // Removed definitions from here, importing them properly if needed.
@@ -134,6 +135,57 @@ const ALLOWED_STREAMING_DOMAINS = [
   "mxcontent.net"
 ];
 
+const ALLOWED_LIVE_STREAMING_DOMAINS = [
+  "up.kiwi",
+  "wurl.com",
+  "jmp2.uk",
+  "amagi.tv",
+  "otteravision.com",
+  "jmvstream.com",
+  "cdntvms.com.br",
+  "pluto.tv",
+  "bolodechocolate.fit",
+  "akamaihd.net",
+  "cloudfront.net",
+  "fastly.net",
+  "qzz.io",
+  "watchplay.shop",
+  "v1.watchplay.shop",
+  "vixsrc.to",
+  "vixsrc.net",
+  "vix-content.net",
+  "45.162.64.114",
+  ...ALLOWED_STREAMING_DOMAINS
+];
+
+function isAllowedLiveStreamingDomain(hostname: string): boolean {
+  if (!hostname || typeof hostname !== "string") return false;
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
+
+  // Se XTREAM_HOST estiver definido no ambiente, autoriza dinamicamente
+  if (process.env.XTREAM_HOST) {
+    try {
+      const xtreamHost = new URL(process.env.XTREAM_HOST).hostname.toLowerCase();
+      if (host === xtreamHost || host.endsWith("." + xtreamHost)) return true;
+    } catch {}
+  }
+
+  // Verifica allowlist estrita
+  const isAllowed = ALLOWED_LIVE_STREAMING_DOMAINS.some((domain) => {
+    const d = domain.toLowerCase();
+    return host === d || host.endsWith("." + d);
+  });
+
+  if (isAllowed) return true;
+
+  // CDNs conhecidas de distribuição HLS/DASH autorizadas
+  if (/\.(qzz\.io|akamaihd\.net|cloudfront\.net|fastly\.net|amagi\.tv|wurl\.com|otteravision\.com)$/i.test(host)) {
+    return true;
+  }
+
+  return false;
+}
+
 function isPrivateOrLocalIp(hostname: string): boolean {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
   if (
@@ -192,4 +244,15 @@ function validateSafeUrl(rawUrl: string, customAllowed = ALLOWED_STREAMING_DOMAI
   return { valid: true, parsedUrl: parsed };
 }
 
-export { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS };
+/**
+ * Comparação em tempo constante para mitigar ataques de temporização (Timing Attacks)
+ */
+function timingSafeCompare(a: string, b: string): boolean {
+  if (typeof a !== "string" || typeof b !== "string") return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+export { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, validateSafeUrl, ALLOWED_STREAMING_DOMAINS, ALLOWED_LIVE_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare };

@@ -20,10 +20,7 @@ export function isAiStudioOrDevEnvironment(): boolean {
   const hostname = window.location.hostname.toLowerCase();
 
   // Se estiver em domínio público/oficial de produção, nunca é modo de teste dev
-  if (
-    hostname.includes("play-infinity") ||
-    hostname.includes("duckdns.org")
-  ) {
+  if (hostname.includes("play-infinity")) {
     return false;
   }
 

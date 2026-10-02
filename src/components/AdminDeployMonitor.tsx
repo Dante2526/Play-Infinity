@@ -953,7 +953,7 @@ export function AdminDeployMonitor() {
                   )}
                 </span>
                 <span className="text-[11px] text-white/40 font-mono block mt-1">
-                  https://play-infinity-app.duckdns.org
+                  https://play-infinity.stream
                 </span>
               </div>
             </div>

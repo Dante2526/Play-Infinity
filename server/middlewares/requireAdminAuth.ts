@@ -35,6 +35,55 @@ const DEFAULT_ADMIN_EMAILS = [
   "cbeth761@gmail.com"
 ];
 
+export async function verifyFirebaseUserToken(token: string): Promise<{ uid: string; email?: string } | null> {
+  if (!token) return null;
+
+  // Tentativa A: Firebase Admin SDK verifyIdToken
+  try {
+    const authInstance = getFirebaseAuth();
+    if (authInstance && token.split(".").length === 3) {
+      const decoded = await authInstance.verifyIdToken(token);
+      if (decoded && decoded.uid) {
+        return {
+          uid: decoded.uid,
+          email: decoded.email
+        };
+      }
+    }
+  } catch (err: any) {
+    // Se falhar (por expiração ou certificados), prossegue para as outras tentativas
+  }
+
+  // Tentativa B: Google Identity Toolkit REST API (validação oficial do Google)
+  if (token.split(".").length === 3) {
+    try {
+      const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyAvv3XgTuTfUHUH8pRdRJ8XiH98uCUcSAs";
+      const lookupResp = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ idToken: token })
+        }
+      );
+      if (lookupResp.ok) {
+        const data = await lookupResp.json();
+        if (data.users && data.users[0]) {
+          const u = data.users[0];
+          return {
+            uid: u.localId,
+            email: u.email
+          };
+        }
+      }
+    } catch (err) {
+      console.warn("[verifyFirebaseUserToken] Erro ao validar token via REST:", err);
+    }
+  }
+
+  return null;
+}
+
 export async function requireAdminAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   // 1. Extrair token dos headers
   const authHeader = req.header("authorization") || req.header("Authorization");
@@ -58,50 +107,7 @@ export async function requireAdminAuth(req: Request, res: Response, next: NextFu
   }
 
   // 2. Verificar ID Token
-  let decodedUser: { uid: string; email?: string; isFirestoreAdmin?: boolean } | null = null;
-
-  // Tentativa A: Firebase Admin SDK verifyIdToken
-  try {
-    const authInstance = getFirebaseAuth();
-    if (authInstance && token.split(".").length === 3) {
-      const decoded = await authInstance.verifyIdToken(token);
-      if (decoded && decoded.uid) {
-        decodedUser = {
-          uid: decoded.uid,
-          email: decoded.email
-        };
-      }
-    }
-  } catch (err: any) {
-    // Se falhar (por expiração ou certificados), prossegue para as outras tentativas
-  }
-
-  // Tentativa B: Google Identity Toolkit REST API (validação oficial do Google)
-  if (!decodedUser && token.split(".").length === 3) {
-    try {
-      const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyAvv3XgTuTfUHUH8pRdRJ8XiH98uCUcSAs";
-      const lookupResp = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ idToken: token })
-        }
-      );
-      if (lookupResp.ok) {
-        const data = await lookupResp.json();
-        if (data.users && data.users[0]) {
-          const u = data.users[0];
-          decodedUser = {
-            uid: u.localId,
-            email: u.email
-          };
-        }
-      }
-    } catch (err) {
-      console.warn("[requireAdminAuth] Erro ao validar token via REST:", err);
-    }
-  }
+  let decodedUser: { uid: string; email?: string; isFirestoreAdmin?: boolean } | null = await verifyFirebaseUserToken(token);
 
   // Tentativa C: Consulta direta de sessão/documento na coleção administradores do Firestore
   if (!decodedUser && token.length > 5 && !token.includes(".")) {

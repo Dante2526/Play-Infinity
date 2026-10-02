@@ -114,14 +114,22 @@ function persistBlocks(): void {
 }
 
 /**
- * Verifica token de admin consultando Firestore "administradores".
- * Suporta tanto o document ID (armazenado em adminSessionToken)
- * quanto o e-mail de um administrador cadastrado.
+ * Verifica token de admin exigindo validação criptográfica (Firebase ID Token JWT).
+ * NUNCA aceita e-mail em texto puro como token.
  */
 async function isAdminToken(req: Request): Promise<boolean> {
-  const token = req.header(ADMIN_TOKEN_HEADER);
+  const authHeader = req.header("authorization") || req.header("Authorization");
+  const xAdminToken = req.header(ADMIN_TOKEN_HEADER) || req.header("X-Admin-Token");
+
+  let token = "";
+  if (authHeader && authHeader.toLowerCase().startsWith("bearer ")) {
+    token = authHeader.slice(7).trim();
+  } else if (xAdminToken) {
+    token = xAdminToken.trim();
+  }
+
   if (!token) {
-    console.warn("[server-blocks] Auth falhou: header x-admin-token ausente");
+    console.warn("[server-blocks] Auth falhou: token ausente");
     return false;
   }
 
@@ -130,71 +138,39 @@ async function isAdminToken(req: Request): Promise<boolean> {
     return true;
   }
 
+  // REJEIÇÃO IMEDIATA: E-mail em texto puro NUNCA é aceito como token
+  if (token.includes("@")) {
+    console.warn("[server-blocks] Auth bloqueada: tentativa de usar e-mail como token de admin.");
+    return false;
+  }
+
   try {
+    const { verifyFirebaseUserToken } = await import("../middlewares/requireAdminAuth");
+    const verifiedUser = await verifyFirebaseUserToken(token);
+    
+    if (verifiedUser && verifiedUser.uid) {
+      const adminEmails = [
+        "naylanmoreira350@gmail.com",
+        "cbeth761@gmail.com",
+        ...(process.env.ADMIN_EMAILS || "").split(",").map(e => e.trim().toLowerCase()).filter(Boolean)
+      ];
+      const userEmail = (verifiedUser.email || "").toLowerCase().trim();
+      if (adminEmails.includes(userEmail)) {
+        return true;
+      }
+    }
+
+    // Se o token for um UID válido no Firestore "administradores" via Admin SDK
     const { getAdminDb } = await import("../firebaseAdmin");
     const adminDb = getAdminDb();
-    
-    if (adminDb) {
-      // Usando Firebase Admin (sem restrições de regras)
-      const docRef = adminDb.collection("administradores").doc(token);
-      const docSnap = await docRef.get();
+    if (adminDb && token.length > 10 && !token.includes("@")) {
+      const docSnap = await adminDb.collection("administradores").doc(token).get();
       if (docSnap.exists) {
         return true;
       }
-      
-      if (token.includes("@")) {
-        const querySnap = await adminDb.collection("administradores")
-          .where("email", "==", token.trim().toLowerCase())
-          .get();
-        if (!querySnap.empty) return true;
-      }
-      
-      const emailSnap = await adminDb.collection("administradores")
-        .where("email", "==", token.trim())
-        .get();
-      if (!emailSnap.empty) return true;
-      
-      console.warn("[server-blocks] Auth falhou via Admin SDK: token não localizado em administradores:", token);
-      return false;
     }
 
-    // Fallback para Client SDK se o Admin não estiver disponível
-    const { db } = await import("../../src/services/firebase");
-    if (!db) {
-      console.warn("[server-blocks] Auth falhou: db do Firestore não inicializado");
-      return false;
-    }
-    const { getDoc, doc, collection, query, where, getDocs } = await import("firebase/firestore");
-
-    // 1. Checa por ID do documento na coleção administradores (fluxo padrão do painel)
-    const docSnap = await getDoc(doc(db, "administradores", token));
-    if (docSnap.exists()) {
-      return true;
-    }
-
-    // 2. Se for um e-mail, busca pelo campo 'email'
-    if (token.includes("@")) {
-      const q = query(
-        collection(db, "administradores"),
-        where("email", "==", token.trim().toLowerCase())
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        return true;
-      }
-    }
-
-    // 3. Fallback genérico: busca se qualquer admin possui esse email ou uid
-    const qEmail = query(
-      collection(db, "administradores"),
-      where("email", "==", token.trim())
-    );
-    const snapEmail = await getDocs(qEmail);
-    if (!snapEmail.empty) {
-      return true;
-    }
-
-    console.warn("[server-blocks] Auth falhou: token não localizado em administradores:", token);
+    console.warn("[server-blocks] Auth falhou: token não autorizado.");
     return false;
   } catch (err) {
     console.warn("[server-blocks] Auth check falhou com erro:", err);
