@@ -47,6 +47,9 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const onResultRef = useRef(onResult);
 
+  const isStartingRef = useRef(false);
+  const isListeningRef = useRef(false);
+
   useEffect(() => {
     onResultRef.current = onResult;
   }, [onResult]);
@@ -55,8 +58,19 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
       setIsSupported(false);
-      return;
     }
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch {}
+      }
+    };
+  }, []);
+
+  const createRecognitionInstance = useCallback(() => {
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) return null;
 
     try {
       const recognition = new SpeechRecognitionClass();
@@ -66,6 +80,8 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
+        isStartingRef.current = false;
+        isListeningRef.current = true;
         setIsListening(true);
         setError(null);
         setInterimTranscript('');
@@ -100,7 +116,8 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.warn('Speech recognition error:', event.error);
+        isStartingRef.current = false;
+        isListeningRef.current = false;
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
           setError('Permissão de microfone negada. Permita o acesso nas configurações do navegador.');
         } else if (event.error === 'no-speech') {
@@ -114,71 +131,76 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
       };
 
       recognition.onend = () => {
+        isStartingRef.current = false;
+        isListeningRef.current = false;
         setIsListening(false);
         setInterimTranscript('');
       };
 
-      recognitionRef.current = recognition;
+      return recognition;
     } catch (err) {
-      console.warn('SpeechRecognition initialization error:', err);
+      console.warn('SpeechRecognition creation error:', err);
       setIsSupported(false);
+      return null;
     }
-
-    return () => {
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.abort();
-        } catch {
-          // ignore
-        }
-      }
-    };
   }, [lang]);
 
   const startListening = useCallback(() => {
-    if (!recognitionRef.current) {
-      const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SpeechRecognitionClass) {
-        setError('Busca por voz não suportada neste navegador.');
-        return;
-      }
+    if (isListeningRef.current || isStartingRef.current) {
+      return;
+    }
+
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) {
+      setError('Busca por voz não suportada neste navegador.');
+      return;
     }
 
     setError(null);
     setTranscript('');
     setInterimTranscript('');
+    isStartingRef.current = true;
+
+    // Se já havia uma instância anterior, aborta silenciosamente
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch {}
+      recognitionRef.current = null;
+    }
 
     try {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-        recognitionRef.current.start();
+      const recognition = createRecognitionInstance();
+      if (!recognition) {
+        isStartingRef.current = false;
+        return;
       }
-    } catch (err) {
-      console.warn('Error starting speech recognition:', err);
-      // If already started, stop and retry
-      try {
-        recognitionRef.current?.stop();
-        setTimeout(() => recognitionRef.current?.start(), 100);
-      } catch (e) {
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      isStartingRef.current = false;
+      isListeningRef.current = false;
+      setIsListening(false);
+      // Ignora erro de já estar rodando sem propagar exceção
+      if (err?.name !== 'InvalidStateError') {
         setError('Erro ao iniciar o microfone.');
-        setIsListening(false);
       }
     }
-  }, []);
+  }, [createRecognitionInstance]);
 
   const stopListening = useCallback(() => {
+    isStartingRef.current = false;
+    isListeningRef.current = false;
     try {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
     setIsListening(false);
   }, []);
 
   const toggleListening = useCallback(() => {
-    if (isListening) {
+    if (isListening || isListeningRef.current) {
       stopListening();
     } else {
       startListening();
