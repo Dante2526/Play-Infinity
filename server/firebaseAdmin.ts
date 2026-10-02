@@ -14,7 +14,9 @@ export function getAdminDb(): any {
 
   try {
     const apps = getApps();
-    if (apps.length === 0) {
+    let defaultApp = apps.find((a: any) => a.name === "[DEFAULT]") || null;
+
+    if (!defaultApp) {
       const possiblePaths = [
         path.join(process.cwd(), "secrets", "firebase-service-account.json"),
         path.join(process.cwd(), "firebase-service-account.json")
@@ -30,23 +32,24 @@ export function getAdminDb(): any {
 
       if (serviceAccountPath) {
         const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
-        initializeApp({
+        defaultApp = initializeApp({
           credential: cert(serviceAccount)
         });
         console.log("[Firebase Admin] Inicializado com sucesso usando arquivo de credencial.");
       } else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-        initializeApp({
+        defaultApp = initializeApp({
           credential: cert(serviceAccount)
         });
         console.log("[Firebase Admin] Inicializado usando variável de ambiente.");
       } else {
-        console.warn("[Firebase Admin] Arquivo de credencial não encontrado. Não será possível usar funções de Admin.");
-        return null;
+        const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "play-infinity-63eaa";
+        defaultApp = initializeApp({ projectId });
+        console.log("[Firebase Admin] Inicializado com projectId:", projectId);
       }
     }
     
-    adminDb = getFirestore();
+    adminDb = getFirestore(defaultApp);
     return adminDb;
   } catch (error) {
     console.error("[Firebase Admin] Erro ao inicializar:", error);

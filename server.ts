@@ -197,13 +197,17 @@ import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
 
 import { adminOpsRouter } from "./server/routes/adminOps";
+import { requireAdminAuth } from "./server/middlewares/requireAdminAuth";
+
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
 app.use(vidsrcRouter);
-app.use(serverBlocksRouter);
 
+// Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de Admin para qualquer rota /api/admin/*
+app.use("/api/admin", requireAdminAuth);
+app.use(serverBlocksRouter);
 app.use("/api/admin", adminOpsRouter);
 
   app.get("/api/extract-player", async (req, res) => {

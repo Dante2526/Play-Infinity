@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { adminFetch } from "../services/adminApi";
 import {
   Server,
   Cpu,
@@ -210,7 +211,7 @@ export function AdminDeployMonitor() {
   const fetchVpsData = useCallback(async () => {
     setVpsLoading(true);
     try {
-      const res = await fetch("/api/admin/vps-telemetry");
+      const res = await adminFetch("/api/admin/vps-telemetry");
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         return;
       }
@@ -238,7 +239,7 @@ export function AdminDeployMonitor() {
   const fetchBotLogs = useCallback(async () => {
     setBotLoading(true);
     try {
-      const res = await fetch("/api/admin/vps-bot-logs");
+      const res = await adminFetch("/api/admin/vps-bot-logs");
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         return;
       }
@@ -266,7 +267,7 @@ export function AdminDeployMonitor() {
       const params = new URLSearchParams();
       if (githubRepo) params.set("repo", githubRepo);
 
-      const res = await fetch(`/api/admin/github-runs?${params.toString()}`);
+      const res = await adminFetch(`/api/admin/github-runs?${params.toString()}`);
       if (res.status === 502 || res.status === 503 || res.status === 504) {
         // Servidor reiniciando durante o deploy no PM2; mantém os dados na tela sem piscar erro
         return;
@@ -320,7 +321,7 @@ export function AdminDeployMonitor() {
   const handleVpsAction = async (action: "restart-all" | "restart-proxy" | "restart-app" | "git-pull-build", title: string) => {
     setActionLoading(action);
     try {
-      const res = await fetch("/api/admin/vps-action", {
+      const res = await adminFetch("/api/admin/vps-action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action })
@@ -363,7 +364,7 @@ export function AdminDeployMonitor() {
     setGithubError(null);
 
     try {
-      const res = await fetch("/api/admin/github-trigger", {
+      const res = await adminFetch("/api/admin/github-trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
