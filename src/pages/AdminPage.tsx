@@ -21,6 +21,9 @@ export interface ClientUser {
   initialPassword?: string;
   createdAt?: string;
   lastActive?: string;
+  notes?: string;
+  fixedDiscount?: number;
+  oneTimeDiscount?: number;
 }
 
 interface AdminPageProps {
@@ -113,9 +116,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editFixedDiscount, setEditFixedDiscount] = useState<number>(0);
+  const [editOneTimeDiscount, setEditOneTimeDiscount] = useState<number>(0);
 
   // Estado do Modal de Usuários Assistindo Agora
   const [showActiveViewersModal, setShowActiveViewersModal] = useState(false);
+  const [expandedNotesId, setExpandedNotesId] = useState<string | null>(null);
 
   const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
@@ -512,6 +519,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setEditAccessType(user.accessType || "mensal");
     setEditMonthlyPrice(user.monthlyFee?.includes("9,90") || user.monthlyFee?.includes("9.90") ? "9.90" : "13.00");
     setEditExpirationDate(formatIsoToLocalInput(user.expirationDate));
+    setEditNotes(user.notes || "");
+    setEditFixedDiscount(user.fixedDiscount || 0);
+    setEditOneTimeDiscount(user.oneTimeDiscount || 0);
     setEditError("");
     setEditSuccess("");
   };
@@ -624,6 +634,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
         email: trimmedEmail,
         tipoAcesso: editAccessType,
         accessType: editAccessType,
+        notes: editNotes,
+        fixedDiscount: editFixedDiscount,
+        oneTimeDiscount: editOneTimeDiscount,
       };
       if (trimmedName !== undefined) {
         updates.nome = trimmedName;
@@ -955,7 +968,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <div className="p-3 bg-orange-500 text-white rounded-[18px] shadow-lg animate-pulse">
                   <Activity className="w-6 h-6" />
                 </div>
-                <span className="font-bold">Assistindo Agora</span>
+                <span className="font-bold whitespace-nowrap">Assistindo Agora</span>
               </div>
               <span className="text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
                 Ver lista
@@ -1061,10 +1074,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   );
 
                   return (
-                    <div
-                      key={client.id}
-                      className="bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-w-full overflow-hidden shadow-lg"
-                    >
+                    <div key={client.id} className="flex flex-col gap-2">
+                      <div className="bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-w-full overflow-hidden shadow-lg relative">
                       {/* Perfil & Identificação */}
                       <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 max-w-full">
                         <div className="relative shrink-0 mt-0.5 sm:mt-0">
@@ -1268,6 +1279,23 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             <span>Editar</span>
                           </button>
 
+                          {/* Botão de Notas */}
+                          {client.notes && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedNotesId(expandedNotesId === client.id ? null : client.id)}
+                              title="Ver anotações do cliente"
+                              className={`px-3.5 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border ${
+                                expandedNotesId === client.id 
+                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' 
+                                  : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
+                              }`}
+                            >
+                              {expandedNotesId === client.id ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              <span>Notas</span>
+                            </button>
+                          )}
+
                           {/* Botão de Revogar Acesso */}
                           <button
                             type="button"
@@ -1281,6 +1309,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         </div>
                       </div>
                     </div>
+                    
+                    {/* Expandable Notes */}
+                    {expandedNotesId === client.id && client.notes && (
+                       <div className="bg-[#1c1c1e]/80 border border-white/5 rounded-xl p-4 sm:p-5 text-white/80 text-sm whitespace-pre-wrap shadow-inner animate-fade-in mx-2 sm:mx-4 -mt-1 mb-2">
+                          <strong className="text-white/40 text-[10px] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <Eye className="w-3.5 h-3.5" />
+                            Anotações do Cliente
+                          </strong>
+                          <p className="leading-relaxed">{client.notes}</p>
+                       </div>
+                    )}
+                  </div>
                   );
                 })}
             </div>
@@ -1841,8 +1881,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 )}
               </div>
 
+              {/* Campo de Comentários / Notas */}
+              <div>
+                <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Comentários / Notas</label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-2.5 py-2 text-white text-[11px] font-medium resize-none h-16 focus:outline-none focus:ring-1 focus:ring-orange-500 custom-scrollbar"
+                  placeholder="Anotações expansíveis sobre este cliente..."
+                />
+              </div>
+
               {/* Opção de Preço Mensal */}
               {editAccessType === "mensal" && (
+                <>
                 <div className="flex items-center justify-between gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
                   <label className="text-white/60 text-[10px] font-bold uppercase tracking-wider">Valor Mensal:</label>
                   <div className="flex gap-1.5">
@@ -1870,6 +1922,35 @@ export function AdminPage({ onBack }: AdminPageProps) {
                     </button>
                   </div>
                 </div>
+                
+                {/* Descontos */}
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div>
+                    <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Desconto Fixo (R$)</label>
+                    <input
+                      type="number"
+                      value={editFixedDiscount}
+                      onChange={(e) => setEditFixedDiscount(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Desconto Único (R$)</label>
+                    <input
+                      type="number"
+                      value={editOneTimeDiscount}
+                      onChange={(e) => setEditOneTimeDiscount(Number(e.target.value))}
+                      className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
+                      min="0"
+                      step="0.01"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                </>
               )}
 
               {/* Botões de Ação */}
