@@ -1,22 +1,35 @@
-# Walkthrough das Correções (2026-09-30)
+# Walkthrough: Anotações e Descontos no Admin
 
-## Resumo das Mudanças
+## Tarefas Realizadas
 
-Foram corrigidos 3 problemas estruturais e de lógica no projeto:
+1. **Atualização do Modelo (`ClientUser`)**
+   - Adicionados os campos opcionais `notes`, `fixedDiscount` e `oneTimeDiscount`.
 
-### 1. Cache Poisoning (`src/services/encontreiCatalog.ts`)
-- **Problema:** Em caso de resposta falha (`!res.ok`) ou erro de rede (bloco `catch`), o código executava `_cache.set(cacheKey, null)` e travava o título de carregar futuras vezes.
-- **Solução:** Removido o armazenamento no cache caso o status do catálogo indique erro.
+2. **Estados de Edição e Salvamento**
+   - Estados criados para o modal (`editNotes`, `editFixedDiscount`, `editOneTimeDiscount`).
+   - `handleOpenEdit` atualizado para carregar os valores atuais ou os padrões vazios/zeros.
+   - `handleSaveEdit` atualizado para consolidar os novos dados no objeto de `updates` que é gravado no Firestore (`usuarios` e `users`).
 
-### 2. Remoção do Provedor Lista Negra (`src/services/encontreiCatalog.ts`)
-- **Problema:** A API encontrava a chave `byse` e o frontend mapeava explicitamente esse servidor. O servidor **BYSE / Streamberry** é estritamente proibido pelas diretrizes (`AGENTS.md`).
-- **Solução:** Removida a tipagem e o mapeamento de `byse` do modelo de dados da interface.
+3. **UI do Modal de Edição**
+   - Criado um `<textarea>` para a digitação de comentários/notas internas do usuário.
+   - Criada uma condicional que exibe os `inputs` de Desconto Fixo e Desconto Único caso o `editAccessType` seja "mensal".
 
-### 3. Eliminação em Massa de "Empty Catches" (Projeto Todo)
-- **Problema:** Haviam 70+ blocos `catch` vazios pelo projeto (em quase 20 arquivos), mascarando erros.
-- **Solução:** Aplicada uma substituição sistemática em todos os 19 arquivos afetados do `src/`, garantindo que toda falha invisível agora passe pelo `console.warn("Silenced error:", error)`. O script temporário de substituição foi excluído após o uso.
+4. **UI do Card do Usuário**
+   - Inserido um botão "Notas" ao lado de "Editar", que só aparece se o `client.notes` não for vazio.
+   - Criada uma área expansível (`div`) abaixo dos dados do usuário, garantindo a exibição do texto com quebras de linha respeitadas (`whitespace-pre-wrap`).
+   - Toda a estrutura do Card foi envolvida num Fragmento/Container `flex-col` para suportar o componente sanfona (accordion) do texto.
 
-## Evidências
-- **Verificação de Compilação:** Após todas as refatorações em massa, `npm run lint` e `npx tsc --noEmit` foram executados com **Exit Code 0** (Sem erros de sintaxe ou tipagem remanescentes).
-- **Testes Manuais Sugeridos:**
-  - Inspecionar a aba Console do Developer Tools e verificar se os antigos congelamentos não-explicados agora loggam `Silenced error:` em amarelo, auxiliando no tracking.
+## Verificação Pós-Código
+
+- Verificação TypeScript `npx tsc --noEmit` executada.
+- Código exit: `0` (Zero erros na compilação).
+
+## Relatório de Code Review (Self)
+
+- **Strengths:** 
+  - UI reutiliza os componentes visuais já adotados, mantendo o fundo *glassmorphism*.
+  - A renderização condicional otimiza a listagem (notas só renderizam no DOM se estiverem ativas e se existirem).
+  - Nenhuma quebra no layout de grid nativo.
+- **Issues:**
+  - Nenhuma (Minor/Important/Critical issue encontrada). O design está de acordo com as restrições globais.
+- **Assessment:** Pronto e Implementado com sucesso.
