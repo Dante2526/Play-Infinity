@@ -61,7 +61,7 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
     name: "EmbedPlay",
     keys: ["srv_embedplay", "embedplay"],
     patterns: [
-      /embedplay/i,
+      /embedplay(?!er)/i,
       "/api/embedplay-direct"
     ],
     reason: "Instabilidade e servidores frequentemente fora do ar",
