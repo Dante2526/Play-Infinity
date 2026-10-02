@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
-import { validateSafeUrl, sanitizeString } from "../utils/helpers";
+import { validateSafeUrl, sanitizeString, timingSafeCompare } from "../utils/helpers";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache } from "../utils/caches";
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
@@ -160,23 +160,101 @@ const router = Router();
   });
 
 // Criar Assinatura e retornar link de pagamento
-  // Webhook de recebimento de pagamentos
+  // Webhook de recebimento de pagamentos com validação estrita (Token + Consulta à API do Asaas)
   router.post("/api/webhook/asaas", async (req, res) => {
     try {
-      const { event, payment } = req.body;
+      const configuredToken = process.env.ASAAS_WEBHOOK_TOKEN;
+      const receivedToken = (req.header("asaas-access-token") || "").trim();
+
+      // 1. Validação do Token de Acesso do Webhook com comparação em tempo constante
+      if (configuredToken) {
+        if (!receivedToken || !timingSafeCompare(receivedToken, configuredToken.trim())) {
+          console.warn("[Webhook Asaas] Rejeitado: asaas-access-token ausente ou inválido.");
+          return res.status(401).json({ success: false, error: "Acesso não autorizado: Token de webhook inválido." });
+        }
+      } else {
+        console.warn("[Webhook Asaas] ALERTA DE SEGURANÇA: ASAAS_WEBHOOK_TOKEN não configurado no .env! Exigindo verificação estrita via API do Asaas.");
+      }
+
+      const { event, payment } = req.body || {};
+
+      if (!event || !payment || typeof payment !== "object") {
+        return res.status(400).json({ success: false, error: "Payload do webhook incompleto ou inválido." });
+      }
 
       // O Asaas envia um 'externalReference' que nós injetamos na assinatura
-      if (payment && payment.externalReference && db) {
-        const userId = payment.externalReference;
+      if (!payment.externalReference) {
+        return res.json({ received: true, ignored: "Sem externalReference" });
+      }
+
+      // 2. Consulta de Verificação na API Oficial do Asaas (Zero-Trust)
+      const paymentId = payment.id;
+      const asaasApiKey = process.env.ASAAS_API_KEY;
+
+      if (asaasApiKey && paymentId) {
+        try {
+          const baseUrl = getAsaasBaseUrl();
+          const verifyRes = await fetch(`${baseUrl}/payments/${paymentId}`, {
+            headers: getAsaasHeaders()
+          });
+
+          if (!verifyRes.ok) {
+            console.warn(`[Webhook Asaas] Cobrança ${paymentId} não encontrada na API do Asaas (HTTP ${verifyRes.status}). Rejeitando webhook.`);
+            return res.status(400).json({ success: false, error: "Cobrança não localizada ou inválida na API do Asaas." });
+          }
+
+          const realPayment = await verifyRes.json();
+
+          // Valida se a referência externa bate com a cobrança oficial
+          if (realPayment.externalReference !== payment.externalReference) {
+            console.warn(`[Webhook Asaas] Inconsistência de externalReference: webhook=${payment.externalReference}, API=${realPayment.externalReference}`);
+            return res.status(400).json({ success: false, error: "Inconsistência cadastral na cobrança." });
+          }
+
+          // Se o evento é de pagamento confirmado, confere se o status na API realmente é de recebido/confirmado
+          if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
+            const validReceivedStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
+            if (!validReceivedStatuses.includes(realPayment.status)) {
+              console.warn(`[Webhook Asaas] Evento ${event} incompatível com o status real ${realPayment.status} no Asaas.`);
+              return res.status(400).json({ success: false, error: "Status da cobrança não confirmado pela API." });
+            }
+          }
+        } catch (apiErr: any) {
+          console.error("[Webhook Asaas] Falha ao consultar API do Asaas:", apiErr);
+          if (!configuredToken) {
+            return res.status(500).json({ success: false, error: "Falha na verificação de autenticidade do pagamento." });
+          }
+        }
+      } else if (!configuredToken) {
+        // Se nem ASAAS_WEBHOOK_TOKEN nem ASAAS_API_KEY estão presentes, não há como garantir autenticidade
+        return res.status(401).json({ success: false, error: "Webhook rejeitado: ausência de credenciais de validação." });
+      }
+
+      // 3. Atualização Segura no Banco de Dados
+      if (db) {
+        let userId = String(payment.externalReference).trim();
+        let isPlusUpgrade = false;
+
+        if (userId.includes("|PLUS")) {
+          userId = userId.split("|")[0];
+          isPlusUpgrade = true;
+        }
+
+        // Sanitização básica do UID do usuário
+        userId = userId.replace(/[^a-zA-Z0-9_-]/g, "");
+        if (!userId) {
+          return res.status(400).json({ success: false, error: "ID de usuário inválido." });
+        }
+
         const userRef = doc(db, "usuarios", userId);
-        
+
         // Se pagou (Pix/Boleto) ou o cartão foi confirmado
         if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
           const now = new Date();
           const nextMonth = new Date(now);
           nextMonth.setMonth(now.getMonth() + 1);
-          
-          await setDoc(userRef, { 
+
+          await setDoc(userRef, {
             assinatura: "ATIVA",
             subscriptionId: payment.subscription || "",
             dataPagamento: now.toISOString(),
@@ -184,17 +262,17 @@ const router = Router();
             ultimoAcesso: now.toISOString()
           }, { merge: true });
           console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId}`);
-        } 
+        }
         // Se a assinatura atrasou ou o pagamento foi estornado/recusado
         else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
-          await setDoc(userRef, { 
+          await setDoc(userRef, {
             assinatura: "INATIVA",
             updatedAt: new Date().toISOString()
           }, { merge: true });
           console.log(`[Webhook Asaas] Assinatura INATIVADA para o user: ${userId}`);
         }
       }
-      
+
       res.json({ received: true });
     } catch (err: any) {
       console.error("[Webhook Asaas] Erro:", err);

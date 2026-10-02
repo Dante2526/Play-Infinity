@@ -107,20 +107,22 @@ export function DownloadPlusModal({ isOpen, onClose }: Props) {
     setError('');
 
     try {
+      const idToken = await user.getIdToken();
       const payload: any = {
-        userId: user.uid,
+        plan: 'plus',
         billingType: 'PIX',
         name: trimmedName,
         email: trimmedEmail,
         cpfCnpj: cpfDigits,
-        value: displayPrice,
-        description: "Assinatura Play Infinity Plus",
-        externalReference: user.uid + "|PLUS" // Important for webhook upgrade
+        idToken,
       };
 
       const res = await fetch('/api/create-subscription', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify(payload),
       });
 

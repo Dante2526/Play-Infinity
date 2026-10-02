@@ -52,7 +52,7 @@ router.get("/api/iptv/:channelId", async (req, res) => {
     const streamUrl = `${base}/${channelId}.m3u8`;
 
     // Obtém a base do proxy
-    const proxyUrl = process.env.VITE_PROXY_URL || "https://play-infinity-app.duckdns.org";
+    const proxyUrl = process.env.VITE_PROXY_URL || "https://play-infinity.stream";
 
     // Redireciona para o proxy com URL fresca
     res.redirect(`${proxyUrl}/api/live-stream-proxy?url=${encodeURIComponent(streamUrl)}`);

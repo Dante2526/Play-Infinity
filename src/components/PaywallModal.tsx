@@ -144,9 +144,11 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     setError('');
 
     try {
+      const idToken = await user.getIdToken();
       const payload: any = {
-        userId: user.uid,
+        plan: 'standard',
         billingType: method,
+        idToken,
       };
 
       if (method === 'CREDIT_CARD') {
@@ -185,7 +187,10 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
 
       const res = await fetch('/api/create-subscription', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
         body: JSON.stringify(payload),
       });
 

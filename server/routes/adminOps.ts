@@ -9,7 +9,7 @@ export const adminOpsRouter = Router();
 const ORACLE_VPS_HOST = process.env.ORACLE_VPS_HOST || "147.15.57.146";
 const ORACLE_VPS_PORT = parseInt(process.env.ORACLE_VPS_PORT || "22", 10);
 const ORACLE_VPS_USER = process.env.ORACLE_VPS_USER || "ubuntu";
-const DUCKDNS_HEALTH_URL = process.env.ORACLE_HEALTH_URL || "https://play-infinity-app.duckdns.org/api/health";
+const ORACLE_HEALTH_URL = process.env.ORACLE_HEALTH_URL || "https://play-infinity.stream/api/health";
 
 /**
  * Lê a chave privada SSH da VPS localmente
@@ -110,12 +110,12 @@ function executeSshCommand(command: string, timeoutMs = 25000): Promise<{ stdout
 adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
   const startTime = Date.now();
 
-  // 1. Probe HTTP do Proxy de TV (DuckDNS / HTTPS)
+  // 1. Probe HTTP do Proxy de TV (HTTPS)
   let proxyStatus = {
     online: false,
     latencyMs: 0,
     httpStatus: 0,
-    url: DUCKDNS_HEALTH_URL,
+    url: ORACLE_HEALTH_URL,
     error: null as string | null
   };
 
@@ -123,7 +123,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
     const probeStart = Date.now();
     const ctrl = new AbortController();
     const to = setTimeout(() => ctrl.abort(), 6000);
-    const resp = await fetch(DUCKDNS_HEALTH_URL, { signal: ctrl.signal });
+    const resp = await fetch(ORACLE_HEALTH_URL, { signal: ctrl.signal });
     clearTimeout(to);
     proxyStatus.latencyMs = Date.now() - probeStart;
     proxyStatus.httpStatus = resp.status;
