@@ -2201,7 +2201,7 @@ const router = Router();
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      if (!isAllowedLiveStreamingDomain(parsed.hostname)) {
+      if (!isAllowedLiveStreamingDomain(parsed.hostname, req.query.referer as string)) {
         return res.status(403).send("Domínio não autorizado para proxy de streaming.");
       }
 
@@ -2256,7 +2256,7 @@ const router = Router();
             return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
           }
 
-          if (!isAllowedLiveStreamingDomain(nextUrl.hostname)) {
+          if (!isAllowedLiveStreamingDomain(nextUrl.hostname, req.query.referer as string)) {
             return res.status(403).send("Redirecionamento para domínio não autorizado.");
           }
 

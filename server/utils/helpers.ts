@@ -168,9 +168,17 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
   ...ALLOWED_STREAMING_DOMAINS
 ];
 
-function isAllowedLiveStreamingDomain(hostname: string): boolean {
+function isAllowedLiveStreamingDomain(hostname: string, referer?: string): boolean {
   if (!hostname || typeof hostname !== "string") return false;
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
+
+  // Bloqueio mandatória de qualquer servidor na blacklist (Superflix, BYSE, EmbedPlay, etc.)
+  if (isSuperflixDetected(host)) return false;
+  if (
+    /superflix|sfapi|byse|streamberry|embedplay(?!er)|videasy|vidlink|autoembed|consumet|animefire|starflix|startflix|painel-aso/i.test(host)
+  ) {
+    return false;
+  }
 
   // Se XTREAM_HOST estiver definido no ambiente, autoriza dinamicamente
   if (process.env.XTREAM_HOST) {
@@ -188,20 +196,48 @@ function isAllowedLiveStreamingDomain(hostname: string): boolean {
 
   if (isAllowed) return true;
 
-  // Servidores oficiais homologados de reprodução (VIP Player / MyEmbed / EmbedPlayer / Playerflix)
+  // Servidores oficiais homologados de reprodução (VIP Player / MyEmbed / EmbedPlayer / Playerflix / Pomfy / Nixplay / Mixdrop)
   if (
     /embedplayer[a-z0-9-]*\.(xyz|site|top|biz|org|net|online|link|cc|to|me|com)$/i.test(host) ||
     /playerflix\.(ink|biz|to|net)$/i.test(host) ||
     /myembed\.(biz|me|to)$/i.test(host) ||
     /warezcdn\.(net|com)$/i.test(host) ||
-    /embedder\.(net|com)$/i.test(host)
+    /embedder\.(net|com)$/i.test(host) ||
+    /pomfy\.(stream|top|vip)$/i.test(host) ||
+    /nixplay\.(lat|net|com)$/i.test(host) ||
+    /eloialu[a-z0-9-]*\.(xyz|site|top|biz|online|net|com)$/i.test(host)
   ) {
     return true;
   }
 
   // CDNs conhecidas de distribuição HLS/DASH autorizadas
-  if (/\.(qzz\.io|akamaihd\.net|cloudfront\.net|fastly\.net|amagi\.tv|wurl\.com|otteravision\.com)$/i.test(host)) {
+  if (/\.(qzz\.io|akamaihd\.net|cloudfront\.net|fastly\.net|amagi\.tv|wurl\.com|otteravision\.com|streamlock\.net)$/i.test(host)) {
     return true;
+  }
+
+  // Se a requisição vem de um referer de provedor homologado confiável
+  if (referer) {
+    try {
+      const refHost = new URL(referer).hostname.toLowerCase();
+      if (
+        refHost.includes("embedplayer") ||
+        refHost.includes("playerflix") ||
+        refHost.includes("myembed") ||
+        refHost.includes("watchplay") ||
+        refHost.includes("warezcdn") ||
+        refHost.includes("nixplay") ||
+        refHost.includes("pomfy") ||
+        refHost.includes("vixsrc") ||
+        refHost.includes("play-infinity") ||
+        refHost.includes("duckdns.org") ||
+        refHost.includes("localhost") ||
+        refHost.includes("127.0.0.1")
+      ) {
+        if (!/superflix|sfapi|byse|streamberry|embedplay(?!er)|videasy|vidlink|autoembed/i.test(host)) {
+          return true;
+        }
+      }
+    } catch {}
   }
 
   return false;
