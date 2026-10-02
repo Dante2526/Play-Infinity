@@ -74,8 +74,6 @@ import {
 } from "../services/tmdb";
 import { VideoPlayerModal } from "../components/VideoPlayerModal";
 import { CastModal } from "../components/CastModal";
-import { DownloadPlusModal } from "../components/DownloadPlusModal";
-import { useSubscription } from "../hooks/useSubscription";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -199,9 +197,6 @@ export function DetailsPage({
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [episodeDownloads, setEpisodeDownloads] = useState<Record<number, DownloadAvailability>>({});
   const [downloadingEp, setDownloadingEp] = useState<number | null>(null);
-  
-  const { isPlus, isVitalicio } = useSubscription();
-  const [isPlusModalOpen, setIsPlusModalOpen] = useState(false);
 
   // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
   useEffect(() => {
@@ -693,10 +688,6 @@ export function DetailsPage({
                       type="button"
                       onClick={() => {
                         if (!movieDownloadInfo.directDownloadUrl) return;
-                        if (!isPlus && !isVitalicio) {
-                          setIsPlusModalOpen(true);
-                          return;
-                        }
                         setIsDownloading(true);
                         triggerDirectDownload(movieDownloadInfo.directDownloadUrl, movieDownloadInfo.fileName, {
                           tmdbId: item.tmdbId || item.id || itemId,
@@ -1061,10 +1052,6 @@ export function DetailsPage({
                               e.stopPropagation();
                               const info = episodeDownloads[ep.ep];
                               if (!info?.directDownloadUrl) return;
-                              if (!isPlus && !isVitalicio) {
-                                setIsPlusModalOpen(true);
-                                return;
-                              }
                               setDownloadingEp(ep.ep);
                               triggerDirectDownload(info.directDownloadUrl, info.fileName, {
                                 tmdbId: item.tmdbId || item.id || itemId,
@@ -1381,11 +1368,6 @@ export function DetailsPage({
           mediaDetails={castMediaDetails}
         />
       )}
-
-      <DownloadPlusModal
-        isOpen={isPlusModalOpen}
-        onClose={() => setIsPlusModalOpen(false)}
-      />
     </div>
   );
 }
