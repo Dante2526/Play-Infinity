@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs } from "../data";;
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 
@@ -62,6 +62,8 @@ import {
   TMDBDetails, 
   Season,
   getTrending,
+  getPopularSeries,
+  getPopularMovies,
   getTrailer,
   TrailerVideo
 } from "../services/tmdb";
@@ -203,16 +205,21 @@ export function HomePage({
   const [kidsReleases, setKidsReleases] = useState<any[]>(kidsContent);
   const [kidsSeriesReleases, setKidsSeriesReleases] = useState<any[]>([]);
 
-  // Itens exibidos na Área Kids (filmes e desenhos animados)
+  // Itens exibidos na Área Kids (filmes e desenhos animados 100% seguros para crianças)
   const displayedKidsItems = React.useMemo(() => {
-    if (kidsSeriesReleases.length === 0) return kidsReleases;
-    const combined: any[] = [];
-    const maxLen = Math.max(kidsReleases.length, kidsSeriesReleases.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (kidsReleases[i]) combined.push(kidsReleases[i]);
-      if (kidsSeriesReleases[i]) combined.push(kidsSeriesReleases[i]);
+    let rawList: any[] = [];
+    if (kidsSeriesReleases.length === 0) {
+      rawList = kidsReleases;
+    } else {
+      const combined: any[] = [];
+      const maxLen = Math.max(kidsReleases.length, kidsSeriesReleases.length);
+      for (let i = 0; i < maxLen; i++) {
+        if (kidsReleases[i]) combined.push(kidsReleases[i]);
+        if (kidsSeriesReleases[i]) combined.push(kidsSeriesReleases[i]);
+      }
+      rawList = combined;
     }
-    return combined;
+    return rawList.filter(item => item && isKidsSafe(item));
   }, [kidsReleases, kidsSeriesReleases]);
 
   // Função auxiliar para mapear itens do histórico garantindo a capa/backdrop real
@@ -290,10 +297,72 @@ export function HomePage({
   // Busca automática do destaque e dos lançamentos recentes via TMDB
   useEffect(() => {
     let isMounted = true;
-    // Busca automática dos destaques (filmes e séries populares, incluindo HBO Max)
+    // Busca automática dos destaques em alta (filmes e séries mais quentes e populares das plataformas)
     const fetchTopTrending = async () => {
-      // Desativado: Garante que apenas o destaque manual (que sabidamente possui stream) apareça.
-      return;
+      try {
+        const [trendingAllRes, trendingTvRes, trendingMoviesRes, popularTvRes] = await Promise.all([
+          getTrending('all', 'week').catch(() => null),
+          getTrending('tv', 'week').catch(() => null),
+          getTrending('movie', 'week').catch(() => null),
+          getPopularSeries().catch(() => null)
+        ]);
+
+        const pool = [
+          ...(trendingAllRes?.results || []),
+          ...(trendingTvRes?.results || []),
+          ...(trendingMoviesRes?.results || []),
+          ...(popularTvRes?.results || [])
+        ];
+
+        if (pool.length > 0 && isMounted) {
+          const seen = new Set<number>();
+          const validTrending = pool
+            .filter((item: TMDBItem) => {
+              if (!item.id || seen.has(item.id)) return false;
+              seen.add(item.id);
+              return (
+                item.backdrop_path &&
+                item.backdrop_path.trim() !== "" &&
+                (item.title || item.name) &&
+                item.overview &&
+                item.overview.trim().length > 15 &&
+                isMediaAvailable({ id: item.id, title: item.title || item.name })
+              );
+            })
+            .slice(0, 7)
+            .map((item: TMDBItem) => {
+              const rawTitle = (item.title || item.name || "").trim();
+              const isSeries = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+              const year = (item.release_date || item.first_air_date || "").substring(0, 4) || new Date().getFullYear().toString();
+              const genres = getGenreNames(item.genre_ids || []);
+              
+              return {
+                id: item.id,
+                tmdbId: item.id,
+                title: rawTitle.toUpperCase(),
+                type: isSeries ? ('series' as const) : ('movie' as const),
+                year,
+                duration: isSeries ? "Série" : "Filme",
+                rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 4.8,
+                quality: checkIsCam(rawTitle) ? "CAM" : "HD",
+                genres: genres.length > 0 ? genres.slice(0, 3) : ["Em Alta", "Destaque"],
+                description: item.overview,
+                imageUrl: formatImageUrl(item.backdrop_path, 'original'),
+                posterUrl: formatImageUrl(item.poster_path, 'w500'),
+                logoText: rawTitle.toUpperCase(),
+                playerUrl: isSeries 
+                  ? `https://v1.watchplay.shop/tvshow/${item.id}/1/1`
+                  : `https://v1.watchplay.shop/movie/${item.id}`
+              };
+            });
+
+          if (validTrending.length > 0) {
+            setHeroItems(validTrending);
+          }
+        }
+      } catch (err) {
+        console.warn("[HomePage] Erro ao sincronizar destaques automáticos:", err);
+      }
     };
 
     // Sincronização automática de lançamentos reais (filmes, séries, animes, doramas e kids) no TMDB
@@ -303,13 +372,17 @@ export function HomePage({
           getAnimes().catch(() => null),
           getDoramas().catch(() => null),
           getMovieReleases().catch(() => null),
-          getSeriesReleases().catch(() => null)
+          getSeriesReleases().catch(() => null),
+          getKidsContent().catch(() => null),
+          getKidsSeries().catch(() => null)
         ]);
 
         const animesRes = results[0];
         const doramasRes = results[1];
         const moviesRes = results[2];
         const seriesRes = results[3];
+        const kidsMoviesRes = results[4];
+        const kidsSeriesRes = results[5];
 
         if (isMounted) {
           // Processamento dinâmico de Lançamentos (Filmes)
@@ -405,6 +478,60 @@ export function HomePage({
               setDoramaReleases(tmdbFiltered);
             }
           }
+
+          // Processamento dinâmico de Filmes e Animações Infantis (Área Kids)
+          if (kidsMoviesRes?.results && kidsMoviesRes.results.length > 0) {
+            const tmdbKidsMovies = kidsMoviesRes.results
+              .filter((m: TMDBItem) => 
+                m.poster_path && 
+                (m.title || m.name) && 
+                isMediaAvailable({ id: m.id, title: m.title || m.name }) &&
+                isKidsSafe(m)
+              )
+              .map((m: TMDBItem) => ({
+                id: m.id,
+                tmdbId: m.id,
+                title: (m.title || m.name || "").toUpperCase(),
+                imageUrl: formatImageUrl(m.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+                type: 'movie' as const,
+                quality: checkIsCam(m.title || m.name) ? "CAM" : "HD",
+                rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
+                year: m.release_date ? m.release_date.substring(0, 4) : new Date().getFullYear().toString(),
+                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
+              }));
+
+            if (tmdbKidsMovies.length > 0) {
+              setKidsReleases(tmdbKidsMovies);
+            }
+          }
+
+          // Processamento dinâmico de Séries e Desenhos Infantis (Área Kids)
+          if (kidsSeriesRes?.results && kidsSeriesRes.results.length > 0) {
+            const tmdbKidsSeries = kidsSeriesRes.results
+              .filter((s: TMDBItem) => 
+                s.poster_path && 
+                (s.name || s.title) && 
+                isMediaAvailable({ id: s.id, title: s.name || s.title }) &&
+                isKidsSafe(s)
+              )
+              .map((s: TMDBItem) => ({
+                id: s.id,
+                tmdbId: s.id,
+                title: (s.name || s.title || "").toUpperCase(),
+                imageUrl: formatImageUrl(s.poster_path, 'w500'),
+                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+                type: 'series' as const,
+                quality: "HD" as const,
+                rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
+                year: s.first_air_date ? s.first_air_date.substring(0, 4) : new Date().getFullYear().toString(),
+                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
+              }));
+
+            if (tmdbKidsSeries.length > 0) {
+              setKidsSeriesReleases(tmdbKidsSeries);
+            }
+          }
         }
       } catch (err) {
         console.error("Erro ao sincronizar lançamentos automáticos com TMDB:", err);
@@ -478,7 +605,7 @@ export function HomePage({
           <div className="mt-auto flex flex-col items-center md:items-start text-center md:text-left">
             {/* Logo / Title area for Hero */}
             <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tighter mb-2.5 md:mb-3 leading-[0.95] drop-shadow-[0_4px_20px_rgba(0,0,0,0.9)]">
-              {heroItem.logoText.split('\n').map((line: string, i: number) => (
+              {(heroItem?.logoText || heroItem?.title || '').split('\n').map((line: string, i: number) => (
                 <span key={i} className="block">{line}</span>
               ))}
             </h1>
@@ -513,7 +640,7 @@ export function HomePage({
 
             {/* Genres */}
             <div className="flex items-center gap-2 sm:gap-2.5 mb-4 md:mb-5 flex-wrap justify-center md:justify-start">
-              {heroItem.genres.map((g: string) => (
+              {(heroItem?.genres || []).map((g: string) => (
                 <span key={g} className="px-2.5 sm:px-3 py-1 bg-white/10 backdrop-blur-md border border-white/10 rounded-md text-xs font-semibold text-neutral-200">
                   {g}
                 </span>

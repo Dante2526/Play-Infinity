@@ -98,3 +98,63 @@ export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: s
   if (name.includes("doraemon")) return false;
   return true;
 };
+
+// Palavras-chave estritamente proibidas na Área Kids (Animações adultas, sátiras e animes japoneses)
+const ADULT_ANIMATION_BLOCKLIST = [
+  'simpson', 'family guy', 'família da pesada', 'familia da pesada', 
+  'american dad', 'south park', 'rick and morty', 'rick & morty', 
+  'big mouth', 'bojack', 'invincible', 'invencivel', 'hazbin', 'helluva', 
+  'arcane', 'futurama', 'sausage party', 'festa da salsicha', 'f is for family', 
+  'paradise pd', 'desencanto', 'disenchantment', 'robot chicken', 'frango robo', 
+  'archer', 'solar opposites', 'castlevania', 'spawn', 'berserk', 'jujutsu', 
+  'attack on titan', 'shingeki', 'naruto', 'dragon ball', 'bleach', 'death note', 
+  'tokyo ghoul', 'demon slayer', 'kimetsu', 'hunter x hunter', 'evangelion', 
+  'hellsing', 'chainsaw man', 'deadpool', 'glitch', 'glit', 'velma', 'sausage', 
+  'clone high', 'harley quinn', 'arlequina', 'pantheon', 'the boys', 'smiling friends', 
+  'drawn together', 'mr. pickles', 'primal', 'vox machina', 'cyberpunk', 'chainsaw',
+  'terminator zero', 'blue eye samurai', 'samurai de olhos azuis', 'scavengers reign',
+  'blood of zeus', 'sangue de zeus', 'hit-monkey', 'supersex', 'hentai', 'ecchi', 
+  'seinen', 'yaoi', 'yuri', 'dota', 'diablo', 'castlevania', 'tomb raider',
+  'resident evil', 'devil may cry', 'love, death & robots', 'love death & robots',
+  'love death and robots', 'bad travelling', 'trese', 'godzilla', 'ultraman', 'baki',
+  'kengan', 'record of ragnarok', 'shuumatsu', 'gantz', 'hell’s paradise', 'hells paradise',
+  'dandadan', 'solo leveling', 'kaiju', 'frieren', 'mushoku', 'rezero', 'overlord',
+  'tuca & bertie', 'tuca e bertie', 'captain fall', 'human resources', 'recursos humanos',
+  'hoops', 'king of the hill', 'o rei do pedaço', 'beavis and butt-head', 'beavis e butt-head',
+  'daria', 'brickleberry', 'inside job', 'midnight gospel', 'undone'
+];
+
+/**
+ * Validação rigorosa para a Área Kids:
+ * Bloqueia qualquer animação voltada para público adulto, terror, violência explícita ou anime japonês.
+ */
+export function isKidsSafe(item: { 
+  id?: number; 
+  tmdbId?: number;
+  title?: string; 
+  name?: string; 
+  genres?: string[] | number[]; 
+  genre_ids?: number[]; 
+  original_language?: string;
+  isAnime?: boolean;
+  isDorama?: boolean;
+}): boolean {
+  if (item.isAnime || item.isDorama) return false;
+  
+  // Bloqueia idiomas asiáticos originais de animes
+  const origLang = (item.original_language || '').toLowerCase();
+  if (origLang === 'ja' || origLang === 'ko' || origLang === 'zh') return false;
+  
+  const title = (item.title || item.name || '').toLowerCase();
+  
+  // Verifica termos bloqueados no título
+  for (const term of ADULT_ANIMATION_BLOCKLIST) {
+    if (title.includes(term)) return false;
+  }
+
+  // Bloqueia IDs de animes da lista
+  const id = Number(item.tmdbId || item.id || 0);
+  if (id && WATCHPLAY_ANIME_IDS.includes(id)) return false;
+
+  return true;
+}

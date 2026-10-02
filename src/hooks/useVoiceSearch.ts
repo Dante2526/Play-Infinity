@@ -145,14 +145,14 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
     }
   }, [lang]);
 
-  const startListening = useCallback(() => {
+  const startListening = useCallback(async () => {
     if (isListeningRef.current || isStartingRef.current) {
       return;
     }
 
     const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognitionClass) {
-      setError('Busca por voz não suportada neste navegador.');
+      setError('Busca por voz não suportada neste aparelho.');
       return;
     }
 
@@ -160,6 +160,23 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
     setTranscript('');
     setInterimTranscript('');
     isStartingRef.current = true;
+
+    // Garante solicitação explícita de permissão do microfone no Android/WebView
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Libera as faixas de áudio imediatamente para que o SpeechRecognition possa usá-las
+        stream.getTracks().forEach(track => track.stop());
+      } catch (micErr: any) {
+        console.warn('Microphone permission request error:', micErr);
+        if (micErr?.name === 'NotAllowedError' || micErr?.name === 'PermissionDeniedError') {
+          setError('Permissão de microfone negada. Permita o microfone nas configurações do app.');
+          isStartingRef.current = false;
+          setIsListening(false);
+          return;
+        }
+      }
+    }
 
     // Se já havia uma instância anterior, aborta silenciosamente
     if (recognitionRef.current) {
@@ -183,7 +200,7 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
       setIsListening(false);
       // Ignora erro de já estar rodando sem propagar exceção
       if (err?.name !== 'InvalidStateError') {
-        setError('Erro ao iniciar o microfone.');
+        setError('Erro ao iniciar o microfone. Verifique as permissões de áudio.');
       }
     }
   }, [createRecognitionInstance]);

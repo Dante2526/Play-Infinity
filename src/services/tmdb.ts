@@ -319,10 +319,10 @@ export const getDoramas = async (page: number = 1): Promise<TMDBResponse> => {
  * Busca conteúdos familiares e infantis (Animação + Família) para a Área Kids
  */
 export const getKidsContent = async (page: number = 1): Promise<TMDBResponse> => {
-  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16,10751&include_adult=false&vote_count.gte=20`;
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16,10751&without_genres=27,80,53,10752,99&without_original_language=ja,ko,zh&include_adult=false&vote_count.gte=10`;
   const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
   if (!res.results || res.results.length === 0) {
-    const fallbackUrl = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16&include_adult=false&vote_count.gte=10`;
+    const fallbackUrl = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=16,10751&include_adult=false&vote_count.gte=5`;
     return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
   }
   return res;
@@ -332,8 +332,13 @@ export const getKidsContent = async (page: number = 1): Promise<TMDBResponse> =>
  * Busca séries e desenhos animados infantis para a Área Kids
  */
 export const getKidsSeries = async (page: number = 1): Promise<TMDBResponse> => {
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=10762&include_adult=false&vote_count.gte=5`;
-  return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=10762&without_genres=18,80,27,10768,99,10759&without_original_language=ja,ko,zh&include_adult=false&vote_count.gte=2`;
+  const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  if (!res.results || res.results.length === 0) {
+    const fallbackUrl = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_genres=10762&include_adult=false&vote_count.gte=1`;
+    return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
+  }
+  return res;
 };
 
 

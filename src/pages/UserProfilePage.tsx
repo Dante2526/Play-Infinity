@@ -43,7 +43,6 @@ import {
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "../utils/mediaUtils";
-import { SpeedTestModal } from "../components/SpeedTestModal";
 import { 
   searchMulti, 
   getDetails, 
@@ -180,8 +179,6 @@ export function UserProfilePage({
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
-
-  const [isSpeedTestOpen, setIsSpeedTestOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
@@ -585,12 +582,6 @@ export function UserProfilePage({
               onClick: () => onNavigate('favorites') 
             },
             { 
-              label: 'Teste a velocidade da internet', 
-              desc: 'Verifique se sua conexão está rápida para filmes',
-              icon: <Gauge className="w-5 h-5 text-blue-500" />,
-              onClick: () => setIsSpeedTestOpen(true)
-            },
-            { 
               label: 'Calendário de Lançamentos', 
               desc: `${followedSeries.length} séries seguidas • ${thisWeekEpisodes.length} lançamentos esta semana`,
               icon: <CalendarDays className="w-5 h-5 text-orange-500" />,
@@ -838,10 +829,6 @@ export function UserProfilePage({
             )}
           </div>
         </div>
-      )}
-
-      {isSpeedTestOpen && (
-        <SpeedTestModal onClose={() => setIsSpeedTestOpen(false)} />
       )}
     </div>
   );
