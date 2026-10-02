@@ -9,6 +9,8 @@ coverage/
 scratch/
 scratch*
 *.tmp
-
+*.key
+*.pem
+*.id_rsa
 
 secrets/
