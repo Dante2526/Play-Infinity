@@ -181,27 +181,7 @@ export function GlobalSearchPage({
             return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
           });
 
-          const itemsToCheck = rawMediaResults.map(r => {
-            const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
-            return {
-              id: r.id,
-              type: isTv ? ('tv' as const) : ('movie' as const)
-            };
-          }).filter(i => Boolean(i.id));
-
-          const playableSet = await checkPlayableBatch(itemsToCheck);
-          if (!isMounted) return;
-
-          // Local catalog IDs (animes, doramas, static collections)
-          const localCatalogIds = new Set([
-            ...allCatalogs.map(i => i.id),
-            ...WATCHPLAY_ANIME_IDS,
-            ...WATCHPLAY_DORAMA_IDS
-          ]);
-
-          // Filtrar estritamente apenas mídias que possuem streaming reproduzível
           const formatted: CatalogItem[] = rawMediaResults
-            .filter(r => playableSet.has(r.id) || localCatalogIds.has(r.id))
             .map(r => {
               const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
               const title = r.title || r.name || "Sem título";
@@ -230,7 +210,7 @@ export function GlobalSearchPage({
               };
             });
 
-          // Mescla resultados do TMDB verificados com os itens locais correspondentes
+          // Mescla resultados do TMDB com os itens locais correspondentes
           const seen = new Set<number>();
           const combined: CatalogItem[] = [];
 
