@@ -28,7 +28,7 @@ export function DownloadPlusModal({ isOpen, onClose }: Props) {
     cpfCnpj: ''
   });
 
-  const plusFee = 20.00;
+  const plusFee = 17.00;
   const diff = Math.max(0, plusFee - currentFee);
   const isUpgrade = isPremium && diff > 0 && diff < plusFee;
   const displayPrice = isUpgrade ? diff : plusFee;
@@ -207,14 +207,14 @@ export function DownloadPlusModal({ isOpen, onClose }: Props) {
                       Pague só a diferença: <span className="text-green-400">R$ {displayPrice.toFixed(2).replace('.', ',')}</span>
                     </div>
                     <p className="text-xs text-indigo-200/50 mt-2">
-                      Nos próximos meses, a renovação será do plano completo (R$ 20,00/mês).
+                      Nos próximos meses, a renovação será do plano completo (R$ 17,00/mês).
                     </p>
                   </>
                 ) : (
                   <>
                     <p className="text-sm text-indigo-200/60 font-medium">Assinatura Plus Completa</p>
                     <div className="text-3xl font-black text-white mt-1">
-                      R$ 20,00<span className="text-lg text-indigo-200/50 font-medium">/mês</span>
+                      R$ 17,00<span className="text-lg text-indigo-200/50 font-medium">/mês</span>
                     </div>
                   </>
                 )}
