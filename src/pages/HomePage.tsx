@@ -265,9 +265,11 @@ export function HomePage({
     return []; // Remove fallbacks para dados mockados em contas novas
   });
 
-  const handleRemoveHistoryItem = (e: React.MouseEvent, item: any) => {
+  const handleRemoveHistoryItem = (e: React.MouseEvent | React.TouchEvent, item: any) => {
     e.stopPropagation();
-    e.preventDefault();
+    if ('preventDefault' in e && typeof e.preventDefault === 'function') {
+      e.preventDefault();
+    }
     removePlaybackItem(item.id, item.mediaType || item.type, item.season, item.episodeNumber);
     setContinueWatchingList(prev => prev.filter(i => String(i.id) !== String(item.id)));
   };
@@ -757,11 +759,12 @@ export function HomePage({
                   <button
                     type="button"
                     onClick={(e) => handleRemoveHistoryItem(e, item)}
+                    onTouchEnd={(e) => handleRemoveHistoryItem(e, item)}
                     title="Remover do Continue Assistindo"
                     aria-label="Remover do Continue Assistindo"
-                    className="absolute top-2.5 right-2.5 z-30 w-7 h-7 md:w-8 md:h-8 rounded-full bg-black/60 hover:bg-red-600/90 text-white/80 hover:text-white flex items-center justify-center backdrop-blur-md border border-white/10 hover:border-red-500/50 transition-all duration-200 opacity-90 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 shadow-lg cursor-pointer"
+                    className="absolute top-2.5 right-2.5 z-30 w-8 h-8 rounded-full bg-black/80 hover:bg-red-600 active:bg-red-600 text-white flex items-center justify-center backdrop-blur-md border border-white/20 hover:border-red-500/50 transition-all duration-200 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 active:scale-95 shadow-xl cursor-pointer"
                   >
-                    <X className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                    <X className="w-4 h-4 text-white" />
                   </button>
                   
                   {/* Play Overlay */}

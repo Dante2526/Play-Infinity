@@ -113,7 +113,52 @@ export interface PlaybackHistoryItem {
 }
 
 const STORAGE_KEY = "playinfinity_playback_history";
+const DELETED_STORAGE_KEY = "playinfinity_deleted_history";
 const MAX_HISTORY_ITEMS = 25;
+
+function getDeletedStore(): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(DELETED_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDeletedStore(store: Record<string, number>) {
+  try {
+    localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(store));
+  } catch (e) {
+    console.warn("Erro ao salvar itens removidos do historico:", e);
+  }
+}
+
+function markAsDeletedLocally(id: string | number) {
+  const store = getDeletedStore();
+  store[String(id)] = Date.now();
+  // Mantém apenas os últimos 50 registros de remoção
+  const entries = Object.entries(store);
+  if (entries.length > 50) {
+    entries.sort((a, b) => b[1] - a[1]);
+    const pruned: Record<string, number> = {};
+    for (let i = 0; i < 50; i++) {
+      pruned[entries[i][0]] = entries[i][1];
+    }
+    saveDeletedStore(pruned);
+    return pruned;
+  }
+  saveDeletedStore(store);
+  return store;
+}
+
+function unmarkAsDeletedLocally(id: string | number) {
+  const store = getDeletedStore();
+  const idStr = String(id);
+  if (store[idStr]) {
+    delete store[idStr];
+    saveDeletedStore(store);
+  }
+}
 
 function makeHistoryKey(id: string | number, type: 'movie' | 'series', season?: number, episode?: number): string {
   return String(id);
@@ -154,19 +199,55 @@ function syncStoreToCloud(store: Record<string, PlaybackHistoryItem>) {
     
     try {
       const userRef = doc(db, "usuarios", user.uid);
-      // Usamos updateDoc para sobrescrever completamente o campo historicoReproducao
-      // sem afetar o resto do documento (setDoc com merge=true não deleta chaves removidas localmente).
-      await updateDoc(userRef, { historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>) });
+      const deletedStore = getDeletedStore();
+      await updateDoc(userRef, { 
+        historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>),
+        historicoRemovido: deletedStore
+      });
     } catch (e: any) {
       if (e.code === 'not-found') {
-        // Se o documento não existir, criamos
         const userRef = doc(db, "usuarios", user.uid);
-        await setDoc(userRef, { historicoReproducao: store }, { merge: true });
+        const deletedStore = getDeletedStore();
+        await setDoc(userRef, { 
+          historicoReproducao: store,
+          historicoRemovido: deletedStore
+        }, { merge: true });
       } else {
         console.warn("[Firestore Sync] Falha ao sincronizar histórico:", e);
       }
     }
   }, 10000);
+}
+
+/** Sincronização imediata (sem debounce) usada em remoções manuais ou finalização */
+async function syncStoreToCloudImmediate(store: Record<string, PlaybackHistoryItem>, deletedMap?: Record<string, number>) {
+  if (syncTimeout) {
+    clearTimeout(syncTimeout);
+    syncTimeout = null;
+  }
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const deletedStore = deletedMap || getDeletedStore();
+  try {
+    const userRef = doc(db, "usuarios", user.uid);
+    await updateDoc(userRef, { 
+      historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>),
+      historicoRemovido: deletedStore
+    });
+  } catch (e: any) {
+    if (e.code === 'not-found') {
+      try {
+        const userRef = doc(db, "usuarios", user.uid);
+        await setDoc(userRef, { 
+          historicoReproducao: store,
+          historicoRemovido: deletedStore
+        }, { merge: true });
+      } catch {}
+    } else {
+      console.warn("[Firestore Sync Immediate] Falha:", e);
+    }
+  }
 }
 
 /** Descarta o debounce e envia o histórico pendente para o Firebase imediatamente. */
@@ -179,11 +260,18 @@ function flushPendingHistorySync(): void {
   if (!user) return;
 
   const store = getStore();
+  const deletedStore = getDeletedStore();
   const userRef = doc(db, "usuarios", user.uid);
-  updateDoc(userRef, { historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>) })
+  updateDoc(userRef, { 
+    historicoReproducao: sanitizeForFirestore(store as unknown as Record<string, any>),
+    historicoRemovido: deletedStore
+  })
     .catch((e: any) => {
       if (e.code === 'not-found') {
-        return setDoc(doc(db, "usuarios", user.uid), { historicoReproducao: store }, { merge: true })
+        return setDoc(doc(db, "usuarios", user.uid), { 
+          historicoReproducao: store,
+          historicoRemovido: deletedStore 
+        }, { merge: true })
           .catch(() => {});
       }
       console.warn("[Firestore Sync] Falha no flush do histórico:", e);
@@ -213,23 +301,43 @@ export async function fetchHistoryFromCloud(): Promise<void> {
     if (snap.exists()) {
       const data = snap.data();
       const remoteHistory = data.historicoReproducao || data.playbackHistory;
+      const remoteDeleted: Record<string, number> = data.historicoRemovido || {};
+      
+      // Unifica tombstone de remoção local com nuvem
+      const localDeleted = getDeletedStore();
+      const mergedDeleted: Record<string, number> = { ...localDeleted, ...remoteDeleted };
+      saveDeletedStore(mergedDeleted);
+
       if (remoteHistory) {
-        // Merge por chave com "último que atualizou vence" (evita que um dispositivo
-        // com progresso LOCAL mais novo seja regredido por dados remotos antigos).
         const local = getStore();
         const remoteMap: Record<string, PlaybackHistoryItem> = Array.isArray(remoteHistory)
           ? Object.fromEntries((remoteHistory as PlaybackHistoryItem[]).map(item => [String(item.id), item]))
           : remoteHistory as Record<string, PlaybackHistoryItem>;
 
         const merged: Record<string, PlaybackHistoryItem> = {};
-        for (const key of new Set([...Object.keys(local), ...Object.keys(remoteMap)])) {
+        const allKeys = new Set([...Object.keys(local), ...Object.keys(remoteMap)]);
+
+        for (const key of allKeys) {
           const a = local[key];
           const b = remoteMap[key];
-          if (!a) { merged[key] = b; continue; }
-          if (!b) { merged[key] = a; continue; }
-          merged[key] = (b.updatedAt || 0) >= (a.updatedAt || 0) ? b : a;
+          const item = (b && (!a || (b.updatedAt || 0) >= (a.updatedAt || 0))) ? b : a;
+          if (!item) continue;
+
+          // Se o item foi removido pelo usuário (em qualquer dispositivo) e não foi reassistido depois, ignora!
+          const deletedAt = mergedDeleted[String(item.id)] || 0;
+          if (deletedAt > 0 && deletedAt >= (item.updatedAt || 0)) {
+            continue;
+          }
+
+          merged[key] = item;
         }
-        saveStore(merged);
+
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: merged }));
+        } catch (e) {
+          console.error("Erro ao aplicar historico mesclado:", e);
+        }
       }
     }
   } catch (e) {
@@ -347,6 +455,7 @@ export function savePlaybackProgress(item: {
     return;
   }
 
+  unmarkAsDeletedLocally(item.id);
   const existing = store[key];
   const resolvedCovers = resolveMediaCovers({
     id: item.id,
@@ -452,12 +561,13 @@ export function getItemPlayback(id: string | number, type: 'movie' | 'series', s
 }
 
 /**
- * Remove um item do histórico
+ * Remove um item do histórico de forma permanente, registrando tombstone e sincronizando com Firestore imediatamente
  */
 export function removePlaybackItem(id: string | number, type?: 'movie' | 'series', season?: number, episode?: number): void {
   if (!id) return;
-  const store = getStore();
   const targetIdStr = String(id);
+  const updatedDeleted = markAsDeletedLocally(targetIdStr);
+  const store = getStore();
   let changed = false;
 
   for (const key of Object.keys(store)) {
@@ -467,8 +577,14 @@ export function removePlaybackItem(id: string | number, type?: 'movie' | 'series
     }
   }
 
-  if (changed) {
-    saveStore(store);
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: store }));
+    // Sincroniza imediatamente com o Firestore para que outros dispositivos (como o celular/app Android)
+    // recebam a remoção imediatamente sem risco de ressuscitar o item
+    syncStoreToCloudImmediate(store, updatedDeleted);
+  } catch (e) {
+    console.error("Erro ao remover item do historico:", e);
   }
 }
 
