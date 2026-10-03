@@ -177,7 +177,27 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
   ...ALLOWED_STREAMING_DOMAINS
 ];
 
-function isAllowedLiveStreamingDomain(hostname: string, referer?: string): boolean {
+import crypto from "crypto";
+
+const PROXY_SECRET = process.env.PROXY_SECRET || crypto.randomBytes(32).toString('hex');
+
+export function signProxyUrl(targetUrl: string): string {
+  const hmac = crypto.createHmac('sha256', PROXY_SECRET);
+  hmac.update(targetUrl);
+  return hmac.digest('hex');
+}
+
+export function verifyProxySignature(targetUrl: string, sig: string): boolean {
+  if (!targetUrl || !sig) return false;
+  const expected = signProxyUrl(targetUrl);
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(sig));
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedLiveStreamingDomain(hostname: string): boolean {
   if (!hostname || typeof hostname !== "string") return false;
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "").trim();
 
@@ -222,31 +242,6 @@ function isAllowedLiveStreamingDomain(hostname: string, referer?: string): boole
   // CDNs conhecidas de distribuição HLS/DASH autorizadas
   if (/\.(qzz\.io|akamaihd\.net|cloudfront\.net|fastly\.net|amagi\.tv|wurl\.com|otteravision\.com|streamlock\.net)$/i.test(host)) {
     return true;
-  }
-
-  // Se a requisição vem de um referer de provedor homologado confiável
-  if (referer) {
-    try {
-      const refHost = new URL(referer).hostname.toLowerCase();
-      if (
-        refHost.includes("embedplayer") ||
-        refHost.includes("playerflix") ||
-        refHost.includes("myembed") ||
-        refHost.includes("watchplay") ||
-        refHost.includes("warezcdn") ||
-        refHost.includes("nixplay") ||
-        refHost.includes("pomfy") ||
-        refHost.includes("vixsrc") ||
-        refHost.includes("play-infinity") ||
-        refHost.includes("duckdns.org") ||
-        refHost.includes("localhost") ||
-        refHost.includes("127.0.0.1")
-      ) {
-        if (!/superflix|sfapi|byse|streamberry|embedplay(?!er)|videasy|vidlink|autoembed/i.test(host)) {
-          return true;
-        }
-      }
-    } catch {}
   }
 
   return false;

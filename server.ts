@@ -12,7 +12,7 @@ import crypto from "crypto";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "./server/utils/caches";
-import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl, validateSafeUrlAsync, ALLOWED_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare } from "./server/utils/helpers";
+import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl, validateSafeUrlAsync, ALLOWED_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare, signProxyUrl, verifyProxySignature } from "./server/utils/helpers";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { verifyFirebaseUserToken } from "./server/middlewares/requireAdminAuth";
@@ -4321,14 +4321,12 @@ app.use("/api/admin", adminOpsRouter);
       // 1. Controle de CORS estrito (impede que sites de terceiros usem nosso proxy para economizar banda)
       const origin = req.headers.origin as string | undefined;
       const isAllowedOrigin = !origin ||
-        origin.includes("play-infinity") ||
-        origin.includes("duckdns.org") ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1") ||
-        origin.startsWith("capacitor://") ||
-        origin.startsWith("ionic://") ||
-        origin.includes("googleusercontent.com") ||
-        origin.includes("run.app");
+        /^(https?:\/\/)?(localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i.test(origin) ||
+        /^capacitor:\/\/localhost$/i.test(origin) ||
+        /^ionic:\/\/localhost$/i.test(origin) ||
+        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*play-infinity\.stream$/i.test(origin) ||
+        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*duckdns\.org$/i.test(origin) ||
+        /^(https?:\/\/)?play-infinity-[a-zA-Z0-9-]+\.run\.app$/i.test(origin);
 
       if (origin) {
         if (isAllowedOrigin) {
@@ -4367,7 +4365,10 @@ app.use("/api/admin", adminOpsRouter);
         return res.status(403).send("Acesso a IP privado, local ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      if (!isAllowedLiveStreamingDomain(parsed.hostname, req.query.referer as string | undefined)) {
+      const signature = req.query.sig as string;
+      const isSignatureValid = signature && verifyProxySignature(rawUrl, signature);
+
+      if (!isSignatureValid && !isAllowedLiveStreamingDomain(parsed.hostname)) {
         return res.status(403).send("Domínio não autorizado para proxy de streaming.");
       }
 
@@ -4424,7 +4425,7 @@ app.use("/api/admin", adminOpsRouter);
             return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
           }
 
-          if (!isAllowedLiveStreamingDomain(nextUrl.hostname)) {
+          if (!isSignatureValid && !isAllowedLiveStreamingDomain(nextUrl.hostname)) {
             return res.status(403).send("Redirecionamento para domínio não autorizado.");
           }
 
@@ -4543,7 +4544,7 @@ app.use("/api/admin", adminOpsRouter);
                 // Devem usar is_manifest=true para que o proxy reescreva as URLs internas
                 // (se usarmos is_segment=true, o proxy pula o rewriting e o HLS.js
                 // recebe URLs diretas de plosia*.xyz causando erros CORS)
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_manifest=true"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&sig=${signProxyUrl(fullUri)}&is_manifest=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -4555,7 +4556,7 @@ app.use("/api/admin", adminOpsRouter);
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
             const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
             const segParam = isStreamManifest ? "&is_manifest=true" : "&is_segment=true";
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}${segParam}`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&sig=${signProxyUrl(fullSegUrl)}${segParam}`;
           } catch {
             return trimmed;
           }
@@ -4593,7 +4594,7 @@ app.use("/api/admin", adminOpsRouter);
           "#EXT-X-TARGETDURATION:6",
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
           "#EXTINF:6.0,",
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&sig=${signProxyUrl(finalUrl)}&is_segment=true&_ts=${Date.now()}`
         ].join("\n");
         return res.send(manifest);
       }
