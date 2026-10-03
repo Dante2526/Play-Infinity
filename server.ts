@@ -200,31 +200,32 @@ process.on("uncaughtException", (err) => {
     }
   }
 
-  // Bypasses de streaming VOD para nunca bloquear reprodução de vídeos nem navegação de episódios
-  const streamingBypassPrefixes = [
-    "/anime/hls-proxy",
+  // Prefixos de scraping que fazem requisições pesadas e devem ter limite restrito
+  const scrapingPrefixes = [
     "/watchplayer-stream",
     "/myembed-stream",
     "/mixdrop-stream",
-    "/stream-proxy",
-    "/check-season",
     "/encontrei/lookup",
     "/encontrei-lookup",
-    "/series-seasons-available",
-    "/check-playable-batch",
-    "/downloads-catalog",
     "/bolodechocolate",
-    "/download"
+    "/stream-proxy",
+    "/check-season",
+    "/vidsrc",
+    "/nixplay"
   ];
 
   app.use("/api", (req, res, next) => {
-    // Roteia /live-stream-proxy estritamente para o limitador dedicado de streaming ao vivo por IP
-    if (req.path.startsWith("/live-stream-proxy")) {
+    // Rotas de proxy de vídeo/hls precisam de limite mais alto para suportar buffer rápido
+    if (req.path.startsWith("/live-stream-proxy") || req.path.startsWith("/anime/hls-proxy")) {
       return liveStreamLimiter(req, res, next);
     }
-    if (streamingBypassPrefixes.some(prefix => req.path.startsWith(prefix))) {
-      return next();
+    
+    // Aplica o limite baixo (30 req/min) nas rotas de scraping pesadas
+    if (scrapingPrefixes.some(prefix => req.path.startsWith(prefix))) {
+      return scraperLimiter(req, res, next);
     }
+
+    // Restante da API (catalog, admin, health, metadados) cai no limite normal da API (150 req/min)
     return apiLimiter(req, res, next);
   });
 
@@ -252,10 +253,10 @@ import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from "./server/middlewares/requireAdminAuth";
 
   app.use(iptvRouter);
-app.use(scraperLimiter, encontreiLookupRouter);
-app.use(scraperLimiter, bolodechocolateRouter);
-app.use(scraperLimiter, nixplayRouter);
-app.use(scraperLimiter, vidsrcRouter);
+app.use(encontreiLookupRouter);
+app.use(bolodechocolateRouter);
+app.use(nixplayRouter);
+app.use(vidsrcRouter);
 
 // Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de Admin para qualquer rota /api/admin/*
 app.use("/api/admin", requireAdminAuth);
@@ -264,10 +265,10 @@ app.use("/api/admin", adminOpsRouter);
 
 // Routers extraídos do server.ts: montados APÓS helmet, express.json e rate limiters
 app.use(paymentsRouter);
-app.use(scraperLimiter, videoScrapersRouter);
+app.use(videoScrapersRouter);
 app.use(catalogRouter);
 app.use(diagnosticsRouter);
-app.use(scraperLimiter, mixdropRouter);
+app.use(mixdropRouter);
 app.use(castRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
