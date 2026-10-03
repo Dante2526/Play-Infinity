@@ -1,0 +1,53 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função para checar se o usuário é administrador
+    function isAdmin() {
+      return request.auth != null && exists(/databases/$(database)/documents/administradores/$(request.auth.uid));
+    }
+
+    // Acesso aos perfis de administradores: restrito.
+    // Ninguém pode escrever pela Web/Client SDK. Gerenciado apenas via Firebase Console / Admin SDK.
+    match /administradores/{userId} {
+      allow read: if isAdmin() || request.auth.uid == userId;
+      allow write: if false; 
+    }
+    
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // Bloqueia a criação de usuários que tentem forçar a assinatura como "ATIVA" no momento da criação
+    function isSafeCreate() {
+      return !("assinatura" in request.resource.data) || request.resource.data.assinatura != "ATIVA";
+    }
+
+    // Bloqueia atualizações (pelo Client SDK) nos campos sensíveis relacionados a pagamentos e planos
+    function isSafeUpdate() {
+      let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
+      return !affectedKeys.hasAny(["assinatura", "plano", "subscriptionId", "dataPagamento", "dataExpiracao", "valorMensalidade", "monthlyFee"]);
+    }
+
+    // Regras para a coleção principal de usuários
+    match /usuarios/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isSafeCreate();
+      allow update: if (isOwner(userId) && isSafeUpdate()) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Regras para a coleção legada de usuários (users)
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isSafeCreate();
+      allow update: if (isOwner(userId) && isSafeUpdate()) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Regra catch-all segura: nega leitura e escrita de qualquer outra coisa por padrão
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

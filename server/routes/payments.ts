@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { db } from "../../server";
+import { getAdminDb } from "../firebaseAdmin";
 import { verifyFirebaseUserToken } from "../middlewares/requireAdminAuth";
 import { timingSafeCompare } from "../utils/helpers";
 
@@ -84,13 +83,14 @@ router.post("/api/create-subscription", async (req, res) => {
     let description = "Play Infinity Premium";
 
     try {
+      const db = getAdminDb();
       if (db && userId) {
-        let userSnap = await getDoc(doc(db, "usuarios", userId));
-        if (!userSnap.exists()) {
-          userSnap = await getDoc(doc(db, "users", userId));
+        let userSnap = await db.collection("usuarios").doc(userId).get();
+        if (!userSnap.exists) {
+          userSnap = await db.collection("users").doc(userId).get();
         }
 
-        const uData = userSnap.exists() ? userSnap.data() : null;
+        const uData = userSnap.exists ? userSnap.data() : null;
 
         if (isPlusPlan) {
           const plusFee = 17.00;
@@ -283,6 +283,7 @@ router.post("/api/webhook/asaas", async (req, res) => {
     }
 
     // 3. Atualização Segura no Banco de Dados
+    const db = getAdminDb();
     if (db) {
       let userId = String(payment.externalReference).trim();
       let isPlusUpgrade = false;
@@ -298,7 +299,7 @@ router.post("/api/webhook/asaas", async (req, res) => {
         return res.status(400).json({ success: false, error: "ID de usuário inválido." });
       }
 
-      const userRef = doc(db, "usuarios", userId);
+      const userRef = db.collection("usuarios").doc(userId);
 
       // Se pagou (Pix/Boleto) ou o cartão foi confirmado
       if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
@@ -319,12 +320,12 @@ router.post("/api/webhook/asaas", async (req, res) => {
           updateData.valorMensalidade = 20.00;
         }
 
-        await setDoc(userRef, updateData, { merge: true });
+        await userRef.set(updateData, { merge: true });
         console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId} (Plus: ${isPlusUpgrade})`);
       }
       // Se a assinatura atrasou ou o pagamento foi estornado/recusado
       else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
-        await setDoc(userRef, {
+        await userRef.set({
           assinatura: "INATIVA",
           updatedAt: new Date().toISOString()
         }, { merge: true });
