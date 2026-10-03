@@ -8,6 +8,14 @@ import { browserslistToTargets } from 'lightningcss';
 export default defineConfig(() => {
   return {
     plugins: [react()],
+    server: {
+      proxy: {
+        '/api': {
+          target: 'https://play-infinity-app.duckdns.org',
+          changeOrigin: true
+        }
+      }
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

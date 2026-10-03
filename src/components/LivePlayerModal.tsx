@@ -265,7 +265,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
   // Determina a URL atual baseada no servidor selecionado e status de proxy
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
-  const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity.stream';
+  const proxyBase = import.meta.env.VITE_PROXY_URL || 'https://play-infinity-app.duckdns.org';
   const streamUrl = currentServer?.isProxy 
     ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
     : currentServer?.url;

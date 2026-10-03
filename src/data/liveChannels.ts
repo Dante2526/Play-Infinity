@@ -145,7 +145,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: '/api/iptv/1228',
+        url: '/api/iptv/1231',
         isProxy: false
       },
       {
