@@ -95,11 +95,26 @@ process.on("uncaughtException", (err) => {
     next();
   });
 
-  // Hardening de Segurança via HTTP Headers (sem quebrar os iframes de players terceiros)
+  // Hardening de Segurança via HTTP Headers
+  // Frameguard 'sameorigin' previne clickjacking na UI, mas não afeta os iframes (players) injetados
+  // CSP permissiva libera players e imagens, mas barra XSS externo
   app.use(helmet({
-    frameguard: false, // Desativado propositalmente para não quebrar a incorporação dos iframes externos caso precisem transitar contexto
-    contentSecurityPolicy: false, // CSP desativada para manter compatibilidade com scripts de terceiros na UI (Analytics, Players)
-    crossOriginResourcePolicy: false,
+    frameguard: { action: 'sameorigin' },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://challenges.cloudflare.com", "https://turnstile.cloudflare.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
+        connectSrc: ["'self'", "ws:", "wss:", "https:", "http:"],
+        fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
+        frameSrc: ["'self'", "https:", "http:"],
+        mediaSrc: ["'self'", "blob:", "https:", "http:"],
+        objectSrc: ["'none'"],
+        upgradeInsecureRequests: [],
+      }
+    },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     crossOriginEmbedderPolicy: false,
     crossOriginOpenerPolicy: false
   }));
