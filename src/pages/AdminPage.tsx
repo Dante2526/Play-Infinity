@@ -970,7 +970,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
                 <span className="font-bold whitespace-nowrap">Assistindo Agora</span>
               </div>
-              <span className="text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
+              <span className="text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1 whitespace-nowrap shrink-0">
                 Ver lista
               </span>
             </div>

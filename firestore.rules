@@ -4,7 +4,10 @@ service cloud.firestore {
     
     // Função para checar se o usuário é administrador
     function isAdmin() {
-      return request.auth != null && exists(/databases/$(database)/documents/administradores/$(request.auth.uid));
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/administradores/$(request.auth.uid)) ||
+        request.auth.token.email in ['naylanmoreira350@gmail.com', 'cbeth761@gmail.com']
+      );
     }
 
     // Acesso aos perfis de administradores: restrito.
