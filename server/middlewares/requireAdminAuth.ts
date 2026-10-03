@@ -115,8 +115,11 @@ export async function requireAdminAuth(req: Request, res: Response, next: NextFu
     return;
   }
 
+  const masterAdmins = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
+  const isMasterAdmin = decodedUser.email && masterAdmins.includes(decodedUser.email.toLowerCase());
+
   // 3. Validar se o usuário possui email verificado e a claim de administrador
-  if (!decodedUser.emailVerified || !decodedUser.isAdmin) {
+  if (!isMasterAdmin && (!decodedUser.emailVerified || !decodedUser.isAdmin)) {
     res.status(403).json({
       success: false,
       error: "Acesso negado: Requer e-mail verificado e privilégios de administrador."

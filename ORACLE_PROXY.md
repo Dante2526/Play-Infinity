@@ -26,7 +26,7 @@
 
 1. **Reescrita de Manifestos HLS (`.m3u8`):**
    - O proxy intercepta as URLs de canais de TV ao vivo.
-   - Reescreve todas as tags `EXT-X-KEY` (chaves de criptografia AES) e os chunks de vídeo (`.ts`, `.aac`, `.m4s`) para apontarem de volta para o domínio HTTPS (`https://play-infinity-app.duckdns.org/api/live-stream-proxy?...`).
+   - Reescreve todas as tags `EXT-X-KEY` (chaves de criptografia AES) e os chunks de vídeo (`.ts`, `.aac`, `.m4s`) para apontarem de volta para o domínio HTTPS (`https://play-infinity.stream/api/live-stream-proxy?...`).
 2. **Bypass de CORS e Spoofing de Headers:**
    - Adiciona `Access-Control-Allow-Origin: *`.
    - Injeta User-Agent, Referer e Origin dos canais originais para evitar bloqueios das operadoras/CDNs.
@@ -60,7 +60,7 @@ Para garantir zero micro-congelamentos e máximo throughput em transmissões con
 server {
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name play-infinity-app.duckdns.org;
+    server_name play-infinity.stream;
 
     # SSL Certbot config...
 

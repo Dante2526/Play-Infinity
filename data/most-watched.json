@@ -476,5 +476,15 @@
     "playerUrl": "https://v1.watchplay.shop/tvshow/214540/1/1",
     "views": 1,
     "lastWatched": "2026-09-30T18:39:55.464Z"
+  },
+  {
+    "id": "1",
+    "title": "Teste",
+    "type": "movie",
+    "imageUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "backdropUrl": "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=800&q=80",
+    "quality": "HD",
+    "views": 1,
+    "lastWatched": "2026-10-03T12:29:55.652Z"
   }
 ]
