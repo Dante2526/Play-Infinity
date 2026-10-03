@@ -180,6 +180,11 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
 
 
 
+if (!process.env.PROXY_SECRET && process.env.NODE_ENV === "production") {
+  console.error("CRITICAL ERROR: PROXY_SECRET não está definido nas variáveis de ambiente em produção. O servidor será encerrado por questões de segurança.");
+  process.exit(1);
+}
+
 const PROXY_SECRET = process.env.PROXY_SECRET || "play-infinity-live-proxy-secret-key-fixed-2026";
 
 export function signProxyUrl(targetUrl: string): string {
