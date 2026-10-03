@@ -187,7 +187,7 @@ export function VideoPlayerModal({
     (title && /anime|naruto|dragon ball|one piece|bleach|attack on titan|jujutsu|demon slayer|death note|boruto|hunter x hunter|solo leveling|re:zero|re zero/i.test(title))
   );
   const [urlInput, setUrlInput] = useState(
-    defaultUrl || "https://v1.watchplay.shop/tvshow/66732/1/1"
+    defaultUrl || ""
   );
   const [activeIframeUrl, setActiveIframeUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -544,8 +544,14 @@ export function VideoPlayerModal({
     if (imdbId) return imdbId;
     const parsed = parseMediaFromUrl(urlInput);
     if (parsed.id) return parsed.id;
-    return isSeries ? "66732" : "tt22084616";
+    return "";
   }, [tmdbId, imdbId, urlInput, isSeries]);
+
+  useEffect(() => {
+    if (isOpen && !resolvedId && !error) {
+      setError("Não foi possível identificar o ID do filme ou série (TMDB/IMDB). O reprodutor requer um ID válido para funcionar.");
+    }
+  }, [isOpen, resolvedId, error]);
 
   const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
 
