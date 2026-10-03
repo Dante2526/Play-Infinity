@@ -143,7 +143,7 @@ process.on("uncaughtException", (err) => {
   // Limite Global: Protege a renderização estática e recursos sem travar o usuário
   const globalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 3000, // Permite 3000 requisições por minuto por IP
+    max: 600, // Reduzido de 3000 para 600 (protege melhor a RAM sem quebrar assets)
     message: "Muitas requisições deste IP, tente novamente em um minuto.",
     standardHeaders: true,
     legacyHeaders: false,
@@ -152,8 +152,17 @@ process.on("uncaughtException", (err) => {
   // Limite para API geral (busca, metadados)
   const apiLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 1200, // Permite 1200 requisições por minuto por IP para a API
+    max: 150, // Reduzido de 1200 para 150
     message: { success: false, error: "Limite de requisições excedido. A proteção anti-DDoS bloqueou este endereço temporariamente." },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
+  // Limite restrito para rotas de scraping (evita abuso e drenagem do proxy/backend)
+  const scraperLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minuto
+    max: 30, // Apenas 30 requisições por minuto para endpoints de scraping
+    message: { success: false, error: "Limite de scraping excedido. Aguarde um instante." },
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -243,10 +252,10 @@ import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from "./server/middlewares/requireAdminAuth";
 
   app.use(iptvRouter);
-app.use(encontreiLookupRouter);
-app.use(bolodechocolateRouter);
-app.use(nixplayRouter);
-app.use(vidsrcRouter);
+app.use(scraperLimiter, encontreiLookupRouter);
+app.use(scraperLimiter, bolodechocolateRouter);
+app.use(scraperLimiter, nixplayRouter);
+app.use(scraperLimiter, vidsrcRouter);
 
 // Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de Admin para qualquer rota /api/admin/*
 app.use("/api/admin", requireAdminAuth);
@@ -255,10 +264,10 @@ app.use("/api/admin", adminOpsRouter);
 
 // Routers extraídos do server.ts: montados APÓS helmet, express.json e rate limiters
 app.use(paymentsRouter);
-app.use(videoScrapersRouter);
+app.use(scraperLimiter, videoScrapersRouter);
 app.use(catalogRouter);
 app.use(diagnosticsRouter);
-app.use(mixdropRouter);
+app.use(scraperLimiter, mixdropRouter);
 app.use(castRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
