@@ -11,7 +11,7 @@ import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, liveVariantR
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
-import { checkVipSeason, checkVizerSeason } from "./encontreiLookup";
+import { checkVipSeason, checkVizerSeason, getEncontreiSeasonEpisodes } from "./encontreiLookup";
 
 const router = Router();
 
@@ -2481,18 +2481,9 @@ const router = Router();
       const catalogEpisodeNumbers = new Set<number>();
 
       try {
-        // Encontrei (MixDrop)
-        let encontreiPath = path.join(process.cwd(), "data", "encontrei-catalog.json");
-        if (!fs.existsSync(encontreiPath)) {
-          encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
-        }
-        if (fs.existsSync(encontreiPath)) {
-          const encData = JSON.parse(fs.readFileSync(encontreiPath, "utf-8"));
-          for (const ep of encData.episodes || []) {
-            if (ep.tmdb_id === numericId && ep.season === season && typeof ep.episode === "number") {
-              catalogEpisodeNumbers.add(ep.episode);
-            }
-          }
+        // Encontrei (MixDrop) — usa índice em memória (sem re-parsear 14 MB por request)
+        for (const epNum of getEncontreiSeasonEpisodes(numericId, season)) {
+          catalogEpisodeNumbers.add(epNum);
         }
       } catch (err) {
         console.warn("[check-season] Aviso ao checar catálogos locais:", err);

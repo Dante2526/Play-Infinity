@@ -533,6 +533,23 @@ function loadCatalogs() {
   );
 }
 
+/**
+ * Números de episódios de uma temporada no catálogo encontrei, usando o índice
+ * em memória (recarregado por mtime). Evita re-parsear o JSON de 14 MB a cada request.
+ */
+export function getEncontreiSeasonEpisodes(tmdbId: number, season: number): number[] {
+  loadCatalogs();
+  const prefix = `${tmdbId}:${season}:`;
+  const eps: number[] = [];
+  for (const [key, ep] of _encontreiEpisodeIndex) {
+    if (key.startsWith(prefix) && typeof ep.episode === "number") {
+      eps.push(ep.episode);
+    }
+  }
+  return eps;
+}
+
+
 // Cache de temporadas verificadas em memória
 // Apenas para PROBES (seasons não presentes no catálogo). Seasons do catálogo
 // são sempre derivadas live do índice em memória — nunca cached.
