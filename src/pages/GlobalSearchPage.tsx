@@ -62,7 +62,6 @@ import {
   getTrailer,
   TrailerVideo
 } from "../services/tmdb";
-import { VideoPlayerModal } from "../components/VideoPlayerModal";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>

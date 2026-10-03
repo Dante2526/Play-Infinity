@@ -72,7 +72,6 @@ import {
   getSimilarRecommendations,
   TrailerVideo
 } from "../services/tmdb";
-import { VideoPlayerModal } from "../components/VideoPlayerModal";
 import { CastModal } from "../components/CastModal";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(

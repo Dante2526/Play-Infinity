@@ -61,7 +61,7 @@ import {
   getTrailer,
   TrailerVideo
 } from "./services/tmdb";
-import { VideoPlayerModal } from "./components/VideoPlayerModal";
+
 import type { LiveChannel } from "./data/liveChannels";
 import { AuthModal } from "./components/AuthModal";
 import { PaywallModal } from "./components/PaywallModal";
@@ -140,7 +140,7 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 };
 
 
-import { HomePage } from './pages/HomePage';
+const HomePage = lazyWithRetry(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
 const DetailsPage = lazyWithRetry(() => import('./pages/DetailsPage').then(m => ({ default: m.DetailsPage })));
 const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearchPage').then(m => ({ default: m.GlobalSearchPage })));
 const UserProfilePage = lazyWithRetry(() => import('./pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
@@ -149,6 +149,7 @@ const DownloadsPage = lazyWithRetry(() => import('./pages/DownloadsPage').then(m
 const GlobalCatalogPage = lazyWithRetry(() => import('./pages/GlobalCatalogPage').then(m => ({ default: m.GlobalCatalogPage })));
 const ProviderPage = lazyWithRetry(() => import('./pages/ProviderPage').then(m => ({ default: m.ProviderPage })));
 const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.default })));
+const VideoPlayerModal = lazyWithRetry(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })));
 import { NavItem } from './components/NavItem';
 import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
 import { WhatsNewModal } from './components/WhatsNewModal';

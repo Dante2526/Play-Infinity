@@ -6,7 +6,9 @@
 const fs = require('fs');
 const path = require('path');
 
-const catalogPath = path.join(process.cwd(), 'public', 'data', 'encontrei-catalog.json');
+const oldCatalogPath = path.join(process.cwd(), 'public', 'data', 'encontrei-catalog.json');
+const newCatalogPath = path.join(process.cwd(), 'data', 'encontrei-catalog.json');
+const catalogPath = fs.existsSync(newCatalogPath) ? newCatalogPath : oldCatalogPath;
 
 if (!fs.existsSync(catalogPath)) {
   console.error(`❌ ERRO NO BUILD: Catálogo não encontrado em ${catalogPath}`);

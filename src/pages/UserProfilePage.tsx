@@ -67,7 +67,6 @@ import {
   getTrailer,
   TrailerVideo
 } from "../services/tmdb";
-import { VideoPlayerModal } from "../components/VideoPlayerModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
