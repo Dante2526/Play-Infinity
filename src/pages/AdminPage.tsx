@@ -960,7 +960,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             role="button"
             tabIndex={0}
             title="Clique para ver os usuários assistindo agora"
-            className="bg-gradient-to-br from-orange-600/20 to-orange-900/20 hover:from-orange-600/30 hover:to-orange-900/30 border border-orange-500/20 hover:border-orange-500/40 backdrop-blur-xl rounded-[28px] p-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] flex flex-col relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
+            className="group bg-gradient-to-br from-orange-600/20 to-orange-900/20 hover:from-orange-600/30 hover:to-orange-900/30 border border-orange-500/20 hover:border-orange-500/40 backdrop-blur-xl rounded-[28px] p-6 shadow-[0_0_30px_rgba(234,88,12,0.15)] flex flex-col relative overflow-hidden cursor-pointer transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
             <div className="flex items-center justify-between mb-4 text-white/90">
@@ -968,11 +968,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <div className="p-3 bg-orange-500 text-white rounded-[18px] shadow-lg animate-pulse">
                   <Activity className="w-6 h-6" />
                 </div>
-                <span className="font-bold whitespace-nowrap">Assistindo Agora</span>
+                <span className="font-bold text-lg">Assistindo Agora</span>
               </div>
-              <span className="text-[11px] font-bold text-orange-400 bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-full flex items-center gap-1 whitespace-nowrap shrink-0">
-                Ver lista
-              </span>
+              <div className="w-8 h-8 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shrink-0 transition-colors group-hover:bg-orange-500/20">
+                <Eye className="w-4 h-4 text-orange-400" />
+              </div>
             </div>
             <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
             <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-2">
