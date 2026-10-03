@@ -4352,7 +4352,7 @@ app.use("/api/admin", adminOpsRouter);
         return res.status(403).send("Acesso a IP privado, local ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      if (!isAllowedLiveStreamingDomain(parsed.hostname)) {
+      if (!isAllowedLiveStreamingDomain(parsed.hostname, req.query.referer as string | undefined)) {
         return res.status(403).send("Domínio não autorizado para proxy de streaming.");
       }
 
@@ -6534,7 +6534,7 @@ app.use("/api/admin", adminOpsRouter);
   import { loadNixplayCatalog } from "./server/services/nixplayCatalog";
 
   async function startServer() {
-    loadNixplayCatalog().catch(err => console.error("[Boot] Erro nixplay catalog:", err));
+    // loadNixplayCatalog().catch(err => console.error("[Boot] Erro nixplay catalog:", err));
     if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       const viteName = "vite";
       const { createServer: createViteServer } = await import(viteName);

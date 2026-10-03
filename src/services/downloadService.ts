@@ -2,7 +2,7 @@ import { findMovieByTmdbId, findEpisode } from "./encontreiCatalog";
 import { safeLocalStorage } from "../utils/safeStorage";
 
 // Base da VPS Oracle (Always Free até 10 TB de tráfego)
-const ORACLE_PROXY_BASE = (import.meta.env.VITE_PROXY_URL as string) || "https://play-infinity.stream";
+const ORACLE_PROXY_BASE = (import.meta.env.VITE_PROXY_URL as string) || "https://play-infinity-app.duckdns.org";
 
 export interface DownloadAvailability {
   available: boolean;

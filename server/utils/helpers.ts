@@ -164,7 +164,10 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
   "embedder.net",
   "warezcdn.net",
   "warezcdn.com",
-  "45.162.64.114",
+  "186.233.184.65",
+  "186.233.118.171",
+  "198.13.16.163",
+  "186.233.118.163",
   ...ALLOWED_STREAMING_DOMAINS
 ];
 
