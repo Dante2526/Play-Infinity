@@ -35,7 +35,7 @@ service cloud.firestore {
     // Regras para a coleção principal de usuários
     match /usuarios/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isSafeCreate();
+      allow create: if (isOwner(userId) && isSafeCreate()) || isAdmin();
       allow update: if (isOwner(userId) && isSafeUpdate()) || isAdmin();
       allow delete: if isAdmin();
     }
@@ -43,7 +43,7 @@ service cloud.firestore {
     // Regras para a coleção legada de usuários (users)
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow create: if isOwner(userId) && isSafeCreate();
+      allow create: if (isOwner(userId) && isSafeCreate()) || isAdmin();
       allow update: if (isOwner(userId) && isSafeUpdate()) || isAdmin();
       allow delete: if isAdmin();
     }
