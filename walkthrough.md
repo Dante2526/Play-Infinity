@@ -1,3 +1,12 @@
+## 03/10/2026 - Correções Live TV e Otimizações de Performance
+
+**Resumo:**
+- **Correção 502 na TV ao Vivo (Live TV):** A fonte `up.kiwi` expirava os tokens HLS muito rápido e respondia com `200 OK` + HTML de erro. Implementado "Watchdog" no `server/routes/videoScrapers.ts` para validar a tag `#EXTM3U` e renovar o token automaticamente sem queda.
+- **Otimização do encontrei-catalog.json (14 MB):** O JSON gigante foi removido da pasta `public/data/` para impedir que os clientes tentem baixá-lo. Agora ele reside em `data/` e é consumido *apenas* pelo backend via `encontreiLookup.ts`.
+- **Redução de Bundle React:** Componentes pesados do frontend (`AdminPage`, `VideoPlayerModal`, `DetailsPage`, etc) foram protegidos com `React.lazy()` via wrapper `lazyWithRetry` no `App.tsx`, garantindo code-splitting e melhor carregamento inicial da aplicação.
+
+---
+
 ## 03/10/2026 - Mega Refatoração de Rotas (server.ts modularizado)
 
 **Resumo:**

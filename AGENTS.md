@@ -102,3 +102,11 @@
 - **Versionamento Automático:** Toda vez que for necessário gerar um novo APK ou AAB para a Google Play Store, o agente DEVE incrementar automaticamente o `versionCode` (e `versionName` quando aplicável) no arquivo `android/app/build.gradle`.
 - **Prevenção de Erros na Loja:** A Google Play Console rejeita pacotes com códigos de versão já utilizados. O controle rígido desta numeração é responsabilidade da IA.
 - **Autorização Explícita:** NUNCA execute o commit/push para a branch `main` (que dispara o GitHub Actions para compilação do AAB) sem ANTES pedir autorização explícita do usuário. Pergunte sempre: "Deseja que eu envie para o GitHub Actions para gerar o novo AAB?".
+
+---
+
+## 8. Memória e Estado das Tarefas (Evitando Amnésia)
+
+- Devido à compactação de histórico em conversas longas, o agente pode perder o contexto de quais tarefas já foram concluídas e sugerir refazê-las.
+- **Antes de propor ou iniciar uma nova tarefa:** O agente DEVE SEMPRE consultar o arquivo `walkthrough.md` na raiz do projeto (se existir) ou verificar diretamente no código (via `grep_search`) se a alteração já não foi implementada por uma instância anterior.
+- **Após concluir um lote de tarefas:** O agente DEVE atualizar o `walkthrough.md` listando claramente o que foi feito, para que futuras instâncias saibam onde paramos.
