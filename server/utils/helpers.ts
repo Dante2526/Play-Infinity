@@ -134,7 +134,13 @@ const ALLOWED_STREAMING_DOMAINS = [
   "mixdrop.ag",
   "mxdrop.to",
   "mxdrop.top",
-  "mxcontent.net"
+  "mxcontent.net",
+  "pomfy.stream",
+  "pomfy.top",
+  "pomfy.vip",
+  "nixplay.lat",
+  "nixplay.com",
+  "nixplay.net"
 ];
 
 const ALLOWED_LIVE_STREAMING_DOMAINS = [
