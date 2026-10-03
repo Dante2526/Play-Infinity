@@ -95,12 +95,23 @@ process.on("uncaughtException", (err) => {
   // CSP permissiva libera players e imagens, mas barra XSS externo
   const isProd = process.env.NODE_ENV === 'production';
 
-  app.use(helmet({
-    frameguard: { action: 'sameorigin' },
+  // Cabeçalhos comuns às duas políticas
+  const commonHelmet = {
+    frameguard: { action: 'sameorigin' as const },
+    hsts: isProd ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
+    crossOriginResourcePolicy: { policy: "cross-origin" as const },
+    crossOriginEmbedderPolicy: false as const,
+    crossOriginOpenerPolicy: false as const
+  };
+
+  // 1) CSP restritiva: apenas para o app (HTML/JS próprios) fora de /api
+  const appHelmet = helmet({
+    ...commonHelmet,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://challenges.cloudflare.com", "https://turnstile.cloudflare.com", "https://apis.google.com", "https://www.gstatic.com", "https://*.firebaseapp.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://www.googletagmanager.com", "https://challenges.cloudflare.com", "https://turnstile.cloudflare.com", "https://apis.google.com", "https://www.gstatic.com", "https://*.firebaseapp.com", "https://cdn.jsdelivr.net"],
+        workerSrc: ["'self'", "blob:"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "blob:", "https:", "http:"],
         connectSrc: ["'self'", "ws:", "wss:", "https:", "http:"],
@@ -110,12 +121,16 @@ process.on("uncaughtException", (err) => {
         objectSrc: ["'none'"],
         ...(isProd ? { upgradeInsecureRequests: [] } : {})
       }
-    },
-    hsts: isProd ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-    crossOriginEmbedderPolicy: false,
-    crossOriginOpenerPolicy: false
-  }));
+    }
+  });
+
+  // 2) Páginas de player em /api/* (watchplayer-stream, myembed-stream, vidsrc, mixdrop...)
+  //    carregam <base>, CSS e scripts de terceiros: uma CSP restritiva as quebra por completo.
+  const playerHelmet = helmet({ ...commonHelmet, contentSecurityPolicy: false });
+
+  app.use((req, res, next) =>
+    req.path.startsWith("/api/") ? playerHelmet(req, res, next) : appHelmet(req, res, next)
+  );
 
   // Limite rigoroso de payload para mitigar ataques de exaustão de memória
   app.use(express.json({ limit: '10kb' }));
