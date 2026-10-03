@@ -816,7 +816,7 @@ export default function App() {
 
       {/* MOBILE BRANDING ON TOP */}
       {viewState.type !== 'admin' && (
-      <div className="lg:hidden absolute top-4 left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full">
+      <div className={`lg:hidden absolute ${Capacitor.isNativePlatform() ? 'top-10' : 'top-4'} left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full`}>
         <div 
           tabIndex={-1}
           data-no-tv-focus="true"
