@@ -1,4 +1,4 @@
-import { getFavoriteIds, getScheduleForFavorites, fetchDynamicScheduleForFavorites, SeriesScheduleEpisode } from "./favorites";
+import { getFavoriteIds, getFavoriteTimestamps, getScheduleForFavorites, fetchDynamicScheduleForFavorites, SeriesScheduleEpisode } from "./favorites";
 import { isEpisodeWatched } from "./watchedEpisodes";
 
 export interface EpisodeNotification {
@@ -117,6 +117,9 @@ export const getFavoriteEpisodeNotifications = (favoriteIds: number[]): EpisodeN
   const readIds = new Set(getReadNotificationIds());
   const allScheduled = getScheduleForFavorites(favoriteIds);
   const todayStr = new Date().toISOString().split('T')[0];
+  
+  // O(1) lookup para a data de favoritação de cada série
+  const favoriteTimestamps = getFavoriteTimestamps();
 
   // Filtra episódios que já saíram (today ou released até 30 dias atrás)
   const notifications: EpisodeNotification[] = [];
@@ -124,27 +127,52 @@ export const getFavoriteEpisodeNotifications = (favoriteIds: number[]): EpisodeN
   allScheduled.forEach(ep => {
     // Apenas episódios que já lançaram (data <= hoje)
     if (ep.airDate <= todayStr) {
-      const isWatched = isEpisodeWatched(ep.seriesId, ep.seasonNumber, ep.episodeNumber);
-      const isToday = ep.airDate === todayStr;
-      const isRead = readIds.has(ep.id);
+      // Pula séries já concluídas (Ended)
+      if (ep.status === 'series_ended' || ep.seriesStatus === 'Ended') {
+        return;
+      }
+      
+      // Regra de Ouro (Pedido do Usuário): 
+      // Não notificar episódios que foram lançados ANTES do usuário começar a seguir a série.
+      const favTimestamp = favoriteTimestamps[ep.seriesId];
+      if (favTimestamp) {
+        const favDateStr = new Date(favTimestamp).toISOString().split('T')[0];
+        // Se o episódio lançou antes do dia que ele favoritou, ignora.
+        if (ep.airDate < favDateStr) {
+          return;
+        }
+      }
 
-      notifications.push({
-        id: ep.id,
-        seriesId: ep.seriesId,
-        seriesTitle: ep.seriesTitle,
-        seriesPoster: ep.seriesPoster,
-        seriesBackdrop: ep.seriesBackdrop,
-        seasonNumber: ep.seasonNumber,
-        episodeNumber: ep.episodeNumber,
-        episodeTitle: ep.episodeTitle,
-        airDate: ep.airDate,
-        airTime: ep.airTime,
-        playerUrl: ep.playerUrl,
-        isNew: !isRead,
-        isToday,
-        isWatched,
-        releasedAgoText: formatReleasedAgo(ep.airDate)
-      });
+      // Calcula a diferença de dias
+      const releaseDate = new Date(ep.airDate);
+      const todayDate = new Date();
+      const diffTime = todayDate.getTime() - releaseDate.getTime();
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+      // Só mostra se for recente (até 30 dias atrás)
+      if (diffDays <= 30) {
+        const isWatched = isEpisodeWatched(ep.seriesId, ep.seasonNumber, ep.episodeNumber);
+        const isToday = ep.airDate === todayStr;
+        const isRead = readIds.has(ep.id);
+
+        notifications.push({
+          id: ep.id,
+          seriesId: ep.seriesId,
+          seriesTitle: ep.seriesTitle,
+          seriesPoster: ep.seriesPoster,
+          seriesBackdrop: ep.seriesBackdrop,
+          seasonNumber: ep.seasonNumber,
+          episodeNumber: ep.episodeNumber,
+          episodeTitle: ep.episodeTitle,
+          airDate: ep.airDate,
+          airTime: ep.airTime,
+          playerUrl: ep.playerUrl,
+          isNew: !isRead,
+          isToday,
+          isWatched,
+          releasedAgoText: formatReleasedAgo(ep.airDate)
+        });
+      }
     }
   });
 

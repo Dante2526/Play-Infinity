@@ -154,17 +154,39 @@ export const saveFavoriteIds = (ids: number[]) => {
   }
 };
 
+const FAVORITE_TIMESTAMPS_KEY = "playinfinity_favorite_timestamps";
+
+export const getFavoriteTimestamps = (): Record<number, number> => {
+  try {
+    const saved = localStorage.getItem(FAVORITE_TIMESTAMPS_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return {};
+};
+
+export const saveFavoriteTimestamps = (timestamps: Record<number, number>) => {
+  try {
+    localStorage.setItem(FAVORITE_TIMESTAMPS_KEY, JSON.stringify(timestamps));
+  } catch {}
+};
+
 export const toggleFavorite = (itemId: number): boolean => {
   const current = getFavoriteIds();
   const exists = current.includes(itemId);
   let updated: number[];
   
+  const timestamps = getFavoriteTimestamps();
+
   if (exists) {
     updated = current.filter(id => id !== itemId);
+    delete timestamps[itemId];
   } else {
     updated = [...current, itemId];
+    // Salva o timestamp exato de quando foi favoritado (em ms)
+    timestamps[itemId] = Date.now();
   }
   
+  saveFavoriteTimestamps(timestamps);
   saveFavoriteIds(updated);
   return !exists;
 };
