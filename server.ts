@@ -11,7 +11,7 @@ import helmet from "helmet";
 import crypto from "crypto";
 import { isServerBlacklisted } from "./src/data/serverBlacklist";
 import { WatchedItem, mostWatchedMemoryCache, scheduleAsyncSaveMostWatched, INITIAL_MOST_WATCHED } from "./server/services/mostWatched";
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "./server/utils/caches";
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, liveVariantRefreshCache, seasonAvailabilityCache } from "./server/utils/caches";
 import { sanitizeString, checkTrackPlayRateLimit, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl, validateSafeUrlAsync, ALLOWED_STREAMING_DOMAINS, isAllowedLiveStreamingDomain, timingSafeCompare, signProxyUrl, verifyProxySignature } from "./server/utils/helpers";
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";

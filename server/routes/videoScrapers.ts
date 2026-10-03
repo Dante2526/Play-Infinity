@@ -7,7 +7,7 @@ import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 import { resolveVixsrcStream, resolveDirectAnimeStream } from "./diagnostics";
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
+import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, liveVariantRefreshCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
@@ -2731,6 +2731,23 @@ const router = Router();
         return res.send(cached.buffer);
       }
 
+      // NOVO: Recuperação de Variante /auth/
+      // Se estamos pedindo uma variante com ?master=... e ela não está no cache ou o request direto der 502,
+      // nós podemos recarregar a URL mestre no backend para pegar a nova variante.
+      const masterUrl = req.query.master as string;
+      const vidx = req.query.vidx as string;
+      const masterSig = req.query.msig as string;
+      
+      if (masterUrl && vidx && masterSig && verifyProxySignature(masterUrl, masterSig)) {
+        const variantKey = `${masterUrl}|${vidx}`;
+        const freshVariantUrl = liveVariantRefreshCache.get(variantKey);
+        // Se a gente já refrescou recentemente e tem o link novo, repassa pra url atual
+        if (freshVariantUrl && freshVariantUrl !== rawUrl) {
+           req.query.url = freshVariantUrl; 
+           // continua com o novo rawUrl... (apenas reescreve localmente)
+        }
+      }
+
       // 3. Headers seguros: sem forjar IP arbitrário de terceiros
       const headers: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -2741,7 +2758,7 @@ const router = Router();
         headers["Referer"] = req.query.referer as string;
       }
 
-      let currentUrl = rawUrl;
+      let currentUrl = (req.query.url as string) || rawUrl; // Atualizado para suportar reescrita do req.query.url pelo cache
       let upstreamRes: Response | undefined;
       let redirects = 0;
       const MAX_REDIRECTS = 5;
@@ -2752,6 +2769,38 @@ const router = Router();
           redirect: "manual",
           signal: AbortSignal.timeout(12000)
         });
+
+        // NOVO: Tratamento especial para erro 502/404 em variante associada a um mestre (up.kiwi expire token)
+        if (!upstreamRes.ok && masterUrl && vidx && masterSig && verifyProxySignature(masterUrl, masterSig)) {
+           // Tenta buscar o mestre de novo e extrair a nova URL da variante respectiva
+           try {
+             const mRes = await fetch(masterUrl, { headers, redirect: "follow", signal: AbortSignal.timeout(8000) });
+             if (mRes.ok) {
+               const mTxt = await mRes.text();
+               if (mTxt.includes("#EXTM3U")) {
+                 let vIdxCounter = 0;
+                 let newVariant = "";
+                 const mLines = mTxt.split("\n").map(l => l.trim());
+                 for (const line of mLines) {
+                   if (line && !line.startsWith("#")) { // é uma variante
+                     if (vIdxCounter.toString() === vidx) {
+                       newVariant = line.startsWith("http") ? line : new URL(line, mRes.url || masterUrl).toString();
+                       break;
+                     }
+                     vIdxCounter++;
+                   }
+                 }
+                 if (newVariant && newVariant !== currentUrl) {
+                    console.log(`[Proxy] Token renovado para a variante ${vidx}: ${newVariant.substring(0, 100)}...`);
+                    // Salva no cache para os próximos requests
+                    liveVariantRefreshCache.set(`${masterUrl}|${vidx}`, newVariant);
+                    currentUrl = newVariant;
+                    continue; // Tenta o fetch novamente no while
+                 }
+               }
+             }
+           } catch (e) {} // Se falhar buscar o master, ignora e deixa o upstreamRes devolver erro
+        }
 
         if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
           const location = upstreamRes.headers.get("location");
@@ -2876,7 +2925,12 @@ const router = Router();
         }
         const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
 
+        // Se este for um M3U8 Master (contém sub-manifestos #EXT-X-STREAM-INF)
+        const isMasterManifest = filteredLines.some(l => l.startsWith("#EXT-X-STREAM-INF"));
+        const masterParam = isMasterManifest ? `&master=${encodeURIComponent(finalUrl)}&msig=${signProxyUrl(finalUrl)}` : "";
+
         let lastTag = "";
+        let variantIndex = 0;
         const rewritten = filteredLines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return line;
@@ -2901,8 +2955,11 @@ const router = Router();
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
-            const segParam = isStreamManifest ? "&is_manifest=true" : "&is_segment=true";
+            
+            // É uma URI solta (variante num mestre ou segmento numa variante)
+            const isStreamManifest = lastTag === "#EXT-X-STREAM-INF" || isMasterManifest;
+            const segParam = isStreamManifest ? `&is_manifest=true${masterParam}&vidx=${variantIndex++}` : "&is_segment=true";
+            
             return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&sig=${signProxyUrl(fullSegUrl)}${segParam}`;
           } catch {
             return trimmed;

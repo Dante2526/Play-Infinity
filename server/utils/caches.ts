@@ -29,6 +29,11 @@ export const liveChunkCache = new LRUCache<string, { buffer: Buffer; contentType
   ttl: 1000 * 10, // 10 seconds
 });
 
+export const liveVariantRefreshCache = new LRUCache<string, string>({
+  max: 50,
+  ttl: 1000 * 60 * 5, // 5 mins
+});
+
 // 4. Search Cache - Limit to 50 items
 export const searchCache = new LRUCache<string, any>({
   max: 50,
