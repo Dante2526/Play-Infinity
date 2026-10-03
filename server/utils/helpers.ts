@@ -157,6 +157,7 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
   "cloudfront.net",
   "fastly.net",
   "qzz.io",
+  "up.kiwi",
   "watchplay.shop",
   "v1.watchplay.shop",
   "vixsrc.to",
@@ -179,7 +180,7 @@ const ALLOWED_LIVE_STREAMING_DOMAINS = [
 
 import crypto from "crypto";
 
-const PROXY_SECRET = process.env.PROXY_SECRET || crypto.randomBytes(32).toString('hex');
+const PROXY_SECRET = process.env.PROXY_SECRET || "play-infinity-live-proxy-secret-key-fixed-2026";
 
 export function signProxyUrl(targetUrl: string): string {
   const hmac = crypto.createHmac('sha256', PROXY_SECRET);
