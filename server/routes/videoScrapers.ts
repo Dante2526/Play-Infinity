@@ -2482,7 +2482,10 @@ const router = Router();
 
       try {
         // Encontrei (MixDrop)
-        const encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+        let encontreiPath = path.join(process.cwd(), "data", "encontrei-catalog.json");
+        if (!fs.existsSync(encontreiPath)) {
+          encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+        }
         if (fs.existsSync(encontreiPath)) {
           const encData = JSON.parse(fs.readFileSync(encontreiPath, "utf-8"));
           for (const ep of encData.episodes || []) {
