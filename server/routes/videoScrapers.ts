@@ -2748,6 +2748,8 @@ const router = Router();
         }
       }
 
+      let currentUrl = (req.query.url as string) || rawUrl; // Definido logo após a possível reescrita do cache
+
       // 3. Headers seguros: sem forjar IP arbitrário de terceiros
       const headers: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -2758,10 +2760,10 @@ const router = Router();
         headers["Referer"] = req.query.referer as string;
       }
 
-      let currentUrl = (req.query.url as string) || rawUrl; // Atualizado para suportar reescrita do req.query.url pelo cache
       let upstreamRes: Response | undefined;
       let redirects = 0;
       const MAX_REDIRECTS = 5;
+      let upstreamText: string | null = null;
 
       while (redirects < MAX_REDIRECTS) {
         upstreamRes = await fetch(currentUrl, {
@@ -2770,8 +2772,23 @@ const router = Router();
           signal: AbortSignal.timeout(12000)
         });
 
+        // Verificação antecipada de manifesto expirado (mesmo com status 200 OK)
+        let isInvalidManifest = false;
+        if (upstreamRes.ok && masterUrl && vidx) {
+           const cType = upstreamRes.headers.get("content-type") || "";
+           const isReqM3U8 = req.query.is_manifest === "true" || currentUrl.includes(".m3u8") || cType.includes("mpegurl");
+           if (isReqM3U8) {
+              const text = await upstreamRes.text();
+              upstreamText = text;
+              if (!text.includes("#EXTM3U")) {
+                 isInvalidManifest = true;
+                 console.log(`[Proxy] Upstream 200 mas manifesto inválido. Tentando renovar mestre para variante ${vidx}`);
+              }
+           }
+        }
+
         // NOVO: Tratamento especial para erro 502/404 em variante associada a um mestre (up.kiwi expire token)
-        if (!upstreamRes.ok && masterUrl && vidx && masterSig && verifyProxySignature(masterUrl, masterSig)) {
+        if ((!upstreamRes.ok || isInvalidManifest) && masterUrl && vidx && masterSig && verifyProxySignature(masterUrl, masterSig)) {
            // Tenta buscar o mestre de novo e extrair a nova URL da variante respectiva
            try {
              const mRes = await fetch(masterUrl, { headers, redirect: "follow", signal: AbortSignal.timeout(8000) });
@@ -2795,6 +2812,7 @@ const router = Router();
                     // Salva no cache para os próximos requests
                     liveVariantRefreshCache.set(`${masterUrl}|${vidx}`, newVariant);
                     currentUrl = newVariant;
+                    upstreamText = null; // limpa para o novo fetch
                     continue; // Tenta o fetch novamente no while
                  }
                }
@@ -2853,8 +2871,7 @@ const router = Router();
         contentType.includes("vnd.apple.mpegurl")
       );
 
-      let upstreamText: string | null = null;
-      if (!isExplicitSegment && (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t"))) {
+      if (!isExplicitSegment && upstreamText === null && (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t"))) {
         try {
           const peekText = await upstreamRes.text();
           if (peekText.includes("#EXTM3U")) {
