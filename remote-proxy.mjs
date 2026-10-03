@@ -214,8 +214,8 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
       
       const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity-app.duckdns.org";
-      const finalProto = (host.includes("duckdns.org") || proto === "https") ? "https" : proto;
+      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity.stream";
+      const finalProto = (host.includes("play-infinity.stream") || proto === "https") ? "https" : proto;
       const baseUrl = `${finalProto}://${host}`;
 
       let lastTag = "";
@@ -283,8 +283,8 @@ app.get("/api/live-stream-proxy", async (req, res) => {
       const EXTINF_SECONDS = 10;
       const seq = Math.floor(Date.now() / 1000 / EXTINF_SECONDS);
       const proto = req.headers["x-forwarded-proto"] || (req.secure ? "https" : "http");
-      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity-app.duckdns.org";
-      const finalProto = (host.includes("duckdns.org") || proto === "https") ? "https" : proto;
+      const host = req.headers["x-forwarded-host"] || req.headers["host"] || "play-infinity.stream";
+      const finalProto = (host.includes("play-infinity.stream") || proto === "https") ? "https" : proto;
       const baseUrl = `${finalProto}://${host}`;
       const manifest = [
         "#EXTM3U",

@@ -12,7 +12,7 @@ A aplicação possui dois ecossistemas distintos de reprodução:
 | :--- | :--- | :--- |
 | **Componente Principal** | `LivePlayerModal.tsx` | `VideoPlayerModal.tsx` + `NetflixPlayerSkin.tsx` |
 | **Reprodução de Mídia** | Local (`new Hls()`, `<video>` nativo) | Iframe isolado com player HTML5 / Artplayer |
-| **Tráfego de Dados** | VPS Dedicada Oracle (`play-infinity-app.duckdns.org`) | **Direto da CDN de origem para o navegador do cliente** |
+| **Tráfego de Dados** | VPS Dedicada Oracle (`play-infinity.stream`) | **Direto da CDN de origem para o navegador do cliente** |
 | **Consumo de Banda** | Proxy dedicado para evitar limite do Render | **Zero tráfego de vídeo pelo servidor principal** |
 | **Controle de Interface** | Controles nativos da aplicação | Skin customizada Netflix comunicando via `postMessage` |
 

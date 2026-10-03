@@ -1,3 +1,21 @@
+## 03/10/2026 - Mega Refatoração de Rotas (server.ts modularizado)
+
+**Resumo:**
+- O monolito `server.ts` possuía ~6.700 linhas, misturando lógicas de proxy, pagamentos, scrapers (VOD) e serviços (TMDB, catálogo).
+- Ele foi dividido em múltiplos roteadores dedicados na pasta `server/routes/`.
+- **Fase 1:** Fix do bypass de segurança no `live-stream-proxy` (HMAC enforced, bypass por *referer* removido). Feita a proteção da backdoor REST do `requireAdminAuth.ts` via enforce de JWT.
+- **Fase 2:** 
+  - Pagamentos e webhooks do ASAAS extraídos para `payments.ts`.
+  - Rotas pesadas de streaming de VOD (`watchplayer-stream`, `anime-stream`, `vixsrc-stream`, `myembed-stream`, `pomfy-stream`) enviadas para `videoScrapers.ts`.
+  - HLS e Proxy CORS Anti-bloqueios transferidos sem perder o mecanismo de bypass.
+- **Fase 3 & 4:** 
+  - Criados `catalog.ts` para endpoints de visualização, rastreamento e disponibilidade.
+  - Criados `diagnostics.ts` para o medidor de speedtest, player info.
+  - Criados `mixdrop.ts` para scraping de streams.
+  - Criados `cast.ts` (integração Chromecast source info).
+- **Resultado:** O `server.ts` caiu drasticamente para ~380 linhas. O bundle principal de CJS em produção foi reduzido de ~475KB para ~380KB. Tudo homologado através do conjunto de testes (smoke tests), garantindo que os clientes e o HLS na Oracle VPS não tenham indisponibilidade.
+
+---
 # Walkthrough: Anotações e Descontos no Admin
 
 ## Tarefas Realizadas

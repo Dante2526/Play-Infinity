@@ -6,7 +6,7 @@ import crypto from "crypto";
 import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain, signProxyUrl, verifyProxySignature } from "../utils/helpers";
-import { resolveVixsrcStream, resolveDirectAnimeStream } from "../../server";
+import { resolveVixsrcStream, resolveDirectAnimeStream } from "./diagnostics";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
@@ -15,7 +15,6 @@ import { checkVipSeason, checkVizerSeason } from "./encontreiLookup";
 
 const router = Router();
 
-// API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
   router.get("/api/anime/hls-proxy", async (req, res) => {
     try {
       const rawUrl = req.query.url as string;
@@ -54,13 +53,30 @@ const router = Router();
         if (referer.startsWith("http")) originHeader = new URL(referer).origin;
       } catch {}
 
-      const upstreamRes = await fetch(rawUrl, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-          "Referer": referer,
-          "Origin": originHeader
-        }
+      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s");
+      // Timeout seguro: 8s para manifests m3u8, 15s para chunks/segmentos de vídeo
+      const timeoutMs = isSegment ? 15000 : 8000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+      // Se o cliente (navegador/player) cancelar ou fechar a conexão, aborta o upstream imediatamente
+      req.on("close", () => {
+        controller.abort();
       });
+
+      let upstreamRes: Response;
+      try {
+        upstreamRes = await fetch(rawUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": referer,
+            "Origin": originHeader
+          },
+          signal: controller.signal
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
 
       if (!upstreamRes.ok) {
         return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
@@ -106,12 +122,19 @@ const router = Router();
         return res.send(buffer);
       }
     } catch (err: any) {
-      console.error("[HLS Proxy Error]:", err.message);
-      return res.status(500).send("Proxy error");
+      if (err.name === "AbortError") {
+        if (!res.headersSent) {
+          return res.status(504).send("Gateway Timeout: CDN upstream demorou para responder");
+        }
+        return;
+      }
+      if (!res.headersSent) {
+        console.error("[HLS Proxy Error]:", err.message);
+        return res.status(500).send("Proxy error");
+      }
     }
   });
 
-// API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
   // API 4.8: Servidor Nativo Vixsrc com Stream Direto HLS em Artplayer com Skin Netflix
   router.get("/api/vixsrc-stream", async (req, res) => {
     const { id, type = "movie", s = "1", e = "1" } = req.query;
@@ -257,7 +280,118 @@ const router = Router();
 
                 setInterval(sendStatus, 300);
 
+                // Auto-Healer A/V Sync para Artplayer HLS
+                (function initAVSyncArtHls() {
+                  var lastFrameCallbackTime = Date.now();
+                  var lastCheckedCurrentTime = 0;
+                  var lastTotalFrames = 0;
+                  var stallTicks = 0;
+                  var isHealing = false;
+                  var lastHealAt = 0;
+
+                  function trackFrameRender(v) {
+                    if (!v) return;
+                    if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                      v._rvfcActive = true;
+                      function onFrame() {
+                        lastFrameCallbackTime = Date.now();
+                        if (v && !v.paused) {
+                          v.requestVideoFrameCallback(onFrame);
+                        } else if (v) {
+                          v._rvfcActive = false;
+                        }
+                      }
+                      try { v.requestVideoFrameCallback(onFrame); } catch(e) { v._rvfcActive = false; }
+                    }
+                  }
+
+                  setInterval(function() {
+                    var v = art.video || document.querySelector("video");
+                    if (!v) return;
+                    trackFrameRender(v);
+
+                    if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                      stallTicks = 0;
+                      lastCheckedCurrentTime = v.currentTime || 0;
+                      return;
+                    }
+
+                    var now = Date.now();
+                    var cur = v.currentTime || 0;
+                    var audioMoving = cur > (lastCheckedCurrentTime + 0.35);
+                    lastCheckedCurrentTime = cur;
+
+                    if (audioMoving) {
+                      var frameFresh = false;
+                      if (typeof v.requestVideoFrameCallback === 'function') {
+                        if ((now - lastFrameCallbackTime) < 1800) frameFresh = true;
+                      }
+                      if (typeof v.getVideoPlaybackQuality === 'function') {
+                        try {
+                          var q = v.getVideoPlaybackQuality();
+                          if (q && typeof q.totalVideoFrames === 'number') {
+                            if (q.totalVideoFrames > lastTotalFrames) {
+                              frameFresh = true;
+                              lastTotalFrames = q.totalVideoFrames;
+                            }
+                          }
+                        } catch(e) {}
+                      }
+
+                      if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                        stallTicks++;
+                        if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                          isHealing = true;
+                          lastHealAt = now;
+                          stallTicks = 0;
+                          try {
+                            if (art && art.hls && typeof art.hls.recoverMediaError === 'function') {
+                              art.hls.recoverMediaError();
+                            }
+                            var nowP = v.currentTime;
+                            v.currentTime = nowP + 0.005;
+                            v._rvfcActive = false;
+                            trackFrameRender(v);
+                          } catch(err) {}
+                          finally { setTimeout(function() { isHealing = false; }, 800); }
+                        }
+                      } else {
+                        stallTicks = 0;
+                      }
+                    }
+                  }, 800);
+                })();
+
                 window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                   if (!e.data) return;
                   var v = art.video || document.querySelector("video");
 
@@ -279,13 +413,9 @@ const router = Router();
                       break;
                     case "SEEK":
                     case "SEEK_ABSOLUTE":
-                    case "SEEK_RELATIVE":
-                      var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                       if (typeof t === "number" && !isNaN(t)) {
-                        var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
-                        if (activeHls && typeof activeHls.startLoad === "function") {
-                          try { activeHls.startLoad(t); } catch(err) {}
-                        }
                         if (art) art.currentTime = t;
                         else if (v) v.currentTime = t;
                         sendStatus();
@@ -335,8 +465,6 @@ const router = Router();
     }
   });
 
-// API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
-  // API 4.8: Servidor Nativo Vixsrc com Stream Direto HLS em Artplayer com Skin Netflix
   // API 5: Servidor Nativo de Anime e Alternativas
   router.get("/api/anime-stream", async (req, res) => {
     const { provider = "consumet", id, s = "1", e = "1", title = "", type = "tv" } = req.query;
@@ -445,6 +573,35 @@ const router = Router();
 
                   // Escuta comandos vindos da Skin Netflix
                   window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                     if (!e.data) return;
                     switch(e.data.type) {
                       case "PLAY":
@@ -461,8 +618,8 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                      case "SEEK_RELATIVE":
-                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           curTime = Math.max(0, Math.min(t, dur));
                           sendStatus();
@@ -630,7 +787,118 @@ const router = Router();
 
                   setInterval(sendStatus, 300);
 
+                  // Auto-Healer A/V Sync
+                  (function initAVSyncArt2() {
+                    var lastFrameCallbackTime = Date.now();
+                    var lastCheckedCurrentTime = 0;
+                    var lastTotalFrames = 0;
+                    var stallTicks = 0;
+                    var isHealing = false;
+                    var lastHealAt = 0;
+
+                    function trackFrameRender(v) {
+                      if (!v) return;
+                      if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                        v._rvfcActive = true;
+                        function onFrame() {
+                          lastFrameCallbackTime = Date.now();
+                          if (v && !v.paused) {
+                            v.requestVideoFrameCallback(onFrame);
+                          } else if (v) {
+                            v._rvfcActive = false;
+                          }
+                        }
+                        try { v.requestVideoFrameCallback(onFrame); } catch(e) { v._rvfcActive = false; }
+                      }
+                    }
+
+                    setInterval(function() {
+                      var v = art.video || document.querySelector("video");
+                      if (!v) return;
+                      trackFrameRender(v);
+
+                      if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                        stallTicks = 0;
+                        lastCheckedCurrentTime = v.currentTime || 0;
+                        return;
+                      }
+
+                      var now = Date.now();
+                      var cur = v.currentTime || 0;
+                      var audioMoving = cur > (lastCheckedCurrentTime + 0.35);
+                      lastCheckedCurrentTime = cur;
+
+                      if (audioMoving) {
+                        var frameFresh = false;
+                        if (typeof v.requestVideoFrameCallback === 'function') {
+                          if ((now - lastFrameCallbackTime) < 1800) frameFresh = true;
+                        }
+                        if (typeof v.getVideoPlaybackQuality === 'function') {
+                          try {
+                            var q = v.getVideoPlaybackQuality();
+                            if (q && typeof q.totalVideoFrames === 'number') {
+                              if (q.totalVideoFrames > lastTotalFrames) {
+                                frameFresh = true;
+                                lastTotalFrames = q.totalVideoFrames;
+                              }
+                            }
+                          } catch(e) {}
+                        }
+
+                        if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                          stallTicks++;
+                          if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                            isHealing = true;
+                            lastHealAt = now;
+                            stallTicks = 0;
+                            try {
+                              if (art && art.hls && typeof art.hls.recoverMediaError === 'function') {
+                                art.hls.recoverMediaError();
+                              }
+                              var nowP = v.currentTime;
+                              v.currentTime = nowP + 0.005;
+                              v._rvfcActive = false;
+                              trackFrameRender(v);
+                            } catch(err) {}
+                            finally { setTimeout(function() { isHealing = false; }, 800); }
+                          }
+                        } else {
+                          stallTicks = 0;
+                        }
+                      }
+                    }, 800);
+                  })();
+
                   window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
                     if (!e.data) return;
                     var v = art.video || document.querySelector("video");
 
@@ -652,13 +920,9 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                      case "SEEK_RELATIVE":
-                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
-                          var activeHls = (window.artInstance && window.artInstance.hls) || window.__lastHlsInstance;
-                          if (activeHls && typeof activeHls.startLoad === "function") {
-                            try { activeHls.startLoad(t); } catch(err) {}
-                          }
                           if (art) art.currentTime = t;
                           else if (v) v.currentTime = t;
                           sendStatus();
@@ -718,9 +982,10 @@ const router = Router();
     }
   });
 
-// API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
-  // API 4.8: Servidor Nativo Vixsrc com Stream Direto HLS em Artplayer com Skin Netflix
-  // API 5: Servidor Nativo de Anime e Alternativas
+  // Cache em memória para rota/prefixo funcional de séries do WatchPlayer (/tvshow/, /series/, /serie/) com TTL de 24h
+  const watchPlayerWorkingPrefixCache = new Map<string, { prefix: string; timestamp: number }>();
+  const PREFIX_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas em milissegundos
+
   // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   router.get("/api/watchplayer-stream", async (req, res) => {
     try {
@@ -770,49 +1035,78 @@ const router = Router();
 
       const parsedTarget = new URL(targetUrl);
       let effectiveTargetUrl = targetUrl;
-      let upstreamRes = await fetch(effectiveTargetUrl, {
-        headers: {
-          "Referer": parsedTarget.origin + "/",
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        },
-        redirect: "manual",
-      });
+
+      // Otimização: Identifica ID da série e aplica prefixo funcional previamente cacheado
+      const seriesKeyMatch = parsedTarget.pathname.match(/\/(tvshow|series|serie)\/([^/]+)/);
+      const seriesId = seriesKeyMatch ? seriesKeyMatch[2] : null;
+      const currentPrefix = seriesKeyMatch ? seriesKeyMatch[1] : null;
+
+      const cached = seriesId ? watchPlayerWorkingPrefixCache.get(seriesId) : null;
+      if (seriesId && currentPrefix && cached && (Date.now() - cached.timestamp < PREFIX_CACHE_TTL)) {
+        const cachedPrefix = cached.prefix;
+        if (cachedPrefix !== currentPrefix) {
+          effectiveTargetUrl = effectiveTargetUrl.replace(`/${currentPrefix}/`, `/${cachedPrefix}/`);
+        }
+      }
+
+      const initialController = new AbortController();
+      const initialTimeout = setTimeout(() => initialController.abort(), 4500);
+      req.on("close", () => initialController.abort());
 
       let html = "";
       let isUnavailable = false;
+      let upstreamRes: Response | null = null;
 
-      // Trata redirecionamentos manuais (evitando seguir para telas de login / painel administrativo)
-      if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-        const loc = upstreamRes.headers.get("location") || "";
-        if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
-          isUnavailable = true;
-        } else {
-          try {
-            const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
-            effectiveTargetUrl = redirectedUrl;
-            upstreamRes = await fetch(effectiveTargetUrl, {
-              headers: {
-                "Referer": parsedTarget.origin + "/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              },
-              redirect: "manual",
-            });
-          } catch (e) {
+      try {
+        let resAttempt = await fetch(effectiveTargetUrl, {
+          headers: {
+            "Referer": parsedTarget.origin + "/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          },
+          redirect: "manual",
+          signal: initialController.signal,
+        });
+
+        // Trata redirecionamentos manuais (evitando telas de login ou erro)
+        if (resAttempt.status >= 300 && resAttempt.status < 400) {
+          const loc = resAttempt.headers.get("location") || "";
+          if (loc.includes("/login") || loc.includes("/admin") || loc.includes("/painel")) {
             isUnavailable = true;
+          } else {
+            try {
+              const redirectedUrl = new URL(loc, effectiveTargetUrl).toString();
+              effectiveTargetUrl = redirectedUrl;
+              resAttempt = await fetch(effectiveTargetUrl, {
+                headers: {
+                  "Referer": parsedTarget.origin + "/",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                redirect: "manual",
+                signal: initialController.signal,
+              });
+            } catch (e) {
+              isUnavailable = true;
+            }
           }
         }
-      }
 
-      if (upstreamRes.status === 200) {
-        html = await upstreamRes.text();
-        if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+        upstreamRes = resAttempt;
+
+        if (upstreamRes.status === 200) {
+          html = await upstreamRes.text();
+          if (isWatchPlayerUnavailable(html, effectiveTargetUrl, upstreamRes.status)) {
+            isUnavailable = true;
+          }
+        } else {
           isUnavailable = true;
         }
-      } else {
+      } catch (err) {
         isUnavailable = true;
+      } finally {
+        clearTimeout(initialTimeout);
       }
 
-      // Se a rota padrão falhou (ex: 404 ou login), tenta alternar automaticamente entre /tvshow/ e /series/
+      // Se a rota inicial falhou, testa todas as variantes concorrentemente em paralelo (sem esperar uma por uma)
       if (isUnavailable) {
         const alternateVariants: string[] = [];
         if (effectiveTargetUrl.includes("/tvshow/")) {
@@ -826,26 +1120,68 @@ const router = Router();
           alternateVariants.push(effectiveTargetUrl.replace("/serie/", "/tvshow/"));
         }
 
-        for (const altUrl of alternateVariants) {
+        if (alternateVariants.length > 0) {
+          const probeVariant = async (altUrl: string): Promise<{ url: string; res: Response; html: string }> => {
+            const probeCtrl = new AbortController();
+            const probeTimer = setTimeout(() => probeCtrl.abort(), 4000);
+            req.on("close", () => probeCtrl.abort());
+
+            try {
+              let currentUrl = altUrl;
+              let altRes = await fetch(currentUrl, {
+                headers: {
+                  "Referer": new URL(altUrl).origin + "/",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                },
+                redirect: "manual",
+                signal: probeCtrl.signal,
+              });
+
+              if (altRes.status >= 300 && altRes.status < 400) {
+                const loc = altRes.headers.get("location") || "";
+                if (!loc.includes("/login") && !loc.includes("/admin") && !loc.includes("/painel")) {
+                  currentUrl = new URL(loc, currentUrl).toString();
+                  altRes = await fetch(currentUrl, {
+                    headers: {
+                      "Referer": new URL(altUrl).origin + "/",
+                      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    },
+                    redirect: "manual",
+                    signal: probeCtrl.signal,
+                  });
+                }
+              }
+
+              if (altRes.status === 200) {
+                const altText = await altRes.text();
+                if (!isWatchPlayerUnavailable(altText, currentUrl, altRes.status)) {
+                  return { url: currentUrl, res: altRes, html: altText };
+                }
+              }
+              throw new Error("Unavailable");
+            } finally {
+              clearTimeout(probeTimer);
+            }
+          };
+
           try {
-            const altRes = await fetch(altUrl, {
-              headers: {
-                "Referer": new URL(altUrl).origin + "/",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              },
-              redirect: "manual",
-            });
-            if (altRes.status === 200) {
-              const altText = await altRes.text();
-              if (!isWatchPlayerUnavailable(altText, altUrl, altRes.status)) {
-                effectiveTargetUrl = altUrl;
-                upstreamRes = altRes;
-                html = altText;
-                isUnavailable = false;
-                break;
+            // Executa todas as variantes em paralelo: a primeira que responder com sucesso vence imediatamente!
+            const winner = await Promise.any(alternateVariants.map(probeVariant));
+            effectiveTargetUrl = winner.url;
+            upstreamRes = winner.res;
+            html = winner.html;
+            isUnavailable = false;
+
+            // Salva no cache o prefixo que funcionou para essa série
+            if (seriesId) {
+              const matchedWinner = winner.url.match(/\/(tvshow|series|serie)\//);
+              if (matchedWinner) {
+                watchPlayerWorkingPrefixCache.set(seriesId, { prefix: matchedWinner[1], timestamp: Date.now() });
               }
             }
-          } catch (e) {}
+          } catch (e) {
+            // Nenhuma variante respondeu positivamente
+          }
         }
       }
 
@@ -867,6 +1203,39 @@ const router = Router();
                 window.parent.postMessage({ 
                   type: "WATCHPLAY_UNAVAILABLE", 
                   reason: "content_not_found"
+                }, "*");
+              } catch(e) {}
+            </script>
+          </body>
+          </html>
+        `);
+      }
+
+      // 0.05 Filtro de Idioma: Detecta se o WatchPlayer retornou a versão Legendada / Inglês
+      // Se for Legendado, aciona o fallback silencioso do frontend para buscar a versão Dublada nos outros servidores (VIP/NixPlay/MixDrop).
+      const isLegendado = html.includes('MyPlayerAudio="Legendado"') || 
+                          html.includes("MyPlayerAudio='Legendado'") ||
+                          html.includes('MyPlayerAudio="Inglês"') ||
+                          html.includes("MyPlayerAudio='Inglês'");
+
+      if (isLegendado) {
+        console.warn(`[WatchPlayer Stream]: Versão Legendada/Inglês detectada (${effectiveTargetUrl}). Acionando fallback para buscar versão PT-BR.`);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.status(404).send(`
+          <!DOCTYPE html>
+          <html lang="pt-BR">
+          <head>
+            <meta charset="utf-8">
+            <style>
+              html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+            </style>
+          </head>
+          <body>
+            <script>
+              try {
+                window.parent.postMessage({ 
+                  type: "WATCHPLAY_UNAVAILABLE", 
+                  reason: "english_language"
                 }, "*");
               } catch(e) {}
             </script>
@@ -1119,7 +1488,8 @@ const router = Router();
           [class*="changeOptions"],
           [class*="players_select"],
           [class*="option"],
-          [id*="option"] {
+          [id*="option"],
+          .art-poster {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
@@ -1244,7 +1614,7 @@ const router = Router();
                 cfg.backBufferLength = 90; // Libera imediatamente segmentos passados da memória
                 cfg.maxBufferSize = 100 * 1000 * 1000;
                 cfg.maxBufferHole = 0.5;
-                cfg.nudgeOffset = 0.3; // Aumentado de 0.15 → 0.3 pra corrigir desync audio/video apóps seek
+                cfg.nudgeOffset = 0.15; // Nudge automático para transpor gaps de keyframe
                 cfg.nudgeMaxRetry = 6;
                 cfg.maxFragLookUpTolerance = 0.25;
                 cfg.highBufferWatchdogPeriod = 1.5;
@@ -1307,7 +1677,11 @@ const router = Router();
                   if (node.nodeType !== 1) continue;
                   var cls = typeof node.className === 'string' ? node.className : '';
                   var tag = (node.tagName || '').toUpperCase();
-                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo
+                  // Remove poster padrao para evitar imagem de fundo (fundo cinza piscando)
+                  if (tag === 'VIDEO') {
+                    node.setAttribute('poster', 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7');
+                  }
+                  // Nunca tocar no container raiz do Artplayer nem nos elementos de vídeo para outras propriedades
                   if (cls.indexOf('art-video-player') !== -1 || tag === 'VIDEO') continue;
                   // Ocultar apenas elementos de overlay nativos desnecessários
                   if (
@@ -1344,7 +1718,9 @@ const router = Router();
                 if (v.paused && (v.readyState >= 1 || v.currentTime > 0)) {
                   v.play().catch(function() {
                     v.muted = true;
-                    v.play().catch(function() {});
+                    v.play().then(function() {
+                      try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+                    }).catch(function() {});
                   });
                 }
                 // Se já possui duração válida ou está reproduzindo, envia status e estabiliza
@@ -1472,7 +1848,9 @@ const router = Router();
               if (v) {
                 v.play().catch(function() {
                   v.muted = true;
-                  v.play().catch(function() {});
+                  v.play().then(function() {
+                    try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+                  }).catch(function() {});
                 });
                 sendPlayerStatus(v);
               }
@@ -1600,6 +1978,35 @@ const router = Router();
 
             // Mensagens enviadas pela Skin Netflix VIP
             window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
               if (!e.data) return;
               var v = getVideoElement();
 
@@ -1622,7 +2029,8 @@ const router = Router();
 
                 case "SEEK":
                 case "SEEK_ABSOLUTE":
-                  var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                   if (typeof t === "number" && !isNaN(t)) {
                     var maxDur = (v && v.duration > 0) ? v.duration : ((window.artInstance && window.artInstance.duration > 0) ? window.artInstance.duration : 99999);
                     var targetTime = Math.max(0, Math.min(t, maxDur - 0.5));
@@ -1826,6 +2234,110 @@ const router = Router();
               } catch(err) {}
             });
 
+            // Monitor e Auto-Healer de Integridade Áudio/Vídeo (A/V Sync & Frame Freeze Recovery)
+            // Corrige automaticamente quando a voz/áudio continua mas a imagem do vídeo congela no navegador/GPU
+            (function initAVSyncAutoHealer() {
+              var lastFrameCallbackTime = Date.now();
+              var lastCheckedCurrentTime = 0;
+              var lastTotalFrames = 0;
+              var stallTicks = 0;
+              var isHealing = false;
+              var lastHealAt = 0;
+
+              function trackFrameRender(v) {
+                if (!v) return;
+                if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                  v._rvfcActive = true;
+                  function onFrame() {
+                    lastFrameCallbackTime = Date.now();
+                    if (v && !v.paused) {
+                      v.requestVideoFrameCallback(onFrame);
+                    } else if (v) {
+                      v._rvfcActive = false;
+                    }
+                  }
+                  try {
+                    v.requestVideoFrameCallback(onFrame);
+                  } catch(e) {
+                    v._rvfcActive = false;
+                  }
+                }
+              }
+
+              function checkAVHealth() {
+                var v = getVideoElement();
+                if (!v) return;
+
+                trackFrameRender(v);
+
+                if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                  stallTicks = 0;
+                  lastCheckedCurrentTime = v.currentTime || 0;
+                  return;
+                }
+
+                var now = Date.now();
+                var cur = v.currentTime || 0;
+                var audioMovingForward = cur > (lastCheckedCurrentTime + 0.35);
+                lastCheckedCurrentTime = cur;
+
+                if (audioMovingForward) {
+                  var frameIsFresh = false;
+
+                  if (typeof v.requestVideoFrameCallback === 'function') {
+                    if ((now - lastFrameCallbackTime) < 1800) {
+                      frameIsFresh = true;
+                    }
+                  }
+
+                  if (typeof v.getVideoPlaybackQuality === 'function') {
+                    try {
+                      var q = v.getVideoPlaybackQuality();
+                      if (q && typeof q.totalVideoFrames === 'number') {
+                        if (q.totalVideoFrames > lastTotalFrames) {
+                          frameIsFresh = true;
+                          lastTotalFrames = q.totalVideoFrames;
+                        }
+                      }
+                    } catch(e) {}
+                  }
+
+                  // Se o áudio está avançando há mais de 1.5s mas NENHUM frame de vídeo foi apresentado:
+                  if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                    stallTicks++;
+                    if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                      console.warn('[Play Infinity A/V Sync] Imagem congelada com áudio em reprodução detectada. Executando auto-healing instantâneo...');
+                      isHealing = true;
+                      lastHealAt = now;
+                      stallTicks = 0;
+
+                      try {
+                        var hls = (window.artInstance && window.artInstance.hls) || window.hls;
+                        if (hls && typeof hls.recoverMediaError === 'function') {
+                          try { hls.recoverMediaError(); } catch(he) {}
+                        }
+
+                        // Micro-nudge no decodificador de vídeo para desobstruir o pipeline da GPU sem perda de posição
+                        var nowPos = v.currentTime;
+                        v.currentTime = nowPos + 0.005;
+
+                        v._rvfcActive = false;
+                        trackFrameRender(v);
+                      } catch(err) {
+                        console.error('[Play Infinity A/V Recovery Error]:', err);
+                      } finally {
+                        setTimeout(function() { isHealing = false; }, 800);
+                      }
+                    }
+                  } else {
+                    stallTicks = 0;
+                  }
+                }
+              }
+
+              setInterval(checkAVHealth, 800);
+            })();
+
             // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
             var cleanArtNodes = function() {
               if (window.artInstance) {
@@ -1969,11 +2481,10 @@ const router = Router();
       const catalogEpisodeNumbers = new Set<number>();
 
       try {
-        const fsModule = await import("fs");
-        const pathModule = await import("path");
-        const encontreiPath = pathModule.join(process.cwd(), "public", "data", "encontrei-catalog.json");
-        if (fsModule.existsSync(encontreiPath)) {
-          const encData = JSON.parse(fsModule.readFileSync(encontreiPath, "utf-8"));
+        // Encontrei (MixDrop)
+        const encontreiPath = path.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+        if (fs.existsSync(encontreiPath)) {
+          const encData = JSON.parse(fs.readFileSync(encontreiPath, "utf-8"));
           for (const ep of encData.episodes || []) {
             if (ep.tmdb_id === numericId && ep.season === season && typeof ep.episode === "number") {
               catalogEpisodeNumbers.add(ep.episode);
@@ -2018,6 +2529,8 @@ const router = Router();
         );
       };
 
+      const cachedPrefixObj = watchPlayerWorkingPrefixCache.get(tmdbId);
+      const prefix = (cachedPrefixObj && (Date.now() - cachedPrefixObj.timestamp < PREFIX_CACHE_TTL)) ? cachedPrefixObj.prefix : "tvshow";
       const checkEpisode = async (episode: number): Promise<boolean> => {
         const checkNixplay = async (): Promise<boolean> => {
           try {
@@ -2042,21 +2555,21 @@ const router = Router();
           const nix = await checkNixplay();
           if (nix) return true;
           try {
-            const vizerOk = await checkVizerSeason(tmdbId, season);
+            const vizerOk = await checkVizerSeason(numericId, season);
             if (vizerOk) return true;
           } catch {}
           try {
-            const vipOk = await checkVipSeason(tmdbId, season);
+            const vipOk = await checkVipSeason(numericId, season);
             if (vipOk) return true;
           } catch {}
           try {
-            const vsOk = await checkVidsrcSeason(tmdbId, season);
+            const vsOk = await checkVidsrcSeason(numericId, season);
             if (vsOk) return true;
           } catch {}
           return false;
         };
 
-        const url = `https://v1.watchplay.shop/tvshow/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
+        const url = `https://v1.watchplay.shop/${prefix}/${encodeURIComponent(tmdbId)}/${season}/${episode}`;
         const commonHeaders = {
           "Referer": "https://v1.watchplay.shop/",
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -2140,10 +2653,6 @@ const router = Router();
     }
   });
 
-// API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
-  // API 4.8: Servidor Nativo Vixsrc com Stream Direto HLS em Artplayer com Skin Netflix
-  // API 5: Servidor Nativo de Anime e Alternativas
-  // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   // ==========================================
   // API TV AO VIVO: PROXY HLS ANTI-CORS & CATÁLOGO DE CANAIS
   // ========================================================
@@ -2153,13 +2662,14 @@ const router = Router();
 
   router.get("/api/live-stream-proxy", async (req, res) => {
     try {
+      // 1. Controle de CORS estrito (impede que sites de terceiros usem nosso proxy para economizar banda)
       const origin = req.headers.origin as string | undefined;
       const isAllowedOrigin = !origin ||
         /^(https?:\/\/)?(localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i.test(origin) ||
         /^capacitor:\/\/localhost$/i.test(origin) ||
         /^ionic:\/\/localhost$/i.test(origin) ||
         /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*play-infinity\.stream$/i.test(origin) ||
-        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*duckdns\.org$/i.test(origin) ||
+
         /^(https?:\/\/)?play-infinity-[a-zA-Z0-9-]+\.run\.app$/i.test(origin);
 
       if (origin) {
@@ -2194,9 +2704,9 @@ const router = Router();
         return res.status(403).send("Protocolo inválido.");
       }
 
-      // Proteção Anti-SSRF avançada com resolução DNS e validação de IPv4/IPv6
+      // 2. Proteção Anti-SSRF (Resolução DNS ativa de IPv4/IPv6) e Allowlist de domínios homologados
       if (await isPrivateOrLocalHost(parsed.hostname)) {
-        return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
+        return res.status(403).send("Acesso a IP privado, local ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
       const signature = req.query.sig as string;
@@ -2218,6 +2728,7 @@ const router = Router();
         return res.send(cached.buffer);
       }
 
+      // 3. Headers seguros: sem forjar IP arbitrário de terceiros
       const headers: Record<string, string> = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "*/*"
@@ -2235,7 +2746,8 @@ const router = Router();
       while (redirects < MAX_REDIRECTS) {
         upstreamRes = await fetch(currentUrl, {
           headers,
-          redirect: "manual"
+          redirect: "manual",
+          signal: AbortSignal.timeout(12000)
         });
 
         if ([301, 302, 303, 307, 308].includes(upstreamRes.status)) {
@@ -2278,26 +2790,45 @@ const router = Router();
 
       const finalUrl = upstreamRes.url || currentUrl;
       const contentType = upstreamRes.headers.get("content-type") || "";
-      const isM3U8 = rawUrl.includes(".m3u8") || 
-                     finalUrl.includes(".m3u8") ||
-                     contentType.includes("mpegurl") || 
-                     contentType.includes("application/x-mpegURL") ||
-                     contentType.includes("vnd.apple.mpegurl");
+      const isExplicitSegment = req.query.is_segment === "true" || isSegment;
+
+      let isM3U8 = !isExplicitSegment && (
+        req.query.is_manifest === "true" ||
+        rawUrl.includes(".m3u8") || 
+        finalUrl.includes(".m3u8") ||
+        contentType.includes("mpegurl") || 
+        contentType.includes("application/x-mpegURL") ||
+        contentType.includes("vnd.apple.mpegurl")
+      );
+
+      let upstreamText: string | null = null;
+      if (!isExplicitSegment && (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t"))) {
+        try {
+          const peekText = await upstreamRes.text();
+          if (peekText.includes("#EXTM3U")) {
+            isM3U8 = true;
+            upstreamText = peekText;
+          } else {
+            upstreamText = peekText;
+          }
+        } catch (_) {}
+      }
 
       if (isM3U8) {
-        const text = await upstreamRes.text();
-
-        // Validação estrita de M3U8: evita repassar HTML de erro (como 404 do Xtream) ou corpo vazio como playlist
-        if (!text.trimStart().startsWith("#EXTM3U") && !text.includes("#EXTM3U")) {
-          console.warn(`[live-stream-proxy] Upstream não-m3u8 recebido para ${rawUrl} (size=${text.length}, head=${text.slice(0, 50).replace(/\n/g, "\\n")})`);
-          liveChunkCache.delete(rawUrl);
-          return res.status(502).send("Upstream retornou conteúdo inválido (não-m3u8)");
+        const text = upstreamText !== null ? upstreamText : await upstreamRes.text();
+        if (!text.includes("#EXTM3U")) {
+          return res.status(502).send("Manifesto inválido recebido da fonte original");
         }
-
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Cache-Control", "public, max-age=2, immutable");
 
-        const lines = text.split("\n");
+        let cleanText = text;
+        const m3uIdx = cleanText.indexOf("#EXTM3U");
+        if (m3uIdx !== -1) {
+          cleanText = cleanText.slice(m3uIdx);
+        }
+
+        const lines = cleanText.split("\n");
         const filteredLines: string[] = [];
         let skipNextLine = false;
 
@@ -2310,6 +2841,10 @@ const router = Router();
             continue;
           }
 
+          if (trimmed.startsWith("<") || trimmed.includes("</") || trimmed.includes("WARNING")) {
+            continue;
+          }
+
           if (skipNextLine && !trimmed.startsWith("#")) {
             skipNextLine = false;
             continue; // Pula a URI associada à qualidade baixa
@@ -2317,10 +2852,7 @@ const router = Router();
           skipNextLine = false;
 
           if (trimmed.startsWith("#EXT-X-STREAM-INF:")) {
-            // Permitimos o ABR do hls.js cair até 480p em caso de internet ruim — isso é
-            // essencial para ele conseguir se adaptar de verdade (ver nota anterior).
-            // Abaixo de 480p (360p, 240p, etc.) a qualidade fica ruim demais para o padrão
-            // do produto, então essas variantes continuam sendo removidas do manifesto.
+            // Permitimos o ABR cair até 480p em redes instáveis para evitar travamentos
             const resMatch = trimmed.match(/RESOLUTION=\d+x(\d+)/i);
             if (resMatch && parseInt(resMatch[1], 10) < 480) {
               skipNextLine = true;
@@ -2341,138 +2873,107 @@ const router = Router();
         }
         const refererParam = baseReferer ? `&referer=${encodeURIComponent(baseReferer)}` : "";
 
+        let lastTag = "";
         const rewritten = filteredLines.map(line => {
           const trimmed = line.trim();
           if (!trimmed) return line;
 
-          if (trimmed.includes('URI="')) {
-            return trimmed.replace(/URI="([^"]+)"/, (match, uri) => {
+          if (trimmed.startsWith("#")) {
+            lastTag = trimmed.split(":")[0];
+            return trimmed.replace(/URI="([^"]+)"/g, (match, uri) => {
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
                 if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}&sig=${signProxyUrl(fullUri)}&is_segment=true"`;
+                // URI= em tags são sempre sub-playlists (EXT-X-MEDIA, EXT-X-KEY, etc.)
+                // Devem usar is_manifest=true para que o proxy reescreva as URLs internas
+                // (se usarmos is_segment=true, o proxy pula o rewriting e o HLS.js
+                // recebe URLs diretas de plosia*.xyz causando erros CORS)
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&sig=${signProxyUrl(fullUri)}&is_manifest=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
             });
           }
 
-          if (trimmed.startsWith("#")) return trimmed;
-
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}&sig=${signProxyUrl(fullSegUrl)}&is_segment=true`;
+            const isStreamManifest = lastTag === "#EXT-X-STREAM-INF";
+            const segParam = isStreamManifest ? "&is_manifest=true" : "&is_segment=true";
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&sig=${signProxyUrl(fullSegUrl)}${segParam}`;
           } catch {
             return trimmed;
           }
         }).join("\n");
         
         const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
-        if (rewrittenBuffer.length > 0 && rewritten.includes("#EXTM3U")) {
-          liveChunkCache.set(rawUrl, {
-            buffer: rewrittenBuffer,
-            contentType: "application/vnd.apple.mpegurl; charset=utf-8",
-            expires: Date.now() + 2500
-          });
-        }
+        // Em live streaming contínuo com fragmentos curtos (2s), o manifesto M3U8 deve ser sempre ultra-fresco
+        liveChunkCache.set(rawUrl, {
+          buffer: rewrittenBuffer,
+          contentType: "application/vnd.apple.mpegurl; charset=utf-8",
+          expires: Date.now() + 500
+        });
 
+        res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         return res.send(rewrittenBuffer);
       }
 
       // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
       // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
-      if (req.query.is_segment !== "true" && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
-        // Libera explicitamente o corpo upstream e o socket TCP para evitar vazamento de descritores/memória
-        try {
-          upstreamRes.body?.cancel().catch(() => {});
-        } catch (_) {}
+      if (!isExplicitSegment && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+        // Libera explicitamente o corpo upstream se ainda não foi lido
+        if (upstreamText === null) {
+          try {
+            upstreamRes.body?.cancel().catch(() => {});
+          } catch (_) {}
+        }
 
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
-        res.setHeader("Cache-Control", "public, max-age=5");
-        
-        // MEDIA-SEQUENCE alinhado com EXTINF (ambos em segundos)
-        const EXTINF_SECONDS = 10;
-        const seq = Math.floor(Date.now() / 1000 / EXTINF_SECONDS);
+        res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        const seq = Math.floor(Date.now() / 4000);
         const manifest = [
           "#EXTM3U",
           "#EXT-X-VERSION:3",
-          `#EXT-X-TARGETDURATION:${EXTINF_SECONDS}`,
+          "#EXT-X-TARGETDURATION:6",
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
-          `#EXTINF:${EXTINF_SECONDS.toFixed(1)},`,
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&sig=${signProxyUrl(finalUrl)}&is_segment=true`
+          "#EXTINF:6.0,",
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&sig=${signProxyUrl(finalUrl)}&is_segment=true&_ts=${Date.now()}`
         ].join("\n");
         return res.send(manifest);
       }
 
       let finalContentType = contentType || "video/MP2T";
-      if (req.query.is_segment === "true" || isSegment) {
+      if (isExplicitSegment && !contentType.includes("mpegurl")) {
         finalContentType = "video/MP2T";
       }
       res.setHeader("Content-Type", finalContentType);
-      res.setHeader("Cache-Control", "no-cache, no-transform");
-      res.setHeader("X-Accel-Buffering", "no"); // Desabilita buffering intermediário do Nginx na VPS
+      res.setHeader("Cache-Control", "public, max-age=60, immutable");
 
-      if (upstreamRes.body) {
-        // Stream direto com alta taxa de transferência para streams de TV contínuos
+      if (upstreamText !== null) {
+        return res.send(Buffer.from(upstreamText, "utf-8"));
+      } else if (upstreamRes.body) {
+        // Transmite o segmento de vídeo de forma contínua e eficiente sem cortes artificiais
         const stream = Readable.fromWeb(upstreamRes.body as any);
-        // Aumenta o highWaterMark do stream para 256KB evitando backpressure prematuro
-        (stream as any)._readableState.highWaterMark = 256 * 1024;
-
-        const isContinuousTs = req.query.is_segment === "true" && (rawUrl.includes("up.kiwi") || finalUrl.endsWith(".ts") || contentType.includes("mp2t"));
-        let cutoff: NodeJS.Timeout | null = null;
         
-        if (isContinuousTs) {
-          // Não cortar fluxos ativos prematuramente: 30s de inatividade total
-          cutoff = setTimeout(() => {
-            try {
-              stream.unpipe(res);
-              stream.destroy();
-              res.end();
-            } catch (_) {}
-          }, 30000);
-        }
-
-        const clearCutoff = () => {
-          if (cutoff) {
-            clearTimeout(cutoff);
-            cutoff = null;
-          }
-        };
-
-        stream.on("end", clearCutoff);
-        stream.on("close", clearCutoff);
-        stream.on("error", clearCutoff);
         res.on("close", () => {
-          clearCutoff();
           try {
             stream.destroy();
           } catch (_) {}
         });
 
-        // Leitura ativa com flush a cada chunk para evitar retenção de dados
-        stream.on("data", (chunk: Buffer) => {
-          if (!res.writableEnded) {
-            res.write(chunk);
-          }
-        });
-        stream.on("end", () => {
-          if (!res.writableEnded) {
-            res.end();
-          }
-        });
-        return;
+        return stream.pipe(res);
       } else {
         const buffer = Buffer.from(await upstreamRes.arrayBuffer());
         return res.send(buffer);
       }
     } catch (err: any) {
-      console.error("[Live Stream Proxy Error]:", err?.message || err, "URL:", req.query?.url);
-      return res.status(500).send("Proxy error");
+      console.warn("[Live Stream Proxy Warning]:", err?.message || err, "URL:", req.query?.url);
+      return res.status(502).send("Upstream stream unavailable");
     }
   });
 
-// API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
+  // Healthcheck
   router.get("/api/myembed-stream", async (req, res) => {
     try {
       const rawId = (req.query.id as string) || (req.query.url as string) || "tt22084616";
@@ -2580,7 +3081,7 @@ const router = Router();
                 const m3u8Source = vidData.securedLink || vidData.videoSource;
                 if (!m3u8Source || typeof m3u8Source !== "string" || !m3u8Source.startsWith("http")) continue;
 
-                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&sig=${signProxyUrl(m3u8Source)}`;
+                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
 
                 res.setHeader("Content-Type", "text/html; charset=utf-8");
                 res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -2681,13 +3182,32 @@ const router = Router();
                   sendStatus();
                 }
               });
+              var _fatalNetworkRetries = 0;
               hls.on(Hls.Events.ERROR, function(event, data) {
                 if (data && data.fatal) {
                   switch (data.type) {
                     case Hls.ErrorTypes.NETWORK_ERROR:
-                      hls.startLoad();
+                      _fatalNetworkRetries++;
+                      var v = art.video || document.querySelector("video");
+                      var isPlaying = v && v.currentTime > 0 && !v.paused;
+                      if (isPlaying) {
+                        // Vídeo já está tocando — erros de rede são de tracks secundários (áudio/key)
+                        // Tenta recuperar sem acionar fallback
+                        try { hls.startLoad(); } catch(e) {}
+                        _fatalNetworkRetries = 0;
+                      } else if (_fatalNetworkRetries <= 2) {
+                        // Ainda não iniciou — tenta recuperar até 2x
+                        hls.startLoad();
+                      } else {
+                        // 3 falhas fatais sem o vídeo começar → stream indisponível de fato
+                        hls.destroy();
+                        try {
+                          window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "vip_hls_cors_blocked" }, "*");
+                        } catch(e) {}
+                      }
                       break;
                     case Hls.ErrorTypes.MEDIA_ERROR:
+                      _fatalNetworkRetries = 0;
                       hls.recoverMediaError();
                       break;
                     default:
@@ -2711,7 +3231,7 @@ const router = Router();
           }
         },
         autoplay: true,
-        muted: false,
+        muted: true,  // Inicia mudo para garantir autoplay (política do browser) — desmuta após canplay
         playsInline: true,
         hotkey: false,
         gesture: false,
@@ -2769,6 +3289,62 @@ const router = Router();
       art.on("video:progress", sendStatus);
       art.on("video:ended", notifyEnded);
 
+      // ─── Auto-play com som: estratégia multi-evento robusta ───────────────
+      // O browser bloqueia autoplay com som em iframes sem interação prévia.
+      // Iniciamos muted=true para o autoplay funcionar, e desmutamos assim que
+      // o vídeo começa a carregar — o clique do usuário no catálogo conta como
+      // gesto e propaga para o iframe dentro de ~1s.
+
+      var _autoUnmuted = false;
+
+      function tryUnmute() {
+        var v = art.video || document.querySelector("video");
+        if (!v) return;
+        try {
+          v.muted = false;
+          v.volume = 1;
+          if (art) { art.muted = false; art.volume = 1; }
+          _autoUnmuted = true;
+        } catch(e) {}
+        sendStatus();
+      }
+
+      function tryAutoPlay() {
+        var v = art.video || document.querySelector("video");
+        if (!v || !v.paused) return;
+        try {
+          var p = v.play();
+          if (p && typeof p.catch === "function") {
+            p.catch(function() {
+              // Se play() falhou (bloqueio de autoplay), mantém muted e tenta com muted=true
+              try { v.muted = true; v.play().catch(function() {}); } catch(e) {}
+            });
+          }
+        } catch(e) {}
+      }
+
+      // Tenta desmutar em múltiplos momentos para garantir que o som não se perca
+      art.on("video:loadeddata",    function() { tryUnmute(); tryAutoPlay(); });
+      art.on("video:canplay",       function() { tryUnmute(); tryAutoPlay(); });
+      art.on("video:canplaythrough",function() { tryUnmute(); });
+      art.on("video:playing",       function() { tryUnmute(); });
+      art.on("video:play",          function() { tryUnmute(); });
+
+      // Timeouts escalonados — garante unmute mesmo se os eventos forem lentos
+      setTimeout(function() { tryUnmute(); tryAutoPlay(); }, 100);
+      setTimeout(function() { tryUnmute(); tryAutoPlay(); }, 500);
+      setTimeout(function() { tryUnmute(); }, 1500);
+      setTimeout(function() { tryUnmute(); }, 3000);
+
+      // Watchdog: verifica a cada 3s se o volume caiu e restaura
+      setInterval(function() {
+        var v = art.video || document.querySelector("video");
+        if (!v || v.paused) return;
+        if (v.muted || v.volume < 0.1) {
+          tryUnmute();
+        }
+      }, 3000);
+
       setInterval(sendStatus, 250);
 
       var myembedSeekStallWatchdog = null;
@@ -2820,6 +3396,35 @@ const router = Router();
 
       // Ponte de comandos completos para a Skin Netflix
       window.addEventListener("message", function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
         if (!e.data) return;
         var v = art.video || document.querySelector("video");
         var msgType = e.data.type || e.data.action;
@@ -2846,7 +3451,8 @@ const router = Router();
           case "SEEK":
           case "seek":
           case "SEEK_ABSOLUTE":
-            var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  case "SEEK_RELATIVE":
+                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
             if (typeof t === "number" && !isNaN(t)) {
               if (art) {
                 try { art.seek = t; } catch(err) {}
@@ -3194,7 +3800,137 @@ const router = Router();
             sendStatus();
           }, 250);
 
+          // Monitor e Auto-Healer de Integridade Áudio/Vídeo para VIP Player (A/V Sync & Frame Freeze Recovery)
+          (function initAVSyncAutoHealerVIP() {
+            var lastFrameCallbackTime = Date.now();
+            var lastCheckedCurrentTime = 0;
+            var lastTotalFrames = 0;
+            var stallTicks = 0;
+            var isHealing = false;
+            var lastHealAt = 0;
+
+            function trackFrameRender(v) {
+              if (!v) return;
+              if (typeof v.requestVideoFrameCallback === 'function' && !v._rvfcActive) {
+                v._rvfcActive = true;
+                function onFrame() {
+                  lastFrameCallbackTime = Date.now();
+                  if (v && !v.paused) {
+                    v.requestVideoFrameCallback(onFrame);
+                  } else if (v) {
+                    v._rvfcActive = false;
+                  }
+                }
+                try {
+                  v.requestVideoFrameCallback(onFrame);
+                } catch(e) {
+                  v._rvfcActive = false;
+                }
+              }
+            }
+
+            function checkAVHealth() {
+              var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
+              if (!v) return;
+
+              trackFrameRender(v);
+
+              if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                stallTicks = 0;
+                lastCheckedCurrentTime = v.currentTime || 0;
+                return;
+              }
+
+              var now = Date.now();
+              var cur = v.currentTime || 0;
+              var audioMovingForward = cur > (lastCheckedCurrentTime + 0.35);
+              lastCheckedCurrentTime = cur;
+
+              if (audioMovingForward) {
+                var frameIsFresh = false;
+
+                if (typeof v.requestVideoFrameCallback === 'function') {
+                  if ((now - lastFrameCallbackTime) < 1800) {
+                    frameIsFresh = true;
+                  }
+                }
+
+                if (typeof v.getVideoPlaybackQuality === 'function') {
+                  try {
+                    var q = v.getVideoPlaybackQuality();
+                    if (q && typeof q.totalVideoFrames === 'number') {
+                      if (q.totalVideoFrames > lastTotalFrames) {
+                        frameIsFresh = true;
+                        lastTotalFrames = q.totalVideoFrames;
+                      }
+                    }
+                  } catch(e) {}
+                }
+
+                if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                  stallTicks++;
+                  if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                    console.warn('[Play Infinity VIP Player] Imagem congelada com áudio em reprodução detectada. Executando auto-healing instantâneo...');
+                    isHealing = true;
+                    lastHealAt = now;
+                    stallTicks = 0;
+
+                    try {
+                      var hls = (window.artInstance && window.artInstance.hls) || window.hls;
+                      if (hls && typeof hls.recoverMediaError === 'function') {
+                        try { hls.recoverMediaError(); } catch(he) {}
+                      }
+
+                      var nowPos = v.currentTime;
+                      v.currentTime = nowPos + 0.005;
+
+                      v._rvfcActive = false;
+                      trackFrameRender(v);
+                    } catch(err) {
+                      console.error('[Play Infinity VIP Player A/V Recovery Error]:', err);
+                    } finally {
+                      setTimeout(function() { isHealing = false; }, 800);
+                    }
+                  }
+                } else {
+                  stallTicks = 0;
+                }
+              }
+            }
+
+            setInterval(checkAVHealth, 800);
+          })();
+
           window.addEventListener('message', function(e) {
+                  if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
+                      var vid = window.artInstance ? window.artInstance.video : (typeof art !== 'undefined' && art.video ? art.video : document.querySelector('video'));
+                      if (!vid) vid = document.querySelector('video');
+                      if (vid) {
+                          var oldTrack = document.getElementById('playinfinity-subtitle');
+                          if (oldTrack) { oldTrack.remove(); }
+                          if (e.data.url) {
+                              var track = document.createElement('track');
+                              track.id = 'playinfinity-subtitle';
+                              track.kind = 'captions';
+                              track.label = e.data.label || 'Português (Brasil)';
+                              track.srclang = 'pt-BR';
+                              track.src = e.data.url;
+                              track.default = true;
+                              vid.appendChild(track);
+                              // Espera carregar para forçar o modo showing
+                              if (e.data.show !== false) { track.addEventListener('load', function() { this.mode = 'showing'; }); }
+                          }
+                      }
+                      return;
+                  }
+                  if (e.data && e.data.type === 'SHOW_SUBTITLE') {
+                      var tr = document.getElementById('playinfinity-subtitle');
+                      if (tr) {
+                          tr.mode = e.data.show ? 'showing' : 'hidden';
+                      }
+                      return;
+                  }
+
             if (!e.data) return;
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
@@ -3270,25 +4006,81 @@ const router = Router();
     }
   });
 
-// API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  router.get("/api/pomfy-stream", (_req, res) => {
-    return res.status(410).json({ error: "Pomfy Stream foi descontinuado. Use MixDrop." });
+  // Pomfy Stream Proxy Bypass (Vai direto para o Servidor 1)
+  router.get("/api/pomfy-stream", async (req, res) => {
+    try {
+      const { id, type, s, e } = req.query;
+      if (!id) {
+        return res.status(400).send("Faltando parâmetro 'id'.");
+      }
+      
+      const baseUrl = type === "tv" 
+        ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` 
+        : `https://api.pomfy.stream/filme/${id}`;
+        
+      // 1. Busca HTML do Pomfy para pegar o statusToken
+      const response = await fetch(baseUrl, {
+        headers: {
+          "Sec-Fetch-Dest": "iframe",
+          "Sec-Fetch-Mode": "navigate",
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+      
+      if (!response.ok) {
+        return res.redirect(302, baseUrl); // Fallback
+      }
+      
+      const html = await response.text();
+      
+      // 2. Extrai o token com Regex (statusToken="...")
+      const tokenMatch = html.match(/statusToken="([^"]+)"/);
+      
+      if (tokenMatch && tokenMatch[1]) {
+        const token = tokenMatch[1];
+        
+        // 3. Resolve o URL direto via API play-token
+        const tokenUrl = `https://api.pomfy.stream/api/play-token?t=${token}`;
+        const tokenResp = await fetch(tokenUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": baseUrl
+          }
+        });
+        
+        if (tokenResp.ok) {
+          const json = await tokenResp.json();
+          // O JSON esperado tem byseUrl (Servidor 1)
+          const finalUrl = json.byseUrl || json.url || json.flyfileUrl;
+          if (finalUrl) {
+            return res.redirect(302, finalUrl);
+          }
+        }
+      }
+      
+      // Fallback
+      return res.redirect(302, baseUrl);
+    } catch (err: any) {
+      console.error("[Pomfy Proxy Error]:", err);
+      // Absolute fallback
+      const { id, type, s, e } = req.query;
+      const baseUrl = type === "tv" 
+        ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` 
+        : `https://api.pomfy.stream/filme/${id}`;
+      return res.redirect(302, baseUrl);
+    }
   });
-  // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
-  // Vite middleware for development
-  
-  // API: Extrator Direto da EmbedPlayAPI (Permanentemente desativado - na blacklist)
+
+  // ==========================================
+  // MIXDROP NATIVE STREAM & ARTPLAYER INTEGRATION
+  // ==========================================
+
   router.get("/api/embedplay-direct", (_req, res) => {
     return res.status(403).json({ 
       error: "Servidor EmbedPlay está bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer." 
     });
   });
 
-// API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
-  // Vite middleware for development
-  
-  // API: Extrator Direto da EmbedPlayAPI (Permanentemente desativado - na blacklist)
   // API: Resolver do BYSE Player (Permanentemente desativado - na blacklist)
   router.get("/api/byse-stream", (_req, res) => {
     return res.status(403).json({ 
@@ -3296,5 +4088,6 @@ const router = Router();
     });
   });
 
-export default router;
+  // Endpoints para Teste de Velocidade Local (Resolve problemas de CORS/Bloqueio em WebViews)
 
+export default router;
