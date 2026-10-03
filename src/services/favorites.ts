@@ -311,7 +311,7 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
           }
 
           results.push({
-            id: `tmdb-next-${id}-${nextEp.season_number}-${nextEp.episode_number}`,
+            id: `tmdb-${id}-${nextEp.season_number}-${nextEp.episode_number}`,
             seriesId: id,
             seriesTitle,
             seriesPoster,
@@ -335,7 +335,7 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
           // Se também houver um último episódio recém-lançado (últimos 30 dias), adiciona aos resultados para notificações e histórico
           if (lastEp && lastEp.air_date && lastEp.air_date <= todayStr && (lastEp.season_number !== nextEp.season_number || lastEp.episode_number !== nextEp.episode_number)) {
             results.push({
-              id: `tmdb-last-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
+              id: `tmdb-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
               seriesId: id,
               seriesTitle,
               seriesPoster,
@@ -364,7 +364,7 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
           const airDate = lastEp.air_date || todayStr;
 
           results.push({
-            id: `tmdb-last-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
+            id: `tmdb-${id}-${lastEp.season_number}-${lastEp.episode_number}`,
             seriesId: id,
             seriesTitle,
             seriesPoster,
