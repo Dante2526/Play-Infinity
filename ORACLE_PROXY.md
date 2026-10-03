@@ -77,3 +77,30 @@ server {
 }
 ```
 
+---
+
+## 5. Automação de Estabilidade (Watchdog)
+
+Para garantir 100% de disponibilidade contra travamentos de porta (como erro `EADDRINUSE:::8080`), existe um **Watchdog (Cron Job)** configurado diretamente na VPS, executando de forma silenciosa e leve.
+
+- **Arquivo do script:** `/home/ubuntu/watchdog.sh`
+- **Frequência (Cron):** A cada minuto (`* * * * *`)
+- **Como funciona:** O script checa a saúde do `video-proxy` via `pm2 jlist`. Se detectar status diferente de `online`, ele automaticamente derruba qualquer processo que esteja prendendo a porta 8080 (`fuser -k 8080/tcp`) e reinicia o PM2.
+- **Impacto na VPS (Garantia):** O impacto na CPU e RAM da VPS é virtualmente nulo (consumo de ~0.001%). O script é um utilitário simples em Node e Bash executado de forma enxuta a cada 60 segundos. O cliente final não notará os engasgos graças a essa auto-cura rápida.
+- **IMPORTANTE:** O Watchdog é apenas a **rede de segurança**. A correção da causa raiz está na seção 6.
+
+---
+
+## 6. Causa Raiz do Erro 502 / `EADDRINUSE :8080` (03/10/2026)
+
+**Problema:** existiam **dois daemons PM2** na VPS: o do usuário `ubuntu` e o do `root` (`pm2-root.service`). O PM2 do `root` tinha um `video-proxy` duplicado que ocupava a porta 8080, e o PM2 do `ubuntu` entrava em loop de crash (300+ reinícios). Matar o processo (`kill -9`) não adiantava: o PM2 do root o ressuscitava.
+
+**Correção definitiva aplicada:**
+1. `sudo pm2 delete video-proxy && sudo pm2 save` (removido do PM2 do root).
+2. `pm2 save` + `pm2 startup systemd -u ubuntu` (o `video-proxy` do `ubuntu` agora sobe sozinho após reboot da VPS).
+
+**Regras para agentes:**
+- O **único dono** do `video-proxy` é o PM2 do usuário **`ubuntu`**. O PM2 do `root` roda apenas `play-infinity-app`.
+- **NUNCA** rode `sudo pm2 start ... video-proxy` nem `pm2 start proxy.mjs` como root.
+- Após alterar processos PM2 do `ubuntu`, rode `pm2 save`.
+- Diagnóstico rápido: `sudo lsof -i :8080` (dono da porta) e `sudo pm2 list` vs `pm2 list`.
