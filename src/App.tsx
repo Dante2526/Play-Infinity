@@ -112,7 +112,8 @@ import {
 } from "./services/favorites";
 import {
   getFavoriteEpisodeNotifications,
-  getReadNotificationIds
+  getReadNotificationIds,
+  markAllNotificationsAsRead
 } from "./services/notifications";
 import {
   isEpisodeWatched,
@@ -785,7 +786,13 @@ export default function App() {
 
           {/* BOTÃO DE NOTIFICAÇÕES (DESKTOP) */}
           <button 
-            onClick={() => setNotificationModalOpen(true)}
+            onClick={() => {
+              setNotificationModalOpen(true);
+              const favIds = getFavoriteIds();
+              const notifs = getFavoriteEpisodeNotifications(favIds);
+              markAllNotificationsAsRead(notifs.map(n => n.id));
+              setUnreadNotificationsCount(0);
+            }}
             className="relative transition-colors p-2 lg:p-2.5 rounded-full border cursor-pointer text-neutral-300 hover:text-white bg-white/5 hover:bg-white/10 border-white/10 hover:border-orange-500/40"
             title="Notificações de Episódios"
           >
@@ -845,7 +852,13 @@ export default function App() {
           {/* BOTÃO DE NOTIFICAÇÕES (MOBILE) */}
           <button 
             tabIndex={0}
-            onClick={() => setNotificationModalOpen(true)}
+            onClick={() => {
+              setNotificationModalOpen(true);
+              const favIds = getFavoriteIds();
+              const notifs = getFavoriteEpisodeNotifications(favIds);
+              markAllNotificationsAsRead(notifs.map(n => n.id));
+              setUnreadNotificationsCount(0);
+            }}
             className="relative p-2 rounded-full bg-[#161616]/90 backdrop-blur-md border border-white/10 text-neutral-300 hover:text-white active:scale-95 transition-all shadow-md cursor-pointer"
             title="Notificações de Episódios"
           >
