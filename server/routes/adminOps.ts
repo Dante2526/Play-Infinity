@@ -208,7 +208,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
   };
 
   try {
-    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && sudo pm2 jlist`;
+    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && pm2 jlist && echo "===DELIM_PM2_ROOT===" && sudo pm2 jlist`;
     const sshResult = await executeSystemOrSshCommand(sshCmd, 12000);
     vpsHardware.hasSsh = true;
 
@@ -217,7 +217,10 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
       const freeLines = parts[0].trim().split("\n");
       const nextParts = parts[1].split("===DELIM_PM2===");
       const uptimeRaw = (nextParts[0] || "").trim();
-      const pm2Raw = (nextParts[1] || "").trim();
+      
+      const pm2Parts = (nextParts[1] || "").split("===DELIM_PM2_ROOT===");
+      const pm2RawUbuntu = (pm2Parts[0] || "").trim();
+      const pm2RawRoot = (pm2Parts[1] || "").trim();
 
       // Parse free -m
       // Mem: total used free shared buff/cache available
@@ -256,8 +259,26 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
 
       // Parse PM2
       try {
-        const pm2List = JSON.parse(pm2Raw);
-        if (Array.isArray(pm2List)) {
+        let pm2List: any[] = [];
+        try {
+          const uList = JSON.parse(pm2RawUbuntu);
+          if (Array.isArray(uList)) pm2List = pm2List.concat(uList);
+        } catch (e) { /* ignore */ }
+        
+        try {
+          const rList = JSON.parse(pm2RawRoot);
+          if (Array.isArray(rList)) pm2List = pm2List.concat(rList);
+        } catch (e) { /* ignore */ }
+
+        if (pm2List.length > 0) {
+          // Remove duplicatas se existirem (pelo nome)
+          const seen = new Set();
+          pm2List = pm2List.filter(app => {
+            const isDuplicate = seen.has(app.name);
+            seen.add(app.name);
+            return !isDuplicate;
+          });
+
           vpsHardware.pm2Processes = pm2List.map((app: any) => ({
             name: app.name || "desconhecido",
             status: app.pm2_env?.status || "offline",
@@ -267,7 +288,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
           }));
         }
       } catch (jsonErr: any) {
-        console.warn("[AdminOps] Falha ao fazer parse do PM2 JSON:", jsonErr.message);
+        console.warn("[AdminOps] Falha geral ao fazer parse do PM2 JSON:", jsonErr.message);
       }
     }
   } catch (sshErr: any) {
