@@ -5,7 +5,7 @@ import path from "path";
 import crypto from "crypto";
 import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
-import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain } from "../utils/helpers";
+import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 import { resolveVixsrcStream, resolveDirectAnimeStream } from "../../server";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
@@ -2155,14 +2155,12 @@ const router = Router();
     try {
       const origin = req.headers.origin as string | undefined;
       const isAllowedOrigin = !origin ||
-        origin.includes("play-infinity") ||
-        origin.includes("duckdns.org") ||
-        origin.includes("localhost") ||
-        origin.includes("127.0.0.1") ||
-        origin.startsWith("capacitor://") ||
-        origin.startsWith("ionic://") ||
-        origin.includes("googleusercontent.com") ||
-        origin.includes("run.app");
+        /^(https?:\/\/)?(localhost(:\d+)?|127\.0\.0\.1(:\d+)?)$/i.test(origin) ||
+        /^capacitor:\/\/localhost$/i.test(origin) ||
+        /^ionic:\/\/localhost$/i.test(origin) ||
+        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*play-infinity\.stream$/i.test(origin) ||
+        /^(https?:\/\/)?([a-zA-Z0-9-]+\.)*duckdns\.org$/i.test(origin) ||
+        /^(https?:\/\/)?play-infinity-[a-zA-Z0-9-]+\.run\.app$/i.test(origin);
 
       if (origin) {
         if (isAllowedOrigin) {
@@ -2201,7 +2199,10 @@ const router = Router();
         return res.status(403).send("Acesso a IP privado ou metadados de nuvem bloqueado (Anti-SSRF).");
       }
 
-      if (!isAllowedLiveStreamingDomain(parsed.hostname, req.query.referer as string)) {
+      const signature = req.query.sig as string;
+      const isSignatureValid = signature && verifyProxySignature(rawUrl, signature);
+
+      if (!isSignatureValid && !isAllowedLiveStreamingDomain(parsed.hostname)) {
         return res.status(403).send("Domínio não autorizado para proxy de streaming.");
       }
 
@@ -2256,7 +2257,7 @@ const router = Router();
             return res.status(403).send("Redirecionamento para IP privado bloqueado (Anti-SSRF).");
           }
 
-          if (!isAllowedLiveStreamingDomain(nextUrl.hostname, req.query.referer as string)) {
+          if (!isSignatureValid && !isAllowedLiveStreamingDomain(nextUrl.hostname)) {
             return res.status(403).send("Redirecionamento para domínio não autorizado.");
           }
 
@@ -2349,7 +2350,7 @@ const router = Router();
               try {
                 const fullUri = uri.startsWith("http") ? uri : new URL(uri, finalUrl).toString();
                 if (fullUri.includes("plutotv.net")) return `URI="${fullUri}"`;
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&is_segment=true"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}&sig=${signProxyUrl(fullUri)}&is_segment=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -2361,7 +2362,7 @@ const router = Router();
           try {
             const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, finalUrl).toString();
             if (fullSegUrl.includes("plutotv.net")) return fullSegUrl;
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&is_segment=true`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}&sig=${signProxyUrl(fullSegUrl)}&is_segment=true`;
           } catch {
             return trimmed;
           }
@@ -2399,7 +2400,7 @@ const router = Router();
           `#EXT-X-TARGETDURATION:${EXTINF_SECONDS}`,
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
           `#EXTINF:${EXTINF_SECONDS.toFixed(1)},`,
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&is_segment=true`
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&sig=${signProxyUrl(finalUrl)}&is_segment=true`
         ].join("\n");
         return res.send(manifest);
       }
@@ -2579,7 +2580,7 @@ const router = Router();
                 const m3u8Source = vidData.securedLink || vidData.videoSource;
                 if (!m3u8Source || typeof m3u8Source !== "string" || !m3u8Source.startsWith("http")) continue;
 
-                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
+                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&sig=${signProxyUrl(m3u8Source)}`;
 
                 res.setHeader("Content-Type", "text/html; charset=utf-8");
                 res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
