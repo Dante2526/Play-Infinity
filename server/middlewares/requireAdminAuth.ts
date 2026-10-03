@@ -30,12 +30,7 @@ function getFirebaseAuth(): any {
   }
 }
 
-const DEFAULT_ADMIN_EMAILS = [
-  "naylanmoreira350@gmail.com",
-  "cbeth761@gmail.com"
-];
-
-export async function verifyFirebaseUserToken(token: string): Promise<{ uid: string; email?: string } | null> {
+export async function verifyFirebaseUserToken(token: string): Promise<{ uid: string; email?: string; emailVerified?: boolean; isAdmin?: boolean } | null> {
   if (!token) return null;
 
   // Tentativa A: Firebase Admin SDK verifyIdToken
@@ -46,7 +41,9 @@ export async function verifyFirebaseUserToken(token: string): Promise<{ uid: str
       if (decoded && decoded.uid) {
         return {
           uid: decoded.uid,
-          email: decoded.email
+          email: decoded.email,
+          emailVerified: decoded.email_verified,
+          isAdmin: decoded.admin === true
         };
       }
     }
@@ -70,9 +67,12 @@ export async function verifyFirebaseUserToken(token: string): Promise<{ uid: str
         const data = await lookupResp.json();
         if (data.users && data.users[0]) {
           const u = data.users[0];
+          const customClaims = u.customAttributes ? JSON.parse(u.customAttributes) : {};
           return {
             uid: u.localId,
-            email: u.email
+            email: u.email,
+            emailVerified: u.emailVerified,
+            isAdmin: customClaims.admin === true
           };
         }
       }
@@ -94,8 +94,6 @@ export async function requireAdminAuth(req: Request, res: Response, next: NextFu
     token = authHeader.slice(7).trim();
   } else if (xAdminToken) {
     token = xAdminToken.trim();
-  } else if (req.query.admin_token && typeof req.query.admin_token === "string") {
-    token = req.query.admin_token.trim();
   }
 
   if (!token) {
@@ -107,28 +105,7 @@ export async function requireAdminAuth(req: Request, res: Response, next: NextFu
   }
 
   // 2. Verificar ID Token
-  let decodedUser: { uid: string; email?: string; isFirestoreAdmin?: boolean } | null = await verifyFirebaseUserToken(token);
-
-  // Tentativa C: Consulta direta de sessão/documento na coleção administradores do Firestore
-  if (!decodedUser && token.length > 5 && !token.includes(".")) {
-    try {
-      const adminDb = getAdminDb();
-      if (adminDb) {
-        // Checa se o token é o próprio ID de documento do administrador
-        const docSnap = await adminDb.collection("administradores").doc(token).get();
-        if (docSnap.exists) {
-          const data = docSnap.data();
-          decodedUser = {
-            uid: docSnap.id,
-            email: data?.email,
-            isFirestoreAdmin: true
-          };
-        }
-      }
-    } catch {
-      // Ignora silenciosamente se o Firestore Admin SDK não tiver credenciais completas
-    }
-  }
+  let decodedUser = await verifyFirebaseUserToken(token);
 
   if (!decodedUser) {
     res.status(401).json({
@@ -138,46 +115,11 @@ export async function requireAdminAuth(req: Request, res: Response, next: NextFu
     return;
   }
 
-  // 3. Validar se o usuário possui privilégios de administrador
-  const envAdmins = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean);
-
-  const allowedEmails = new Set([
-    ...DEFAULT_ADMIN_EMAILS.map(e => e.toLowerCase()),
-    ...envAdmins
-  ]);
-
-  const userEmail = (decodedUser.email || "").toLowerCase().trim();
-  let isAuthorized = allowedEmails.has(userEmail) || !!decodedUser.isFirestoreAdmin;
-
-  // Se o email não estiver na lista padrão, checa se consta na coleção "administradores"
-  if (!isAuthorized) {
-    try {
-      const adminDb = getAdminDb();
-      if (adminDb) {
-        const uidSnap = await adminDb.collection("administradores").doc(decodedUser.uid).get();
-        if (uidSnap.exists) {
-          isAuthorized = true;
-        } else if (userEmail) {
-          const emailSnap = await adminDb.collection("administradores")
-            .where("email", "==", userEmail)
-            .get();
-          if (!emailSnap.empty) {
-            isAuthorized = true;
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("[requireAdminAuth] Erro ao verificar coleção administradores:", err);
-    }
-  }
-
-  if (!isAuthorized) {
+  // 3. Validar se o usuário possui email verificado e a claim de administrador
+  if (!decodedUser.emailVerified || !decodedUser.isAdmin) {
     res.status(403).json({
       success: false,
-      error: "Acesso negado: Requer privilégios de administrador."
+      error: "Acesso negado: Requer e-mail verificado e privilégios de administrador."
     });
     return;
   }
