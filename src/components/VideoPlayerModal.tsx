@@ -1077,7 +1077,9 @@ export function VideoPlayerModal({
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
-    setIsLoading(false);
+    // NÃO definimos setIsLoading(false) aqui. 
+    // Para servidores com skin (VIP, Watchplay, Mixdrop), o spinner só some quando houver confirmação real (WATCHPLAY_STATUS).
+    // Para outros servidores, o onLoad do iframe vai limpar o isLoading.
   }, [servers, isSeries, resolvedId, season, episode, tmdbId, lookupMixdropFileId, buildMixdropFallbackUrl]);
 
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
@@ -1144,12 +1146,12 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  // Watchdog inteligente de segurança: se o player demorar mais de 50s sem iniciar,
+  // Watchdog inteligente de segurança: se o player demorar mais de 25s sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = 50000; // 50 segundos
+    const timeoutDuration = 25000; // 25 segundos
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -2360,9 +2362,16 @@ export function VideoPlayerModal({
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
-                  if (activeIframeUrl?.includes("/api/") || selectedServerKey !== "external") {
+                  const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop';
+                  
+                  if (skinSupported) {
+                    // Mantém o isLoading = true (spinner girando na frente do player)
+                    // Libera apenas a skin por baixo
                     setTimeout(() => setPlayerSkinReady(true), 500);
                   } else {
+                    // Para servidores sem integração de status (VidSrc, Consumet, External),
+                    // liberamos o spinner assim que o iframe carrega para não travar a tela.
+                    setTimeout(() => setPlayerSkinReady(true), 500);
                     setIsLoading(false);
                   }
                 }}

@@ -202,7 +202,7 @@ export async function checkVizerSeason(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const url = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`;
+    const url = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`;
     const res = await fetch(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -237,7 +237,7 @@ export async function resolveVizerEpisode(
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 4000);
-    const listUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
+    const listUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
     const res = await fetch(listUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -261,7 +261,7 @@ export async function resolveVizerEpisode(
 
     const pController = new AbortController();
     const pTimeout = setTimeout(() => pController.abort(), 3500);
-    const pUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vid}`;
+    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vid}`;
     const pRes = await fetch(pUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -352,13 +352,13 @@ export async function resolveVizerMovie(tmdbId: number) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3500);
-    const pUrl = `https://www.vizer.beauty/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vizerMovieId}`;
+    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vizerMovieId}`;
     const pRes = await fetch(pUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "X-Requested-With": "XMLHttpRequest",
         "Accept": "application/json",
-        "Referer": `https://www.vizer.beauty/filmes/online/x-${vizerMovieId}/`,
+        "Referer": `https://www.vizer.website/filmes/online/x-${vizerMovieId}/`,
       },
       signal: controller.signal,
     });
