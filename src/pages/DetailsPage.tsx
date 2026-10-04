@@ -460,33 +460,7 @@ export function DetailsPage({
     });
   }, [seasonData, verifiedAvailableEpisodes, selectedSeason, item.title, tmdbDetails]);
 
-  // Verificar disponibilidade de download dos episódios visíveis via MixDrop
-  useEffect(() => {
-    let active = true;
-    if (!isSeries || !effectiveTmdbId) return;
 
-    const tmdbNum = Number(effectiveTmdbId);
-    if (!tmdbNum || isNaN(tmdbNum)) return;
-
-    // Dispara checagem em background para os episódios da temporada
-    const epNumbers = currentEpisodes.map(e => e.ep);
-    if (epNumbers.length === 0) return;
-
-    // Checamos em lote suave para não sobrecarregar
-    epNumbers.forEach(async (epNum) => {
-      try {
-        const avail = await checkEpisodeDownloadAvailability(tmdbNum, selectedSeason, epNum, item.title);
-        if (active && avail.available) {
-          setEpisodeDownloads(prev => ({
-            ...prev,
-            [epNum]: avail
-          }));
-        }
-      } catch(_){console.warn("Silenced error:", _);}
-    });
-
-    return () => { active = false; };
-  }, [isSeries, effectiveTmdbId, selectedSeason, currentEpisodes, item.title]);
 
   const totalSeasonEpisodes = currentEpisodes.length;
 
@@ -1042,39 +1016,49 @@ export function DetailsPage({
                           <Check className="w-4 h-4 stroke-[3] text-white transition-all" />
                         </button>
 
-                        {/* Botão de Download do Episódio (se disponível no MixDrop) */}
-                        {episodeDownloads[ep.ep]?.available && episodeDownloads[ep.ep]?.directDownloadUrl && (
-                          <button
-                            tabIndex={0}
-                            role="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const info = episodeDownloads[ep.ep];
-                              if (!info?.directDownloadUrl) return;
-                              setDownloadingEp(ep.ep);
-                              triggerDirectDownload(info.directDownloadUrl, info.fileName, {
-                                tmdbId: item.tmdbId || item.id || itemId,
-                                title: item.title,
-                                type: "series",
-                                season: selectedSeason,
-                                episode: ep.ep,
-                                posterUrl: item.posterUrl || item.imageUrl,
-                                backdropUrl: item.backdropUrl,
-                                quality: "HD"
-                              });
-                              setTimeout(() => setDownloadingEp(null), 4000);
-                            }}
-                            disabled={downloadingEp === ep.ep}
-                            className="w-8 h-8 rounded-full bg-blue-500/10 hover:bg-blue-600 flex items-center justify-center text-blue-400 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-blue-500/30 hover:border-blue-500 shadow-sm"
-                            title={`Baixar episódio ${ep.ep} em HD (MixDrop)`}
-                          >
-                            {downloadingEp === ep.ep ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                        )}
+                        {/* Botão de Download do Episódio */}
+                        <button
+                          tabIndex={0}
+                          role="button"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setDownloadingEp(ep.ep);
+                            try {
+                              let info = episodeDownloads[ep.ep];
+                              if (!info || !info.available) {
+                                const tmdbNum = Number(effectiveTmdbId);
+                                info = await checkEpisodeDownloadAvailability(tmdbNum, selectedSeason, ep.ep, item.title);
+                              }
+                              if (info && info.directDownloadUrl) {
+                                triggerDirectDownload(info.directDownloadUrl, info.fileName, {
+                                  tmdbId: item.tmdbId || item.id || itemId,
+                                  title: item.title,
+                                  type: "series",
+                                  season: selectedSeason,
+                                  episode: ep.ep,
+                                  posterUrl: item.posterUrl || item.imageUrl,
+                                  backdropUrl: item.backdropUrl,
+                                  quality: "HD"
+                                });
+                              } else {
+                                alert("Download indisponível para este episódio no momento.");
+                              }
+                            } catch (err) {
+                              console.warn("Download check failed", err);
+                            } finally {
+                              setTimeout(() => setDownloadingEp(null), 1500);
+                            }
+                          }}
+                          disabled={downloadingEp === ep.ep}
+                          className="w-8 h-8 rounded-full bg-blue-500/10 hover:bg-blue-600 flex items-center justify-center text-blue-400 hover:text-white hover:scale-105 active:scale-95 transition-all cursor-pointer border border-blue-500/30 hover:border-blue-500 shadow-sm"
+                          title={`Baixar episódio ${ep.ep} em HD`}
+                        >
+                          {downloadingEp === ep.ep ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                          ) : (
+                            <Download className="w-3.5 h-3.5" />
+                          )}
+                        </button>
 
                         {/* Botão de Transmitir */}
                         <div 
