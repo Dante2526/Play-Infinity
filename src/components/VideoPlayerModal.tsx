@@ -1344,17 +1344,17 @@ export function VideoPlayerModal({
 
       // Remove overlay preto quando o player estiver pronto (duration > 0)
       const msgType = event.data.type || event.data.event;
-      if (
-        (msgType === "WATCHPLAY_STATUS" ||
+      const isStatusMessage = msgType === "WATCHPLAY_STATUS" ||
           msgType === "PLAYER_STATUS" ||
           msgType === "status" ||
           msgType === "timeupdate" ||
-          msgType === "PLAYER_EVENT") &&
-        !playerSkinReady
-      ) {
+          msgType === "PLAYER_EVENT";
+
+      if (isStatusMessage) {
         const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
         const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
+        
         if (incomingTime > 0) {
           lastKnownTimeRef.current = incomingTime;
         }
@@ -1380,37 +1380,40 @@ export function VideoPlayerModal({
           pausedAtRef.current = null;
         }
 
-        if (
-          (typeof data.duration === "number" && data.duration > 0) ||
-          (typeof data.currentTime === "number" && data.currentTime > 0) ||
-          (typeof data.readyState === "number" && data.readyState >= 1)
-        ) {
-          // Se for transição recente (< 800ms), aguarda estabilização do novo frame
-          if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
-            return;
-          }
+        if (!playerSkinReady) {
+          if (
+            (typeof data.duration === "number" && data.duration > 0) ||
+            (typeof data.currentTime === "number" && data.currentTime > 0) ||
+            (typeof data.readyState === "number" && data.readyState >= 1)
+          ) {
+            // Se for transição recente (< 800ms), aguarda estabilização do novo frame
+            if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
+              return;
+            }
 
-          setPlayerSkinReady(true);
-          retrySameServerRef.current = false;
-          fallbackAttemptsRef.current.clear();
-          mixdropAttemptRef.current = 1;
+            setPlayerSkinReady(true);
+            retrySameServerRef.current = false;
+            fallbackAttemptsRef.current.clear();
+            mixdropAttemptRef.current = 1;
 
-          // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
-          if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
-            hasSeekedInitialTimeRef.current = true;
-            try {
-              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: lastKnownTimeRef.current }, "*");
-              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: lastKnownTimeRef.current }, "*");
-              iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: lastKnownTimeRef.current }, "*");
-            } catch(err){console.warn("Silenced error:", err);}
+            // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
+            if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
+              hasSeekedInitialTimeRef.current = true;
+              try {
+                iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: lastKnownTimeRef.current }, "*");
+                iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: lastKnownTimeRef.current }, "*");
+                iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: lastKnownTimeRef.current }, "*");
+              } catch(err){console.warn("Silenced error:", err);}
+            }
           }
         }
 
         // Revela o iframe (remove opacity-0) apenas quando o vídeo começou a tocar, para esconder botões nativos gigantes
         if (
-          (typeof data.currentTime === "number" && data.currentTime > 0.1) ||
+          !isIframeVisible &&
+          ((typeof data.currentTime === "number" && data.currentTime > 0.1) ||
           data.paused === false ||
-          (typeof data.readyState === "number" && data.readyState >= 3)
+          (typeof data.readyState === "number" && data.readyState >= 3))
         ) {
           setIframeVisible(true);
         }
