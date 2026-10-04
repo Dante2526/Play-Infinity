@@ -250,7 +250,8 @@ import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
 
 import { adminOpsRouter } from "./server/routes/adminOps";
-import { requireAdminAuth } from "./server/middlewares/requireAdminAuth";
+import { requireAdminAuth } from './server/middlewares/requireAdminAuth';
+import { userOpsRouter } from './server/routes/userOps.js';
 
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
@@ -262,6 +263,7 @@ app.use(vidsrcRouter);
 app.use("/api/admin", requireAdminAuth);
 app.use(serverBlocksRouter);
 app.use("/api/admin", adminOpsRouter);
+app.use(userOpsRouter);
 
 // Routers extraídos do server.ts: montados APÓS helmet, express.json e rate limiters
 app.use(paymentsRouter);

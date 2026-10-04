@@ -75,17 +75,19 @@ export async function startTrial(): Promise<boolean> {
   const user = auth.currentUser;
   if (!user) return false;
   try {
-    const untilIso = new Date(Date.now() + TRIAL_DURATION_MS).toISOString();
-    await setDoc(
-      doc(db, "usuarios", user.uid),
-      {
-        testeExpiracao: untilIso,
-        trialUntil: untilIso,
-        trialUsado: true,
-      },
-      { merge: true }
-    );
-    return true;
+    const token = await user.getIdToken();
+    const res = await fetch("/api/start-trial", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+    if (res.ok) {
+      return true;
+    }
+    const data = await res.json().catch(() => ({}));
+    console.warn("[Trial] O servidor negou o teste:", data.error);
+    return false;
   } catch (err) {
     console.error("[Trial] Falha ao ativar teste de 30 min:", err);
     return false;
