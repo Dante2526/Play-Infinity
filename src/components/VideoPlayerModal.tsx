@@ -276,8 +276,8 @@ export function VideoPlayerModal({
       if (cancelled) return;
       console.log(
         result
-          ? `[MixDrop] fileId HD: ${result} (S${season}E${episode})`
-          : `[MixDrop] Sem fileId (S${season}E${episode})`
+          ? `[MixDrop] fileId HD: ${result} ${seriesMode ? `(S${season}E${episode})` : ''}`.trim()
+          : `[MixDrop] Sem fileId ${seriesMode ? `(S${season}E${episode})` : ''}`.trim()
       );
     };
 
