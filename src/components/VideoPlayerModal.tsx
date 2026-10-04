@@ -1423,6 +1423,7 @@ export function VideoPlayerModal({
 
             playbackConfirmedRef.current = true;
             setPlayerSkinReady(true);
+            setIsLoading(false);
             retrySameServerRef.current = false;
             fallbackAttemptsRef.current.clear();
             mixdropAttemptRef.current = 1;
@@ -2360,9 +2361,10 @@ export function VideoPlayerModal({
                 allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
-                  setIsLoading(false);
                   if (activeIframeUrl?.includes("/api/") || selectedServerKey !== "external") {
                     setTimeout(() => setPlayerSkinReady(true), 500);
+                  } else {
+                    setIsLoading(false);
                   }
                 }}
                 onError={() => handleSilentFallback()}
