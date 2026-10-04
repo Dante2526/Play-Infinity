@@ -1246,7 +1246,17 @@ export function VideoPlayerModal({
           imdbId === "tt22084616" ||
           (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
 
-        let targetServerKey = isMixdropTarget ? "srv_mixdrop" : "srv_watchplay";
+        let prefServer = null;
+        if (isSeries && tmdbId) {
+          try {
+            prefServer = localStorage.getItem(`preferred_server_${tmdbId}`);
+            if (prefServer && !serversRef.current.find(s => s.key === prefServer)) {
+              prefServer = null;
+            }
+          } catch(e) {}
+        }
+
+        let targetServerKey = initialServerKey || prefServer || (isMixdropTarget ? "srv_mixdrop" : "srv_watchplay");
         let targetUrl: string;
 
         if (isSeries && targetSeason >= 5 && (String(tmdbId) === "126027" || String(resolvedId) === "126027")) {
@@ -1429,6 +1439,12 @@ export function VideoPlayerModal({
             fallbackAttemptsRef.current.clear();
             mixdropAttemptRef.current = 1;
 
+            if (isSeries && tmdbId) {
+              try {
+                localStorage.setItem(`preferred_server_${tmdbId}`, selectedServerKey);
+              } catch(e) {}
+            }
+
             // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
             if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
               hasSeekedInitialTimeRef.current = true;
@@ -1521,7 +1537,7 @@ export function VideoPlayerModal({
 
     window.addEventListener("message", handlePlayerWindowMessages);
     return () => window.removeEventListener("message", handlePlayerWindowMessages);
-  }, [isSeries, episode, season, resolvedId, skipDurationSeconds]);
+  }, [isSeries, episode, season, resolvedId, skipDurationSeconds, selectedServerKey]);
 
   // Recuperação automática em caso de queda e retorno de conexão com a internet
   useEffect(() => {

@@ -646,5 +646,48 @@ const router = Router();
     });
   });
 
+  router.get("/api/diagnostics/health-check", async (req, res) => {
+    const targets = [
+      { name: "Catálogo Vizer", url: "https://vizer.website", type: "html" },
+      { name: "Catálogo Encontrei.me", url: "https://encontrei.me", type: "html" },
+      { name: "TMDB API", url: "https://api.themoviedb.org/3/configuration?api_key=4df7e324c4cf4b5fb6bbcb245d43fb6c", type: "json" },
+      { name: "VIP Player", url: "https://myembed.biz", type: "html" },
+      { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
+      { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
+    ];
+
+    const results = await Promise.all(
+      targets.map(async (target) => {
+        try {
+          const start = Date.now();
+          const response = await axios.get(target.url, { 
+            timeout: 8000,
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            }
+          });
+          const latency = Date.now() - start;
+          return {
+            name: target.name,
+            url: target.url,
+            status: response.status >= 200 && response.status < 400 ? "ONLINE" : "OFFLINE",
+            latencyMs: latency,
+            statusCode: response.status
+          };
+        } catch (error: any) {
+          return {
+            name: target.name,
+            url: target.url,
+            status: "OFFLINE",
+            latencyMs: null,
+            statusCode: error.response?.status || 0,
+            error: error.message
+          };
+        }
+      })
+    );
+
+    res.json({ success: true, timestamp: Date.now(), results });
+  });
 
 export default router;
