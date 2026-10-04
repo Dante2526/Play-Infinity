@@ -1376,9 +1376,10 @@ export function VideoPlayerModal({
         // 2. Sinais implícitos (Evolução do relógio = tocando)
         if (isPaused === undefined && incomingTime > 0) {
           const diff = incomingTime - lastKnownTimeRef.current;
-          // Se o relógio andou pra frente numa fração normal de 1 frame a 1 segundo, está tocando.
-          // Se o diff for muito alto (> 2s), foi um Seek (usuário pode ter buscado estando pausado).
-          if (diff > 0.05 && diff < 1.5) {
+          // Se o relógio andou pra frente numa fração normal, está tocando.
+          // Trocamos diff > 0.05 por diff > 0 para prever players que emitem timeupdate a 60fps (diff = 0.016)
+          // Se o diff for muito alto (> 1.5s), foi um Seek (usuário saltou no tempo).
+          if (diff > 0 && diff < 1.5) {
             isPaused = false;
           }
         }
