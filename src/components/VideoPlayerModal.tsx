@@ -2437,7 +2437,7 @@ export function VideoPlayerModal({
               onToggleAspectRatio={handleToggleAspectRatio}
               onTogglePiP={handleToggleMiniPlayer}
               isMiniPlayer={isMiniPlayer}
-              passThroughClicks={isExternalPlayer || !playerSkinReady}
+              passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
               subtitleUrl={subtitleUrl}
             />
             </div>

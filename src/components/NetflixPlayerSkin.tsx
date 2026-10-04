@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Play,
   Pause,
@@ -1570,7 +1570,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 handleSeekRelative(-10);
               }}
               className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
-                controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
+                controlsVisible && !isLocked && !isEffectiveExternal ? "pointer-events-auto" : "pointer-events-none"
               }`}
               title="Voltar 10s"
             >
@@ -1588,7 +1588,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               handleTogglePlay();
             }}
             className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none ${
-              controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
+              controlsVisible && !isLocked && !isEffectiveExternal ? "pointer-events-auto" : "pointer-events-none"
             }`}
             title={playerStatus.paused ? "Reproduzir" : "Pausar"}
           >
@@ -1609,7 +1609,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 handleSeekRelative(10);
               }}
               className={`relative p-2 sm:p-3 text-white/90 hover:text-white hover:scale-110 active:scale-95 transition-all cursor-pointer group ${
-                controlsVisible && !isLocked ? "pointer-events-auto" : "pointer-events-none"
+                controlsVisible && !isLocked && !isEffectiveExternal ? "pointer-events-auto" : "pointer-events-none"
               }`}
               title="Avançar 10s"
             >
