@@ -3789,11 +3789,11 @@ const router = Router();
               return;
             }
 
-            // Se após 70 segundos ainda não houver vídeo tocando e nenhum stream ativo
-            if (vipWatchdogTicks >= 140) {
+            // Se após 45 segundos ainda não houver vídeo tocando e nenhum stream ativo
+            if (vipWatchdogTicks >= 90) {
               if (!isPlaying) {
                 clearInterval(vipStreamWatchdog);
-                console.warn('[Play Infinity VIP] Stream não iniciou reprodução real. Emitindo VIP_UNAVAILABLE.');
+                console.warn('[Play Infinity VIP] Stream não iniciou reprodução real (lentidão severa). Emitindo VIP_UNAVAILABLE.');
                 try {
                   window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "no_stream_playing" }, "*");
                 } catch(e) {}
@@ -3802,6 +3802,16 @@ const router = Router();
               }
             }
           }, 500);
+
+          // Fast-Fail: Detecta erros fatais instantaneamente para não prender o usuário
+          setInterval(function() {
+            var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
+            if (!v) return;
+            if (v.error || v.networkState === 3) {
+              console.warn('[Play Infinity VIP] Erro fatal nativo detectado (networkState 3 ou v.error). Emitindo VIP_UNAVAILABLE.');
+              try { window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "video_playback_error" }, "*"); } catch(e) {}
+            }
+          }, 1000);
 
           function sendStatus() {
             var v = document.querySelector('video');

@@ -1144,13 +1144,12 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  // Watchdog inteligente de segurança: se o player demorar mais de 60s sem iniciar,
+  // Watchdog inteligente de segurança: se o player demorar mais de 50s sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
-  // Tempo aumentado a pedido do usuário para permitir clique manual caso o Autoplay seja bloqueado.
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = 60000; // 60 segundos (1 minuto)
+    const timeoutDuration = 50000; // 50 segundos
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
