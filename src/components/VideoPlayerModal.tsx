@@ -1435,7 +1435,7 @@ export function VideoPlayerModal({
 
         // Revela o iframe (remove opacity-0) apenas quando o vídeo começou a tocar, para esconder botões nativos gigantes
         if (
-          !isIframeVisible &&
+          !iframeVisible &&
           ((typeof data.currentTime === "number" && data.currentTime > 0.1) ||
           data.paused === false ||
           (typeof data.readyState === "number" && data.readyState >= 3))
