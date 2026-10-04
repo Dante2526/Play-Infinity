@@ -3772,9 +3772,8 @@ const router = Router();
           window.onbeforeunload = null;
 
           // Detecção de marcas da lista negra e watchdog de início de reprodução
-          var vipWatchdogTicks = 0;
+          var vipWatchdogStart = Date.now();
           var vipStreamWatchdog = setInterval(function() {
-            vipWatchdogTicks++;
             var textContent = document.body ? (document.body.innerText || "") : "";
             var isFakeBrand = textContent.includes("embedmovies.org") || textContent.includes("embedmovies");
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
@@ -3789,8 +3788,8 @@ const router = Router();
               return;
             }
 
-            // Se após 20 segundos ainda não houver vídeo tocando e nenhum stream ativo
-            if (vipWatchdogTicks >= 40) {
+            // Se após 20 segundos reais ainda não houver vídeo tocando
+            if (Date.now() - vipWatchdogStart >= 20000) {
               if (!isPlaying) {
                 clearInterval(vipStreamWatchdog);
                 console.warn('[Play Infinity VIP] Stream não iniciou reprodução real (lentidão severa). Emitindo VIP_UNAVAILABLE.');
@@ -3814,7 +3813,7 @@ const router = Router();
           }, 1000);
 
           function sendStatus() {
-            var v = document.querySelector('video');
+            var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
             var dur = v.duration || 0;
             var cur = v.currentTime || 0;
