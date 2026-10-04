@@ -410,6 +410,7 @@ export function VideoPlayerModal({
     setAspectRatio((prev) => (prev === "contain" ? "cover" : prev === "cover" ? "stretch" : "contain"));
   };
   const hasSeekedInitialTimeRef = useRef<boolean>(false);
+  const lastKnownTimeRef = useRef<number>(initialTime || 0);
 
   // Escuta atualizações de episódios assistidos para re-renderizar em tempo real
   useEffect(() => {
@@ -1046,6 +1047,7 @@ export function VideoPlayerModal({
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback(async (serverKey: string) => {
     mixdropAttemptRef.current = 1; // Reseta tentativa intra-servidor
+    hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
     const srv = servers.find(s => s.key === serverKey);
     if (!srv) return;
@@ -1093,6 +1095,7 @@ export function VideoPlayerModal({
           const fallbackSource = isPrimaryVizer ? "Encontrei" : "Vizer";
           console.warn(`[VideoPlayerModal] MixDrop primário falhou. Tentando MixDrop do ${fallbackSource}...`);
           mixdropAttemptRef.current = 2;
+          hasSeekedInitialTimeRef.current = false;
           transitionEpochRef.current = Date.now();
           setIsLoading(true);
           setError(null);
@@ -1109,6 +1112,7 @@ export function VideoPlayerModal({
     const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
     if (nextServer) {
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
+      hasSeekedInitialTimeRef.current = false;
       handleServerSwitch(nextServer.key);
       return;
     }
@@ -1154,6 +1158,7 @@ export function VideoPlayerModal({
       fallbackAttemptsRef.current.clear();
       mixdropAttemptRef.current = 1;
       hasSeekedInitialTimeRef.current = false;
+      lastKnownTimeRef.current = initialTime || 0;
 
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
       if (autoFullscreen) {
@@ -1335,6 +1340,9 @@ export function VideoPlayerModal({
         const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
         const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
+        if (incomingTime > 0) {
+          lastKnownTimeRef.current = incomingTime;
+        }
 
         // Se acabamos de trocar de episódio/temporada, descarta mensagens residuais
         // do vídeo anterior que ainda estavam na fila com posição adiantada (> 4s)
@@ -1355,12 +1363,12 @@ export function VideoPlayerModal({
           setPlayerSkinReady(true);
 
           // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
-          if (initialTime && initialTime > 2 && !hasSeekedInitialTimeRef.current) {
+          if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
             hasSeekedInitialTimeRef.current = true;
             try {
-              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: initialTime }, "*");
-              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: initialTime }, "*");
-              iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: initialTime }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: lastKnownTimeRef.current }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: lastKnownTimeRef.current }, "*");
+              iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: lastKnownTimeRef.current }, "*");
             } catch(err){console.warn("Silenced error:", err);}
           }
         }
@@ -1403,6 +1411,7 @@ export function VideoPlayerModal({
               transitionEpochRef.current = Date.now();
               setSeason(nextSeason);
               setEpisode(1);
+              lastKnownTimeRef.current = 0;
               setIsIntroActive(false);
               setPlayerSkinReady(false);
               setIframeVisible(false);
@@ -1528,6 +1537,7 @@ export function VideoPlayerModal({
 
     transitionEpochRef.current = Date.now();
     setEpisode(newEpisode);
+    lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     setIframeVisible(false);
@@ -1564,6 +1574,7 @@ export function VideoPlayerModal({
     transitionEpochRef.current = Date.now();
     setSeason(newSeason);
     setEpisode(1);
+    lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false);
     setIframeVisible(false);
