@@ -1356,10 +1356,8 @@ export function VideoPlayerModal({
         const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
         
-        // Se acabamos de trocar de episódio/temporada, descarta mensagens residuais
-        // do vídeo anterior que ainda estavam na fila com posição adiantada (> 4s)
-        const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
-        if (isRecentTransition && incomingTime > 4) {
+        // Proteção contra mensagens de iframes antigos (que ainda não foram coletados pelo GC)
+        if (event.source && iframeRef.current?.contentWindow && event.source !== iframeRef.current.contentWindow) {
           return;
         }
 
@@ -1411,11 +1409,6 @@ export function VideoPlayerModal({
             (typeof data.currentTime === "number" && data.currentTime > 0) ||
             (typeof data.readyState === "number" && data.readyState >= 1)
           ) {
-            // Se for transição recente (< 800ms), aguarda estabilização do novo frame
-            if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
-              return;
-            }
-
             setPlayerSkinReady(true);
             retrySameServerRef.current = false;
             fallbackAttemptsRef.current.clear();
