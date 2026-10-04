@@ -1080,6 +1080,7 @@ export function VideoPlayerModal({
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
   const mixdropAttemptRef = useRef<number>(1);
+  const retrySameServerRef = useRef<boolean>(false);
 
   const handleSilentFallback = useCallback(() => {
     // 1. Fallback intra-servidor do MixDrop: se o primário falhou, tenta o outro catálogo
@@ -1105,6 +1106,15 @@ export function VideoPlayerModal({
           return; // Não pula de servidor ainda
         }
       }
+    }
+
+    // 2. Retry do mesmo servidor em caso de timeout de token (pausa longa)
+    if (!retrySameServerRef.current && lastKnownTimeRef.current > 2) {
+      console.warn(`[VideoPlayerModal] Possível expiração de token pós-pausa. Recarregando ${selectedServerKey} de forma transparente...`);
+      retrySameServerRef.current = true;
+      hasSeekedInitialTimeRef.current = false;
+      handleServerSwitch(selectedServerKey);
+      return;
     }
 
     fallbackAttemptsRef.current.add(selectedServerKey);
@@ -1361,6 +1371,7 @@ export function VideoPlayerModal({
           }
 
           setPlayerSkinReady(true);
+          retrySameServerRef.current = false;
 
           // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
           if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
