@@ -22,7 +22,7 @@ service cloud.firestore {
       let allowedKeys = [
         "nome", "email", "senha", "assinatura", "tipoAcesso",
         "photoURL", "historicoReproducao", "historicoRemovido", "episodiosAssistidos",
-        "favoritos", "createdAt", "updatedAt"
+        "favoritos", "createdAt", "updatedAt", "valorMensalidade", "valor", "criadoEm"
       ];
       let keysOk = request.resource.data.keys().hasOnly(allowedKeys);
       let assinaturaOk = !("assinatura" in request.resource.data) || request.resource.data.assinatura == "INATIVA";
@@ -35,7 +35,7 @@ service cloud.firestore {
         "nome", "email", "photoURL", "senha", "senhaInicial",
         "historicoReproducao", "historicoRemovido", "episodiosAssistidos",
         "favoritos", "createdAt", "updatedAt",
-        "assinatura", "subscription", "valorMensalidade", "valor"
+        "assinatura", "subscription", "valorMensalidade", "valor", "ultimoAcesso", "lastActive"
       ];
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let hasOnlyAllowed = affectedKeys.hasOnly(allowedKeys);
