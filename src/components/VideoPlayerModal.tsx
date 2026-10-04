@@ -330,6 +330,8 @@ export function VideoPlayerModal({
   const [blockedServerKeys, setBlockedServerKeys] = useState<Set<string>>(new Set());
   // Controle do overlay anti-flash: permanece preto até a skin estética estar pronta
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
+  // Ref para confirmar que o vídeo realmente iniciou a reprodução (usado pelo watchdog e seek)
+  const playbackConfirmedRef = useRef<boolean>(false);
   // Controle de visibilidade do iframe: oculta o iframe nativo (com botões feios/gigantes) até o vídeo começar a rodar
   const [iframeVisible, setIframeVisible] = useState<boolean>(false);
   // Controle de Picture-in-Picture nativo do Android
@@ -1055,6 +1057,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
     setPlayerSkinReady(serverKey === "srv_mixdrop");
+    playbackConfirmedRef.current = false;
     setIframeVisible(false);
     setError(null);
 
@@ -1145,17 +1148,17 @@ export function VideoPlayerModal({
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
   // Tempo aumentado a pedido do usuário para permitir clique manual caso o Autoplay seja bloqueado.
   useEffect(() => {
-    if (!activeIframeUrl || playerSkinReady || error) return;
+    if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
     const timeoutDuration = 60000; // 60 segundos (1 minuto)
     const timer = setTimeout(() => {
-      if (!playerSkinReady && !error) {
+      if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
         handleSilentFallback();
       }
     }, timeoutDuration);
     return () => clearTimeout(timer);
-  }, [activeIframeUrl, selectedServerKey, playerSkinReady, error, isAnimeMedia, handleSilentFallback]);
+  }, [activeIframeUrl, selectedServerKey, error, isAnimeMedia, handleSilentFallback]);
 
   // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
@@ -1169,6 +1172,7 @@ export function VideoPlayerModal({
       setError(null);
       setIsLoading(true);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
+      playbackConfirmedRef.current = false; // Reset de reprodução real
       setIframeVisible(false); // Oculta iframe até rodar
       // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
       mixdropAttemptRef.current = 1;
@@ -1406,7 +1410,7 @@ export function VideoPlayerModal({
           lastKnownTimeRef.current = incomingTime;
         }
 
-        if (!playerSkinReady) {
+        if (!playbackConfirmedRef.current) {
           if (
             (typeof data.duration === "number" && data.duration > 0) ||
             (typeof data.currentTime === "number" && data.currentTime > 0) ||
@@ -1417,6 +1421,7 @@ export function VideoPlayerModal({
               return;
             }
 
+            playbackConfirmedRef.current = true;
             setPlayerSkinReady(true);
             retrySameServerRef.current = false;
             fallbackAttemptsRef.current.clear();
@@ -1476,6 +1481,7 @@ export function VideoPlayerModal({
               lastKnownTimeRef.current = 0;
               setIsIntroActive(false);
               setPlayerSkinReady(false);
+              playbackConfirmedRef.current = false;
               setIframeVisible(false);
               fallbackAttemptsRef.current.clear();
               mixdropAttemptRef.current = 1;
@@ -1602,6 +1608,7 @@ export function VideoPlayerModal({
     lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
+    playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
     mixdropAttemptRef.current = 1;
@@ -1639,6 +1646,7 @@ export function VideoPlayerModal({
     lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false);
+    playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
     mixdropAttemptRef.current = 1;
