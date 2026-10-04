@@ -20,7 +20,7 @@ const router = Router();
       const query = new URLSearchParams(req.query as any);
       query.delete("path");
       
-      const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
+      const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
 
       query.set("api_key", apiKey);
       

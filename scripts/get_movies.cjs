@@ -2,7 +2,8 @@ const https = require('https');
 
 function search(query, type) {
   return new Promise((resolve) => {
-    const url = `https://api.themoviedb.org/3/search/${type}?api_key=e0cc43e590a5c5c0d03f920bd4fe9424&query=${encodeURIComponent(query)}&language=pt-BR`;
+    const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+    const url = `https://api.themoviedb.org/3/search/${type}?api_key=${apiKey}&query=${encodeURIComponent(query)}&language=pt-BR`;
     https.get(url, (res) => {
       let data = '';
       res.on('data', c => data += c);

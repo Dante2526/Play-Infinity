@@ -159,7 +159,7 @@ subtitlesRouter.get("/api/subtitles", async (req, res) => {
     }
 
     // 2. Busca TMDB em inglês — usa original_title para garantir que o SubtitleCat encontre
-    const TMDB_KEY = process.env.VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
+    const TMDB_KEY = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
     const tmdbRes = await fetch(tmdbUrl, { signal: AbortSignal.timeout(8000) });
     if (!tmdbRes.ok) throw new Error(`TMDB failed: ${tmdbRes.status}`);

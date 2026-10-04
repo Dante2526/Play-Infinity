@@ -20,7 +20,8 @@ export function AdminHealthMonitor() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch("/api/diagnostics/health-check");
+      const { adminFetch } = await import("../services/adminApi");
+      const response = await adminFetch("/api/admin/health-check");
       const data = await response.json();
       if (data.success) {
         setResults(data.results);

@@ -139,6 +139,55 @@ function executeSshCommand(command: string, timeoutMs = 25000): Promise<{ stdout
 }
 
 /**
+ * GET /api/admin/health-check
+ * Checa a saúde dos domínios homologados de forma autenticada
+ */
+adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
+  const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+  const targets = [
+    { name: "Catálogo Vizer", url: "https://vizer.website", type: "html" },
+    { name: "Catálogo Encontrei.me", url: "https://encontrei.me", type: "html" },
+    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
+    { name: "VIP Player", url: "https://myembed.biz", type: "html" },
+    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
+    { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
+  ];
+
+  const results = await Promise.all(
+    targets.map(async (target) => {
+      try {
+        const start = Date.now();
+        const response = await fetch(target.url, {
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          }
+        });
+        const latency = Date.now() - start;
+        return {
+          name: target.name,
+          url: target.url,
+          status: response.status >= 200 && response.status < 400 ? "ONLINE" : "OFFLINE",
+          latencyMs: latency,
+          statusCode: response.status
+        };
+      } catch (error: any) {
+        return {
+          name: target.name,
+          url: target.url,
+          status: "OFFLINE",
+          latencyMs: null,
+          statusCode: error.response?.status || 0,
+          error: error.message
+        };
+      }
+    })
+  );
+
+  res.json({ success: true, timestamp: Date.now(), results });
+});
+
+/**
  * GET /api/admin/vps-telemetry
  * Retorna telemetria em tempo real da VPS Oracle e health probes dos serviços
  */
