@@ -989,6 +989,8 @@ const router = Router();
   // API 6: Stream do WatchPlayer com Autoplay Imediato (sem ter que clicar em Opção 1)
   router.get("/api/watchplayer-stream", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      
       const targetUrl = req.query.url as string;
       const validation = validateSafeUrl(targetUrl);
       if (!validation.valid) {

@@ -68,7 +68,7 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
 
 export function buildMixdropStreamUrl(fileId: string | undefined): string | null {
   if (!fileId) return null;
-  return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${fileId}`)}`;
+  return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${fileId}`)}&cb=${Date.now()}`;
 }
 
 export interface EncontreiMovie { servers: { mixdrop?: string }; audio: string; server_name: string; }

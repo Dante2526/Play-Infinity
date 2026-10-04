@@ -879,7 +879,7 @@ export function VideoPlayerModal({
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s?: number, e?: number) => 
-            `https://v1.watchplay.shop/tvshow/${id}/${s || 1}/${e || 1}`,
+            `https://v1.watchplay.shop/tvshow/${id}/${s || 1}/${e || 1}?cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer"
         },
@@ -924,7 +924,7 @@ export function VideoPlayerModal({
               return defaultUrl;
             }
             // Prioridade 3: fallback (pode ser versão cam)
-            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
@@ -936,7 +936,7 @@ export function VideoPlayerModal({
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
-          buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}`,
+          buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}?cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer"
         },
@@ -977,7 +977,7 @@ export function VideoPlayerModal({
               return defaultUrl;
             }
             // Prioridade 3: fallback (pode ser versão cam)
-            return "https://mxdrop.top/f/36nggdmqspmlg4";
+            return `https://mxdrop.top/f/36nggdmqspmlg4?cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
@@ -1081,6 +1081,8 @@ export function VideoPlayerModal({
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
   const mixdropAttemptRef = useRef<number>(1);
   const retrySameServerRef = useRef<boolean>(false);
+  const hasPlayedRef = useRef<boolean>(false);
+  const pausedAtRef = useRef<number | null>(null);
 
   const handleSilentFallback = useCallback(() => {
     // 1. Fallback intra-servidor do MixDrop: se o primário falhou, tenta o outro catálogo
@@ -1109,7 +1111,7 @@ export function VideoPlayerModal({
     }
 
     // 2. Retry do mesmo servidor em caso de timeout de token (pausa longa)
-    if (!retrySameServerRef.current && lastKnownTimeRef.current > 2) {
+    if (!retrySameServerRef.current && lastKnownTimeRef.current > 2 && hasPlayedRef.current) {
       console.warn(`[VideoPlayerModal] Possível expiração de token pós-pausa. Recarregando ${selectedServerKey} de forma transparente...`);
       retrySameServerRef.current = true;
       hasSeekedInitialTimeRef.current = false;
@@ -1165,8 +1167,11 @@ export function VideoPlayerModal({
       setIsLoading(true);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       setIframeVisible(false); // Oculta iframe até rodar
-      fallbackAttemptsRef.current.clear();
+      // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
       mixdropAttemptRef.current = 1;
+      retrySameServerRef.current = false;
+      hasPlayedRef.current = false;
+      pausedAtRef.current = null;
       hasSeekedInitialTimeRef.current = false;
       lastKnownTimeRef.current = initialTime || 0;
 
@@ -1360,6 +1365,21 @@ export function VideoPlayerModal({
           return;
         }
 
+        // Detecção de pausa longa proativa (> 3 min)
+        if (data.paused === true) {
+          if (!pausedAtRef.current) pausedAtRef.current = Date.now();
+        } else if (data.paused === false || (typeof data.currentTime === "number" && data.currentTime > 0.1)) {
+          hasPlayedRef.current = true;
+          if (pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
+            console.warn("[VideoPlayerModal] Pausa longa detectada (> 3 min). Forçando reload proativo...");
+            pausedAtRef.current = null;
+            retrySameServerRef.current = false;
+            silentFallbackRef.current();
+            return;
+          }
+          pausedAtRef.current = null;
+        }
+
         if (
           (typeof data.duration === "number" && data.duration > 0) ||
           (typeof data.currentTime === "number" && data.currentTime > 0) ||
@@ -1372,6 +1392,8 @@ export function VideoPlayerModal({
 
           setPlayerSkinReady(true);
           retrySameServerRef.current = false;
+          fallbackAttemptsRef.current.clear();
+          mixdropAttemptRef.current = 1;
 
           // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
           if (lastKnownTimeRef.current && lastKnownTimeRef.current > 2 && !hasSeekedInitialTimeRef.current) {
