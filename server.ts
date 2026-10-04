@@ -205,11 +205,11 @@ process.on("uncaughtException", (err) => {
     "/watchplayer-stream",
     "/myembed-stream",
     "/mixdrop-stream",
-    "/encontrei/lookup",
-    "/encontrei-lookup",
+    
+    
     "/bolodechocolate",
     "/stream-proxy",
-    "/check-season",
+    
     "/vidsrc",
     "/nixplay"
   ];
