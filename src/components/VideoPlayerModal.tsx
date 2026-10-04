@@ -1367,9 +1367,9 @@ export function VideoPlayerModal({
         let isPaused: boolean | undefined = undefined;
 
         // 1. Sinais explícitos do player
-        if (data.paused === true || data.event === "pause" || msgType === "pause") {
+        if (data.paused === true || data.paused === "true" || data.event === "pause" || msgType === "pause") {
           isPaused = true;
-        } else if (data.paused === false || data.event === "play" || data.event === "playing" || msgType === "play" || msgType === "playing") {
+        } else if (data.paused === false || data.paused === "false" || data.event === "play" || data.event === "playing" || msgType === "play" || msgType === "playing") {
           isPaused = false;
         }
 
