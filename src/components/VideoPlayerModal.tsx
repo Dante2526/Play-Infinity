@@ -2279,7 +2279,7 @@ export function VideoPlayerModal({
 
             {activeIframeUrl && !error ? (
               <iframe
-                key={activeIframeUrl}
+                key={`${activeIframeUrl}-${transitionEpochRef.current}`}
                 ref={iframeRef}
                 src={activeIframeUrl}
                 title={title}
