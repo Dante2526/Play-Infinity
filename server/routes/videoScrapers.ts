@@ -3789,8 +3789,8 @@ const router = Router();
               return;
             }
 
-            // Se após 3.5 segundos ainda não houver vídeo tocando e nenhum stream ativo
-            if (vipWatchdogTicks >= 7) {
+            // Se após 30 segundos ainda não houver vídeo tocando e nenhum stream ativo
+            if (vipWatchdogTicks >= 60) {
               if (!isPlaying) {
                 clearInterval(vipStreamWatchdog);
                 console.warn('[Play Infinity VIP] Stream não iniciou reprodução real. Emitindo VIP_UNAVAILABLE.');
