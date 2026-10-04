@@ -274,7 +274,12 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
       headers["Range"] = req.headers.range as string;
     }
 
-    const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(15000), headers });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    req.on("close", () => controller.abort());
+
+    const upstream = await fetch(targetUrl, { signal: controller.signal, headers });
+    clearTimeout(timeoutId);
     if (!upstream.ok && upstream.status !== 206) {
       return res.status(upstream.status).json({ error: `upstream ${upstream.status}` });
     }

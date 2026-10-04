@@ -2757,11 +2757,15 @@ const router = Router();
       let upstreamText: string | null = null;
 
       while (redirects < MAX_REDIRECTS) {
+        const fetchController = new AbortController();
+        const fetchTimeout = setTimeout(() => fetchController.abort(), 12000);
+        
         upstreamRes = await fetch(currentUrl, {
           headers,
           redirect: "manual",
-          signal: AbortSignal.timeout(12000)
+          signal: fetchController.signal
         });
+        clearTimeout(fetchTimeout);
 
         // Verificação antecipada de manifesto expirado (mesmo com status 200 OK)
         let isInvalidManifest = false;
