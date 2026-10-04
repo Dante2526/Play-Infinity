@@ -1081,6 +1081,7 @@ export function VideoPlayerModal({
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
   const mixdropAttemptRef = useRef<number>(1);
   const retrySameServerRef = useRef<boolean>(false);
+  const forceRetrySameServerRef = useRef<boolean>(false);
   const hasPlayedRef = useRef<boolean>(false);
   const pausedAtRef = useRef<number | null>(null);
 
@@ -1111,9 +1112,10 @@ export function VideoPlayerModal({
     }
 
     // 2. Retry do mesmo servidor em caso de timeout de token (pausa longa)
-    if (!retrySameServerRef.current && lastKnownTimeRef.current > 2 && hasPlayedRef.current) {
+    if ((!retrySameServerRef.current && lastKnownTimeRef.current > 2 && hasPlayedRef.current) || forceRetrySameServerRef.current) {
       console.warn(`[VideoPlayerModal] Possível expiração de token pós-pausa. Recarregando ${selectedServerKey} de forma transparente...`);
       retrySameServerRef.current = true;
+      forceRetrySameServerRef.current = false;
       hasSeekedInitialTimeRef.current = false;
       handleServerSwitch(selectedServerKey);
       return;
@@ -1390,6 +1392,7 @@ export function VideoPlayerModal({
             console.warn("[VideoPlayerModal] Pausa longa detectada (> 3 min). Forçando reload proativo...");
             pausedAtRef.current = null;
             retrySameServerRef.current = false;
+            forceRetrySameServerRef.current = true;
             silentFallbackRef.current();
             return;
           }
