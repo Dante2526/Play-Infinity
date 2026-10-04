@@ -77,7 +77,7 @@ async function getOriginToken(origin: string): Promise<string> {
   // Tenta obter novo token com retry e tratamento de 429
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      const resp = await fetch(`${origin}/generate.php`, {
+      const resp = await fetch(`${origin}/generate.php`, { signal: AbortSignal.timeout(15000),
         headers: { "User-Agent": UA },
       });
       const text = (await resp.text()).trim();
@@ -118,22 +118,19 @@ async function getRewrittenM3u8(tmdb: string, season: string, episode: string): 
   if (cached && cached.expires > Date.now()) return cached.m3u8;
 
   // 1. vs_src.php
-  const r1 = await fetch(
-    `https://vidsrc.sh/vs_src.php?type=tv&id=${tmdb}&season=${season}&episode=${episode}`,
-    { headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" } }
-  );
+  const r1 = await fetch(`https://vidsrc.sh/vs_src.php?type=tv&id=${tmdb}&season=${season}&episode=${episode}`, { signal: AbortSignal.timeout(15000), headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" } });
   const d1 = await r1.json();
   const cloudUrl = d1.src;
 
   // 2. cloudorchestranova shell → playerUrl
-  const r2 = await fetch(cloudUrl, { headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" } });
+  const r2 = await fetch(cloudUrl, { signal: AbortSignal.timeout(15000), headers: { "User-Agent": UA, Referer: "https://vidsrc.sh/" } });
   const h2 = await r2.text();
   const pm = h2.match(/"playerUrl":"([^"]+)"/);
   if (!pm) throw new Error("playerUrl not found");
   const playerUrl = "https://cloudorchestranova.com" + pm[1].replace(/\\u0026/g, "&");
 
   // 3. player page → streamBase (PRECISA de Referer do cloudUrl!)
-  const r3 = await fetch(playerUrl, { headers: { "User-Agent": UA, Referer: cloudUrl } });
+  const r3 = await fetch(playerUrl, { signal: AbortSignal.timeout(15000), headers: { "User-Agent": UA, Referer: cloudUrl } });
   const h3 = await r3.text();
   const sbm = h3.match(/"streamBase":"([^"]+)"/);
   if (!sbm) throw new Error("streamBase not found");
@@ -141,7 +138,7 @@ async function getRewrittenM3u8(tmdb: string, season: string, episode: string): 
 
   // 4. API + &stream_urls → encrypted + WASM
   const streamApiUrl = `${streamBase}&season=${season}&episode=${episode}&stream_urls`;
-  const r4 = await fetch(streamApiUrl, {
+  const r4 = await fetch(streamApiUrl, { signal: AbortSignal.timeout(15000),
     headers: { "User-Agent": UA, Accept: "application/json" },
   });
   const d4 = await r4.json();
@@ -149,7 +146,7 @@ async function getRewrittenM3u8(tmdb: string, season: string, episode: string): 
 
   // 5. WASM decrypt
   const enc = Buffer.from(d4.data.stream_urls, "base64");
-  const wasmResp = await fetch(d4.vs.wasm_url, { headers: { "User-Agent": UA } });
+  const wasmResp = await fetch(d4.vs.wasm_url, { signal: AbortSignal.timeout(15000), headers: { "User-Agent": UA } });
   const wasmBuf = await wasmResp.arrayBuffer();
   const mod = await WebAssembly.compile(wasmBuf);
   const inst = await WebAssembly.instantiate(mod, {});
@@ -175,7 +172,7 @@ async function getRewrittenM3u8(tmdb: string, season: string, episode: string): 
 
   // 7. Fetch master.m3u8 (VPS IP + token)
   const masterUrl = urls[0] + (urls[0].includes("?") ? "&" : "?") + "token=" + token;
-  const r5 = await fetch(masterUrl, { headers: { "User-Agent": UA, Referer: "https://cloudorchestranova.com/" } });
+  const r5 = await fetch(masterUrl, { signal: AbortSignal.timeout(15000), headers: { "User-Agent": UA, Referer: "https://cloudorchestranova.com/" } });
   const masterM3u8 = await r5.text();
 
   // 8. Rewrite m3u8 — todas URLs apontam pra /api/vidsrc-proxy
@@ -277,7 +274,7 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
       headers["Range"] = req.headers.range as string;
     }
 
-    const upstream = await fetch(targetUrl, { headers });
+    const upstream = await fetch(targetUrl, { signal: AbortSignal.timeout(15000), headers });
     if (!upstream.ok && upstream.status !== 206) {
       return res.status(upstream.status).json({ error: `upstream ${upstream.status}` });
     }

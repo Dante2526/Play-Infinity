@@ -14,7 +14,7 @@ export async function loadNixplayCatalog() {
 
   try {
     // 1. Busca Filmes
-    const moviesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_vod_streams");
+    const moviesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_vod_streams", { signal: AbortSignal.timeout(15000) });
     if (moviesRes.ok) {
       const movies = await moviesRes.json();
       movies.forEach((m: any) => {
@@ -24,7 +24,7 @@ export async function loadNixplayCatalog() {
     }
 
     // 2. Busca Séries
-    const seriesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series");
+    const seriesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series", { signal: AbortSignal.timeout(15000) });
     if (seriesRes.ok) {
       const series = await seriesRes.json();
       series.forEach((s: any) => {

@@ -15,13 +15,13 @@ export default defineConfig(() => {
     },
     css: {
       lightningcss: {
-        targets: browserslistToTargets(browserslist('>= 0.5%, last 3 versions, not dead, Chrome >= 50, Safari >= 10, iOS >= 10, Edge >= 15')),
+        targets: browserslistToTargets(browserslist('>= 0.5%, last 2 versions, not dead, Chrome >= 87, Safari >= 14, iOS >= 14, Edge >= 88')),
       },
     },
 
     build: {
       cssMinify: 'lightningcss' as const,
-      target: 'es2015',
+      target: 'es2022',
       rollupOptions: {
         output: {
           manualChunks: {

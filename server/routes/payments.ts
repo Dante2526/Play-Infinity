@@ -55,7 +55,7 @@ router.post("/api/create-subscription", async (req, res) => {
 
     // 2. Busca ou cria cliente no Asaas
     let customerId = "";
-    const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { headers });
+    const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { signal: AbortSignal.timeout(15000), headers });
     if (cusRes.status === 401) throw new Error("Chave da API do Asaas inválida ou expirada. Verifique o arquivo .env");
     const cusText = await cusRes.text();
     const cusData = cusText ? JSON.parse(cusText) : {};
@@ -63,7 +63,7 @@ router.post("/api/create-subscription", async (req, res) => {
     if (cusData.data && cusData.data.length > 0) {
       customerId = cusData.data[0].id;
     } else {
-      const newCusRes = await fetch(`${baseUrl}/customers`, {
+      const newCusRes = await fetch(`${baseUrl}/customers`, { signal: AbortSignal.timeout(15000),
         method: "POST",
         headers,
         body: JSON.stringify({ name: name || email, email, cpfCnpj })
@@ -171,7 +171,7 @@ router.post("/api/create-subscription", async (req, res) => {
       delete subPayload.nextDueDate;
     }
 
-    const subRes = await fetch(`${baseUrl}/subscriptions`, {
+    const subRes = await fetch(`${baseUrl}/subscriptions`, { signal: AbortSignal.timeout(15000),
       method: "POST",
       headers,
       body: JSON.stringify(subPayload)
@@ -187,7 +187,7 @@ router.post("/api/create-subscription", async (req, res) => {
     let pixQrCode;
     
     if (billingType !== "CREDIT_CARD") {
-      const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { headers });
+      const payRes = await fetch(`${baseUrl}/payments?subscription=${subData.id}`, { signal: AbortSignal.timeout(15000), headers });
       const payData = await payRes.json();
       
       const firstPayment = payData.data?.[0];
@@ -197,7 +197,7 @@ router.post("/api/create-subscription", async (req, res) => {
       
       // Se for PIX explícito, busca a imagem do QR Code e o copia-e-cola
       if (billingType === "PIX") {
-        const qrRes = await fetch(`${baseUrl}/payments/${firstPayment.id}/pixQrCode`, { headers });
+        const qrRes = await fetch(`${baseUrl}/payments/${firstPayment.id}/pixQrCode`, { signal: AbortSignal.timeout(15000), headers });
         const qrData = await qrRes.json();
         if (qrData.success !== false) {
           pixQrCode = qrData;
@@ -246,7 +246,7 @@ router.post("/api/webhook/asaas", async (req, res) => {
     if (asaasApiKey && paymentId) {
       try {
         const baseUrl = getAsaasBaseUrl();
-        const verifyRes = await fetch(`${baseUrl}/payments/${paymentId}`, {
+        const verifyRes = await fetch(`${baseUrl}/payments/${paymentId}`, { signal: AbortSignal.timeout(15000),
           headers: getAsaasHeaders()
         });
 

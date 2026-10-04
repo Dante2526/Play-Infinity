@@ -55,9 +55,7 @@ export async function verifyFirebaseUserToken(token: string): Promise<{ uid: str
   if (token.split(".").length === 3) {
     try {
       const apiKey = process.env.VITE_FIREBASE_API_KEY || "AIzaSyAvv3XgTuTfUHUH8pRdRJ8XiH98uCUcSAs";
-      const lookupResp = await fetch(
-        `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`,
-        {
+      const lookupResp = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${apiKey}`, { signal: AbortSignal.timeout(15000),
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ idToken: token })

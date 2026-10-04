@@ -515,7 +515,7 @@ const router = Router();
         headers["Range"] = req.headers.range;
       }
 
-      const upstream = await fetch(videoUrl, { headers });
+      const upstream = await fetch(videoUrl, { signal: AbortSignal.timeout(15000), headers });
       res.status(upstream.status);
 
       for (const [key, value] of upstream.headers.entries()) {

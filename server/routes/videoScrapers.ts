@@ -1002,7 +1002,7 @@ const router = Router();
         signTarget.searchParams.set("action_secure_sign", "1");
         if (rawUrl) signTarget.searchParams.set("raw_url", rawUrl);
 
-        const signRes = await fetch(signTarget.toString(), {
+        const signRes = await fetch(signTarget.toString(), { signal: AbortSignal.timeout(15000),
           headers: {
             "Referer": targetUrl,
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -1277,7 +1277,7 @@ const router = Router();
           console.log(`[WatchPlayer Stream] Auto-resolvendo tela de opções para o player direto: ${choiceUrl}`);
           effectiveTargetUrl = choiceUrl;
           try {
-            const choiceRes = await fetch(effectiveTargetUrl, {
+            const choiceRes = await fetch(effectiveTargetUrl, { signal: AbortSignal.timeout(15000),
               headers: {
                 "Referer": parsedTarget.origin + "/",
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -3080,7 +3080,7 @@ const router = Router();
       let ajaxHadValidSources = false;
       try {
         const ajaxUrl = `https://playerflix.ink/inc/Ajax.php?type=${type}&id=${resolvedId}&season=${season}&episode=${episode}`;
-        const ajaxRes = await fetch(ajaxUrl, {
+        const ajaxRes = await fetch(ajaxUrl, { signal: AbortSignal.timeout(15000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://playerflix.ink/",
@@ -3129,7 +3129,7 @@ const router = Router();
 
                 if (!hash || !host) continue;
 
-                const getVidRes = await fetch(`https://${host}/player/index.php?data=${hash}&do=getVideo`, {
+                const getVidRes = await fetch(`https://${host}/player/index.php?data=${hash}&do=getVideo`, { signal: AbortSignal.timeout(15000),
                   method: "POST",
                   headers: {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -3688,7 +3688,7 @@ const router = Router();
         return sendVipUnavailablePage("no_valid_sources");
       }
 
-      let myembedRes = await fetch(targetUrl, {
+      let myembedRes = await fetch(targetUrl, { signal: AbortSignal.timeout(15000),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Referer": "https://myembed.biz/",
@@ -3704,7 +3704,7 @@ const router = Router();
           ? `https://myembed.biz/serie/${resolvedId}/${season}/${episode}`
           : `https://myembed.biz/filme/${resolvedId}`;
 
-        const fallbackRes = await fetch(fallbackUrl, {
+        const fallbackRes = await fetch(fallbackUrl, { signal: AbortSignal.timeout(15000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Referer": "https://myembed.biz/",
@@ -4087,7 +4087,7 @@ const router = Router();
         : `https://api.pomfy.stream/filme/${id}`;
         
       // 1. Busca HTML do Pomfy para pegar o statusToken
-      const response = await fetch(baseUrl, {
+      const response = await fetch(baseUrl, { signal: AbortSignal.timeout(15000),
         headers: {
           "Sec-Fetch-Dest": "iframe",
           "Sec-Fetch-Mode": "navigate",
@@ -4109,7 +4109,7 @@ const router = Router();
         
         // 3. Resolve o URL direto via API play-token
         const tokenUrl = `https://api.pomfy.stream/api/play-token?t=${token}`;
-        const tokenResp = await fetch(tokenUrl, {
+        const tokenResp = await fetch(tokenUrl, { signal: AbortSignal.timeout(15000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer": baseUrl

@@ -23,7 +23,7 @@ const router = Router();
     try {
       console.log(`[Extrator] Buscando player de: ${targetUrl}`);
 
-      const response = await fetch(targetUrl, {
+      const response = await fetch(targetUrl, { signal: AbortSignal.timeout(15000),
         headers: {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -113,7 +113,7 @@ const router = Router();
           }
 
           if (ajaxUrl) {
-            const ajaxRes = await fetch(ajaxUrl, {
+            const ajaxRes = await fetch(ajaxUrl, { signal: AbortSignal.timeout(15000),
               headers: {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
                 "Referer": refererUrl,
@@ -201,7 +201,7 @@ const router = Router();
 
     try {
       const startTime = Date.now();
-      const headRes = await fetch(testUrl, {
+      const headRes = await fetch(testUrl, { signal: AbortSignal.timeout(15000),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           "Referer": new URL(testUrl).origin,
@@ -315,7 +315,7 @@ const router = Router();
         if (exact) targetAnime = exact;
       }
 
-      const animePageRes = await fetch(targetAnime, {
+      const animePageRes = await fetch(targetAnime, { signal: AbortSignal.timeout(15000),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
           "Referer": "https://animesonlinecc.to/"
@@ -336,7 +336,7 @@ const router = Router();
         u.endsWith(`/${epNum}/`)
       ) || uniqueEps[0];
 
-      const epPageRes = await fetch(targetEp, {
+      const epPageRes = await fetch(targetEp, { signal: AbortSignal.timeout(15000),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
           "Referer": targetAnime
@@ -430,7 +430,7 @@ const router = Router();
 
       let optionId: string | null = null;
       if (contentId) {
-        const optRes = await fetch("https://v1.watchplay.shop/api", {
+        const optRes = await fetch("https://v1.watchplay.shop/api", { signal: AbortSignal.timeout(15000),
           method: "POST",
           headers: {
             "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -475,7 +475,7 @@ const router = Router();
         return null;
       }
 
-      const playerRes = await fetch("https://v1.watchplay.shop/api", {
+      const playerRes = await fetch("https://v1.watchplay.shop/api", { signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
@@ -494,7 +494,7 @@ const router = Router();
         const signTarget = new URL(pageUrl);
         signTarget.searchParams.set("action_secure_sign", "1");
         signTarget.searchParams.set("raw_url", rawVideoUrl);
-        const signRes = await fetch(signTarget.toString(), {
+        const signRes = await fetch(signTarget.toString(), { signal: AbortSignal.timeout(15000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer": pageUrl,
@@ -565,7 +565,7 @@ const router = Router();
       const apiData: any = await apiRes.json().catch(() => null);
       if (!apiData?.src) return null;
 
-      const embedPageRes = await fetch(BASE_URL + apiData.src, {
+      const embedPageRes = await fetch(BASE_URL + apiData.src, { signal: AbortSignal.timeout(15000),
         headers: { ...VIXSRC_HEADERS, Accept: 'text/html' }
       });
       if (!embedPageRes.ok) return null;

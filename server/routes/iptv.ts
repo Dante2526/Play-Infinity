@@ -20,7 +20,7 @@ async function getFreshXtreamToken(): Promise<string> {
 
   // Faz autenticacao Xtream Codes — recebe player_api
   const authUrl = `${host}/player_api.php?username=${user}&password=${pass}`;
-  const res = await fetch(authUrl);
+  const res = await fetch(authUrl, { signal: AbortSignal.timeout(15000) });
   const data = await res.json();
 
   if (!data?.user_info?.auth) {
@@ -344,7 +344,7 @@ router.get("/api/iptv/:channelId", async (req, res) => {
   // API 4: Proxy WatchPlay API (para obter opções de episódio e player sem bloqueio de CORS)
   router.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req, res) => {
     try {
-      const upstreamRes = await fetch("https://v1.watchplay.shop/api", {
+      const upstreamRes = await fetch("https://v1.watchplay.shop/api", { signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",

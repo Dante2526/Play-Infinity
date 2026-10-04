@@ -69,7 +69,7 @@ router.get("/api/bolodechocolate", async (req, res) => {
 
     // Fetch do bolodechocolate.fit
     const embedUrl = `https://bolodechocolate.fit/embed/${canal}.html`;
-    const upstream = await fetch(embedUrl, {
+    const upstream = await fetch(embedUrl, { signal: AbortSignal.timeout(15000),
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36",
         "Accept": "text/html,*/*",

@@ -115,7 +115,7 @@ router.get("/api/native-player", (req, res) => {
     var needsResolve = rawUrl.indexOf('nixplay.lat') !== -1;
 
     if (needsResolve) {
-      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl))
+      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl, { signal: AbortSignal.timeout(15000) }))
         .then(function(r) { return r.json(); })
         .then(function(data) { initVideo(data.url || rawUrl); })
         .catch(function() { initVideo(rawUrl); });

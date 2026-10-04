@@ -442,7 +442,7 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
       headers.Authorization = `Bearer ${token.trim()}`;
     }
 
-    const response = await fetch(apiUrl, { headers });
+    const response = await fetch(apiUrl, { signal: AbortSignal.timeout(15000), headers });
 
     if (!response.ok) {
       const errText = await response.text();
@@ -509,7 +509,7 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
     if (runs.length > 0 && (runs[0].status === "in_progress" || runs[0].status === "queued")) {
       try {
         const jobsUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/actions/runs/${runs[0].id}/jobs`;
-        const jobsRes = await fetch(jobsUrl, { headers });
+        const jobsRes = await fetch(jobsUrl, { signal: AbortSignal.timeout(15000), headers });
         if (jobsRes.ok) {
           const jobsData: any = await jobsRes.json();
           for (const job of jobsData.jobs || []) {
@@ -540,7 +540,7 @@ adminOpsRouter.get("/github-runs", async (req: Request, res: Response) => {
     if (runs.length > 0 && runs[0].conclusion === "failure") {
       try {
         const jobsUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/actions/runs/${runs[0].id}/jobs`;
-        const jobsRes = await fetch(jobsUrl, { headers });
+        const jobsRes = await fetch(jobsUrl, { signal: AbortSignal.timeout(15000), headers });
         if (jobsRes.ok) {
           const jobsData: any = await jobsRes.json();
           for (const job of jobsData.jobs || []) {
@@ -621,7 +621,7 @@ adminOpsRouter.post("/github-trigger", async (req: Request, res: Response) => {
     const triggerUrl = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repoName)}/actions/workflows/${encodeURIComponent(wf)}/dispatches`;
 
     try {
-      const response = await fetch(triggerUrl, {
+      const response = await fetch(triggerUrl, { signal: AbortSignal.timeout(15000),
         method: "POST",
         headers: {
           Accept: "application/vnd.github+json",

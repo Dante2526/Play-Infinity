@@ -26,7 +26,7 @@ const router = Router();
       
       const cleanPath = tmdbPath.replace(/^\/+/, "");
       const url = `https://api.themoviedb.org/3/${cleanPath}?${query.toString()}`;
-      const response = await fetch(url, {
+      const response = await fetch(url, { signal: AbortSignal.timeout(15000),
         headers: { "accept": "application/json" }
       });
       
