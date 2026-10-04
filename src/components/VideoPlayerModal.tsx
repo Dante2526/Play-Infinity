@@ -2353,15 +2353,7 @@ export function VideoPlayerModal({
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
                   setIsLoading(false);
-                  if (
-                    selectedServerKey === "srv_mixdrop" ||
-                    selectedServerKey === "srv_nixplay" ||
-                    selectedServerKey === "srv_vidsrc" ||
-                    activeIframeUrl?.includes("/api/mixdrop-stream") ||
-                    activeIframeUrl?.includes("/api/native-player") ||
-                    activeIframeUrl?.includes("/api/vidsrc-player") ||
-                    activeIframeUrl?.includes("nixplay")
-                  ) {
+                  if (activeIframeUrl?.includes("/api/") || selectedServerKey !== "external") {
                     setTimeout(() => setPlayerSkinReady(true), 500);
                   }
                 }}
