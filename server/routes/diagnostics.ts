@@ -647,10 +647,11 @@ const router = Router();
   });
 
   router.get("/api/diagnostics/health-check", async (req, res) => {
+    const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY || "e0cc43e590a5c5c0d03f920bd4fe9424";
     const targets = [
       { name: "Catálogo Vizer", url: "https://vizer.website", type: "html" },
       { name: "Catálogo Encontrei.me", url: "https://encontrei.me", type: "html" },
-      { name: "TMDB API", url: "https://api.themoviedb.org/3/configuration?api_key=4df7e324c4cf4b5fb6bbcb245d43fb6c", type: "json" },
+      { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
       { name: "VIP Player", url: "https://myembed.biz", type: "html" },
       { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
       { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
