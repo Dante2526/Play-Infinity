@@ -30,7 +30,7 @@ jobs:
 
       - name: 📦 Compactar arquivos de Deploy
         run: |
-          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json
+          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json data/encontrei-catalog.json
 
       - name: 🔑 Configurar Chave SSH
         run: |
