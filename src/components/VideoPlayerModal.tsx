@@ -1352,23 +1352,39 @@ export function VideoPlayerModal({
 
       if (isStatusMessage) {
         const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
-        const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
         
-        if (incomingTime > 0) {
-          lastKnownTimeRef.current = incomingTime;
-        }
-
         // Se acabamos de trocar de episódio/temporada, descarta mensagens residuais
         // do vídeo anterior que ainda estavam na fila com posição adiantada (> 4s)
+        const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
         if (isRecentTransition && incomingTime > 4) {
           return;
         }
 
-        // Detecção de pausa longa proativa (> 3 min)
-        if (data.paused === true) {
+        // --- LÓGICA DE PAUSA BLINDADA (Triplo Check) ---
+        let isPaused: boolean | undefined = undefined;
+
+        // 1. Sinais explícitos do player
+        if (data.paused === true || data.event === "pause" || msgType === "pause") {
+          isPaused = true;
+        } else if (data.paused === false || data.event === "play" || data.event === "playing" || msgType === "play" || msgType === "playing") {
+          isPaused = false;
+        }
+
+        // 2. Sinais implícitos (Evolução do relógio = tocando)
+        if (isPaused === undefined && incomingTime > 0) {
+          const diff = incomingTime - lastKnownTimeRef.current;
+          // Se o relógio andou pra frente numa fração normal de 1 frame a 1 segundo, está tocando.
+          // Se o diff for muito alto (> 2s), foi um Seek (usuário pode ter buscado estando pausado).
+          if (diff > 0.05 && diff < 1.5) {
+            isPaused = false;
+          }
+        }
+
+        // 3. Aplica o cronômetro
+        if (isPaused === true) {
           if (!pausedAtRef.current) pausedAtRef.current = Date.now();
-        } else if (data.paused === false || (typeof data.currentTime === "number" && data.currentTime > 0.1)) {
+        } else if (isPaused === false) {
           hasPlayedRef.current = true;
           if (pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
             console.warn("[VideoPlayerModal] Pausa longa detectada (> 3 min). Forçando reload proativo...");
@@ -1378,6 +1394,11 @@ export function VideoPlayerModal({
             return;
           }
           pausedAtRef.current = null;
+        }
+
+        // 4. Atualiza a memória de tempo (deve ser DEPOIS do diff)
+        if (incomingTime > 0) {
+          lastKnownTimeRef.current = incomingTime;
         }
 
         if (!playerSkinReady) {
