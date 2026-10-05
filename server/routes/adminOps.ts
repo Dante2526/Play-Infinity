@@ -144,17 +144,93 @@ function executeSshCommand(command: string, timeoutMs = 25000): Promise<{ stdout
  */
 adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
-  const targets = [
+
+  // Cookie de sessão do encontrei.me (fórum IPS exige login desde out/2026).
+  // Sem esse cookie o site redireciona tudo para /login/ — o health check
+  // precisa enviá-lo para validar o estado REAL (sessão logada vs login).
+  const encontreiCookie = process.env.ENCONTREI_COOKIE || "";
+
+  /**
+   * Validação dedicada do encontrei.me:
+   * - Envia o cookie de sessão (se configurado via ENCONTREI_COOKIE)
+   * - Detecta se caiu na página de login (sessão expirada) mesmo com HTTP 200
+   * - Retorna ONLINE apenas se o conteúdo carregou de verdade
+   */
+  const checkEncontrei = async () => {
+    const start = Date.now();
+    try {
+      const headers: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      };
+      if (encontreiCookie) {
+        headers["Cookie"] = encontreiCookie;
+      }
+
+      const response = await fetch("https://encontrei.me", {
+        signal: AbortSignal.timeout(8000),
+        headers,
+        redirect: "follow",
+      });
+      const latency = Date.now() - start;
+      const statusCode = response.status;
+
+      // HTTP OK não basta: sem sessão válida o site redireciona pra /login/
+      // e responde 200 com a página de login (falso positivo de "ONLINE").
+      const finalUrl = response.url || "";
+      const body = await response.text();
+      const pageTitle = (body.match(/<title>([^<]*)<\/title>/) || [""])[1] || "";
+      const isLoginPage =
+        finalUrl.includes("/login") ||
+        body.includes("elUser_login") ||
+        /^\s*login\b/i.test(pageTitle);
+
+      if (statusCode >= 200 && statusCode < 400 && !isLoginPage) {
+        return {
+          name: "Catálogo Encontrei.me",
+          url: "https://encontrei.me",
+          status: "ONLINE" as const,
+          latencyMs: latency,
+          statusCode,
+        };
+      }
+
+      return {
+        name: "Catálogo Encontrei.me",
+        url: "https://encontrei.me",
+        status: "OFFLINE" as const,
+        latencyMs: latency,
+                statusCode,
+        error: isLoginPage
+          ? (encontreiCookie
+              ? "Sessão expirada/inválida: recapturar ENCONTREI_COOKIE (logar no site com \"Manter-me conectado\" + F12 > Network > Cookie)."
+              : "ENCONTREI_COOKIE não configurado: site exige login e redireciona para /login/.")
+          : `Resposta inválida HTTP ${statusCode}`,
+      };
+    } catch (error: any) {
+      return {
+        name: "Catálogo Encontrei.me",
+        url: "https://encontrei.me",
+        status: "OFFLINE" as const,
+        latencyMs: null,
+        statusCode: 0,
+        error: `Possível bloqueio Cloudflare ao IP da VPS: ${error?.message || "fetch falhou"}`,
+      };
+    }
+  };
+
+  const staticTargets = [
     { name: "Catálogo Vizer", url: "https://vizer.website", type: "html" },
-    { name: "Catálogo Encontrei.me", url: "https://encontrei.me", type: "html" },
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html" },
     { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
     { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
   ];
 
-  const results = await Promise.all(
-    targets.map(async (target) => {
+  // Encontrei usa validação dedicada (cookie de sessão + detecção de página de login);
+  // os demais alvos seguem com o fetch simples padrão.
+  const [encontreiResult, ...staticResults] = await Promise.all([
+    checkEncontrei(),
+    ...staticTargets.map(async (target) => {
       try {
         const start = Date.now();
         const response = await fetch(target.url, {
@@ -167,7 +243,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         return {
           name: target.name,
           url: target.url,
-          status: response.status >= 200 && response.status < 400 ? "ONLINE" : "OFFLINE",
+          status: response.status >= 200 && response.status < 400 ? ("ONLINE" as const) : ("OFFLINE" as const),
           latencyMs: latency,
           statusCode: response.status
         };
@@ -175,15 +251,16 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         return {
           name: target.name,
           url: target.url,
-          status: "OFFLINE",
+          status: "OFFLINE" as const,
           latencyMs: null,
           statusCode: error.response?.status || 0,
           error: error.message
         };
       }
     })
-  );
+  ]);
 
+  const results = [encontreiResult, ...staticResults];
   res.json({ success: true, timestamp: Date.now(), results });
 });
 
