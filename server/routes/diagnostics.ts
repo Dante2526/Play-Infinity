@@ -2,11 +2,20 @@ import { Router } from "express";
 import axios from "axios";
 import os from "os";
 import * as cheerio from "cheerio";
+import rateLimit from "express-rate-limit";
 import { validateSafeUrl, isSuperflixDetected } from "../utils/helpers";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { animeDirectStreamCache, vixsrcStreamCache } from "../utils/caches";
 
 const router = Router();
+
+const speedtestLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 15, // Max 15 req/min por IP
+  message: "Limite de testes de velocidade excedido.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
   router.get("/api/extract-player", async (req, res) => {
     const targetUrl = req.query.url as string;
@@ -589,11 +598,11 @@ const router = Router();
   }
 
   // API 4.5: Proxy HLS Anti-CORS para reprodução direta sem bloqueios no Artplayer
-  router.get("/api/speedtest-down", (req, res) => {
+  router.get("/api/speedtest-down", speedtestLimiter, (req, res) => {
     try {
       const bytesRaw = Number(req.query.bytes);
-      // Padrão de 25MB se não especificado, máximo de 200MB por requisição
-      const bytesToDownload = !isNaN(bytesRaw) && bytesRaw > 0 ? Math.min(bytesRaw, 200 * 1024 * 1024) : 25 * 1024 * 1024;
+      // Padrão de 25MB se não especificado, máximo de 25MB por requisição para evitar abuso de banda
+      const bytesToDownload = !isNaN(bytesRaw) && bytesRaw > 0 ? Math.min(bytesRaw, 25 * 1024 * 1024) : 25 * 1024 * 1024;
       
       res.setHeader("Content-Type", "application/octet-stream");
       res.setHeader("Content-Length", bytesToDownload.toString());

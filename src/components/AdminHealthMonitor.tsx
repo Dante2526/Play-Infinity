@@ -58,7 +58,7 @@ export function AdminHealthMonitor() {
         <button
           onClick={checkHealth}
           disabled={loading}
-          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20"
+          className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-500/20 whitespace-nowrap shrink-0"
         >
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
           {loading ? "Testando..." : "Testar Agora"}

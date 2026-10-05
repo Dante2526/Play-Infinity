@@ -3803,11 +3803,12 @@ const router = Router();
           }, 500);
 
           // Fast-Fail: Detecta erros fatais instantaneamente para não prender o usuário
-          setInterval(function() {
+          var fastFailInterval = setInterval(function() {
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
             if (v.error || v.networkState === 3) {
               console.warn('[Play Infinity VIP] Erro fatal nativo detectado (networkState 3 ou v.error). Emitindo VIP_UNAVAILABLE.');
+              clearInterval(fastFailInterval);
               try { window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "video_playback_error" }, "*"); } catch(e) {}
             }
           }, 1000);

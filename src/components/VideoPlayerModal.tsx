@@ -1436,10 +1436,11 @@ export function VideoPlayerModal({
             setPlayerSkinReady(true);
             setIsLoading(false);
             retrySameServerRef.current = false;
+            const wasFallback = fallbackAttemptsRef.current.size > 0;
             fallbackAttemptsRef.current.clear();
             mixdropAttemptRef.current = 1;
 
-            if (isSeries && tmdbId) {
+            if (isSeries && tmdbId && !wasFallback) {
               try {
                 localStorage.setItem(`preferred_server_${tmdbId}`, selectedServerKey);
               } catch(e) {}
