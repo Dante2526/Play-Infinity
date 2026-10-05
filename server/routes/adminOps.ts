@@ -257,7 +257,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req: Request, res: Response) => {
   };
 
   try {
-    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && pm2 jlist && echo "===DELIM_PM2_ROOT===" && sudo pm2 jlist`;
+    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && sudo -u ubuntu pm2 jlist && echo "===DELIM_PM2_ROOT===" && sudo pm2 jlist`;
     const sshResult = await executeSystemOrSshCommand(sshCmd, 12000);
     vpsHardware.hasSsh = true;
 
