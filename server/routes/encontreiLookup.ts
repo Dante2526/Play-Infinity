@@ -5,18 +5,21 @@
  * Em vez do frontend baixar 11MB+26MB de JSON, faz 1 request rápida:
  *   GET /api/encontrei-lookup?tmdb_id=299534&type=movie
  *   GET /api/encontrei-lookup?tmdb_id=126027&type=tv&season=4&episode=1
+ *   GET /api/encontrei-lookup?tmdb_id=126027&type=tv&season=4&episode=1&refresh=1
  * 
- * Retorna: { mixdrop: "...", streamtape: "...", byse: "...", doodstream: "...", 
- *            audio: "Dublado", source: "vizer|encontrei" }
+ * Retorna: { mixdrop: "...", mixdrop_encontrei: "...", mixdrop_vizer: "...",
+ *            audio: "Dublado", source: "vizer|encontrei|encontrei-live|vizer-live" }
  * 
  * Backend carrega AMBOS catálogos 1x (cacheado em memória):
  *   - vizer-catalog.json: 65.246 eps + 5.593 filmes (todos com Mixdrop, mais episódios)
  *   - encontrei-catalog.json: 27.629 eps + 6.694 filmes (mais filmes)
  * 
  * Lookup order:
- *   1. Procura em vizer-catalog (mais episódios, prioridade)
- *   2. Se não achar, procura em encontrei-catalog (mais filmes)
- *   3. Se não achar em nenhum, retorna 404
+ *   1. Se refresh=1, pula direto pro resolver live (encontrei → vizer)
+ *   2. Procura em vizer-catalog (mais episódios, prioridade)
+ *   3. Se não achar, procura em encontrei-catalog (mais filmes)
+ *   4. Se não achar em nenhum catálogo, chama resolver live (encontrei → vizer)
+ *   5. Se não achar em nenhum, retorna 200 com { error: "Não encontrado" }
  */
 import { Router } from "express";
 import fs from "fs";
@@ -136,6 +139,62 @@ export async function checkWatchPlayerMovie(
 
 // Mapeamento global de TMDB ID -> Serie ID do Vizer/Encontrei
 const _tmdbToSerieIdMap = new Map<number, number>();
+
+// ──────────────────────────────────────────────────────────────────────────
+// Resolver AJAX live do encontrei.me (cookie de sessão obrigatório)
+//   - Circuit breaker 10min quando cookie expira (redirect 301/302 ou non-JSON)
+//   - Dedup de chamadas concorrentes via _encInflight
+//   - Negative cache 3min via _encNeg (só falhas; acertos vão pro índice persistente)
+//   - fetch com AbortController 4s em todas as chamadas
+// ──────────────────────────────────────────────────────────────────────────
+const ENC_BASE = "https://encontrei.me";
+const ENC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+const ENC_NEG_TTL_MS = 3 * 60 * 1000;      // negative cache 3 min
+const ENC_BREAKER_MS = 10 * 60 * 1000;    // circuit breaker 10 min
+const ENC_FETCH_TIMEOUT_MS = 4000;        // 4s timeout em cada fetch
+
+let _encCookieDownUntil = 0;
+const _encInflight = new Map<string, Promise<any>>();
+const _encNeg = new Map<string, number>();
+
+/** fetch com timeout (AbortController) — evita requisição pendurada prender o once() */
+function fetchWithTimeout(
+  url: string,
+  opts: RequestInit = {},
+  ms: number = ENC_FETCH_TIMEOUT_MS
+): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+
+/** Dedup de chamadas concorrentes + negative cache 3min para falhas */
+async function once<T>(
+  key: string,
+  fn: () => Promise<T | null>,
+): Promise<T | null> {
+  // 1) negative cache?
+  const negExp = _encNeg.get(key);
+  if (negExp && Date.now() < negExp) return null;
+  // 2) já tem chamada em voo para essa chave?
+  const existing = _encInflight.get(key);
+  if (existing) return existing as Promise<T | null>;
+  // 3) dispara nova chamada
+  const p = (async () => {
+    try {
+      const r = await fn();
+      if (r === null) _encNeg.set(key, Date.now() + ENC_NEG_TTL_MS);
+      return r;
+    } catch (e) {
+      _encNeg.set(key, Date.now() + ENC_NEG_TTL_MS);
+      throw e;
+    } finally {
+      _encInflight.delete(key);
+    }
+  })();
+  _encInflight.set(key, p);
+  return p;
+}
 
 // Mapeamento global de TMDB ID -> Movie Video ID do Vizer (pra resolveVizerMovie)
 // Carregado de public/data/vizer-movie-ids.json
@@ -275,19 +334,9 @@ export async function resolveVizerEpisode(
     const pData = await pRes.json();
     const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
 
-    let mixdrop: string | null = null;
-    let streamtape: string | null = null;
-    let byse: string | null = null;
-    let doodstream: string | null = null;
-
-    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
-      const [, k, v] = match;
-      if (k === "mixdrop") mixdrop = v;
-      else if (k === "streamtape") streamtape = v;
-      else if (k === "byse") byse = v;
-      else if (k === "doodstream") doodstream = v;
-    }
-
+    // Extrai apenas mixdrop (streamtape/byse/doodstream foram removidos — só usamos mixdrop)
+    const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+    const mixdrop = mMix ? mMix[1] : null;
     if (!mixdrop) return null;
 
     const epObj = {
@@ -297,31 +346,30 @@ export async function resolveVizerEpisode(
       episode,
       tmdb_id: tmdbId,
       audio: pData.current_audio || "Dublado",
-      servers: { mixdrop, streamtape, byse, doodstream },
+      servers: { mixdrop },
       source_url: target.url,
       _fetchedAt: Date.now()
     };
 
-    // Cache no índice em memória
+    // CORREÇÃO DE BUG: gravar no _vizerEpisodeIndex (não no _encontreiEpisodeIndex)
     const key = `${tmdbId}:${season}:${episode}`;
-    _encontreiEpisodeIndex.set(key, epObj);
+    _vizerEpisodeIndex.set(key, epObj);
 
     // Atualiza temporadas conhecidas
-    const curSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
+    const curSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
     if (!curSeasons.includes(season)) {
-      _encontreiSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
+      _vizerSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
     }
 
     return {
       mixdrop,
-      streamtape,
-      byse,
-      doodstream,
       audio: epObj.audio,
       server_name: "MixDrop",
       season,
       episode,
       source: "vizer-live",
+      mixdrop_vizer: mixdrop,
+      mixdrop_encontrei: null,
     };
   } catch {
     return null;
@@ -335,14 +383,13 @@ export async function resolveVizerEpisode(
  * Fluxo:
  * 1. Carrega mapeamento TMDB → vizer_movie_id (de public/data/vizer-movie-ids.json)
  * 2. AJAX em /do=playerData?id={vizer_movie_id}
- * 3. Extrai mixdrop/streamtape/byse/doodstream de servers_dub + servers_leg
+ * 3. Extrai apenas mixdrop de servers_dub + servers_leg
  * 4. Salva no _vizerMovieIndex em memória (próxima busca é instantânea)
  *
  * Use case: filme existe no encontrei-catalog mas mixdrop fileId morreu
  * (Mixdrop apagou o arquivo). Esse resolver re-busca o fileId atual do Vizer.
  *
- * @returns { mixdrop, streamtape, byse, doodstream, audio, server_name, source: "vizer-live" }
- *          ou null se Vizer não tem o filme ou AJAX falhou.
+ * @returns { mixdrop, audio, server_name, source: "vizer-live" } ou null.
  */
 export async function resolveVizerMovie(tmdbId: number) {
   loadVizerMovieIds();
@@ -367,26 +414,16 @@ export async function resolveVizerMovie(tmdbId: number) {
     const pData = await pRes.json();
     const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
 
-    let mixdrop: string | null = null;
-    let streamtape: string | null = null;
-    let byse: string | null = null;
-    let doodstream: string | null = null;
-
-    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
-      const [, k, v] = match;
-      if (k === "mixdrop") mixdrop = v;
-      else if (k === "streamtape") streamtape = v;
-      else if (k === "byse") byse = v;
-      else if (k === "doodstream") doodstream = v;
-    }
-
+    // Extrai apenas mixdrop (streamtape/byse/doodstream removidos)
+    const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+    const mixdrop = mMix ? mMix[1] : null;
     if (!mixdrop) return null;
 
     const movieObj = {
       video_id: vizerMovieId,
       tmdb_id: tmdbId,
       audio: pData.current_audio || "Dublado",
-      servers: { mixdrop, streamtape, byse, doodstream },
+      servers: { mixdrop },
       _fetchedAt: Date.now()
     };
 
@@ -395,16 +432,258 @@ export async function resolveVizerMovie(tmdbId: number) {
 
     return {
       mixdrop,
-      streamtape,
-      byse,
-      doodstream,
       audio: movieObj.audio,
       server_name: "MixDrop",
       source: "vizer-live",
+      mixdrop_vizer: mixdrop,
+      mixdrop_encontrei: null,
     };
   } catch {
     return null;
   }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// RESOLVER AJAX LIVE DO ENCONTREI.ME (cookie de sessão obrigatório)
+//
+// resolveEncontreiEpisode(tmdbId, season, episode):
+//   1. serie_id = _tmdbToSerieIdMap.get(tmdbId)            // catálogo já populou
+//   2. AJAX episodesList(serie_id, season, "Dublado")      // descobre episode_id
+//   3. AJAX playerData(episode_id)                          // pega servers_dub|leg
+//   4. pickMixdrop(servers)                                 // extrai só mixdrop
+//   5. grava em _encontreiEpisodeIndex com formato alinhado ao catálogo
+//
+// resolveEncontreiMovie(tmdbId):
+//   video_id vem direto de _encontreiMovieIndex.get(tmdbId).video_id (catálogo)
+//   Não tem episodesList pra filme — chama playerData direto.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Faz AJAX pro encontrei.me com cookie. Detecta cookie expirado via redirect 301/302
+ *  ou content-type não-JSON, e ativa circuit breaker 10min nesses casos. */
+async function encontreiPlayerData(id: number): Promise<any | null> {
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) {
+    if (!_encCookieWarned) {
+      console.warn("[encontrei-live] ENCONTREI_COOKIE não configurado — resolver live desativado");
+      _encCookieWarned = true;
+    }
+    return null;
+  }
+  if (Date.now() < _encCookieDownUntil) return null;
+
+  const url = `${ENC_BASE}/index.php?app=videobox&module=video&controller=view&do=playerData&id=${id}`;
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Referer": `${ENC_BASE}/`,
+      },
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      console.error("[encontrei-live] cookie expirado (redirect) — pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    if (!res.ok) {
+      console.warn(`[encontrei-live] HTTP ${res.status} para video_id=${id}`);
+      return null;
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json") && !ct.includes("javascript")) {
+      console.error("[encontrei-live] resposta não-JSON — cookie inválido, pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    return await res.json();
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      console.warn(`[encontrei-live] timeout para video_id=${id}`);
+    } else {
+      console.error(`[encontrei-live] erro de rede para video_id=${id}:`, e?.message || e);
+    }
+    return null;
+  }
+}
+let _encCookieWarned = false;
+
+/** Faz AJAX episodesList no encontrei.me e devolve o episode_id da temporada/episódio.
+ *  Copia o parsing do resolveVizerEpisode (ambos são IPS, mesmo formato provavel). */
+async function encontreiEpisodeId(
+  serieId: number,
+  season: number,
+  episode: number,
+): Promise<number | null> {
+  if (Date.now() < _encCookieDownUntil) return null;
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) return null;
+
+  const url = `${ENC_BASE}/index.php?app=videobox&module=video&controller=view`
+            + `&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+      },
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const eps: any[] = Array.isArray(json?.episodes) ? json.episodes
+              : Array.isArray(json) ? json
+              : Array.isArray(json?.[season]) ? json[season]
+              : [];
+    if (!eps.length) return null;
+
+    // Mesma lógica do resolveVizerEpisode: match por e.number, fallback posicional
+    const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+    if (!target) return null;
+
+    // Extrai o episode_id de target.url com /-(\d+)\/?$/
+    const m = String(target.url || "").match(/-(\d+)\/?$/);
+    if (m) return parseInt(m[1], 10);
+    if (target.id) return parseInt(target.id, 10);
+    if (target.episode_id) return parseInt(target.episode_id, 10);
+    return null;
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      console.warn(`[encontrei-live] timeout em episodesList(serie=${serieId}, s${season}e${episode})`);
+    } else {
+      console.error(`[encontrei-live] erro em episodesList(serie=${serieId}):`, e?.message || e);
+    }
+    return null;
+  }
+}
+
+/** Extrai SÓ mixdrop de um playerData JSON. Tenta servers_dub primeiro, depois servers_leg.
+ *  Áudio = "Dublado" se servers_dub tem conteúdo, senão "Legendado". */
+function pickMixdrop(d: any): { mixdrop: string; audio: "Dublado" | "Legendado" } | null {
+  if (!d || typeof d !== "object") return null;
+  const dubRaw = String(d.servers_dub || "");
+  const legRaw = String(d.servers_leg || "");
+  const dub = dubRaw.replace(/&amp;/g, "&");
+  const leg = legRaw.replace(/&amp;/g, "&");
+  const audio: "Dublado" | "Legendado" = dubRaw.length > 0 ? "Dublado" : "Legendado";
+  const RE = /(?:^|&)mixdrop=([^&]+)/i;
+  const mDub = dub.match(RE);
+  if (mDub) return { mixdrop: mDub[1], audio: "Dublado" };
+  const mLeg = leg.match(RE);
+  if (mLeg) return { mixdrop: mLeg[1], audio: "Legendado" };
+  return null;
+}
+
+/** Resolve episódio no encontrei.me live (cookie necessário). */
+export async function resolveEncontreiEpisode(
+  tmdbId: number,
+  season: number,
+  episode: number,
+): Promise<{
+  mixdrop: string;
+  mixdrop_encontrei: string;
+  mixdrop_vizer: null;
+  audio: string;
+  server_name: string;
+  season: number;
+  episode: number;
+  source: string;
+} | null> {
+  loadCatalogs();
+  // CORREÇÃO: _tmdbToSerieIdMap é Map<number, number> (chave numérica, sem prefixo)
+  const serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) return null;
+
+  // CORREÇÃO: chave alinhada com catálogo — "${tmdbId}:${season}:${episode}" sem prefixo "enc:"
+  const key = `${tmdbId}:${season}:${episode}`;
+  return once(key, async () => {
+    const epId = await encontreiEpisodeId(serieId, season, episode);
+    if (!epId) return null;
+    const data = await encontreiPlayerData(epId);
+    if (!data) return null;
+    const picked = pickMixdrop(data);
+    if (!picked) return null;
+
+    // CORREÇÃO: formato alinhado ao catálogo — episode_id, serie_id, season, episode,
+    // tmdb_id, audio, servers:{mixdrop}, _fetchedAt
+    _encontreiEpisodeIndex.set(key, {
+      episode_id: epId,
+      serie_id: serieId,
+      season,
+      episode,
+      tmdb_id: tmdbId,
+      audio: picked.audio,
+      servers: { mixdrop: picked.mixdrop },
+      source_url: `${ENC_BASE}/episodios/online/`,
+      _fetchedAt: Date.now(),
+    });
+
+    // Atualiza temporadas conhecidas (no índice encontrei, que é lido em /api/series-seasons-available)
+    const curSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
+    if (!curSeasons.includes(season)) {
+      _encontreiSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
+    }
+
+    return {
+      mixdrop: picked.mixdrop,
+      mixdrop_encontrei: picked.mixdrop,
+      mixdrop_vizer: null,
+      audio: picked.audio,
+      server_name: "MixDrop",
+      season,
+      episode,
+      source: "encontrei-live",
+    };
+  });
+}
+
+/** Resolve filme no encontrei.me live (cookie necessário).
+ *  video_id vem direto do catálogo _encontreiMovieIndex.get(tmdbId).video_id. */
+export async function resolveEncontreiMovie(tmdbId: number): Promise<{
+  mixdrop: string;
+  mixdrop_encontrei: string;
+  mixdrop_vizer: null;
+  audio: string;
+  server_name: string;
+  source: string;
+} | null> {
+  loadCatalogs();
+  const entry = _encontreiMovieIndex.get(tmdbId);
+  if (!entry) return null;
+  const videoId = entry.video_id || entry.episode_id;
+  if (!videoId) return null;
+
+  return once(`movie:${tmdbId}`, async () => {
+    const data = await encontreiPlayerData(videoId);
+    if (!data) return null;
+    const picked = pickMixdrop(data);
+    if (!picked) return null;
+
+    // Sobrescreve entrada antiga do catálogo, mantendo campos extras
+    _encontreiMovieIndex.set(tmdbId, {
+      ...entry,
+      audio: picked.audio,
+      servers: { mixdrop: picked.mixdrop, ...(entry.servers || {}) },
+      _fetchedAt: Date.now(),
+    });
+
+    return {
+      mixdrop: picked.mixdrop,
+      mixdrop_encontrei: picked.mixdrop,
+      mixdrop_vizer: null,
+      audio: picked.audio,
+      server_name: "MixDrop",
+      source: "encontrei-live",
+    };
+  });
 }
 
 // Catálogo encontrei (fallback, mais filmes)
@@ -885,6 +1164,9 @@ router.get("/api/encontrei-lookup", async (req, res) => {
     const type = (req.query.type as string) || "movie";
     const season = parseInt(req.query.season as string, 10) || 1;
     const episode = parseInt(req.query.episode as string, 10) || 1;
+    // refresh=1: pula o catálogo estático e vai direto pro resolver live.
+    // Usado quando o frontend constatou que o mixdrop fileId do catálogo morreu.
+    const forceLive = req.query.refresh === "1";
     
     if (!tmdbId) {
       return res.status(400).json({ error: "tmdb_id é obrigatório" });
@@ -899,13 +1181,14 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1000;
       const now = Date.now();
       
-      let vizerEp = _vizerEpisodeIndex.get(key);
+      // Se refresh=1, pula o catálogo estático e vai direto ao resolver live
+      let vizerEp = forceLive ? undefined : _vizerEpisodeIndex.get(key);
       if (vizerEp && vizerEp._fetchedAt && (now - vizerEp._fetchedAt > VIZER_ON_DEMAND_TTL)) {
         _vizerEpisodeIndex.delete(key);
         vizerEp = undefined;
       }
       
-      let encontreiEp = _encontreiEpisodeIndex.get(key);
+      let encontreiEp = forceLive ? undefined : _encontreiEpisodeIndex.get(key);
       if (encontreiEp && encontreiEp._fetchedAt && (now - encontreiEp._fetchedAt > VIZER_ON_DEMAND_TTL)) {
         _encontreiEpisodeIndex.delete(key);
         encontreiEp = undefined;
@@ -939,9 +1222,6 @@ router.get("/api/encontrei-lookup", async (req, res) => {
           mixdrop: bestEp.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
-          streamtape: bestEp.servers.streamtape || null,
-          byse: bestEp.servers.byse || null,
-          doodstream: bestEp.servers.doodstream || null,
           audio: bestEp.audio || "Dublado",
           server_name: "MixDrop",
           season: bestEp.season,
@@ -949,8 +1229,9 @@ router.get("/api/encontrei-lookup", async (req, res) => {
           source: bestSource,
         };
       } else {
-        // Se não estava no catálogo em memória, busca on-demand do Vizer Live
-        const live = await resolveVizerEpisode(tmdbId, season, episode);
+        // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
+        const live = (await resolveEncontreiEpisode(tmdbId, season, episode))
+                  || (await resolveVizerEpisode(tmdbId, season, episode));
         if (live) {
           result = live;
         }
@@ -960,13 +1241,13 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1000;
       const now = Date.now();
       
-      let vizerMovie = _vizerMovieIndex.get(tmdbId);
+      let vizerMovie = forceLive ? undefined : _vizerMovieIndex.get(tmdbId);
       if (vizerMovie && vizerMovie._fetchedAt && (now - vizerMovie._fetchedAt > VIZER_ON_DEMAND_TTL)) {
         _vizerMovieIndex.delete(tmdbId);
         vizerMovie = undefined;
       }
       
-      let encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+      let encontreiMovie = forceLive ? undefined : _encontreiMovieIndex.get(tmdbId);
       if (encontreiMovie && encontreiMovie._fetchedAt && (now - encontreiMovie._fetchedAt > VIZER_ON_DEMAND_TTL)) {
         _encontreiMovieIndex.delete(tmdbId);
         encontreiMovie = undefined;
@@ -1002,20 +1283,14 @@ router.get("/api/encontrei-lookup", async (req, res) => {
           mixdrop: bestMovie.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
-          streamtape: bestMovie.servers.streamtape || null,
-          byse: bestMovie.servers.byse || null,
-          doodstream: bestMovie.servers.doodstream || null,
           audio: bestMovie.audio || "Dublado",
           server_name: "MixDrop",
           source: bestSource,
         };
       } else {
-        // Se não estava em nenhum catálogo estático, resolve on-demand do Vizer Live
-        // (subsui o backup estático vizer-catalog.json que foi deletado — equivalente
-        // funcional ao resolveVizerEpisode mas pra filmes).
-        // Caso de uso: filme tinha no encontrei, mas mixdrop fileId morreu e o Vizer
-        // ainda tem o filme com fileId atualizado.
-        const live = await resolveVizerMovie(tmdbId);
+        // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
+        const live = (await resolveEncontreiMovie(tmdbId))
+                  || (await resolveVizerMovie(tmdbId));
         if (live) {
           result = live;
         }
@@ -1023,7 +1298,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
     }
     
     if (!result) {
-      return res.status(200).json({ error: "Não encontrado nos catálogos (vizer + encontrei)", tmdb_id: tmdbId });
+      return res.status(200).json({ error: "Não encontrado nos catálogos (vizer + encontrei) nem nos resolvers live", tmdb_id: tmdbId });
     }
     
     res.setHeader("Cache-Control", "public, max-age=3600");

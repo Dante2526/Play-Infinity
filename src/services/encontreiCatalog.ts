@@ -2,8 +2,6 @@ export interface EncontreiResult {
   mixdrop: string | null;
   mixdrop_encontrei?: string | null;
   mixdrop_vizer?: string | null;
-  streamtape: string | null;
-  doodstream: string | null;
   audio: string;
   server_name: string;
   season?: number;
@@ -32,8 +30,6 @@ export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult
       mixdrop: data.mixdrop || null,
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
-      streamtape: data.streamtape || null,
-      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
     };
     _cache.set(cacheKey, result);
@@ -56,8 +52,6 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
       mixdrop: data.mixdrop || null,
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
-      streamtape: data.streamtape || null,
-      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
       season: data.season, episode: data.episode,
     };
