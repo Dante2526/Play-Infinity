@@ -33,6 +33,11 @@
         </provider>
     </application>
 
+    <!-- Hardware features (todos opcionais — o app funciona sem eles) -->
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+    <uses-feature android:name="android.hardware.audio.output" android:required="false" />
+    <uses-feature android:name="android.hardware.sensors.accelerometer" android:required="false" />
+
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
