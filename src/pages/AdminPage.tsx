@@ -934,8 +934,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <ServerBlocksAdmin />
         ) : (
           <>
-        {/* Alerta automático: cookie do encontrei.me expirado ou não configurado */}
-        <EncontreiCookieAlert />
         {/* Dashboard Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           

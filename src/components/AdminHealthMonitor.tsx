@@ -10,11 +10,22 @@ interface HealthResult {
   error?: string;
 }
 
+interface EncontreiStatus {
+  success: boolean;
+  cookieConfigured: boolean;
+  breakerActive: boolean;
+  breakerMsRemaining: number;
+  inflightCount: number;
+  negativeCacheCount: number;
+}
+
 export function AdminHealthMonitor() {
   const [results, setResults] = useState<HealthResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
   const [error, setError] = useState("");
+  // NOVO: status específico do circuit breaker do encontrei (cookie expirado?)
+  const [encontreiStatus, setEncontreiStatus] = useState<EncontreiStatus | null>(null);
 
   const checkHealth = async () => {
     setLoading(true);
@@ -36,8 +47,29 @@ export function AdminHealthMonitor() {
     }
   };
 
+  // NOVO: checa estado do circuit breaker do encontrei (paralelo ao health check)
+  const checkEncontreiStatus = async () => {
+    try {
+      const { adminFetch } = await import("../services/adminApi");
+      const r = await adminFetch("/api/admin/encontrei-status");
+      const data = await r.json();
+      if (data.success) setEncontreiStatus(data);
+    } catch {
+      // silencioso — só admin vê, e se falhar aqui não afeta o health check principal
+    }
+  };
+
   useEffect(() => {
     checkHealth();
+    checkEncontreiStatus();
+    // Auto-refresh a cada 60s pra detectar mudanças de status automaticamente
+    // (ex: cookie do encontrei.me expirou e circuit breaker ativou)
+    const healthInterval = setInterval(checkHealth, 60000);
+    const encontreiInterval = setInterval(checkEncontreiStatus, 30000); // breaker status mais frequente (30s)
+    return () => {
+      clearInterval(healthInterval);
+      clearInterval(encontreiInterval);
+    };
   }, []);
 
   return (
@@ -79,21 +111,37 @@ export function AdminHealthMonitor() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {results.map((item, idx) => (
+        {results.map((item, idx) => {
+          // NOVO: detecta se é o card do encontrei pra turbinar com status do cookie
+          const isEncontreiCard = item.name.toLowerCase().includes("encontrei");
+          const encontreiCookieOk = encontreiStatus?.cookieConfigured && !encontreiStatus?.breakerActive;
+          const cookieExpired = encontreiStatus?.breakerActive === true;
+          const cookieMissing = encontreiStatus?.cookieConfigured === false;
+          const encontreiProblem = isEncontreiCard && (cookieExpired || cookieMissing);
+          const minutesRemaining = encontreiStatus ? Math.ceil(encontreiStatus.breakerMsRemaining / 60000) : 0;
+
+          return (
           <div 
             key={idx}
             className={`p-4 rounded-xl border flex flex-col gap-2 ${
-              item.status === "ONLINE" 
-                ? "bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40" 
-                : "bg-red-500/5 border-red-500/20 hover:border-red-500/40"
+              encontreiProblem
+                ? "bg-amber-500/5 border-amber-500/40 hover:border-amber-500/60 animate-pulse" // destaque âmbar pulsante
+                : item.status === "ONLINE" 
+                  ? "bg-emerald-500/5 border-emerald-500/20 hover:border-emerald-500/40" 
+                  : "bg-red-500/5 border-red-500/20 hover:border-red-500/40"
             } transition-colors`}
           >
             <div className="flex items-center justify-between">
               <h4 className="text-white font-bold text-sm truncate pr-2">{item.name}</h4>
-              {item.status === "ONLINE" ? (
+              {item.status === "ONLINE" && !encontreiProblem ? (
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-lg text-xs font-bold">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   ONLINE
+                </div>
+              ) : encontreiProblem ? (
+                <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/30 text-amber-300 rounded-lg text-xs font-bold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {cookieMissing ? "SEM COOKIE" : "COOKIE EXPIRADO"}
                 </div>
               ) : (
                 <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/20 text-red-400 rounded-lg text-xs font-bold">
@@ -105,7 +153,9 @@ export function AdminHealthMonitor() {
 
             <div className="flex items-center gap-2 text-white/50 text-xs font-mono mt-1">
               <Globe className="w-3.5 h-3.5 shrink-0" />
-              <span className="truncate" title={item.url}>{new URL(item.url).hostname}</span>
+              <span className="truncate" title={item.url}>{(() => {
+                try { return new URL(item.url).hostname; } catch { return item.url; }
+              })()}</span>
             </div>
 
             <div className="flex items-center justify-between mt-2 pt-2 border-t border-white/5">
@@ -119,13 +169,45 @@ export function AdminHealthMonitor() {
               )}
             </div>
 
-            {item.error && (
+            {item.error && !encontreiProblem && (
               <div className="mt-2 text-[10px] text-red-400/80 leading-tight">
                 {item.error}
               </div>
             )}
+
+            {/* NOVO: alerta especial pra cookie do encontrei dentro do próprio card */}
+            {encontreiProblem && (
+              <div className="mt-3 pt-3 border-t border-amber-500/20 text-xs leading-relaxed">
+                <p className="text-amber-300 font-bold flex items-center gap-1.5 mb-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  {cookieMissing
+                    ? "ENCONTREI_COOKIE não configurado no .env"
+                    : "Cookie de sessão expirou ou foi invalidado"}
+                </p>
+                <p className="text-amber-200/70 mb-2">
+                  {cookieMissing
+                    ? "Resolver AJAX live desativado. Sistema cai só em catálogo estático + Vizer."
+                    : `Resolver em pausa (circuit breaker ativo). Retoma em ~${minutesRemaining}min. Enquanto isso, cai pra Vizer.`}
+                </p>
+                <div className="text-amber-200/60 text-[10px] space-y-0.5">
+                  <p><span className="font-semibold">Como resolver:</span></p>
+                  <ol className="list-decimal ml-4 space-y-0.5">
+                    <li>Faça login no <a href="https://encontrei.me" target="_blank" rel="noopener" className="underline">encontrei.me</a> marcando "Manter-me conectado"</li>
+                    <li>F12 → Application → Cookies → copie os valores <code className="bg-black/40 px-1 rounded">ips4_*</code></li>
+                    <li>No VPS: edite <code className="bg-black/40 px-1 rounded">.env</code> e atualize a linha <code className="bg-black/40 px-1 rounded">ENCONTREI_COOKIE=...</code></li>
+                    <li>Rode: <code className="bg-black/40 px-1 rounded">pm2 restart play-infinity-app --update-env</code></li>
+                  </ol>
+                </div>
+                {encontreiStatus && encontreiStatus.inflightCount > 0 && (
+                  <p className="text-amber-200/40 text-[10px] mt-2">
+                    Stats: {encontreiStatus.inflightCount} chamadas em voo, {encontreiStatus.negativeCacheCount} em negative cache.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
       
       {results.length > 0 && results.some(r => r.status === "OFFLINE") && (
