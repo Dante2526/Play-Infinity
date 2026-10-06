@@ -1725,6 +1725,10 @@ export function VideoPlayerModal({
     }
 
     if (
+      cleanUrl.startsWith("blob:") ||
+      cleanUrl.startsWith("capacitor://") ||
+      cleanUrl.startsWith("file://") ||
+      cleanUrl.match(/^https?:\/\/localhost\/_capacitor_file_\//) !== null ||
       cleanUrl.startsWith("/api/watchplayer-stream") ||
       cleanUrl.startsWith("/api/myembed-stream") ||
       cleanUrl.startsWith("/api/mixdrop-stream") ||

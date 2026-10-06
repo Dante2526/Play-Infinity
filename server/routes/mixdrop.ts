@@ -546,4 +546,158 @@ const router = Router();
 
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)
 
+  // NOVO: /api/download?url=<mixdrop_fileId>&filename=<filename>
+  // Resolve fileId → MP4 URL real (reusando cache do /api/mixdrop-stream) e faz proxy
+  // do stream com Content-Disposition: attachment pra forçar download.
+  // Mesmo IP que gerou o token da CDN mxcontent.net, evita 403 no navegador.
+  router.get("/api/download", async (req, res) => {
+    try {
+      const rawUrl = String(req.query.url || "").trim();
+      const filename = String(req.query.filename || "video.mp4").trim();
+
+      if (!rawUrl) {
+        return res.status(400).send("Parâmetro 'url' é obrigatório.");
+      }
+
+      // rawUrl pode ser:
+      // - fileId direto (ex: "q161g1vgcwkzd7")
+      // - URL completa (ex: "https://mxdrop.top/e/q161g1vgcwkzd7")
+      let fileId: string | null = null;
+      let host: string = "mxdrop.top";
+
+      if (/^[a-zA-Z0-9_-]{5,40}$/.test(rawUrl) && !rawUrl.includes("/") && !rawUrl.includes(":")) {
+        // É só o fileId
+        fileId = rawUrl;
+      } else {
+        const safeCheck = validateSafeUrl(rawUrl);
+        if (!safeCheck.valid || !safeCheck.parsedUrl) {
+          return res.status(400).send("URL inválida ou não autorizada.");
+        }
+        const parsedHost = safeCheck.parsedUrl.hostname.toLowerCase();
+        if (!parsedHost.includes("mixdrop.") && !parsedHost.includes("mxdrop.")) {
+          return res.status(400).send("Domínio fornecido não pertence à rede MixDrop.");
+        }
+        host = parsedHost;
+        const fileMatch = safeCheck.parsedUrl.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
+        fileId = fileMatch ? fileMatch[1] : null;
+      }
+
+      if (!fileId) {
+        return res.status(400).send("ID de arquivo do MixDrop não encontrado na URL.");
+      }
+
+      // Reusa cache do mixdrop-stream (mesmo Map em memória)
+      let videoUrl = "";
+      const cached = mixdropMemoryCache.get(fileId);
+
+      if (cached && cached.expiresAt > Date.now() + 60000) {
+        videoUrl = cached.videoUrl;
+      } else {
+        // Resolve o videoUrl fazendo fetch no embed do mixdrop
+        const embedUrl = `https://${host}/e/${fileId}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        try {
+          const upstream = await fetch(embedUrl, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (!upstream.ok) {
+            return res.status(502).send(`MixDrop retornou status HTTP ${upstream.status}`);
+          }
+
+          const html = await upstream.text();
+          const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+          if (!packerMatch) {
+            return res.status(502).send("Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
+          }
+
+          const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
+          const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+          if (!wurlMatch || !wurlMatch[1]) {
+            return res.status(502).send("URL de vídeo não encontrada no player do MixDrop.");
+          }
+
+          videoUrl = wurlMatch[1];
+          if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+
+          // Atualiza cache
+          mixdropMemoryCache.set(fileId, {
+            videoUrl,
+            posterUrl: "",
+            title: filename,
+            expiresAt: Date.now() + 4 * 60 * 60 * 1000,
+          });
+        } catch (fetchErr: any) {
+          clearTimeout(timeoutId);
+          console.error("[MixDrop Download Scraper Error]:", fetchErr);
+          return res.status(502).send("Tempo limite ou erro ao contatar MixDrop.");
+        }
+      }
+
+      // Sanitiza filename (remove caracteres problemáticos pra header)
+      const safeFilename = filename.replace(/[^\w\.\- ]/g, '_').substring(0, 200);
+
+      // Seta headers pra forçar download (em vez de tocar no navegador)
+      res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+
+      // Headers de request pro upstream (CDN mxcontent.net) — inclui Range se veio do cliente
+      const upstreamHeaders: Record<string, string> = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      };
+      if (req.headers.range) {
+        upstreamHeaders["Range"] = req.headers.range as string;
+      }
+
+      // Faz proxy do stream do MP4 direto pro cliente
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s pra download grande
+      req.on("close", () => controller.abort());
+
+      try {
+        const upstream = await fetch(videoUrl, { signal: controller.signal, headers: upstreamHeaders });
+        clearTimeout(timeoutId);
+
+        if (!upstream.ok) {
+          return res.status(502).send(`CDN retornou status ${upstream.status}`);
+        }
+
+        res.status(upstream.status);
+        for (const [key, value] of upstream.headers.entries()) {
+          if (["content-length", "content-range", "accept-ranges", "content-type"].includes(key.toLowerCase())) {
+            if (key.toLowerCase() === "content-type") {
+              // Sempre video/mp4 — não confia no CDN
+              continue;
+            }
+            res.setHeader(key, value);
+          }
+        }
+
+        if (!upstream.body) {
+          return res.end();
+        }
+
+        const { Readable } = await import("stream");
+        // @ts-ignore
+        Readable.fromWeb(upstream.body).pipe(res);
+      } catch (proxyErr: any) {
+        clearTimeout(timeoutId);
+        console.error("[MixDrop Download Proxy Error]:", proxyErr);
+        return res.status(502).send("Erro no proxy do download.");
+      }
+    } catch (err: any) {
+      console.error("[MixDrop Download Error]:", err);
+      return res.status(500).send("Erro interno no download.");
+    }
+  });
+
 export default router;
