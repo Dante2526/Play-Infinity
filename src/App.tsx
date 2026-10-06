@@ -83,12 +83,46 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
     try {
       const module = await componentImport();
       return { default: module.default || Object.values(module)[0] };
-    } catch (error) {
+    } catch (error: any) {
       console.warn("[LazyRetry] Dynamic import failed, reloading page...", error);
-      const hasReloaded = safeSessionStorage.getItem("lazy-reload");
-      if (!hasReloaded) {
+
+      // Verifica se é o erro de "Failed to fetch dynamically imported module"
+      // (acontece quando deploy novo muda hash dos assets mas o index.html antigo tá cacheado)
+      const isStaleModuleError =
+        error?.message?.includes("Failed to fetch dynamically imported module") ||
+        error?.message?.includes("Importing a module script failed") ||
+        error?.name === "TypeError";
+
+      // Flag pra evitar reload infinito
+      const reloadFlag = safeSessionStorage.getItem("lazy-reload");
+      if (!reloadFlag) {
         safeSessionStorage.setItem("lazy-reload", "true");
-        window.location.reload();
+        // NOVO: força reload com cache-buster pra pegar index.html novo
+        // (sem isso, alguns browsers mobile reusam o index.html cacheado)
+        const url = new URL(window.location.href);
+        url.searchParams.set("nocache", String(Date.now()));
+        // Mantém hash e pathname, só adiciona ?nocache
+        const newHref = url.pathname + url.search + url.hash;
+        window.location.replace(newHref);
+        // Aguarda um tick antes de throw pro React não processar o erro
+        await new Promise(r => setTimeout(r, 100));
+      } else if (isStaleModuleError) {
+        // Já tentou reload mas ainda falhou — provavelmente o cache do service worker
+        // tá mandando o index.html antigo. Força limpeza via cache:reload
+        try {
+          if ('caches' in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map(k => caches.delete(k)));
+            console.log("[LazyRetry] Caches do service worker limpos");
+          }
+          // Limpa flag pra próxima tentativa
+          safeSessionStorage.removeItem("lazy-reload");
+          // Recarrega de novo (agora sem cache)
+          const url = new URL(window.location.href);
+          url.searchParams.set("nocache", String(Date.now() + 1));
+          window.location.replace(url.pathname + url.search + url.hash);
+          await new Promise(r => setTimeout(r, 100));
+        } catch (e) {}
       }
       throw error;
     }

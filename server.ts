@@ -188,9 +188,13 @@ process.on("uncaughtException", (err) => {
       app.use(express.static(distPath, {
         maxAge: "30d",
         setHeaders: (res, filePath) => {
-          // Arquivos HTML e manifestos nunca devem ser cacheados permanentemente para refletir atualizações na hora
+          // Arquivos HTML e manifestos nunca devem ser cacheados permanentemente para refletir atualizações na hora.
+          // NOVO: usar no-store em vez de max-age=0 pra evitar browsers mobile
+          // que reusam index.html antigo e quebram com assets novos (hash mudou).
           if (filePath.endsWith(".html") || filePath.endsWith("metadata.json")) {
-            res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+            res.setHeader("Pragma", "no-cache");
+            res.setHeader("Expires", "0");
           } else if (filePath.includes("/assets/")) {
             // Assets do Vite com hash de versão (ex: index-CCLh_Jfm.js) têm cache longo e imutável
             res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
