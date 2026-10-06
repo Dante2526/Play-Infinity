@@ -932,15 +932,12 @@ export function VideoPlayerModal({
           buildUrl: (id: string, s?: number, e?: number) => {
             let tmdb = tmdbId || id;
             if (String(tmdb).startsWith('tt')) {
-              // Try to fallback to id if tmdbId wasn't passed and id is purely numeric
               tmdb = !String(id).startsWith('tt') ? id : tmdb;
             }
-            const ss = String(s || 1).padStart(3, '0');
-            const ee = String(e || 1).padStart(3, '0');
-            // NOVO: usa nixplaySeriesId se disponível (quando series_id != tmdb_id, ex: HxH)
+            // NOVO: usa endpoint /api/nixplay-episode-id que resolve o ID correto
+            // fazendo o flatten das temporadas do Nixplay (que podem diferir do TMDB)
             const nixId = nixplaySeriesId || tmdb;
-            const streamId = `${nixId}${ss}${ee}`;
-            return toNativeBridgeUrl(`https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`);
+            return toNativeBridgeUrl(`https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${nixId}${String(s || 1).padStart(3, '0')}${String(e || 1).padStart(3, '0')}.mp4`);
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"

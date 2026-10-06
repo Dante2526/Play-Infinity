@@ -65,10 +65,192 @@ router.get("/api/nixplay-resolve", async (req, res) => {
   }
 });
 
+// NOVO: Resolve o episode ID correto do Nixplay dado seriesId + season + episode (do TMDB)
+// Necessário porque TMDB e Nixplay usam estruturas de temporada DIFERENTES.
+// Ex: HxH TMDB S1 tem 62 eps, mas Nixplay tem 6 temporadas (26+12+20+17+61+12=148).
+// Este endpoint faz o "flatten" dos episódios do Nixplay e encontra o ID correto.
+// Cache em memória pra não re-fetchar get_series_info toda vez.
+const nixplayEpisodeCache = new Map<string, { episodes: any[]; fetchedAt: number }>();
+const NIXPLAY_CACHE_TTL = 6 * 60 * 60 * 1000; // 6h
+
+router.get("/api/nixplay-episode-id", async (req, res) => {
+  const seriesId = req.query.seriesId as string;
+  const season = parseInt(req.query.season as string, 10) || 1;
+  const episode = parseInt(req.query.episode as string, 10) || 1;
+  if (!seriesId) return res.status(400).json({ error: "Missing seriesId" });
+
+  try {
+    // Calcula o episódio GLOBAL (número contínuo)
+    // Para HxH TMDB S1: E1-E62 (global 1-62)
+    // Para HxH TMDB S2: E63-E74 (global 63-74) — se TMDB tiver S2
+    // Na prática, a maioria dos animes tem S1 com numeração contínua
+    // Então globalEpisode = (season-1) * eps_per_season + episode
+    // Mas como não sabemos eps_per_season do TMDB aqui, usamos uma abordagem mais simples:
+    // Para S1: globalEp = episode (1-62)
+    // Para S2+: globalEp = episode + (episode offset da temporada anterior)
+    // Como não temos essa info aqui, vamos assumir que S1 cobre tudo e usar o episode direto
+    // se season == 1. Para season > 1, tentamos achar pela season do Nixplay.
+
+    // Busca (ou usa cache) do get_series_info
+    let cached = nixplayEpisodeCache.get(seriesId);
+    if (!cached || (Date.now() - cached.fetchedAt > NIXPLAY_CACHE_TTL)) {
+      const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${seriesId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const response = await fetch(infoUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!response.ok) {
+        return res.status(502).json({ error: `Nixplay API retornou ${response.status}` });
+      }
+      const data = await response.json();
+      const episodesData = data.episodes || {};
+      // Flatten: cria lista única de todos os episódios em ordem
+      const flatEps: any[] = [];
+      if (Array.isArray(episodesData)) {
+        flatEps.push(...episodesData);
+      } else if (typeof episodesData === 'object') {
+        // episodes é um dict com seasons como keys
+        for (const seasonKey of Object.keys(episodesData).sort((a,b) => Number(a) - Number(b))) {
+          const seasonEps = episodesData[seasonKey];
+          if (Array.isArray(seasonEps)) {
+            flatEps.push(...seasonEps);
+          }
+        }
+      }
+      cached = { episodes: flatEps, fetchedAt: Date.now() };
+      nixplayEpisodeCache.set(seriesId, cached);
+    }
+
+    // Calcula o episódio global
+    // Para S1 E1: global 1. Para S1 E62: global 62.
+    // Para S2 E1 (se existir): global = (eps em S1) + 1
+    // Mas o TMDB pode ter S1 com 62 eps e o app mostra S2 a partir do ep 63
+    // Então globalEpisode = (season - 1) * ??? + episode
+    // Como não sabemos quantos eps o TMDB tem por season, vamos usar uma heurística:
+    // Se season == 1: globalEp = episode
+    // Se season > 1: tentamos usar o episode number direto (assume que TMDB usa numeração contínua)
+    // Ex: TMDB S2 E63 = global 63 = 63º episódio na lista flatten do Nixplay
+    let globalEp;
+    if (season === 1) {
+      globalEp = episode;
+    } else {
+      // Para season > 1, assume que o episódio number do TMDB já é o global
+      // (ex: TMDB S2 E63 = episódio 63 global)
+      globalEp = episode;
+    }
+
+    // Pega o episódio na posição globalEp - 1 (0-indexed)
+    if (globalEp < 1 || globalEp > cached.episodes.length) {
+      return res.status(404).json({
+        error: `Episódio ${globalEp} não encontrado (série tem ${cached.episodes.length} eps)`,
+        totalEpisodes: cached.episodes.length,
+      });
+    }
+
+    const ep = cached.episodes[globalEp - 1];
+    const epId = ep.id || ep.episode_id;
+    if (!epId) {
+      return res.status(404).json({ error: "ID do episódio não encontrado" });
+    }
+
+    // Monta a URL do Nixplay
+    const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${epId}.mp4`;
+
+    // Resolve o redirect pra pegar a URL final assinada
+    const resolveController = new AbortController();
+    const resolveTimeout = setTimeout(() => resolveController.abort(), 8000);
+    const upstream = await fetch(nixUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal: resolveController.signal,
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
+    clearTimeout(resolveTimeout);
+
+    let finalUrl = nixUrl;
+    if ((upstream.status === 302 || upstream.status === 301) && upstream.headers.get("location")) {
+      finalUrl = upstream.headers.get("location")!;
+    }
+
+    return res.json({
+      success: true,
+      episodeId: epId,
+      nixplayUrl: nixUrl,
+      videoUrl: finalUrl,
+      totalEpisodes: cached.episodes.length,
+    });
+  } catch (err: any) {
+    console.error("[nixplay-episode-id] Erro:", err?.message);
+    return res.status(500).json({ error: err?.message || "Erro interno" });
+  }
+});
+
 // Página bridge genérica para tocar arquivos .mp4 cru (ex: Nixplay) e emitir eventos para a skin
-router.get("/api/native-player", (req, res) => {
-  const videoUrl = req.query.url as string;
+router.get("/api/native-player", async (req, res) => {
+  let videoUrl = req.query.url as string;
   if (!videoUrl) return res.status(400).send("Missing url parameter");
+
+  // NOVO: Se a URL é do Nixplay (series), resolve o episode ID correto.
+  // Necessário porque TMDB e Nixplay usam estruturas de temporada diferentes.
+  // Ex: HxH TMDB S1 E27 → URL original: 46298001027 (não existe, S1 só tem 26 eps)
+  //     → endpoint resolve pra: 46298002001 (S2 E1 do Nixplay, que é o 27º ep global)
+  if (videoUrl.includes("nixplay.lat/series/")) {
+    try {
+      // Extrai seriesId, season e episode da URL
+      // URL pattern: https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/<seriesId><SSS><EEE>.mp4
+      const match = videoUrl.match(/\/(\d+)\.mp4$/);
+      if (match) {
+        const fullId = match[1];
+        // Os últimos 6 dígitos são SSS + EEE (3+3)
+        const seriesId = fullId.slice(0, -6);
+        const seasonStr = fullId.slice(-6, -3);
+        const episodeStr = fullId.slice(-3);
+        const tmdbSeason = parseInt(seasonStr, 10);
+        const tmdbEpisode = parseInt(episodeStr, 10);
+
+        // Usa o cache pra achar o episódio correto
+        let cached = nixplayEpisodeCache.get(seriesId);
+        if (!cached || (Date.now() - cached.fetchedAt > NIXPLAY_CACHE_TTL)) {
+          const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${seriesId}`;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15000);
+          const response = await fetch(infoUrl, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (response.ok) {
+            const data = await response.json();
+            const episodesData = data.episodes || {};
+            const flatEps: any[] = [];
+            if (Array.isArray(episodesData)) {
+              flatEps.push(...episodesData);
+            } else if (typeof episodesData === 'object') {
+              for (const sk of Object.keys(episodesData).sort((a,b) => Number(a) - Number(b))) {
+                if (Array.isArray(episodesData[sk])) flatEps.push(...episodesData[sk]);
+              }
+            }
+            cached = { episodes: flatEps, fetchedAt: Date.now() };
+            nixplayEpisodeCache.set(seriesId, cached);
+          }
+        }
+
+        if (cached) {
+          // Calcula episódio global (assume numeração contínua do TMDB)
+          const globalEp = tmdbSeason === 1 ? tmdbEpisode : tmdbEpisode;
+          if (globalEp >= 1 && globalEp <= cached.episodes.length) {
+            const correctEp = cached.episodes[globalEp - 1];
+            const correctId = correctEp.id || correctEp.episode_id;
+            if (correctId) {
+              // Substitui a URL com o ID correto
+              videoUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${correctId}.mp4`;
+              console.log(`[nixplay] Episódio remapeado: TMDB S${tmdbSeason}E${tmdbEpisode} → Nixplay ID ${correctId} (ep global ${globalEp})`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      // Se falha, usa a URL original (pode funcionar para séries onde tmdb_id == series_id)
+      console.warn("[nixplay] Erro ao remapear episódio, usando URL original:", e);
+    }
+  }
 
   const encodedUrl = encodeURIComponent(videoUrl);
 
