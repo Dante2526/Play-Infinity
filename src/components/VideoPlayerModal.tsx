@@ -2360,6 +2360,37 @@ export function VideoPlayerModal({
             )}
 
             {activeIframeUrl && !error ? (
+              activeIframeUrl.startsWith("blob:") ? (
+                // NOVO: blob URL = playback offline. Renderiza <video> direto (sem iframe)
+                // porque blob URLs são bound ao document que as criou — iframe não acessa.
+                // Controls nativos do HTML5 garantem play/pause/seek/fullscreen.
+                <video
+                  key={`blob-${activeIframeUrl}-${transitionEpochRef.current}`}
+                  src={activeIframeUrl}
+                  autoPlay
+                  controls
+                  className="w-full h-full bg-black"
+                  style={{
+                    objectFit: "contain",
+                    width: "100%",
+                    height: "100%",
+                  }}
+                  onPlay={() => {
+                    setPlayerSkinReady(true);
+                    setIsLoading(false);
+                    playbackConfirmedRef.current = true;
+                  }}
+                  onError={(e: any) => {
+                    console.error("[VideoPlayerModal] Erro no video offline (blob):", e);
+                    setError("Não foi possível reproduzir o arquivo baixado. Pode estar corrompido.");
+                    setIsLoading(false);
+                  }}
+                  onLoadedMetadata={() => {
+                    setPlayerSkinReady(true);
+                    setIsLoading(false);
+                  }}
+                />
+              ) : (
               <iframe
                 key={`${activeIframeUrl}-${transitionEpochRef.current}`}
                 ref={iframeRef}
@@ -2398,6 +2429,7 @@ export function VideoPlayerModal({
                 }}
                 onError={() => handleSilentFallback()}
               />
+              )
             ) : error ? (
               <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-4">
                 <div className="w-14 h-14 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-orange-500">

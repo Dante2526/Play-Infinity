@@ -1,5 +1,6 @@
 import { findMovieByTmdbId, findEpisode } from "./encontreiCatalog";
 import { safeLocalStorage } from "../utils/safeStorage";
+import { saveBlob, getBlob, deleteBlob } from "./offlineStorage";
 
 // Base da VPS Oracle (Always Free até 10 TB de tráfego)
 const ORACLE_PROXY_BASE = (import.meta.env.VITE_PROXY_URL as string) || "https://play-infinity.stream";
@@ -246,10 +247,12 @@ export function startActiveDownloadProgress(item: Omit<ActiveDownload, "progress
 }
 
 /**
- * Dispara o download direto sem sair da página e opcionalmente registra no histórico
+ * Dispara o download direto sem sair da página e opcionalmente registra no histórico.
+ * Além de baixar o arquivo pro SO, também salva uma cópia no IndexedDB pra
+ * reprodução offline (o "Reproduzir" na DownloadsPage lê desse blob).
  */
 export function triggerDirectDownload(
-  url: string, 
+  url: string,
   fileName?: string,
   meta?: {
     tmdbId: number;
@@ -273,10 +276,10 @@ export function triggerDirectDownload(
   link.click();
 
   if (meta) {
-    const id = meta.type === "movie" 
-      ? `movie:${meta.tmdbId}` 
+    const id = meta.type === "movie"
+      ? `movie:${meta.tmdbId}`
       : `tv:${meta.tmdbId}:${meta.season || 1}:${meta.episode || 1}`;
-    
+
     recordDownload({
       id,
       tmdbId: meta.tmdbId,
@@ -304,6 +307,40 @@ export function triggerDirectDownload(
       backdropUrl: meta.backdropUrl,
       quality: meta.quality
     });
+
+    // NOVO: fetch + save blob no IndexedDB pra reprodução offline real.
+    // Roda em background, não bloqueia o <a download>.
+    // Se falhar (CORS, rede, storage cheio), só loga — não quebra o download do SO.
+    (async () => {
+      try {
+        console.log(`[downloadService] Baixando blob offline pra "${meta.title}" (id=${id})`);
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.warn(`[downloadService] Fetch do blob falhou: HTTP ${response.status}`);
+          return;
+        }
+        const blob = await response.blob();
+        if (blob.size < 1024) {
+          console.warn(`[downloadService] Blob muito pequeno (${blob.size}B), provavelmente erro`);
+          return;
+        }
+        await saveBlob(id, blob, fileName || `${meta.title}.mp4`);
+        console.log(`[downloadService] Blob offline salvo: ${(blob.size / 1024 / 1024).toFixed(1)}MB pra id=${id}`);
+
+        // Atualiza barra de progresso pra 100% quando blob terminar
+        const event = new CustomEvent("playinfinity:active_download_update", {
+          detail: {
+            ...currentActiveDownload,
+            progress: 100,
+            status: "completed",
+            speed: "—"
+          }
+        });
+        window.dispatchEvent(event);
+      } catch (err: any) {
+        console.warn(`[downloadService] Não foi possível salvar blob offline:`, err?.message || err);
+      }
+    })();
   }
 
   setTimeout(() => {
@@ -311,4 +348,19 @@ export function triggerDirectDownload(
       document.body.removeChild(link);
     } catch(_){console.warn("Silenced error:", _);}
   }, 1000);
+}
+
+/**
+ * Lê o blob offline salvo pra um item (se existir).
+ * Retorna null se não tiver blob salvo pra esse ID.
+ */
+export async function getOfflineBlob(id: string) {
+  return getBlob(id);
+}
+
+/**
+ * Remove o blob offline de um item específico (quando remove do histórico).
+ */
+export async function removeOfflineBlob(id: string) {
+  return deleteBlob(id);
 }

@@ -14,14 +14,16 @@ import {
   Sparkles,
   CheckCircle2
 } from "lucide-react";
-import { 
-  getDownloadHistory, 
-  removeDownloadFromHistory, 
-  clearDownloadHistory, 
-  DownloadHistoryItem,
+import {
+  getDownloadHistory,
+  removeDownloadFromHistory,
+  removeOfflineBlob,
+  clearDownloadHistory,
+  getOfflineBlob,
   triggerDirectDownload,
   getActiveDownload,
-  ActiveDownload
+  ActiveDownload,
+  DownloadHistoryItem
 } from "../services/downloadService";
 import { CatalogItem } from "../utils/mediaUtils";
 import { OnPlayHandler } from "../types";
@@ -109,12 +111,52 @@ export function DownloadsPage({
 
   // NOVO: chama onPlay direto (sem passar pela DetailsPage) pra abrir o VideoPlayerModal
   // com o mixdrop do backend. Funciona igual ao "Play" da página de Detalhes.
-  const handlePlay = (item: DownloadHistoryItem) => {
+  // PRIMEIRO tenta tocar do blob offline (IndexedDB) — se existir, é playback 100% offline.
+  // Se não tem blob salvo, faz fallback pra streaming do mixdrop do backend.
+  const [isPreparingPlay, setIsPreparingPlay] = useState<string | null>(null);
+
+  const handlePlay = async (item: DownloadHistoryItem) => {
     if (!onPlay) {
       // Fallback: se onPlay não foi passado, vai pra página de detalhes
       handleItemClick(item);
       return;
     }
+
+    setIsPreparingPlay(item.id);
+    try {
+      // Tenta ler blob do IndexedDB (playback offline real)
+      const stored = await getOfflineBlob(item.id);
+      if (stored && stored.blob && stored.blob.size > 1024) {
+        // Tem blob salvo! Cria URL de objeto e abre o player com ela.
+        const blobUrl = URL.createObjectURL(stored.blob);
+        console.log(`[DownloadsPage] Reproduzindo offline: ${(stored.blob.size / 1024 / 1024).toFixed(1)}MB de "${item.title}"`);
+        onPlay(
+          item.title,        // title
+          blobUrl,           // url — blob URL (offline!)
+          item.type,         // mediaType
+          item.tmdbId,       // tmdbId
+          undefined,         // imdbId
+          item.season,       // season
+          item.episode,      // episode
+          item.quality || "HD", // quality
+          false,             // isCam
+          undefined,         // initialTime
+          undefined,         // autoFullscreen
+          item.posterUrl,    // imageUrl
+          item.backdropUrl,  // backdropUrl
+          item.posterUrl,    // posterUrl
+          false,             // isAnime
+          "srv_mixdrop"      // serverKey (força MixDrop — blob URL é tratado como MixDrop)
+        );
+        setIsPreparingPlay(null);
+        return;
+      }
+      console.log(`[DownloadsPage] Sem blob offline pra "${item.title}" (id=${item.id}). Fazendo fallback pra streaming...`);
+    } catch (err) {
+      console.warn(`[DownloadsPage] Erro ao ler blob offline:`, err);
+    }
+
+    // Fallback: streaming do mixdrop do backend (re-busca o fileId)
     onPlay(
       item.title,        // title
       undefined,         // url (deixa o VideoPlayerModal buscar o mixdrop do backend)
@@ -133,6 +175,7 @@ export function DownloadsPage({
       false,             // isAnime
       undefined          // serverKey (deixa o frontend escolher MixDrop como priority 1)
     );
+    setIsPreparingPlay(null);
   };
 
   const formatDate = (timestamp: number) => {
