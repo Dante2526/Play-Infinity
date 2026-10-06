@@ -561,6 +561,8 @@ export function VideoPlayerModal({
   // Necessário porque para algumas séries (ex: HxH), series_id != tmdb_id
   // O buildUrl do srv_nixplay usa esse ID em vez do tmdbId pra montar a URL
   const [nixplaySeriesId, setNixplaySeriesId] = useState<string | null>(null);
+  // NOVO: total de episódios do Nixplay (pra override do TMDB quando Nixplay tem mais)
+  const [nixplayTotalEpisodes, setNixplayTotalEpisodes] = useState<number | null>(null);
 
   // Legenda PT-BR: URL do arquivo VTT gerado pelo backend
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
@@ -609,6 +611,10 @@ export function VideoPlayerModal({
           // NOVO: salva o seriesId retornado (pra usar na URL do Nixplay)
           if (data.seriesId) {
             setNixplaySeriesId(data.seriesId);
+          }
+          // NOVO: salva o total de episódios do Nixplay (pra override do TMDB)
+          if (data.totalEpisodes && data.totalEpisodes > 0) {
+            setNixplayTotalEpisodes(data.totalEpisodes);
           }
         }
       })
@@ -854,13 +860,25 @@ export function VideoPlayerModal({
       return filteredSeasonEpisodes.map(e => e.episode_number);
     }
     if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
+      // NOVO: se Nixplay tem mais episódios que o catálogo, extende a lista
+      if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > verifiedAvailableEpisodes.length) {
+        return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
+      }
       return verifiedAvailableEpisodes;
     }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
+      // NOVO: se Nixplay tem mais episódios que o TMDB, extende a lista
+      if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > seasonData.episodes.length) {
+        return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
+      }
       return seasonData.episodes.map(e => e.episode_number);
     }
+    // NOVO: se Nixplay tem mais episódios que o TMDB fallback, usa o total do Nixplay
+    if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > totalSeasonEpisodes) {
+      return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
+    }
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
-  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes]);
+  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes, nixplayAvailable, nixplayTotalEpisodes]);
 
   // Auto-scroll do botão do episódio ativo
   useEffect(() => {

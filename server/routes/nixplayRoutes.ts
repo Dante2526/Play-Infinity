@@ -21,7 +21,39 @@ router.get("/api/nixplay-check", async (req, res) => {
     const seriesName = name ? String(name) : undefined;
     const resolvedId = resolveNixplaySeriesId(String(tmdb_id), seriesName);
     if (resolvedId) {
-      return res.json({ available: true, seriesId: resolvedId });
+      // Busca o total de episódios do Nixplay (pra override do TMDB quando Nixplay tem mais)
+      let totalEpisodes = 0;
+      try {
+        const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${resolvedId}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000);
+        const response = await fetch(infoUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (response.ok) {
+          const data = await response.json();
+          const eps = data.episodes || {};
+          if (Array.isArray(eps)) {
+            totalEpisodes = eps.length;
+          } else if (typeof eps === 'object') {
+            for (const sk of Object.keys(eps)) {
+              if (Array.isArray(eps[sk])) totalEpisodes += eps[sk].length;
+            }
+          }
+          // Salva no cache de episódios também
+          const flatEps: any[] = [];
+          if (Array.isArray(eps)) {
+            flatEps.push(...eps);
+          } else {
+            for (const sk of Object.keys(eps).sort((a,b) => Number(a) - Number(b))) {
+              if (Array.isArray(eps[sk])) flatEps.push(...eps[sk]);
+            }
+          }
+          nixplayEpisodeCache.set(resolvedId, { episodes: flatEps, fetchedAt: Date.now() });
+        }
+      } catch (e) {
+        // Não falha o check se não conseguir buscar total de eps
+      }
+      return res.json({ available: true, seriesId: resolvedId, totalEpisodes });
     }
     return res.json({ available: false });
   } else {
