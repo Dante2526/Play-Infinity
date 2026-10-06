@@ -107,6 +107,34 @@ export function DownloadsPage({
     }
   };
 
+  // NOVO: chama onPlay direto (sem passar pela DetailsPage) pra abrir o VideoPlayerModal
+  // com o mixdrop do backend. Funciona igual ao "Play" da página de Detalhes.
+  const handlePlay = (item: DownloadHistoryItem) => {
+    if (!onPlay) {
+      // Fallback: se onPlay não foi passado, vai pra página de detalhes
+      handleItemClick(item);
+      return;
+    }
+    onPlay(
+      item.title,        // title
+      undefined,         // url (deixa o VideoPlayerModal buscar o mixdrop do backend)
+      item.type,         // mediaType ('movie' | 'series')
+      item.tmdbId,       // tmdbId
+      undefined,         // imdbId
+      item.season,       // season
+      item.episode,      // episode
+      item.quality || "HD", // quality
+      false,             // isCam
+      undefined,         // initialTime
+      undefined,         // autoFullscreen
+      item.posterUrl,    // imageUrl
+      item.backdropUrl,  // backdropUrl
+      item.posterUrl,    // posterUrl
+      false,             // isAnime
+      undefined          // serverKey (deixa o frontend escolher MixDrop como priority 1)
+    );
+  };
+
   const formatDate = (timestamp: number) => {
     try {
       const d = new Date(timestamp);
@@ -330,7 +358,8 @@ export function DownloadsPage({
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div 
                       className="flex items-center gap-3.5 cursor-pointer flex-1 min-w-0"
-                      onClick={() => handleItemClick(item)}
+                      onClick={() => handlePlay(item)}
+                      title="Reproduzir agora"
                     >
                       {/* Thumbnail / Poster */}
                       <div className="w-14 h-20 rounded-xl overflow-hidden bg-neutral-900 border border-white/10 shrink-0 relative">
@@ -372,14 +401,14 @@ export function DownloadsPage({
 
                     {/* Ações */}
                     <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                      {/* Ver detalhes / Abrir */}
+                      {/* Reproduzir direto (abre VideoPlayerModal com mixdrop do backend) */}
                       <button
-                        onClick={() => handleItemClick(item)}
-                        className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white border border-white/10 text-xs font-semibold transition-all flex items-center gap-1 cursor-pointer"
-                        title="Ver página do título"
+                        onClick={() => handlePlay(item)}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-lg shadow-emerald-600/20"
+                        title="Reproduzir agora"
                       >
                         <Play className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Detalhes</span>
+                        <span>Reproduzir</span>
                       </button>
 
                       {/* Baixar Novamente */}
