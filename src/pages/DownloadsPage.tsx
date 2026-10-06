@@ -412,7 +412,7 @@ export function DownloadsPage({
                   } rounded-2xl p-4 sm:p-5 flex flex-col gap-3 transition-all shadow-md group`}
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div 
+                    <div
                       className="flex items-center gap-3.5 cursor-pointer flex-1 min-w-0"
                       onClick={() => handlePlay(item)}
                       title="Reproduzir agora"
@@ -433,6 +433,13 @@ export function DownloadsPage({
                         <span className="absolute bottom-1 right-1 px-1 py-0.2 rounded bg-black/80 text-[8px] font-black text-orange-400 uppercase">
                           HD
                         </span>
+                        {/* NOVO: badge verde "Offline pronto" quando o blob tá salvo */}
+                        {item.hasOfflineBlob && (
+                          <span className="absolute top-1 left-1 px-1 py-0.2 rounded bg-emerald-500/90 text-[8px] font-black text-white uppercase flex items-center gap-0.5">
+                            <CheckCircle2 className="w-2.5 h-2.5" />
+                            Offline
+                          </span>
+                        )}
                       </div>
 
                       {/* Detalhes do item */}
@@ -445,6 +452,23 @@ export function DownloadsPage({
                             <Clock className="w-3 h-3" />
                             {formatDate(item.timestamp)}
                           </span>
+                          {/* NOVO: badge de status offline (texto maior) */}
+                          {item.hasOfflineBlob ? (
+                            <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold flex items-center gap-0.5">
+                              <CheckCircle2 className="w-2.5 h-2.5" />
+                              Offline pronto
+                              {item.blobSize && (
+                                <span className="text-emerald-500/60 ml-0.5">
+                                  {(item.blobSize / 1024 / 1024).toFixed(0)}MB
+                                </span>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[9px] font-bold flex items-center gap-0.5 animate-pulse">
+                              <Clock className="w-2.5 h-2.5" />
+                              Preparando offline...
+                            </span>
+                          )}
                         </div>
                         <h4 className="font-bold text-sm sm:text-base text-white group-hover:text-orange-300 transition-colors truncate">
                           {item.title}

@@ -25,6 +25,10 @@ export interface DownloadHistoryItem {
   posterUrl?: string;
   backdropUrl?: string;
   quality?: string;
+  // NOVO: indica se o blob offline terminou de salvar no IndexedDB/Filesystem.
+  // Enquanto false/undefined, o "Reproduzir" faz fallback pra streaming.
+  hasOfflineBlob?: boolean;
+  blobSize?: number; // em bytes — pra mostrar no card quanto salvou offline
 }
 
 const DOWNLOAD_HISTORY_STORAGE_KEY = "playinfinity_download_history";
@@ -87,6 +91,32 @@ export function clearDownloadHistory(): void {
     window.dispatchEvent(new CustomEvent("playinfinity:downloads_updated", { detail: [] }));
   } catch (err) {
     console.warn("[DownloadService] Erro ao limpar histórico:", err);
+  }
+}
+
+/**
+ * NOVO: Marca que um item do histórico tem o blob offline pronto no IndexedDB/Filesystem.
+ * Chamado depois que saveBlob() completa com sucesso no triggerDirectDownload.
+ * Dispara evento playinfinity:downloads_updated pra DownloadsPage reagir e atualizar a UI.
+ */
+export function markOfflineBlobReady(id: string, blobSize: number): void {
+  try {
+    const history = getDownloadHistory();
+    const idx = history.findIndex(h => h.id === id);
+    if (idx === -1) {
+      // Item não existe mais no histórico (usuário removeu?) — ignora
+      return;
+    }
+    history[idx] = {
+      ...history[idx],
+      hasOfflineBlob: true,
+      blobSize,
+    };
+    safeLocalStorage.setItem(DOWNLOAD_HISTORY_STORAGE_KEY, JSON.stringify(history));
+    window.dispatchEvent(new CustomEvent("playinfinity:downloads_updated", { detail: history }));
+    console.log(`[DownloadService] Item "${id}" marcado como offline-ready (${(blobSize / 1024 / 1024).toFixed(1)}MB)`);
+  } catch (err) {
+    console.warn("[DownloadService] Erro ao marcar offline-ready:", err);
   }
 }
 
@@ -309,36 +339,148 @@ export function triggerDirectDownload(
     });
 
     // NOVO: fetch + save blob no IndexedDB pra reprodução offline real.
-    // Roda em background, não bloqueia o <a download>.
-    // Se falhar (CORS, rede, storage cheio), só loga — não quebra o download do SO.
+    // Acompanha o progresso REAL do download e atualiza a barra bidirecional.
+    // Em vez de animação fake, usa response.body.getReader() pra ler chunks.
     (async () => {
       try {
+        // PARA a animação fake do startActiveDownloadProgress — vamos usar progresso real
+        if (activeDownloadTimer) {
+          clearInterval(activeDownloadTimer);
+          activeDownloadTimer = null;
+        }
+
         console.log(`[downloadService] Baixando blob offline pra "${meta.title}" (id=${id})`);
         const response = await fetch(url);
         if (!response.ok) {
           console.warn(`[downloadService] Fetch do blob falhou: HTTP ${response.status}`);
+          // Marca erro no progresso
+          if (currentActiveDownload && currentActiveDownload.id === id) {
+            currentActiveDownload = {
+              ...currentActiveDownload,
+              status: "completed",
+              speed: "Falhou",
+              progress: 100,
+            };
+            window.dispatchEvent(new CustomEvent("playinfinity:active_download_update", { detail: currentActiveDownload }));
+          }
           return;
         }
-        const blob = await response.blob();
+
+        // Pega o tamanho total do arquivo (se veio Content-Length)
+        const contentLength = parseInt(response.headers.get("Content-Length") || "0", 10);
+        console.log(`[downloadService] Tamanho total: ${contentLength > 0 ? (contentLength / 1024 / 1024).toFixed(1) + "MB" : "desconhecido"}`);
+
+        // Lê o stream em chunks (em vez de await response.blob() que espera tudo de uma vez)
+        const reader = response.body?.getReader();
+        if (!reader) {
+          // Fallback: usa response.blob() direto (sem progress)
+          const blob = await response.blob();
+          if (blob.size < 1024) {
+            console.warn(`[downloadService] Blob muito pequeno (${blob.size}B), provavelmente erro`);
+            return;
+          }
+          await saveBlob(id, blob, fileName || `${meta.title}.mp4`);
+          markOfflineBlobReady(id, blob.size);
+          return;
+        }
+
+        const chunks: Uint8Array[] = [];
+        let receivedLength = 0;
+        let lastUpdateAt = Date.now();
+        let lastReceivedAt = Date.now();
+        let lastReceivedLength = 0;
+        let throttleTimer = 0;
+
+        // Atualiza o status pra "downloading"
+        if (currentActiveDownload && currentActiveDownload.id === id) {
+          currentActiveDownload = {
+            ...currentActiveDownload,
+            status: "downloading",
+            speed: "Conectando...",
+            progress: 0,
+          };
+          window.dispatchEvent(new CustomEvent("playinfinity:active_download_update", { detail: currentActiveDownload }));
+        }
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          receivedLength += value.length;
+
+          // Throttle de updates: máximo 1 update a cada 200ms (evita floodar React)
+          const now = Date.now();
+          if (now - lastUpdateAt > 200) {
+            const progress = contentLength > 0 ? Math.min(99, (receivedLength / contentLength) * 100) : 0;
+
+            // Calcula velocidade (bytes por segundo)
+            const dtSec = (now - lastReceivedAt) / 1000;
+            const dBytes = receivedLength - lastReceivedLength;
+            const speedBytesPerSec = dtSec > 0 ? dBytes / dtSec : 0;
+            const speedMB = speedBytesPerSec / (1024 * 1024);
+            const speedStr = speedMB >= 1 ? `${speedMB.toFixed(1)} MB/s` : `${(speedBytesPerSec / 1024).toFixed(0)} KB/s`;
+
+            // Calcula ETA se tiver contentLength
+            let eta = "";
+            if (contentLength > 0 && speedBytesPerSec > 0) {
+              const remainingBytes = contentLength - receivedLength;
+              const etaSec = remainingBytes / speedBytesPerSec;
+              if (etaSec < 60) eta = `~${etaSec.toFixed(0)}s restantes`;
+              else eta = `~${(etaSec / 60).toFixed(1)}min restantes`;
+            }
+
+            if (currentActiveDownload && currentActiveDownload.id === id) {
+              currentActiveDownload = {
+                ...currentActiveDownload,
+                progress: progress,
+                speed: contentLength > 0 ? `${speedStr} • ${eta}` : `${speedStr} • ${(receivedLength / 1024 / 1024).toFixed(1)}MB`,
+                status: "downloading",
+              };
+              window.dispatchEvent(new CustomEvent("playinfinity:active_download_update", { detail: currentActiveDownload }));
+            }
+
+            lastUpdateAt = now;
+            lastReceivedAt = now;
+            lastReceivedLength = receivedLength;
+          }
+        }
+
+        // Concatena todos os chunks num único blob
+        const blob = new Blob(chunks, { type: "video/mp4" });
         if (blob.size < 1024) {
-          console.warn(`[downloadService] Blob muito pequeno (${blob.size}B), provavelmente erro`);
+          console.warn(`[downloadService] Blob final muito pequeno (${blob.size}B), provavelmente erro`);
           return;
         }
+
         await saveBlob(id, blob, fileName || `${meta.title}.mp4`);
         console.log(`[downloadService] Blob offline salvo: ${(blob.size / 1024 / 1024).toFixed(1)}MB pra id=${id}`);
 
+        // Marca no histórico que o blob offline tá pronto
+        markOfflineBlobReady(id, blob.size);
+
         // Atualiza barra de progresso pra 100% quando blob terminar
-        const event = new CustomEvent("playinfinity:active_download_update", {
-          detail: {
+        if (currentActiveDownload && currentActiveDownload.id === id) {
+          currentActiveDownload = {
             ...currentActiveDownload,
             progress: 100,
             status: "completed",
-            speed: "—"
-          }
-        });
-        window.dispatchEvent(event);
+            speed: "Concluído",
+          };
+          window.dispatchEvent(new CustomEvent("playinfinity:active_download_update", { detail: currentActiveDownload }));
+        }
       } catch (err: any) {
         console.warn(`[downloadService] Não foi possível salvar blob offline:`, err?.message || err);
+        // Marca erro no progresso
+        if (currentActiveDownload && currentActiveDownload.id === id) {
+          currentActiveDownload = {
+            ...currentActiveDownload,
+            status: "completed",
+            speed: "Erro no download",
+            progress: 100,
+          };
+          window.dispatchEvent(new CustomEvent("playinfinity:active_download_update", { detail: currentActiveDownload }));
+        }
       }
     })();
   }
