@@ -1717,25 +1717,51 @@ const router = Router();
               var v = getVideoElement();
               if (v) {
                 // NOVO v2.2: restaurar posição de playback após reload do AV Sync
-                // Lê de sessionStorage UMA vez e dá seek antes do play
-                if (!window._piSeekRestored && v.readyState >= 1 && v.currentTime === 0) {
+                // Espera readyState >= 3 (HAVE_FUTURE_DATA) antes de tentar seek
+                // porque em HLS, seek com readyState baixo (só metadata) falha
+                // e o player fica em tela preta.
+                if (!window._piSeekRestored && v.readyState >= 3) {
                   try {
                     var seekPos = sessionStorage.getItem('_pi_avsync_seek_pos');
                     if (seekPos) {
                       var pos = parseFloat(seekPos);
                       if (pos > 1 && !isNaN(pos)) {
+                        // Retry até 5x (a cada 60ms pelo setInterval): espera artInstance ficar pronto
+                        if (window._piSeekRetries === undefined) window._piSeekRetries = 0;
+                        window._piSeekRetries++;
                         try {
-                          if (window.artInstance && window.artInstance.seek) {
+                          var seeked = false;
+                          if (window.artInstance && typeof window.artInstance.seek === 'number') {
                             window.artInstance.seek = pos;
+                            seeked = true;
+                          } else if (window.artInstance && typeof window.artInstance.currentTime !== 'undefined') {
+                            window.artInstance.currentTime = pos;
+                            seeked = true;
                           } else {
                             v.currentTime = pos;
+                            seeked = true;
                           }
-                          console.warn('[A/V Sync v2] Restaurando posição após reload:', pos, 's');
-                        } catch(e) {}
+                          if (seeked) {
+                            console.warn('[A/V Sync v2] Restaurando posição após reload:', pos, 's (readyState=' + v.readyState + ', retry #' + window._piSeekRetries + ')');
+                            // Dispara play logo depois (HLS pode precisar do play pra requisitar segmentos da posição)
+                            try { v.play().catch(function(){}); } catch(e) {}
+                            // Marca como restaurado e limpa sessionStorage
+                            sessionStorage.removeItem('_pi_avsync_seek_pos');
+                            window._piSeekRestored = true;
+                          }
+                        } catch(e) {
+                          console.warn('[A/V Sync v2] Erro no seek de restore:', e?.message || e);
+                          // Se falhou 5x, desiste
+                          if (window._piSeekRetries >= 5) {
+                            sessionStorage.removeItem('_pi_avsync_seek_pos');
+                            window._piSeekRestored = true;
+                          }
+                        }
+                      } else {
+                        // Posição inválida, remove
+                        sessionStorage.removeItem('_pi_avsync_seek_pos');
+                        window._piSeekRestored = true;
                       }
-                      // Sempre remove (mesmo se seek falhou, não fica tentando eternamente)
-                      sessionStorage.removeItem('_pi_avsync_seek_pos');
-                      window._piSeekRestored = true;
                     }
                   } catch(e) {}
                 }
