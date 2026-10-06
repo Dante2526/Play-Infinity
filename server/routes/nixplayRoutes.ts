@@ -2,26 +2,33 @@
  * Rotas de suporte ao player Nixplay e Native Player (MP4)
  */
 import { Router } from "express";
-import { isNixplayAvailable, loadNixplayCatalog } from "../services/nixplayCatalog";
+import { isNixplayAvailable, loadNixplayCatalog, resolveNixplaySeriesId } from "../services/nixplayCatalog";
 
 const router = Router();
 
-// Verifica instantaneamente se um filme/série existe no catálogo local cacheado do Nixplay
-// CORREÇÃO: chama loadNixplayCatalog() antes do check pra garantir que o catálogo carregou.
-// A função tem `if (isCatalogLoaded) return;` no início, então só carrega na primeira chamada.
-// Sem isso, isNixplayAvailable() sempre retorna false (isCatalogLoaded = false) e Nixplay
-// nunca aparece na lista de servidores do VideoPlayerModal.
+// Verifica se um filme/série existe no Nixplay e retorna o series_id correto
+// (necessário porque para algumas séries, series_id != tmdb_id, ex: HxH)
 router.get("/api/nixplay-check", async (req, res) => {
-  const { tmdb_id, type } = req.query;
+  const { tmdb_id, type, name } = req.query;
   if (!tmdb_id || !type) return res.status(400).json({ error: "Missing tmdb_id or type" });
   
-  // Garante que o catálogo carregou (primeira chamada demora ~2s, depois é instantâneo)
   await loadNixplayCatalog();
   
   const isSeries = type === "series";
-  const available = isNixplayAvailable(String(tmdb_id), isSeries);
   
-  return res.json({ available });
+  if (isSeries) {
+    // Para séries: tenta resolver o series_id do Nixplay
+    const seriesName = name ? String(name) : undefined;
+    const resolvedId = resolveNixplaySeriesId(String(tmdb_id), seriesName);
+    if (resolvedId) {
+      return res.json({ available: true, seriesId: resolvedId });
+    }
+    return res.json({ available: false });
+  } else {
+    // Para filmes: checa direto por tmdb_id (a API de filmes retorna tmdb_id)
+    const available = isNixplayAvailable(String(tmdb_id), false);
+    return res.json({ available });
+  }
 });
 
 // Resolve o redirect do Nixplay server-side e retorna a URL assinada do R2 para o player

@@ -5,6 +5,12 @@ import path from "path";
 export const nixplayMovies = new Set<string>();
 export const nixplaySeries = new Set<string>();
 
+// NOVO: Map de nome da série → series_id do Nixplay
+// Necessário porque a API get_series NÃO retorna tmdb_id.
+// Para a maioria das séries, series_id == tmdb_id (ex: Loki = 84958).
+// Mas para algumas (ex: HxH), series_id != tmdb_id (46298 vs 45952).
+export const nixplaySeriesNameToId = new Map<string, string>();
+
 let isCatalogLoaded = false;
 
 // Busca o catálogo da API do Nixplay (Xtream Codes API)
@@ -28,9 +34,15 @@ export async function loadNixplayCatalog() {
     if (seriesRes.ok) {
       const series = await seriesRes.json();
       series.forEach((s: any) => {
-        if (s.series_id) nixplaySeries.add(String(s.series_id));
+        if (s.series_id) {
+          nixplaySeries.add(String(s.series_id));
+          // NOVO: mapeia nome → series_id (lowercase pra match case-insensitive)
+          if (s.name) {
+            nixplaySeriesNameToId.set(s.name.toLowerCase(), String(s.series_id));
+          }
+        }
       });
-      console.log(`[NixplayCatalog] 📺 ${nixplaySeries.size} séries indexadas.`);
+      console.log(`[NixplayCatalog] 📺 ${nixplaySeries.size} séries indexadas (${nixplaySeriesNameToId.size} nomes mapeados).`);
     }
 
     isCatalogLoaded = true;
@@ -39,9 +51,40 @@ export async function loadNixplayCatalog() {
   }
 }
 
-// Checa se existe no Nixplay (O(1))
+// Checa se existe no Nixplay por tmdb_id (caso comum onde tmdb_id == series_id)
 export function isNixplayAvailable(tmdbId: string | number, isSeries: boolean): boolean {
-  if (!isCatalogLoaded) return false; // Falha segura se ainda não carregou
+  if (!isCatalogLoaded) return false;
   const idStr = String(tmdbId);
   return isSeries ? nixplaySeries.has(idStr) : nixplayMovies.has(idStr);
+}
+
+// NOVO: Resolve o series_id do Nixplay dado um tmdb_id + nome da série.
+// Retorna o tmdb_id se ele existir no Set (caso comum), ou busca pelo nome
+// se o tmdb_id não estiver no Set (caso HxH onde tmdb_id != series_id).
+export function resolveNixplaySeriesId(tmdbId: string | number, seriesName?: string): string | null {
+  if (!isCatalogLoaded) return null;
+  const idStr = String(tmdbId);
+
+  // Caso 1: tmdb_id está no Set (séries onde tmdb_id == series_id, ex: Loki 84958)
+  if (nixplaySeries.has(idStr)) {
+    return idStr;
+  }
+
+  // Caso 2: tmdb_id não está no Set, mas talvez o series_id seja diferente
+  // Busca pelo nome da série no Map (case-insensitive)
+  if (seriesName) {
+    const nameLower = seriesName.toLowerCase();
+    // Tenta match exato
+    if (nixplaySeriesNameToId.has(nameLower)) {
+      return nixplaySeriesNameToId.get(nameLower)!;
+    }
+    // Tenta match parcial (nome da série contém o termo ou vice-versa)
+    for (const [mapName, mapId] of nixplaySeriesNameToId) {
+      if (mapName.includes(nameLower) || nameLower.includes(mapName)) {
+        return mapId;
+      }
+    }
+  }
+
+  return null;
 }

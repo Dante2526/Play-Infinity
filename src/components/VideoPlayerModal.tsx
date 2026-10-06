@@ -557,6 +557,10 @@ export function VideoPlayerModal({
   }, [isOpen, resolvedId, error]);
 
   const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
+  // NOVO: guarda o series_id do Nixplay retornado pelo /api/nixplay-check
+  // Necessário porque para algumas séries (ex: HxH), series_id != tmdb_id
+  // O buildUrl do srv_nixplay usa esse ID em vez do tmdbId pra montar a URL
+  const [nixplaySeriesId, setNixplaySeriesId] = useState<string | null>(null);
 
   // Legenda PT-BR: URL do arquivo VTT gerado pelo backend
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
@@ -595,15 +599,21 @@ export function VideoPlayerModal({
     if (!numId) return;
 
     // Check Nixplay availability
-    fetch(`/api/nixplay-check?tmdb_id=${numId}&type=${isSeries ? 'series' : 'movie'}`)
+    // NOVO: passa o nome da série no check pra resolver series_id quando tmdb_id != series_id
+    const checkName = isSeries && title ? `&name=${encodeURIComponent(title)}` : '';
+    fetch(`/api/nixplay-check?tmdb_id=${numId}&type=${isSeries ? 'series' : 'movie'}${checkName}`)
       .then(res => res.json())
       .then(data => {
         if (data && typeof data.available === 'boolean') {
           setNixplayAvailable(data.available);
+          // NOVO: salva o seriesId retornado (pra usar na URL do Nixplay)
+          if (data.seriesId) {
+            setNixplaySeriesId(data.seriesId);
+          }
         }
       })
       .catch(() => setNixplayAvailable(false));
-  }, [isOpen, isSeries, tmdbId, resolvedId]);
+  }, [isOpen, isSeries, tmdbId, resolvedId, title]);
 
   // Busca blocks dinâmicos (admin panel) pra esse tmdbId
   // Atualiza em até 2min (cache client-side) — admin faz mudança no painel,
@@ -927,7 +937,9 @@ export function VideoPlayerModal({
             }
             const ss = String(s || 1).padStart(3, '0');
             const ee = String(e || 1).padStart(3, '0');
-            const streamId = `${tmdb}${ss}${ee}`;
+            // NOVO: usa nixplaySeriesId se disponível (quando series_id != tmdb_id, ex: HxH)
+            const nixId = nixplaySeriesId || tmdb;
+            const streamId = `${nixId}${ss}${ee}`;
             return toNativeBridgeUrl(`https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${streamId}.mp4`);
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
@@ -1017,7 +1029,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, blockedServerKeys]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
