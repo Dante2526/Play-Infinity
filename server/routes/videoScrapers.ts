@@ -2238,6 +2238,7 @@ const router = Router();
 
             // Monitor e Auto-Healer de Integridade Áudio/Vídeo (A/V Sync & Frame Freeze Recovery)
             // Corrige automaticamente quando a voz/áudio continua mas a imagem do vídeo congela no navegador/GPU
+            // v2: threshold 4 (era 2 → menos disparos falsos), reload após 2 heals falhados, cleanup do interval
             (function initAVSyncAutoHealer() {
               var lastFrameCallbackTime = Date.now();
               var lastCheckedCurrentTime = 0;
@@ -2245,6 +2246,24 @@ const router = Router();
               var stallTicks = 0;
               var isHealing = false;
               var lastHealAt = 0;
+              // NOVO v2: tracking de heals falhos consecutivos e frames frescos sustentados
+              var consecutiveFailedHeals = 0;
+              var consecutiveFreshTicks = 0;
+              var checkIntervalId = null;
+              // NOVO v2: estado persistido entre reloads pra evitar loop infinito
+              var sessionState = { reloadCount: 0, firstReloadAt: 0 };
+              try {
+                var saved = sessionStorage.getItem('_pi_avsync_state');
+                if (saved) {
+                  var parsed = JSON.parse(saved);
+                  // Só considera se foi nos últimos 60s
+                  if (parsed.firstReloadAt && Date.now() - parsed.firstReloadAt < 60000) {
+                    sessionState = parsed;
+                  } else {
+                    sessionStorage.removeItem('_pi_avsync_state');
+                  }
+                }
+              } catch(e) {}
 
               function trackFrameRender(v) {
                 if (!v) return;
@@ -2274,6 +2293,7 @@ const router = Router();
 
                 if (v.paused || v.ended || v.seeking || v.readyState < 2) {
                   stallTicks = 0;
+                  consecutiveFreshTicks = 0;
                   lastCheckedCurrentTime = v.currentTime || 0;
                   return;
                 }
@@ -2304,14 +2324,55 @@ const router = Router();
                     } catch(e) {}
                   }
 
-                  // Se o áudio está avançando há mais de 1.5s mas NENHUM frame de vídeo foi apresentado:
-                  if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                  if (frameIsFresh) {
+                    // NOVO v2: só reseta o contador de heals falhos se o frame ficar fresco
+                    // por ~2.4s (3 ticks) — recuperação sustentada, não momentânea
+                    consecutiveFreshTicks++;
+                    if (consecutiveFreshTicks >= 3) {
+                      consecutiveFailedHeals = 0;
+                      // Limpa estado de session se recovery foi sustentado
+                      if (sessionState.reloadCount > 0) {
+                        sessionState = { reloadCount: 0, firstReloadAt: 0 };
+                        try { sessionStorage.removeItem('_pi_avsync_state'); } catch(e) {}
+                      }
+                    }
+                    stallTicks = 0;
+                  } else if (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function') {
+                    consecutiveFreshTicks = 0;
                     stallTicks++;
-                    if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                    // NOVO v2: threshold 4 (era 2) — requer 3.2s de stall sustentado antes de heal
+                    if (stallTicks >= 4 && (now - lastHealAt > 3500) && !isHealing) {
+                      // NOVO v2: se 2 heals falharam consecutivamente nesta sessão, escalar
+                      if (consecutiveFailedHeals >= 2) {
+                        // Se ainda não fizemos 2 reloads em 60s, fazer reload do iframe
+                        if (sessionState.reloadCount < 2) {
+                          console.warn('[Play Infinity A/V Sync] 2 heals falharam consecutivos. Recarregando player para recriar pipeline HLS...');
+                          sessionState.reloadCount = (sessionState.reloadCount || 0) + 1;
+                          if (!sessionState.firstReloadAt) sessionState.firstReloadAt = now;
+                          try { sessionStorage.setItem('_pi_avsync_state', JSON.stringify(sessionState)); } catch(e) {}
+                          // Para o interval antes de recarregar
+                          if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+                          try { window.location.reload(); } catch(e) {
+                            console.error('[Play Infinity A/V Recovery Error]: reload falhou', e);
+                          }
+                          return;
+                        } else {
+                          // 2 reloads em 60s não resolveram — desistir e notificar parent pra trocar de servidor
+                          console.error('[Play Infinity A/V Sync] Player persiste congelado após 2 reloads em 60s. Acionando fallback de servidor.');
+                          try {
+                            window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "av_sync_persistent_freeze" }, "*");
+                          } catch(e) {}
+                          if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+                          try { sessionStorage.removeItem('_pi_avsync_state'); } catch(e) {}
+                          return;
+                        }
+                      }
+
                       console.warn('[Play Infinity A/V Sync] Imagem congelada com áudio em reprodução detectada. Executando auto-healing instantâneo...');
                       isHealing = true;
                       lastHealAt = now;
                       stallTicks = 0;
+                      consecutiveFailedHeals++; // NOVO v2: incrementa contador antes do heal
 
                       try {
                         var hls = (window.artInstance && window.artInstance.hls) || window.hls;
@@ -2337,7 +2398,16 @@ const router = Router();
                 }
               }
 
-              setInterval(checkAVHealth, 800);
+              checkIntervalId = setInterval(checkAVHealth, 800);
+
+              // NOVO v2: cleanup ao descarregar — evita leak de interval se iframe for removido
+              window.addEventListener('beforeunload', function() {
+                if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+              });
+              // pagehide é mais confiável em mobile (iOS especialmente)
+              window.addEventListener('pagehide', function() {
+                if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+              });
             })();
 
             // Blindagem do Artplayer: oculta controles via style (NÃO remove do DOM para não quebrar o player)
