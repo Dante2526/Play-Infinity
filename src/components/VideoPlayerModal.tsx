@@ -1242,6 +1242,22 @@ export function VideoPlayerModal({
 
       // Inicialização do servidor: prioriza MixDrop para links dedicados, e WatchPlayer como padrão
       const setupInitialServer = async () => {
+        // NOVO: se a URL inicial é blob: ou capacitor:// (playback offline),
+        // usa ela direto — sem montar URL do mixdrop-stream.
+        const isOfflineUrl = defaultUrl && (
+          defaultUrl.startsWith("blob:") ||
+          defaultUrl.startsWith("capacitor://") ||
+          defaultUrl.startsWith("file://") ||
+          defaultUrl.match(/^https?:\/\/localhost\/_capacitor_file_\//) !== null
+        );
+        if (isOfflineUrl && defaultUrl) {
+          console.log("[VideoPlayerModal] URL offline detectada (blob/capacitor). Renderizando <video> direto.");
+          setSelectedServerKey("srv_mixdrop");
+          setUrlInput(defaultUrl);
+          handleExtract(defaultUrl);
+          return;
+        }
+
         const isMixdropTarget =
           (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/mixdrop-stream"))) ||
           resolvedId === "969681" ||
@@ -2360,9 +2376,12 @@ export function VideoPlayerModal({
             )}
 
             {activeIframeUrl && !error ? (
-              activeIframeUrl.startsWith("blob:") ? (
-                // NOVO: blob URL = playback offline. Renderiza <video> direto (sem iframe)
-                // porque blob URLs são bound ao document que as criou — iframe não acessa.
+              activeIframeUrl.startsWith("blob:") || activeIframeUrl.startsWith("capacitor://") || activeIframeUrl.match(/^https?:\/\/localhost\/_capacitor_file_\//) || activeIframeUrl.startsWith("file://") ? (
+                // NOVO: blob URL (web) ou capacitor://file URL (mobile nativo) = playback offline.
+                // Renderiza <video> direto (sem iframe) porque:
+                // - blob URLs são bound ao document que as criou (iframe não acessa)
+                // - capacitor:// e localhost/_capacitor_file_/ são URLs do webview que só funcionam
+                //   num <video> direto (não num iframe que cria novo contexto)
                 // Controls nativos do HTML5 garantem play/pause/seek/fullscreen.
                 <video
                   key={`blob-${activeIframeUrl}-${transitionEpochRef.current}`}
@@ -2381,7 +2400,7 @@ export function VideoPlayerModal({
                     playbackConfirmedRef.current = true;
                   }}
                   onError={(e: any) => {
-                    console.error("[VideoPlayerModal] Erro no video offline (blob):", e);
+                    console.error("[VideoPlayerModal] Erro no video offline (blob/file):", e);
                     setError("Não foi possível reproduzir o arquivo baixado. Pode estar corrompido.");
                     setIsLoading(false);
                   }}

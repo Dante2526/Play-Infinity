@@ -124,32 +124,45 @@ export function DownloadsPage({
 
     setIsPreparingPlay(item.id);
     try {
-      // Tenta ler blob do IndexedDB (playback offline real)
+      // Tenta ler blob do IndexedDB (web) ou registro com webviewUrl (mobile nativo)
       const stored = await getOfflineBlob(item.id);
-      if (stored && stored.blob && stored.blob.size > 1024) {
-        // Tem blob salvo! Cria URL de objeto e abre o player com ela.
-        const blobUrl = URL.createObjectURL(stored.blob);
-        console.log(`[DownloadsPage] Reproduzindo offline: ${(stored.blob.size / 1024 / 1024).toFixed(1)}MB de "${item.title}"`);
-        onPlay(
-          item.title,        // title
-          blobUrl,           // url — blob URL (offline!)
-          item.type,         // mediaType
-          item.tmdbId,       // tmdbId
-          undefined,         // imdbId
-          item.season,       // season
-          item.episode,      // episode
-          item.quality || "HD", // quality
-          false,             // isCam
-          undefined,         // initialTime
-          undefined,         // autoFullscreen
-          item.posterUrl,    // imageUrl
-          item.backdropUrl,  // backdropUrl
-          item.posterUrl,    // posterUrl
-          false,             // isAnime
-          "srv_mixdrop"      // serverKey (força MixDrop — blob URL é tratado como MixDrop)
-        );
-        setIsPreparingPlay(null);
-        return;
+      if (stored) {
+        // Em mobile nativo: usa webviewUrl (file:// convertido) direto no <video>
+        // Em web: usa URL.createObjectURL(blob) que cria blob URL no parent document
+        let playUrl: string | null = null;
+
+        if (stored.webviewUrl) {
+          // Mobile nativo (Capacitor + Filesystem) — webviewUrl é acessível no <video>
+          playUrl = stored.webviewUrl;
+          console.log(`[DownloadsPage] Reproduzindo offline (mobile, file://): ${stored.size ? (stored.size / 1024 / 1024).toFixed(1) + 'MB' : '?'} de "${item.title}"`);
+        } else if (stored.blob && stored.blob.size > 1024) {
+          // Web — cria blob URL a partir do blob no IndexedDB
+          playUrl = URL.createObjectURL(stored.blob);
+          console.log(`[DownloadsPage] Reproduzindo offline (web, blob): ${(stored.blob.size / 1024 / 1024).toFixed(1)}MB de "${item.title}"`);
+        }
+
+        if (playUrl) {
+          onPlay(
+            item.title,        // title
+            playUrl,            // url — blob URL (web) ou webviewUrl (mobile)
+            item.type,         // mediaType
+            item.tmdbId,       // tmdbId
+            undefined,         // imdbId
+            item.season,       // season
+            item.episode,      // episode
+            item.quality || "HD", // quality
+            false,             // isCam
+            undefined,         // initialTime
+            undefined,         // autoFullscreen
+            item.posterUrl,    // imageUrl
+            item.backdropUrl,  // backdropUrl
+            item.posterUrl,    // posterUrl
+            false,             // isAnime
+            "srv_mixdrop"      // serverKey (força MixDrop — URL é tratada como MixDrop)
+          );
+          setIsPreparingPlay(null);
+          return;
+        }
       }
       console.log(`[DownloadsPage] Sem blob offline pra "${item.title}" (id=${item.id}). Fazendo fallback pra streaming...`);
     } catch (err) {
