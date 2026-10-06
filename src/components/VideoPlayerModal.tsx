@@ -1,3 +1,4 @@
+export const __NIXPLAY_TOTAL_EPISODES_VERSION__ = "2.1.0";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Hls from "hls.js";
 import { 
@@ -856,26 +857,31 @@ export function VideoPlayerModal({
 
   // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
   const episodeNumbers = useMemo(() => {
+    // NOVO: PRIORIDADE MÁXIMA — se Nixplay tem mais episódios que qualquer outra fonte,
+    // mostra todos do Nixplay. Isso precisa vir ANTES do filteredSeasonEpisodes porque
+    // a verificação do catálogo (verifiedAvailableEpisodes) só conhece eps do TMDB (62),
+    // mas o Nixplay tem 148. Sem esse check primeiro, a verificação sobrescreve pra 62.
+    if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > 0) {
+      const allSources = [
+        filteredSeasonEpisodes.length,
+        verifiedAvailableEpisodes?.length || 0,
+        seasonData?.episodes?.length || 0,
+        totalSeasonEpisodes,
+      ];
+      const maxOther = Math.max(...allSources);
+      if (nixplayTotalEpisodes > maxOther) {
+        return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
+      }
+    }
+    
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.map(e => e.episode_number);
     }
     if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
-      // NOVO: se Nixplay tem mais episódios que o catálogo, extende a lista
-      if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > verifiedAvailableEpisodes.length) {
-        return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
-      }
       return verifiedAvailableEpisodes;
     }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
-      // NOVO: se Nixplay tem mais episódios que o TMDB, extende a lista
-      if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > seasonData.episodes.length) {
-        return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
-      }
       return seasonData.episodes.map(e => e.episode_number);
-    }
-    // NOVO: se Nixplay tem mais episódios que o TMDB fallback, usa o total do Nixplay
-    if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > totalSeasonEpisodes) {
-      return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
     }
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
   }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes, nixplayAvailable, nixplayTotalEpisodes]);
