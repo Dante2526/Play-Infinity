@@ -1716,6 +1716,30 @@ const router = Router();
               // D) Detecção proativa do vídeo (Filmes via #tv-player e Séries)
               var v = getVideoElement();
               if (v) {
+                // NOVO v2.2: restaurar posição de playback após reload do AV Sync
+                // Lê de sessionStorage UMA vez e dá seek antes do play
+                if (!window._piSeekRestored && v.readyState >= 1 && v.currentTime === 0) {
+                  try {
+                    var seekPos = sessionStorage.getItem('_pi_avsync_seek_pos');
+                    if (seekPos) {
+                      var pos = parseFloat(seekPos);
+                      if (pos > 1 && !isNaN(pos)) {
+                        try {
+                          if (window.artInstance && window.artInstance.seek) {
+                            window.artInstance.seek = pos;
+                          } else {
+                            v.currentTime = pos;
+                          }
+                          console.warn('[A/V Sync v2] Restaurando posição após reload:', pos, 's');
+                        } catch(e) {}
+                      }
+                      // Sempre remove (mesmo se seek falhou, não fica tentando eternamente)
+                      sessionStorage.removeItem('_pi_avsync_seek_pos');
+                      window._piSeekRestored = true;
+                    }
+                  } catch(e) {}
+                }
+
                 // Se o vídeo estiver pausado mas já com metadados ou pronto, tenta dar play
                 if (v.paused && (v.readyState >= 1 || v.currentTime > 0)) {
                   v.play().catch(function() {
@@ -2357,6 +2381,15 @@ const router = Router();
                       if (consecutiveFailedHeals >= 2) {
                         // Se ainda não fizemos 2 reloads em 60s, fazer reload do iframe
                         if (sessionState.reloadCount < 2) {
+                          // NOVO v2.2: salvar posição de playback antes de reload pra restaurar depois
+                          // (evita episódio voltar do começo após reload)
+                          try {
+                            var savedPos = v.currentTime || 0;
+                            if (savedPos > 1) {
+                              sessionStorage.setItem('_pi_avsync_seek_pos', String(savedPos));
+                              console.warn('[A/V Sync v2 DEBUG] Posição salva pra restore:', savedPos, 's');
+                            }
+                          } catch(e) {}
                           sessionState.reloadCount = (sessionState.reloadCount || 0) + 1;
                           if (!sessionState.firstReloadAt) sessionState.firstReloadAt = now;
                           console.warn('[A/V Sync v2 DEBUG] Reload disparado. Novo reloadCount:', sessionState.reloadCount, 'firstReloadAt:', sessionState.firstReloadAt, 'agora:', now);
