@@ -64,12 +64,11 @@ export function AdminHealthMonitor() {
     checkEncontreiStatus();
     // Auto-refresh a cada 60s pra detectar mudanças de status automaticamente
     // (ex: cookie do encontrei.me expirou e circuit breaker ativou)
-    const healthInterval = setInterval(checkHealth, 60000);
-    const encontreiInterval = setInterval(checkEncontreiStatus, 30000); // breaker status mais frequente (30s)
-    return () => {
-      clearInterval(healthInterval);
-      clearInterval(encontreiInterval);
-    };
+    const interval = setInterval(() => {
+      checkHealth();
+      checkEncontreiStatus();
+    }, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
