@@ -4,6 +4,7 @@ import path from "path";
 import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
+import { getEncontreiResolverStatus } from "./encontreiLookup";
 
 export const adminOpsRouter = Router();
 
@@ -777,4 +778,43 @@ adminOpsRouter.post("/github-trigger", async (req: Request, res: Response) => {
     success: false,
     error: `Não foi possível disparar o workflow no GitHub: ${lastError}`
   });
+});
+
+/**
+ * GET /api/admin/encontrei-status
+ * Retorna o estado do circuit breaker do encontrei.me live resolver.
+ * Usado pelo painel admin pra mostrar banner vermelho automático quando o cookie expira.
+ *
+ * Body retornado:
+ *   {
+ *     success: true,
+ *     cookieConfigured: boolean,        // ENCONTREI_COOKIE está no .env?
+ *     breakerActive: boolean,           // circuit breaker ativo (cookie expirou)?
+ *     breakerUntil: number,             // timestamp ms até quando o breaker tá ativo
+ *     breakerMsRemaining: number,       // ms restantes pro breaker expirar
+ *     inflightCount: number,            // chamadas AJAX em voo (dedup)
+ *     negativeCacheCount: number,      // chaves em negative cache (falhas recentes)
+ *     cookieSource: string,            // origem do cookie ("ENCONTREI_COOKIE env" ou "not_set")
+ *     timestamp: number                // horário da checagem
+ *   }
+ *
+ * Quando breakerActive === true, o cookie do encontrei.me expirou (redirect pra /login/
+ * ou resposta non-JSON). O painel admin deve mostrar um banner vermelho alertando.
+ */
+adminOpsRouter.get("/encontrei-status", (_req: Request, res: Response) => {
+  try {
+    const status = getEncontreiResolverStatus();
+    res.json({
+      success: true,
+      ...status,
+      timestamp: Date.now(),
+    });
+  } catch (err: any) {
+    console.error("[adminOps] erro em /encontrei-status:", err);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno ao obter status do encontrei resolver",
+      details: err?.message || String(err),
+    });
+  }
 });

@@ -510,6 +510,27 @@ async function encontreiPlayerData(id: number): Promise<any | null> {
 }
 let _encCookieWarned = false;
 
+/**
+ * Exporta o estado do circuit breaker do encontrei.me live resolver.
+ * Usado pelo endpoint /api/admin/encontrei-status pra alertar no painel admin
+ * quando o cookie expira (redirect 301/302 ou non-JSON do encontrei.me).
+ */
+export function getEncontreiResolverStatus() {
+  const cookieConfigured = !!(process.env.ENCONTREI_COOKIE || "").trim();
+  const now = Date.now();
+  const breakerActive = now < _encCookieDownUntil;
+  const breakerMsRemaining = breakerActive ? (_encCookieDownUntil - now) : 0;
+  return {
+    cookieConfigured,
+    breakerActive,
+    breakerUntil: _encCookieDownUntil,
+    breakerMsRemaining,
+    inflightCount: _encInflight.size,
+    negativeCacheCount: _encNeg.size,
+    cookieSource: cookieConfigured ? "ENCONTREI_COOKIE env" : "not_set",
+  };
+}
+
 /** Faz AJAX episodesList no encontrei.me e devolve o episode_id da temporada/episódio.
  *  Copia o parsing do resolveVizerEpisode (ambos são IPS, mesmo formato provavel). */
 async function encontreiEpisodeId(

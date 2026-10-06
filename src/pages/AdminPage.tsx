@@ -10,6 +10,7 @@ import { TurnstileWidget } from "../components/TurnstileWidget";
 import { AdminDeployMonitor } from "../components/AdminDeployMonitor";
 import { ServerBlocksAdmin } from "../components/ServerBlocksAdmin";
 import { AdminHealthMonitor } from "../components/AdminHealthMonitor";
+import { EncontreiCookieAlert, EncontreiCookieBadge } from "../components/EncontreiCookieAlert";
 
 export interface ClientUser {
   id: string;
@@ -933,6 +934,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <ServerBlocksAdmin />
         ) : (
           <>
+        {/* Alerta automático: cookie do encontrei.me expirado ou não configurado */}
+        <EncontreiCookieAlert />
         {/* Dashboard Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           

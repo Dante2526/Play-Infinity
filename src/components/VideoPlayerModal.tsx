@@ -863,7 +863,9 @@ export function VideoPlayerModal({
     }
   }, [episode]);
 
-  // Servidores oficiais homologados: WatchPlayer Oficial e VIP Player (Dublado PT-BR)
+  // Servidores oficiais homologados: MixDrop PRIMÁRIO (MP4 direto, mais robusto contra A/V desync)
+  // seguido por WatchPlayer/VIP Player/Nixplay como fallbacks.
+  // v2: trocou ordem — antes era WatchPlayer primeiro (HLS propenso a freeze), agora MixDrop primeiro.
   const servers = useMemo(() => {
     let list: Array<{
       key: string;
@@ -876,6 +878,25 @@ export function VideoPlayerModal({
 
     if (isSeries) {
       list = [
+        {
+          key: "srv_mixdrop",
+          label: "MixDrop",
+          badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
+            if (mixdropFileId) {
+              return buildMixdropStreamUrl(mixdropFileId) || `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+            }
+            // Prioridade 2: defaultUrl se já é uma URL do MixDrop
+            if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
+              return defaultUrl;
+            }
+            // Prioridade 3: fallback (pode ser versão cam)
+            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
+          },
+          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
+          name: "MixDrop"
+        },
         {
           key: "srv_watchplay",
           label: "WatchPlayer",
@@ -911,29 +932,29 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
-        },
+        }
+      ];
+    } else {
+      list = [
         {
           key: "srv_mixdrop",
           label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
-          buildUrl: (id: string, s?: number, e?: number) => {
+          buildUrl: () => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
             if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+              return buildMixdropStreamUrl(mixdropFileId) || "https://mxdrop.top/f/36nggdmqspmlg4";
             }
             // Prioridade 2: defaultUrl se já é uma URL do MixDrop
             if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
               return defaultUrl;
             }
             // Prioridade 3: fallback (pode ser versão cam)
-            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
+            return `https://mxdrop.top/f/36nggdmqspmlg4?cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
-        }
-      ];
-    } else {
-      list = [
+        },
         {
           key: "srv_watchplay",
           label: "WatchPlayer",
@@ -964,25 +985,6 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
-        },
-        {
-          key: "srv_mixdrop",
-          label: "MixDrop",
-          badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
-          buildUrl: () => {
-            // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
-            if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || "https://mxdrop.top/f/36nggdmqspmlg4";
-            }
-            // Prioridade 2: defaultUrl se já é uma URL do MixDrop
-            if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
-              return defaultUrl;
-            }
-            // Prioridade 3: fallback (pode ser versão cam)
-            return `https://mxdrop.top/f/36nggdmqspmlg4?cb=${Date.now()}`;
-          },
-          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
-          name: "MixDrop"
         }
       ];
     }
