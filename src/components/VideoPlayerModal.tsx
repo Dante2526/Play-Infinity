@@ -289,7 +289,7 @@ export function VideoPlayerModal({
 
   const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_watchplay");
+  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_mixdrop");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
@@ -1258,7 +1258,9 @@ export function VideoPlayerModal({
           } catch(e) {}
         }
 
-        let targetServerKey = initialServerKey || prefServer || (isMixdropTarget ? "srv_mixdrop" : "srv_watchplay");
+        // Default: MixDrop (priority 1 — MP4 direto, mais robusto contra A/V desync).
+        // Antes era srv_watchplay (HLS, propenso a freeze).
+        let targetServerKey = initialServerKey || prefServer || "srv_mixdrop";
         let targetUrl: string;
 
         if (isSeries && targetSeason >= 5 && (String(tmdbId) === "126027" || String(resolvedId) === "126027")) {
