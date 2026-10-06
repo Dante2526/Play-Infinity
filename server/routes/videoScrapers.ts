@@ -2259,11 +2259,17 @@ const router = Router();
                   // Só considera se foi nos últimos 60s
                   if (parsed.firstReloadAt && Date.now() - parsed.firstReloadAt < 60000) {
                     sessionState = parsed;
+                    console.warn('[A/V Sync v2 DEBUG] IIFE init: sessionState recuperado do sessionStorage:', JSON.stringify(sessionState));
                   } else {
                     sessionStorage.removeItem('_pi_avsync_state');
+                    console.warn('[A/V Sync v2 DEBUG] IIFE init: sessionStorage expirado (>60s), removido');
                   }
+                } else {
+                  console.warn('[A/V Sync v2 DEBUG] IIFE init: nenhum sessionStorage encontrado (primeira sessão ou sessionStorage não persiste)');
                 }
-              } catch(e) {}
+              } catch(e) {
+                console.warn('[A/V Sync v2 DEBUG] IIFE init: erro lendo sessionStorage:', e?.message || e);
+              }
 
               function trackFrameRender(v) {
                 if (!v) return;
@@ -2328,7 +2334,12 @@ const router = Router();
                     // NOVO v2: só reseta o contador de heals falhos se o frame ficar fresco
                     // por ~2.4s (3 ticks) — recuperação sustentada, não momentânea
                     consecutiveFreshTicks++;
-                    if (consecutiveFreshTicks >= 3) {
+                    // CORREÇÃO v2.1: era 3 ticks (2.4s) — agressivo demais, resetava entre reloads
+                    // porque o frame recuperava brevemente. Agora 30 ticks (24s) = recuperação REAL.
+                    if (consecutiveFreshTicks >= 30) {
+                      if (consecutiveFailedHeals > 0 || sessionState.reloadCount > 0) {
+                        console.warn('[A/V Sync v2 DEBUG] Recuperação sustentada (24s estável). Resetando contadores.');
+                      }
                       consecutiveFailedHeals = 0;
                       // Limpa estado de session se recovery foi sustentado
                       if (sessionState.reloadCount > 0) {
@@ -2346,10 +2357,18 @@ const router = Router();
                       if (consecutiveFailedHeals >= 2) {
                         // Se ainda não fizemos 2 reloads em 60s, fazer reload do iframe
                         if (sessionState.reloadCount < 2) {
-                          console.warn('[Play Infinity A/V Sync] 2 heals falharam consecutivos. Recarregando player para recriar pipeline HLS...');
                           sessionState.reloadCount = (sessionState.reloadCount || 0) + 1;
                           if (!sessionState.firstReloadAt) sessionState.firstReloadAt = now;
-                          try { sessionStorage.setItem('_pi_avsync_state', JSON.stringify(sessionState)); } catch(e) {}
+                          console.warn('[A/V Sync v2 DEBUG] Reload disparado. Novo reloadCount:', sessionState.reloadCount, 'firstReloadAt:', sessionState.firstReloadAt, 'agora:', now);
+                          try { sessionStorage.setItem('_pi_avsync_state', JSON.stringify(sessionState)); } catch(e) {
+                            console.warn('[A/V Sync v2 DEBUG] ERRO salvando sessionStorage:', e?.message || e);
+                          }
+                          // Verificar se salvou mesmo
+                          try {
+                            var verify = sessionStorage.getItem('_pi_avsync_state');
+                            console.warn('[A/V Sync v2 DEBUG] Verificação pós-save:', verify);
+                          } catch(e) {}
+                          console.warn('[Play Infinity A/V Sync] 2 heals falharam consecutivos. Recarregando player para recriar pipeline HLS...');
                           // Para o interval antes de recarregar
                           if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
                           try { window.location.reload(); } catch(e) {
