@@ -2,14 +2,21 @@
  * Rotas de suporte ao player Nixplay e Native Player (MP4)
  */
 import { Router } from "express";
-import { isNixplayAvailable } from "../services/nixplayCatalog";
+import { isNixplayAvailable, loadNixplayCatalog } from "../services/nixplayCatalog";
 
 const router = Router();
 
 // Verifica instantaneamente se um filme/série existe no catálogo local cacheado do Nixplay
-router.get("/api/nixplay-check", (req, res) => {
+// CORREÇÃO: chama loadNixplayCatalog() antes do check pra garantir que o catálogo carregou.
+// A função tem `if (isCatalogLoaded) return;` no início, então só carrega na primeira chamada.
+// Sem isso, isNixplayAvailable() sempre retorna false (isCatalogLoaded = false) e Nixplay
+// nunca aparece na lista de servidores do VideoPlayerModal.
+router.get("/api/nixplay-check", async (req, res) => {
   const { tmdb_id, type } = req.query;
   if (!tmdb_id || !type) return res.status(400).json({ error: "Missing tmdb_id or type" });
+  
+  // Garante que o catálogo carregou (primeira chamada demora ~2s, depois é instantâneo)
+  await loadNixplayCatalog();
   
   const isSeries = type === "series";
   const available = isNixplayAvailable(String(tmdb_id), isSeries);
