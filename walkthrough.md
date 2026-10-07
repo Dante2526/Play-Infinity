@@ -273,3 +273,14 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - A correção anterior tentou usar a API do TMDB para converter o número absoluto para um índice relativo, mas o provedor não usa esse índice. Ele exige Temporada 1 e o número do episódio absoluto.
 - Patcheamos as rotas watchplay-proxy-iframe, ip-proxy-iframe e myembed-stream em server/routes/videoScrapers.ts para forçar season = 1 caso o episódio passado seja > 50.
 - Testado localmente, a extração passa a achar o iframe do embedplayer2.xyz e o HLS master.m3u8 com sucesso.
+
+## 07/10/2026 - Sistema de Reporte de Bugs
+**Resumo:**
+- Implementado o sistema de relatÃ³rios de bugs integrado ao Firebase Firestore e Storage.
+- `clientId.ts`: Criado identificador Ãºnico baseado no localStorage (com fallback em crypto.randomUUID ou gerador randÃ´mico simples se uuid indisponÃ­vel).
+- `firestore.rules`: Adicionadas regras para a coleÃ§Ã£o `bug_reports` (create livre desde que seja status=pending e possua clientId; leitura restrita ao admin ou para os bugs do prÃ³prio cliente (limitado a 20)).
+- `ReportBugModal.tsx`: Componente criado na raiz dos componentes para o usuÃ¡rio relatar erros (incluindo anexo de print que sobe no Firebase Storage).
+- `AdminBugReports.tsx`: Adicionada nova interface (acessada pela tab Bugs) no `AdminPage.tsx` que lista os reports, separa entre pendentes e resolvidos e permite responder/marcar como resolvido com mensagens em template ou customizadas.
+- `BugFeedbackListener.tsx`: Renderizado no final do `App.tsx`. Ouve passivamente ao Firestore por bugs do usuÃ¡rio (`clientId`) marcados como `resolved` e exibe um feedback flutuante (toast). Ao fechar, deleta o registro do banco de dados e a imagem do Storage.
+- `DetailsPage.tsx`: Inserido o botÃ£o "Reportar Erro" ao lado de Download na pÃ¡gina principal do filme/sÃ©rie e um botÃ£o com Ã­cone de bug na listagem para cada episÃ³dio.
+- Os cÃ³digos TypeScript foram validados com `tsc --noEmit` e nÃ£o mostraram erros nas mudanÃ§as recentes.

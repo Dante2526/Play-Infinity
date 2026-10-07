@@ -278,6 +278,31 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     setActiveCue(cue ? cue.text : null);
   }, [playerStatus.currentTime, vttCues, selectedSubtitle, subtitleOffset]);
 
+  useEffect(() => {
+    if (iframeRef && iframeRef.current && iframeRef.current.contentWindow) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          { type: isEffectiveExternal ? "NETFLIX_SKIN_INACTIVE" : "NETFLIX_SKIN_ACTIVE" },
+          "*"
+        );
+      } catch (e) {
+        // Ignora erros de CORS ao tentar fazer postMessage
+      }
+    }
+  }, [isEffectiveExternal, iframeRef]);
+
+  // Re-envia o status se o iframe recarregar ou emitir status (assim garante que o state tá em sync)
+  useEffect(() => {
+    if (iframeRef && iframeRef.current && iframeRef.current.contentWindow && playerStatus.duration > 0) {
+      try {
+        iframeRef.current.contentWindow.postMessage(
+          { type: isEffectiveExternal ? "NETFLIX_SKIN_INACTIVE" : "NETFLIX_SKIN_ACTIVE" },
+          "*"
+        );
+      } catch (e) {}
+    }
+  }, [playerStatus.duration, isEffectiveExternal, iframeRef]);
+
   const displayAudioServers = useMemo(() => {
     if (serversList && serversList.length > 0) {
       return serversList;

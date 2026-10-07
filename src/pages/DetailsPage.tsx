@@ -34,8 +34,10 @@ import {
   Mic,
   MicOff,
   Download,
-  Cast
+  Cast,
+  Bug
 } from "lucide-react";
+import { ReportBugModal } from "../components/ReportBugModal";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
@@ -196,6 +198,10 @@ export function DetailsPage({
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
   const [episodeDownloads, setEpisodeDownloads] = useState<Record<number, DownloadAvailability>>({});
   const [downloadingEp, setDownloadingEp] = useState<number | null>(null);
+  
+  // States para o modal de reporte de bug
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [reportEpisodeInfo, setReportEpisodeInfo] = useState<string | undefined>(undefined);
 
   // Garante que a página de detalhes sempre abra exatamente no topo absoluto (0, 0)
   useEffect(() => {
@@ -684,6 +690,19 @@ export function DetailsPage({
               {/* Botões Secundários: Grid de 2 ou 3 colunas para organização */}
               <div className="flex flex-wrap items-center gap-3 w-full">
                 
+                {/* Botão Reportar Bug */}
+                <button
+                  onClick={() => {
+                    setReportEpisodeInfo(isSeries ? `Temporada ${selectedSeason}` : undefined);
+                    setIsReportModalOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-2 bg-red-600/20 hover:bg-red-600/30 text-red-400 hover:text-red-300 font-bold py-3.5 px-6 rounded-full transition-all text-sm border border-red-500/40 hover:border-red-500/70 cursor-pointer backdrop-blur-md hover:scale-105 active:scale-95 shadow-lg group"
+                  title="Reportar problema de reprodução"
+                >
+                  <Bug className="w-4 h-4 text-red-400 group-hover:scale-110 transition-transform" />
+                  <span>Reportar Erro</span>
+                </button>
+                
                 {/* Botão Baixar Filme (Disponível via MixDrop + Oracle VPS) */}
                 {!isSeries && (
                   isCheckingDownload ? (
@@ -1115,6 +1134,19 @@ export function DetailsPage({
                           <Cast className="w-3.5 h-3.5" />
                         </div>
 
+                        {/* Botão de Reportar Erro (Episódio) */}
+                        <div
+                          tabIndex={0} role="button" onClick={(e) => {
+                            e.stopPropagation();
+                            setReportEpisodeInfo(`Temporada ${selectedSeason} - Episódio ${ep.ep}`);
+                            setIsReportModalOpen(true);
+                          }}
+                          className="w-8 h-8 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 hover:text-white hover:bg-red-600 hover:scale-105 active:scale-95 transition-all cursor-pointer border border-red-500/30 hover:border-red-500 shadow-sm"
+                          title="Reportar problema neste episódio"
+                        >
+                          <Bug className="w-3.5 h-3.5" />
+                        </div>
+
                         {/* Botão de Play */}
                         <div 
                           tabIndex={0} role="button" onClick={() => {
@@ -1380,10 +1412,19 @@ export function DetailsPage({
         <CastModal
           onClose={() => { setCastUrl(null); setCastMediaDetails(undefined); }}
           streamUrl={castUrl}
-          title={item.title}
-          mediaDetails={castMediaDetails}
-        />
-      )}
-    </div>
-  );
+        title={item.title}
+        mediaDetails={castMediaDetails}
+      />
+    )}
+
+    <ReportBugModal
+      isOpen={isReportModalOpen}
+      onClose={() => setIsReportModalOpen(false)}
+      mediaId={String(item.tmdbId || item.id || itemId)}
+      mediaTitle={item.title}
+      mediaType={item.type === 'series' ? 'tv' : 'movie'}
+      episodeInfo={reportEpisodeInfo}
+    />
+  </div>
+);
 }

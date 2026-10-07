@@ -135,6 +135,7 @@ const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
 const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal"));
 const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import { VirtualRemote } from "./components/VirtualRemote";
+import { BugFeedbackListener } from "./components/BugFeedbackListener";
 import {
   getFavoriteIds,
   toggleFavorite,
@@ -1190,6 +1191,8 @@ export default function App() {
             />
           )}
         </AnimatePresence>
+        
+        <BugFeedbackListener />
       </React.Suspense>
 
       {/* CSS Utility for hiding scrollbar while keeping functionality */}

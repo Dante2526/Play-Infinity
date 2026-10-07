@@ -1,14 +1,16 @@
-# Tarefa de Implementação
+# Tarefas do Relato de Bugs
 
-- [x] Task 1: Atualizar a Interface de Tipagem `ClientUser`
-  - [x] Step 1: Modificar `ClientUser` no topo do arquivo `AdminPage.tsx`
-- [x] Task 2: Adicionar Estados e Lógica de Edição
-  - [x] Step 1: Criar estados de edição em `AdminPage.tsx`
-  - [x] Step 2: Preencher estados ao iniciar a edição (`handleEditUser`)
-  - [x] Step 3: Salvar alterações no banco de dados (`handleSaveEdit`)
-- [x] Task 4: Atualizar Modal de Edição com os Novos Campos
-  - [x] Step 1: Campo de Comentários no JSX de edição
-  - [x] Step 2: Campos de Desconto no JSX de edição
-- [x] Task 5: Atualizar a UI do Card de Usuário (Anotações Expansíveis)
-  - [x] Step 1: Estado para controlar a expansão das notas do usuário
-  - [x] Step 2: Renderizar botão e conteúdo expansível
+- [x] Task 1: Configuração do Firebase e Utilitário de Cliente
+  - [x] Step 1: Exportar Storage do Firebase
+  - [x] Step 2: Criar Utilitário de Identificação
+  - [x] Step 3: Atualizar firestore.rules
+- [x] Task 2: Componente do Modal de Reporte de Bug
+  - [x] Step 1: Implementar UI e Upload
+- [x] Task 3: Botão de Reportar Bug nas Telas
+  - [x] Step 1: Inserir o botão
+- [x] Task 4: Aba de Relatórios no Painel ADM
+  - [x] Step 1: Adicionar visualização dos bugs
+- [x] Task 5: Feedback para o Cliente e Limpeza
+  - [x] Step 1: Criar Componente de Escuta
+  - [x] Step 2: Mostrar Cartão de Feedback
+  - [x] Step 3: Ação de Limpeza

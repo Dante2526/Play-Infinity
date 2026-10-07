@@ -1543,47 +1543,47 @@ const router = Router();
           /* BLINDAGEM COMPLETA DOS CONTROLES NATIVOS DO ARTPLAYER:
              Oculta a barra de controles e menus nativos para a Skin Netflix assumir,
              mas NUNCA destrói a camada de vídeo nem impede o funcionamento do player. */
-          .art-top,
-          .art-bottom,
-          .art-controls,
-          .art-controls-left,
-          .art-controls-center,
-          .art-controls-right,
-          .art-settings,
-          .art-setting,
-          .art-subtitle-setting,
-          .art-contextmenu,
-          .art-danmuku,
-          .art-fast-forward,
-          .art-lock,
-          .art-poster,
-          .art-notice,
-          .art-notice-inner,
-          .art-info,
-          .art-info-panel,
-          .art-progress,
-          .art-progress-loaded,
-          .art-progress-played,
-          .art-progress-highlight,
-          .art-progress-tip,
-          .art-control,
-          .art-control-fullscreen,
-          .art-control-volume,
-          .art-control-play,
-          .art-control-time,
-          [class*="art-control"],
-          .art-volume-panel,
-          .art-icon-state,
-          .wp-seek-10,
-          .wp-seek-back,
-          .wp-seek-forward,
-          [class*="wp-seek"],
-          #pip-skip-intro-btn,
-          #pip-skip-toast,
-          #tv-player .art-bottom,
-          #tv-player .art-controls,
-          #tv-player [class*="art-control"],
-          #tv-player .art-progress {
+          body.hide-native-controls .art-top,
+          body.hide-native-controls .art-bottom,
+          body.hide-native-controls .art-controls,
+          body.hide-native-controls .art-controls-left,
+          body.hide-native-controls .art-controls-center,
+          body.hide-native-controls .art-controls-right,
+          body.hide-native-controls .art-settings,
+          body.hide-native-controls .art-setting,
+          body.hide-native-controls .art-subtitle-setting,
+          body.hide-native-controls .art-contextmenu,
+          body.hide-native-controls .art-danmuku,
+          body.hide-native-controls .art-fast-forward,
+          body.hide-native-controls .art-lock,
+          body.hide-native-controls .art-poster,
+          body.hide-native-controls .art-notice,
+          body.hide-native-controls .art-notice-inner,
+          body.hide-native-controls .art-info,
+          body.hide-native-controls .art-info-panel,
+          body.hide-native-controls .art-progress,
+          body.hide-native-controls .art-progress-loaded,
+          body.hide-native-controls .art-progress-played,
+          body.hide-native-controls .art-progress-highlight,
+          body.hide-native-controls .art-progress-tip,
+          body.hide-native-controls .art-control,
+          body.hide-native-controls .art-control-fullscreen,
+          body.hide-native-controls .art-control-volume,
+          body.hide-native-controls .art-control-play,
+          body.hide-native-controls .art-control-time,
+          body.hide-native-controls [class*="art-control"],
+          body.hide-native-controls .art-volume-panel,
+          body.hide-native-controls .art-icon-state,
+          body.hide-native-controls .wp-seek-10,
+          body.hide-native-controls .wp-seek-back,
+          body.hide-native-controls .wp-seek-forward,
+          body.hide-native-controls [class*="wp-seek"],
+          body.hide-native-controls #pip-skip-intro-btn,
+          body.hide-native-controls #pip-skip-toast,
+          body.hide-native-controls #tv-player .art-bottom,
+          body.hide-native-controls #tv-player .art-controls,
+          body.hide-native-controls #tv-player [class*="art-control"],
+          body.hide-native-controls #tv-player .art-progress {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
@@ -1606,6 +1606,15 @@ const router = Router();
 
         <script>
           (function() {
+            // Recebe estado da skin do iframe pai para mostrar/ocultar controles nativos
+            window.addEventListener("message", function(e) {
+              if (e.data && e.data.type === "NETFLIX_SKIN_ACTIVE") {
+                document.body.classList.add("hide-native-controls");
+              } else if (e.data && e.data.type === "NETFLIX_SKIN_INACTIVE") {
+                document.body.classList.remove("hide-native-controls");
+              }
+            });
+
             // 0. Otimização Agressiva de Buffer e Fast-Seek no Hls.js
             function applyHlsFastSeekConfig(cfg) {
               if (!cfg) return;
@@ -3361,19 +3370,19 @@ const router = Router();
       width: 100%;
       height: 100%;
     }
-    /* Oculta totalmente qualquer elemento de interface nativa do Artplayer para dar lugar exclusivo à Skin Netflix */
-    .art-video-player .art-bottom,
-    .art-video-player .art-mask,
-    .art-video-player .art-state,
-    .art-video-player .art-contextmenus,
-    .art-video-player .art-loading,
-    .art-video-player .art-notice,
-    .art-video-player .art-controls,
-    .art-video-player .art-layer-state,
-    .art-video-player .art-progress,
-    .art-video-player .art-control,
-    .art-video-player .art-backdrop,
-    .art-video-player .art-layers {
+    /* Oculta interface nativa APENAS quando a classe hide-native-controls estiver ativa (Skin Netflix presente) */
+    body.hide-native-controls .art-video-player .art-bottom,
+    body.hide-native-controls .art-video-player .art-mask,
+    body.hide-native-controls .art-video-player .art-state,
+    body.hide-native-controls .art-video-player .art-contextmenus,
+    body.hide-native-controls .art-video-player .art-loading,
+    body.hide-native-controls .art-video-player .art-notice,
+    body.hide-native-controls .art-video-player .art-controls,
+    body.hide-native-controls .art-video-player .art-layer-state,
+    body.hide-native-controls .art-video-player .art-progress,
+    body.hide-native-controls .art-video-player .art-control,
+    body.hide-native-controls .art-video-player .art-backdrop,
+    body.hide-native-controls .art-video-player .art-layers {
       display: none !important;
       opacity: 0 !important;
       visibility: hidden !important;
@@ -3387,6 +3396,15 @@ const router = Router();
   <div id="artplayer-container"></div>
   <script>
     (function() {
+      // Recebe estado da skin do iframe pai para mostrar/ocultar controles nativos
+      window.addEventListener("message", function(e) {
+        if (e.data && e.data.type === "NETFLIX_SKIN_ACTIVE") {
+          document.body.classList.add("hide-native-controls");
+        } else if (e.data && e.data.type === "NETFLIX_SKIN_INACTIVE") {
+          document.body.classList.remove("hide-native-controls");
+        }
+      });
+
       // Neutraliza popups e janelas secundárias
       window.open = function() { return null; };
       window.alert = function() {};
@@ -3493,7 +3511,6 @@ const router = Router();
         gesture: false,
         miniProgressBar: false,
         backdrop: false,
-        controls: [],
         icons: { state: '' },
         theme: "#e50914"
       });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug } from "lucide-react";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -10,6 +10,7 @@ import { TurnstileWidget } from "../components/TurnstileWidget";
 import { AdminDeployMonitor } from "../components/AdminDeployMonitor";
 import { ServerBlocksAdmin } from "../components/ServerBlocksAdmin";
 import { AdminHealthMonitor } from "../components/AdminHealthMonitor";
+import { AdminBugReports } from "../components/AdminBugReports";
 import { EncontreiCookieAlert, EncontreiCookieBadge } from "../components/EncontreiCookieAlert";
 
 export interface ClientUser {
@@ -35,7 +36,7 @@ interface AdminPageProps {
 export function AdminPage({ onBack }: AdminPageProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(!!sessionStorage.getItem("adminSessionToken"));
-  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health">("users");
+  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health" | "bugs">("users");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -924,6 +925,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span className="hidden md:inline">Saúde & </span>Scrapers
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => setAdminSection("bugs")}
+            className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer relative w-full ${
+              adminSection === "bugs"
+                ? "bg-red-600 text-white shadow-lg shadow-red-600/30"
+                : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+            }`}
+          >
+            <Bug className="w-4 h-4 text-red-400 shrink-0" />
+            <span className="truncate">
+              Bugs
+            </span>
+          </button>
         </div>
 
         {adminSection === "health" ? (
@@ -932,6 +947,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <AdminDeployMonitor />
         ) : adminSection === "blocks" ? (
           <ServerBlocksAdmin />
+        ) : adminSection === "bugs" ? (
+          <AdminBugReports />
         ) : (
           <>
         {/* Dashboard Cards */}
