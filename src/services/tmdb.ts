@@ -124,6 +124,34 @@ const DEFAULT_SEASON: Season = {
   episodes: [],
 };
 
+// Cache persistente das últimas temporadas conhecidas por série (via TMDB).
+// Garante que abas reais (ex: T3 do HxH) nunca sumam quando a API do TMDB
+// falhar temporariamente — a UI reusa a última lista conhecida.
+const TV_SEASONS_CACHE_KEY = "play-infinity:tmdb-seasons-cache";
+
+function readSeasonsCache(): Record<string, Season[]> {
+  try {
+    const raw = typeof localStorage !== "undefined" ? localStorage.getItem(TV_SEASONS_CACHE_KEY) : null;
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSeasonsCache(cache: Record<string, Season[]>) {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(TV_SEASONS_CACHE_KEY, JSON.stringify(cache));
+    }
+  } catch {
+    // Quota/privacidade — falha silenciosa, não quebra o app
+  }
+}
+
+const tvSeasonsCache: Record<string, Season[]> = readSeasonsCache();
+
 /**
  * Wrapper de requisição resiliente ao TMDB:
  * Valida res.ok, status HTTP (401/404/429), timeout estrito de 6s e JSON seguro com fallback.
@@ -195,15 +223,32 @@ import { UNAVAILABLE_SEASONS } from "../data";;;
 
 export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
   const details = await fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);
-  
-  if (type === 'tv' && details && details.seasons && UNAVAILABLE_SEASONS[id]) {
+
+  let result = details;
+
+  if (type === 'tv') {
+    const validSeasons = (details?.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
+    if (details && details.id && details.id !== 0 && validSeasons.length > 0) {
+      // Sucesso: guarda as temporadas reais pra usar de fallback em falhas futuras
+      tvSeasonsCache[String(id)] = validSeasons;
+      writeSeasonsCache(tvSeasonsCache);
+    } else if (details && (!Array.isArray(details.seasons) || validSeasons.length === 0)) {
+      // Falha do TMDB: injeta as últimas temporadas conhecidas pra não colapsar a UI
+      const cached = tvSeasonsCache[String(id)];
+      if (cached && cached.length > 0) {
+        result = { ...details, seasons: cached, number_of_seasons: cached.length };
+      }
+    }
+  }
+
+  if (type === 'tv' && result && result.seasons && UNAVAILABLE_SEASONS[id]) {
     // Filtra as temporadas que estão marcadas como indisponíveis na configuração
     const unavailableList = UNAVAILABLE_SEASONS[id];
-    details.seasons = details.seasons.filter(s => !unavailableList.includes(s.season_number));
-    details.number_of_seasons = details.seasons.length;
+    result.seasons = result.seasons.filter(s => !unavailableList.includes(s.season_number));
+    result.number_of_seasons = result.seasons.length;
   }
-  
-  return details;
+
+  return result;
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {

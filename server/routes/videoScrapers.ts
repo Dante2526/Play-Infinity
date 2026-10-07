@@ -2650,6 +2650,9 @@ const router = Router();
           availableEpisodes: sortedEps,
           totalAvailable: sortedEps.length,
           cached: false,
+          // Resposta definitiva baseada no catálogo local (confiável): o front pode
+          // ocultar episódios "fantasma" com segurança.
+          verifiedFromCatalog: true,
         });
       }
 
@@ -2790,6 +2793,10 @@ const router = Router();
         availableEpisodes,
         totalAvailable: availableEpisodes.length,
         cached: false,
+        // Resposta baseada em sondagem de rede (não definitiva): o front NÃO deve
+        // ocultar episódios declarados pelo TMDB com base nisso — uma falha de
+        // probe não significa que o episódio não existe.
+        verifiedFromCatalog: false,
       });
     } catch (err) {
       console.error("[check-season] Erro ao verificar disponibilidade da temporada:", err);

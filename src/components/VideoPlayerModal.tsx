@@ -23,6 +23,7 @@ import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getDetails, getSeasonDetails, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
+import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
@@ -288,7 +289,9 @@ export function VideoPlayerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, tmdbId, mediaType, season, episode, lookupMixdropFileId]);
 
-  const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = useState<number[] | null>(null);
+  // Info de disponibilidade de episódios (verifiedFromCatalog === true => resposta
+  // definitiva do catálogo local; false => sondagem de rede, não ocultar eps do TMDB)
+  const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = useState<EpisodeAvailabilityInfo | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
   const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_mixdrop");
 
@@ -666,9 +669,26 @@ export function VideoPlayerModal({
         if (!targetId && title) {
           const cleanTitle = title.split(/ - (?:T\d|Temporada)/i)[0].trim();
           const searchRes = await searchMulti(cleanTitle);
-          const foundTv = searchRes.results?.find(r => r.media_type === 'tv' || (r.name && !r.title));
-          if (foundTv) {
-            targetId = foundTv.id;
+          // Só aceita um resultado de TV cujo título tenha similaridade com o
+          // procurado: pegar o "primeiro que parecer TV" gerava IDs absurdos
+          // (ex.: /api/tmdb/tv/<id inexistente> → 404) e exibia temporadas erradas.
+          const wanted = cleanTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const norm = (s: string) => (s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+          const score = (name: string) => {
+            const a = norm(name);
+            if (!a) return 0;
+            if (a.includes(wanted) || wanted.includes(a)) return 1;
+            const tokens = wanted.split(/\s+/).filter((t) => t.length > 3);
+            if (!tokens.length) return 0;
+            const hit = tokens.filter((t) => a.includes(t)).length;
+            return hit / tokens.length;
+          };
+          const foundTv = (searchRes.results || [])
+            .filter((r) => r.media_type === "tv" || (r.name && !r.title))
+            .map((r) => ({ r, s: score(r.name || r.title || "") }))
+            .sort((x, y) => y.s - x.s)[0];
+          if (foundTv && foundTv.s >= 0.5) {
+            targetId = foundTv.r.id;
           }
         }
 
@@ -790,7 +810,7 @@ export function VideoPlayerModal({
 
     let isMounted = true;
     setLoadingSeason(true);
-    setVerifiedAvailableEpisodes(null);
+    setEpisodeAvailabilityInfo(null);
     setIsCheckingEpisodes(true);
 
     getSeasonDetails(numericId, season)
@@ -801,9 +821,9 @@ export function VideoPlayerModal({
 
           // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
           getAvailableEpisodes(numericId, season, totalEpCount)
-            .then(availList => {
-              if (isMounted && Array.isArray(availList)) {
-                setVerifiedAvailableEpisodes(availList.length > 0 ? availList : []);
+            .then(info => {
+              if (isMounted && info && Array.isArray(info.episodes) && info.episodes.length > 0) {
+                setEpisodeAvailabilityInfo(info);
               }
             })
             .catch(e => {
@@ -828,22 +848,25 @@ export function VideoPlayerModal({
     };
   }, [isOpen, isSeries, tmdbId, resolvedId, season]);
 
-  // Lista filtrada de episódios do TMDB contendo apenas os que realmente estão no servidor
+  // Lista filtrada de episódios do TMDB contendo apenas os que realmente estão no servidor.
+  // Só filtra quando a resposta é DEFINITIVA (catálogo local). Sondagens de rede
+  // (verifiedFromCatalog === false) não devem esconder episódios declarados pelo TMDB.
   const filteredSeasonEpisodes = useMemo(() => {
     if (!seasonData?.episodes) return [];
-    if (verifiedAvailableEpisodes && Array.isArray(verifiedAvailableEpisodes)) {
-      return seasonData.episodes.filter(e => verifiedAvailableEpisodes.includes(e.episode_number));
+    const eav = episodeAvailabilityInfo;
+    if (eav && eav.verifiedFromCatalog && Array.isArray(eav.episodes)) {
+      return seasonData.episodes.filter(e => eav.episodes.includes(e.episode_number));
     }
     return seasonData.episodes;
-  }, [seasonData, verifiedAvailableEpisodes]);
+  }, [seasonData, episodeAvailabilityInfo]);
 
   // Total de episódios da temporada selecionada com streaming comprovado
   const totalSeasonEpisodes = useMemo(() => {
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.length;
     }
-    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
-      return verifiedAvailableEpisodes.length;
+    if (episodeAvailabilityInfo?.episodes && episodeAvailabilityInfo.episodes.length > 0) {
+      return episodeAvailabilityInfo.episodes.length;
     }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       return seasonData.episodes.length;
@@ -853,18 +876,18 @@ export function VideoPlayerModal({
       return sInfo.episode_count;
     }
     return 8;
-  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, seriesDetails, season]);
+  }, [filteredSeasonEpisodes, episodeAvailabilityInfo, seasonData, seriesDetails, season]);
 
   // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
   const episodeNumbers = useMemo(() => {
     // NOVO: PRIORIDADE MÁXIMA — se Nixplay tem mais episódios que qualquer outra fonte,
     // mostra todos do Nixplay. Isso precisa vir ANTES do filteredSeasonEpisodes porque
-    // a verificação do catálogo (verifiedAvailableEpisodes) só conhece eps do TMDB (62),
+    // a verificação do catálogo (verifiedFromCatalog) só conhece eps do TMDB (62),
     // mas o Nixplay tem 148. Sem esse check primeiro, a verificação sobrescreve pra 62.
     if (nixplayAvailable && nixplayTotalEpisodes && nixplayTotalEpisodes > 0) {
       const allSources = [
         filteredSeasonEpisodes.length,
-        verifiedAvailableEpisodes?.length || 0,
+        episodeAvailabilityInfo?.episodes?.length || 0,
         seasonData?.episodes?.length || 0,
         totalSeasonEpisodes,
       ];
@@ -877,14 +900,14 @@ export function VideoPlayerModal({
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.map(e => e.episode_number);
     }
-    if (verifiedAvailableEpisodes && verifiedAvailableEpisodes.length > 0) {
-      return verifiedAvailableEpisodes;
+    if (episodeAvailabilityInfo?.episodes && episodeAvailabilityInfo.episodes.length > 0) {
+      return episodeAvailabilityInfo.episodes;
     }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       return seasonData.episodes.map(e => e.episode_number);
     }
     return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
-  }, [filteredSeasonEpisodes, verifiedAvailableEpisodes, seasonData, totalSeasonEpisodes, nixplayAvailable, nixplayTotalEpisodes]);
+  }, [filteredSeasonEpisodes, episodeAvailabilityInfo, seasonData, totalSeasonEpisodes, nixplayAvailable, nixplayTotalEpisodes]);
 
   // Auto-scroll do botão do episódio ativo
   useEffect(() => {
@@ -2467,7 +2490,6 @@ export function VideoPlayerModal({
                 }}
                 fetchPriority="high"
                 allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
-                allowFullScreen
                 referrerPolicy="strict-origin-when-cross-origin"
                 onLoad={() => {
                   const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop';

@@ -367,6 +367,14 @@ export default function App() {
     };
   }, []);
 
+  // Reinscreve o listener do doc do usuário quando ele morre por erro transitório
+  // (token expirado → regras veem request.auth == null e negam a leitura).
+  const [userDocEpoch, setUserDocEpoch] = useState(0);
+  const userDocRetriesRef = useRef(0);
+  useEffect(() => {
+    userDocRetriesRef.current = 0;
+  }, [currentUser]);
+
   // Monitora a existência do usuário no Firestore em tempo real com proteção anti-falso-positivo para mobile
   useEffect(() => {
     if (!currentUser) return;
@@ -462,13 +470,27 @@ export default function App() {
       }
     }, (err) => {
       console.warn("[Auth] Listener do documento do usuário:", err);
+      // Um onSnapshot que dispara erro MORRE (não se recupera sozinho). Se a causa
+      // for token expirado, forçar o refresh e rescrever o listener restaura a
+      // sessão — limitado a 2 tentativas para nunca entrar em loop.
+      (async () => {
+        try {
+          await currentUser.getIdToken(true);
+        } catch {
+          /* segue para a nova tentativa de qualquer forma */
+        }
+        if (userDocRetriesRef.current < 2) {
+          userDocRetriesRef.current += 1;
+          setUserDocEpoch((v) => v + 1);
+        }
+      })();
     });
 
     return () => {
       isSubscribed = false;
       unsubscribeUserDoc();
     };
-  }, [currentUser, viewState.type]);
+  }, [currentUser, viewState.type, userDocEpoch]);
 
   const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || (isDevEnvironment ? 'DEV' : 'N')).trim().charAt(0).toUpperCase() || 'P';
 

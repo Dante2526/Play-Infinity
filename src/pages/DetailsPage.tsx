@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
+import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { 
   checkMovieDownloadAvailability, 
   checkEpisodeDownloadAvailability, 
@@ -392,14 +393,14 @@ export function DetailsPage({
     }
   }, [availableSeasons, selectedSeason]);
 
-  const [verifiedAvailableEpisodes, setVerifiedAvailableEpisodes] = React.useState<number[] | null>(null);
+  const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = React.useState<EpisodeAvailabilityInfo | null>(null);
 
   // Buscar episódios reais da temporada selecionada no TMDB sempre que mudar série ou temporada
   useEffect(() => {
     if (!isSeries || !effectiveTmdbId || isNaN(Number(effectiveTmdbId))) return;
     let isMounted = true;
     setLoadingSeason(true);
-    setVerifiedAvailableEpisodes(null);
+    setEpisodeAvailabilityInfo(null);
 
     getSeasonDetails(Number(effectiveTmdbId), selectedSeason)
       .then(data => {
@@ -407,9 +408,9 @@ export function DetailsPage({
           setSeasonData(data);
           const totalCount = data.episodes?.length || 24;
           getAvailableEpisodes(Number(effectiveTmdbId), selectedSeason, totalCount)
-            .then(availList => {
-              if (isMounted && Array.isArray(availList) && availList.length > 0) {
-                setVerifiedAvailableEpisodes(availList);
+            .then(info => {
+              if (isMounted && info && Array.isArray(info.episodes) && info.episodes.length > 0) {
+                setEpisodeAvailabilityInfo(info);
               }
             })
             .catch(() => {});
@@ -431,8 +432,13 @@ export function DetailsPage({
   const currentEpisodes = React.useMemo(() => {
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       let eps = seasonData.episodes;
-      if (verifiedAvailableEpisodes && Array.isArray(verifiedAvailableEpisodes)) {
-        eps = eps.filter(ep => verifiedAvailableEpisodes.includes(ep.episode_number));
+      // Só oculta episódios quando a resposta é DEFINITIVA (vinda do catálogo local).
+      // Respostas de sondagem de rede (verifiedFromCatalog === false) não devem
+      // remover episódios declarados pelo TMDB — uma falha de probe (ex: IDs do
+      // Nixplay/HxH) não significa que o episódio não existe.
+      const eav = episodeAvailabilityInfo;
+      if (eav && eav.verifiedFromCatalog && Array.isArray(eav.episodes)) {
+        eps = eps.filter(ep => eav.episodes.includes(ep.episode_number));
       }
       return eps.map(ep => ({
         ep: ep.episode_number,
@@ -447,9 +453,8 @@ export function DetailsPage({
 
     // Fallback dinâmico caso a API falhe ou ainda esteja carregando
     const count = seasonData?.episode_count || tmdbDetails?.seasons?.find(s => s.season_number === selectedSeason)?.episode_count || 6;
-    const baseCount = verifiedAvailableEpisodes?.length || Math.min(count, 50);
-    return Array.from({ length: baseCount }, (_, idx) => {
-      const epNum = verifiedAvailableEpisodes ? verifiedAvailableEpisodes[idx] : idx + 1;
+    return Array.from({ length: count }, (_, idx) => {
+      const epNum = idx + 1;
       return {
         ep: epNum,
         name: `Episódio ${epNum}`,
@@ -458,7 +463,7 @@ export function DetailsPage({
         stillPath: null
       };
     });
-  }, [seasonData, verifiedAvailableEpisodes, selectedSeason, item.title, tmdbDetails]);
+  }, [seasonData, episodeAvailabilityInfo, selectedSeason, item.title, tmdbDetails]);
 
 
 
@@ -1156,8 +1161,7 @@ export function DetailsPage({
                     src={`https://www.youtube.com/embed/${activeTrailer.key}?autoplay=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
                     title={activeTrailer.name || "Trailer Oficial"}
                     className="w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                    allowFullScreen
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                     loading="lazy"
                     referrerPolicy="strict-origin-when-cross-origin"
                   />
@@ -1326,8 +1330,7 @@ export function DetailsPage({
                         src={`https://www.youtube.com/embed/${activeTrailer.key}?autoplay=1&rel=0&modestbranding=1&playsinline=1&enablejsapi=1`}
                         title={activeTrailer.name || "Trailer"}
                         className="w-full h-full border-0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
                         referrerPolicy="strict-origin-when-cross-origin"
                       />
                     </div>

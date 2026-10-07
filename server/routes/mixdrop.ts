@@ -524,8 +524,19 @@ const router = Router();
 
       res.status(upstream.status);
 
+      // Content-Length só é seguro em resposta parcial (206) sem content-encoding
+      // (o fetch do Node descomprime o corpo e mantém o tamanho original no header
+      // → casaria ERR_CONTENT_LENGTH_MISMATCH). Em 200 o corpo vai chunked: um
+      // aborto do cliente (seek/cancelamento) não gera mismatch. Sem corpo (HEAD)
+      // preserva o header original.
+      const keepContentLength =
+        upstream.status === 206 &&
+        !!upstream.body &&
+        !upstream.headers.get("content-encoding");
       for (const [key, value] of upstream.headers.entries()) {
-        if (["content-type", "content-length", "content-range", "accept-ranges"].includes(key.toLowerCase())) {
+        const lk = key.toLowerCase();
+        if (lk === "content-length" && !keepContentLength) continue;
+        if (["content-type", "content-length", "content-range", "accept-ranges"].includes(lk)) {
           res.setHeader(key, value);
         }
       }
@@ -537,10 +548,35 @@ const router = Router();
 
       const { Readable } = await import("stream");
       // @ts-ignore
-      Readable.fromWeb(upstream.body).pipe(res);
+      const source = Readable.fromWeb(upstream.body);
+      // pipe() NÃO propaga 'error' da origem para o destino: sem este handler,
+      // um reset da CDN deixaria a resposta aberta e o navegador travado até o
+      // timeout dele.
+      let sourceFailed = false;
+      source.on("error", () => {
+        if (sourceFailed || res.writableEnded) return;
+        sourceFailed = true;
+        controller.abort();
+        // 206 prometeu Content-Length → não dá para finalizar limpo; 200 é
+        // chunked e pode ser encerrado com o terminador normal.
+        if (upstream.status === 206) res.destroy();
+        else res.end();
+      });
+      source.pipe(res);
+
+      res.on("close", () => controller.abort());
+      res.on("error", () => controller.abort());
     } catch (err: any) {
+      if ((err as any)?.name === "AbortError") {
+        if (!res.headersSent) res.end();
+        return;
+      }
       console.error("[MixDrop Proxy Error]:", err);
-      res.status(500).send("Erro no proxy do MixDrop");
+      if (!res.headersSent) {
+        res.status(500).send("Erro no proxy do MixDrop");
+      } else {
+        res.destroy();
+      }
     }
   });
 

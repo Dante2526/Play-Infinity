@@ -7,12 +7,25 @@ interface AvailableEpisodesResponse {
   availableEpisodes: number[];
   totalAvailable: number;
   cached?: boolean;
+  // true => resposta definitiva derivada do catálogo local (confiável p/ ocultar eps fantasmas)
+  // false => resposta baseada em sondagem de rede (não ocultar eps declarados pelo TMDB)
+  verifiedFromCatalog?: boolean;
+}
+
+export interface EpisodeAvailabilityInfo {
+  episodes: number[];
+  verifiedFromCatalog: boolean;
+  requested: number;
+}
+
+function fullRange(count: number): number[] {
+  return Array.from({ length: count }, (_, i) => i + 1);
 }
 
 // Cache em memória no cliente para transições ultra-rápidas
 // TTL curto pra evitar problema de cache stale quando catálogo server-side ganha
 // temporadas novas (ex: T5 do Ghosts adicionado depois do cache populado)
-const clientAvailabilityCache = new Map<string, { timestamp: number; episodes: number[] }>();
+const clientAvailabilityCache = new Map<string, { timestamp: number; episodes: number[]; verifiedFromCatalog: boolean }>();
 const clientSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
 const clientPlayableCache = new Map<number, boolean>();
 const CLIENT_CACHE_TTL = 3 * 60 * 1000; // 3 minutos (reduzido de 15min)
@@ -124,21 +137,31 @@ export async function getAvailableSeasonsForSeries(
 /**
  * Consulta a API do backend para saber quais episódios da temporada
  * realmente possuem streaming ativo nos servidores (eliminando episódios fantasmas).
+ *
+ * Retorna também se a resposta veio de um catálogo local definitivo
+ * (verifiedFromCatalog === true) ou de sondagens de rede não-conclusivas.
+ * Quando não-conclusiva, o front deve manter todos os episódios declarados
+ * pelo TMDB — uma falha de probe não significa que um episódio não existe
+ * (ex: HxH 2011, onde os IDs do Nixplay não seguem a numeração do TMDB).
  */
 export async function getAvailableEpisodes(
   tmdbId: number | string,
   season: number,
   totalSeasonEpisodes: number = 24
-): Promise<number[]> {
+): Promise<EpisodeAvailabilityInfo> {
   const idStr = String(tmdbId).trim();
   if (!idStr) {
-    return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+    return { episodes: fullRange(totalSeasonEpisodes), verifiedFromCatalog: false, requested: totalSeasonEpisodes };
   }
 
   const cacheKey = `${idStr}_${season}`;
   const cached = clientAvailabilityCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
-    return cached.episodes;
+    return {
+      episodes: cached.episodes,
+      verifiedFromCatalog: cached.verifiedFromCatalog,
+      requested: totalSeasonEpisodes,
+    };
   }
 
   try {
@@ -147,22 +170,28 @@ export async function getAvailableEpisodes(
     );
 
     if (!res.ok) {
-      // Fallback gracioso em caso de instabilidade
-      return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+      // Fallback gracioso em caso de instabilidade: não filtra nada
+      return { episodes: fullRange(totalSeasonEpisodes), verifiedFromCatalog: false, requested: totalSeasonEpisodes };
     }
 
     const data: AvailableEpisodesResponse = await res.json();
     if (data && data.success && Array.isArray(data.availableEpisodes) && data.availableEpisodes.length > 0) {
+      const info: EpisodeAvailabilityInfo = {
+        episodes: data.availableEpisodes,
+        verifiedFromCatalog: Boolean(data.verifiedFromCatalog),
+        requested: totalSeasonEpisodes,
+      };
       clientAvailabilityCache.set(cacheKey, {
         timestamp: Date.now(),
-        episodes: data.availableEpisodes,
+        episodes: info.episodes,
+        verifiedFromCatalog: info.verifiedFromCatalog,
       });
-      return data.availableEpisodes;
+      return info;
     }
   } catch (err) {
     console.warn("[episodeAvailability] Falha ao consultar disponibilidade nos servidores:", err);
   }
 
-  // Fallback padrão se não conseguir verificar
-  return Array.from({ length: totalSeasonEpisodes }, (_, i) => i + 1);
+  // Fallback padrão se não conseguir verificar: não filtra nada
+  return { episodes: fullRange(totalSeasonEpisodes), verifiedFromCatalog: false, requested: totalSeasonEpisodes };
 }
