@@ -132,9 +132,43 @@ process.on("uncaughtException", (err) => {
     req.path.startsWith("/api/") ? playerHelmet(req, res, next) : appHelmet(req, res, next)
   );
 
-  // Limite rigoroso de payload para mitigar ataques de exaustão de memória
+  // Upload Route (Deve vir antes do limitador de 10kb)
+  app.use('/api/upload-bug-image', express.json({ limit: '10mb' }));
+  app.post('/api/upload-bug-image', (req, res) => {
+    try {
+      const { imageBase64, filename } = req.body;
+      if (!imageBase64 || !filename) {
+        return res.status(400).json({ error: 'Dados da imagem incompletos.' });
+      }
+
+      // Criar a pasta se não existir
+      const uploadDir = path.join(process.cwd(), 'uploads', 'bug_reports');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      // Converter o base64
+      const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = path.join(uploadDir, safeFilename);
+      
+      fs.writeFileSync(filePath, buffer);
+      
+      res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}` });
+    } catch (err: any) {
+      console.error('[Upload API] Erro:', err);
+      res.status(500).json({ error: 'Erro ao processar imagem no servidor.' });
+    }
+  });
+
+  // Limite rigoroso de payload para as outras rotas para mitigar ataques de exaustão de memória
   app.use(express.json({ limit: '10kb' }));
   app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+
+  // Pasta estática para uploads
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
   // ========================================================
   // PROTEÇÃO CONTRA DDOS (Camada de Aplicação)

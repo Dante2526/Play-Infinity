@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../services/firebase';
 import { getClientId } from '../utils/clientId';
+import { AlertTriangle, X, UploadCloud, Image as ImageIcon, Send } from 'lucide-react';
 
 interface ReportBugModalProps {
   isOpen: boolean;
@@ -52,10 +54,29 @@ export function ReportBugModal({
 
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop() || 'png';
-        storagePath = `bug_reports/${clientId}_${Date.now()}.${fileExt}`;
-        const imageRef = ref(storage, storagePath);
-        await uploadBytes(imageRef, imageFile);
-        imageUrl = await getDownloadURL(imageRef);
+        const filename = `${clientId}_${Date.now()}.${fileExt}`;
+        
+        // Converter file para base64
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(imageFile);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+        });
+
+        const uploadRes = await fetch('/api/upload-bug-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageBase64: base64, filename })
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error('Falha ao enviar a imagem.');
+        }
+        
+        const data = await uploadRes.json();
+        imageUrl = data.url;
+        storagePath = `vps/${filename}`;
       }
 
       const user = auth.currentUser;
@@ -91,109 +112,128 @@ export function ReportBugModal({
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-[#141414] border border-gray-800 rounded-lg max-w-md w-full p-6 relative shadow-2xl">
+  return createPortal(
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div className="bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-w-md w-full p-6 sm:p-8 relative shadow-[0_0_50px_-12px_rgba(239,68,68,0.2)] animate-in zoom-in-95 duration-300">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-orange-500 rounded-t-3xl"></div>
+        
         <button
           onClick={onClose}
           disabled={isSubmitting}
-          className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+          className="absolute top-5 right-5 text-zinc-500 hover:text-white transition-colors disabled:opacity-50 hover:bg-white/10 p-1.5 rounded-full"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <X size={20} />
         </button>
 
-        <h2 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
-          <svg className="w-5 h-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-          </svg>
+        <h2 className="text-xl sm:text-2xl font-black text-white mb-2 flex items-center gap-2.5">
+          <AlertTriangle className="text-red-500 w-6 h-6" />
           Reportar Bug
         </h2>
-        <p className="text-sm text-gray-400 mb-4">
-          Problemas com <strong>{mediaTitle}</strong> {episodeInfo ? `- ${episodeInfo}` : ''}?
+        <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
+          Encontrou algum problema com <strong className="text-white">{mediaTitle}</strong> {episodeInfo ? `- ${episodeInfo}` : ''}? Nos detalhe abaixo.
         </p>
 
         {success ? (
-          <div className="bg-green-500/20 text-green-400 p-4 rounded-md text-center">
-            Relatório enviado com sucesso! Nossa equipe analisará em breve.
+          <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-5 rounded-2xl text-center flex flex-col items-center gap-3">
+            <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-green-500" />
+            </div>
+            <p className="font-medium text-sm">Relatório enviado com sucesso!<br/>Nossa equipe analisará em breve.</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
                 Descrição do Problema *
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Ex: A tela fica preta, o áudio está sem sincronia, erro 404..."
-                className="w-full bg-[#2a2a2a] text-white border border-gray-700 rounded-md p-3 focus:outline-none focus:border-red-500 min-h-[100px]"
+                placeholder="Ex: A tela fica preta, o áudio está sem sincronia..."
+                className="w-full bg-white/5 text-white border border-white/10 rounded-xl p-3.5 focus:outline-none focus:border-red-500 focus:bg-white/10 transition-colors min-h-[110px] text-sm resize-none"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">
+              <label className="block text-xs font-semibold text-zinc-400 mb-1.5 uppercase tracking-wider">
                 Anexar Print (Opcional)
               </label>
-              <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-700 border-dashed rounded-md bg-[#2a2a2a] hover:bg-[#333] transition-colors relative">
-                <div className="space-y-1 text-center">
-                  <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-                    <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  <div className="flex text-sm text-gray-400 justify-center">
-                    <label htmlFor="file-upload" className="relative cursor-pointer bg-transparent rounded-md font-medium text-red-500 hover:text-red-400 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-red-500">
-                      <span>{imageFile ? 'Trocar Imagem' : 'Fazer Upload'}</span>
-                      <input id="file-upload" name="file-upload" type="file" accept="image/*" className="sr-only" onChange={handleFileChange} />
-                    </label>
+              <label 
+                htmlFor="file-upload"
+                className={`mt-1 flex justify-center px-6 py-7 border-2 border-dashed rounded-xl cursor-pointer transition-colors relative group ${
+                  imageFile 
+                    ? 'border-green-500/30 bg-green-500/10 hover:bg-green-500/20' 
+                    : 'border-white/10 bg-white/5 hover:bg-white/10'
+                }`}
+              >
+                <div className="space-y-2 text-center flex flex-col items-center">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+                    imageFile ? 'bg-green-500/20 text-green-400' : 'bg-white/5 text-zinc-400 group-hover:bg-red-500/10 group-hover:text-red-400'
+                  }`}>
+                    {imageFile ? <ImageIcon className="w-5 h-5" /> : <UploadCloud className="w-5 h-5" />}
                   </div>
-                  <p className="text-xs text-gray-500">
-                    PNG, JPG, GIF até 5MB
-                  </p>
+                  <div className="flex text-sm justify-center mt-2">
+                    <span className={`font-medium transition-colors truncate max-w-[200px] sm:max-w-[300px] ${
+                      imageFile ? 'text-green-400' : 'text-red-500 group-hover:text-red-400'
+                    }`}>
+                      {imageFile ? imageFile.name : 'Fazer Upload'}
+                    </span>
+                    <input id="file-upload" name="file-upload" type="file" accept="image/*" className="sr-only" onChange={handleFileChange} />
+                  </div>
+                  {!imageFile ? (
+                    <p className="text-xs text-zinc-500 font-medium">
+                      PNG, JPG, GIF até 5MB
+                    </p>
+                  ) : (
+                    <p className="text-xs text-green-500/70 font-medium mt-1">
+                      Clique para trocar a imagem
+                    </p>
+                  )}
                 </div>
-              </div>
-              {imageFile && (
-                <p className="mt-2 text-sm text-green-400 truncate">
-                  Selecionado: {imageFile.name}
-                </p>
-              )}
+              </label>
             </div>
 
             {error && (
-              <p className="text-sm text-red-500">{error}</p>
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-sm text-red-400">
+                {error}
+              </div>
             )}
 
-            <div className="pt-2 flex justify-end gap-3">
+            <div className="pt-3 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium text-gray-300 hover:text-white transition-colors disabled:opacity-50"
+                className="px-5 py-2.5 text-sm font-semibold text-zinc-400 hover:text-white hover:bg-white/5 rounded-xl transition-all disabled:opacity-50"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 text-sm font-medium bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 transition-colors disabled:opacity-50 flex items-center justify-center"
+                className="px-5 py-2.5 text-sm font-bold bg-red-600 text-white rounded-xl hover:bg-red-500 shadow-[0_0_20px_-5px_rgba(239,68,68,0.5)] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isSubmitting ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                    <svg className="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
                     Enviando...
                   </>
                 ) : (
-                  'Enviar Relatório'
+                  <>
+                    <Send size={16} />
+                    Enviar Relatório
+                  </>
                 )}
               </button>
             </div>
           </form>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

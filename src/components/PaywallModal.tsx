@@ -231,6 +231,46 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     }
   };
 
+  const handleCheckPayment = async () => {
+    if (!auth.currentUser) return;
+    setLoading(true);
+    setError('');
+    
+    try {
+      const docRef = doc(db, "usuarios", auth.currentUser.uid);
+      const docSnap = await getDoc(docRef);
+      
+      let isPaid = false;
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.assinatura === 'premium' || data.isPremium === true || data.assinaturaStatus === 'ACTIVE') {
+          isPaid = true;
+        }
+      }
+      
+      if (!isPaid) {
+        const docRef2 = doc(db, "users", auth.currentUser.uid);
+        const docSnap2 = await getDoc(docRef2);
+        if (docSnap2.exists()) {
+           const data = docSnap2.data();
+           if (data.assinatura === 'premium' || data.isPremium === true || data.assinaturaStatus === 'ACTIVE') {
+             isPaid = true;
+           }
+        }
+      }
+      
+      if (isPaid) {
+        window.location.reload();
+      } else {
+        setError('O pagamento via PIX ainda não foi confirmado.');
+      }
+    } catch (err) {
+      setError('Erro ao verificar pagamento. Tente recarregar a página manualmente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCopyPix = () => {
     if (pixData?.payload) {
       navigator.clipboard.writeText(pixData.payload);
@@ -393,10 +433,15 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                     </button>
 
                     <button 
-                      onClick={() => window.location.reload()}
-                      className="w-full py-3 sm:py-3.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white font-bold text-sm sm:text-base transition-all shadow-md shadow-purple-600/30"
+                      onClick={handleCheckPayment}
+                      disabled={loading}
+                      className="w-full py-3 sm:py-3.5 bg-purple-600 hover:bg-purple-500 rounded-xl text-white font-bold text-sm sm:text-base transition-all shadow-md shadow-purple-600/30 flex items-center justify-center gap-2"
                     >
-                      Já paguei / Atualizar
+                      {loading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        "Já paguei / Atualizar"
+                      )}
                     </button>
                     
                     <p className="text-zinc-400 text-[11px] sm:text-xs mt-3 sm:mt-4 text-center leading-relaxed">
