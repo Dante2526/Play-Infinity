@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../services/firebase';
+import { db, storage, auth } from '../services/firebase';
 import { getClientId } from '../utils/clientId';
 
 interface ReportBugModalProps {
@@ -58,8 +58,12 @@ export function ReportBugModal({
         imageUrl = await getDownloadURL(imageRef);
       }
 
+      const user = auth.currentUser;
+      
       await addDoc(collection(db, 'bug_reports'), {
         clientId,
+        userName: user?.displayName || user?.email?.split('@')[0] || 'Anônimo',
+        userEmail: user?.email || 'N/A',
         mediaId,
         mediaTitle,
         mediaType,

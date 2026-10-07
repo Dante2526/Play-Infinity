@@ -6,6 +6,8 @@ import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink } from 'lucide-r
 interface BugReport {
   id: string;
   clientId: string;
+  userName?: string;
+  userEmail?: string;
   mediaId: string;
   mediaTitle: string;
   mediaType: string;
@@ -102,6 +104,12 @@ export function AdminBugReports() {
                     <p className="text-sm text-gray-400 font-medium mb-3">{report.episodeInfo}</p>
                   )}
                   
+                  <div className="flex flex-col gap-0.5 mb-3 text-xs text-gray-500">
+                    <span><strong>Por:</strong> {report.userName || 'Anônimo'}</span>
+                    {report.userEmail && <span><strong>Email:</strong> {report.userEmail}</span>}
+                    <span><strong>Data:</strong> {report.createdAt ? new Date(report.createdAt.toMillis()).toLocaleString() : 'Recente'}</span>
+                  </div>
+                  
                   <div className="bg-[#222] p-3 rounded-xl mb-4">
                     <p className="text-gray-300 text-sm whitespace-pre-wrap">{report.description}</p>
                   </div>
@@ -164,7 +172,7 @@ export function AdminBugReports() {
       <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl mt-6">
         <h2 className="text-2xl font-black text-white flex items-center gap-3 mb-6">
           <MessageSquare className="w-7 h-7 text-green-500" />
-          Bugs Resolvidos (Aguardando Cliente)
+          Bugs Resolvidos
         </h2>
         {resolved.length === 0 ? (
           <p className="text-gray-400">Nenhum bug resolvido na fila.</p>
@@ -180,7 +188,11 @@ export function AdminBugReports() {
                     Resolvido
                   </span>
                 </div>
-                <p className="text-xs text-gray-400 font-medium mb-3">ID do cliente: {report.clientId.slice(0, 8)}...</p>
+                <div className="flex flex-col gap-0.5 mb-3 text-xs text-gray-500">
+                  <span><strong>Por:</strong> {report.userName || 'Anônimo'}</span>
+                  {report.userEmail && <span><strong>Email:</strong> {report.userEmail}</span>}
+                  <span><strong>ID do cliente:</strong> {report.clientId.slice(0, 8)}...</span>
+                </div>
                 <div className="bg-[#222] p-3 rounded-xl mb-4 border border-green-900/20">
                   <p className="text-green-400 text-sm font-semibold mb-1">Resposta:</p>
                   <p className="text-gray-300 text-sm">{report.adminResponse}</p>
