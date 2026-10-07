@@ -265,4 +265,11 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
  -   I d e n t i f i e d   t h a t   W a t c h P l a y e r   a n d   V I P   P l a y e r   e x p e c t   r e l a t i v e ,   1 - b a s e d   i n d i c e s   f o r   e p i s o d e s   ( S 3 E 4 ) .  
  -   C r e a t e d   b a c k e n d   p r o x y   r o u t e s   \ / a p i / w a t c h p l a y - p r o x y - i f r a m e \   a n d   \ / a p i / v i p - p r o x y - i f r a m e \   i n   \ s e r v e r / r o u t e s / v i d e o S c r a p e r s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e d i r e c t i n g .  
  -   P a t c h e d   \ V i d e o P l a y e r M o d a l . t s x \   t o   r o u t e   \ s r v _ w a t c h p l a y \   a n d   \ s r v _ v i p \   t h r o u g h   t h e   n e w   p r o x y   e n d p o i n t s .  
+ -   P a t c h e d   \  i d s r c R o u t e s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e q u e s t i n g   t h e   s t r e a m   f r o m   v i d s r c .  
  
+## Correção de Hunter x Hunter no VIP Player / WatchPlayer (07/10/2026)
+- Descobrimos que o site animexhd.xyz roda o VIP Player mas enviava a Temporada 1.
+- O PlayerFlix (fonte do VIP Player) aloca **todos** os episódios de animes contínuos na Temporada 1.
+- A correção anterior tentou usar a API do TMDB para converter o número absoluto para um índice relativo, mas o provedor não usa esse índice. Ele exige Temporada 1 e o número do episódio absoluto.
+- Patcheamos as rotas watchplay-proxy-iframe, ip-proxy-iframe e myembed-stream em server/routes/videoScrapers.ts para forçar season = 1 caso o episódio passado seja > 50.
+- Testado localmente, a extração passa a achar o iframe do embedplayer2.xyz e o HLS master.m3u8 com sucesso.

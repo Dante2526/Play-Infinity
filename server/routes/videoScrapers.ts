@@ -3210,8 +3210,13 @@ const router = Router();
       const idMatch = rawId.match(/(?:filme|movie|serie|series|tvshow|tv)\/([a-zA-Z0-9_-]+)/i) || rawId.match(/(tt\d+|\d+)/);
       const id = idMatch ? idMatch[1] : rawId;
       const type = (req.query.type as string) || (rawId.includes("serie") ? "tv" : "movie");
-      const season = req.query.s ? String(req.query.s) : "1";
-      const episode = req.query.e ? String(req.query.e) : "1";
+      let season = req.query.s ? String(req.query.s) : "1";
+      let episode = req.query.e ? String(req.query.e) : "1";
+      
+      // Provedores geralmente jogam episódios de animes contínuos na Temporada 1
+      if (parseInt(episode) > 50) {
+        season = "1";
+      }
 
       // Para séries e filmes, se o id for IMDb (tt...), converte para TMDB numérico para compatibilidade total com o Ajax
       let resolvedId = id;
@@ -4361,16 +4366,9 @@ router.get("/api/watchplay-proxy-iframe", async (req, res) => {
   let season = parseInt(s as string) || 1;
   let episode = parseInt(e as string) || 1;
   
+  // Se o episódio for absoluto (> 50), provedores sempre o jogam na Temporada 1
   if (episode > 50) {
-    try {
-      const fetch = require("node-fetch");
-      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
-      const tmdbData = await tmdbRes.json();
-      if (tmdbData.episodes) {
-        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === episode);
-        if (idx >= 0) episode = idx + 1;
-      }
-    } catch(err) { console.error("[WP Proxy] Erro no TMDB:", err); }
+    season = 1;
   }
   
   res.redirect(`https://v1.watchplay.shop/tvshow/${id}/${season}/${episode}?cb=${Date.now()}`);
@@ -4381,16 +4379,9 @@ router.get("/api/vip-proxy-iframe", async (req, res) => {
   let season = parseInt(s as string) || 1;
   let episode = parseInt(e as string) || 1;
   
+  // Se o episódio for absoluto (> 50), provedores sempre o jogam na Temporada 1
   if (episode > 50) {
-    try {
-      const fetch = require("node-fetch");
-      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
-      const tmdbData = await tmdbRes.json();
-      if (tmdbData.episodes) {
-        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === episode);
-        if (idx >= 0) episode = idx + 1;
-      }
-    } catch(err) {}
+    season = 1;
   }
   
   const seriesIdParam = nixId ? `&series_id=${encodeURIComponent(nixId as string)}` : "";

@@ -229,7 +229,19 @@ router.get("/api/vidsrc-stream", async (req, res) => {
     res.setHeader(CORS["Access-Control-Allow-Origin"] as string, "*");
     const tmdb = (req.query.tmdb as string) || "126027";
     const season = (req.query.season as string) || "1";
-    const episode = (req.query.episode as string) || "1";
+    let episode = (req.query.episode as string) || "1";
+
+  if (parseInt(episode) > 50) {
+    try {
+      const fetch = require("node-fetch");
+      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbData = await tmdbRes.json();
+      if (tmdbData.episodes) {
+        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === parseInt(episode));
+        if (idx >= 0) episode = String(idx + 1);
+      }
+    } catch(err) {}
+  }
 
     console.log(`[vidsrc-stream] tmdb=${tmdb} s${season}e${episode}`);
     const m3u8 = await getRewrittenM3u8(tmdb, season, episode);
@@ -328,7 +340,19 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
 router.get("/api/vidsrc-player", async (req, res) => {
   const tmdb = (req.query.tmdb as string) || "126027";
   const season = (req.query.season as string) || "1";
-  const episode = (req.query.episode as string) || "1";
+  let episode = (req.query.episode as string) || "1";
+
+  if (parseInt(episode) > 50) {
+    try {
+      const fetch = require("node-fetch");
+      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbData = await tmdbRes.json();
+      if (tmdbData.episodes) {
+        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === parseInt(episode));
+        if (idx >= 0) episode = String(idx + 1);
+      }
+    } catch(err) {}
+  }
 
   const streamUrl = `/api/vidsrc-stream?tmdb=${tmdb}&season=${season}&episode=${episode}`;
 
