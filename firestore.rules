@@ -64,13 +64,11 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      // Create: Anyone can create if they provide their clientId and status is pending
+      // Create: Anyone pode criar se enviar clientId e status=pending
       allow create: if request.resource.data.keys().hasAll(["clientId", "status"]) && request.resource.data.status == "pending";
       
-      // Read, Update, Delete: Admin can do anything. Client can only read/delete their own reports.
+      // Read, Update, Delete: Admin tem acesso total. O cliente possui restrições para ler apenas os seus.
       allow read, update, delete: if isAdmin() || resource.data.clientId == request.auth.uid || (resource.data.clientId != null && request.query.limit <= 20); 
-      // Note: Because clientId is passed from localStorage, we can't secure reads purely by auth.uid if unauthenticated, 
-      // but we allow limited reading so the client can query their own clientId.
     }
 
     match /{document=**} {
