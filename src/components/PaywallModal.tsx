@@ -279,7 +279,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
             initial={{ opacity: 0, scale: 0.95, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 15 }}
-            className="relative w-full max-w-lg my-auto rounded-2xl sm:rounded-3xl bg-zinc-900 border border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.15)] max-h-[92vh] flex flex-col overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full"
+            className="relative w-full max-w-lg my-auto rounded-2xl sm:rounded-3xl bg-zinc-900 border border-purple-500/30 shadow-[0_0_50px_rgba(168,85,247,0.15)] max-h-[92vh] flex flex-col overflow-y-auto overflow-x-hidden scrollbar-hide"
           >
             {/* Background Glows */}
             <div className="absolute -top-32 -left-32 w-64 h-64 bg-purple-600/30 rounded-full blur-[80px] pointer-events-none" />
