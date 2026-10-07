@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink } from 'lucide-react';
+import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink, ChevronDown } from 'lucide-react';
 
 interface BugReport {
   id: string;
@@ -23,7 +23,7 @@ const PREDEFINED_RESPONSES = [
   "Recebido e resolvido. Pode testar.",
   "Recebido, mas não conseguimos reproduzir o erro.",
   "Estamos analisando, correção na próxima atualização.",
-  "Problema temporário do servidor parceiro, tente outro."
+  "Problema temporário no servidor"
 ];
 
 export function AdminBugReports() {
@@ -32,6 +32,7 @@ export function AdminBugReports() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<Record<string, string>>({});
   const [customResponse, setCustomResponse] = useState<Record<string, string>>({});
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'bug_reports'), orderBy('createdAt', 'desc'));
@@ -48,6 +49,13 @@ export function AdminBugReports() {
     });
 
     return () => unsubscribe();
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdownId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
   const handleResolve = async (reportId: string) => {
@@ -130,16 +138,51 @@ export function AdminBugReports() {
                   <label className="block text-sm font-medium text-gray-400 mb-2">
                     Resposta para o cliente:
                   </label>
-                  <select 
-                    className="w-full bg-[#2a2a2a] text-white border border-gray-700 rounded-lg p-2.5 text-sm mb-3 focus:outline-none focus:border-red-500"
-                    value={selectedResponse[report.id] || PREDEFINED_RESPONSES[0]}
-                    onChange={(e) => setSelectedResponse({...selectedResponse, [report.id]: e.target.value})}
-                  >
-                    {PREDEFINED_RESPONSES.map((resp, i) => (
-                      <option key={i} value={resp}>{resp}</option>
-                    ))}
-                    <option value="custom">-- Mensagem Personalizada --</option>
-                  </select>
+                  <div className="relative mb-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenDropdownId(openDropdownId === report.id ? null : report.id);
+                      }}
+                      className="w-full bg-[#2a2a2a] text-white border border-gray-700 hover:border-red-500 rounded-lg p-2.5 text-sm flex justify-between items-center transition-colors focus:outline-none focus:ring-1 focus:ring-red-500"
+                    >
+                      <span className="truncate pr-2">
+                        {selectedResponse[report.id] === 'custom' 
+                          ? '-- Mensagem Personalizada --' 
+                          : (selectedResponse[report.id] || PREDEFINED_RESPONSES[0])}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${openDropdownId === report.id ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {openDropdownId === report.id && (
+                      <div className="absolute top-full left-0 w-full mt-1 bg-[#2a2a2a] border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                        {PREDEFINED_RESPONSES.map((resp, i) => (
+                          <div 
+                            key={i} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedResponse({...selectedResponse, [report.id]: resp});
+                              setOpenDropdownId(null);
+                            }}
+                            className="p-2.5 text-sm text-gray-300 hover:text-white hover:bg-red-600/20 cursor-pointer border-b border-gray-800 last:border-0 transition-colors truncate"
+                          >
+                            {resp}
+                          </div>
+                        ))}
+                        <div 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedResponse({...selectedResponse, [report.id]: 'custom'});
+                            setOpenDropdownId(null);
+                          }}
+                          className="p-2.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-600/20 cursor-pointer transition-colors truncate"
+                        >
+                          -- Mensagem Personalizada --
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
                   {selectedResponse[report.id] === 'custom' && (
                     <input 
