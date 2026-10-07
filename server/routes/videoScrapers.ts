@@ -12,6 +12,7 @@ import { Readable } from "stream";
 import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
 import { checkVipSeason, checkVizerSeason, getEncontreiSeasonEpisodes } from "./encontreiLookup";
+import { loadNixplayCatalog, resolveNixplaySeriesId } from "../services/nixplayCatalog";
 
 const router = Router();
 
@@ -3279,6 +3280,27 @@ const router = Router();
 
             if (validOptions.length > 0) {
               ajaxHadValidSources = true;
+            } else if ((type === "tv" || type === "series") && !req.query.__nixretry) {
+              // O Ajax com o tmdb_id só devolveu fontes da lista negra (ou lista vazia).
+              // Tenta de novo com o series_id do Nixplay: para algumas séries ele é o
+              // ID correto pro Ajax (ex: HxH onde series_id 46298 != tmdb 45952).
+              // O frontend já nos envia `series_id` (resolvido no nixplay-check);
+              // sem ele, o backend tenta resolver pelo nome (bounded ~1.2s p/ não travar o VIP).
+              const providedSeriesId = req.query.series_id ? String(req.query.series_id) : null;
+              let nixRetryId = providedSeriesId;
+              if (!nixRetryId && req.query.name) {
+                const loadPromise = loadNixplayCatalog().catch(() => {});
+                await Promise.race([loadPromise, new Promise((r) => setTimeout(r, 1200))]);
+                nixRetryId = resolveNixplaySeriesId(resolvedId, String(req.query.name));
+              }
+              if (nixRetryId && String(nixRetryId) !== resolvedId && String(nixRetryId) !== id) {
+                console.warn(`[MyEmbed Stream] Ajax ${resolvedId} só retornou fontes blacklisted. Retentando com series_id do Nixplay: ${nixRetryId}`);
+                const retryUrl =
+                  `/api/myembed-stream?id=${encodeURIComponent(String(nixRetryId))}` +
+                  `&type=${encodeURIComponent(type)}` +
+                  `&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}&__nixretry=1`;
+                return res.redirect(307, retryUrl);
+              }
             }
 
             for (const vipOption of validOptions) {

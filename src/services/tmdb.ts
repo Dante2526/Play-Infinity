@@ -1,6 +1,8 @@
 // A chave de API do TMDB foi movida para o servidor para segurança (evitar vazamento no DevTools).
 // As requisições agora passam pelo proxy /api/tmdb definido em server.ts.
 
+import { titleSimilarity } from "../utils/mediaUtils";
+
 const BASE_URL = '/api/tmdb';
 
 const options = {
@@ -68,6 +70,8 @@ export interface TMDBDetails {
   seasons?: Season[];
   number_of_seasons?: number;
   imdb_id?: string;
+  origin_country?: string[];
+  original_language?: string;
 }
 
 // Map Genres
@@ -231,6 +235,101 @@ export const searchMulti = async (query: string): Promise<TMDBResponse> => {
   return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/search/multi?query=${encodeURIComponent(query.trim())}&language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
 
+// ==== Auto-correção de identidade do card ====
+// Cards podem chegar com id/tipo equivocados no catálogo (ex.: título de Harry
+// Potter e a Câmara Secreta colado num id de filme 1101412 → marcado como série,
+// sem nunca existir em /tv). Quando a consulta no tipo pedido responde 404 de
+// forma DEFINITIVA (não é timeout), resolve o verdadeiro id/tipo buscando o
+// título no TMDB e reusando a semântica de similaridade do repo (>= 0.5).
+// Nunca age sobre timeout/erro de rede (conteúdo pode estar só lento).
+
+export interface CardIdentity {
+  /** id TMDB final a usar (o correto, quando `corrected`). */
+  id: number;
+  /** tipo final a usar. */
+  type: 'movie' | 'tv';
+  /** true quando item era do tipo que não existe + título achou a obra certa. */
+  corrected: boolean;
+  /** detalhes do tipo final (DEFAULT_DETAILS se inútil). */
+  details: TMDBDetails;
+  /** true quando `details` traz informação utilizável (id != 0 ou temporadas). */
+  detailsOk: boolean;
+}
+
+const _identityCache = new Map<string, CardIdentity & { ts: number }>();
+const IDENTITY_CACHE_TTL = 30 * 60 * 1000;
+
+export const resolveCardIdentity = async (opts: { id: number; type: 'movie' | 'tv'; title?: string }): Promise<CardIdentity> => {
+  const sig = `${opts.type}:${opts.id}:${(opts.title || "").trim().toLowerCase()}`;
+  const cached = _identityCache.get(sig);
+  if (cached && Date.now() - cached.ts < IDENTITY_CACHE_TTL) {
+    return { id: cached.id, type: cached.type, corrected: cached.corrected, details: cached.details, detailsOk: cached.detailsOk };
+  }
+
+  const empty: CardIdentity = { id: opts.id, type: opts.type, corrected: false, details: DEFAULT_DETAILS, detailsOk: false };
+
+  const original = await lookupDetails(opts.id, opts.type);
+  const usable = (details: TMDBDetails | null) =>
+    !!details && details.id !== 0 && !('status_code' in details);
+  const usableWithSeasons = (details: TMDBDetails | null) =>
+    usable(details) || (!!details && Array.isArray(details.seasons) && details.seasons.length > 0);
+
+  // 1. O id existe no tipo pedido → sem correção.
+  if (usableWithSeasons(original.details)) {
+    const out: CardIdentity = { id: opts.id, type: opts.type, corrected: false, details: original.details, detailsOk: usableWithSeasons(original.details) };
+    _identityCache.set(sig, { ...out, ts: Date.now() });
+    return out;
+  }
+
+  // 2. O tipo pedido deu 404 mas o id existe no OUTRO tipo com o título batendo
+  //    (ex.: filme catalogado como série) → adota o tipo real, mesmo id.
+  if (original.status === 404 && original.crossType && usable(original.crossDetails) && opts.title) {
+    const candidateTitle = original.crossDetails!.title || original.crossDetails!.name || "";
+    if (titleSimilarity(opts.title, candidateTitle) >= 0.5) {
+      const out: CardIdentity = { id: opts.id, type: original.crossType, corrected: true, details: original.crossDetails || DEFAULT_DETAILS, detailsOk: true };
+      _identityCache.set(sig, { ...out, ts: Date.now() });
+      return out;
+    }
+  }
+
+  // 3. 404 definitivo sem cross utilizável → procura pelo título.
+  //    Prefere o tipo original do card; se não houver match forte, aceita o outro.
+  if (original.status === 404 && opts.title && opts.title.trim()) {
+    const resp = await searchMulti(opts.title);
+    const prefsByType: Record<'movie' | 'tv', ('movie' | 'tv')[]> = {
+      movie: ["movie", "tv"],
+      tv: ["tv", "movie"],
+    };
+    const prefs = prefsByType[opts.type] || ["movie", "tv"];
+    const candidates = (resp.results || [])
+      .filter((r: any) => r && (r.media_type === "movie" || r.media_type === "tv" || !!(r.name && !r.title) || !!(r.title && !r.name)))
+      .map((r: any) => {
+        const media_type = r.media_type === "movie" || r.media_type === "tv" ? r.media_type : (r.name && !r.title ? "tv" : r.title && !r.name ? "movie" : null);
+        return { r, media_type, s: titleSimilarity(opts.title, r.title || r.name || "") };
+      })
+      .filter((c: any) => c.media_type && c.s >= 0.5 && Number(c.r.id) !== opts.id)
+      .sort((a: any, b: any) => b.s - a.s);
+
+    const best = candidates.find((c: any) => prefs[0] === c.media_type) || candidates.find((c: any) => prefs[1] === c.media_type);
+    if (best) {
+      const adopted = await lookupDetails(Number(best.r.id), best.media_type as 'movie' | 'tv');
+      const out: CardIdentity = {
+        id: Number(best.r.id),
+        type: best.media_type as 'movie' | 'tv',
+        corrected: true,
+        details: usableWithSeasons(adopted.details) ? adopted.details : DEFAULT_DETAILS,
+        detailsOk: usableWithSeasons(adopted.details),
+      };
+      _identityCache.set(sig, { ...out, ts: Date.now() });
+      return out;
+    }
+  }
+
+  // 4. Nada utilizável (timeout/rede ou busca sem resultado forte) → mantém identidade.
+  _identityCache.set(sig, { ...empty, ts: Date.now() });
+  return empty;
+};
+
 import { UNAVAILABLE_SEASONS } from "../data";;;
 
 export interface DetailsLookup {
@@ -244,7 +343,60 @@ export interface DetailsLookup {
   crossDetails: TMDBDetails | null;
 }
 
+// Memo de FALHAS definitivas (status HTTP != 2xx) por `${type}:${id}`.
+// Um card mal catalogado (ex.: id de filme marcado como série) reabre a página e
+// refaz o mesmo 404 toda vez — esse memo elimina o refetch e o spam de logs
+// dentro da sessão (memória) e entre reloads (sessionStorage, leve — só o resumo).
+type LookupFailMemo = {
+  status: number;
+  crossType: 'movie' | 'tv' | null;
+  cross: { id: number; title?: string; name?: string } | null;
+};
+const FAIL_MEMO_KEY = "play-infinity:tmdb-lookup-failures";
+const _failMemo = new Map<string, LookupFailMemo>();
+(function readFailMemo() {
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      const raw = sessionStorage.getItem(FAIL_MEMO_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          for (const k of Object.keys(parsed)) {
+            _failMemo.set(k, parsed[k]);
+          }
+        }
+      }
+    }
+  } catch {
+    // Sem storage (privacidade/nativo) — memo apenas em memória, degrada ok.
+  }
+})();
+function persistFailMemo() {
+  try {
+    if (typeof sessionStorage !== "undefined") {
+      sessionStorage.setItem(FAIL_MEMO_KEY, JSON.stringify(Object.fromEntries(_failMemo)));
+    }
+  } catch {
+    // Quota cheia — falha silenciosa
+  }
+}
+
 export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<DetailsLookup> => {
+  const memoKey = `${type}:${id}`;
+  const memo = _failMemo.get(memoKey);
+
+  if (memo) {
+    // Falha já conhecida nesta sessão: devolve o resumo sem refetchar o 404.
+    return {
+      details: DEFAULT_DETAILS,
+      status: memo.status,
+      crossType: memo.crossType,
+      crossDetails: memo.cross
+        ? { id: memo.cross.id, title: memo.cross.title, name: memo.cross.name, overview: "", poster_path: "", backdrop_path: "", vote_average: 0, genres: [] }
+        : null,
+    };
+  }
+
   const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`);
 
   let crossType: 'movie' | 'tv' | null = null;
@@ -261,6 +413,16 @@ export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<D
       crossType = other;
       crossDetails = alt.data;
     }
+  }
+
+  if (!outcome.ok) {
+    // Armazena a falha definitiva (404) para não repetir o refetch na sessão.
+    _failMemo.set(memoKey, {
+      status: outcome.status,
+      crossType,
+      cross: crossDetails ? { id: crossDetails.id, title: crossDetails.title, name: crossDetails.name } : null,
+    });
+    persistFailMemo();
   }
 
   let result: TMDBDetails = outcome.ok && outcome.data ? outcome.data : DEFAULT_DETAILS;

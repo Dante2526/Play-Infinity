@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
-import { checkIsCam, titlesLookLikeSame } from "../utils/mediaUtils";
+import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
 import { 
   isEpisodeWatched, 
@@ -20,7 +20,7 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
-import { getSeasonDetails, lookupDetails, searchMulti, TMDBDetails, Season } from "../services/tmdb";
+import { getSeasonDetails, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
@@ -203,6 +203,19 @@ export function VideoPlayerModal({
   // Series Season & Episode State
   const [season, setSeason] = useState<number>(initialSeason);
   const [episode, setEpisode] = useState<number>(initialEpisode);
+
+  // === Auto-correção de identidade (filme marcado como série) ===
+  // Precisam ser declarados AQUI, antes dos memos de MixDrop: esses memos já
+  // precisam saber se o conteúdo foi resolvido como filme (e o id correto) para
+  // montar a chave (movie:{id}) certa do lookup HD.
+  const [resolvedAsMovie, setResolvedAsMovie] = useState(false);
+  const [correctedMovieId, setCorrectedMovieId] = useState<number | null>(null);
+
+  const effectiveMovieId = useMemo(
+    () => (resolvedAsMovie && correctedMovieId ? correctedMovieId : tmdbId || null),
+    [resolvedAsMovie, correctedMovieId, tmdbId]
+  );
+
   // === MixDrop: fileId por episódio ===
   // Mapa (tv:{tmdbId}:{season}:{episode} | movie:{tmdbId}) → fileId.
   // Evita reutilizar o fileId do episódio ANTERIOR na troca de EPs —
@@ -216,36 +229,42 @@ export function VideoPlayerModal({
   const [mixdropEncontreiFileIds, setMixdropEncontreiFileIds] = useState<Record<string, string | null>>({});
   const mixdropLookupInflightRef = useRef<Set<string>>(new Set());
   const mixdropFileId = useMemo(() => {
-    if (!tmdbId) return null;
-    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!lookupId) return null;
+    const key = mediaType === "series" && !resolvedAsMovie ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
     return key in mixdropFileIds ? mixdropFileIds[key] : null;
-  }, [mixdropFileIds, tmdbId, mediaType, season, episode]);
+  }, [mixdropFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
 
   const mixdropVizerFileId = useMemo(() => {
-    if (!tmdbId) return null;
-    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!lookupId) return null;
+    const key = mediaType === "series" && !resolvedAsMovie ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
     return key in mixdropVizerFileIds ? mixdropVizerFileIds[key] : null;
-  }, [mixdropVizerFileIds, tmdbId, mediaType, season, episode]);
+  }, [mixdropVizerFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
 
   const mixdropEncontreiFileId = useMemo(() => {
-    if (!tmdbId) return null;
-    const key = mediaType === "series" ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!lookupId) return null;
+    const key = mediaType === "series" && !resolvedAsMovie ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
     return key in mixdropEncontreiFileIds ? mixdropEncontreiFileIds[key] : null;
-  }, [mixdropEncontreiFileIds, tmdbId, mediaType, season, episode]);
+  }, [mixdropEncontreiFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
 
   // Resolve (e cacheia no mapa) o fileId do MixDrop de um episódio específico.
+  // Quando o card chegou marcado como série mas é um filme (resolvedAsMovie),
+  // consulta o catálogo como filme usando o id correto (effectiveMovieId).
   const lookupMixdropFileId = useCallback(
     async (s: number, e: number): Promise<string | null> => {
-      if (!tmdbId) return null;
-      const seriesMode = mediaType === "series";
-      const key = seriesMode ? `tv:${tmdbId}:${s}:${e}` : `movie:${tmdbId}`;
+      const lookupId = effectiveMovieId || tmdbId;
+      if (!lookupId) return null;
+      const lookupMode = mediaType === "series" && !resolvedAsMovie ? "tv" : "movie";
+      const key = lookupMode === "tv" ? `tv:${lookupId}:${s}:${e}` : `movie:${lookupId}`;
       if (key in mixdropFileIdsRef.current) return mixdropFileIdsRef.current[key];
       if (mixdropLookupInflightRef.current.has(key)) return null;
       mixdropLookupInflightRef.current.add(key);
       try {
-        const res = seriesMode
-          ? await findEpisode(tmdbId, s, e)
-          : await findMovieByTmdbId(tmdbId);
+        const res = lookupMode === "tv"
+          ? await findEpisode(lookupId, s, e)
+          : await findMovieByTmdbId(lookupId);
         const result = res?.mixdrop ?? null;
         const vizerResult = res?.mixdrop_vizer ?? null;
         const encontreiResult = res?.mixdrop_encontrei ?? null;
@@ -259,16 +278,17 @@ export function VideoPlayerModal({
         mixdropLookupInflightRef.current.delete(key);
       }
     },
-    [tmdbId, mediaType]
+    [tmdbId, mediaType, effectiveMovieId, resolvedAsMovie]
   );
 
   // Busca o fileId do MixDrop do episódio atual no catálogo encontrei.me (HD, sem marca d'água)
   useEffect(() => {
-    if (!isOpen || !tmdbId) return;
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!isOpen || !lookupId) return;
     let cancelled = false;
 
-    const seriesMode = mediaType === "series";
-    const key = seriesMode ? `tv:${tmdbId}:${season}:${episode}` : `movie:${tmdbId}`;
+    const lookupMode = mediaType === "series" && !resolvedAsMovie ? "tv" : "movie";
+    const key = lookupMode === "tv" ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
 
     // Se o fileId deste episódio já foi resolvido, nada a fazer (evita refetch/spam)
     if (key in mixdropFileIdsRef.current) return;
@@ -278,8 +298,8 @@ export function VideoPlayerModal({
       if (cancelled) return;
       console.log(
         result
-          ? `[MixDrop] fileId HD: ${result} ${seriesMode ? `(S${season}E${episode})` : ''}`.trim()
-          : `[MixDrop] Sem fileId ${seriesMode ? `(S${season}E${episode})` : ''}`.trim()
+          ? `[MixDrop] fileId HD: ${result} ${lookupMode === "tv" ? `(S${season}E${episode})` : ''}`.trim()
+          : `[MixDrop] Sem fileId ${lookupMode === "tv" ? `(S${season}E${episode})` : ''}`.trim()
       );
     };
 
@@ -287,7 +307,7 @@ export function VideoPlayerModal({
     // CLEANUP: React chama quando deps mudam → cancela este lookup
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, tmdbId, mediaType, season, episode, lookupMixdropFileId]);
+  }, [isOpen, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie, lookupMixdropFileId]);
 
   // Info de disponibilidade de episódios (verifiedFromCatalog === true => resposta
   // definitiva do catálogo local; false => sondagem de rede, não ocultar eps do TMDB)
@@ -534,13 +554,10 @@ export function VideoPlayerModal({
     };
   }, [isOpen]);
 
-  // Detectado: o item chegou marcado como série, mas o id pertence a um filme
-  // (ex.: /tv/<id> → 404 e /movie/<id> existe com o mesmo título). Enquanto true,
-  // a modal ignora toda a máquina de temporadas/episódios.
-  const [resolvedAsMovie, setResolvedAsMovie] = useState(false);
-
+  // Reseta a correção quando o modal abre com outro conteúdo
   useEffect(() => {
     setResolvedAsMovie(false);
+    setCorrectedMovieId(null);
   }, [isOpen, tmdbId, mediaType, urlInput]);
 
   // Determine if content is a series
@@ -585,7 +602,7 @@ export function VideoPlayerModal({
     if (!tmdbId) return;
     const type = isSeries ? "tv" : "movie";
     const params = new URLSearchParams({
-      tmdb: String(tmdbId),
+      tmdb: String(effectiveMovieId || tmdbId),
       type,
       lang: "pt-BR",
       ...(isSeries ? { season: String(currentSeason), episode: String(currentEpisode) } : {})
@@ -599,7 +616,7 @@ export function VideoPlayerModal({
     } catch {
       setSubtitleUrl(null);
     }
-  }, [tmdbId, isSeries]);
+  }, [tmdbId, isSeries, effectiveMovieId]);
 
   // Busca legenda PT-BR do backend sempre que o modal abre ou o episódio muda
   useEffect(() => {
@@ -611,7 +628,9 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    const numId = tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+    const numId = resolvedAsMovie && effectiveMovieId
+      ? effectiveMovieId
+      : (tmdbId ? Number(tmdbId) : (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null));
     if (!numId) return;
 
     // Check Nixplay availability
@@ -633,7 +652,7 @@ export function VideoPlayerModal({
         }
       })
       .catch(() => setNixplayAvailable(false));
-  }, [isOpen, isSeries, tmdbId, resolvedId, title]);
+  }, [isOpen, isSeries, tmdbId, resolvedId, title, effectiveMovieId, resolvedAsMovie]);
 
   // Busca blocks dinâmicos (admin panel) pra esse tmdbId
   // Atualiza em até 2min (cache client-side) — admin faz mudança no painel,
@@ -703,25 +722,24 @@ export function VideoPlayerModal({
         }
 
         if (targetId) {
-          const lookup = await lookupDetails(targetId, 'tv');
+          // Resolve a identidade real do card: o id pode existir direto como tv,
+          // existir só como filme (item marcado como série com id de filme), ou
+          // nem existir (id de outro filme colado num título — ex.: Harry Potter
+          // marcado como série com id 1101412) → a busca por título acha o certo.
+          const identityTitle = title ? title.split(/ - (?:T\d|Temporada|E\d+)/i)[0].trim() : undefined;
+          const identity = await resolveCardIdentity({ id: Number(targetId), type: 'tv', title: identityTitle });
           if (!isMounted) return;
 
-          const realTv = !!lookup.details && lookup.details.id !== 0;
-          const hasSeasons = Array.isArray(lookup.details?.seasons) && lookup.details.seasons.length > 0;
-          const hasMovieIdentity = lookup.crossType === 'movie' && !!lookup.crossDetails;
-
-          // Item catalogado como série, mas o id só existe como filme: desliga a
-          // máquina de temporadas (evita /tv/<id>/season → 404 e abas vazias).
-          // Só conclui quando o título do catálogo bate com o do filme do TMDB.
-          if (!realTv && !hasSeasons && hasMovieIdentity) {
-            const candidateTitle = lookup.crossDetails!.title || lookup.crossDetails!.name || "";
-            if (titlesLookLikeSame(title || "", candidateTitle)) {
-              setResolvedAsMovie(true);
-              setSeriesDetails(null);
-              return;
-            }
+          // Filme adotado → desliga a máquina de temporadas e guarda o id correto
+          // para os resolvers de filme (watchplay/nixplay/mixdrop).
+          if (identity.corrected && identity.type === 'movie') {
+            setResolvedAsMovie(true);
+            setSeriesDetails(null);
+            if (identity.id !== Number(targetId)) setCorrectedMovieId(identity.id);
+            return;
           }
-          setSeriesDetails(lookup.details);
+
+          setSeriesDetails(identity.type === 'tv' && identity.detailsOk ? identity.details : null);
         }
       } catch (err) {
         console.warn("[VideoPlayerModal] Não foi possível carregar detalhes da série:", err);
@@ -994,8 +1012,14 @@ export function VideoPlayerModal({
           key: "srv_vip",
           label: "VIP Player",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
-          buildUrl: (id: string, s?: number, e?: number) => 
-            `/api/myembed-stream?id=${id}&type=tv&s=${s || 1}&e=${e || 1}&cb=${Date.now()}`,
+          buildUrl: (id: string, s?: number, e?: number) => {
+            // Passa o series_id do Nixplay pro backend: quando o Ajax com tmdb_id só
+            // devolve fontes blacklisted, ele retenta com esse series_id (ou resolve
+            // pelo nome via resolveNixplaySeriesId). Evita VIP_UNAVAILABLE indevido.
+            const nixId = nixplaySeriesId ? encodeURIComponent(String(nixplaySeriesId)) : "";
+            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            return `/api/myembed-stream?id=${id}&type=tv&s=${s || 1}&e=${e || 1}${nixId ? `&series_id=${nixId}` : ""}${nameParam}&cb=${Date.now()}`;
+          },
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"
         },
@@ -1042,7 +1066,7 @@ export function VideoPlayerModal({
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
-          buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || id}?cb=${Date.now()}`,
+          buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || effectiveMovieId || id}?cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer"
         },
@@ -1051,7 +1075,7 @@ export function VideoPlayerModal({
           label: "VIP Player",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string) => 
-            `/api/myembed-stream?id=${imdbId || id}&type=movie&cb=${Date.now()}`,
+            `/api/myembed-stream?id=${imdbId || effectiveMovieId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"
         },
@@ -1060,7 +1084,7 @@ export function VideoPlayerModal({
           label: "Nixplay",
           badge: "Nixplay Premium • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: (id: string) => {
-            let tmdb = tmdbId || id;
+            let tmdb = effectiveMovieId || tmdbId || id;
             if (String(tmdb).startsWith('tt')) {
               tmdb = !String(id).startsWith('tt') ? id : tmdb;
             }
@@ -1100,7 +1124,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
