@@ -1,4 +1,63 @@
-﻿## 06/10/2026 - Erros de console ao assistir via MixDrop (proxy, TMDB 404, permissão Firebase)
+﻿## 06/10/2026 - HxH 2011: "eps 70+ não reproduzem" — worker do CONTEÚDO do HxH fora no Nixplay
+
+**Problema relatado:** após o fix das abas, o usuário reporta que "os eps do nixplay não reproduz a partir do ~70".
+
+**Correção da primeira hipótese (era "Nixplay fora do ar geral" — NÃO é):** o usuário estava assistindo Harry Potter pelo Nixplay no mesmo momento. Probe comparativa (`scratch/nixplay-movie-vs-series.mjs`) no `player_api.php` do Nixplay:
+- `movie/HP` (671/672) → **302** para `cdn99xn----booster.anipixel.best/v/m/...` ✅
+- `series/Loki` (84958) e `series/Breaking%20Bad` (1396) → **302** ✅
+- `series/HxH` (46298, inclusive ep 1) → **503 "Worker de reproducao indisponivel."** ❌
+
+Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` tem 11.433 séries; teste de varredura dos 11 hits "hunter" + amostra de animes mostra o mesmo 503 em vários títulos (Sword of the Demon Hunter, Fire Hunter, Gringo Hunters, Mindhunter, Witch Hunter Robin, Bakuretsu Hunters) enquanto A Família Hunter, Loki, Breaking Bad e os filmes HP respondem 302. São "workers de reprodução" por conteúdo no provedor (CDN booster `anipixel.best`); o worker do HxH está caído junto com um lote (majoritariamente anime). Não há outro series_id do HxH funcional no catálogo (o par [L] `1000046298` também 503) — confirmado do servidor local e via `play-infinity.stream` (idêntico).
+
+**Mapeamento revalidado (sem bug):** `/api/nixplay-episode-id` resolve posição exata dos 148 eps (ex.: global 70 → `46298004012` Nixplay T4E12). Grid flat 1..148 do app → posição correta.
+
+**Cobertura dos demais servidores (HxH keyed 45952 no encontrei):** `encontrei-lookup` → S1 flat **1..70** com `mixdrop`=Y; **71..148 → vazio**. O corte "~70" = fim do catálogo MixDrop/Encontrei; dos 71+ a única fonte era o Nixplay → caindo, nada reproduz.
+
+**Pendentes opcionais (não implementados nesta sessão):**
+1. **Alias de id para MixDrop (46298→45952) no HxH:** daria eps 1..70 via MixDrop/Encontrei robustamente enquanto o Nixplay estiver fora. Exige confirmar que o conteúdo keyed 45952 no encontrei é HxH 2011 (e não o 1999) antes de mapear.
+2. **Detector de "worker indisponível" do Nixplay** (`/api/nixplay-resolve` e `/api/nixplay-episode-id`): corpo do 503 contém "Worker de reproducao indisponível" → responder erro tipado pro modal marcar `srv_nixplay` como inútil para aquele conteúdo e pular mais rápido no fallback (não cria eps 71+, mas evita espera vazia no servidor).
+
+**Smoke/server:** servidor local de teste encerrado; probes em `scratch/`. Nada tocou em player → sem `tsc`.
+
+---
+
+## 06/10/2026 - `ERR_CONTENT_LENGTH_MISMATCH` em `/api/mixdrop-proxy` (segunda ocorrência)
+
+**Problema:** novo console mostra `Failed to load resource: net::ERR_CONTENT_LENGTH_MISMATCH` no `mixdrop-proxy` logo após o ArtPlayer iniciar. O fix anterior só cobria o caso 200; o mismatch **continuava possível nas respostas 206 (Range)**.
+
+**Raiz:** impossível manter `Content-Length` em resposta parcial e evitar o mismatch ao mesmo tempo — se a CDN reseta ou o cliente aborta no meio do streaming, o corpo termina antes do tamanho declarado e o Chrome dispara o erro. O 206 com `Content-Length` promete bytes que podem não chegar.
+
+**Correção (`server/routes/mixdrop.ts`, regra de ouro agora):** `Content-Length` é **DROPPED em qualquer status** — resposta sempre chunked, terminando no marcador de fim (mismatch vira impossível). `Content-Range`/`Accept-Ranges`/`Content-Type` continuam sendo repassados, então o player segue sabendo o tamanho total do arquivo (seek intacto). Aplicado em **ambos** os proxies:
+- `/api/mixdrop-proxy` (removida a condição que mantinha Length no 206);
+- `/api/download` (mesma política + handler de erro do stream de origem no pipe, que faltava — um reset da CDN no meio do download travava a resposta).
+
+**Smoke test (`scratch/proxy-smoke.mjs`) atualizado e reexecutado = 9/9 PASS** contra CDN real (arquivo 1,38 GB): 400s, upstream 404 chunked sem Length, fileId resolvido, `Range: bytes=0-1048575` → **206 chunked sem Content-Length** com `Content-Range` íntegro (corpo exatamente 1048576 bytes), seek intermediário → 206, aborto no meio → servidor segue vivo. `npx tsc --noEmit` = 0 erros.
+
+**Nota:** com isso, qualquer novo `mixdrop-proxy` no console será `net::ERR_ABORTED`/`ERR_CONNECTION_RESET` (aborto do próprio navegador — inofensivo) e não mais mismatch.
+
+---
+
+## 06/10/2026 - 404 `/api/tmdb/tv/*` em item catalogado como série (id é de FILME)
+
+**Problema relatado (novo console dump):** `Failed to load resource: 404` + `[TMDB Service] Proxy local retornou status 404. Ativando fallback de dados...` logo antes dos logs do MixDrop (fileId resolvido) e do ArtPlayer. O playback funciona, mas o 404 aparece.
+
+**Descoberta decisiva (consulta direta ao proxy da VPS `https://play-infinity.stream/api/tmdb/...`):**
+- `tv/1101412` → **404** (não existe)
+- `movie/1101412` → **existe** e é **"A Queda 2: No Limite" (Fall 2: Deadpoint)** — thriller USA/GB, lançamento 2026-09-01, `tt31192372`.
+- Ou seja: o **id é de filme**, mas algum item chega com `type: 'series'`/`isSeries: true` → todos os lookups `/tv/<id>` (detalhes, temporada) dão 404 em cascata. A origem do card não está no repositório (grep `1101412` = 0 hits) — vem de fonte em runtime (catálogo externo Vizer/Encontrei ou histórico do usuário).
+- Reviso a conclusão antiga ("404 é cosmético"): continua inofensivo ao playback, mas agora é **detectável e auto-corrigido** quando há como confirmar.
+
+**Correções (4 arquivos, `npx tsc --noEmit` = 0 erros):**
+- `src/services/tmdb.ts`: `fetchTmdbRaw` agora devolve **status HTTP** (distingue 404 de timeout/rede) e **todo warning inclui a URL** — dali pra frente o DevTools diz exatamente qual recurso falhou. Novo `lookupDetails(id, type)` que, **só quando o TMDB responde 404 explicitamente** (nunca em timeout/erro de rede), sonda o outro tipo (`tv`↔`movie`) e expõe `crossType`/`crossDetails`. `getDetails` = `(await lookupDetails(...)).details` (contrato inalterado).
+- `src/pages/DetailsPage.tsx`: usa `lookupDetails`. Se os detalhes do tipo pedido vierem vazios **e** o id existir no outro tipo **e** o título do item casar com o do TMDB (≥ 0,5 via novo `titlesLookLikeSame`), **adota o tipo real** (`setItem`: corrige `type` + `playerUrl` pro servidor WatchPlayer certo) e refaz trailer/recomendações no tipo correto. Guard novo: `DEFAULT_DETAILS` (id 0 sem temporadas) **não** sobrescreve mais sinopse/pôster/gêneros do catálogo (antes, `genres: []` zerrava os gêneros ao abrir item sem metadados).
+- `src/components/VideoPlayerModal.tsx`: em `loadSeries`, se o id não existe como TV mas existe como filme com mesmo título → novo estado `resolvedAsMovie` ⇒ `isSeries` vira `false` e a máquina de temporadas é desligada (sem abas vazias nem 404 repetido). O efeito que busca episódios (`getSeasonDetails`) agora **aguarda `seriesDetails`** antes de rodar — elimina o `/tv/<id>/season` 404 quando o item é filme mascarado de série.
+- `src/utils/mediaUtils.ts`: `titleSimilarity`/`titlesLookLikeSame` (normaliza acentos/pontuação, sobreposição de tokens).
+
+**Limitação honesta:** se o título do card **não** casar com a obra do TMDB no outro tipo (ex.: id de outra obra colado num card), a correção recusa (evita exibir metadados de uma obra diferente) e o 404 persiste — mas o log agora mostra a URL exata, permitindo achar a fonte real do card.
+
+---
+
+## 06/10/2026 - Erros de console ao assistir via MixDrop (proxy, TMDB 404, permissão Firebase)
 
 **Problema relatado:** logs capturados assistindo "Harry Potter e a Câmara Secreta": `net::ERR_CONTENT_LENGTH_MISMATCH` no `/api/mixdrop-proxy`, `404 /api/tmdb/tv/1101412?language=pt-BR`, `FirebaseError: Missing or insufficient permissions`, logs `parts Array(...)` e warning de iframe (`Allow attribute will take precedence over 'allowfullscreen'`).
 

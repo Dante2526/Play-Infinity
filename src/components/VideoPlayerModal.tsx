@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
-import { checkIsCam } from "../utils/mediaUtils";
+import { checkIsCam, titlesLookLikeSame } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
 import { 
   isEpisodeWatched, 
@@ -20,7 +20,7 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
-import { getDetails, getSeasonDetails, searchMulti, TMDBDetails, Season } from "../services/tmdb";
+import { getSeasonDetails, lookupDetails, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
@@ -534,8 +534,18 @@ export function VideoPlayerModal({
     };
   }, [isOpen]);
 
+  // Detectado: o item chegou marcado como série, mas o id pertence a um filme
+  // (ex.: /tv/<id> → 404 e /movie/<id> existe com o mesmo título). Enquanto true,
+  // a modal ignora toda a máquina de temporadas/episódios.
+  const [resolvedAsMovie, setResolvedAsMovie] = useState(false);
+
+  useEffect(() => {
+    setResolvedAsMovie(false);
+  }, [isOpen, tmdbId, mediaType, urlInput]);
+
   // Determine if content is a series
   const isSeries = useMemo(() => {
+    if (resolvedAsMovie) return false;
     if (mediaType === 'series') return true;
     if (mediaType === 'movie') return false;
     const parsed = parseMediaFromUrl(urlInput);
@@ -543,7 +553,7 @@ export function VideoPlayerModal({
     const lowerTitle = title.toLowerCase();
     if (lowerTitle.includes("série") || lowerTitle.includes("episódio") || lowerTitle.includes("temporada") || title.includes("T1:") || title.includes("T2:") || title.includes("T3:") || title.includes("T4:")) return true;
     return false;
-  }, [mediaType, urlInput, title]);
+  }, [mediaType, urlInput, title, resolvedAsMovie]);
 
   // Determine ID (TMDB or IMDB or extracted)
   const resolvedId = useMemo(() => {
@@ -693,10 +703,25 @@ export function VideoPlayerModal({
         }
 
         if (targetId) {
-          const details = await getDetails(targetId, 'tv');
-          if (isMounted && details) {
-            setSeriesDetails(details);
+          const lookup = await lookupDetails(targetId, 'tv');
+          if (!isMounted) return;
+
+          const realTv = !!lookup.details && lookup.details.id !== 0;
+          const hasSeasons = Array.isArray(lookup.details?.seasons) && lookup.details.seasons.length > 0;
+          const hasMovieIdentity = lookup.crossType === 'movie' && !!lookup.crossDetails;
+
+          // Item catalogado como série, mas o id só existe como filme: desliga a
+          // máquina de temporadas (evita /tv/<id>/season → 404 e abas vazias).
+          // Só conclui quando o título do catálogo bate com o do filme do TMDB.
+          if (!realTv && !hasSeasons && hasMovieIdentity) {
+            const candidateTitle = lookup.crossDetails!.title || lookup.crossDetails!.name || "";
+            if (titlesLookLikeSame(title || "", candidateTitle)) {
+              setResolvedAsMovie(true);
+              setSeriesDetails(null);
+              return;
+            }
           }
+          setSeriesDetails(lookup.details);
         }
       } catch (err) {
         console.warn("[VideoPlayerModal] Não foi possível carregar detalhes da série:", err);
@@ -804,7 +829,9 @@ export function VideoPlayerModal({
 
   // Busca episódios da temporada ativa e valida disponibilidade real nos servidores homologados
   useEffect(() => {
-    if (!isOpen || !isSeries) return;
+    // Só busca depois que loadSeries confirmou a identidade: evita /tv/<id>/season
+    // → 404 quando o item está catalogado como série mas o id é de um filme.
+    if (!isOpen || !isSeries || !seriesDetails) return;
     const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
     if (!numericId) return;
 
@@ -846,7 +873,7 @@ export function VideoPlayerModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, isSeries, tmdbId, resolvedId, season]);
+  }, [isOpen, isSeries, seriesDetails, tmdbId, resolvedId, season]);
 
   // Lista filtrada de episódios do TMDB contendo apenas os que realmente estão no servidor.
   // Só filtra quando a resposta é DEFINITIVA (catálogo local). Sondagens de rede

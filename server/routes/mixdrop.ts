@@ -524,19 +524,16 @@ const router = Router();
 
       res.status(upstream.status);
 
-      // Content-Length só é seguro em resposta parcial (206) sem content-encoding
-      // (o fetch do Node descomprime o corpo e mantém o tamanho original no header
-      // → casaria ERR_CONTENT_LENGTH_MISMATCH). Em 200 o corpo vai chunked: um
-      // aborto do cliente (seek/cancelamento) não gera mismatch. Sem corpo (HEAD)
-      // preserva o header original.
-      const keepContentLength =
-        upstream.status === 206 &&
-        !!upstream.body &&
-        !upstream.headers.get("content-encoding");
+      // Content-Length é DROPPED em qualquer status. Mesmo em 206 (Range) um
+      // reset da CDN ou um aborto do cliente encerra o corpo antes do fim
+      // declarado → Chrome dispara net::ERR_CONTENT_LENGTH_MISMATCH. Sem o
+      // header a resposta vai chunked e termina no marcador de fim — o mismatch
+      // vira impossível. Content-Range/Accept-Ranges seguem sendo enviados:
+      // o player usa o total deles pra saber o tamanho do arquivo (seek).
       for (const [key, value] of upstream.headers.entries()) {
         const lk = key.toLowerCase();
-        if (lk === "content-length" && !keepContentLength) continue;
-        if (["content-type", "content-length", "content-range", "accept-ranges"].includes(lk)) {
+        if (lk === "content-length") continue;
+        if (["content-type", "content-range", "accept-ranges"].includes(lk)) {
           res.setHeader(key, value);
         }
       }
@@ -707,13 +704,19 @@ const router = Router();
           return res.status(502).send(`CDN retornou status ${upstream.status}`);
         }
 
-        res.status(upstream.status);
+        // Mesma política do proxy: sem Content-Length (chunked sempre). Um
+        // download cortado (aborto/reset) não pode disparar mismatch no Chrome.
+        const keepLength =
+          upstream.status === 206 &&
+          !!upstream.body &&
+          !upstream.headers.get("content-encoding");
         for (const [key, value] of upstream.headers.entries()) {
           if (["content-length", "content-range", "accept-ranges", "content-type"].includes(key.toLowerCase())) {
             if (key.toLowerCase() === "content-type") {
               // Sempre video/mp4 — não confia no CDN
               continue;
             }
+            if (key.toLowerCase() === "content-length" && !keepLength) continue;
             res.setHeader(key, value);
           }
         }
@@ -724,7 +727,15 @@ const router = Router();
 
         const { Readable } = await import("stream");
         // @ts-ignore
-        Readable.fromWeb(upstream.body).pipe(res);
+        const sourceReadable = Readable.fromWeb(upstream.body);
+        // pipe() não propaga 'error' da origem: um reset da CDN deve finalizar a
+        // resposta mesmo sem os bytes prometidos (evita travamento + mismatch).
+        sourceReadable.on("error", () => {
+          if (res.writableEnded) return;
+          if (upstream.status === 206) res.destroy();
+          else res.end();
+        });
+        sourceReadable.pipe(res);
       } catch (proxyErr: any) {
         clearTimeout(timeoutId);
         console.error("[MixDrop Download Proxy Error]:", proxyErr);

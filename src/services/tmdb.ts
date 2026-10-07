@@ -152,12 +152,14 @@ function writeSeasonsCache(cache: Record<string, Season[]>) {
 
 const tvSeasonsCache: Record<string, Season[]> = readSeasonsCache();
 
+type TmdbFetchOutcome<T> = { ok: boolean; status: number; data: T | null };
+
 /**
- * Wrapper de requisição resiliente ao TMDB:
- * Valida res.ok, status HTTP (401/404/429), timeout estrito de 6s e JSON seguro com fallback.
+ * Requisição bruta à rota interna /api/tmdb (Express proxy seguro).
+ * Devolve o status HTTP real (distingue 404 de timeout/erro de rede) e registra
+ * a URL em todo warning — sem isso não dá pra saber qual recurso falhou no DevTools.
  */
-async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
-  // 1. Tenta a rota interna /api/tmdb (Express proxy seguro)
+async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
   try {
     let controller: AbortController | null = null;
     let timeoutId: any = null;
@@ -176,25 +178,35 @@ async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
     const res = await fetch(url, fetchOptions);
     if (timeoutId) clearTimeout(timeoutId);
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data === "object") {
-        if (!("status_code" in data) || (data as any).status_code === 1) {
-          return data as T;
-        }
-      }
-    } else {
-      console.warn(`[TMDB Service] Proxy local retornou status ${res.status}. Ativando fallback de dados...`);
+    if (!res.ok) {
+      console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
+      return { ok: false, status: res.status, data: null };
     }
+
+    const data = await res.json();
+    if (data && typeof data === "object") {
+      if (!("status_code" in data) || (data as any).status_code === 1) {
+        return { ok: true, status: res.status, data: data as T };
+      }
+    }
+    return { ok: false, status: res.status, data: null };
   } catch (err: any) {
     if (err?.name === 'AbortError') {
       console.warn(`[TMDB Service] Requisição abortada por timeout de 6s (${url}). Ativando fallback instantâneo...`);
     } else {
-      console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}). Ativando fallback...`);
+      console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}) em ${url}. Ativando fallback...`);
     }
+    return { ok: false, status: 0, data: null };
   }
+}
 
-  return fallback;
+/**
+ * Wrapper de requisição resiliente ao TMDB:
+ * Valida res.ok, status HTTP (401/404/429), timeout estrito de 6s e JSON seguro com fallback.
+ */
+async function fetchTmdbSafe<T>(url: string, fallback: T): Promise<T> {
+  const outcome = await fetchTmdbRaw<T>(url);
+  return outcome.ok && outcome.data ? outcome.data : fallback;
 }
 
 // API Calls
@@ -221,22 +233,49 @@ export const searchMulti = async (query: string): Promise<TMDBResponse> => {
 
 import { UNAVAILABLE_SEASONS } from "../data";;;
 
-export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
-  const details = await fetchTmdbSafe<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, DEFAULT_DETAILS);
+export interface DetailsLookup {
+  /** Detalhes para a UI (mesmo contrato de getDetails — inclui cache de temporadas). */
+  details: TMDBDetails;
+  /** Status HTTP da consulta no tipo pedido (404 = o id não existe nesse tipo). */
+  status: number;
+  /** Tipo alternativo em que o id REALMENTE existe (ex.: filme catalogado como série). */
+  crossType: 'movie' | 'tv' | null;
+  /** Metadados do outro tipo — só preenchido quando status === 404 e o id existe lá. */
+  crossDetails: TMDBDetails | null;
+}
 
-  let result = details;
+export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<DetailsLookup> => {
+  const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`);
+
+  let crossType: 'movie' | 'tv' | null = null;
+  let crossDetails: TMDBDetails | null = null;
+
+  // Fallback cruzado: alguns itens chegam com o tipo errado (ex.: filme tratado
+  // como série → /tv/<id> responde 404). Só investiga o outro tipo quando o TMDB
+  // respondeu 404 explicitamente — timeout/erro de rede não dispara 2ª chamada.
+  // Quem consome decide se aceita o crossType (verifica similaridade de título).
+  if (!outcome.ok && outcome.status === 404 && id && !isNaN(Number(id))) {
+    const other: 'movie' | 'tv' = type === 'tv' ? 'movie' : 'tv';
+    const alt = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${other}/${id}?language=pt-BR`);
+    if (alt.ok && alt.data && alt.data.id && alt.data.id !== 0) {
+      crossType = other;
+      crossDetails = alt.data;
+    }
+  }
+
+  let result: TMDBDetails = outcome.ok && outcome.data ? outcome.data : DEFAULT_DETAILS;
 
   if (type === 'tv') {
-    const validSeasons = (details?.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
-    if (details && details.id && details.id !== 0 && validSeasons.length > 0) {
+    const validSeasons = (result?.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0);
+    if (result && result.id && result.id !== 0 && validSeasons.length > 0) {
       // Sucesso: guarda as temporadas reais pra usar de fallback em falhas futuras
       tvSeasonsCache[String(id)] = validSeasons;
       writeSeasonsCache(tvSeasonsCache);
-    } else if (details && (!Array.isArray(details.seasons) || validSeasons.length === 0)) {
+    } else if (result && (!Array.isArray(result.seasons) || validSeasons.length === 0)) {
       // Falha do TMDB: injeta as últimas temporadas conhecidas pra não colapsar a UI
       const cached = tvSeasonsCache[String(id)];
       if (cached && cached.length > 0) {
-        result = { ...details, seasons: cached, number_of_seasons: cached.length };
+        result = { ...result, seasons: cached, number_of_seasons: cached.length };
       }
     }
   }
@@ -248,7 +287,11 @@ export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDB
     result.number_of_seasons = result.seasons.length;
   }
 
-  return result;
+  return { details: result, status: outcome.status, crossType, crossDetails };
+};
+
+export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDBDetails> => {
+  return (await lookupDetails(id, type)).details;
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {

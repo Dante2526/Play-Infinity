@@ -99,6 +99,31 @@ export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: s
   return true;
 };
 
+// Compara títulos ignorando acentos, pontuação e caixa. Retorna a fração dos
+// tokens relevantes do título procurado presentes no candidato (0..1).
+export const titleSimilarity = (wanted: string, candidate: string): number => {
+  const norm = (s: string) =>
+    (s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const a = norm(wanted);
+  const b = norm(candidate);
+  if (!a || !b) return 0;
+  if (a === b || a.includes(b) || b.includes(a)) return 1;
+  const tokens = a.split(" ").filter((t) => t.length > 3);
+  if (!tokens.length) return 0;
+  return tokens.filter((t) => b.includes(t)).length / tokens.length;
+};
+
+// Usado para confirmar que um item realmente corresponde ao id consultado antes
+// de adotar metadados (evita casar obras diferentes que compartilham o mesmo id).
+export const titlesLookLikeSame = (a: string, b: string, threshold = 0.5): boolean =>
+  titleSimilarity(a, b) >= threshold;
+
 // Palavras-chave estritamente proibidas na Área Kids (Animações adultas, sátiras e animes japoneses)
 const ADULT_ANIMATION_BLOCKLIST = [
   'simpson', 'family guy', 'família da pesada', 'familia da pesada', 

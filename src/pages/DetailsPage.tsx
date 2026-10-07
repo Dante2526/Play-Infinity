@@ -46,10 +46,10 @@ import {
   DownloadAvailability 
 } from "../services/downloadService";
 
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable, titlesLookLikeSame } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
-  getDetails, 
+  lookupDetails,
   getSeasonDetails, 
   formatImageUrl, 
   getGenreNames, 
@@ -244,11 +244,38 @@ export function DetailsPage({
         setLoadingTmdb(true);
         setLoadingTrailer(true);
 
-        const [details, trailers, recommendations] = await Promise.all([
-          getDetails(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null),
-          getTrailerList(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => []),
-          getSimilarRecommendations(Number(targetId), item.type === 'series' ? 'tv' : 'movie').catch(() => null)
+        const requestedType: 'movie' | 'tv' = item.type === 'series' ? 'tv' : 'movie';
+        const lookup = await lookupDetails(Number(targetId), requestedType).catch(() => null);
+        let [trailers, recommendations] = await Promise.all([
+          getTrailerList(Number(targetId), requestedType).catch(() => []),
+          getSimilarRecommendations(Number(targetId), requestedType).catch(() => null)
         ]);
+
+        let details = lookup?.details ?? null;
+
+        // O item pode estar catalogado com o tipo errado (ex.: filme tratado como
+        // série → /tv/<id> responde 404). Quando o id existe no outro tipo E o
+        // título confere, adota o tipo real — evita 404 em cascata e a UI mostra
+        // as informações certas (sem abas de temporada para um filme).
+        if ((!details || details.id === 0) && lookup?.crossType && lookup.crossDetails) {
+          const candidateTitle = lookup.crossDetails.title || lookup.crossDetails.name || "";
+          if (titlesLookLikeSame(item.title, candidateTitle)) {
+            details = lookup.crossDetails;
+            const correctedType: 'movie' | 'series' = lookup.crossType === 'tv' ? 'series' : 'movie';
+            setItem(prev => ({
+              ...prev,
+              type: correctedType,
+              playerUrl: correctedType === 'movie'
+                ? `https://v1.watchplay.shop/movie/${prev.imdbId || prev.tmdbId || prev.id}`
+                : `https://v1.watchplay.shop/tvshow/${prev.tmdbId || prev.id}/1/1`
+            }));
+            // Trailer/recomendações buscaram no tipo errado (404): refaz no correto
+            [trailers, recommendations] = await Promise.all([
+              getTrailerList(Number(targetId), lookup.crossType).catch(() => []),
+              getSimilarRecommendations(Number(targetId), lookup.crossType).catch(() => null)
+            ]);
+          }
+        }
 
         if (isMounted) {
           if (Array.isArray(trailers) && trailers.length > 0) {
@@ -286,7 +313,12 @@ export function DetailsPage({
           setLoadingTrailer(false);
         }
 
-        if (isMounted && details && !('status_code' in (details as any))) {
+        // Só aplica detalhes reais: DEFAULT_DETAILS (id 0 sem temporadas) não deve
+        // sobrescrever sinopse/pôster/gêneros já vindos do catálogo. Aceita também
+        // o fallback do cache de temporadas (id 0 + seasons preenchidas).
+        const hasUsableDetails = !!(details && (details.id !== 0 || (Array.isArray(details.seasons) && details.seasons.length > 0)) && !('status_code' in (details as any)));
+
+        if (isMounted && hasUsableDetails) {
           setTmdbDetails(details);
           // Enriquecer item se faltar sinopse ou imagens
           setItem(prev => ({
