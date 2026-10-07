@@ -257,3 +257,6 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - Em `src/components/VideoPlayerModal.tsx`: o buildUrl do VIP Player (série) agora envia `&series_id=<nixplaySeriesId>` (quando disponível) e `&name=<title>` para o backend.
 - **Validação:** `npx tsc --noEmit` 0 erros; `scratch/proxy-smoke.mjs` 9/9 PASS. Servidor local ainda com o código antigo em memória (precisa reiniciar o dev server para ativar). Caminho exato do retry (título cujo Ajax só devolve blacklisted) deve ser conferido ao vivo.
 - **Pendente:** deploy na VPS só com autorização explícita do usuário.
+
+### 07/10/2026 - Correção do Servidor Nixplay (Hunter x Hunter)
+- **Bloqueio de Série com Arquivos Offline:** O anime Hunter x Hunter 2011 (TMDB ID 46298) foi incluído numa lista de bloqueio do catálogo Nixplay (em server/services/nixplayCatalog.ts). Os arquivos .mp4 deste anime no servidor Nixplay estavam retornando erro 503 (Worker de reprodução indisponível). O bloqueio força a interface a não exibir o Nixplay para essa série e usar os servidores de fallback primários (WatchPlayer e VIP Player), que mapeiam corretamente os episódios pelo TMDB e estão funcionando com sucesso.

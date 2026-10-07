@@ -53,6 +53,7 @@ export async function loadNixplayCatalog() {
 
 // Checa se existe no Nixplay por tmdb_id (caso comum onde tmdb_id == series_id)
 export function isNixplayAvailable(tmdbId: string | number, isSeries: boolean): boolean {
+  if (String(tmdbId) === "46298") return false; // Bloqueia Hunter x Hunter 2011 (streams offline 503)
   if (!isCatalogLoaded) return false;
   const idStr = String(tmdbId);
   return isSeries ? nixplaySeries.has(idStr) : nixplayMovies.has(idStr);
@@ -62,6 +63,7 @@ export function isNixplayAvailable(tmdbId: string | number, isSeries: boolean): 
 // Retorna o tmdb_id se ele existir no Set (caso comum), ou busca pelo nome
 // se o tmdb_id não estiver no Set (caso HxH onde tmdb_id != series_id).
 export function resolveNixplaySeriesId(tmdbId: string | number, seriesName?: string): string | null {
+  if (String(tmdbId) === "46298") return null; // Bloqueia Hunter x Hunter 2011 (streams offline 503)
   if (!isCatalogLoaded) return null;
   const idStr = String(tmdbId);
 
