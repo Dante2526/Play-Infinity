@@ -1004,7 +1004,7 @@ export function VideoPlayerModal({
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s?: number, e?: number) => 
-            `https://v1.watchplay.shop/tvshow/${id}/${s || 1}/${e || 1}?cb=${Date.now()}`,
+            `/api/watchplay-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer"
         },
@@ -1018,7 +1018,7 @@ export function VideoPlayerModal({
             // pelo nome via resolveNixplaySeriesId). Evita VIP_UNAVAILABLE indevido.
             const nixId = nixplaySeriesId ? encodeURIComponent(String(nixplaySeriesId)) : "";
             const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
-            return `/api/myembed-stream?id=${id}&type=tv&s=${s || 1}&e=${e || 1}${nixId ? `&series_id=${nixId}` : ""}${nameParam}&cb=${Date.now()}`;
+            return `/api/vip-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${nixId ? `&nixId=${nixId}` : ""}${nameParam}`;
           },
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"

@@ -260,3 +260,9 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 
 ### 07/10/2026 - Correção do Servidor Nixplay (Hunter x Hunter)
 - **Bloqueio de Série com Arquivos Offline:** O anime Hunter x Hunter 2011 (TMDB ID 46298) foi incluído numa lista de bloqueio do catálogo Nixplay (em server/services/nixplayCatalog.ts). Os arquivos .mp4 deste anime no servidor Nixplay estavam retornando erro 503 (Worker de reprodução indisponível). O bloqueio força a interface a não exibir o Nixplay para essa série e usar os servidores de fallback primários (WatchPlayer e VIP Player), que mapeiam corretamente os episódios pelo TMDB e estão funcionando com sucesso.
+# #   F i x   S 3 E 1 4 0   ( A b s o l u t e   E p i s o d e   I n d e x i n g )   f o r   W a t c h P l a y e r / V I P   P l a y e r  
+ -   I d e n t i f i e d   t h a t   T M D B   r e t u r n s   a b s o l u t e   e p i s o d e _ n u m b e r s   ( e . g . ,   1 4 0 )   f o r   S e a s o n   3   o f   H u n t e r   x   H u n t e r .  
+ -   I d e n t i f i e d   t h a t   W a t c h P l a y e r   a n d   V I P   P l a y e r   e x p e c t   r e l a t i v e ,   1 - b a s e d   i n d i c e s   f o r   e p i s o d e s   ( S 3 E 4 ) .  
+ -   C r e a t e d   b a c k e n d   p r o x y   r o u t e s   \ / a p i / w a t c h p l a y - p r o x y - i f r a m e \   a n d   \ / a p i / v i p - p r o x y - i f r a m e \   i n   \ s e r v e r / r o u t e s / v i d e o S c r a p e r s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e d i r e c t i n g .  
+ -   P a t c h e d   \ V i d e o P l a y e r M o d a l . t s x \   t o   r o u t e   \ s r v _ w a t c h p l a y \   a n d   \ s r v _ v i p \   t h r o u g h   t h e   n e w   p r o x y   e n d p o i n t s .  
+ 

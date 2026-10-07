@@ -4351,4 +4351,52 @@ const router = Router();
 
   // Endpoints para Teste de Velocidade Local (Resolve problemas de CORS/Bloqueio em WebViews)
 
+
+// ==========================================
+// PROXY DE REDIRECT PARA RESOLUCAO DE EPISODIOS ABSOLUTOS
+// Converte eps > 50 (ex: HxH ep 140) para o indice relativo (ex: S3E4)
+// ==========================================
+router.get("/api/watchplay-proxy-iframe", async (req, res) => {
+  let { id, s, e } = req.query;
+  let season = parseInt(s as string) || 1;
+  let episode = parseInt(e as string) || 1;
+  
+  if (episode > 50) {
+    try {
+      const fetch = require("node-fetch");
+      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbData = await tmdbRes.json();
+      if (tmdbData.episodes) {
+        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === episode);
+        if (idx >= 0) episode = idx + 1;
+      }
+    } catch(err) { console.error("[WP Proxy] Erro no TMDB:", err); }
+  }
+  
+  res.redirect(`https://v1.watchplay.shop/tvshow/${id}/${season}/${episode}?cb=${Date.now()}`);
+});
+
+router.get("/api/vip-proxy-iframe", async (req, res) => {
+  let { id, s, e, nixId, name } = req.query;
+  let season = parseInt(s as string) || 1;
+  let episode = parseInt(e as string) || 1;
+  
+  if (episode > 50) {
+    try {
+      const fetch = require("node-fetch");
+      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbData = await tmdbRes.json();
+      if (tmdbData.episodes) {
+        const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === episode);
+        if (idx >= 0) episode = idx + 1;
+      }
+    } catch(err) {}
+  }
+  
+  const seriesIdParam = nixId ? `&series_id=${encodeURIComponent(nixId as string)}` : "";
+  const nameParam = name ? `&name=${encodeURIComponent(name as string)}` : "";
+  res.redirect(`/api/myembed-stream?id=${id}&type=tv&s=${season}&e=${episode}${seriesIdParam}${nameParam}&cb=${Date.now()}`);
+});
+
 export default router;
+
