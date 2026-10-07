@@ -236,13 +236,10 @@ export function AdminBugReports() {
                   {report.userEmail && <span><strong>Email:</strong> {report.userEmail}</span>}
                   <span><strong>ID do cliente:</strong> {report.clientId.slice(0, 8)}...</span>
                 </div>
-                <div className="bg-[#222] p-3 rounded-xl mb-4 border border-green-900/20">
+                <div className="bg-[#222] p-3 rounded-xl border border-green-900/20">
                   <p className="text-green-400 text-sm font-semibold mb-1">Resposta:</p>
                   <p className="text-gray-300 text-sm">{report.adminResponse}</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-auto">
-                  Aguardando o cliente visualizar para ser excluído automaticamente.
-                </p>
               </div>
             ))}
           </div>

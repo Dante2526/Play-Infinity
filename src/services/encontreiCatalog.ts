@@ -15,14 +15,14 @@ const _cache = new Map<string, EncontreiResult | null>();
 // e o cancelled=false do cleanup anterior nunca é checado.
 const yieldToEventLoop = () => new Promise(r => setTimeout(r, 0));
 
-export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult | null> {
+export async function findMovieByTmdbId(tmdbId: number, refresh: boolean = false): Promise<EncontreiResult | null> {
   const cacheKey = `movie:${tmdbId}`;
-  if (_cache.has(cacheKey)) {
+  if (!refresh && _cache.has(cacheKey)) {
     await yieldToEventLoop();
     return _cache.get(cacheKey) || null;
   }
   try {
-    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie`);
+    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie${refresh ? '&refresh=1' : ''}`);
     if (!res.ok) { return null; }
     const data = await res.json();
     if (data.error) { return null; }
@@ -37,14 +37,14 @@ export async function findMovieByTmdbId(tmdbId: number): Promise<EncontreiResult
   } catch { return null; }
 }
 
-export async function findEpisode(tmdbId: number, season: number, episode: number): Promise<EncontreiResult | null> {
+export async function findEpisode(tmdbId: number, season: number, episode: number, refresh: boolean = false): Promise<EncontreiResult | null> {
   const cacheKey = `tv:${tmdbId}:${season}:${episode}`;
-  if (_cache.has(cacheKey)) {
+  if (!refresh && _cache.has(cacheKey)) {
     await yieldToEventLoop();
     return _cache.get(cacheKey) || null;
   }
   try {
-    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}`);
+    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}${refresh ? '&refresh=1' : ''}`);
     if (!res.ok) { return null; }
     const data = await res.json();
     if (data.error) { return null; }

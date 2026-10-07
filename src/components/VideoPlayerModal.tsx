@@ -253,18 +253,18 @@ export function VideoPlayerModal({
   // Quando o card chegou marcado como série mas é um filme (resolvedAsMovie),
   // consulta o catálogo como filme usando o id correto (effectiveMovieId).
   const lookupMixdropFileId = useCallback(
-    async (s: number, e: number): Promise<string | null> => {
+    async (s: number, e: number, refresh: boolean = false): Promise<string | null> => {
       const lookupId = effectiveMovieId || tmdbId;
       if (!lookupId) return null;
       const lookupMode = mediaType === "series" && !resolvedAsMovie ? "tv" : "movie";
       const key = lookupMode === "tv" ? `tv:${lookupId}:${s}:${e}` : `movie:${lookupId}`;
-      if (key in mixdropFileIdsRef.current) return mixdropFileIdsRef.current[key];
+      if (!refresh && key in mixdropFileIdsRef.current) return mixdropFileIdsRef.current[key];
       if (mixdropLookupInflightRef.current.has(key)) return null;
       mixdropLookupInflightRef.current.add(key);
       try {
         const res = lookupMode === "tv"
-          ? await findEpisode(lookupId, s, e)
-          : await findMovieByTmdbId(lookupId);
+          ? await findEpisode(lookupId, s, e, refresh)
+          : await findMovieByTmdbId(lookupId, refresh);
         const result = res?.mixdrop ?? null;
         const vizerResult = res?.mixdrop_vizer ?? null;
         const encontreiResult = res?.mixdrop_encontrei ?? null;
@@ -1255,6 +1255,19 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
+  const mixdropRecoveryRef = useRef(async () => {});
+  mixdropRecoveryRef.current = async () => {
+    console.warn("[VideoPlayerModal] MixDrop deletado detectado. Puxando novo link ao vivo do scraper...");
+    const newId = await lookupMixdropFileId(season, episode, true);
+    if (newId && newId !== mixdropFileId) {
+        console.log("[VideoPlayerModal] Novo link MixDrop obtido do scraper! Recarregando...");
+        handleServerSwitch("srv_mixdrop");
+    } else {
+        console.warn("[VideoPlayerModal] Scraper não achou link novo pro MixDrop. Acionando fallback...");
+        silentFallbackRef.current();
+    }
+  };
+
   // Watchdog inteligente de segurança: se o player demorar mais de 25s sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
   useEffect(() => {
@@ -1658,6 +1671,12 @@ export function VideoPlayerModal({
         event.data.type === "VIP_UNAVAILABLE" ||
         event.data.type === "STREAM_DISCONNECTED"
       ) {
+        const reason = String(event.data.reason || "");
+        if (selectedServerKey === "srv_mixdrop" && reason.includes("possivelmente deletado")) {
+          mixdropRecoveryRef.current();
+          return;
+        }
+
         console.warn(`[VideoPlayerModal] Servidor informou erro/indisponibilidade (${event.data.reason || event.data.type}). Acionando fallback automático para próximo servidor homologado...`);
         silentFallbackRef.current();
       }

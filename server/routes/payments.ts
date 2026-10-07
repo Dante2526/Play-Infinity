@@ -7,7 +7,8 @@ const router = Router();
 
 export const getAsaasHeaders = () => ({
   "access_token": process.env.ASAAS_API_KEY || "",
-  "Content-Type": "application/json"
+  "Content-Type": "application/json",
+  "User-Agent": "PlayInfinity/1.0.0"
 });
 
 export const getAsaasBaseUrl = () => process.env.ASAAS_ENVIRONMENT === "sandbox" ? "https://sandbox.asaas.com/api/v3" : "https://api.asaas.com/v3";
