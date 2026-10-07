@@ -90,7 +90,7 @@ export function BugFeedbackListener() {
               onClick={() => handleDismiss(bug)}
               className="mt-2 text-xs font-bold text-center bg-gray-800 hover:bg-gray-700 text-white py-1.5 rounded transition-colors"
             >
-              Ciente (Fechar)
+              Ok, vou testar
             </button>
           </motion.div>
         ))}
