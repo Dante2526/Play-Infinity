@@ -114,8 +114,8 @@ export function ReportBugModal({
 
   return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-w-md w-full p-6 sm:p-8 relative shadow-[0_0_50px_-12px_rgba(239,68,68,0.2)] animate-in zoom-in-95 duration-300">
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-orange-500 rounded-t-3xl"></div>
+      <div className="bg-[#0a0a0a]/90 backdrop-blur-3xl border border-white/10 rounded-3xl max-w-md w-full p-6 sm:p-8 relative overflow-hidden shadow-[0_0_50px_-12px_rgba(239,68,68,0.2)] animate-in zoom-in-95 duration-300">
+        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-600 to-orange-500"></div>
         
         <button
           onClick={onClose}
