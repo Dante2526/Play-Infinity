@@ -32,9 +32,20 @@ export function ReportBugModal({
   if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setImageFile(e.target.files[0]);
+    setError(null);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Valida tipo: apenas imagens reais
+    if (!file.type.startsWith('image/')) {
+      setError('Apenas imagens (PNG, JPG, GIF) são aceitas.');
+      return;
     }
+    // Valida tamanho: máximo 5MB (mesmo limite da UI e do servidor)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('A imagem deve ter no máximo 5MB.');
+      return;
+    }
+    setImageFile(file);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -50,7 +61,11 @@ export function ReportBugModal({
     try {
       let imageUrl = null;
       let storagePath = null;
-      const clientId = getClientId();
+      const user = auth.currentUser;
+      // ClientId = uid do Firebase quando logado (habilita o loop de feedback:
+      // a regra do Firestore permite ler/apagar apenas docs onde clientId == auth.uid).
+      // Usuários anônimos usam o identificador de localStorage (sem loop de feedback).
+      const clientId = user?.uid || getClientId();
 
       if (imageFile) {
         const fileExt = imageFile.name.split('.').pop() || 'png';
@@ -79,8 +94,6 @@ export function ReportBugModal({
         storagePath = `vps/${filename}`;
       }
 
-      const user = auth.currentUser;
-      
       await addDoc(collection(db, 'bug_reports'), {
         clientId,
         userName: user?.displayName || user?.email?.split('@')[0] || 'Anônimo',

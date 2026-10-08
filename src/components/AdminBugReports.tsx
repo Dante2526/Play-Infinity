@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink, ChevronDown } from 'lucide-react';
+import { adminFetch } from '../services/adminApi';
+import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink, ChevronDown, Trash2 } from 'lucide-react';
 
 interface BugReport {
   id: string;
@@ -30,6 +31,7 @@ export function AdminBugReports() {
   const [reports, setReports] = useState<BugReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [selectedResponse, setSelectedResponse] = useState<Record<string, string>>({});
   const [customResponse, setCustomResponse] = useState<Record<string, string>>({});
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
@@ -71,6 +73,36 @@ export function AdminBugReports() {
       alert('Falha ao atualizar o bug.');
     } finally {
       setResolvingId(null);
+    }
+  };
+
+  // Exclui permanentemente: remove a imagem da VPS (disco) e o documento do Firestore.
+  // Dá vazão à fila de reports e ao disco do servidor (antes os arquivos nunca eram apagados).
+  const handleDelete = async (report: BugReport) => {
+    if (!confirm(`Excluir o relatório "${report.mediaTitle}" permanentemente?\n(A imagem anexa também será removida da VPS)`)) {
+      return;
+    }
+    try {
+      setDeletingId(report.id);
+      // 1. Remove a imagem do disco da VPS (se houver)
+      if (report.imageUrl) {
+        try {
+          await adminFetch('/api/admin/delete-bug-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imageUrl: report.imageUrl })
+          });
+        } catch (e) {
+          console.warn('Falha ao deletar imagem da VPS (continuando com o doc):', e);
+        }
+      }
+      // 2. Remove o documento do Firestore
+      await deleteDoc(doc(db, 'bug_reports', report.id));
+    } catch (err) {
+      console.error('Erro ao excluir bug:', err);
+      alert('Falha ao excluir o relatório.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -194,17 +226,27 @@ export function AdminBugReports() {
                     />
                   )}
 
-                  <button
-                    onClick={() => handleResolve(report.id)}
-                    disabled={resolvingId === report.id || (selectedResponse[report.id] === 'custom' && !customResponse[report.id])}
-                    className="w-full py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
-                  >
-                    {resolvingId === report.id ? 'Marcando...' : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" /> Marcar como Resolvido
-                      </>
-                    )}
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleResolve(report.id)}
+                      disabled={resolvingId === report.id || (selectedResponse[report.id] === 'custom' && !customResponse[report.id])}
+                      className="flex-1 py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-lg transition-colors flex justify-center items-center gap-2 disabled:opacity-50"
+                    >
+                      {resolvingId === report.id ? 'Marcando...' : (
+                        <>
+                          <CheckCircle2 className="w-4 h-4" /> Marcar como Resolvido
+                        </>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleDelete(report)}
+                      disabled={deletingId === report.id}
+                      title="Excluir relatório e imagem permanentemente"
+                      className="px-3 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-lg transition-colors flex items-center justify-center disabled:opacity-50 shrink-0"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -223,13 +265,23 @@ export function AdminBugReports() {
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {resolved.map(report => (
               <div key={report.id} className="bg-[#141414] border border-green-900/30 rounded-2xl p-5 flex flex-col opacity-75">
-                <div className="flex justify-between items-start mb-2">
+                <div className="flex justify-between items-start mb-2 gap-2">
                   <h3 className="text-lg font-bold text-white leading-tight">
                     {report.mediaTitle}
                   </h3>
-                  <span className="text-xs font-semibold px-2 py-1 bg-green-600/20 text-green-400 rounded-md">
-                    Resolvido
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs font-semibold px-2 py-1 bg-green-600/20 text-green-400 rounded-md">
+                      Resolvido
+                    </span>
+                    <button
+                      onClick={() => handleDelete(report)}
+                      disabled={deletingId === report.id}
+                      title="Excluir relatório e imagem permanentemente"
+                      className="p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="flex flex-col gap-0.5 mb-3 text-xs text-gray-500">
                   <span><strong>Por:</strong> {report.userName || 'Anônimo'}</span>

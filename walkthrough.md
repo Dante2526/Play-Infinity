@@ -342,6 +342,18 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Deploy:** Versionamento Android incrementado para `versionCode 11` / `versionName 1.2.0` e alterações enviadas para a `main` (Deploy VPS Oracle + Build Android). Após o deploy, o push web fica 100% ativo: navegador pede permissão no login → registra SW `firebase-messaging-sw.js` → token salvo em `usuarios/{uid}.fcmTokens`.
 
 
+## 08/10/2026 - Auditoria e Correção do Sistema de Reportar Bugs
+**Resumo:**
+- **Bug crítico 1 (regra do Firestore morta):** A regra de `bug_reports` usava `request.query.limit` — que NÃO existe na linguagem de regras do Firestore (erro de avaliação = deny) — e comparava `clientId` (UUID de localStorage) com `request.auth.uid` (nunca igual). Resultado: o `BugFeedbackListener` tomava permission-denied silencioso → **o toast de feedback do admin NUNCA chegou ao usuário final** e o dismiss não apagava nada. Regra reescrita: read/delete para admin OU dono (clientId == auth.uid), update só admin, create com hasOnly de campos + description 1-2000 chars.
+- **Bug crítico 2 (vazamento de disco na VPS):** O `storagePath: "vps/<file>"` apontava pro Firebase Storage, mas a imagem vive no disco da VPS (`uploads/bug_reports/`) → o `deleteObject` do listener sempre falhava → **imagens jamais eram apagadas**. Corrigido: listener só apaga o doc; nova rota `POST /api/admin/delete-bug-image` (protegida por requireAdminAuth, com blindagem de path traversal) remove o arquivo do disco, acionada pelo novo botão "Excluir" no painel admin (cards pendentes E resolvidos) que também deleta o doc — fim da fila infinita de reports resolvidos.
+- **clientId = auth.uid:** `ReportBugModal` agora grava `clientId = user.uid` quando logado (habilita o loop de feedback pelas regras); anônimos mantêm o identificador de localStorage (reportam, mas sem feedback — limitação aceita).
+- **BugFeedbackListener:** reescrito — escuta por uid com `onAuthStateChanged` (reativa em login/logout), callback de erro no `onSnapshot` (fim da falha silenciosa), removida a tentativa quebrada de deletar do Storage.
+- **Hardening do upload (`/api/upload-bug-image`):** rate limit de 5/hora por IP (express-rate-limit), validação de content-type (só data URL de PNG/JPG/GIF/WEBP), validação de 5MB pós-decode (mesmo limite da UI) e validação de tipo+tamanho no cliente (`handleFileChange`) com mensagens de erro claras.
+- **Infra:** `server.watch.ignored` += `'**/uploads/**'` (regra 2 do AGENTS.md — uploads não causam mais reload no Vite dev) e `.gitignore` += `uploads/` (prints de usuários não correm risco de commit).
+- **Validação:** `npx tsc --noEmit` — exit 0, zero erros.
+- **PENDÊNCIA MANUAL CRÍTICA:** As `firestore.rules` são deployadas manualmente (não há firebase.json/CI no repo) — **o usuário DEVE colar as novas regras no Firebase Console → Firestore → Regras** para o loop de feedback funcionar em produção. Docs antigos com clientId de localStorage não recebem feedback (edge aceita).
+
+
 ## 08/10/2026 - Download 100% In-App + Playback Offline com Skin Netflix
 **Resumo:**
 - **Download sem arquivo no SO (decisão de produto do usuário):** `triggerDirectDownload` (`src/services/downloadService.ts`) não cria mais o `<a download>` — o navegador não recebe mais o arquivo bruto. O download agora é só dentro da plataforma: fetch com progresso real (velocidade/ETA na barra bidirecional) → blob no IndexedDB (web) ou Capacitor Filesystem (mobile). Bônus: fim do download duplicado (antes baixava 2x — uma pro SO e outra pro app), banda reduzida pela metade.

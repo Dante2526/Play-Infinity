@@ -821,6 +821,39 @@ adminOpsRouter.get("/encontrei-status", (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/admin/delete-bug-image
+ * Remove do disco da VPS a imagem anexa de um relatório de bug.
+ * Body: { imageUrl: "/uploads/bug_reports/<filename>" }
+ * Protegido por requireAdminAuth (app.use("/api/admin", requireAdminAuth)).
+ */
+adminOpsRouter.post("/delete-bug-image", (req: Request, res: Response) => {
+  try {
+    const { imageUrl } = req.body;
+    if (!imageUrl || typeof imageUrl !== "string") {
+      return res.status(400).json({ success: false, error: "imageUrl é obrigatório." });
+    }
+
+    // Blindagem: só aceita caminhos dentro de /uploads/bug_reports e sem travessia
+    const prefix = "/uploads/bug_reports/";
+    if (!imageUrl.startsWith(prefix) || imageUrl.includes("..")) {
+      return res.status(400).json({ success: false, error: "Caminho de imagem inválido." });
+    }
+
+    const filename = path.basename(imageUrl);
+    const filePath = path.join(process.cwd(), "uploads", "bug_reports", filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`[adminOps] Imagem de bug removida do disco: ${filePath}`);
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("[adminOps] Erro ao deletar imagem de bug:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
  * POST /api/admin/push
  * Dispara notificação push manual via Firebase Cloud Messaging.
  * Body: { title, body, targetEmails? } — sem targetEmails = push global (todos os dispositivos).

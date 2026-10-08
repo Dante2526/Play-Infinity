@@ -135,11 +135,27 @@ process.on("uncaughtException", (err) => {
 
   // Upload Route (Deve vir antes do limitador de 10kb)
   app.use('/api/upload-bug-image', express.json({ limit: '10mb' }));
-  app.post('/api/upload-bug-image', (req, res) => {
+
+  // Rate limit anti-spam: 5 uploads de print por hora por IP
+  const bugUploadLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    limit: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Muitos envios de imagem em pouco tempo. Tente novamente mais tarde.' }
+  });
+
+  app.post('/api/upload-bug-image', bugUploadLimiter, (req, res) => {
     try {
       const { imageBase64, filename } = req.body;
       if (!imageBase64 || !filename) {
         return res.status(400).json({ error: 'Dados da imagem incompletos.' });
+      }
+
+      // Valida: precisa ser data URL de imagem (PNG/JPG/GIF/WEBP) —
+      // impede salvar conteúdo arbitrário (executáveis, scripts etc.)
+      if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(imageBase64)) {
+        return res.status(400).json({ error: 'Formato inválido. Apenas imagens PNG, JPG, GIF ou WEBP.' });
       }
 
       // Criar a pasta se não existir
@@ -151,12 +167,17 @@ process.on("uncaughtException", (err) => {
       // Converter o base64
       const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
       const buffer = Buffer.from(base64Data, 'base64');
-      
+
+      // Valida tamanho real pós-decode: máximo 5MB (mesmo limite prometido na UI)
+      if (buffer.length > 5 * 1024 * 1024) {
+        return res.status(400).json({ error: 'A imagem excede o limite de 5MB.' });
+      }
+
       const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
       const filePath = path.join(uploadDir, safeFilename);
-      
+
       fs.writeFileSync(filePath, buffer);
-      
+
       res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}` });
     } catch (err: any) {
       console.error('[Upload API] Erro:', err);
@@ -407,7 +428,7 @@ app.use(castRouter);
         server: {
           middlewareMode: true,
           watch: {
-            ignored: ['**/data/**','**/scratch/**','**/*.tmp*','**/*.log','**/.system_generated/**','**/*.md'],
+            ignored: ['**/data/**','**/scratch/**','**/*.tmp*','**/*.log','**/.system_generated/**','**/*.md','**/uploads/**'],
           },
         },
         appType: "spa",

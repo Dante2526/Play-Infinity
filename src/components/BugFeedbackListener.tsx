@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, deleteDoc, doc } from 'firebase/firestore';
-import { ref, deleteObject } from 'firebase/storage';
-import { db, storage } from '../services/firebase';
-import { getClientId } from '../utils/clientId';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '../services/firebase';
 import { ShieldCheck, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -10,19 +9,30 @@ interface ResolvedBug {
   id: string;
   adminResponse: string;
   mediaTitle: string;
-  storagePath?: string;
 }
 
 export function BugFeedbackListener() {
   const [resolvedBugs, setResolvedBugs] = useState<ResolvedBug[]>([]);
+  const [authUid, setAuthUid] = useState<string | null>(auth.currentUser?.uid ?? null);
 
+  // Reage a login/logout (o feedback só existe para usuários logados)
   useEffect(() => {
-    const clientId = getClientId();
-    if (!clientId) return;
+    const unsub = onAuthStateChanged(auth, (user) => setAuthUid(user?.uid ?? null));
+    return () => unsub();
+  }, []);
+
+  // Ouve bugs marcados como "resolved" pelo admin — apenas para usuários logados.
+  // O modal grava clientId = auth.uid; as regras do Firestore permitem ler
+  // apenas os documentos onde clientId == request.auth.uid.
+  useEffect(() => {
+    if (!authUid) {
+      setResolvedBugs([]);
+      return;
+    }
 
     const q = query(
       collection(db, 'bug_reports'),
-      where('clientId', '==', clientId),
+      where('clientId', '==', authUid),
       where('status', '==', 'resolved')
     );
 
@@ -32,30 +42,30 @@ export function BugFeedbackListener() {
         const data = d.data();
         bugs.push({
           id: d.id,
-          adminResponse: data.adminResponse,
-          mediaTitle: data.mediaTitle,
-          storagePath: data.storagePath
+          adminResponse: data.adminResponse || 'Seu relatório foi resolvido!',
+          mediaTitle: data.mediaTitle || 'Conteúdo'
         });
       });
       setResolvedBugs(bugs);
+    }, (error) => {
+      // Sem falha silenciosa: qualquer problema (ex: regras do Firestore) aparece no console
+      console.warn('[BugFeedback] Não foi possível escutar feedback de bugs:', error?.message || error);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [authUid]);
 
   const handleDismiss = async (bug: ResolvedBug) => {
-    // Remove from UI immediately
+    // Remove da UI imediatamente
     setResolvedBugs(prev => prev.filter(b => b.id !== bug.id));
-    
-    // Delete from Firestore and Storage
+
+    // Deleta o registro do Firestore (permitido pela regra: dono do documento).
+    // A imagem anexa (na VPS) é removida pelo painel admin via /api/admin/delete-bug-image —
+    // o delete antigo via Firebase Storage nunca funcionava (o arquivo vive no disco da VPS).
     try {
-      if (bug.storagePath) {
-        const imageRef = ref(storage, bug.storagePath);
-        await deleteObject(imageRef).catch(e => console.warn('Erro ao deletar imagem do bug:', e));
-      }
       await deleteDoc(doc(db, 'bug_reports', bug.id));
     } catch (err) {
-      console.error('Erro ao limpar bug resolvido:', err);
+      console.error('Erro ao remover bug resolvido:', err);
     }
   };
 

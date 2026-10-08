@@ -64,11 +64,34 @@ service cloud.firestore {
     }
 
     match /bug_reports/{reportId} {
-      // Create: Anyone pode criar se enviar clientId e status=pending
-      allow create: if request.resource.data.keys().hasAll(["clientId", "status"]) && request.resource.data.status == "pending";
-      
-      // Read, Update, Delete: Admin tem acesso total. O cliente possui restrições para ler apenas os seus.
-      allow read, update, delete: if isAdmin() || resource.data.clientId == request.auth.uid || (resource.data.clientId != null && request.query.limit <= 20); 
+      // Create: qualquer um pode reportar, desde que status=pending, clientId válido,
+      // description legível (1-2000 chars) e APENAS os campos previstos pelo modal
+      // (impede gravar payloads arbitrários/oversized na coleção).
+      allow create: if request.resource.data.status == "pending"
+        && request.resource.data.clientId is string
+        && request.resource.data.clientId.size() > 0
+        && request.resource.data.clientId.size() <= 64
+        && request.resource.data.description is string
+        && request.resource.data.description.size() > 0
+        && request.resource.data.description.size() <= 2000
+        && request.resource.data.keys().hasOnly([
+             "clientId", "userName", "userEmail", "mediaId", "mediaTitle", "mediaType",
+             "episodeInfo", "description", "imageUrl", "storagePath", "status", "adminResponse", "createdAt"
+           ]);
+
+      // Read: Admin tem acesso total. Cliente lê apenas os próprios relatórios
+      // (clientId == request.auth.uid quando o usuário está logado — o modal
+      // grava o uid como clientId, o que faz o BugFeedbackListener funcionar).
+      // NOTA: request.query NÃO existe na linguagem de regras do Firestore —
+      // a cláusula antiga com request.query.limit sempre falhava (erro de avaliação).
+      allow read: if isAdmin() || (request.auth != null && resource.data.clientId == request.auth.uid);
+
+      // Update: apenas admin resolve/responde.
+      allow update: if isAdmin();
+
+      // Delete: admin tem acesso total; cliente apaga o próprio relatório
+      // (após visualizar o feedback resolvido).
+      allow delete: if isAdmin() || (request.auth != null && resource.data.clientId == request.auth.uid);
     }
 
     match /{document=**} {
