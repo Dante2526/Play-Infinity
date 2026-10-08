@@ -333,3 +333,10 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Validação:** `npx tsc --noEmit` passando com zero erros (node_modules foi completado com `npm install` — pacotes `@capacitor-firebase/messaging` e `@caprockapps/capacitor-chromecast` estavam ausentes localmente).
 - **Pendente de configuração:** Adicionar `VITE_FIREBASE_VAPID_KEY` no `.env`/`.env.local` e na VPS Oracle para ativar push web; o push nativo Android funciona sem ela. Deploy backend na VPS Oracle necessário para o watcher/correções fazerem efeito em produção.
 - **Deploy/Release:** Versionamento Android incrementado para `versionCode 10` / `versionName 1.1.9` (android/app/build.gradle) e alterações enviadas para a branch `main`, disparando o Deploy Automático para a VPS Oracle (main.yml) e o Build Android (build-android.yml).
+
+## 08/10/2026 - Ativação do Push Web (VAPID Key FCM) + Deploy
+**Resumo:**
+- **VAPID Key configurada:** O usuário gerou o par de chaves no Firebase Console (Cloud Messaging → Certificados Push da Web). A chave pública foi validada criptograficamente (65 bytes, ponto P-256 válido, importação via WebCrypto OK).
+- **`.env.production` (novo, versionado):** Contém apenas a `VITE_FIREBASE_VAPID_KEY` (chave PÚBLICA por design — segura para o repositório). O `.gitignore` foi ajustado com `!.env.production` (o `.env.local` com segredos continua ignorado).
+- **Teste local end-to-end:** `npx vite build` confirmou a chave embutida no bundle final (`dist/assets/index-*.js`).
+- **Deploy:** Versionamento Android incrementado para `versionCode 11` / `versionName 1.2.0` e alterações enviadas para a `main` (Deploy VPS Oracle + Build Android). Após o deploy, o push web fica 100% ativo: navegador pede permissão no login → registra SW `firebase-messaging-sw.js` → token salvo em `usuarios/{uid}.fcmTokens`.
