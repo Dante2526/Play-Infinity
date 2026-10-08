@@ -159,6 +159,18 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
     ],
     reason: "A infraestrutura original ativou proteção Cloudflare severa (Turnstile) bloqueando nosso proxy (403), e também está retornando 522 Connection Timed Out. O player está morto no momento.",
     blockedAt: "2026-09"
+  },
+  {
+    id: "pomfy",
+    name: "Pomfy Stream",
+    keys: ["srv_pomfy", "pomfy"],
+    patterns: [
+      /pomfy\.(stream|top|vip)/i,
+      "/api/pomfy-stream",
+      "pomfy"
+    ],
+    reason: "Removido por solicitação do usuário. Instável.",
+    blockedAt: "2026-10"
   }
 ];
 

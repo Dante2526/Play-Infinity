@@ -135,9 +135,6 @@ const ALLOWED_STREAMING_DOMAINS = [
   "mxdrop.to",
   "mxdrop.top",
   "mxcontent.net",
-  "pomfy.stream",
-  "pomfy.top",
-  "pomfy.vip",
   "nixplay.lat",
   "nixplay.com",
   "nixplay.net"
@@ -231,14 +228,13 @@ function isAllowedLiveStreamingDomain(hostname: string): boolean {
 
   if (isAllowed) return true;
 
-  // Servidores oficiais homologados de reprodução (VIP Player / MyEmbed / EmbedPlayer / Playerflix / Pomfy / Nixplay / Mixdrop)
+  // Servidores oficiais homologados de reprodução (VIP Player / MyEmbed / EmbedPlayer / Playerflix / Nixplay / Mixdrop)
   if (
     /embedplayer[a-z0-9-]*\.(xyz|site|top|biz|org|net|online|link|cc|to|me|com)$/i.test(host) ||
     /playerflix\.(ink|biz|to|net)$/i.test(host) ||
     /myembed\.(biz|me|to)$/i.test(host) ||
     /warezcdn\.(net|com)$/i.test(host) ||
     /embedder\.(net|com)$/i.test(host) ||
-    /pomfy\.(stream|top|vip)$/i.test(host) ||
     /nixplay\.(lat|net|com)$/i.test(host) ||
     /eloialu[a-z0-9-]*\.(xyz|site|top|biz|online|net|com)$/i.test(host)
   ) {

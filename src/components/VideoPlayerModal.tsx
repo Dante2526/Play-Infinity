@@ -1273,7 +1273,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = 10000; // 10 segundos
+    const timeoutDuration = selectedServerKey === "srv_mixdrop" ? 20000 : 15000;
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);

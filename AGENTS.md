@@ -12,7 +12,6 @@
    Atualmente homologados:
    - **WatchPlayer Oficial:** `https://v1.watchplay.shop/...`
    - **VIP Player Dublado PT-BR:** `/api/myembed-stream?id=...`
-   - **Pomfy Stream:** `https://api.pomfy.stream/...` (Permitido pois não consta na lista negra).
 
 2. **Proibição Absoluta de Servidores Alternativos (Lista Negra)**
    - **É ESTRITAMENTE PROIBIDO** reintroduzir ou sugerir servidores alternativos como:
@@ -24,6 +23,7 @@
      - `AutoEmbed`
      - `Consumet` / `AnimeFire` (iframes externos não-oficiais)
      - `Starflix` / `Startflix` / `painel-aso.sbs`
+     - `Pomfy`
    - **Consulte sempre o arquivo:** [`src/data/serverBlacklist.ts`](file:///c:/Users/nayla/.antigravity/Play-Infinity/src/data/serverBlacklist.ts).
    - Qualquer domínio, rota ou provedor que conste na lista negra **JAMAIS** deve ser reativado ou reintroduzido no catálogo.
 

@@ -31,7 +31,7 @@ Toda a interação é feita por mensageria assíncrona com o iframe:
 ### 2.2. Segurança e Validação de Origem (`isTrustedMessageOrigin`)
 Para impedir que scripts de anúncios ou embeds de terceiros injetem comandos ou falsifiquem o estado de reprodução, a skin valida:
 1. Se a mensagem provém comprovadamente de `iframeRef.current.contentWindow`.
-2. Se a origem faz parte da lista restrita de domínios homologados (`watchplay.shop`, `pomfy.stream`, etc.).
+2. Se a origem faz parte da lista restrita de domínios homologados (`watchplay.shop`, `nixplay.lat`, etc.).
 
 ---
 

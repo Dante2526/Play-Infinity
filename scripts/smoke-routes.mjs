@@ -13,7 +13,6 @@ const endpoints = [
   // Requires params but let's test if the route exists and returns 400/404 or something consistent
   { path: '/api/watchplayer-stream?id=tt123456' },
   { path: '/api/myembed-stream?id=tt123456' },
-  { path: '/api/pomfy-stream?id=tt123456' },
   { path: '/api/check-season?tmdbId=123&s=1' },
   { path: '/api/series/available-episodes?tmdbId=123&s=1' },
   { path: '/api/find-cast-source?tmdbId=123&mediaType=movie' },
