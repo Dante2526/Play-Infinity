@@ -152,30 +152,68 @@ export function AdminPushNotifications() {
 
           {targetType === "specific" && (
             <div className="animate-fade-in">
-              <label className="block text-white/60 text-xs font-bold mb-1.5 uppercase tracking-wider ml-1">
-                Selecione os Usuários
-              </label>
-              <div className="max-h-64 overflow-y-auto bg-white/5 border border-white/10 rounded-[20px] p-2 custom-scrollbar flex flex-col gap-1">
+              <div className="flex items-center justify-between mb-2 px-1">
+                <label className="text-white/60 text-xs font-bold uppercase tracking-wider">
+                  Selecione os Usuários ({selectedEmails.length}/{usersList.length})
+                </label>
+                {usersList.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedEmails.length === usersList.length) setSelectedEmails([]);
+                      else setSelectedEmails(usersList.map(u => u.email));
+                    }}
+                    className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors"
+                  >
+                    {selectedEmails.length === usersList.length ? "Desmarcar Todos" : "Marcar Todos"}
+                  </button>
+                )}
+              </div>
+              <div className="max-h-64 overflow-y-auto bg-[#141414]/80 border border-white/5 rounded-[20px] p-2 custom-scrollbar flex flex-col gap-1 shadow-inner">
                 {usersList.length === 0 ? (
-                  <p className="text-white/40 text-xs p-4 text-center">Carregando usuários...</p>
+                  <div className="flex flex-col items-center justify-center p-8 text-white/40 gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-purple-500" />
+                    <span className="text-xs font-medium">Carregando usuários...</span>
+                  </div>
                 ) : (
-                  usersList.map((u, i) => (
-                    <label key={i} className="flex items-center gap-3 p-3 hover:bg-white/10 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-white/5">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-[#1c1c1e] border-white/20 transition-all cursor-pointer"
-                        checked={selectedEmails.includes(u.email)}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedEmails([...selectedEmails, u.email]);
-                          else setSelectedEmails(selectedEmails.filter(email => email !== u.email));
-                        }}
-                      />
-                      <div className="flex flex-col">
-                        <span className="text-sm font-bold text-white">{u.name}</span>
-                        <span className="text-xs text-white/50">{u.email}</span>
-                      </div>
-                    </label>
-                  ))
+                  usersList.map((u, i) => {
+                    const isSelected = selectedEmails.includes(u.email);
+                    return (
+                      <label 
+                        key={i} 
+                        className={`flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all duration-200 border ${
+                          isSelected 
+                            ? "bg-purple-600/10 border-purple-500/30" 
+                            : "bg-transparent border-transparent hover:bg-white/5 hover:border-white/10"
+                        }`}
+                      >
+                        <div className="relative flex items-center justify-center">
+                          <input 
+                            type="checkbox" 
+                            className="peer sr-only"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) setSelectedEmails([...selectedEmails, u.email]);
+                              else setSelectedEmails(selectedEmails.filter(email => email !== u.email));
+                            }}
+                          />
+                          <div className={`w-5 h-5 rounded flex items-center justify-center transition-all ${
+                            isSelected 
+                              ? "bg-purple-600 shadow-[0_0_10px_rgba(147,51,234,0.5)]" 
+                              : "bg-[#2a2a2a] border border-white/20 peer-hover:border-purple-500/50"
+                          }`}>
+                            <svg className={`w-3.5 h-3.5 text-white transition-transform duration-200 ${isSelected ? "scale-100 opacity-100" : "scale-50 opacity-0"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        </div>
+                        <div className="flex flex-col">
+                          <span className={`text-sm font-bold transition-colors ${isSelected ? "text-purple-300" : "text-white"}`}>{u.name}</span>
+                          <span className="text-xs text-white/40 font-medium">{u.email}</span>
+                        </div>
+                      </label>
+                    );
+                  })
                 )}
               </div>
             </div>
