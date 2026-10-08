@@ -130,7 +130,13 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
       if (Capacitor.isNativePlatform()) {
         try {
           await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
-          await Chromecast.show();
+          // Compat: versões antigas do plugin expõem `show`; a API atual usa `requestSession`
+          const anyCast = Chromecast as any;
+          if (typeof anyCast.show === 'function') {
+            await anyCast.show();
+          } else {
+            await Chromecast.requestSession();
+          }
           onClose();
           return;
         } catch (err) {

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
-import { getAdminMessaging, getAdminDb } from "../firebaseAdmin";
+import { getAdminMessaging, getAdminDb, getAdminFieldValue } from "../firebaseAdmin";
 import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
@@ -822,43 +822,118 @@ adminOpsRouter.get("/encontrei-status", (_req: Request, res: Response) => {
 
 /**
  * POST /api/admin/push
- * Dispara notificação push manual via Firebase Cloud Messaging
+ * Dispara notificação push manual via Firebase Cloud Messaging.
+ * Body: { title, body, targetEmails? } — sem targetEmails = push global (todos os dispositivos).
  */
 adminOpsRouter.post("/push", async (req: Request, res: Response) => {
   try {
     const { title, body, targetEmails } = req.body;
+
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: "Título e mensagem são obrigatórios." });
+    }
+
     const messaging = getAdminMessaging();
+    const db = getAdminDb();
     if (!messaging) {
       return res.status(500).json({ success: false, error: "Firebase Messaging não inicializado" });
     }
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Firebase Firestore não inicializado" });
+    }
 
-    const db = getAdminDb();
-    let tokens: string[] = [];
+    // Mapeia token -> documentos dos donos (para limpeza de tokens inválidos após o envio)
+    const tokenOwners = new Map<string, any[]>();
+    const seenDocs = new Map<string, string[]>(); // docId -> tokens do doc
+
+    const collectTokensFromSnapshot = (snapshot: any) => {
+      snapshot.forEach((docSnap: any) => {
+        const data = docSnap.data();
+        const tokens: string[] = [];
+        // Campo legado (string única) + array multi-dispositivo
+        if (typeof data.fcmToken === "string" && data.fcmToken) tokens.push(data.fcmToken);
+        if (Array.isArray(data.fcmTokens)) {
+          for (const t of data.fcmTokens) {
+            if (typeof t === "string" && t) tokens.push(t);
+          }
+        }
+        if (tokens.length === 0) return;
+        const unique = [...new Set(tokens)];
+        seenDocs.set(docSnap.id, unique);
+        for (const token of unique) {
+          const owners = tokenOwners.get(token) || [];
+          owners.push(docSnap.ref);
+          tokenOwners.set(token, owners);
+        }
+      });
+    };
 
     if (targetEmails && Array.isArray(targetEmails) && targetEmails.length > 0) {
       // Divide emails em chunks de 10 (limite do 'in' no firestore)
       for (let i = 0; i < targetEmails.length; i += 10) {
         const chunk = targetEmails.slice(i, i + 10);
         const snapshot = await db.collection("usuarios").where("email", "in", chunk).get();
-        snapshot.forEach((doc: any) => {
-          const data = doc.data();
-          if (data.fcmToken) tokens.push(data.fcmToken);
-        });
+        collectTokensFromSnapshot(snapshot);
       }
     } else {
-      const snapshot = await db.collection("usuarios").where("fcmToken", "!=", null).limit(500).get();
-      snapshot.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.fcmToken) tokens.push(data.fcmToken);
+      // Push global: busca TODOS os usuários (projeção leve via select para não
+      // carregar campos pesados). O limit(500) antigo cortava a base silenciosamente.
+      const snapshot = await db.collection("usuarios").select("fcmToken", "fcmTokens").get();
+      collectTokensFromSnapshot(snapshot);
+    }
+
+    const allTokens = [...tokenOwners.keys()];
+    if (allTokens.length === 0) {
+      return res.json({ success: true, count: 0, sent: 0, cleanedInvalid: 0 });
+    }
+
+    // Envia em lotes de 500 (limite do sendEachForMulticast)
+    let sent = 0;
+    const invalidTokens = new Set<string>();
+    for (let i = 0; i < allTokens.length; i += 500) {
+      const chunk = allTokens.slice(i, i + 500);
+      const message = { notification: { title, body }, tokens: chunk };
+      const response = await messaging.sendEachForMulticast(message);
+      sent += response.successCount;
+      response.responses.forEach((r: any, idx: number) => {
+        if (!r.success && r.error) {
+          const errCode = String((r.error as any)?.code || r.error?.message || "");
+          // Token não registrado/inválido -> marcar para limpeza no Firestore
+          if (/unregistered|invalid/i.test(errCode)) {
+            invalidTokens.add(chunk[idx]);
+          }
+        }
       });
     }
 
-    if (tokens.length > 0) {
-      const message = { notification: { title, body }, tokens };
-      await messaging.sendEachForMulticast(message);
+    // Limpeza: remove tokens inválidos/expirados dos documentos dos donos
+    let cleanedInvalid = 0;
+    if (invalidTokens.size > 0) {
+      for (const [docId, tokens] of seenDocs.entries()) {
+        const remaining = tokens.filter((t) => !invalidTokens.has(t));
+        if (remaining.length === tokens.length) continue;
+        try {
+          const update: any = { fcmTokens: remaining };
+          if (remaining.length === 0) {
+            // Campo legado: apaga de vez quando não sobrou nenhum token
+            const FieldValue = getAdminFieldValue();
+            if (FieldValue) {
+              update.fcmToken = FieldValue.delete();
+            } else {
+              update.fcmToken = null;
+            }
+          } else {
+            update.fcmToken = remaining[remaining.length - 1];
+          }
+          await db.collection("usuarios").doc(docId).update(update);
+          cleanedInvalid++;
+        } catch (err: any) {
+          console.warn("[adminOps] Falha ao limpar token FCM inválido do usuário", docId, err?.message || err);
+        }
+      }
     }
 
-    res.json({ success: true, count: tokens.length });
+    res.json({ success: true, count: allTokens.length, sent, cleanedInvalid });
   } catch (error: any) {
     console.error("[adminOps] Erro ao disparar push:", error);
     res.status(500).json({ success: false, error: error.message });

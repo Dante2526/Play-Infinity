@@ -46,6 +46,7 @@ export function getAdminDb(): any {
       } else {
         const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "play-infinity-63eaa";
         defaultApp = initializeApp({ projectId });
+        console.warn("[Firebase Admin] ATENÇÃO: sem credenciais de service account (arquivo secrets/firebase-service-account.json ou env FIREBASE_SERVICE_ACCOUNT). Leitura do Firestore e envio de Push (FCM) NÃO funcionarão até configurar as credenciais.");
         console.log("[Firebase Admin] Inicializado com projectId:", projectId);
       }
     }
@@ -75,4 +76,22 @@ export function getAdminMessaging(): any {
     console.error("[Firebase Admin] Erro ao inicializar Messaging:", error);
   }
   return null;
+}
+
+let adminFieldValue: any = null;
+
+/**
+ * Expõe FieldValue do Admin SDK (ex: FieldValue.delete()) para
+ * limpeza de campos legados nos documentos do Firestore.
+ */
+export function getAdminFieldValue(): any {
+  if (adminFieldValue) return adminFieldValue;
+  try {
+    const { FieldValue } = req("firebase-admin/firestore");
+    adminFieldValue = FieldValue;
+    return adminFieldValue;
+  } catch (error) {
+    console.error("[Firebase Admin] Erro ao obter FieldValue:", error);
+    return null;
+  }
 }

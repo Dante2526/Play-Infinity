@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
+import { removeFcmTokenFromCloud } from "../services/pushNotifications";
 import {
   Play,
   Bookmark,
@@ -181,6 +182,7 @@ export function UserProfilePage({
 
   const handleLogout = async () => {
     try {
+      await removeFcmTokenFromCloud(); // Remove o token FCM deste aparelho antes de sair
       localStorage.removeItem("playinfinity_logged_in");
       localStorage.removeItem("playinfinity_playback_history");
       localStorage.removeItem("playinfinity_favorites");
