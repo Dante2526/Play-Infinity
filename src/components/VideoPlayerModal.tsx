@@ -1,8 +1,8 @@
 export const __NIXPLAY_TOTAL_EPISODES_VERSION__ = "2.1.0";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Hls from "hls.js";
-import { 
-  X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink, 
+import {
+  X, Play, Loader2, AlertCircle, RefreshCw, ExternalLink,
   Check, Sparkles, Radio, ShieldCheck,
   Tv, Film, ChevronLeft, ChevronRight, ChevronDown, Layers, Maximize2, Minimize2, FastForward,
   SkipForward, RotateCcw, PictureInPicture2, Pause
@@ -11,9 +11,9 @@ import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
-import { 
-  isEpisodeWatched, 
-  markEpisodeWatched, 
+import {
+  isEpisodeWatched,
+  markEpisodeWatched,
   toggleEpisodeWatched,
   markSeasonWatched,
   isSeasonFullyWatched,
@@ -125,14 +125,14 @@ function parseMediaFromUrl(url: string) {
         season: isNaN(season) ? 1 : season,
         episode: isNaN(episode) ? 1 : episode,
       };
-    } catch(e){console.warn("Silenced error:", e);}
+    } catch (e) { console.warn("Silenced error:", e); }
   }
 
   const isSeries = url.includes("/tv/") || url.includes("/tvshow/") || url.includes("/serie") || url.includes("/series");
-  
+
   const tvPattern = /\/(?:tv|tvshow|serie|series)\/([a-zA-Z0-9_-]+)(?:\/(\d+)\/(\d+))?/i;
   const tvMatch = url.match(tvPattern);
-  
+
   const moviePattern = /\/(?:movie|filme)\/([a-zA-Z0-9_-]+)/i;
   const movieMatch = url.match(moviePattern);
 
@@ -162,10 +162,10 @@ function parseMediaFromUrl(url: string) {
   };
 }
 
-export function VideoPlayerModal({ 
-  isOpen, 
-  onClose, 
-  title, 
+export function VideoPlayerModal({
+  isOpen,
+  onClose,
+  title,
   defaultUrl,
   mediaType,
   tmdbId,
@@ -399,24 +399,24 @@ export function VideoPlayerModal({
 
     const enforceStatusBarHidden = () => {
       if (Capacitor.isNativePlatform() && isOpen && isExpanded && !isMiniPlayer) {
-        StatusBar.hide().catch(() => {});
+        StatusBar.hide().catch(() => { });
       }
     };
 
     if (Capacitor.isNativePlatform()) {
       if (isOpen && isExpanded && !isMiniPlayer) {
-        StatusBar.hide().catch(() => {});
-        
+        StatusBar.hide().catch(() => { });
+
         // Adiciona listeners para garantir que a status bar suma se o usuário 
         // puxou a barra de notificações e ela ficou "presa"
         window.addEventListener("pointerdown", enforceStatusBarHidden);
         window.addEventListener("touchstart", enforceStatusBarHidden, { passive: true });
-        
+
         // Também verifica periodicamente a cada 2 segundos se a status bar reapareceu
         // para esconder automaticamente, imitando o IMMERSIVE_STICKY nativo
         enforceInterval = setInterval(enforceStatusBarHidden, 2500);
       } else {
-        StatusBar.show().catch(() => {});
+        StatusBar.show().catch(() => { });
       }
     }
     return () => {
@@ -425,7 +425,7 @@ export function VideoPlayerModal({
       if (enforceInterval) clearInterval(enforceInterval);
 
       if (Capacitor.isNativePlatform()) {
-        StatusBar.show().catch(() => {});
+        StatusBar.show().catch(() => { });
       }
     };
   }, [isOpen, isExpanded, isMiniPlayer]);
@@ -461,11 +461,11 @@ export function VideoPlayerModal({
         setIsWidescreen(false);
         setIsRotated(false);
         if (Capacitor.isNativePlatform()) {
-          ScreenOrientation.unlock().catch(() => {});
+          ScreenOrientation.unlock().catch(() => { });
         } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
           try {
             (screen.orientation as any).unlock();
-          } catch(e){console.warn("Silenced error:", e);}
+          } catch (e) { console.warn("Silenced error:", e); }
         }
       }
     };
@@ -497,7 +497,7 @@ export function VideoPlayerModal({
     if (typeof screen !== "undefined" && screen.orientation) {
       try {
         screen.orientation.addEventListener("change", handleOrientationOrResize);
-      } catch(_){console.warn("Silenced error:", _);}
+      } catch (_) { console.warn("Silenced error:", _); }
     }
     return () => {
       window.removeEventListener("resize", handleOrientationOrResize);
@@ -505,7 +505,7 @@ export function VideoPlayerModal({
       if (typeof screen !== "undefined" && screen.orientation) {
         try {
           screen.orientation.removeEventListener("change", handleOrientationOrResize);
-        } catch(_){console.warn("Silenced error:", _);}
+        } catch (_) { console.warn("Silenced error:", _); }
       }
     };
   }, []);
@@ -811,7 +811,7 @@ export function VideoPlayerModal({
         setIsWidescreen(false);
         setIsFullscreen(false);
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
       }
     };
@@ -941,7 +941,7 @@ export function VideoPlayerModal({
         return Array.from({ length: nixplayTotalEpisodes }, (_, i) => i + 1);
       }
     }
-    
+
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.map(e => e.episode_number);
     }
@@ -1003,7 +1003,7 @@ export function VideoPlayerModal({
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
-          buildUrl: (id: string, s?: number, e?: number) => 
+          buildUrl: (id: string, s?: number, e?: number) =>
             `/api/watchplay-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}`,
           isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
           name: "WatchPlayer"
@@ -1074,7 +1074,7 @@ export function VideoPlayerModal({
           key: "srv_vip",
           label: "VIP Player",
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
-          buildUrl: (id: string) => 
+          buildUrl: (id: string) =>
             `/api/myembed-stream?id=${imdbId || effectiveMovieId || id}&type=movie&cb=${Date.now()}`,
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"
@@ -1095,7 +1095,7 @@ export function VideoPlayerModal({
         }
       ];
     }
-    
+
     // Adiciona Seriesflix HD (vidsrc.sh decrypt + proxy) — usa hls.js + Netflix skin 100%
     if (isSeries && tmdbId) {
       list.push({
@@ -1109,7 +1109,7 @@ export function VideoPlayerModal({
       });
     }
 
-    
+
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
     }
@@ -1206,7 +1206,7 @@ export function VideoPlayerModal({
       // Se o link primário veio do Encontrei (mixdrop === mixdrop_encontrei), tenta o Vizer
       const isPrimaryVizer = mixdropFileId && mixdropVizerFileId && mixdropFileId === mixdropVizerFileId;
       const fallbackFileId = isPrimaryVizer ? mixdropEncontreiFileId : mixdropVizerFileId;
-      
+
       if (fallbackFileId && fallbackFileId !== mixdropFileId) {
         const fallbackUrl = buildMixdropStreamUrl(fallbackFileId);
         if (fallbackUrl) {
@@ -1255,16 +1255,16 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  const mixdropRecoveryRef = useRef(async () => {});
+  const mixdropRecoveryRef = useRef(async () => { });
   mixdropRecoveryRef.current = async () => {
     console.warn("[VideoPlayerModal] MixDrop deletado detectado. Puxando novo link ao vivo do scraper...");
     const newId = await lookupMixdropFileId(season, episode, true);
     if (newId && newId !== mixdropFileId) {
-        console.log("[VideoPlayerModal] Novo link MixDrop obtido do scraper! Recarregando...");
-        handleServerSwitch("srv_mixdrop");
+      console.log("[VideoPlayerModal] Novo link MixDrop obtido do scraper! Recarregando...");
+      handleServerSwitch("srv_mixdrop");
     } else {
-        console.warn("[VideoPlayerModal] Scraper não achou link novo pro MixDrop. Acionando fallback...");
-        silentFallbackRef.current();
+      console.warn("[VideoPlayerModal] Scraper não achou link novo pro MixDrop. Acionando fallback...");
+      silentFallbackRef.current();
     }
   };
 
@@ -1273,7 +1273,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = selectedServerKey === "srv_mixdrop" ? 20000 : 15000;
+    const timeoutDuration = 10000; // 10 segundos
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -1324,18 +1324,18 @@ export function VideoPlayerModal({
                 try {
                   const fallbackPromise = requestFS.call(elem);
                   if (fallbackPromise && typeof fallbackPromise.catch === "function") {
-                    fallbackPromise.catch(() => {});
+                    fallbackPromise.catch(() => { });
                   }
-                } catch(_){console.warn("Silenced error:", _);}
+                } catch (_) { console.warn("Silenced error:", _); }
               });
             }
           } catch (_) {
             try {
               const fallbackPromise = requestFS.call(elem);
               if (fallbackPromise && typeof fallbackPromise.catch === "function") {
-                fallbackPromise.catch(() => {});
+                fallbackPromise.catch(() => { });
               }
-            } catch(_){console.warn("Silenced error:", _);}
+            } catch (_) { console.warn("Silenced error:", _); }
           }
         }
 
@@ -1347,16 +1347,16 @@ export function VideoPlayerModal({
         }
 
         if (Capacitor.isNativePlatform()) {
-          ScreenOrientation.lock({ orientation: 'landscape' }).then(() => setIsRotated(false)).catch(() => {});
+          ScreenOrientation.lock({ orientation: 'landscape' }).then(() => setIsRotated(false)).catch(() => { });
         } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
           try {
             const lockPromise = (screen.orientation as any).lock("landscape");
             if (lockPromise && typeof lockPromise.then === "function") {
               lockPromise.then(() => {
                 setIsRotated(false);
-              }).catch(() => {});
+              }).catch(() => { });
             }
-          } catch(_){console.warn("Silenced error:", _);}
+          } catch (_) { console.warn("Silenced error:", _); }
         }
       }
 
@@ -1391,7 +1391,7 @@ export function VideoPlayerModal({
             if (prefServer && !serversRef.current.find(s => s.key === prefServer)) {
               prefServer = null;
             }
-          } catch(e) {}
+          } catch (e) { }
         }
 
         // Default: MixDrop (priority 1 — MP4 direto, mais robusto contra A/V desync).
@@ -1414,7 +1414,7 @@ export function VideoPlayerModal({
           targetUrl = defaultUrl;
         } else {
           const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
-          targetUrl = isSeries 
+          targetUrl = isSeries
             ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
             : targetSrv.buildUrl(resolvedId);
         }
@@ -1489,7 +1489,7 @@ export function VideoPlayerModal({
       try {
         const parsed = new URL(iframeRef.current.src, window.location.origin);
         if (parsed.origin === event.origin) return true;
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
     return false;
   };
@@ -1503,15 +1503,15 @@ export function VideoPlayerModal({
       // Remove overlay preto quando o player estiver pronto (duration > 0)
       const msgType = event.data.type || event.data.event;
       const isStatusMessage = msgType === "WATCHPLAY_STATUS" ||
-          msgType === "PLAYER_STATUS" ||
-          msgType === "status" ||
-          msgType === "timeupdate" ||
-          msgType === "PLAYER_EVENT";
+        msgType === "PLAYER_STATUS" ||
+        msgType === "status" ||
+        msgType === "timeupdate" ||
+        msgType === "PLAYER_EVENT";
 
       if (isStatusMessage) {
         const data = (msgType === "PLAYER_EVENT" && event.data.data) ? event.data.data : (event.data.data || event.data);
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : 0;
-        
+
         // Se acabamos de trocar de episódio/temporada, descarta mensagens residuais
         // do vídeo anterior que ainda estavam na fila com posição adiantada (> 4s)
         const isRecentTransition = Date.now() - transitionEpochRef.current < 1500;
@@ -1583,7 +1583,7 @@ export function VideoPlayerModal({
             if (isSeries && tmdbId && !wasFallback) {
               try {
                 localStorage.setItem(`preferred_server_${tmdbId}`, selectedServerKey);
-              } catch(e) {}
+              } catch (e) { }
             }
 
             // Salto automático para o segundo exato salvo se aberto via "Continuar Assistindo"
@@ -1593,7 +1593,7 @@ export function VideoPlayerModal({
                 iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: lastKnownTimeRef.current }, "*");
                 iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: lastKnownTimeRef.current }, "*");
                 iframeRef.current?.contentWindow?.postMessage({ type: "seek", time: lastKnownTimeRef.current }, "*");
-              } catch(err){console.warn("Silenced error:", err);}
+              } catch (err) { console.warn("Silenced error:", err); }
             }
           }
         }
@@ -1602,8 +1602,8 @@ export function VideoPlayerModal({
         if (
           !iframeVisible &&
           ((typeof data.currentTime === "number" && data.currentTime > 0.1) ||
-          data.paused === false ||
-          (typeof data.readyState === "number" && data.readyState >= 3))
+            data.paused === false ||
+            (typeof data.readyState === "number" && data.readyState >= 3))
         ) {
           setIframeVisible(true);
         }
@@ -1630,10 +1630,10 @@ export function VideoPlayerModal({
             if (hasNextSeason) {
               const nextSeason = season + 1;
               console.log(`[Player Auto-Next] Temporada ${season} encerrada. Passando para Temp ${nextSeason} Ep 1...`);
-              
+
               if (resolvedId) markEpisodeWatched(resolvedId, season, episode, true);
-              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch(e){console.warn("Silenced error:", e);}
-              
+              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch (e) { console.warn("Silenced error:", e); }
+
               transitionEpochRef.current = Date.now();
               setSeason(nextSeason);
               setEpisode(1);
@@ -1644,7 +1644,7 @@ export function VideoPlayerModal({
               setIframeVisible(false);
               fallbackAttemptsRef.current.clear();
               mixdropAttemptRef.current = 1;
-              
+
               const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
               const newUrl = activeServer.buildUrl(resolvedId, nextSeason, 1);
               setUrlInput(newUrl);
@@ -1712,7 +1712,7 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
 
@@ -1730,7 +1730,7 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
     setLastSkippedSeconds(null);
@@ -1745,14 +1745,14 @@ export function VideoPlayerModal({
     setSkipDurationSeconds(newSec);
     try {
       localStorage.setItem("playinfinity_skip_duration", String(newSec));
-    } catch(e){console.warn("Silenced error:", e);}
+    } catch (e) { console.warn("Silenced error:", e); }
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({
           type: "SET_SKIP_DURATION",
           seconds: newSec,
         }, "*");
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
   };
 
@@ -1766,7 +1766,7 @@ export function VideoPlayerModal({
     // Pausa imediatamente o áudio do player anterior para evitar ruído residual
     try {
       iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
-    } catch(e){console.warn("Silenced error:", e);}
+    } catch (e) { console.warn("Silenced error:", e); }
 
     transitionEpochRef.current = Date.now();
     setEpisode(newEpisode);
@@ -1803,7 +1803,7 @@ export function VideoPlayerModal({
     }
     try {
       iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*");
-    } catch(e){console.warn("Silenced error:", e);}
+    } catch (e) { console.warn("Silenced error:", e); }
 
     transitionEpochRef.current = Date.now();
     setSeason(newSeason);
@@ -1905,7 +1905,7 @@ export function VideoPlayerModal({
     if (hasFS) {
       try {
         if (document.exitFullscreen) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         } else if ((document as any).webkitExitFullscreen) {
           (document as any).webkitExitFullscreen();
         } else if ((document as any).mozCancelFullScreen) {
@@ -1913,14 +1913,14 @@ export function VideoPlayerModal({
         } else if ((document as any).msExitFullscreen) {
           (document as any).msExitFullscreen();
         }
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
     if (Capacitor.isNativePlatform()) {
-      ScreenOrientation.unlock().catch(() => {});
+      ScreenOrientation.unlock().catch(() => { });
     } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
       try {
         (screen.orientation as any).unlock();
-      } catch(e){console.warn("Silenced error:", e);}
+      } catch (e) { console.warn("Silenced error:", e); }
     }
     setIsWidescreen(false);
     setIsRotated(false);
@@ -1983,7 +1983,7 @@ export function VideoPlayerModal({
 
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch(_){console.warn("Silenced error:", _);}
+    } catch (_) { console.warn("Silenced error:", _); }
   };
 
   const handleMiniHeaderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -2010,7 +2010,7 @@ export function VideoPlayerModal({
         if (e.currentTarget.hasPointerCapture(e.pointerId)) {
           e.currentTarget.releasePointerCapture(e.pointerId);
         }
-      } catch(_){console.warn("Silenced error:", _);}
+      } catch (_) { console.warn("Silenced error:", _); }
       setIsDragging(false);
     }
   };
@@ -2022,14 +2022,14 @@ export function VideoPlayerModal({
       setIsWidescreen(false);
       setIsRotated(false);
       if (document.fullscreenElement) {
-        document.exitFullscreen().catch(() => {});
+        document.exitFullscreen().catch(() => { });
       }
       if (Capacitor.isNativePlatform()) {
-        ScreenOrientation.unlock().catch(() => {});
+        ScreenOrientation.unlock().catch(() => { });
       } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
-        } catch(e){console.warn("Silenced error:", e);}
+        } catch (e) { console.warn("Silenced error:", e); }
       }
     } else {
       setIsWidescreen(true);
@@ -2067,14 +2067,14 @@ export function VideoPlayerModal({
       if (Capacitor.isNativePlatform()) {
         ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
           setIsRotated(false);
-        }).catch(() => {});
+        }).catch(() => { });
       } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
         try {
           const lockPromise = (screen.orientation as any).lock("landscape");
           if (lockPromise && typeof lockPromise.then === "function") {
             lockPromise.then(() => {
               setIsRotated(false);
-            }).catch(() => {});
+            }).catch(() => { });
           }
         } catch (err) {
           // Fallback
@@ -2095,7 +2095,7 @@ export function VideoPlayerModal({
     } else {
       if (isExpanded) {
         if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
+          document.exitFullscreen().catch(() => { });
         }
         setIsWidescreen(false);
         setIsRotated(false);
@@ -2159,23 +2159,21 @@ export function VideoPlayerModal({
       style={
         isMiniPlayer && miniPosition
           ? {
-              left: `${miniPosition.x}px`,
-              top: `${miniPosition.y}px`,
-              right: "auto",
-              bottom: "auto",
-            }
+            left: `${miniPosition.x}px`,
+            top: `${miniPosition.y}px`,
+            right: "auto",
+            bottom: "auto",
+          }
           : undefined
       }
       className={
         isMiniPlayer
-          ? `fixed z-50 pointer-events-auto select-none ${
-              !miniPosition ? "bottom-4 right-4" : ""
-            } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
-          : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${
-              isExpanded 
-                ? "p-0 m-0 bg-black w-full h-full overflow-hidden" 
-                : `p-2 sm:p-4 md:p-6 bg-black/95 ${!isSmartTV ? "backdrop-blur-xl" : ""}`
-            }`
+          ? `fixed z-50 pointer-events-auto select-none ${!miniPosition ? "bottom-4 right-4" : ""
+          } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
+          : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${isExpanded
+            ? "p-0 m-0 bg-black w-full h-full overflow-hidden"
+            : `p-2 sm:p-4 md:p-6 bg-black/95 ${!isSmartTV ? "backdrop-blur-xl" : ""}`
+          }`
       }
     >
       {/* Overlay global enquanto arrasta para evitar que iframes capturem o cursor */}
@@ -2189,13 +2187,12 @@ export function VideoPlayerModal({
       )}
 
       <div
-        className={`relative bg-[#111111] overflow-hidden flex flex-col transition-all duration-300 ${
-          isMiniPlayer
+        className={`relative bg-[#111111] overflow-hidden flex flex-col transition-all duration-300 ${isMiniPlayer
             ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
             : isExpanded
-            ? "w-full h-full max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
-            : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
-        }`}
+              ? "w-full h-full max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+              : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
+          }`}
       >
         {/* Header do Mini-Player Flutuante (Arrastável) */}
         {isMiniPlayer && (
@@ -2204,9 +2201,8 @@ export function VideoPlayerModal({
             onPointerMove={handleMiniHeaderPointerMove}
             onPointerUp={handleMiniHeaderPointerUp}
             onPointerCancel={handleMiniHeaderPointerUp}
-            className={`flex items-center justify-between px-3 py-2 bg-[#161616] border-b border-neutral-800 text-xs select-none gap-2 touch-none ${
-              isDragging ? "cursor-grabbing bg-[#1c1c1c]" : "cursor-grab hover:bg-[#1a1a1a]"
-            } transition-colors`}
+            className={`flex items-center justify-between px-3 py-2 bg-[#161616] border-b border-neutral-800 text-xs select-none gap-2 touch-none ${isDragging ? "cursor-grabbing bg-[#1c1c1c]" : "cursor-grab hover:bg-[#1a1a1a]"
+              } transition-colors`}
           >
             <div className="flex items-center gap-2 min-w-0 pointer-events-none">
               <div className="w-5 h-5 rounded-full bg-orange-600/20 text-orange-500 flex items-center justify-center shrink-0">
@@ -2272,14 +2268,14 @@ export function VideoPlayerModal({
         {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido e nem mini player) */}
         {!isExpanded && !isMiniPlayer && isSeries && (
           <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-[#121214] via-[#161618] to-[#121214] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 shadow-inner">
-            
+
             {/* Bloco de Temporadas */}
             <div className="flex items-center gap-2.5 flex-wrap">
               <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-300">
                 <Layers className="w-3.5 h-3.5 text-orange-500" />
                 <span>Temporada:</span>
               </div>
-              
+
               <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hide max-w-full">
                 {availableSeasons.map((s) => {
                   const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
@@ -2289,13 +2285,12 @@ export function VideoPlayerModal({
                     <button
                       key={s}
                       onClick={() => handleSeasonChange(s)}
-                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
-                        isCurrent
+                      className={`relative px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${isCurrent
                           ? "bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold"
                           : seasonDone
                             ? "bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50"
                             : "text-neutral-400 hover:text-white hover:bg-white/5"
-                      }`}
+                        }`}
                       title={seasonDone ? `Temporada ${s} (Assistida)` : `Temporada ${s}`}
                     >
                       <span>T{s}</span>
@@ -2314,11 +2309,10 @@ export function VideoPlayerModal({
                 return (
                   <button
                     onClick={() => markSeasonWatched(resolvedId, season, totalSeasonEpisodes, !isCurrentSeasonDone)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer shrink-0 ${
-                      isCurrentSeasonDone
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border cursor-pointer shrink-0 ${isCurrentSeasonDone
                         ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                         : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
-                    }`}
+                      }`}
                     title={
                       isCurrentSeasonDone
                         ? `Desmarcar Temporada ${season} inteira como assistida`
@@ -2332,9 +2326,8 @@ export function VideoPlayerModal({
                     <span className="sm:hidden">
                       {isCurrentSeasonDone ? `T${season} ✓` : `Marcar T${season}`}
                     </span>
-                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${
-                      isCurrentSeasonDone ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-neutral-400"
-                    }`}>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ml-0.5 ${isCurrentSeasonDone ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-neutral-400"
+                      }`}>
                       {watchedCount}/{totalSeasonEpisodes}
                     </span>
                   </button>
@@ -2355,110 +2348,106 @@ export function VideoPlayerModal({
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => handleEpisodeChange(episode - 1)}
-                disabled={episode <= 1}
-                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
-              >
-                <ChevronLeft className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Anterior</span>
-              </button>
+                <button
+                  onClick={() => handleEpisodeChange(episode - 1)}
+                  disabled={episode <= 1}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Anterior</span>
+                </button>
 
-              <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px]">
-                {episodeNumbers.map((ep) => {
-                  const watched = isEpisodeWatched(resolvedId, season, ep);
-                  const isCurrent = episode === ep;
-                  return (
-                    <button
-                      key={ep}
-                      ref={isCurrent ? activeEpisodeBtnRef : null}
-                      onClick={() => handleEpisodeChange(ep)}
-                      title={watched ? `Episódio ${ep} (Assistido)` : `Episódio ${ep}`}
-                      className={`relative w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${
-                        isCurrent
-                          ? "bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-600/30 scale-105 border border-orange-400/40"
-                          : watched
-                            ? "bg-emerald-950/40 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-900/60 hover:border-emerald-400/60"
-                            : "bg-[#1a1a1d] text-neutral-300 hover:text-white hover:bg-[#25252a] border border-white/5"
-                      }`}
-                    >
-                      <span>{ep}</span>
-                      {watched && (
-                        <span 
-                          className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-md ${
-                            isCurrent ? "bg-emerald-400 text-black" : "bg-emerald-500 text-white"
+                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px]">
+                  {episodeNumbers.map((ep) => {
+                    const watched = isEpisodeWatched(resolvedId, season, ep);
+                    const isCurrent = episode === ep;
+                    return (
+                      <button
+                        key={ep}
+                        ref={isCurrent ? activeEpisodeBtnRef : null}
+                        onClick={() => handleEpisodeChange(ep)}
+                        title={watched ? `Episódio ${ep} (Assistido)` : `Episódio ${ep}`}
+                        className={`relative w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center shrink-0 ${isCurrent
+                            ? "bg-gradient-to-tr from-orange-600 to-amber-500 text-white shadow-lg shadow-orange-600/30 scale-105 border border-orange-400/40"
+                            : watched
+                              ? "bg-emerald-950/40 text-emerald-200 border border-emerald-500/40 hover:bg-emerald-900/60 hover:border-emerald-400/60"
+                              : "bg-[#1a1a1d] text-neutral-300 hover:text-white hover:bg-[#25252a] border border-white/5"
                           }`}
-                        >
-                          <Check className="w-2.5 h-2.5 stroke-[3]" />
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
+                      >
+                        <span>{ep}</span>
+                        {watched && (
+                          <span
+                            className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center shadow-md ${isCurrent ? "bg-emerald-400 text-black" : "bg-emerald-500 text-white"
+                              }`}
+                          >
+                            <Check className="w-2.5 h-2.5 stroke-[3]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => handleEpisodeChange(episode + 1)}
+                  disabled={episode >= totalSeasonEpisodes}
+                  className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
+                >
+                  <span className="hidden sm:inline">Próximo</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+
+                {/* Botão de Toggle Manual do Episódio Atual */}
+                <button
+                  onClick={() => toggleEpisodeWatched(resolvedId, season, episode)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer backdrop-blur-sm active:scale-95 ${isEpisodeWatched(resolvedId, season, episode)
+                      ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                      : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
+                    }`}
+                  title={isEpisodeWatched(resolvedId, season, episode) ? "Clique para desmarcar como assistido" : "Clique para marcar como assistido"}
+                >
+                  <Check className={`w-3.5 h-3.5 ${isEpisodeWatched(resolvedId, season, episode) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
+                  <span className="hidden sm:inline">
+                    {isEpisodeWatched(resolvedId, season, episode) ? "Episódio Visto" : "Marcar Visto"}
+                  </span>
+                  <span className="sm:hidden">
+                    {isEpisodeWatched(resolvedId, season, episode) ? "Visto" : "Marcar"}
+                  </span>
+                </button>
               </div>
-
-              <button
-                onClick={() => handleEpisodeChange(episode + 1)}
-                disabled={episode >= totalSeasonEpisodes}
-                className="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-25 disabled:hover:bg-white/5 text-neutral-300 hover:text-white text-xs font-semibold flex items-center gap-1 border border-white/5 transition-all cursor-pointer active:scale-95"
-              >
-                <span className="hidden sm:inline">Próximo</span>
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
-
-              {/* Botão de Toggle Manual do Episódio Atual */}
-              <button
-                onClick={() => toggleEpisodeWatched(resolvedId, season, episode)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer backdrop-blur-sm active:scale-95 ${
-                  isEpisodeWatched(resolvedId, season, episode)
-                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25 shadow-[0_0_12px_rgba(16,185,129,0.15)]"
-                    : "bg-white/5 text-neutral-300 border-white/10 hover:text-white hover:bg-white/10 hover:border-white/20"
-                }`}
-                title={isEpisodeWatched(resolvedId, season, episode) ? "Clique para desmarcar como assistido" : "Clique para marcar como assistido"}
-              >
-                <Check className={`w-3.5 h-3.5 ${isEpisodeWatched(resolvedId, season, episode) ? "text-emerald-400 stroke-[3]" : "text-neutral-400"}`} />
-                <span className="hidden sm:inline">
-                  {isEpisodeWatched(resolvedId, season, episode) ? "Episódio Visto" : "Marcar Visto"}
-                </span>
-                <span className="sm:hidden">
-                  {isEpisodeWatched(resolvedId, season, episode) ? "Visto" : "Marcar"}
-                </span>
-              </button>
-            </div>
             )}
           </div>
         )}
 
         {/* Player Video Stage: Mantém tela cheia contínua sem interrupções entre episódios */}
-        <div 
-          id="player-stage-container" 
+        <div
+          id="player-stage-container"
           onMouseMove={handleStageMouseMove}
           onMouseLeave={handleStageMouseLeave}
-          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${
-            isExpanded ? "w-full h-full flex-1 fixed inset-0 z-[999999]" : "aspect-video"
-          }`}
+          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${isExpanded ? "w-full h-full flex-1 fixed inset-0 z-[999999]" : "aspect-video"
+            }`}
         >
           {/* Inner Viewport Rotacionável para modo Paisagem (Widescreen Deitado) no Celular */}
           <div
             style={
               isRotated
                 ? {
-                    position: "absolute",
-                    top: "50%",
-                    left: "50%",
-                    width: "100dvh",
-                    height: "100dvw",
-                    maxWidth: "100dvh",
-                    maxHeight: "100dvw",
-                    transform: "translate(-50%, -50%) rotate(90deg)",
-                    zIndex: 20,
-                  }
+                  position: "absolute",
+                  top: "50%",
+                  left: "50%",
+                  width: "100dvh",
+                  height: "100dvw",
+                  maxWidth: "100dvh",
+                  maxHeight: "100dvw",
+                  transform: "translate(-50%, -50%) rotate(90deg)",
+                  zIndex: 20,
+                }
                 : {
-                    position: "relative",
-                    width: "100%",
-                    height: "100%",
-                    zIndex: 20,
-                  }
+                  position: "relative",
+                  width: "100%",
+                  height: "100%",
+                  zIndex: 20,
+                }
             }
             className="flex items-center justify-center bg-black overflow-hidden select-none"
           >
@@ -2540,43 +2529,43 @@ export function VideoPlayerModal({
                   }}
                 />
               ) : (
-              <iframe
-                key={`${activeIframeUrl}-${transitionEpochRef.current}`}
-                ref={iframeRef}
-                src={activeIframeUrl}
-                title={title}
-                className="w-full h-full border-0 bg-black"
-                style={{
-                  backgroundColor: "#000000",
-                  opacity: iframeVisible ? 1 : 0,
-                  transform:
-                    aspectRatio === "cover"
-                      ? "scale(1.35)"
-                      : aspectRatio === "stretch"
-                      ? "scale(1.0, 1.25)"
-                      : "none",
-                  transformOrigin: "center center",
-                  transition: "transform 0.3s ease, opacity 0.5s ease",
-                }}
-                fetchPriority="high"
-                allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
-                referrerPolicy="strict-origin-when-cross-origin"
-                onLoad={() => {
-                  const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop';
-                  
-                  if (skinSupported) {
-                    // Mantém o isLoading = true (spinner girando na frente do player)
-                    // Libera apenas a skin por baixo
-                    setTimeout(() => setPlayerSkinReady(true), 500);
-                  } else {
-                    // Para servidores sem integração de status (VidSrc, Consumet, External),
-                    // liberamos o spinner assim que o iframe carrega para não travar a tela.
-                    setTimeout(() => setPlayerSkinReady(true), 500);
-                    setIsLoading(false);
-                  }
-                }}
-                onError={() => handleSilentFallback()}
-              />
+                <iframe
+                  key={`${activeIframeUrl}-${transitionEpochRef.current}`}
+                  ref={iframeRef}
+                  src={activeIframeUrl}
+                  title={title}
+                  className="w-full h-full border-0 bg-black"
+                  style={{
+                    backgroundColor: "#000000",
+                    opacity: iframeVisible ? 1 : 0,
+                    transform:
+                      aspectRatio === "cover"
+                        ? "scale(1.35)"
+                        : aspectRatio === "stretch"
+                          ? "scale(1.0, 1.25)"
+                          : "none",
+                    transformOrigin: "center center",
+                    transition: "transform 0.3s ease, opacity 0.5s ease",
+                  }}
+                  fetchPriority="high"
+                  allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
+                  referrerPolicy="strict-origin-when-cross-origin"
+                  onLoad={() => {
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop';
+
+                    if (skinSupported) {
+                      // Mantém o isLoading = true (spinner girando na frente do player)
+                      // Libera apenas a skin por baixo
+                      setTimeout(() => setPlayerSkinReady(true), 500);
+                    } else {
+                      // Para servidores sem integração de status (VidSrc, Consumet, External),
+                      // liberamos o spinner assim que o iframe carrega para não travar a tela.
+                      setTimeout(() => setPlayerSkinReady(true), 500);
+                      setIsLoading(false);
+                    }
+                  }}
+                  onError={() => handleSilentFallback()}
+                />
               )
             ) : error ? (
               <div className="flex flex-col items-center max-w-lg p-6 text-center text-neutral-300 space-y-4">
@@ -2622,43 +2611,43 @@ export function VideoPlayerModal({
             <div className={`absolute inset-0 pointer-events-none ${isNativePiP ? 'hidden' : ''}`}>
               <NetflixPlayerSkin
                 mediaId={resolvedId}
-              tmdbId={tmdbId}
-              imdbId={imdbId}
-              title={title}
-              isSeries={isSeries}
-              season={season}
-              episode={episode}
-              totalEpisodes={totalSeasonEpisodes}
-              availableSeasons={availableSeasons}
-              activeServerKey={selectedServerKey}
-              onServerChange={handleServerSwitch}
-              serversList={servers}
-              onSeasonChange={handleSeasonChange}
-              episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
-              onClose={handleCloseModal}
-              onCastRequest={handleCastRequest}
-              onEpisodeChange={handleEpisodeChange}
-              onSkipIntro={() => handleSkipIntro()}
-              skipDurationSeconds={skipDurationSeconds}
-              isIntroActive={isIntroActive}
-              isFullscreen={isExpanded}
-              onToggleFullscreen={handleFullScreen}
-              iframeRef={iframeRef}
-              isRotated={isRotated}
-              onToggleRotate={handleToggleRotate}
-              isExternalPlayer={isExternalPlayer}
-              imageUrl={imageUrl}
-              backdropUrl={backdropUrl}
-              posterUrl={posterUrl}
-              quality={quality}
-              isCam={isCamMovie}
-              aspectRatio={aspectRatio}
-              onToggleAspectRatio={handleToggleAspectRatio}
-              onTogglePiP={handleToggleMiniPlayer}
-              isMiniPlayer={isMiniPlayer}
-              passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
-              subtitleUrl={subtitleUrl}
-            />
+                tmdbId={tmdbId}
+                imdbId={imdbId}
+                title={title}
+                isSeries={isSeries}
+                season={season}
+                episode={episode}
+                totalEpisodes={totalSeasonEpisodes}
+                availableSeasons={availableSeasons}
+                activeServerKey={selectedServerKey}
+                onServerChange={handleServerSwitch}
+                serversList={servers}
+                onSeasonChange={handleSeasonChange}
+                episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
+                onClose={handleCloseModal}
+                onCastRequest={handleCastRequest}
+                onEpisodeChange={handleEpisodeChange}
+                onSkipIntro={() => handleSkipIntro()}
+                skipDurationSeconds={skipDurationSeconds}
+                isIntroActive={isIntroActive}
+                isFullscreen={isExpanded}
+                onToggleFullscreen={handleFullScreen}
+                iframeRef={iframeRef}
+                isRotated={isRotated}
+                onToggleRotate={handleToggleRotate}
+                isExternalPlayer={isExternalPlayer}
+                imageUrl={imageUrl}
+                backdropUrl={backdropUrl}
+                posterUrl={posterUrl}
+                quality={quality}
+                isCam={isCamMovie}
+                aspectRatio={aspectRatio}
+                onToggleAspectRatio={handleToggleAspectRatio}
+                onTogglePiP={handleToggleMiniPlayer}
+                isMiniPlayer={isMiniPlayer}
+                passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
+                subtitleUrl={subtitleUrl}
+              />
             </div>
           </div>
         </div>
