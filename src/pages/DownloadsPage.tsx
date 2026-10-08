@@ -496,14 +496,14 @@ export function DownloadsPage({
                         onClick={() => handleRedownload(item)}
                         disabled={isCurrentlyDownloading}
                         className="px-4 py-2 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 hover:text-orange-300 border border-orange-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-                        title="Baixar novamente este arquivo"
+                        title="Baixar novamente dentro do app (offline)"
                       >
                         {isCurrentlyDownloading ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
                         ) : (
                           <Download className="w-3.5 h-3.5" />
                         )}
-                        <span>{isCurrentlyDownloading ? "Baixando..." : "Baixar Novamente"}</span>
+                        <span>{isCurrentlyDownloading ? "Baixando..." : "Baixar no App"}</span>
                       </button>
 
                       {/* Remover do Histórico */}
