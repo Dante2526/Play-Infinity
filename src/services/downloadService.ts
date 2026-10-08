@@ -277,9 +277,11 @@ export function startActiveDownloadProgress(item: Omit<ActiveDownload, "progress
 }
 
 /**
- * Dispara o download direto sem sair da página e opcionalmente registra no histórico.
- * Além de baixar o arquivo pro SO, também salva uma cópia no IndexedDB pra
- * reprodução offline (o "Reproduzir" na DownloadsPage lê desse blob).
+ * Dispara o download 100% DENTRO da plataforma (sem salvar arquivo no SO).
+ * O vídeo é baixado via fetch com progresso real e salvo no IndexedDB (web)
+ * ou no Filesystem do app (mobile). Depois fica disponível pro "Reproduzir"
+ * na DownloadsPage com a skin Netflix — exatamente como o streaming.
+ * OBS: por decisão de produto, o navegador NÃO recebe mais o arquivo bruto.
  */
 export function triggerDirectDownload(
   url: string,
@@ -295,15 +297,9 @@ export function triggerDirectDownload(
     quality?: string;
   }
 ) {
-  const link = document.createElement("a");
-  link.href = url;
-  if (fileName) {
-    link.download = fileName;
-  }
-  link.setAttribute("target", "_blank");
-  link.setAttribute("rel", "noopener noreferrer");
-  document.body.appendChild(link);
-  link.click();
+  // Download somente dentro do app: nenhum <a download> é criado — o navegador
+  // não baixa mais nada pro dispositivo. Todo o conteúdo fica no storage
+  // offline da plataforma (IndexedDB / Capacitor Filesystem).
 
   if (meta) {
     const id = meta.type === "movie"
@@ -484,12 +480,6 @@ export function triggerDirectDownload(
       }
     })();
   }
-
-  setTimeout(() => {
-    try {
-      document.body.removeChild(link);
-    } catch(_){console.warn("Silenced error:", _);}
-  }, 1000);
 }
 
 /**

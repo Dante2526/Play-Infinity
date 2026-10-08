@@ -376,6 +376,13 @@ export function VideoPlayerModal({
   const [skipNotice, setSkipNotice] = useState<string | null>(null);
   const [lastSkippedSeconds, setLastSkippedSeconds] = useState<number | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Referência do <video> local (playback offline: blob:/capacitor:// baixado no app).
+  // Usada pela ponte local (Local Player Bridge) pra dar à NetflixPlayerSkin
+  // controle total sobre o vídeo offline, igual ao streaming.
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  // Indica se a mídia atual é playback offline (lido pelo handler de mensagens
+  // pra desativar comportamentos pensados só pro streaming, como o reload forçado).
+  const isOfflineMediaRef = useRef<boolean>(false);
 
   // Fullscreen & Widescreen state tracking
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
@@ -1545,7 +1552,7 @@ export function VideoPlayerModal({
           if (!pausedAtRef.current) pausedAtRef.current = Date.now();
         } else if (isPaused === false) {
           hasPlayedRef.current = true;
-          if (pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
+          if (!isOfflineMediaRef.current && pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
             console.warn("[VideoPlayerModal] Pausa longa detectada (> 3 min). Forçando reload proativo...");
             pausedAtRef.current = null;
             retrySameServerRef.current = false;
@@ -1685,6 +1692,143 @@ export function VideoPlayerModal({
     window.addEventListener("message", handlePlayerWindowMessages);
     return () => window.removeEventListener("message", handlePlayerWindowMessages);
   }, [isSeries, episode, season, resolvedId, skipDurationSeconds, selectedServerKey]);
+
+  // =====================================================================
+  // PONTE LOCAL (Local Player Bridge) — playback offline com skin Netflix
+  // =====================================================================
+  // Sem iframe (blob:/capacitor:// baixado no app), este adaptador:
+  //  1. Traduz eventos do <video> local pro mesmo protocolo postMessage dos
+  //     players remotos (WATCHPLAY_STATUS/ENDED/ERROR) — modal, watchdog e
+  //     skin ficam indistinguíveis de um player de streaming.
+  //  2. Intercepta os comandos que a NetflixPlayerSkin publica na window
+  //     (PLAY/PAUSE/SEEK/SET_VOLUME/SET_MUTED) e aplica no elemento local.
+  const isOfflineMediaUrl = !!activeIframeUrl && (
+    activeIframeUrl.startsWith("blob:") ||
+    activeIframeUrl.startsWith("capacitor://") ||
+    activeIframeUrl.startsWith("file://") ||
+    /^https?:\/\/localhost\/_capacitor_file_\//.test(activeIframeUrl)
+  );
+
+  useEffect(() => {
+    if (!isOfflineMediaUrl) {
+      isOfflineMediaRef.current = false;
+      return;
+    }
+    isOfflineMediaRef.current = true;
+
+    const video = localVideoRef.current;
+    if (!video) return;
+
+    const dispatchLocal = (data: Record<string, any>) => {
+      try {
+        window.dispatchEvent(new MessageEvent("message", { data, origin: window.location.origin }));
+      } catch (e) {
+        console.warn("[VideoPlayerModal] Falha no dispatch da ponte local:", e);
+      }
+    };
+
+    const sendLocalStatus = () => {
+      dispatchLocal({
+        type: "WATCHPLAY_STATUS",
+        data: {
+          currentTime: video.currentTime || 0,
+          duration: video.duration && isFinite(video.duration) ? video.duration : 0,
+          paused: video.paused,
+          muted: video.muted,
+          volume: video.volume,
+          buffered: video.buffered && video.buffered.length > 0 ? video.buffered.end(video.buffered.length - 1) : 0,
+          playbackRate: video.playbackRate,
+          readyState: video.readyState,
+        },
+      });
+    };
+
+    // Comandos auto-publicados pela skin na window (sem iframe, a skin só
+    // faz window.postMessage) -> aplicados no <video> local
+    const handleLocalCommand = (e: MessageEvent) => {
+      if (!e.data || typeof e.data !== "object") return;
+      if (e.source !== window) return; // apenas comandos auto-publicados
+      const cmd = e.data;
+      try {
+        switch (cmd.type) {
+          case "PLAY":
+            video.play().catch(() => {});
+            break;
+          case "PAUSE":
+            video.pause();
+            break;
+          case "TOGGLE_PLAY":
+            if (video.paused) {
+              video.play().catch(() => {});
+            } else {
+              video.pause();
+            }
+            break;
+          case "SEEK":
+          case "SEEK_ABSOLUTE": {
+            const t = typeof cmd.time === "number" ? cmd.time : cmd.targetTime;
+            if (typeof t === "number" && isFinite(t) && t >= 0) {
+              video.currentTime = t;
+              sendLocalStatus();
+            }
+            break;
+          }
+          case "SET_VOLUME":
+            if (typeof cmd.volume === "number") {
+              video.volume = Math.min(1, Math.max(0, cmd.volume));
+              if (cmd.volume > 0) video.muted = false;
+            }
+            break;
+          case "SET_MUTED":
+            video.muted = !!cmd.muted;
+            break;
+          case "REQUEST_STATUS":
+            sendLocalStatus();
+            break;
+        }
+      } catch (err) {
+        console.warn("[VideoPlayerModal] Erro ao aplicar comando local:", err);
+      }
+    };
+
+    const onTimeUpdate = () => sendLocalStatus();
+    const onPlayEv = () => sendLocalStatus();
+    const onPauseEv = () => sendLocalStatus();
+    const onWaiting = () => sendLocalStatus();
+    const onVolumeChange = () => sendLocalStatus();
+    const onRateChange = () => sendLocalStatus();
+    const onEnded = () => dispatchLocal({ type: "WATCHPLAY_VIDEO_ENDED" });
+    const onErrorEv = () => dispatchLocal({ type: "WATCHPLAY_ERROR", reason: "local_video_error" });
+    const onLoadedMetadataEv = () => sendLocalStatus();
+
+    video.addEventListener("timeupdate", onTimeUpdate);
+    video.addEventListener("play", onPlayEv);
+    video.addEventListener("pause", onPauseEv);
+    video.addEventListener("waiting", onWaiting);
+    video.addEventListener("volumechange", onVolumeChange);
+    video.addEventListener("ratechange", onRateChange);
+    video.addEventListener("ended", onEnded);
+    video.addEventListener("error", onErrorEv);
+    video.addEventListener("loadedmetadata", onLoadedMetadataEv);
+    window.addEventListener("message", handleLocalCommand);
+
+    // Ticker de status (espelha o setInterval(sendStatus, 1000) dos players remotos)
+    const statusInterval = setInterval(sendLocalStatus, 1000);
+
+    return () => {
+      video.removeEventListener("timeupdate", onTimeUpdate);
+      video.removeEventListener("play", onPlayEv);
+      video.removeEventListener("pause", onPauseEv);
+      video.removeEventListener("waiting", onWaiting);
+      video.removeEventListener("volumechange", onVolumeChange);
+      video.removeEventListener("ratechange", onRateChange);
+      video.removeEventListener("ended", onEnded);
+      video.removeEventListener("error", onErrorEv);
+      video.removeEventListener("loadedmetadata", onLoadedMetadataEv);
+      window.removeEventListener("message", handleLocalCommand);
+      clearInterval(statusInterval);
+    };
+  }, [isOfflineMediaUrl, activeIframeUrl]);
 
   // Recuperação automática em caso de queda e retorno de conexão com a internet
   useEffect(() => {
@@ -2512,12 +2656,14 @@ export function VideoPlayerModal({
                 // - blob URLs são bound ao document que as criou (iframe não acessa)
                 // - capacitor:// e localhost/_capacitor_file_/ são URLs do webview que só funcionam
                 //   num <video> direto (não num iframe que cria novo contexto)
-                // Controls nativos do HTML5 garantem play/pause/seek/fullscreen.
+                // Sem controls nativos: a interface é a própria NetflixPlayerSkin, que controla
+                // este elemento através da Ponte Local (localPlayerBridge) — play/pause/seek/volume.
                 <video
                   key={`blob-${activeIframeUrl}-${transitionEpochRef.current}`}
+                  ref={localVideoRef}
                   src={activeIframeUrl}
                   autoPlay
-                  controls
+                  playsInline
                   className="w-full h-full bg-black"
                   style={{
                     objectFit: "contain",
