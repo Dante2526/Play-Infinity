@@ -826,7 +826,7 @@ adminOpsRouter.get("/encontrei-status", (_req: Request, res: Response) => {
  */
 adminOpsRouter.post("/push", async (req: Request, res: Response) => {
   try {
-    const { title, body, targetUids } = req.body;
+    const { title, body, targetEmails } = req.body;
     const messaging = getAdminMessaging();
     if (!messaging) {
       return res.status(500).json({ success: false, error: "Firebase Messaging não inicializado" });
@@ -835,12 +835,16 @@ adminOpsRouter.post("/push", async (req: Request, res: Response) => {
     const db = getAdminDb();
     let tokens: string[] = [];
 
-    if (targetUids && Array.isArray(targetUids) && targetUids.length > 0) {
-      const snapshot = await db.collection("usuarios").where("__name__", "in", targetUids).get();
-      snapshot.forEach((doc: any) => {
-        const data = doc.data();
-        if (data.fcmToken) tokens.push(data.fcmToken);
-      });
+    if (targetEmails && Array.isArray(targetEmails) && targetEmails.length > 0) {
+      // Divide emails em chunks de 10 (limite do 'in' no firestore)
+      for (let i = 0; i < targetEmails.length; i += 10) {
+        const chunk = targetEmails.slice(i, i + 10);
+        const snapshot = await db.collection("usuarios").where("email", "in", chunk).get();
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          if (data.fcmToken) tokens.push(data.fcmToken);
+        });
+      }
     } else {
       const snapshot = await db.collection("usuarios").where("fcmToken", "!=", null).limit(500).get();
       snapshot.forEach((doc: any) => {

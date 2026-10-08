@@ -18,6 +18,7 @@ import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { verifyFirebaseUserToken } from "./server/middlewares/requireAdminAuth";
 import { checkVidsrcSeason } from "./server/routes/vidsrcRoutes";
 import { checkVipSeason, checkVizerSeason } from "./server/routes/encontreiLookup";
+import { startCatalogWatcher } from "./server/services/catalogWatcher";
 if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
 }
@@ -451,6 +452,9 @@ app.use(castRouter);
         console.error("[Server Listen Error]:", err);
       });
       server.setTimeout(30000);
+      
+      // Inicia a checagem automática de episódios para PUSH Notification
+      startCatalogWatcher();
     }
   }
 

@@ -309,3 +309,11 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 ## 08/10/2026 - Robô de Criação Ampere (VPS)
 **Resumo:**
 - Atualizado o script `auto_create_ampere.py` remotamente na VPS Oracle para forçar `boot_volume_size_in_gbs=150` no `source_details`. Isso garante a manutenção no escopo grátis de discos, evitando passar do limite grátis (junto com a Micro de 50GB). O PM2 foi reiniciado na VPS para aplicar a mudança no bot de prospecção contínua da A1.Flex.
+
+## 08/10/2026 - Notificações Automáticas de Novos Episódios (Favoritos)
+**Resumo:**
+- **Catalog Watcher:** Criado serviço `server/services/catalogWatcher.ts` que monitora o `encontrei-catalog.json`.
+- **Persistência de Estado:** O serviço salva o tamanho atual das séries (número de episódios) em `data/catalog-state.json`.
+- **Verificação Contínua:** Integrado ao `server.ts` para rodar a cada 60 minutos (e 10s após inicialização).
+- **Push para Fãs:** Ao detectar novos episódios, consulta o Firestore (`usuarios` -> `favoritos`), coleta os `fcmToken` dos usuários afetados, e dispara o Push Notification com a Firebase Admin SDK.
+- **Sininho In-App:** Validado que a funcionalidade "Sininho" de lançamentos diários já operava automaticamente no app (lendo diretamente dos cronogramas do TMDB de forma dinâmica).
