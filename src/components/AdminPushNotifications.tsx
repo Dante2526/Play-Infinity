@@ -1,5 +1,7 @@
-import React, { useState } from "react";
-import { Send, Bell, Users, Loader2, MessageSquare } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown } from "lucide-react";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "../services/firebase";
 
 const TEMPLATES = [
   { label: "Nenhum (Personalizado)", title: "", body: "" },
@@ -12,17 +14,45 @@ export function AdminPushNotifications() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [targetType, setTargetType] = useState<"global" | "specific">("global");
-  const [targetEmails, setTargetEmails] = useState("");
+  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+  const [usersList, setUsersList] = useState<{email: string, name: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  const handleTemplateChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const t = TEMPLATES[Number(e.target.value)];
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [selectedTemplateIdx, setSelectedTemplateIdx] = useState(0);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const snap = await getDocs(collection(db, "usuarios"));
+        const snap2 = await getDocs(collection(db, "users"));
+        const userMap = new Map();
+        snap.forEach(doc => {
+           const d = doc.data();
+           if (d.email) userMap.set(d.email, { email: d.email, name: d.nome || d.name || "Usuário" });
+        });
+        snap2.forEach(doc => {
+           const d = doc.data();
+           if (d.email && !userMap.has(d.email)) userMap.set(d.email, { email: d.email, name: d.nome || d.name || "Usuário" });
+        });
+        setUsersList(Array.from(userMap.values()).sort((a,b) => a.name.localeCompare(b.name)));
+      } catch(e) {
+        console.error("Erro ao carregar usuários para push:", e);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  const handleTemplateSelect = (idx: number) => {
+    const t = TEMPLATES[idx];
     if (t) {
       setTitle(t.title);
       setBody(t.body);
+      setSelectedTemplateIdx(idx);
     }
+    setIsDropdownOpen(false);
   };
 
   const handleSendPush = async (e: React.FormEvent) => {
@@ -34,9 +64,9 @@ export function AdminPushNotifications() {
     
     let emailsArray: string[] = [];
     if (targetType === "specific") {
-      emailsArray = targetEmails.split(",").map(e => e.trim()).filter(e => e);
+      emailsArray = selectedEmails;
       if (emailsArray.length === 0) {
-        setError("Digite pelo menos um e-mail válido.");
+        setError("Selecione pelo menos um usuário.");
         return;
       }
     }
@@ -108,7 +138,7 @@ export function AdminPushNotifications() {
               onClick={() => setTargetType("global")}
               className={`flex-1 py-2.5 text-sm font-bold rounded-[16px] transition-all flex items-center justify-center gap-2 ${targetType === "global" ? "bg-purple-600 text-white shadow-lg" : "text-white/50 hover:text-white"}`}
             >
-              <Users className="w-4 h-4" /> Global (Todos)
+              <Users className="w-4 h-4" /> Global
             </button>
             <button
               type="button"
@@ -122,16 +152,31 @@ export function AdminPushNotifications() {
           {targetType === "specific" && (
             <div className="animate-fade-in">
               <label className="block text-white/60 text-xs font-bold mb-1.5 uppercase tracking-wider ml-1">
-                E-mails dos Usuários (separados por vírgula)
+                Selecione os Usuários
               </label>
-              <textarea
-                value={targetEmails}
-                onChange={(e) => setTargetEmails(e.target.value)}
-                placeholder="exemplo1@gmail.com, exemplo2@gmail.com"
-                rows={2}
-                className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-3 px-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all font-medium text-sm rounded-[20px] resize-none"
-                required={targetType === "specific"}
-              />
+              <div className="max-h-64 overflow-y-auto bg-white/5 border border-white/10 rounded-[20px] p-2 custom-scrollbar flex flex-col gap-1">
+                {usersList.length === 0 ? (
+                  <p className="text-white/40 text-xs p-4 text-center">Carregando usuários...</p>
+                ) : (
+                  usersList.map((u, i) => (
+                    <label key={i} className="flex items-center gap-3 p-3 hover:bg-white/10 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-white/5">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-[#1c1c1e] border-white/20 transition-all cursor-pointer"
+                        checked={selectedEmails.includes(u.email)}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedEmails([...selectedEmails, u.email]);
+                          else setSelectedEmails(selectedEmails.filter(email => email !== u.email));
+                        }}
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-white">{u.name}</span>
+                        <span className="text-xs text-white/50">{u.email}</span>
+                      </div>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           )}
 
@@ -142,14 +187,29 @@ export function AdminPushNotifications() {
               Mensagem Pré-configurada
             </label>
             <div className="relative">
-              <select 
-                onChange={handleTemplateChange}
-                className="w-full appearance-none bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-3 pl-4 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all font-medium text-sm rounded-[20px]"
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-full flex items-center justify-between bg-white/5 hover:bg-white/10 focus:bg-white/10 border border-white/10 py-3 px-4 text-white focus:outline-none transition-all font-medium text-sm rounded-[20px]"
               >
-                {TEMPLATES.map((t, idx) => (
-                  <option key={idx} value={idx} className="bg-[#1c1c1e] text-white">{t.label}</option>
-                ))}
-              </select>
+                <span>{TEMPLATES[selectedTemplateIdx].label}</span>
+                <ChevronDown className={`w-4 h-4 text-white/50 transition-transform ${isDropdownOpen ? "rotate-180" : ""}`} />
+              </button>
+              
+              {isDropdownOpen && (
+                <div className="absolute z-50 mt-2 w-full bg-[#1c1c1e] border border-white/10 rounded-[20px] shadow-2xl overflow-hidden py-2 animate-in fade-in zoom-in-95 duration-200">
+                  {TEMPLATES.map((t, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleTemplateSelect(idx)}
+                      className={`w-full text-left px-4 py-3 text-sm transition-colors ${selectedTemplateIdx === idx ? "bg-purple-500/20 text-purple-400 font-bold" : "text-white/80 hover:bg-white/5 hover:text-white"}`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
