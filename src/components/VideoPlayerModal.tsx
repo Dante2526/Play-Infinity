@@ -27,7 +27,7 @@ import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
-import { Chromecast } from 'capacitor-chromecast';
+import { Chromecast } from '@caprockapps/capacitor-chromecast';
 interface VideoPlayerModalProps {
   isOpen: boolean;
   onClose: () => void;

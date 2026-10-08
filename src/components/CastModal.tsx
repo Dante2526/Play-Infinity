@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Cast, Tv, Smartphone, QrCode, MonitorUp, X, MonitorSmartphone, ChevronLeft, Copy, Check, Play } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
-import { Chromecast } from 'capacitor-chromecast';
+import { Chromecast } from '@caprockapps/capacitor-chromecast';
 
 import { registerPlugin } from '@capacitor/core';
 const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
