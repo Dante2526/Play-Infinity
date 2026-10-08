@@ -87,7 +87,7 @@ export function AdminBugReports() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
+      <div className="relative z-50 bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
         <h2 className="text-2xl font-black text-white flex items-center gap-3 mb-6">
           <ShieldAlert className="w-7 h-7 text-red-500" />
           Bugs Pendentes ({pending.length})
@@ -98,7 +98,7 @@ export function AdminBugReports() {
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
             {pending.map(report => (
-              <div key={report.id} className="bg-[#141414] border border-red-900/30 rounded-2xl p-5 flex flex-col justify-between">
+              <div key={report.id} className={`bg-[#141414] border border-red-900/30 rounded-2xl p-5 flex flex-col justify-between relative transition-colors ${openDropdownId === report.id ? 'z-50 ring-1 ring-red-500/50' : 'z-10'}`}>
                 <div>
                   <div className="flex justify-between items-start mb-3">
                     <h3 className="text-lg font-bold text-white leading-tight">
