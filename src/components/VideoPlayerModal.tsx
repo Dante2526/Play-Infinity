@@ -263,8 +263,8 @@ export function VideoPlayerModal({
       mixdropLookupInflightRef.current.add(key);
       try {
         const res = lookupMode === "tv"
-          ? await findEpisode(lookupId, s, e, refresh)
-          : await findMovieByTmdbId(lookupId, refresh);
+          ? await findEpisode(lookupId, s, e, refresh, title || undefined)
+          : await findMovieByTmdbId(lookupId, refresh, title || undefined);
         const result = res?.mixdrop ?? null;
         const vizerResult = res?.mixdrop_vizer ?? null;
         const encontreiResult = res?.mixdrop_encontrei ?? null;
@@ -278,7 +278,7 @@ export function VideoPlayerModal({
         mixdropLookupInflightRef.current.delete(key);
       }
     },
-    [tmdbId, mediaType, effectiveMovieId, resolvedAsMovie]
+    [tmdbId, mediaType, effectiveMovieId, resolvedAsMovie, title]
   );
 
   // Busca o fileId do MixDrop do episódio atual no catálogo encontrei.me (HD, sem marca d'água)
@@ -1424,6 +1424,30 @@ export function VideoPlayerModal({
           targetUrl = isSeries
             ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
             : targetSrv.buildUrl(resolvedId);
+        }
+
+        // ── Fim do "fallback fantasma" do MixDrop ──
+        // mxdrop.top/e/{imdbId|tmdbId} NUNCA é um fileId real do MixDrop — a URL
+        // fabricada sempre dá 502 ("possivelmente deletado") e queimava ~20s do
+        // usuário (502 → recovery → comutação lenta). Se sobrou só ela, inicia
+        // direto pelo próximo servidor homologado. (Caso real: Carrie a Estranha
+        // usava mxdrop.top/e/288673 — o próprio TMDB ID chuteado como fileId.)
+        if (targetServerKey === "srv_mixdrop" && targetUrl) {
+          let looksFabricated = false;
+          try {
+            const decoded = decodeURIComponent(targetUrl);
+            looksFabricated = /mxdrop\.top\/e\/(tt\d+|\d{4,})/.test(decoded);
+          } catch { /* ignora decode malformado */ }
+          if (looksFabricated) {
+            console.warn("[VideoPlayerModal] MixDrop sem fileId real (URL fabricada com imdbId/tmdbId). Iniciando pelo próximo servidor...");
+            const nextSrv = serversRef.current.find(s => s.key !== "srv_mixdrop");
+            if (nextSrv) {
+              targetServerKey = nextSrv.key;
+              targetUrl = isSeries
+                ? nextSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+                : nextSrv.buildUrl(resolvedId);
+            }
+          }
         }
 
         setSelectedServerKey(targetServerKey);

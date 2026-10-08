@@ -101,7 +101,7 @@
 
 - **Versionamento Automático:** Toda vez que for necessário gerar um novo APK ou AAB para a Google Play Store, o agente DEVE incrementar automaticamente o `versionCode` (e `versionName` quando aplicável) no arquivo `android/app/build.gradle`.
 - **Prevenção de Erros na Loja:** A Google Play Console rejeita pacotes com códigos de versão já utilizados. O controle rígido desta numeração é responsabilidade da IA.
-- **Autorização Explícita:** NUNCA execute o commit/push para a branch `main` (que dispara o GitHub Actions para compilação do AAB) sem ANTES pedir autorização explícita do usuário. Pergunte sempre: "Deseja que eu envie para o GitHub Actions para gerar o novo AAB?".
+- **Autorização Explícita e Inviolável (Ordem Direta do Dono - 08/10/2026):** NUNCA execute `git push` para o GitHub — **em NENHUMA branch** (`main`, `master` ou qualquer outra) — sem ANTES pedir autorização explícita do usuário e receber uma resposta afirmativa direta ("pode fazer", "executa", "envia"). Pushs NÃO autorizados são PROIBIDOS, mesmo que o agente julgue a mudança trivial ou urgente. Pergunte sempre: "Deseja que eu envie para o GitHub Actions para gerar o novo AAB?". Se o usuário não autorizar, o agente deve deixar os commits preparados localmente (ou nem commitar, se o usuário preferir) e o deploy é feito manualmente pelo dono. Esta regra vale para TODOS os agentes de IA trabalhando neste repositório, em qualquer sessão.
 
 ---
 

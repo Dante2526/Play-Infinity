@@ -603,11 +603,184 @@ function pickMixdrop(d: any): { mixdrop: string; audio: "Dublado" | "Legendado" 
   return null;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// REFRESH INCREMENTAL — conteúdo NOVO no encontrei.me (pós-snapshot do catálogo)
+//
+// O snapshot local congela o catálogo (ex.: 22/09/2026). Séries/filmes
+// adicionados DEPOIS ficam invisíveis pro resolver live, pois
+// _tmdbToSerieIdMap/_encontreiMovieIndex só saem do snapshot — e a busca
+// /search/ do site devolve 403 ("Sorry, you do not have permission") pra
+// essa conta. Solução validada ao vivo (scratch/test-encontrei-search.mjs):
+//   1. Varrer as primeiras páginas de listagem (/series/online/, /filmes/online/)
+//   2. Item com id NOVO (ausente do snapshot) = candidato
+//   3. A página do item expõe data-tmdb-id="<tmdb>" (série e filme)
+//   4. Mapeia tmdb → serie_id/video_id e segue o fluxo normal
+//      (episodesList → playerData → pickMixdrop).
+// Caso real validado: Carrie a Estranha (tmdb 288673, estreou 07/10/2026) →
+// serie_id 82940 → ep_id 82941 → mixdrop dublado pjkr4deehg7r646.
+// ──────────────────────────────────────────────────────────────────────────
+
+const ENC_FRESH_LISTING_TTL_MS = 10 * 60 * 1000; // listagens re-varridas no máx 1x/10min
+const ENC_FRESH_MAX_CANDIDATES = 12;             // proteção: no máx N páginas por scan
+let _encFreshListing: {
+  series: Array<{ slug: string; id: number }>;
+  movies: Array<{ slug: string; id: number }>;
+  at: number;
+} | null = null;
+const _encFreshTmdbCache = new Map<string, number | null>(); // "s:slug"/"f:slug" → tmdb
+const _encKnownSerieIds = new Set<number>();
+const _encKnownMovieIds = new Set<number>();
+let _encKnownSetsLoaded = false;
+
+/** Popula os sets de ids já conhecidos (catálogo snapshot) — 1x por processo. */
+function encKnownSetsLoad(): void {
+  if (_encKnownSetsLoaded) return;
+  _encKnownSetsLoaded = true;
+  try {
+    const cat = _encontreiCatalog?.value;
+    for (const s of cat?.series || []) {
+      const id = Number(s.serie_id);
+      if (id > 0) _encKnownSerieIds.add(id);
+    }
+    for (const mv of cat?.movies || []) {
+      const id = Number(mv.video_id);
+      if (id > 0) _encKnownMovieIds.add(id);
+    }
+  } catch { /* snapshot indisponível — segue com sets vazios */ }
+}
+
+/** HTML GET no encontrei.me com cookie + breaker (redirect = cookie morto, 10min). */
+async function encontreiGetHtml(path: string): Promise<string | null> {
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) return null;
+  if (Date.now() < _encCookieDownUntil) return null;
+  try {
+    const res = await fetchWithTimeout(`${ENC_BASE}${path}`, {
+      headers: {
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "text/html",
+        "Referer": `${ENC_BASE}/`,
+      },
+      redirect: "manual",
+    });
+    if (res.status >= 300 && res.status < 400) {
+      console.error("[encontrei-fresh] cookie expirado (redirect) — pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+
+/** Normaliza título/slug pra comparação (sem acentos, sem pontuação). */
+function encNormTitle(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Slug da listagem casa com o título pedido? (sem título = aceita, bounded) */
+function encSlugMatchesTitle(slug: string, title?: string): boolean {
+  if (!title) return true;
+  const s = encNormTitle(slug.replace(/-(dublado|legendado|nacional)$/i, ""));
+  const t = encNormTitle(title);
+  if (!t) return true;
+  return s.includes(t) || t.includes(s);
+}
+
+/** Varrer listagens recentes de séries e filmes (cache de 10min). */
+async function ensureEncontreiFreshListing(): Promise<void> {
+  if (_encFreshListing && Date.now() - _encFreshListing.at < ENC_FRESH_LISTING_TTL_MS) return;
+  const series: Array<{ slug: string; id: number }> = [];
+  const movies: Array<{ slug: string; id: number }> = [];
+  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+    const html = await encontreiGetHtml(p);
+    if (!html) continue;
+    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !series.some(x => x.id === id)) series.push({ slug: m[1], id });
+    }
+    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !movies.some(x => x.id === id)) movies.push({ slug: m[1], id });
+    }
+  }
+  _encFreshListing = { series, movies, at: Date.now() };
+}
+
+/**
+ * Descobre conteúdo NOVO (pós-snapshot) e popula os índices:
+ * séries → _tmdbToSerieIdMap (tmdb → serie_id);
+ * filmes → _encontreiMovieIndex (entrada com video_id; servers resolvidos depois
+ * pelo resolveEncontreiMovie via playerData). `title` filtra candidatos pelo slug.
+ */
+async function ensureEncontreiFreshContent(kind: "series" | "movies", title?: string): Promise<void> {
+  try {
+    encKnownSetsLoad();
+    await ensureEncontreiFreshListing();
+    if (!_encFreshListing) return;
+
+    const known = kind === "series" ? _encKnownSerieIds : _encKnownMovieIds;
+    const items = kind === "series" ? _encFreshListing.series : _encFreshListing.movies;
+    const tag = kind === "series" ? "s" : "f";
+
+    const candidates = items.filter(it => {
+      if (known.has(it.id)) return false;                           // já no snapshot
+      if (_encFreshTmdbCache.has(`${tag}:${it.slug}`)) return false; // já resolvido antes
+      return encSlugMatchesTitle(it.slug, title);                   // sem título: bounded
+    }).slice(0, ENC_FRESH_MAX_CANDIDATES);
+
+    for (const it of candidates) {
+      const cacheKey = `${tag}:${it.slug}`;
+      const pagePath = kind === "series"
+        ? `/series/online/${it.slug}-${it.id}/`
+        : `/filmes/online/${it.slug}-${it.id}/`;
+      const html = await encontreiGetHtml(pagePath);
+      if (!html) {
+        _encFreshTmdbCache.set(cacheKey, null);
+        continue;
+      }
+      const tm = html.match(/data-tmdb-id="(\d+)"/);
+      const tmdb = tm ? parseInt(tm[1], 10) : 0;
+      _encFreshTmdbCache.set(cacheKey, tmdb || null);
+      if (!tmdb) continue;
+
+      if (kind === "series") {
+        if (!_tmdbToSerieIdMap.has(tmdb)) {
+          _tmdbToSerieIdMap.set(tmdb, it.id);
+          console.log(`[encontrei-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
+        }
+      } else {
+        if (!_encontreiMovieIndex.has(tmdb)) {
+          _encontreiMovieIndex.set(tmdb, {
+            video_id: it.id,
+            tmdb_id: tmdb,
+            title: it.slug.replace(/-/g, " "),
+            servers: {},
+            _fetchedAt: Date.now(),
+          } as any);
+          console.log(`[encontrei-fresh] Filme novo mapeado: tmdb=${tmdb} → video_id=${it.id} (${it.slug})`);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[encontrei-fresh] Erro no scan incremental:", e?.message || e);
+  }
+}
+
 /** Resolve episódio no encontrei.me live (cookie necessário). */
 export async function resolveEncontreiEpisode(
   tmdbId: number,
   season: number,
   episode: number,
+  name?: string,
 ): Promise<{
   mixdrop: string;
   mixdrop_encontrei: string;
@@ -620,7 +793,14 @@ export async function resolveEncontreiEpisode(
 } | null> {
   loadCatalogs();
   // CORREÇÃO: _tmdbToSerieIdMap é Map<number, number> (chave numérica, sem prefixo)
-  const serieId = _tmdbToSerieIdMap.get(tmdbId);
+  let serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) {
+    // Conteúdo NOVO (lançado após o snapshot do catálogo): descobre ao vivo
+    // nas listagens recentes do site antes de desistir. Caso real: Carrie a
+    // Estranha (288673, estreou 07/10/2026 — snapshot era de 22/09/2026).
+    await ensureEncontreiFreshContent("series", name);
+    serieId = _tmdbToSerieIdMap.get(tmdbId);
+  }
   if (!serieId) return null;
 
   // CORREÇÃO: chave alinhada com catálogo — "${tmdbId}:${season}:${episode}" sem prefixo "enc:"
@@ -668,7 +848,7 @@ export async function resolveEncontreiEpisode(
 
 /** Resolve filme no encontrei.me live (cookie necessário).
  *  video_id vem direto do catálogo _encontreiMovieIndex.get(tmdbId).video_id. */
-export async function resolveEncontreiMovie(tmdbId: number): Promise<{
+export async function resolveEncontreiMovie(tmdbId: number, name?: string): Promise<{
   mixdrop: string;
   mixdrop_encontrei: string;
   mixdrop_vizer: null;
@@ -677,7 +857,12 @@ export async function resolveEncontreiMovie(tmdbId: number): Promise<{
   source: string;
 } | null> {
   loadCatalogs();
-  const entry = _encontreiMovieIndex.get(tmdbId);
+  let entry = _encontreiMovieIndex.get(tmdbId);
+  if (!entry) {
+    // Filme NOVO (pós-snapshot): descobre ao vivo nas listagens recentes.
+    await ensureEncontreiFreshContent("movies", name);
+    entry = _encontreiMovieIndex.get(tmdbId);
+  }
   if (!entry) return null;
   const videoId = entry.video_id || entry.episode_id;
   if (!videoId) return null;
@@ -1188,6 +1373,9 @@ router.get("/api/encontrei-lookup", async (req, res) => {
     // refresh=1: pula o catálogo estático e vai direto pro resolver live.
     // Usado quando o frontend constatou que o mixdrop fileId do catálogo morreu.
     const forceLive = req.query.refresh === "1";
+    // name (opcional): título da série/filme — permite ao resolver live descobrir
+    // conteúdo NOVO (pós-snapshot) nas listagens do site filtrando pelo slug.
+    const lookupName = (req.query.name as string) || undefined;
     
     if (!tmdbId) {
       return res.status(400).json({ error: "tmdb_id é obrigatório" });
@@ -1251,7 +1439,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
         };
       } else {
         // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
-        const live = (await resolveEncontreiEpisode(tmdbId, season, episode))
+        const live = (await resolveEncontreiEpisode(tmdbId, season, episode, lookupName))
                   || (await resolveVizerEpisode(tmdbId, season, episode));
         if (live) {
           result = live;
@@ -1310,7 +1498,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
         };
       } else {
         // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
-        const live = (await resolveEncontreiMovie(tmdbId))
+        const live = (await resolveEncontreiMovie(tmdbId, lookupName))
                   || (await resolveVizerMovie(tmdbId));
         if (live) {
           result = live;

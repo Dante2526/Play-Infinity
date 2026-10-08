@@ -292,6 +292,18 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Admin UI:** O texto 'Aguardando o cliente visualizar para ser excluído automaticamente' removido de AdminBugReports.tsx. O scroll vertical do card permanece aguardando clarificação.
 
 
+
+## 08/10/2026 - Resolver Ao Vivo pra Conteúdo NOVO (Carrie a Estranha / MixDrop)
+**Resumo:**
+- **Problema:** Série nova "Carrie, a Estranha" (tmdb 288673, estreou 07/10/2026) não puxava no MixDrop — o catálogo local é um snapshot de 22/09/2026 e o resolver live (`resolveEncontreiEpisode`) retornava null IMEDIATAMENTE quando o `_tmdbToSerieIdMap` não tinha o tmdb (nunca buscava no site). Além disso o fallback fabricava `mxdrop.top/e/{tmdbId}` (chute que sempre dá 502). A busca `/search/` do encontrei.me é 403 ("permission") pra conta Dante15.
+- **Descoberta ao vivo (scratch/test-encontrei-search.mjs):** as páginas de listagem (`/series/online/`, `/filmes/online/`) são acessíveis com cookie e listam slug+id; a página de cada item expõe `data-tmdb-id`. Cadeia validada: listagem → Carrie serie_id 82940 → episodesList → ep 82941 → playerData → mixdrop dublado `pjkr4deehg7r646`.
+- **Refresh Incremental (`encontreiLookup.ts`):** nova infra `ensureEncontreiFreshContent` — varre listagens (pgs 1-2, cache 10min), identifica itens com id FORA do snapshot, extrai o `data-tmdb-id` da página (filtro opcional por título via slug) e popula `_tmdbToSerieIdMap` (séries) e `_encontreiMovieIndex` (filmes com video_id; servers resolvidos depois via playerData). Bounded: máx 12 páginas/scan, cache por slug, breaker de cookie compartilhado. `resolveEncontreiEpisode`/`resolveEncontreiMovie` agora escaneiam antes de desistir (parâmetro `name` opcional).
+- **Rota `/api/encontrei-lookup`:** aceita `&name=<título>` e repassa pros resolvers.
+- **Frontend:** `encontreiCatalog.ts` (`findEpisode`/`findMovieByTmdbId` ganham `name`) e `VideoPlayerModal.tsx` (`lookupMixdropFileId` passa o `title` do modal).
+- **Fim do fallback fantasma (`VideoPlayerModal.tsx`):** `setupInitialServer` detecta URL fabricada `mxdrop.top/e/{imdbId|tmdbId}` (que nunca é fileId real) e inicia direto pelo próximo servidor homologado — elimina o ciclo 502 → recovery → ~20s perdidos.
+- **Validação:** `npx tsc --noEmit` exit 0; teste ao vivo `scratch/test-fresh-resolver.mjs` (tsx): S1E1 → `pjkr4deehg7r646` Dublado em 3.3s (primeira chamada inclui o scan), S1E2 em 0.3s via cache do mapa.
+- **Pendente:** deploy na VPS Oracle (o resolver live da VPS precisa do ENCONTREI_COOKIE no ambiente) — só com autorização explícita. O resolver do Vizer tem o mesmo guard estrutural; mesma técnica pode ser aplicada depois se necessário.
+
 ## 07/10/2026 - Sincronização de Notificações Lidas (Sininho) na Nuvem
 **Resumo:**
 - **Problema:** Ao abrir o modal de notificações (sininho) no PC, os itens eram marcados como lidos apenas no localStorage. Ao abrir no celular, o badge continuava aceso.
@@ -340,6 +352,10 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **`.env.production` (novo, versionado):** Contém apenas a `VITE_FIREBASE_VAPID_KEY` (chave PÚBLICA por design — segura para o repositório). O `.gitignore` foi ajustado com `!.env.production` (o `.env.local` com segredos continua ignorado).
 - **Teste local end-to-end:** `npx vite build` confirmou a chave embutida no bundle final (`dist/assets/index-*.js`).
 - **Deploy:** Versionamento Android incrementado para `versionCode 11` / `versionName 1.2.0` e alterações enviadas para a `main` (Deploy VPS Oracle + Build Android). Após o deploy, o push web fica 100% ativo: navegador pede permissão no login → registra SW `firebase-messaging-sw.js` → token salvo em `usuarios/{uid}.fcmTokens`.
+
+
+## 08/10/2026 - REGRA DO DONO: Push pro GitHub Exige Autorização Explícita
+**Resumo:** Por ordem direta do dono do projeto, regrado na seção 7 do `AGENTS.md` (editada localmente): **NENHUM agente de IA pode executar `git push` para o GitHub em NENHUMA branch sem autorização explícita e verbal do usuário** ("pode fazer", "executa", "envia"). Sem autorização, deixar commits prontos localmente — o deploy é feito manualmente pelo dono. Esta entrada serve como lembrete permanente para todas as sessões futuras. NOTA: a edição do AGENTS.md com esta regra ainda NÃO foi commitada/pushada — aguardando decisão do dono (manualmente ou autorizando um agente).
 
 
 ## 08/10/2026 - Auditoria e Correção do Sistema de Reportar Bugs
