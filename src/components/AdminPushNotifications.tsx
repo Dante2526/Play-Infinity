@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../services/firebase";
+import { adminFetch } from "../services/adminApi";
 
 const TEMPLATES = [
   { label: "Nenhum (Personalizado)", title: "", body: "" },
@@ -81,7 +82,7 @@ export function AdminPushNotifications() {
         payload.targetEmails = emailsArray;
       }
 
-      const res = await fetch("/api/admin/push", {
+      const res = await adminFetch("/api/admin/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

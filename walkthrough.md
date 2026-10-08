@@ -317,3 +317,19 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Verificação Contínua:** Integrado ao `server.ts` para rodar a cada 60 minutos (e 10s após inicialização).
 - **Push para Fãs:** Ao detectar novos episódios, consulta o Firestore (`usuarios` -> `favoritos`), coleta os `fcmToken` dos usuários afetados, e dispara o Push Notification com a Firebase Admin SDK.
 - **Sininho In-App:** Validado que a funcionalidade "Sininho" de lançamentos diários já operava automaticamente no app (lendo diretamente dos cronogramas do TMDB de forma dinâmica).
+
+
+## 08/10/2026 - Correção Profunda da Lógica de Push Notifications (FCM) — Auditoria + Fixes
+**Resumo:**
+- **Bug crítico 1 (watcher morto):** O `catalogWatcher.ts` lia um campo `seriesId` que **não existe** no `encontrei-catalog.json` (os episódios usam `serie_id` e `tmdb_id`). Resultado: `currentCounts` sempre vazio → **nenhum push automático jamais disparou**. Corrigido para contar por `tmdb_id`.
+- **Bug crítico 2 (espaço de IDs):** Mesmo corrigido o campo, a query antiga usava o ID do encontrei (`serie_id`) contra o array `favoritos`, que armazena **TMDB IDs**. Corrigido: query `where("favoritos", "array-contains", tmdbId)`. O nome real da série agora é resolvido via `serie_id -> slug` do catálogo (ex: "Presidente Curtis") e usado no texto do push.
+- **Bug crítico 3 (painel admin 401):** `AdminPushNotifications.tsx` usava `fetch` puro sem headers de auth → sempre rejeitado pelo `requireAdminAuth`. Corrigido para usar `adminFetch` (injeta `Authorization: Bearer` + `x-admin-token`).
+- **Push Web (navegador):** Criado `public/firebase-messaging-sw.js` (service worker FCM v12.19.0). O registro web é feito no novo serviço `src/services/pushNotifications.ts` e exige a env `VITE_FIREBASE_VAPID_KEY` (chave de par Web Push gerada no Firebase Console → Cloud Messaging). Sem a chave, o push web fica desativado com log informativo (sem crash).
+- **Multi-dispositivo:** Token FCM agora gravado no array `fcmTokens` (via `arrayUnion`, não sobrescreve outros aparelhos). O campo `fcmToken` (string) é mantido por compatibilidade legada. Backend lê ambos.
+- **Lifecycle do token:** Adicionado listener `tokenReceived` (rotação de token FCM nativo) em `setupFcmTokenRefreshListener()` (usado no App.tsx) e `removeFcmTokenFromCloud()` no logout (`UserProfilePage.tsx`) — usuário deslogado para de receber push naquele aparelho.
+- **Push global sem corte:** `POST /api/admin/push` não limita mais a 500 usuários silenciosamente — busca todos com `.select("fcmToken","fcmTokens")` (projeção leve) e envia em lotes de 500. Tokens inválidos/não-registrados (resposta do `sendEachForMulticast`) são removidos dos docs dos donos automaticamente. Resposta agora retorna `{count, sent, cleanedInvalid}`.
+- **firebaseAdmin.ts:** Adicionado `getAdminFieldValue()` (para `FieldValue.delete()` na limpeza) e warning claro quando inicializa sem service account (Firestore/FCM não funcionarão).
+- **Fix colateral:** `CastModal.tsx` — `Chromecast.show()` não existe nas typings do `@caprockapps/capacitor-chromecast@7.x` instalado; substituído por compat (usa `show` se existir em runtime, senão `requestSession()`).
+- **Validação:** `npx tsc --noEmit` passando com zero erros (node_modules foi completado com `npm install` — pacotes `@capacitor-firebase/messaging` e `@caprockapps/capacitor-chromecast` estavam ausentes localmente).
+- **Pendente de configuração:** Adicionar `VITE_FIREBASE_VAPID_KEY` no `.env`/`.env.local` e na VPS Oracle para ativar push web; o push nativo Android funciona sem ela. Deploy backend na VPS Oracle necessário para o watcher/correções fazerem efeito em produção.
+- **Deploy/Release:** Versionamento Android incrementado para `versionCode 10` / `versionName 1.1.9` (android/app/build.gradle) e alterações enviadas para a branch `main`, disparando o Deploy Automático para a VPS Oracle (main.yml) e o Build Android (build-android.yml).
