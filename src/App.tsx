@@ -75,6 +75,7 @@ import { safeSessionStorage, safeLocalStorage, clearLocalUserData } from "./util
 import { useSmartTV } from "./hooks/useSmartTV";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "@capacitor/status-bar";
+import { FirebaseMessaging } from "@capacitor-firebase/messaging";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -193,6 +194,21 @@ import { WhatsNewModal } from './components/WhatsNewModal';
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
 
 import { OnPlayHandler } from "./types";
+
+const requestPushPermission = async (userId: string) => {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    const result = await FirebaseMessaging.requestPermissions();
+    if (result.receive === 'granted') {
+      const tokenResult = await FirebaseMessaging.getToken();
+      if (tokenResult && tokenResult.token) {
+        await updateDoc(doc(db, 'usuarios', userId), { fcmToken: tokenResult.token });
+      }
+    }
+  } catch (error) {
+    console.warn("[Push] FCM bloqueado ou erro:", error);
+  }
+};
 
 export default function App() {
   type ViewState = { 
@@ -349,6 +365,7 @@ export default function App() {
       setIsAuthInitialized(true);
       if (user) {
         localStorage.setItem("playinfinity_logged_in", "true");
+        requestPushPermission(user.uid);
         if (user.email) {
           localStorage.setItem("playinfinity_last_email", user.email);
         }

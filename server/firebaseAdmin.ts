@@ -6,6 +6,7 @@ const req = typeof require !== 'undefined' ? require : createRequire(import.meta
 
 const { initializeApp, cert, getApps } = req("firebase-admin/app");
 const { getFirestore } = req("firebase-admin/firestore");
+const { getMessaging } = req("firebase-admin/messaging");
 
 let adminDb: any = null;
 
@@ -55,4 +56,23 @@ export function getAdminDb(): any {
     console.error("[Firebase Admin] Erro ao inicializar:", error);
     return null;
   }
+}
+
+let adminMessaging: any = null;
+
+export function getAdminMessaging(): any {
+  if (adminMessaging) return adminMessaging;
+  const db = getAdminDb(); // guarantees initializeApp was called
+  if (!db) return null;
+  try {
+    const apps = getApps();
+    const defaultApp = apps.find((a: any) => a.name === "[DEFAULT]") || null;
+    if (defaultApp) {
+      adminMessaging = getMessaging(defaultApp);
+      return adminMessaging;
+    }
+  } catch (error) {
+    console.error("[Firebase Admin] Erro ao inicializar Messaging:", error);
+  }
+  return null;
 }

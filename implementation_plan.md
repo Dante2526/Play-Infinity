@@ -1,100 +1,138 @@
-# Relato de Bugs (Bug Reporting) Implementation Plan
+# Notificações Push (Web e Android) Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) ou superpowers:executing-plans para implementar isso tarefa por tarefa. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Implementar um sistema de reporte de bugs onde os clientes podem anexar prints, o administrador gerencia via painel e o cliente recebe feedback visual para validação e descarte do log.
+**Goal:** Implementar sistema de notificações push manuais (Painel ADM) e automáticas (Novos episódios de séries favoritas) usando Firebase Cloud Messaging (FCM).
 
-**Architecture:** O sistema utilizará `localStorage` no frontend para gerar/manter um ID único para cada dispositivo (cliente). Os dados textuais irão para o Firestore (coleção `bug_reports`) e o anexo para o Firebase Storage (`bug_reports/{id}.png`). O Painel ADM vai ler/atualizar esses logs. O frontend do cliente fará um polling passivo (ou escuta ativa) de logs "resolvidos" vinculados ao seu ID.
+**Architecture:** Frontend usa `@capacitor-firebase/messaging` para gerar tokens e envia para o Firestore. Backend Node.js roda um cron job a cada 6h que checa o TMDB/Catálogo para séries favoritadas e usa `firebase-admin` para disparar as notificações push.
 
-**Tech Stack:** React, TailwindCSS, Firebase Firestore, Firebase Storage.
+**Tech Stack:** React, Capacitor, Node.js, Express, Firebase Admin SDK, node-cron.
 
 ## Global Constraints
 - Usar idioma Português do Brasil.
-- A exclusão do arquivo no Firebase Storage deve ocorrer ao mesmo tempo que o log no Firestore.
-- Firebase Storage deve estar configurado na exportação.
-- Regras de Firestore atualizadas para permitir essas interações (cliente anônimo precisa de permissão de escrita restrita ao seu clientId e leitura).
+- A lógica de verificação de catálogos deve reusar os scrapers locais (ex: `encontreiCatalog.ts`).
+- Não deletar ou reescrever as funções existentes de notificação em "Sininho".
 
 ---
 
-### Task 1: Configuração do Firebase e Utilitário de Cliente
+### Task 1: Instalação e Geração de Token FCM (Frontend)
+
 **Files:**
-- Modify: `src/services/firebase.ts`
-- Create: `src/utils/clientId.ts`
-- Modify: `firestore.rules`
+- Modify: `package.json`
+- Modify: `src/App.tsx`
 
 **Interfaces:**
-- Produces: `storage` exportado do Firebase.
-- Produces: `getClientId()` utilitário.
+- Produces: Dispositivo do usuário salva `fcmToken` no banco de dados Firestore (`usuarios/{uid}`).
 
-- [ ] **Step 1: Exportar Storage do Firebase**
-No `src/services/firebase.ts`:
-```typescript
-import { getStorage } from "firebase/storage";
-export const storage = getStorage(app);
+- [ ] **Step 1: Instalar pacote do Firebase Capacitor**
+```bash
+npm install @capacitor-firebase/messaging
 ```
 
-- [ ] **Step 2: Criar Utilitário de Identificação**
-Criar `src/utils/clientId.ts` para persistir e buscar o ID do cliente.
+- [ ] **Step 2: Solicitar permissão e pegar o token no App.tsx**
+No `src/App.tsx`, logo após o login ser confirmado (no listener de auth), criar a função para pedir permissão e pegar o token:
 ```typescript
-import { v4 as uuidv4 } from "uuid";
+import { FirebaseMessaging } from '@capacitor-firebase/messaging';
+import { updateDoc, doc } from 'firebase/firestore';
 
-export const getClientId = (): string => {
-  let clientId = localStorage.getItem("PLAY_INFINITY_CLIENT_ID");
-  if (!clientId) {
-    clientId = uuidv4();
-    localStorage.setItem("PLAY_INFINITY_CLIENT_ID", clientId);
+const requestPushPermission = async (userId: string) => {
+  try {
+    const result = await FirebaseMessaging.requestPermissions();
+    if (result.receive === 'granted') {
+      const tokenResult = await FirebaseMessaging.getToken();
+      await updateDoc(doc(db, 'usuarios', userId), { fcmToken: tokenResult.token });
+    }
+  } catch (error) {
+    console.warn("Push bloqueado ou não suportado:", error);
   }
-  return clientId;
 };
 ```
-*(Certificar que o `uuid` está instalado, ou gerar um hash aleatório usando Math.random se não estiver)*
+*(Chamar essa função passando o `uid` do usuário).*
 
-- [ ] **Step 3: Atualizar firestore.rules**
-No `firestore.rules`, adicionar regras para `bug_reports`:
-```javascript
-    match /bug_reports/{reportId} {
-      allow create: if request.resource.data.keys().hasAll(["clientId", "status"]) && request.resource.data.status == "pending";
-      allow read, update, delete: if isAdmin() || resource.data.clientId == request.query.clientId || resource.data.clientId == request.auth.uid;
-    }
-```
-*(A regra exata será ajustada para permitir que o cliente leia e delete seu próprio log)*
+### Task 2: Firebase Admin e Rota de Disparo Manual (Backend)
 
-### Task 2: Componente do Modal de Reporte de Bug
 **Files:**
-- Create: `src/components/ReportBugModal.tsx`
+- Modify: `server/firebaseAdmin.ts`
+- Modify: `server/routes/adminOps.ts`
 
 **Interfaces:**
-- Produces: Componente de UI `<ReportBugModal />` que recebe `mediaTitle`, `mediaId`, `episodeInfo` e `isOpen`, `onClose`.
+- Consumes: `fcmToken` dos usuários lidos do Firestore.
+- Produces: Endpoint `POST /api/admin/push` para disparar mensagens do painel.
 
-- [ ] **Step 1: Implementar UI e Upload**
-No componente, adicionar um formulário com `<textarea>` para a descrição e `<input type="file" accept="image/*">`.
-Usar `uploadBytes` e `getDownloadURL` do `firebase/storage` e depois `addDoc` no `firestore`.
+- [ ] **Step 1: Exportar o serviço de mensageria**
+No `server/firebaseAdmin.ts`:
+```typescript
+export const messaging = admin.messaging();
+```
 
-### Task 3: Botão de Reportar Bug nas Telas
-**Files:**
-- Modify: `src/pages/DetailsPage.tsx`
-- Modify: `src/components/VideoPlayerModal.tsx`
+- [ ] **Step 2: Criar Rota de Envio**
+No `server/routes/adminOps.ts`:
+```typescript
+import { messaging } from "../firebaseAdmin";
 
-- [ ] **Step 1: Inserir o botão**
-Adicionar o botão de "Reportar Erro/Bug" (com ícone de bug) nessas telas. Quando clicado, abre o `ReportBugModal` passando os dados da mídia atual.
+adminOpsRouter.post("/push", async (req, res) => {
+  const { title, body, targetUids } = req.body;
+  // Implementar busca de fcmTokens no Firestore baseado nos targetUids
+  // (ou buscar todos se targetUids for vazio/todos)
+  const tokens = ["mock-token-1"]; // substituir pela busca real
+  
+  if (tokens.length > 0) {
+    const message = { notification: { title, body }, tokens };
+    await messaging.sendEachForMulticast(message);
+  }
+  res.json({ success: true, count: tokens.length });
+});
+```
 
-### Task 4: Aba de Relatórios no Painel ADM
+### Task 3: Interface no Painel ADM
+
 **Files:**
 - Modify: `src/pages/AdminPage.tsx`
 
-- [ ] **Step 1: Adicionar visualização dos bugs**
-Buscar a coleção `bug_reports` ordenada por `createdAt` desc.
-Listar em cards os bugs mostrando ID, Filme/Episódio, Descrição e a Imagem.
-Adicionar opções de responder com mensagens pré-definidas (ex: "Recebido e resolvido. Pode testar.").
-Botão para salvar altera o `status` para `resolved` e preenche `adminResponse`.
+**Interfaces:**
+- Consumes: Endpoint `POST /api/admin/push`.
 
-### Task 5: Feedback para o Cliente e Limpeza
+- [ ] **Step 1: Adicionar aba "Push"**
+Criar um formulário simples (Título e Mensagem). Adicionar um botão "Disparar Push Global" que chama o endpoint criado no backend.
+
+### Task 4: Cron Job de Lançamentos (Backend)
+
 **Files:**
-- Modify: `src/App.tsx` ou componente de Layout central (`src/components/ClientBugFeedback.tsx`)
+- Create: `server/jobs/episodeChecker.ts`
+- Modify: `server.ts`
 
-- [ ] **Step 1: Criar Componente de Escuta**
-Criar `ClientBugFeedback.tsx` que usa `onSnapshot` escutando a coleção `bug_reports` com `where("clientId", "==", getClientId())` e `where("status", "==", "resolved")`.
-- [ ] **Step 2: Mostrar Cartão de Feedback**
-Exibir ao cliente qual foi a resposta do Admin e um botão "OK, vou testar".
-- [ ] **Step 3: Ação de Limpeza**
-Ao clicar em "OK, vou testar", o sistema deleta o arquivo no Firebase Storage (`ref(storage, imagePath)`) e deleta o documento no Firestore (`deleteDoc`).
+**Interfaces:**
+- Consumes: Coleção `favoritos` no Firestore, API do TMDB, `getAvailableEpisodes` do `videoScrapers.ts`.
+- Produces: Notificações automáticas via FCM.
+
+- [ ] **Step 1: Instalar node-cron**
+```bash
+npm install node-cron
+```
+
+- [ ] **Step 2: Criar o script do robô**
+No `server/jobs/episodeChecker.ts`:
+```typescript
+import cron from "node-cron";
+import { db, messaging } from "../firebaseAdmin";
+// import TMDB e Scrapers
+
+export const startEpisodeCron = () => {
+  cron.schedule("0 */6 * * *", async () => {
+    console.log("[Cron] Verificando novos episódios...");
+    // 1. Buscar séries com isFavorite == true no Firestore
+    // 2. Fazer fetch ao TMDB para checar o último episódio ao ar
+    // 3. Confirmar disponibilidade local via getAvailableEpisodes
+    // 4. Buscar fcmToken dos usuários que favoritaram
+    // 5. messaging.sendEachForMulticast(...)
+    // 6. Atualizar a coleção eadNotifications (sininho interno)
+  });
+};
+```
+
+- [ ] **Step 3: Iniciar o cron**
+No final do `server.ts`:
+```typescript
+import { startEpisodeCron } from "./jobs/episodeChecker";
+startEpisodeCron();
+```

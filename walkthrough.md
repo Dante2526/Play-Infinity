@@ -1,4 +1,4 @@
-﻿## 06/10/2026 - HxH 2011: "eps 70+ não reproduzem" — worker do CONTEÚDO do HxH fora no Nixplay
+## 06/10/2026 - HxH 2011: "eps 70+ não reproduzem" — worker do CONTEÚDO do HxH fora no Nixplay
 
 **Problema relatado:** após o fix das abas, o usuário reporta que "os eps do nixplay não reproduz a partir do ~70".
 
@@ -297,3 +297,15 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Problema:** Ao abrir o modal de notificações (sininho) no PC, os itens eram marcados como lidos apenas no localStorage. Ao abrir no celular, o badge continuava aceso.
 - **Solução:** Implementada sincronia com o Firestore (eadNotifications). markNotificationAsRead e markAllNotificationsAsRead agora fazem debounce de 5s e enviam o array atualizado pro banco. O App.tsx baixa essas flags no login (etchReadNotificationsFromCloud) e o listener onSnapshot captura atualizações em tempo real vindas de outros dispositivos, mesclando e apagando o badge instantaneamente em todas as sessões ativas.
 
+
+
+## 08/10/2026 - Implementação de Push Notifications (FCM)
+**Resumo:**
+- **Frontend (`App.tsx`):** Integrado o Firebase Cloud Messaging (FCM). Adicionada lógica que solicita permissão do usuário via `requestPermission()` após o login. O `fcmToken` obtido é gravado no documento do usuário no Firestore (`usuarios/{uid}` e `users/{email}`).
+- **Backend (`server/firebaseAdmin.ts` & `adminOps.ts`):** O backend foi configurado para instanciar também o serviço `getAdminMessaging()`. Foi criada a rota protegida `POST /api/admin/push` que recebe `title` e `body`. A rota busca todos os usuários com `fcmToken` válido no Firestore (limitado a 500 por lote do `sendEachForMulticast`) e envia os pushes globalmente.
+- **Painel Admin (`AdminPage.tsx` & `AdminPushNotifications.tsx`):** Adicionada uma nova aba com o ícone de "Sino" (Push) ao painel administrativo. A nova interface permite compor um Título e Mensagem e disparar um Push Notification em lote com apenas um clique.
+- **Capacitor Mobile:** O envio funciona nativamente em dispositivos móveis caso as dependências `@capacitor-firebase/messaging` estejam instaladas e configuradas adequadamente.
+
+## 08/10/2026 - Robô de Criação Ampere (VPS)
+**Resumo:**
+- Atualizado o script `auto_create_ampere.py` remotamente na VPS Oracle para forçar `boot_volume_size_in_gbs=150` no `source_details`. Isso garante a manutenção no escopo grátis de discos, evitando passar do limite grátis (junto com a Micro de 50GB). O PM2 foi reiniciado na VPS para aplicar a mudança no bot de prospecção contínua da A1.Flex.

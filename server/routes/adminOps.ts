@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import { getAdminMessaging, getAdminDb } from "../firebaseAdmin";
 import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
@@ -816,5 +817,46 @@ adminOpsRouter.get("/encontrei-status", (_req: Request, res: Response) => {
       error: "Erro interno ao obter status do encontrei resolver",
       details: err?.message || String(err),
     });
+  }
+});
+
+/**
+ * POST /api/admin/push
+ * Dispara notificação push manual via Firebase Cloud Messaging
+ */
+adminOpsRouter.post("/push", async (req: Request, res: Response) => {
+  try {
+    const { title, body, targetUids } = req.body;
+    const messaging = getAdminMessaging();
+    if (!messaging) {
+      return res.status(500).json({ success: false, error: "Firebase Messaging não inicializado" });
+    }
+
+    const db = getAdminDb();
+    let tokens: string[] = [];
+
+    if (targetUids && Array.isArray(targetUids) && targetUids.length > 0) {
+      const snapshot = await db.collection("usuarios").where("__name__", "in", targetUids).get();
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.fcmToken) tokens.push(data.fcmToken);
+      });
+    } else {
+      const snapshot = await db.collection("usuarios").where("fcmToken", "!=", null).limit(500).get();
+      snapshot.forEach((doc: any) => {
+        const data = doc.data();
+        if (data.fcmToken) tokens.push(data.fcmToken);
+      });
+    }
+
+    if (tokens.length > 0) {
+      const message = { notification: { title, body }, tokens };
+      await messaging.sendEachForMulticast(message);
+    }
+
+    res.json({ success: true, count: tokens.length });
+  } catch (error: any) {
+    console.error("[adminOps] Erro ao disparar push:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
