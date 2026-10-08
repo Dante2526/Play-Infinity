@@ -1,5 +1,7 @@
 import { getFavoriteIds, getFavoriteTimestamps, getScheduleForFavorites, fetchDynamicScheduleForFavorites, SeriesScheduleEpisode } from "./favorites";
 import { isEpisodeWatched } from "./watchedEpisodes";
+import { db, auth } from "./firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 
 export interface EpisodeNotification {
   id: string;
@@ -65,12 +67,55 @@ export const getReadNotificationIds = (): string[] => {
   return [];
 };
 
+let syncReadTimeout: any = null;
+
+function syncReadNotificationsToCloud(ids: string[]) {
+  if (syncReadTimeout) clearTimeout(syncReadTimeout);
+  
+  syncReadTimeout = setTimeout(async () => {
+    const user = auth.currentUser;
+    if (!user) return; // Só sincroniza se estiver logado
+    
+    try {
+      const userRef = doc(db, "usuarios", user.uid);
+      await setDoc(userRef, { readNotifications: ids }, { merge: true });
+    } catch (e) {
+      console.warn("[Firestore Sync] Falha ao sincronizar notificações lidas:", e);
+    }
+  }, 5000);
+}
+
+export async function fetchReadNotificationsFromCloud(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  
+  try {
+    let snap = await getDoc(doc(db, "usuarios", user.uid));
+    if (!snap.exists()) {
+      snap = await getDoc(doc(db, "users", user.uid));
+    }
+    if (snap.exists()) {
+      const data = snap.data();
+      const remoteReads = data.readNotifications;
+      if (remoteReads && Array.isArray(remoteReads)) {
+        const local = getReadNotificationIds();
+        const merged = Array.from(new Set([...local, ...remoteReads]));
+        localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(merged));
+        window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
+      }
+    }
+  } catch (e) {
+    console.warn("[Firestore Fetch] Erro ao baixar notificações lidas:", e);
+  }
+}
+
 export const markNotificationAsRead = (notificationId: string) => {
   try {
     const current = getReadNotificationIds();
     if (!current.includes(notificationId)) {
       const updated = [...current, notificationId];
       localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
+      syncReadNotificationsToCloud(updated);
       window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
     }
   } catch (e) {
@@ -83,6 +128,7 @@ export const markAllNotificationsAsRead = (notificationIds: string[]) => {
     const current = getReadNotificationIds();
     const merged = Array.from(new Set([...current, ...notificationIds]));
     localStorage.setItem(READ_NOTIFICATIONS_STORAGE_KEY, JSON.stringify(merged));
+    syncReadNotificationsToCloud(merged);
     window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
   } catch (e) {
     console.error("Erro ao marcar todas como lidas:", e);

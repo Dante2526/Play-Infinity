@@ -284,3 +284,16 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - `BugFeedbackListener.tsx`: Renderizado no final do `App.tsx`. Ouve passivamente ao Firestore por bugs do usuÃ¡rio (`clientId`) marcados como `resolved` e exibe um feedback flutuante (toast). Ao fechar, deleta o registro do banco de dados e a imagem do Storage.
 - `DetailsPage.tsx`: Inserido o botÃ£o "Reportar Erro" ao lado de Download na pÃ¡gina principal do filme/sÃ©rie e um botÃ£o com Ã­cone de bug na listagem para cada episÃ³dio.
 - Os cÃ³digos TypeScript foram validados com `tsc --noEmit` e nÃ£o mostraram erros nas mudanÃ§as recentes.
+
+## 07/10/2026 - Correção O Dia do Chacal (MixDrop) & Asaas 401 & UI
+**Resumo:**
+- **O Dia do Chacal (MixDrop):** Auto-recovery (Fase 3) em ação perfeitamente. O erro 502 Bad Gateway (visto nos logs do usuário) foi o gatilho capturado pelo React. O frontend executou o efresh=1 chamando encontreiLookup.ts, ignorou o arquivo JSON obsoleto e usou o scraper ao vivo para capturar a string HD funcional do site encontrei.me correspondente à dublagem em português. 4dnjrxg3aq3wvwk carregou normalmente.
+- **Asaas Payment 401:** Inserido o header User-Agent: PlayInfinity/1.0.0 no arquivo server/routes/payments.ts. Contas raiz criadas a partir de jun/2024 bloqueavam a API com 401 se ausente.
+- **Admin UI:** O texto 'Aguardando o cliente visualizar para ser excluído automaticamente' removido de AdminBugReports.tsx. O scroll vertical do card permanece aguardando clarificação.
+
+
+## 07/10/2026 - Sincronização de Notificações Lidas (Sininho) na Nuvem
+**Resumo:**
+- **Problema:** Ao abrir o modal de notificações (sininho) no PC, os itens eram marcados como lidos apenas no localStorage. Ao abrir no celular, o badge continuava aceso.
+- **Solução:** Implementada sincronia com o Firestore (eadNotifications). markNotificationAsRead e markAllNotificationsAsRead agora fazem debounce de 5s e enviam o array atualizado pro banco. O App.tsx baixa essas flags no login (etchReadNotificationsFromCloud) e o listener onSnapshot captura atualizações em tempo real vindas de outros dispositivos, mesclando e apagando o badge instantaneamente em todas as sessões ativas.
+

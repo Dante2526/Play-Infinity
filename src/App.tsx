@@ -148,7 +148,8 @@ import {
 import {
   getFavoriteEpisodeNotifications,
   getReadNotificationIds,
-  markAllNotificationsAsRead
+  markAllNotificationsAsRead,
+  fetchReadNotificationsFromCloud
 } from "./services/notifications";
 import {
   isEpisodeWatched,
@@ -357,6 +358,7 @@ export default function App() {
         fetchHistoryFromCloud(); // Baixa histórico e mescla no login
         fetchFavoritesFromCloud(); // Baixa favoritos da nuvem
         fetchWatchedFromCloud(); // Baixa episódios assistidos
+        fetchReadNotificationsFromCloud(); // Baixa notificações lidas
       } else {
         setUserDisplayName("");
         clearLocalUserData();
@@ -468,6 +470,16 @@ export default function App() {
       const name = data.nome || data.name || data.displayName;
       if (name && isSubscribed) {
         setUserDisplayName(name);
+      }
+      
+      // Sincroniza notificações lidas
+      if (data.readNotifications && Array.isArray(data.readNotifications) && isSubscribed) {
+        const local = getReadNotificationIds();
+        const merged = Array.from(new Set([...local, ...data.readNotifications]));
+        if (merged.length > local.length) {
+          localStorage.setItem("playinfinity_read_notifications", JSON.stringify(merged));
+          window.dispatchEvent(new CustomEvent("playinfinity:notifications_updated"));
+        }
       }
     }, (err) => {
       console.warn("[Auth] Listener do documento do usuário:", err);
