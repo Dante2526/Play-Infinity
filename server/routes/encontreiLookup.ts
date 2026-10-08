@@ -1097,8 +1097,8 @@ router.all("/api/check-playable-batch", async (req, res) => {
       unverifiedItems.push(item);
     }
 
-    // 4. Sonda itens não encontrados em lote rápido (máximo 15 por requisição)
-    const itemsToProbe = unverifiedItems.slice(0, 15);
+    // 4. Sonda itens não encontrados em lote rápido (máximo 25 por requisição)
+    const itemsToProbe = unverifiedItems.slice(0, 25);
     if (itemsToProbe.length > 0) {
       await Promise.all(
         itemsToProbe.map(async (item) => {

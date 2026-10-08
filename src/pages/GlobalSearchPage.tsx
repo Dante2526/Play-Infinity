@@ -220,7 +220,23 @@ export function GlobalSearchPage({
             }
           }
 
-          setTmdbResults(combined);
+          // Filtra a lista usando a sonda (WatchPlayer/VIP/MixDrop/Nixplay)
+          try {
+            const playableSet = await checkPlayableBatch(
+              combined.map(item => ({ id: item.id, type: item.type === 'movie' ? 'movie' : 'tv' }))
+            );
+            
+            if (!isMounted) return;
+
+            // Mantém apenas os itens que a sonda confirmou ter em algum servidor
+            const trulyAvailable = combined.filter(item => playableSet.has(item.id));
+            setTmdbResults(trulyAvailable);
+          } catch(err) {
+            console.warn("Falha ao checar batch playability:", err);
+            // Em caso de erro na API, falha de forma graciosa e mostra todos
+            if (isMounted) setTmdbResults(combined);
+          }
+
         } else if (localMatches.length > 0) {
           setTmdbResults(localMatches);
         } else {
