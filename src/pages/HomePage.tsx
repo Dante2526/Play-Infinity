@@ -135,12 +135,14 @@ export function HomePage({
   onProviderSelect, 
   onItemClick, 
   onPlay,
-  onNavigateToLiveTv
+  onNavigateToLiveTv,
+  onNavigateToSagas
 }: { 
   onProviderSelect: (p: string) => void, 
   onItemClick: (id: number, item?: any) => void,
   onPlay?: OnPlayHandler,
-  onNavigateToLiveTv?: () => void
+  onNavigateToLiveTv?: () => void,
+  onNavigateToSagas?: () => void
 }) {
   const [heroItems, setHeroItems] = useState<any[]>(featuredCarousel);
   const [heroIndex, setHeroIndex] = useState<number>(0);
@@ -777,44 +779,84 @@ export function HomePage({
           </div>
         </section>
 
-        {/* Destaque TV Ao Vivo & Futebol */}
+        {/* Destaque TV Ao Vivo & Futebol e Sagas */}
         {onNavigateToLiveTv && (
-          <section className="relative rounded-3xl overflow-hidden border border-orange-500/25 bg-gradient-to-r from-neutral-950 via-neutral-900 to-orange-950/40 p-6 md:p-8 shadow-2xl group">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10">
-              <div className="flex items-center gap-4 md:gap-5">
-                <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-600/20 border border-orange-500/40 flex items-center justify-center text-orange-500 shrink-0 shadow-lg shadow-orange-600/20 group-hover:scale-105 transition-transform">
-                  <Radio className="w-7 h-7 text-red-500 animate-pulse" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                    <span className="flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-md">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
-                      AO VIVO
-                    </span>
-                    <h3 className="text-white font-black text-lg md:text-xl tracking-tight">
-                      TV Ao Vivo & Esportes
-                    </h3>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                      Premiere • SporTV • CazéTV
-                    </span>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <section className="relative rounded-3xl overflow-hidden border border-orange-500/25 bg-gradient-to-r from-neutral-950 via-neutral-900 to-orange-950/40 p-6 shadow-2xl group">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10 h-full">
+                <div className="flex items-center gap-4 md:gap-5">
+                  <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-orange-600/20 border border-orange-500/40 flex items-center justify-center text-orange-500 shrink-0 shadow-lg shadow-orange-600/20 group-hover:scale-105 transition-transform">
+                    <Radio className="w-7 h-7 text-red-500 animate-pulse" />
                   </div>
-                  <p className="text-xs md:text-sm text-neutral-400 max-w-xl leading-relaxed">
-                    Acompanhe partidas de futebol ao vivo, transmissões do Brasileirão, canais abertos, notícias e programação 24h com múltiplos servidores de alta performance.
-                  </p>
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <span className="flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-md">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span>
+                        AO VIVO
+                      </span>
+                      <h3 className="text-white font-black text-lg md:text-xl tracking-tight">
+                        TV Ao Vivo & Esportes
+                      </h3>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                        Premiere • SporTV
+                      </span>
+                    </div>
+                    <p className="text-xs md:text-sm text-neutral-400 max-w-xl leading-relaxed">
+                      Acompanhe partidas de futebol ao vivo, transmissões do Brasileirão, canais abertos, notícias e programação 24h.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 w-full md:w-auto">
+                  <button
+                    onClick={onNavigateToLiveTv}
+                    className="flex-1 md:flex-initial flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs md:text-sm transition-all shadow-lg shadow-orange-600/30 hover:scale-105 cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    Assistir TV Ao Vivo
+                  </button>
                 </div>
               </div>
+            </section>
 
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                <button
-                  onClick={onNavigateToLiveTv}
-                  className="flex-1 md:flex-initial flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs md:text-sm transition-all shadow-lg shadow-orange-600/30 hover:scale-105 cursor-pointer"
-                >
-                  <Play className="w-4 h-4 fill-white" />
-                  Assistir TV Ao Vivo
-                </button>
-              </div>
-            </div>
-          </section>
+            {onNavigateToSagas && (
+              <section className="relative rounded-3xl overflow-hidden border border-blue-500/25 bg-gradient-to-r from-neutral-950 via-neutral-900 to-blue-950/40 p-6 shadow-2xl group">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative z-10 h-full">
+                  <div className="flex items-center gap-4 md:gap-5">
+                    <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-500 shrink-0 shadow-lg shadow-blue-600/20 group-hover:scale-105 transition-transform">
+                      <Film className="w-7 h-7 text-blue-500" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                        <span className="flex items-center gap-1 text-[9px] font-black uppercase px-2.5 py-0.5 rounded-full bg-blue-600 text-white tracking-widest shadow-md">
+                          NOVO
+                        </span>
+                        <h3 className="text-white font-black text-lg md:text-xl tracking-tight">
+                          Sagas de Filmes
+                        </h3>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                          Harry Potter • Star Wars
+                        </span>
+                      </div>
+                      <p className="text-xs md:text-sm text-neutral-400 max-w-xl leading-relaxed">
+                        Assista as melhores franquias do cinema organizadas em ordem cronológica para maratonar sem parar.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <button
+                      onClick={onNavigateToSagas}
+                      className="flex-1 md:flex-initial flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs md:text-sm transition-all shadow-lg shadow-blue-600/30 hover:scale-105 cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-white" />
+                      Assista uma saga
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+          </div>
         )}
 
         {/* Continue Assistindo */}

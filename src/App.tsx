@@ -133,6 +133,7 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
 const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
+const SagasPage = lazyWithRetry(() => import("./components/SagasPage"));
 const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal"));
 const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import { VirtualRemote } from "./components/VirtualRemote";
@@ -197,7 +198,7 @@ import { OnPlayHandler } from "./types";
 
 export default function App() {
   type ViewState = { 
-    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'downloads' | 'details' | 'live-tv' | 'admin' | 'privacy';
+    type: 'home' | 'movies' | 'series' | 'calendar' | 'provider' | 'search' | 'profile' | 'favorites' | 'downloads' | 'details' | 'live-tv' | 'admin' | 'privacy' | 'sagas';
     id?: string;
     itemData?: CatalogItem;
     previous?: any;
@@ -1004,6 +1005,8 @@ export default function App() {
         <FavoritesPage onBack={handleBack} onItemClick={navigateToDetails} onPlay={openPlayer} onNavigateToCalendar={() => navigateTo({ type: 'calendar' })} />
       ) : viewState.type === 'downloads' ? (
         <DownloadsPage onItemClick={navigateToDetails} onPlay={openPlayer} onNavigate={(t) => navigateTo({ type: t as any })} />
+      ) : viewState.type === 'sagas' ? (
+        <SagasPage onItemClick={navigateToDetails} onPlay={openPlayer} />
       ) : viewState.type === 'privacy' ? (
         <PrivacyPolicyPage />
       ) : viewState.type === 'admin' ? (
@@ -1019,6 +1022,7 @@ export default function App() {
           onItemClick={navigateToDetails} 
           onPlay={openPlayer} 
           onNavigateToLiveTv={() => navigateTo({ type: 'live-tv' })}
+          onNavigateToSagas={() => navigateTo({ type: 'sagas' })}
         />
       )}
       </React.Suspense>
@@ -1039,6 +1043,7 @@ export default function App() {
             { label: "Início", type: "home" },
             { label: "Filmes", type: "movies" },
             { label: "Séries", type: "series" },
+            { label: "Sagas", type: "sagas" },
             { label: "TV Ao Vivo", type: "live-tv" },
             { label: "Calendário", type: "calendar" },
             { label: "Favoritos", type: "favorites" },

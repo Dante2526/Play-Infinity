@@ -380,3 +380,6 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Limitações conhecidas do offline:** "Continuar Assistindo" (seek inicial) e pular abertura não se aplicam no playback offline (esses comandos vão direto pro iframe, que não existe); auto-next de episódio volta pro streaming do backend.
 - **Validação:** `npx tsc --noEmit` — zero erros.
 - **Versionamento:** `versionCode 12` / `versionName 1.2.1`. Deploy na VPS Oracle + AAB pendentes de autorização explícita do usuário.
+## 08/10/2026 - Fix: Condi��o de corrida no MixDrop (Fallback fantasma)
+- **Problema:** Ao abrir um v�deo, o React iniciava a sondagem do fileId HD do MixDrop no background, mas o setupInitialServer n�o aguardava o resultado. Com isso, ele gerava a URL fabricada (ex: mxdrop.top/e/tmdbId), detectava imediatamente que era falsa e descartava o MixDrop antes mesmo do scraper de 3 segundos conseguir devolver a URL verdadeira. Isso gerava os erros 'MixDrop sem fileId real' seguidos de pulo pro WatchPlayer/Nixplay.
+- **Corre��o:** No src/components/VideoPlayerModal.tsx, a inicializa��o do MixDrop agora faz o await lookupMixdropFileId explicitamente antes de gerar a URL, garantindo que o player utilize o resultado resolvido na primeira tentativa. Validado com base no console dump do usu�rio.

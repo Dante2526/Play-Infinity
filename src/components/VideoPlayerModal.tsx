@@ -1420,10 +1420,22 @@ export function VideoPlayerModal({
         } else if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
         } else {
-          const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
-          targetUrl = isSeries
-            ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
-            : targetSrv.buildUrl(resolvedId);
+          let resolvedTargetUrl = "";
+          if (targetServerKey === "srv_mixdrop") {
+            const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
+            if (fid) {
+              resolvedTargetUrl = buildMixdropStreamUrl(fid) || "";
+            }
+          }
+
+          if (resolvedTargetUrl) {
+            targetUrl = resolvedTargetUrl;
+          } else {
+            const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
+            targetUrl = isSeries
+              ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+              : targetSrv.buildUrl(resolvedId);
+          }
         }
 
         // ── Fim do "fallback fantasma" do MixDrop ──

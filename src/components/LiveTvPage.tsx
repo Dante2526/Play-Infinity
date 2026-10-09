@@ -21,7 +21,8 @@ import {
   FolderOpen,
   Mic,
   MicOff,
-  Info
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
@@ -96,6 +97,31 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
   const [formStreamUrl, setFormStreamUrl] = useState<string>('');
   const [formLogoUrl, setFormLogoUrl] = useState<string>('');
   const [formQuality, setFormQuality] = useState<'1080p' | '720p' | 'HD'>('720p');
+
+  // Modal de Aviso de Travamento (1º Acesso)
+  const [showWarningModal, setShowWarningModal] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('playinfinity_tv_warning') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleDismissWarning = () => {
+    setShowWarningModal(false);
+    try {
+      localStorage.setItem('playinfinity_tv_warning', 'true');
+    } catch(e) {}
+  };
+
+  const [warningCountdown, setWarningCountdown] = useState<number>(7);
+
+  useEffect(() => {
+    if (showWarningModal && warningCountdown > 0) {
+      const timer = setTimeout(() => setWarningCountdown(prev => prev - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [showWarningModal, warningCountdown]);
 
   // Carrega canais e favoritos ao montar
   const refreshChannels = () => {
@@ -754,6 +780,52 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* MODAL: AVISO SOBRE TV AO VIVO */}
+      {showWarningModal && (
+        <div className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-neutral-900 border border-orange-500/30 rounded-2xl sm:rounded-3xl w-full max-w-md p-6 sm:p-8 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+            {/* Efeito Glow */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-24 bg-orange-500/20 blur-[50px] rounded-full pointer-events-none" />
+            
+            <div className="flex flex-col items-center text-center relative z-10">
+              <div className="w-16 h-16 rounded-full bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mb-5">
+                <AlertTriangle className="w-8 h-8 text-orange-500" />
+              </div>
+              
+              <h3 className="text-xl font-bold text-white mb-2">Aviso Importante</h3>
+              
+              <div className="space-y-4 text-sm text-neutral-300 leading-relaxed mt-2">
+                <p>
+                  A seção de Canais de TV é um <strong className="text-orange-400">bônus exclusivo</strong> do seu pacote atual.
+                </p>
+                <div className="p-4 rounded-xl bg-black/50 border border-white/5 space-y-3 text-left">
+                  <p className="flex gap-3">
+                    <span className="text-orange-500 shrink-0 text-lg">⚠️</span>
+                    <span>Por se tratar de uma <strong>reprodução ao vivo</strong>, é comum que ocorram pequenos travamentos ou engasgos.</span>
+                  </p>
+                  <p className="flex gap-3">
+                    <span className="text-orange-500 shrink-0 text-lg">🛜</span>
+                    <span>A velocidade e estabilidade da sua internet residencial também influenciam diretamente para que o canal rode sem travar.</span>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleDismissWarning}
+                disabled={warningCountdown > 0}
+                className={`mt-8 w-full py-3.5 px-6 rounded-xl text-white font-bold transition-all ${
+                  warningCountdown > 0 
+                    ? 'bg-neutral-700 cursor-not-allowed opacity-70' 
+                    : 'bg-orange-600 hover:bg-orange-500 shadow-[0_0_20px_rgba(234,88,12,0.3)] hover:shadow-[0_0_25px_rgba(234,88,12,0.5)] active:scale-[0.98]'
+                }`}
+              >
+                {warningCountdown > 0 ? `Entendi (${warningCountdown}s)` : 'Entendi, não mostrar novamente'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
