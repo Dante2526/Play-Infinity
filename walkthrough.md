@@ -302,6 +302,15 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Frontend:** `encontreiCatalog.ts` (`findEpisode`/`findMovieByTmdbId` ganham `name`) e `VideoPlayerModal.tsx` (`lookupMixdropFileId` passa o `title` do modal).
 - **Fim do fallback fantasma (`VideoPlayerModal.tsx`):** `setupInitialServer` detecta URL fabricada `mxdrop.top/e/{imdbId|tmdbId}` (que nunca é fileId real) e inicia direto pelo próximo servidor homologado — elimina o ciclo 502 → recovery → ~20s perdidos.
 - **Validação:** `npx tsc --noEmit` exit 0; teste ao vivo `scratch/test-fresh-resolver.mjs` (tsx): S1E1 → `pjkr4deehg7r646` Dublado em 3.3s (primeira chamada inclui o scan), S1E2 em 0.3s via cache do mapa.
+
+## 08/10/2026 - Blinda Nixplay: Cache em Disco + Retry do Check (não some mais do seletor)
+**Resumo:**
+- **Problema relatado:** Logo após o deploy do fix da Carrie, o Nixplay sumiu do seletor de servidores pra essa série. Investigação ao vivo: backend respondia `available: true` (Carrie no acervo Nixplay, series_id 288673, 8 eps), sem block do painel admin (só o srv_vip de Carrie estava blockado — intencional, criado pelo dono com reason "Sem a Skin Netflix"), sem blacklist. Causa raiz: `nixplayCatalog.ts` mantinha o catálogo SÓ em memória — cada restart de deploy zerava tudo e o primeiro `/api/nixplay-check` dependia do nixplay.lat responder; se estava lento/fora, `available:false` → Nixplay escondido do seletor naquela sessão.
+- **`server/services/nixplayCatalog.ts` (reescrito):** catálogo agora persiste em `data/nixplay-catalog-cache.json` (gitignored; pasta data/ já fora do Vite watch). No boot, carrega do disco instantaneamente (check funciona em 0ms, independente do nixplay.lat); re-sincroniza ao vivo em background com throttle de 30min e dedupe de syncs concorrentes; sucesso parcial (só filmes OU só séries) não zera o catálogo; só substitui listas quando a resposta vem populada. Falha do nixplay.lat nunca mais esconde o servidor — usa cache stale até voltar.
+- **`src/components/VideoPlayerModal.tsx`:** o check de disponibilidade do Nixplay ganhou 1 retry automático após 2s quando a requisição FALHA por rede (antes: qualquer blip escondia o servidor instantaneamente). Resposta definitiva `available:false` do backend não retrata.
+- **Validação:** `npx tsc --noEmit` exit 0; teste de runtime (`scratch/test-nixplay-cache.mjs`): 1ª execução sync ao vivo 2.3s (23.093 filmes / 11.450 séries) + cache salvo; 2ª execução em processo novo (simula restart da VPS): **96ms do disco, Carrie disponível** — cenário pós-deploy blindado. HxH 46298 permanece bloqueado por design.
+- **Pendente:** deploy na VPS Oracle — só com autorização explícita do dono.
+
 - **Pendente:** deploy na VPS Oracle (o resolver live da VPS precisa do ENCONTREI_COOKIE no ambiente) — só com autorização explícita. O resolver do Vizer tem o mesmo guard estrutural; mesma técnica pode ser aplicada depois se necessário.
 
 ## 07/10/2026 - Sincronização de Notificações Lidas (Sininho) na Nuvem
