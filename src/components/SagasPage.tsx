@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Loader2, Film } from 'lucide-react';
 import { sagas, Saga } from '../data/sagas';
-import { getDetails, formatImageUrl } from '../services/tmdb';
-import { checkIsCam, FALLBACK_POSTER_IMAGE } from '../utils/mediaUtils';
+import { getDetails, formatImageUrl, FALLBACK_POSTER_IMAGE } from '../services/tmdb';
+import { checkIsCam } from '../utils/mediaUtils';
 import { OnPlayHandler } from '../types';
 
 interface SagasPageProps {
