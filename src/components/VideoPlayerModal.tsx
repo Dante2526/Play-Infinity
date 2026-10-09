@@ -2061,7 +2061,9 @@ export function VideoPlayerModal({
       cleanUrl.startsWith("file://") ||
       cleanUrl.match(/^https?:\/\/localhost\/_capacitor_file_\//) !== null ||
       cleanUrl.startsWith("/api/watchplayer-stream") ||
+      cleanUrl.startsWith("/api/watchplay-proxy-iframe") ||
       cleanUrl.startsWith("/api/myembed-stream") ||
+      cleanUrl.startsWith("/api/vip-proxy-iframe") ||
       cleanUrl.startsWith("/api/mixdrop-stream") ||
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("myembed.biz") ||
