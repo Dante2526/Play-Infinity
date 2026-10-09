@@ -396,3 +396,5 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.** O `get_series` 
 - [x] Corrigido erro de comutação do servidor MixDrop para WatchPlayer em séries. O fallback para \/api/watchplay-proxy-iframe\ não estava no whitelist de extração, resultando em 403 Forbidden pelo \/api/extract-player\. Foram adicionados os prefixos \/api/watchplay-proxy-iframe\ e \/api/vip-proxy-iframe\ ao whitelist em \handleExtract\ no arquivo \VideoPlayerModal.tsx\.
 
 - [x] Corrigido falha instantânea do MixDrop em navegadores com bloqueadores de anúncio e Tracking Prevention estrito. A URL do iframe \/api/mixdrop-stream\ estava sendo bloqueada pela palavra 'mixdrop', acionando o evento onError e causando fallback silencioso imediato. Os endpoints foram renomeados para \/api/md-stream\ e \/api/md-proxy\.
+
+- [x] Otimizada lógica de inicialização do VideoPlayerModal para resolver fileIds reais do MixDrop imediatamente ao invés de pular para o próximo servidor, evitando tempo de espera desnecessário.

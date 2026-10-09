@@ -1467,22 +1467,29 @@ export function VideoPlayerModal({
         // mxdrop.top/e/{imdbId|tmdbId} NUNCA é um fileId real do MixDrop — a URL
         // fabricada sempre dá 502 ("possivelmente deletado") e queimava ~20s do
         // usuário (502 → recovery → comutação lenta). Se sobrou só ela, inicia
-        // direto pelo próximo servidor homologado. (Caso real: Carrie a Estranha
-        // usava mxdrop.top/e/288673 — o próprio TMDB ID chuteado como fileId.)
+        // buscando o fileId real de forma transparente, ou vai pro próximo servidor.
         if (targetServerKey === "srv_mixdrop" && targetUrl) {
           let looksFabricated = false;
           try {
             const decoded = decodeURIComponent(targetUrl);
             looksFabricated = /mxdrop\.top\/e\/(tt\d+|\d{4,})/.test(decoded);
           } catch { /* ignora decode malformado */ }
+          
           if (looksFabricated) {
-            console.warn("[VideoPlayerModal] MixDrop sem fileId real (URL fabricada com imdbId/tmdbId). Iniciando pelo próximo servidor...");
-            const nextSrv = serversRef.current.find(s => s.key !== "srv_mixdrop");
-            if (nextSrv) {
-              targetServerKey = nextSrv.key;
-              targetUrl = isSeries
-                ? nextSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
-                : nextSrv.buildUrl(resolvedId);
+            console.warn("[VideoPlayerModal] MixDrop com URL fabricada detectado. Resolvendo fileId real antes de abrir...");
+            const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
+            if (fid) {
+              console.log("[VideoPlayerModal] FileId resolvido com sucesso na inicialização:", fid);
+              targetUrl = buildMixdropStreamUrl(fid) || "";
+            } else {
+              console.warn("[VideoPlayerModal] Scraper não encontrou fileId real. Iniciando pelo próximo servidor...");
+              const nextSrv = serversRef.current.find(s => s.key !== "srv_mixdrop");
+              if (nextSrv) {
+                targetServerKey = nextSrv.key;
+                targetUrl = isSeries
+                  ? nextSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
+                  : nextSrv.buildUrl(resolvedId);
+              }
             }
           }
         }
