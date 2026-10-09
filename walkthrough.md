@@ -398,3 +398,5 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.** O `get_series` 
 - [x] Corrigido falha instantânea do MixDrop em navegadores com bloqueadores de anúncio e Tracking Prevention estrito. A URL do iframe \/api/mixdrop-stream\ estava sendo bloqueada pela palavra 'mixdrop', acionando o evento onError e causando fallback silencioso imediato. Os endpoints foram renomeados para \/api/md-stream\ e \/api/md-proxy\.
 
 - [x] Otimizada lógica de inicialização do VideoPlayerModal para resolver fileIds reais do MixDrop imediatamente ao invés de pular para o próximo servidor, evitando tempo de espera desnecessário.
+
+- [x] Otimizada e expandida a aba de Sagas (src/data/sagas.ts): gerado um script automatizado que consultou a API do TMDB em busca das sagas mais famosas, adicionando 29 franquias ao sistema. Também foi removido 'Hobbs & Shaw', curtas e 'Better Luck Tomorrow' da saga Velozes e Furiosos para manter a cronologia oficial.
