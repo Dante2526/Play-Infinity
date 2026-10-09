@@ -643,22 +643,47 @@ export function VideoPlayerModal({
     // Check Nixplay availability
     // NOVO: passa o nome da série no check pra resolver series_id quando tmdb_id != series_id
     const checkName = isSeries && title ? `&name=${encodeURIComponent(title)}` : '';
-    fetch(`/api/nixplay-check?tmdb_id=${numId}&type=${isSeries ? 'series' : 'movie'}${checkName}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data && typeof data.available === 'boolean') {
-          setNixplayAvailable(data.available);
-          // NOVO: salva o seriesId retornado (pra usar na URL do Nixplay)
-          if (data.seriesId) {
-            setNixplaySeriesId(data.seriesId);
+    const checkUrl = `/api/nixplay-check?tmdb_id=${numId}&type=${isSeries ? 'series' : 'movie'}${checkName}`;
+
+    let cancelled = false;
+    let retryTimer: any = null;
+
+    const runCheck = (isRetry: boolean) => {
+      fetch(checkUrl)
+        .then(res => res.json())
+        .then(data => {
+          if (cancelled) return;
+          if (data && typeof data.available === 'boolean') {
+            setNixplayAvailable(data.available);
+            // NOVO: salva o seriesId retornado (pra usar na URL do Nixplay)
+            if (data.seriesId) {
+              setNixplaySeriesId(data.seriesId);
+            }
+            // NOVO: salva o total de episódios do Nixplay (pra override do TMDB)
+            if (data.totalEpisodes && data.totalEpisodes > 0) {
+              setNixplayTotalEpisodes(data.totalEpisodes);
+            }
           }
-          // NOVO: salva o total de episódios do Nixplay (pra override do TMDB)
-          if (data.totalEpisodes && data.totalEpisodes > 0) {
-            setNixplayTotalEpisodes(data.totalEpisodes);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Falha transitória (rede/restart do servidor): 1 retry após 2s
+          // antes de esconder o Nixplay do seletor — evita o servidor sumir
+          // por um blip do nixplay.lat ou de um deploy reiniciando a VPS.
+          if (!isRetry) {
+            retryTimer = setTimeout(() => runCheck(true), 2000);
+          } else {
+            setNixplayAvailable(false);
           }
-        }
-      })
-      .catch(() => setNixplayAvailable(false));
+        });
+    };
+
+    runCheck(false);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [isOpen, isSeries, tmdbId, resolvedId, title, effectiveMovieId, resolvedAsMovie]);
 
   // Busca blocks dinâmicos (admin panel) pra esse tmdbId
