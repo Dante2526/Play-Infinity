@@ -236,6 +236,92 @@ function loadVizerMovieIds() {
   }
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// DOMÍNIOS DO VIZER (histórico de migração: vizer.beauty → vizer.website → vizer.reisen)
+//
+// O vizer.website atualmente responde os endpoints AJAX com HTTP 200 + JSON
+// {"redirect": "https://www.vizer.reisen/..."} (redirect em nível de aplicação)
+// e a homepage com redirect HTTP. O vizerFetchJson persegue esse redirect,
+// memoriza o domínio que funcionou (_vizerWorkingDomain) e cai para o próximo
+// domínio da lista em caso de timeout/erro — blindando o resolver contra a
+// migração silenciosa de domínio.
+// ──────────────────────────────────────────────────────────────────────────
+const VIZER_DOMAINS = [
+  "https://www.vizer.reisen",  // domínio atual (2026-10)
+  "https://www.vizer.website", // domínio anterior, responde com redirect
+];
+let _vizerWorkingDomain: string | null = null;
+
+/**
+ * Faz um request AJAX no endpoint videobox do Vizer com fallback duplo de
+ * domínio. Retorna o JSON parseado do primeiro domínio que responder com
+ * dados reais, ou null se todos falharem.
+ * @param doQuery     Querystring após o prefixo (ex: "do=episodesList&id=123&season=1&audio=Dublado")
+ * @param timeoutMs   Timeout por tentativa
+ * @param refererPath Referer opcional (caminho relativo ao domínio base)
+ */
+async function vizerFetchJson(
+  doQuery: string,
+  timeoutMs: number,
+  refererPath?: string
+): Promise<any | null> {
+  const order = _vizerWorkingDomain
+    ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)]
+    : [...VIZER_DOMAINS];
+
+  for (const base of order) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(`${base}/index.php?app=videobox&module=video&controller=view&${doQuery}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json",
+          ...(refererPath ? { "Referer": `${base}${refererPath}` } : {}),
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (!data) continue;
+
+      // Domínio velho: HTTP 200 + redirect em nível de aplicação — persegue.
+      if (typeof data.redirect === "string" && data.redirect && !data.episodes && !data.servers_dub) {
+        const redirBase = new URL(data.redirect).origin;
+        try {
+          const r2Controller = new AbortController();
+          const r2Timer = setTimeout(() => r2Controller.abort(), timeoutMs);
+          const r2 = await fetch(data.redirect, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              "X-Requested-With": "XMLHttpRequest",
+              "Accept": "application/json",
+            },
+            signal: r2Controller.signal,
+          });
+          clearTimeout(r2Timer);
+          if (r2.ok) {
+            const data2 = await r2.json().catch(() => null);
+            if (data2 && (data2.episodes || data2.servers_dub)) {
+              _vizerWorkingDomain = redirBase;
+              return data2;
+            }
+          }
+        } catch {}
+        continue; // redirect falhou → tenta o próximo domínio da lista
+      }
+
+      _vizerWorkingDomain = base;
+      return data;
+    } catch {
+      continue; // timeout/erro de rede → próximo domínio
+    }
+  }
+  return null;
+}
+
 // Cache de temporadas verificadas no Vizer Live (TTL 30 min)
 const vizerSeasonCache = new Map<string, { ok: boolean; timestamp: number }>();
 const VIZER_SEASON_TTL = 30 * 60 * 1000;
@@ -258,131 +344,96 @@ export async function checkVizerSeason(
     return cached.ok;
   }
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const url = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json",
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      vizerSeasonCache.set(key, { ok: false, timestamp: Date.now() });
-      return false;
-    }
-    const data = await res.json();
-    const ok = Array.isArray(data.episodes) && data.episodes.length > 0;
-    vizerSeasonCache.set(key, { ok, timestamp: Date.now() });
-    return ok;
-  } catch {
-    return false;
-  }
+  const data = await vizerFetchJson(
+    `do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`,
+    3000
+  );
+  const ok = !!(data && Array.isArray(data.episodes) && data.episodes.length > 0);
+  vizerSeasonCache.set(key, { ok, timestamp: Date.now() });
+  return ok;
 }
 
 export async function resolveVizerEpisode(
   tmdbId: number,
   season: number,
-  episode: number
+  episode: number,
+  name?: string
 ) {
   loadCatalogs();
-  const serieId = _tmdbToSerieIdMap.get(tmdbId);
+  let serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) {
+    // Conteúdo NOVO (pós-snapshot): descobre ao vivo nas listagens recentes do
+    // Vizer antes de desistir (mesmo modelo do scan do encontrei.me).
+    await ensureVizerFreshContent("series", name);
+    serieId = _tmdbToSerieIdMap.get(tmdbId);
+  }
   if (!serieId) return null;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
-    const listUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
-    const res = await fetch(listUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json",
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) return null;
-    const data = await res.json();
-    const eps = data.episodes || [];
-    if (!eps.length) return null;
+  const data = await vizerFetchJson(
+    `do=episodesList&id=${serieId}&season=${season}&audio=Dublado`,
+    4000
+  );
+  if (!data) return null;
+  const eps = data.episodes || [];
+  if (!eps.length) return null;
 
-    const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || eps[episode - 1];
-    if (!target) return null;
+  const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+  if (!target) return null;
 
-    const vidMatch = target.url.match(/-(\d+)\/?$/);
-    if (!vidMatch) return null;
-    const vid = vidMatch[1];
+  const vidMatch = String(target.url || "").match(/-(\d+)\/?$/);
+  if (!vidMatch) return null;
+  const vid = vidMatch[1];
 
-    const pController = new AbortController();
-    const pTimeout = setTimeout(() => pController.abort(), 3500);
-    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vid}`;
-    const pRes = await fetch(pUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json",
-      },
-      signal: pController.signal,
-    });
-    clearTimeout(pTimeout);
-    if (!pRes.ok) return null;
-    const pData = await pRes.json();
-    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+  const pData = await vizerFetchJson(`do=playerData&id=${vid}`, 3500);
+  if (!pData) return null;
+  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
 
-    // Extrai apenas mixdrop (streamtape/byse/doodstream foram removidos — só usamos mixdrop)
-    const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
-    const mixdrop = mMix ? mMix[1] : null;
-    if (!mixdrop) return null;
+  // Extrai apenas mixdrop (streamtape/byse/doodstream foram removidos — só usamos mixdrop)
+  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mixdrop = mMix ? mMix[1] : null;
+  if (!mixdrop) return null;
 
-    const epObj = {
-      episode_id: parseInt(vid, 10),
-      serie_id: serieId,
-      season,
-      episode,
-      tmdb_id: tmdbId,
-      audio: pData.current_audio || "Dublado",
-      servers: { mixdrop },
-      source_url: target.url,
-      _fetchedAt: Date.now()
-    };
+  const epObj = {
+    episode_id: parseInt(vid, 10),
+    serie_id: serieId,
+    season,
+    episode,
+    tmdb_id: tmdbId,
+    audio: pData.current_audio || "Dublado",
+    servers: { mixdrop },
+    source_url: target.url,
+    _fetchedAt: Date.now()
+  };
 
-    // CORREÇÃO DE BUG: gravar no _vizerEpisodeIndex (não no _encontreiEpisodeIndex)
-    const key = `${tmdbId}:${season}:${episode}`;
-    _vizerEpisodeIndex.set(key, epObj);
+  // CORREÇÃO DE BUG: gravar no _vizerEpisodeIndex (não no _encontreiEpisodeIndex)
+  const key = `${tmdbId}:${season}:${episode}`;
+  _vizerEpisodeIndex.set(key, epObj);
 
-    // Atualiza temporadas conhecidas
-    const curSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
-    if (!curSeasons.includes(season)) {
-      _vizerSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
-    }
-
-    return {
-      mixdrop,
-      audio: epObj.audio,
-      server_name: "MixDrop",
-      season,
-      episode,
-      source: "vizer-live",
-      mixdrop_vizer: mixdrop,
-      mixdrop_encontrei: null,
-    };
-  } catch {
-    return null;
+  // Atualiza temporadas conhecidas
+  const curSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
+  if (!curSeasons.includes(season)) {
+    _vizerSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
   }
+
+  return {
+    mixdrop,
+    audio: epObj.audio,
+    server_name: "MixDrop",
+    season,
+    episode,
+    source: "vizer-live",
+    mixdrop_vizer: mixdrop,
+    mixdrop_encontrei: null,
+  };
 }
 
 /**
- * Resolve um FILME on-demand no Vizer.beauty (espelho de resolveVizerEpisode
+ * Resolve um FILME on-demand no Vizer (espelho de resolveVizerEpisode
  * mas pra filmes em vez de episódios).
  *
  * Fluxo:
  * 1. Carrega mapeamento TMDB → vizer_movie_id (de public/data/vizer-movie-ids.json)
- * 2. AJAX em /do=playerData?id={vizer_movie_id}
+ * 2. AJAX em /do=playerData?id={vizer_movie_id} (fallback duplo de domínio via vizerFetchJson)
  * 3. Extrai apenas mixdrop de servers_dub + servers_leg
  * 4. Salva no _vizerMovieIndex em memória (próxima busca é instantânea)
  *
@@ -391,55 +442,205 @@ export async function resolveVizerEpisode(
  *
  * @returns { mixdrop, audio, server_name, source: "vizer-live" } ou null.
  */
-export async function resolveVizerMovie(tmdbId: number) {
+export async function resolveVizerMovie(tmdbId: number, name?: string) {
   loadVizerMovieIds();
-  const vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  let vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  if (!vizerMovieId) {
+    // Filme NOVO (pós-snapshot): descobre ao vivo nas listagens recentes do Vizer.
+    loadCatalogs();
+    await ensureVizerFreshContent("movies", name);
+    vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  }
   if (!vizerMovieId) return null;
 
+  const pData = await vizerFetchJson(
+    `do=playerData&id=${vizerMovieId}`,
+    3500,
+    `/filmes/online/x-${vizerMovieId}/`
+  );
+  if (!pData) return null;
+  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+
+  // Extrai apenas mixdrop (streamtape/byse/doodstream removidos)
+  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mixdrop = mMix ? mMix[1] : null;
+  if (!mixdrop) return null;
+
+  const movieObj = {
+    video_id: vizerMovieId,
+    tmdb_id: tmdbId,
+    audio: pData.current_audio || "Dublado",
+    servers: { mixdrop },
+    _fetchedAt: Date.now()
+  };
+
+  // Cache no índice em memória (próxima busca = instantânea)
+  _vizerMovieIndex.set(tmdbId, movieObj);
+
+  return {
+    mixdrop,
+    audio: movieObj.audio,
+    server_name: "MixDrop",
+    source: "vizer-live",
+    mixdrop_vizer: mixdrop,
+    mixdrop_encontrei: null,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// REFRESH INCREMENTAL — conteúdo NOVO no Vizer (pós-snapshot do catálogo)
+//
+// Mesmo modelo do scan do encontrei.me (ambos são espelhos IPS — os ids de
+// série/vídeo são os mesmos nos dois sites):
+//   1. Varrer as primeiras páginas de listagem (/series/online/, /filmes/online/ e pg/2)
+//   2. Item com id NOVO (ausente dos snapshots) = candidato
+//   3. A página do item expõe data-tmdb-id="<tmdb>" (série e filme — validado ao vivo)
+//   4. Mapeia tmdb → serie_id / vizer_movie_id e segue o fluxo normal
+// Diferenças pro encontrei: Vizer não exige cookie de sessão e usa vizerFetchHtml
+// com o fallback duplo de domínio (VIZER_DOMAINS) — o scan sobrevive à migração
+// .website → .reisen. Valores validados ao vivo em 2026-10-08:
+// série Carrie 288673; filme "Sobrenatural: Agora Entre Nós" 1291595 (id 78472).
+// ──────────────────────────────────────────────────────────────────────────
+
+const VIZER_FRESH_LISTING_TTL_MS = 10 * 60 * 1000; // listagens re-varridas no máx 1x/10min
+const VIZER_FRESH_MAX_CANDIDATES = 12;             // proteção: no máx N páginas por scan
+let _vizerFreshListing: {
+  series: Array<{ slug: string; id: number }>;
+  movies: Array<{ slug: string; id: number }>;
+  at: number;
+} | null = null;
+const _vizerFreshTmdbCache = new Map<string, number | null>(); // "s:slug"/"f:slug" → tmdb
+const _vizerKnownSerieIds = new Set<number>();
+const _vizerKnownMovieIds = new Set<number>();
+let _vizerKnownSetsLoaded = false;
+
+/** Popula os sets de ids já conhecidos (snapshots vizer) — 1x por processo. */
+function vizerKnownSetsLoad(): void {
+  if (_vizerKnownSetsLoaded) return;
+  _vizerKnownSetsLoaded = true;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
-    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vizerMovieId}`;
-    const pRes = await fetch(pUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json",
-        "Referer": `https://www.vizer.website/filmes/online/x-${vizerMovieId}/`,
-      },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!pRes.ok) return null;
-    const pData = await pRes.json();
-    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+    loadVizerMovieIds();
+    // séries: serie_ids dos episódios do snapshot vizer
+    for (const ep of _vizerCatalog?.episodes || []) {
+      const id = Number((ep as any).serie_id);
+      if (id > 0) _vizerKnownSerieIds.add(id);
+    }
+    // filmes: vizer_movie_ids do mapeamento TMDB→vizer (vizer-movie-ids.json)
+    for (const vid of _tmdbToVizerMovieIdMap.values()) {
+      if (vid > 0) _vizerKnownMovieIds.add(vid);
+    }
+  } catch { /* snapshot indisponível — segue com sets vazios */ }
+}
 
-    // Extrai apenas mixdrop (streamtape/byse/doodstream removidos)
-    const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
-    const mixdrop = mMix ? mMix[1] : null;
-    if (!mixdrop) return null;
+/** HTML GET no Vizer (listagens/páginas de item) com fallback duplo de domínio. */
+async function vizerFetchHtml(pagePath: string, timeoutMs: number = 8000): Promise<string | null> {
+  const order = _vizerWorkingDomain
+    ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)]
+    : [...VIZER_DOMAINS];
+  for (const base of order) {
+    try {
+      const res = await fetch(`${base}${pagePath}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "Accept": "text/html",
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) continue;
+      const html = await res.text().catch(() => null);
+      if (!html || html.length < 500) continue;
+      _vizerWorkingDomain = base;
+      return html;
+    } catch {
+      continue; // timeout/erro de rede → próximo domínio
+    }
+  }
+  return null;
+}
 
-    const movieObj = {
-      video_id: vizerMovieId,
-      tmdb_id: tmdbId,
-      audio: pData.current_audio || "Dublado",
-      servers: { mixdrop },
-      _fetchedAt: Date.now()
-    };
+/** Varrer listagens recentes de séries e filmes do Vizer (cache de 10min). */
+async function ensureVizerFreshListing(): Promise<void> {
+  if (_vizerFreshListing && Date.now() - _vizerFreshListing.at < VIZER_FRESH_LISTING_TTL_MS) return;
+  const series: Array<{ slug: string; id: number }> = [];
+  const movies: Array<{ slug: string; id: number }> = [];
+  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+    const html = await vizerFetchHtml(p);
+    if (!html) continue;
+    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !series.some(x => x.id === id)) series.push({ slug: m[1], id });
+    }
+    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !movies.some(x => x.id === id)) movies.push({ slug: m[1], id });
+    }
+  }
+  _vizerFreshListing = { series, movies, at: Date.now() };
+}
 
-    // Cache no índice em memória (próxima busca = instantânea)
-    _vizerMovieIndex.set(tmdbId, movieObj);
+/**
+ * Descobre conteúdo NOVO (pós-snapshot) no Vizer e popula os índices:
+ * séries → _tmdbToSerieIdMap (tmdb → serie_id);
+ * filmes → _tmdbToVizerMovieIdMap (tmdb → vizer_movie_id) + entrada placeholder
+ * em _vizerMovieIndex (servers vazios — resolvidos depois pelo resolveVizerMovie).
+ * `title` filtra candidatos pelo slug (reusa encSlugMatchesTitle do scan do encontrei).
+ */
+async function ensureVizerFreshContent(kind: "series" | "movies", title?: string): Promise<void> {
+  try {
+    loadCatalogs();
+    vizerKnownSetsLoad();
+    await ensureVizerFreshListing();
+    if (!_vizerFreshListing) return;
 
-    return {
-      mixdrop,
-      audio: movieObj.audio,
-      server_name: "MixDrop",
-      source: "vizer-live",
-      mixdrop_vizer: mixdrop,
-      mixdrop_encontrei: null,
-    };
-  } catch {
-    return null;
+    const known = kind === "series" ? _vizerKnownSerieIds : _vizerKnownMovieIds;
+    const items = kind === "series" ? _vizerFreshListing.series : _vizerFreshListing.movies;
+    const tag = kind === "series" ? "s" : "f";
+
+    const candidates = items.filter(it => {
+      if (known.has(it.id)) return false;                               // já no snapshot
+      if (_vizerFreshTmdbCache.has(`${tag}:${it.slug}`)) return false;  // já resolvido antes
+      return encSlugMatchesTitle(it.slug, title);                       // sem título: bounded
+    }).slice(0, VIZER_FRESH_MAX_CANDIDATES);
+
+    for (const it of candidates) {
+      const cacheKey = `${tag}:${it.slug}`;
+      const pagePath = kind === "series"
+        ? `/series/online/${it.slug}-${it.id}/`
+        : `/filmes/online/${it.slug}-${it.id}/`;
+      const html = await vizerFetchHtml(pagePath);
+      if (!html) {
+        _vizerFreshTmdbCache.set(cacheKey, null);
+        continue;
+      }
+      const tm = html.match(/data-tmdb-id="(\d+)"/);
+      const tmdb = tm ? parseInt(tm[1], 10) : 0;
+      _vizerFreshTmdbCache.set(cacheKey, tmdb || null);
+      if (!tmdb) continue;
+
+      if (kind === "series") {
+        if (!_tmdbToSerieIdMap.has(tmdb)) {
+          _tmdbToSerieIdMap.set(tmdb, it.id);
+          console.log(`[vizer-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
+        }
+      } else {
+        if (!_tmdbToVizerMovieIdMap.has(tmdb)) {
+          _tmdbToVizerMovieIdMap.set(tmdb, it.id);
+          console.log(`[vizer-fresh] Filme novo mapeado: tmdb=${tmdb} → vizer_movie_id=${it.id} (${it.slug})`);
+        }
+        if (!_vizerMovieIndex.has(tmdb)) {
+          _vizerMovieIndex.set(tmdb, {
+            video_id: it.id,
+            tmdb_id: tmdb,
+            title: it.slug.replace(/-/g, " "),
+            servers: {},
+            _fetchedAt: Date.now(),
+          } as any);
+        }
+      }
+    }
+  } catch (e: any) {
+    console.warn("[vizer-fresh] Erro no scan incremental:", e?.message || e);
   }
 }
 
@@ -1016,6 +1217,57 @@ function loadCatalogs() {
     { get value() { return _encontreiLastMtime; }, set value(v) { _encontreiLastMtime = v; } },
     "encontrei-lookup",
   );
+
+  // Aplica patches de catálogo (conteúdo novo demais para esperar o snapshot)
+  applyCatalogPatches();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// PATCH DE CATÁLOGO — Carrie (2026) | TMDB 288673 | vizer serie_id 82940
+//
+// Sondado ao vivo em 2026-10-08: T1 completa (8 eps) DUBLADA no Vizer, todos
+// com MixDrop ativo. Esses episódios não constam no snapshot vizer-catalog.json,
+// então este patch injeta as entradas nos índices em memória após cada
+// loadCatalogs (idempotente — nunca sobrescreve o que o catálogo oficial já
+// tem). Se um mixdrop morrer, o parâmetro refresh=1 do /api/encontrei-lookup
+// re-resolve ao vivo (o _tmdbToSerieIdMap já tem o mapeamento 288673→82940).
+// ──────────────────────────────────────────────────────────────────────────
+const PATCH_FETCHED_AT = Date.now();
+const VIZER_CATALOG_PATCH: { movies: any[]; episodes: any[] } = {
+  movies: [],
+  episodes: [
+    { episode_id: 82941, serie_id: 82940, season: 1, episode: 1, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "pjkr4deehg7r646" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x1-dublado-82941/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82942, serie_id: 82940, season: 1, episode: 2, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "ow7v46wrber04l" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x2-dublado-82942/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82943, serie_id: 82940, season: 1, episode: 3, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "4dngnomncd0rq7" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x3-dublado-82943/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82944, serie_id: 82940, season: 1, episode: 4, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "elno6gn4fojqdp" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x4-dublado-82944/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82945, serie_id: 82940, season: 1, episode: 5, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "wln1kqlwcg1p0" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x5-dublado-82945/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82946, serie_id: 82940, season: 1, episode: 6, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "67qnpxewinn70m" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x6-dublado-82946/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82947, serie_id: 82940, season: 1, episode: 7, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "elno6gp0hpwdpk" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x7-dublado-82947/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82948, serie_id: 82940, season: 1, episode: 8, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "jd9lqr0es44pj0" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x8-dublado-82948/", _fetchedAt: PATCH_FETCHED_AT },
+  ],
+};
+
+/** Injeta as entradas do patch nos índices em memória (sem sobrescrever o catálogo oficial) */
+function applyCatalogPatches() {
+  for (const movie of VIZER_CATALOG_PATCH.movies) {
+    if (movie.tmdb_id && !_vizerMovieIndex.has(movie.tmdb_id)) {
+      _vizerMovieIndex.set(movie.tmdb_id, movie);
+    }
+  }
+  for (const ep of VIZER_CATALOG_PATCH.episodes) {
+    if (!ep.tmdb_id || !ep.serie_id || !ep.season || !ep.episode) continue;
+    if (!_tmdbToSerieIdMap.has(ep.tmdb_id)) {
+      _tmdbToSerieIdMap.set(ep.tmdb_id, ep.serie_id);
+    }
+    const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
+    if (!_vizerEpisodeIndex.has(key)) {
+      _vizerEpisodeIndex.set(key, ep);
+    }
+    const curSeasons = _vizerSeriesSeasonsIndex.get(ep.tmdb_id) || [];
+    if (!curSeasons.includes(ep.season)) {
+      _vizerSeriesSeasonsIndex.set(ep.tmdb_id, [...curSeasons, ep.season].sort((a, b) => a - b));
+    }
+  }
 }
 
 /**
@@ -1440,7 +1692,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       } else {
         // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
         const live = (await resolveEncontreiEpisode(tmdbId, season, episode, lookupName))
-                  || (await resolveVizerEpisode(tmdbId, season, episode));
+                  || (await resolveVizerEpisode(tmdbId, season, episode, lookupName));
         if (live) {
           result = live;
         }
@@ -1499,7 +1751,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       } else {
         // Catálogo falhou OU refresh=1: tenta resolver live (encontrei primeiro, vizer depois)
         const live = (await resolveEncontreiMovie(tmdbId, lookupName))
-                  || (await resolveVizerMovie(tmdbId));
+                  || (await resolveVizerMovie(tmdbId, lookupName));
         if (live) {
           result = live;
         }

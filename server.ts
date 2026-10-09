@@ -264,7 +264,7 @@ process.on("uncaughtException", (err) => {
   const scrapingPrefixes = [
     "/watchplayer-stream",
     "/myembed-stream",
-    "/mixdrop-stream",
+    "/md-stream", // ex-/mixdrop-stream (renomeado p/ driblar adblockers) — precisa continuar com limite restrito
     
     
     "/bolodechocolate",

@@ -389,14 +389,52 @@ Ou seja: **não é movie×series — é conteúdo-específico.** O `get_series` 
 - **Limitações conhecidas do offline:** "Continuar Assistindo" (seek inicial) e pular abertura não se aplicam no playback offline (esses comandos vão direto pro iframe, que não existe); auto-next de episódio volta pro streaming do backend.
 - **Validação:** `npx tsc --noEmit` — zero erros.
 - **Versionamento:** `versionCode 12` / `versionName 1.2.1`. Deploy na VPS Oracle + AAB pendentes de autorização explícita do usuário.
-## 08/10/2026 - Fix: Condi��o de corrida no MixDrop (Fallback fantasma)
-- **Problema:** Ao abrir um v�deo, o React iniciava a sondagem do fileId HD do MixDrop no background, mas o setupInitialServer n�o aguardava o resultado. Com isso, ele gerava a URL fabricada (ex: mxdrop.top/e/tmdbId), detectava imediatamente que era falsa e descartava o MixDrop antes mesmo do scraper de 3 segundos conseguir devolver a URL verdadeira. Isso gerava os erros 'MixDrop sem fileId real' seguidos de pulo pro WatchPlayer/Nixplay.
-- **Corre��o:** No src/components/VideoPlayerModal.tsx, a inicializa��o do MixDrop agora faz o await lookupMixdropFileId explicitamente antes de gerar a URL, garantindo que o player utilize o resultado resolvido na primeira tentativa. Validado com base no console dump do usu�rio.
+## 08/10/2026 - Fix: Condi��o de corrida no MixDrop (Fallback fantasma)
+- **Problema:** Ao abrir um v�deo, o React iniciava a sondagem do fileId HD do MixDrop no background, mas o setupInitialServer n�o aguardava o resultado. Com isso, ele gerava a URL fabricada (ex: mxdrop.top/e/tmdbId), detectava imediatamente que era falsa e descartava o MixDrop antes mesmo do scraper de 3 segundos conseguir devolver a URL verdadeira. Isso gerava os erros 'MixDrop sem fileId real' seguidos de pulo pro WatchPlayer/Nixplay.
+- **Corre��o:** No src/components/VideoPlayerModal.tsx, a inicializa��o do MixDrop agora faz o await lookupMixdropFileId explicitamente antes de gerar a URL, garantindo que o player utilize o resultado resolvido na primeira tentativa. Validado com base no console dump do usu�rio.
 
-- [x] Corrigido erro de comuta��o do servidor MixDrop para WatchPlayer em s�ries. O fallback para \/api/watchplay-proxy-iframe\ n�o estava no whitelist de extra��o, resultando em 403 Forbidden pelo \/api/extract-player\. Foram adicionados os prefixos \/api/watchplay-proxy-iframe\ e \/api/vip-proxy-iframe\ ao whitelist em \handleExtract\ no arquivo \VideoPlayerModal.tsx\.
+- [x] Corrigido erro de comuta��o do servidor MixDrop para WatchPlayer em s�ries. O fallback para \/api/watchplay-proxy-iframe\ n�o estava no whitelist de extra��o, resultando em 403 Forbidden pelo \/api/extract-player\. Foram adicionados os prefixos \/api/watchplay-proxy-iframe\ e \/api/vip-proxy-iframe\ ao whitelist em \handleExtract\ no arquivo \VideoPlayerModal.tsx\.
 
-- [x] Corrigido falha instant�nea do MixDrop em navegadores com bloqueadores de an�ncio e Tracking Prevention estrito. A URL do iframe \/api/mixdrop-stream\ estava sendo bloqueada pela palavra 'mixdrop', acionando o evento onError e causando fallback silencioso imediato. Os endpoints foram renomeados para \/api/md-stream\ e \/api/md-proxy\.
+- [x] Corrigido falha instant�nea do MixDrop em navegadores com bloqueadores de an�ncio e Tracking Prevention estrito. A URL do iframe \/api/mixdrop-stream\ estava sendo bloqueada pela palavra 'mixdrop', acionando o evento onError e causando fallback silencioso imediato. Os endpoints foram renomeados para \/api/md-stream\ e \/api/md-proxy\.
 
-- [x] Otimizada l�gica de inicializa��o do VideoPlayerModal para resolver fileIds reais do MixDrop imediatamente ao inv�s de pular para o pr�ximo servidor, evitando tempo de espera desnecess�rio.
+- [x] Otimizada l�gica de inicializa��o do VideoPlayerModal para resolver fileIds reais do MixDrop imediatamente ao inv�s de pular para o pr�ximo servidor, evitando tempo de espera desnecess�rio.
 
-- [x] Otimizada e expandida a aba de Sagas (src/data/sagas.ts): gerado um script automatizado que consultou a API do TMDB em busca das sagas mais famosas, adicionando 29 franquias ao sistema. Tamb�m foi removido 'Hobbs & Shaw', curtas e 'Better Luck Tomorrow' da saga Velozes e Furiosos para manter a cronologia oficial.
+- [x] Otimizada e expandida a aba de Sagas (src/data/sagas.ts): gerado um script automatizado que consultou a API do TMDB em busca das sagas mais famosas, adicionando 29 franquias ao sistema. Tamb�m foi removido 'Hobbs & Shaw', curtas e 'Better Luck Tomorrow' da saga Velozes e Furiosos para manter a cronologia oficial.
+
+## 08/10/2026 - Carrie 2026 no Vizer + Fallback Duplo de Domínio (vizer.website → vizer.reisen) + Health Check Anti-Migração
+
+**Contexto:** Sondagem ao vivo revelou que a série **Carrie, a Estranha (2026)** (TMDB **288673**) existe no Vizer (`serie_id=82940`, T1 com 8 eps **DUBLADOS**, todos com MixDrop ativo — EP1 `pjkr4deehg7r646` ... EP8 `jd9lqr0es44pj0`), mas não constava em nenhum catálogo local. Além disso, o Vizer **migrando de domínio**: `vizer.website` agora redireciona para `vizer.reisen` (homepage via 302 e endpoints AJAX via HTTP 200 + JSON `{"redirect":"..."}`).
+
+**Alterações:**
+
+- **`server/routes/encontreiLookup.ts`:**
+  - Novo helper **`vizerFetchJson()`** com **fallback duplo de domínio**: `VIZER_DOMAINS = [vizer.reisen (atual), vizer.website (antigo)]`, memoriza o domínio que funcionou (`_vizerWorkingDomain`), persegue o redirect em nível de aplicação (JSON `{"redirect":...}`) e cai pro próximo domínio em timeout/erro. Blindado contra migrações silenciosas (histórico: vizer.beauty → vizer.website → vizer.reisen).
+  - `checkVizerSeason`, `resolveVizerEpisode` e `resolveVizerMovie` reescritos para usar `vizerFetchJson` (sem URLs hardcoded). O `Referer` do playerData de filme agora é relativo ao domínio base.
+  - **Patch de catálogo em memória** (`VIZER_CATALOG_PATCH` + `applyCatalogPatches()`, aplicado ao final de cada `loadCatalogs()`): injeta a Carrie 2026 (TMDB 288673 → serie_id 82940, 8 eps com os MixDrop IDs sondados) nos índices `_vizerEpisodeIndex`/`_tmdbToSerieIdMap`/`_vizerSeriesSeasonsIndex` sem tocar nos JSONs de 14MB. Idempotente (nunca sobrescreve o catálogo oficial); se um mixdrop morrer, o `refresh=1` re-resolve ao vivo.
+- **`server/routes/adminOps.ts` (`/api/admin/health-check`):** o "Catálogo Vizer" agora usa validação dedicada **`checkVizer()`** que detecta migração de domínio por dois sinais: redirect HTTP (comparando o host de `res.url`) e o stub JSON `{"redirect":...}` nos endpoints AJAX (sonda episodesList com Carrie 82940). Migração detectada → marca **OFFLINE** com mensagem explicativa (antes o fetch seguia o redirect, via 200 e o painel marcava ONLINE sem avisar — motivo pelo qual a migração atual passou despercebida). Adicionado alvo estático "Catálogo Vizer (novo domínio)" = `https://www.vizer.reisen`.
+
+**Observação operacional:** durante os testes o Vizer apresentou latência alta intermitente (10s+ por chamada); os timeouts estritos dos resolvers (3–4s) retornam `null` nesses casos (proteção anti-travamento by design) e o player cai nos fallbacks. 
+
+**Validações:**
+- `npx tsc --noEmit` — zero erros.
+- `scratch/test-carrie-resolvers.ts`: [1] `checkVizerSeason(288673,1)=true` (patch funcionando); [2]/[3] resolveVizerEpisode EP1/EP8 retornaram os mixdrop corretos `pjkr4deehg7r646`/`jd9lqr0es44pj0` Dublado; [4] resolveVizerMovie(18) OK (`369jx489amz61xl`); [5] teste determinístico com fetch mockado: reisen "caído" → fallback pro .website → perseguição do redirect → mixdrop resolvido. **Fallback duplo 100% funcional.**
+
+**Pendente (deploy):** alterações somente no ambiente local — `git push`/deploy na VPS Oracle aguardando autorização explícita do usuário (regra 7 do AGENTS.md). No app Android, o bundle `android/.../server.cjs` será regenerado no build do GitHub Actions.
+
+
+
+## 08/10/2026 (2) - Scan Incremental do Vizer (modelo do encontrei.me) + Fix rate-limiter pós-rename md-stream
+
+**Contexto:** `git pull` trouxe os commits do agente anterior, incluindo `34aa1dc` (rename `/api/mixdrop-stream` → `/api/md-stream` e `/api/mixdrop-proxy` → `/api/md-proxy` — anti-adblocker) e `0993486` (scan incremental de conteúdo pós-snapshot no encontrei.me). Conflito de walkthrough.md resolvido mantendo as duas seções.
+
+**Alterações:**
+- **`server.ts` (fix pós-rename):** a lista `scrapingPrefixes` do rate-limiter ainda apontava `/mixdrop-stream` — a rota renomeada `/md-stream` ficou SEM o limite restrito de 30 req/min (caía no genérico de 150). Corrigido para `"/md-stream"`.
+- **`server/routes/encontreiLookup.ts` — REFRESH INCREMENTAL DO VIZER** (réplica do modelo do encontrei.me, pois ambos são espelhos IPS com os mesmos ids): `vizerFetchHtml()` (HTML GET com fallback duplo de domínio VIZER_DOMAINS), `ensureVizerFreshListing()` (varre `/series/online/` + pg/2 e `/filmes/online/` + pg/2, cache 10min), `vizerKnownSetsLoad()` (ids conhecidos dos snapshots) e `ensureVizerFreshContent(kind, title)` (bounded em 12 candidatos, filtro por slug via `encSlugMatchesTitle` reutilizada, extrai `data-tmdb-id` da página do item e popula `_tmdbToSerieIdMap`/`_tmdbToVizerMovieIdMap` + placeholder em `_vizerMovieIndex`). `resolveVizerEpisode`/`resolveVizerMovie` ganham param `name?` e escaneiam antes de desistir; a rota `/api/encontrei-lookup` repassa `lookupName` aos resolvers do Vizer.
+- Vantagens sobre o scan do encontrei: **não exige cookie de sessão** e **sobrevive à migração de domínio** (.website→.reisen) via fallback duplo.
+
+**Validações:**
+- `npx tsc --noEmit` — zero erros.
+- `scratch/test-vizer-fresh.ts` (conteúdo estreiado 07-08/10/2026, ausente de todos os snapshots): [1] série "Dentro do Círculo" (TMDB 290233) → scan mapeou `serie_id=82931` sozinho → EP1 mixdrop `vknw7gwxul8d9k` Dublado (34s, inclui o scan); [2] 2ª chamada EP2 em 2.6s (cache do mapeamento); [3] filme "Sobrenatural: Agora Entre Nós" (TMDB 1291595) → `vizer_movie_id=78472` → mixdrop `r6w7l8rpfve7qqz` Dublado em 666ms.
+- Log de descoberta: `[vizer-fresh] Série nova mapeada: tmdb=290233 → serie_id=82931 (dentro-do-circulo-dublado)`.
+
+**Deploy:** push autorizado pelo usuário — `versionCode 15` / `versionName 1.2.4` (APK/AAB via GitHub Actions no push pra main). Deploy na VPS Oracle (PM2) segue manual pelo dono.

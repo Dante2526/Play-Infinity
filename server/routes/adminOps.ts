@@ -220,18 +220,88 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     }
   };
 
+  // Vizer usa validação dedicada: com fetch simples + redirect:follow, um 30x
+  // (migração silenciosa de domínio, ex: vizer.beauty → vizer.website → vizer.reisen)
+  // retornava 200 no domínio novo e o painel marcava ONLINE sem avisar nada.
+  const checkVizer = async () => {
+    const start = Date.now();
+    const oldBase = "https://www.vizer.website";
+    try {
+      const res = await fetch(oldBase, {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+      const latency = Date.now() - start;
+      let finalHost = "";
+      try { finalHost = new URL(res.url).hostname; } catch {}
+
+      // Sonda um endpoint AJAX real: domínio velho responde 200 + {"redirect": "..."}
+      let appRedirect = "";
+      try {
+        const ajax = await fetch(`${oldBase}/index.php?app=videobox&module=video&controller=view&do=episodesList&id=82940&season=1&audio=Dublado`, {
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json"
+          }
+        });
+        const j = await ajax.json().catch(() => null);
+        if (j && typeof j.redirect === "string" && j.redirect) appRedirect = j.redirect;
+      } catch {}
+
+      // Migração detectada → marca OFFLINE para o painel exibir o alerta
+      let migratingHost = "";
+      if (finalHost && finalHost !== "www.vizer.website") {
+        migratingHost = finalHost;
+      } else if (appRedirect) {
+        try { migratingHost = new URL(appRedirect).hostname; } catch { migratingHost = "?"; }
+      }
+      if (migratingHost) {
+        return {
+          name: "Catálogo Vizer",
+          url: oldBase,
+          status: "OFFLINE" as const,
+          latencyMs: latency,
+          statusCode: res.status,
+          error: `Domínio migrando: vizer.website agora aponta para ${migratingHost}. Os resolvers já perseguem o redirect automaticamente (VIZER_DOMAINS em encontreiLookup.ts), mas monitore o novo domínio.`
+        };
+      }
+
+      return {
+        name: "Catálogo Vizer",
+        url: oldBase,
+        status: res.ok ? ("ONLINE" as const) : ("OFFLINE" as const),
+        latencyMs: latency,
+        statusCode: res.status
+      };
+    } catch (error: any) {
+      return {
+        name: "Catálogo Vizer",
+        url: oldBase,
+        status: "OFFLINE" as const,
+        latencyMs: null,
+        statusCode: 0,
+        error: `Possível bloqueio Cloudflare ou domínio morto: ${error?.message || "fetch falhou"}`
+      };
+    }
+  };
+
   const staticTargets = [
-    { name: "Catálogo Vizer", url: "https://vizer.website", type: "html" },
+    { name: "Catálogo Vizer (novo domínio)", url: "https://www.vizer.reisen", type: "html" },
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html" },
     { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
     { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
   ];
 
-  // Encontrei usa validação dedicada (cookie de sessão + detecção de página de login);
-  // os demais alvos seguem com o fetch simples padrão.
-  const [encontreiResult, ...staticResults] = await Promise.all([
+  // Encontrei e Vizer usam validação dedicada (cookie de sessão e detecção de
+  // migração de domínio, respectivamente); os demais alvos seguem com fetch simples.
+  const [encontreiResult, vizerResult, ...staticResults] = await Promise.all([
     checkEncontrei(),
+    checkVizer(),
     ...staticTargets.map(async (target) => {
       try {
         const start = Date.now();
@@ -262,7 +332,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     })
   ]);
 
-  const results = [encontreiResult, ...staticResults];
+  const results = [encontreiResult, vizerResult, ...staticResults];
   res.json({ success: true, timestamp: Date.now(), results });
 });
 
