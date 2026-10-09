@@ -61,7 +61,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
 
         const baseMixdrop = mixdropFileId 
           ? buildMixdropStreamUrl(mixdropFileId)
-          : `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${mediaDetails.imdbId || mediaDetails.tmdbId}`)}`;
+          : `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${mediaDetails.imdbId || mediaDetails.tmdbId}`)}`;
 
         let gotMixdrop = false;
         if (baseMixdrop) {

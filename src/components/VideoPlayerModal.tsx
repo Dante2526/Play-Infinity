@@ -335,7 +335,7 @@ export function VideoPlayerModal({
       activeLower.includes("mixdrop") ||
       activeLower.includes("mxdrop") ||
       activeLower.includes("/api/native-player") ||
-      activeLower.includes("/api/mixdrop-stream") ||
+      activeLower.includes("/api/md-stream") ||
       activeLower.includes("/api/watchplayer-stream") ||
       activeLower.includes("/api/myembed-stream") ||
       activeLower.includes("/api/anime-stream") ||
@@ -708,7 +708,7 @@ export function VideoPlayerModal({
     if (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
       return defaultUrl;
     }
-    return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || resolvedId}`)}`;
+    return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || resolvedId}`)}`;
   }, [defaultUrl, imdbId, resolvedId]);
 
   // Carregamento dinâmico de temporadas e episódios reais via TMDB
@@ -1019,14 +1019,14 @@ export function VideoPlayerModal({
           buildUrl: (id: string, s?: number, e?: number) => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
             if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+              return buildMixdropStreamUrl(mixdropFileId) || `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
             }
             // Prioridade 2: defaultUrl se já é uma URL do MixDrop
             if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
               return defaultUrl;
             }
             // Prioridade 3: fallback (pode ser versão cam)
-            return `/api/mixdrop-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
+            return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
@@ -1411,7 +1411,7 @@ export function VideoPlayerModal({
         }
 
         const isMixdropTarget =
-          (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/mixdrop-stream"))) ||
+          (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/md-stream"))) ||
           resolvedId === "969681" ||
           imdbId === "tt22084616" ||
           (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
@@ -1507,7 +1507,7 @@ export function VideoPlayerModal({
   const resolveStreamIframeUrl = (url: string) => {
     if (!url) return "";
     // Guard: se já é um endpoint /api/, retorna direto — evita double-encoding
-    // Ex: /api/mixdrop-stream?url=https%3A%2F%2Fmxdrop.top%2Fe%2F{id}
+    // Ex: /api/md-stream?url=https%3A%2F%2Fmxdrop.top%2Fe%2F{id}
     // sem esse guard, o includes("mxdrop.") abaixo batia no query string e re-encodava
     if (url.startsWith("/api/")) return url;
     if (url.includes("watchplay.shop")) {
@@ -1523,7 +1523,7 @@ export function VideoPlayerModal({
       return url; // Removido
     }
     if (url.includes("mxdrop.") || url.includes("mixdrop.")) {
-      return `/api/mixdrop-stream?url=${encodeURIComponent(url)}`;
+      return `/api/md-stream?url=${encodeURIComponent(url)}`;
     }
     return url;
   };
@@ -2064,7 +2064,7 @@ export function VideoPlayerModal({
       cleanUrl.startsWith("/api/watchplay-proxy-iframe") ||
       cleanUrl.startsWith("/api/myembed-stream") ||
       cleanUrl.startsWith("/api/vip-proxy-iframe") ||
-      cleanUrl.startsWith("/api/mixdrop-stream") ||
+      cleanUrl.startsWith("/api/md-stream") ||
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("myembed.biz") ||
       cleanUrl.includes("playerflix.ink") ||

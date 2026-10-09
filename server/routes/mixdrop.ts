@@ -7,7 +7,7 @@ const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string
 
 const router = Router();
 
-  router.get("/api/mixdrop-stream", async (req, res) => {
+  router.get("/api/md-stream", async (req, res) => {
     try {
       const rawUrl = String(req.query.url || "").trim();
       if (!rawUrl) {
@@ -121,7 +121,7 @@ const router = Router();
       // Usa o PROXY — o token da CDN mxcontent.net é IP-locked (gerado pro IP do Render).
       // Se passar URL direta pro navegador do usuário, a CDN retorna 403 (IP diferente).
       // O proxy faz a request do MESMO IP que gerou o token (Render server), então funciona.
-      const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
+      const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}`;
 
       if (req.query.format === 'json') {
         const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
@@ -500,7 +500,7 @@ const router = Router();
   });
 
   // Proxy de streaming direto do MixDrop com suporte a Range bytes (fallback resiliente)
-  router.get("/api/mixdrop-proxy", async (req, res) => {
+  router.get("/api/md-proxy", async (req, res) => {
     try {
       const videoUrl = String(req.query.url || "").trim();
       if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
