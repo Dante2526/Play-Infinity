@@ -971,26 +971,6 @@ export function AdminDeployMonitor() {
             </div>
 
             <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
-              {!erudaActive ? (
-                <button
-                  type="button"
-                  onClick={() => handleToggleEruda(true)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 cursor-pointer text-center w-full sm:w-auto"
-                >
-                  <Terminal className="w-4 h-4 shrink-0" />
-                  <span className="text-center">Ativar Nesta Aba</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => handleToggleEruda(false)}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-red-600/20 cursor-pointer text-center w-full sm:w-auto"
-                >
-                  <XCircle className="w-4 h-4 shrink-0" />
-                  <span className="text-center">Desativar Nesta Aba</span>
-                </button>
-              )}
-
               <a
                 href="https://play-infinity.stream/?debug=true"
                 target="_blank"
