@@ -27,26 +27,25 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões completas e exclusivas dos jogos do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/premiere1/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
         url: '/api/iptv/898',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (HD Alternativo)',
+        name: 'Servidor 3 (HD Alternativo)',
         url: '/api/iptv/896',
         isProxy: false
-      }
-
-      ,{
+      },
+      {
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiereclubes.html',
         isEmbed: true,
         isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1024x576)',
-        url: 'http://195.178.110.110/premiere1/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -60,26 +59,25 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal secundário Premiere para rodadas simultâneas de jogos.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/premiere2/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
         url: '/api/iptv/863',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (HD Alternativo)',
+        name: 'Servidor 3 (HD Alternativo)',
         url: '/api/iptv/859',
         isProxy: false
-      }
-
-      ,{
+      },
+      {
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiere2.html',
         isEmbed: true,
         isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1024x576)',
-        url: 'http://195.178.110.110/premiere2/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -93,31 +91,25 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Cobertura de todos os lances e partidas dos campeonatos estaduais e nacionais.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/premiere3/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
         url: '/api/iptv/867',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (HD Backup)',
+        name: 'Servidor 3 (HD Backup)',
         url: '/api/iptv/296309',
         isProxy: false
       },
       {
-        name: 'Servidor 3 (HD Alternativo)',
-        url: '/api/iptv/865',
-        isProxy: false
-      }
-
-      ,{
         name: 'DASH (Sem Anúncios)',
         url: 'https://bolodechocolate.fit/embed/premiere3.html',
         isEmbed: true,
         isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1024x576)',
-        url: 'http://195.178.110.110/premiere3/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -131,35 +123,72 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal complementar Premiere com cobertura de futebol 100% brasileira.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
-        url: '/api/iptv/296312',
-        isProxy: false
-      },
-      {
-        name: 'Servidor 2 (HD Alternativo)',
-        url: '/api/iptv/296311',
-        isProxy: false
-      }
-
-      ,{
-        name: 'DASH (Sem Anúncios)',
-        url: 'https://bolodechocolate.fit/embed/premiere4.html',
-        isEmbed: true,
-        isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1280x720)',
+        name: 'Servidor 1 (HLS Direto BR)',
         url: 'http://195.178.110.110/premiere4/index.m3u8',
         isProxy: true
       },
       {
-        name: 'Premiere 5 (HLS Direto BR)',
-        url: 'http://195.178.110.110/premiere5/index.m3u8',
-        isProxy: true
+        name: 'Servidor 2 (HD 720p)',
+        url: '/api/iptv/296312',
+        isProxy: false
       },
       {
-        name: 'Premiere 6 (HLS Direto BR)',
+        name: 'Servidor 3 (HD Alternativo)',
+        url: '/api/iptv/296311',
+        isProxy: false
+      },
+      {
+        name: 'DASH (Sem Anúncios)',
+        url: 'https://bolodechocolate.fit/embed/premiere4.html',
+        isEmbed: true,
+        isProxy: false
+      }
+    ]
+  },
+  {
+    id: 'premiere-5',
+    name: 'Premiere 5 HD',
+    category: 'Esportes',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/premiere-br.png',
+    currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
+    quality: '720p',
+    description: 'Canal Premiere 5 com cobertura de jogos ao vivo do futebol nacional.',
+    servers: [
+      {
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/premiere5/index.m3u8',
+        isProxy: true
+      }
+    ]
+  },
+  {
+    id: 'premiere-6',
+    name: 'Premiere 6 HD',
+    category: 'Esportes',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/premiere-br.png',
+    currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
+    quality: '720p',
+    description: 'Canal Premiere 6 com cobertura de jogos ao vivo do futebol nacional.',
+    servers: [
+      {
+        name: 'Servidor 1 (HLS Direto BR)',
         url: 'http://195.178.110.110/premiere6/index.m3u8',
+        isProxy: true
+      }
+    ]
+  },
+  {
+    id: 'premiere-7',
+    name: 'Premiere 7 HD',
+    category: 'Esportes',
+    logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/premiere-br.png',
+    currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
+    quality: '720p',
+    description: 'Canal Premiere 7 com cobertura de jogos ao vivo do futebol nacional.',
+    servers: [
+      {
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/premiere7/index.m3u8',
         isProxy: true
       }
     ]
@@ -174,24 +203,19 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal campeão com debates, cobertura ao vivo, vôlei, basquete e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
-        url: '/api/iptv/1231',
-        isProxy: false
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/sportv/index.m3u8',
+        isProxy: true
       },
       {
-        name: 'Servidor 2 (HD 720p Backup)',
-        url: '/api/iptv/1223',
+        name: 'Servidor 2 (HD 720p)',
+        url: '/api/iptv/1231',
         isProxy: false
       },
       {
         name: 'Servidor 3 (HD Alternativo)',
         url: '/api/iptv/296211',
         isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1024x576)',
-        url: 'http://195.178.110.110/sportv/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -205,24 +229,19 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/sportv2/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
         url: '/api/iptv/1221',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (HD Backup)',
+        name: 'Servidor 3 (HD Backup)',
         url: '/api/iptv/296209',
         isProxy: false
-      },
-      {
-        name: 'Servidor 3 (HD Alternativo)',
-        url: '/api/iptv/296210',
-        isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1024x576)',
-        url: 'http://195.178.110.110/sportv2/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -236,19 +255,14 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
-        url: '/api/iptv/1226',
-        isProxy: false
-      },
-      {
-        name: 'Servidor 2 (HD Alternativo)',
-        url: '/api/iptv/1224',
-        isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1280x720)',
+        name: 'Servidor 1 (HLS Direto BR)',
         url: 'http://195.178.110.110/sportv3/index.m3u8',
         isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
+        url: '/api/iptv/1226',
+        isProxy: false
       }
     ]
   },
@@ -262,24 +276,19 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O líder mundial em esportes com Premier League, LaLiga, NFL, NBA e debates.',
     servers: [
       {
-        name: 'Servidor 1 (HD 720p)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/espn/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (HD 720p)',
         url: '/api/iptv/506',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (HD Backup)',
+        name: 'Servidor 3 (HD Backup)',
         url: '/api/iptv/296355',
         isProxy: false
-      },
-      {
-        name: 'Servidor 3 (HD Alternativo)',
-        url: '/api/iptv/296354',
-        isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1280x720)',
-        url: 'http://195.178.110.110/espn/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -673,29 +682,19 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Mais opções esportivas, basquete, beisebol, futebol e debates.',
     servers: [
       {
-        name: 'Servidor 1 (Kiwi HD Principal)',
+        name: 'Servidor 1 (HLS Direto BR)',
+        url: 'http://195.178.110.110/espn5/index.m3u8',
+        isProxy: true
+      },
+      {
+        name: 'Servidor 2 (Kiwi HD Principal)',
         url: '/api/iptv/296556',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Kiwi HD Backup)',
+        name: 'Servidor 3 (Kiwi HD Backup)',
         url: '/api/iptv/497',
         isProxy: false
-      },
-      {
-        name: 'Servidor 3 (Kiwi HD Alternativo)',
-        url: '/api/iptv/493',
-        isProxy: false
-      },
-      {
-        name: 'Servidor 4 (Kiwi SD Backup)',
-        url: '/api/iptv/296557',
-        isProxy: false
-      },
-      {
-        name: 'HLS Direto BR (HD 1280x720)',
-        url: 'http://195.178.110.110/espn5/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -831,28 +830,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal de esportes do Grupo Bandeirantes.',
     servers: [
       {
-        name: 'Servidor 1 (Kiwi HD 720p Principal)',
-        url: '/api/iptv/296480',
-        isProxy: false
-      },
-      {
-        name: 'Servidor 2 (Esportes Fast Backup)',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'HLS Direto BR (HD 1280x720)',
+        name: 'Servidor 1 (HLS Direto BR)',
         url: 'http://195.178.110.110/bandsports/index.m3u8',
         isProxy: true
       },
       {
-        name: 'Band Sports Alt 1',
-        url: 'http://170.83.16.50/BAND_SPORTS/index.m3u8',
-        isProxy: true
+        name: 'Servidor 2 (Kiwi HD 720p)',
+        url: '/api/iptv/296480',
+        isProxy: false
       },
       {
-        name: 'Band Sports Alt 2',
-        url: 'http://45.162.64.114/BAND_SPORTS/index.m3u8',
+        name: 'Servidor 3 (Esportes Fast)',
+        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
     ]
