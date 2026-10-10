@@ -41,8 +41,8 @@ function isIgnorableError(message?: string, stack?: string): boolean {
   if (combined.includes('net::err_network_changed')) return true;
   if (combined.includes('the internet connection appears to be offline')) return true;
   if (combined.includes('the network connection was lost')) return true;
-  if (combined.includes('failed to fetch') && typeof navigator !== 'undefined' && !navigator.onLine) return true;
-  if (combined.includes('load failed') && typeof navigator !== 'undefined' && !navigator.onLine) return true;
+  if (combined.includes('failed to fetch')) return true;
+  if (combined.includes('load failed')) return true;
 
   // Ruídos do ciclo de vida de mídia HTML5 / Browser
   if (combined.includes('the play() request was interrupted')) return true;
