@@ -225,54 +225,18 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   // retornava 200 no domínio novo e o painel marcava ONLINE sem avisar nada.
   const checkVizer = async () => {
     const start = Date.now();
-    const oldBase = "https://www.vizer.website";
+    const primaryBase = "https://www.vizer.reisen";
     try {
-      const res = await fetch(oldBase, {
+      const res = await fetch(primaryBase, {
         signal: AbortSignal.timeout(8000),
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
       });
       const latency = Date.now() - start;
-      let finalHost = "";
-      try { finalHost = new URL(res.url).hostname; } catch {}
-
-      // Sonda um endpoint AJAX real: domínio velho responde 200 + {"redirect": "..."}
-      let appRedirect = "";
-      try {
-        const ajax = await fetch(`${oldBase}/index.php?app=videobox&module=video&controller=view&do=episodesList&id=82940&season=1&audio=Dublado`, {
-          signal: AbortSignal.timeout(8000),
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-            "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json"
-          }
-        });
-        const j = await ajax.json().catch(() => null);
-        if (j && typeof j.redirect === "string" && j.redirect) appRedirect = j.redirect;
-      } catch {}
-
-      // Migração detectada → marca OFFLINE para o painel exibir o alerta
-      let migratingHost = "";
-      if (finalHost && finalHost !== "www.vizer.website") {
-        migratingHost = finalHost;
-      } else if (appRedirect) {
-        try { migratingHost = new URL(appRedirect).hostname; } catch { migratingHost = "?"; }
-      }
-      if (migratingHost) {
-        return {
-          name: "Catálogo Vizer",
-          url: oldBase,
-          status: "OFFLINE" as const,
-          latencyMs: latency,
-          statusCode: res.status,
-          error: `Domínio migrando: vizer.website agora aponta para ${migratingHost}. Os resolvers já perseguem o redirect automaticamente (VIZER_DOMAINS em encontreiLookup.ts), mas monitore o novo domínio.`
-        };
-      }
-
       return {
         name: "Catálogo Vizer",
-        url: oldBase,
+        url: primaryBase,
         status: res.ok ? ("ONLINE" as const) : ("OFFLINE" as const),
         latencyMs: latency,
         statusCode: res.status
@@ -280,11 +244,11 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     } catch (error: any) {
       return {
         name: "Catálogo Vizer",
-        url: oldBase,
+        url: primaryBase,
         status: "OFFLINE" as const,
         latencyMs: null,
         statusCode: 0,
-        error: `Possível bloqueio Cloudflare ou domínio morto: ${error?.message || "fetch falhou"}`
+        error: `Falha ao conectar no Vizer: ${error?.message || "fetch falhou"}`
       };
     }
   };
