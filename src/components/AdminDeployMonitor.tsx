@@ -189,6 +189,60 @@ export function AdminDeployMonitor() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [expandCommitDetails, setExpandCommitDetails] = useState(false);
 
+  // Estado e ativação instantânea do DevTools Mobile (Eruda) na aba atual
+  const [erudaActive, setErudaActive] = useState<boolean>(() => {
+    return typeof localStorage !== "undefined" && localStorage.getItem("playinfinity_eruda_active") === "true";
+  });
+
+  const handleToggleEruda = (enable: boolean) => {
+    if (enable) {
+      try {
+        localStorage.setItem("playinfinity_eruda_active", "true");
+        const url = new URL(window.location.href);
+        url.searchParams.set("debug", "true");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+
+        if ((window as any).eruda) {
+          (window as any).eruda.init();
+          (window as any).eruda.show();
+        } else {
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/eruda";
+          script.onload = () => {
+            if ((window as any).eruda) {
+              (window as any).eruda.init();
+              (window as any).eruda.show();
+            }
+          };
+          document.head.appendChild(script);
+        }
+        setErudaActive(true);
+      } catch (e) {
+        console.warn("Erro ao ativar Eruda:", e);
+      }
+    } else {
+      try {
+        localStorage.removeItem("playinfinity_eruda_active");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("debug");
+        url.searchParams.delete("eruda");
+        url.searchParams.delete("dev");
+        url.searchParams.delete("devtools");
+        const newSearch = url.searchParams.toString();
+        window.history.replaceState({}, "", url.pathname + (newSearch ? "?" + newSearch : "") + url.hash);
+
+        if ((window as any).eruda) {
+          try {
+            (window as any).eruda.destroy();
+          } catch (e) {}
+        }
+        setErudaActive(false);
+      } catch (e) {
+        console.warn("Erro ao desativar Eruda:", e);
+      }
+    }
+  };
+
   // Ticker de 1 segundo para atualizar o cronômetro e a barra de progresso em tempo real quando houver deploy em andamento
   useEffect(() => {
     const isRunning = githubData?.runs?.[0]?.status === "in_progress" || githubData?.runs?.[0]?.status === "queued";
@@ -916,15 +970,36 @@ export function AdminDeployMonitor() {
               </div>
             </div>
 
-            <div className="flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
+              {!erudaActive ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 cursor-pointer text-center w-full sm:w-auto"
+                >
+                  <Terminal className="w-4 h-4 shrink-0" />
+                  <span className="text-center">🟢 Ativar Nesta Aba</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(false)}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-red-600/20 cursor-pointer text-center w-full sm:w-auto"
+                >
+                  <XCircle className="w-4 h-4 shrink-0" />
+                  <span className="text-center">🔴 Desativar Nesta Aba</span>
+                </button>
+              )}
+
               <a
                 href="https://play-infinity.stream/?debug=true"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer text-center w-full sm:w-auto"
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white font-semibold text-xs rounded-xl transition-all border border-white/10 cursor-pointer text-center w-full sm:w-auto"
+                title="Abrir em nova aba com DevTools ativo"
               >
-                <ExternalLink className="w-4 h-4 shrink-0" />
-                <span className="text-center">Abrir App com DevTools (?debug=true)</span>
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-center">Abrir Link Direto</span>
               </a>
             </div>
           </div>
@@ -940,9 +1015,14 @@ export function AdminDeployMonitor() {
               <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=true
               </code>
-              <p className="text-white/50 text-[10px] text-center">
-                Também aceita <code className="text-amber-200/80 font-mono">?eruda=true</code> ou <code className="text-amber-200/80 font-mono">?dev=true</code>.
-              </p>
+              <button
+                type="button"
+                onClick={() => handleToggleEruda(true)}
+                className="w-full mt-1.5 py-2 px-3 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                <span>Ativar Agora na Aba Atual</span>
+              </button>
             </div>
 
             <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
@@ -970,6 +1050,14 @@ export function AdminDeployMonitor() {
               <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=false
               </code>
+              <button
+                type="button"
+                onClick={() => handleToggleEruda(false)}
+                className="w-full mt-1.5 py-2 px-3 bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <XCircle className="w-3.5 h-3.5 shrink-0" />
+                <span>Desativar Agora na Aba Atual</span>
+              </button>
             </div>
           </div>
         </div>
