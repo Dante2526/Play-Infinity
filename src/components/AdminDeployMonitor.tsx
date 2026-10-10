@@ -916,15 +916,15 @@ export function AdminDeployMonitor() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center justify-center gap-2 shrink-0 w-full sm:w-auto">
               <a
                 href="https://play-infinity.stream/?debug=true"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer text-center w-full sm:w-auto"
               >
-                <ExternalLink className="w-4 h-4" />
-                Abrir App com DevTools (?debug=true)
+                <ExternalLink className="w-4 h-4 shrink-0" />
+                <span className="text-center">Abrir App com DevTools (?debug=true)</span>
               </a>
             </div>
           </div>
