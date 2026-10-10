@@ -895,6 +895,84 @@ export function AdminDeployMonitor() {
             </p>
           </div>
         )}
+
+        {/* Card Destaque: DevTools Mobile & Inspecionar Celular (Eruda) */}
+        <div className="p-6 bg-gradient-to-r from-orange-950/40 via-[#1c1c1e] to-purple-950/30 border border-orange-500/30 rounded-[24px] shadow-2xl space-y-4 my-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-orange-500/20 text-orange-400 rounded-2xl border border-orange-500/30 shrink-0">
+                <Terminal className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-black text-white">DevTools Mobile (Eruda Inspector)</h3>
+                  <span className="px-2.5 py-0.5 text-[10px] uppercase font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
+                    Ativo na Plataforma
+                  </span>
+                </div>
+                <p className="text-xs text-white/60 mt-0.5">
+                  Inspecione elementos, logs de JavaScript, requisições de rede (HLS/API) e armazenamento direto no navegador do celular.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="https://play-infinity.stream/?debug=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 hover:bg-orange-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer"
+              >
+                <ExternalLink className="w-4 h-4" />
+                Abrir App com DevTools (?debug=true)
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1 text-xs">
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
+              <span className="text-orange-400 font-bold block flex items-center gap-1.5 text-xs">
+                📱 Como Ativar na Barra de Endereços
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed">
+                No celular, adicione qualquer um destes parâmetros na URL do site:
+              </p>
+              <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold">
+                https://play-infinity.stream/?debug=true
+              </code>
+              <p className="text-white/50 text-[10px]">
+                Também aceita <code className="text-amber-200/80 font-mono">?eruda=true</code> ou <code className="text-amber-200/80 font-mono">?dev=true</code>.
+              </p>
+            </div>
+
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
+              <span className="text-emerald-400 font-bold block flex items-center gap-1.5 text-xs">
+                ⚙️ O que Inspecionar no Celular
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed">
+                Ao abrir, toque na engrenagem flutuante no canto inferior direito para acessar:
+              </p>
+              <ul className="text-white/60 text-[11px] space-y-1 list-disc pl-4">
+                <li><strong className="text-white/90">Console:</strong> Erros de JS e logs do player</li>
+                <li><strong className="text-white/90">Network:</strong> Status de chamadas HLS/m3u8 e APIs</li>
+                <li><strong className="text-white/90">Elements:</strong> Árvore DOM e CSS em tempo real</li>
+                <li><strong className="text-white/90">Resources:</strong> LocalStorage e Cookies</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
+              <span className="text-purple-400 font-bold block flex items-center gap-1.5 text-xs">
+                🔴 Como Desativar
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed">
+                Para fechar o painel e remover a engrenagem flutuante, basta acessar:
+              </p>
+              <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold">
+                https://play-infinity.stream/?debug=false
+              </code>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ======================================================== */}
