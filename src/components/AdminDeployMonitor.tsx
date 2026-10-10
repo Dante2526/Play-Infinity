@@ -930,44 +930,44 @@ export function AdminDeployMonitor() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1 text-xs">
-            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
-              <span className="text-orange-400 font-bold block flex items-center gap-1.5 text-xs">
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-orange-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
                 📱 Como Ativar na Barra de Endereços
               </span>
-              <p className="text-white/70 text-[11px] leading-relaxed">
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
                 No celular, adicione qualquer um destes parâmetros na URL do site:
               </p>
-              <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold">
+              <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=true
               </code>
-              <p className="text-white/50 text-[10px]">
+              <p className="text-white/50 text-[10px] text-center">
                 Também aceita <code className="text-amber-200/80 font-mono">?eruda=true</code> ou <code className="text-amber-200/80 font-mono">?dev=true</code>.
               </p>
             </div>
 
-            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
-              <span className="text-emerald-400 font-bold block flex items-center gap-1.5 text-xs">
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-emerald-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
                 ⚙️ O que Inspecionar no Celular
               </span>
-              <p className="text-white/70 text-[11px] leading-relaxed">
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
                 Ao abrir, toque na engrenagem flutuante no canto inferior direito para acessar:
               </p>
-              <ul className="text-white/60 text-[11px] space-y-1 list-disc pl-4">
-                <li><strong className="text-white/90">Console:</strong> Erros de JS e logs do player</li>
-                <li><strong className="text-white/90">Network:</strong> Status de chamadas HLS/m3u8 e APIs</li>
-                <li><strong className="text-white/90">Elements:</strong> Árvore DOM e CSS em tempo real</li>
-                <li><strong className="text-white/90">Resources:</strong> LocalStorage e Cookies</li>
+              <ul className="text-white/60 text-[11px] space-y-1.5 text-center flex flex-col items-center justify-center list-none w-full">
+                <li className="text-center"><strong className="text-white/90">Console:</strong> Erros de JS e logs do player</li>
+                <li className="text-center"><strong className="text-white/90">Network:</strong> Status de chamadas HLS/m3u8 e APIs</li>
+                <li className="text-center"><strong className="text-white/90">Elements:</strong> Árvore DOM e CSS em tempo real</li>
+                <li className="text-center"><strong className="text-white/90">Resources:</strong> LocalStorage e Cookies</li>
               </ul>
             </div>
 
-            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2">
-              <span className="text-purple-400 font-bold block flex items-center gap-1.5 text-xs">
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-purple-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
                 🔴 Como Desativar
               </span>
-              <p className="text-white/70 text-[11px] leading-relaxed">
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
                 Para fechar o painel e remover a engrenagem flutuante, basta acessar:
               </p>
-              <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold">
+              <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=false
               </code>
             </div>
