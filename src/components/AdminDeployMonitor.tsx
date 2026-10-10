@@ -978,7 +978,7 @@ export function AdminDeployMonitor() {
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-emerald-600/20 cursor-pointer text-center w-full sm:w-auto"
                 >
                   <Terminal className="w-4 h-4 shrink-0" />
-                  <span className="text-center">🟢 Ativar Nesta Aba</span>
+                  <span className="text-center">Ativar Nesta Aba</span>
                 </button>
               ) : (
                 <button
@@ -987,7 +987,7 @@ export function AdminDeployMonitor() {
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-red-600/20 cursor-pointer text-center w-full sm:w-auto"
                 >
                   <XCircle className="w-4 h-4 shrink-0" />
-                  <span className="text-center">🔴 Desativar Nesta Aba</span>
+                  <span className="text-center">Desativar Nesta Aba</span>
                 </button>
               )}
 
@@ -995,7 +995,7 @@ export function AdminDeployMonitor() {
                 href="https://play-infinity.stream/?debug=true"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center justify-center gap-1.5 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white font-semibold text-xs rounded-xl transition-all border border-white/10 cursor-pointer text-center w-full sm:w-auto"
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer text-center w-full sm:w-auto"
                 title="Abrir em nova aba com DevTools ativo"
               >
                 <ExternalLink className="w-3.5 h-3.5 shrink-0" />
@@ -1015,14 +1015,25 @@ export function AdminDeployMonitor() {
               <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=true
               </code>
-              <button
-                type="button"
-                onClick={() => handleToggleEruda(true)}
-                className="w-full mt-1.5 py-2 px-3 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                <span>Ativar Agora na Aba Atual</span>
-              </button>
+              {!erudaActive ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(true)}
+                  className="w-full mt-1.5 py-2 px-3 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Ativar Nesta Aba</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(false)}
+                  className="w-full mt-1.5 py-2 px-3 bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Desativar Nesta Aba</span>
+                </button>
+              )}
             </div>
 
             <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
@@ -1050,14 +1061,6 @@ export function AdminDeployMonitor() {
               <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
                 https://play-infinity.stream/?debug=false
               </code>
-              <button
-                type="button"
-                onClick={() => handleToggleEruda(false)}
-                className="w-full mt-1.5 py-2 px-3 bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <XCircle className="w-3.5 h-3.5 shrink-0" />
-                <span>Desativar Agora na Aba Atual</span>
-              </button>
             </div>
           </div>
         </div>
