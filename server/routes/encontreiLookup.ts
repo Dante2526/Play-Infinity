@@ -1655,6 +1655,25 @@ router.get("/api/encontrei-lookup", async (req, res) => {
         encontreiEp = undefined;
       }
 
+      // Se encontreiEp não constava no catálogo estático, tenta resolver live no encontrei.me
+      if (!encontreiEp && process.env.ENCONTREI_COOKIE) {
+        try {
+          const liveEnc = await resolveEncontreiEpisode(tmdbId, season, episode, lookupName);
+          if (liveEnc && liveEnc.mixdrop) {
+            encontreiEp = {
+              season,
+              episode,
+              tmdb_id: tmdbId,
+              audio: liveEnc.audio || "Dublado",
+              servers: { mixdrop: liveEnc.mixdrop },
+              source: "encontrei-live",
+              _fetchedAt: now,
+            };
+            _encontreiEpisodeIndex.set(key, encontreiEp);
+          }
+        } catch (_) {}
+      }
+
       let bestEp = null;
       let bestSource = "";
 
@@ -1712,6 +1731,23 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       if (encontreiMovie && encontreiMovie._fetchedAt && (now - encontreiMovie._fetchedAt > VIZER_ON_DEMAND_TTL)) {
         _encontreiMovieIndex.delete(tmdbId);
         encontreiMovie = undefined;
+      }
+
+      // Se encontreiMovie não constava no catálogo estático, tenta resolver live no encontrei.me
+      if (!encontreiMovie && process.env.ENCONTREI_COOKIE) {
+        try {
+          const liveEnc = await resolveEncontreiMovie(tmdbId, lookupName);
+          if (liveEnc && liveEnc.mixdrop) {
+            encontreiMovie = {
+              tmdb_id: tmdbId,
+              audio: liveEnc.audio || "Dublado",
+              servers: { mixdrop: liveEnc.mixdrop },
+              source: "encontrei-live",
+              _fetchedAt: now,
+            };
+            _encontreiMovieIndex.set(tmdbId, encontreiMovie);
+          }
+        } catch (_) {}
       }
 
       let bestMovie = null;
