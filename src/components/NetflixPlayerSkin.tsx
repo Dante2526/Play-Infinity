@@ -638,6 +638,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           console.log(`🌐 Servidor CDN: ${e.data.src}`);
           console.log(`📊 Total de engasgos nesta sessão: ${e.data.totalStalls}`);
           console.groupEnd();
+
+          // Auto-Healer no nível da Skin: desativa travamentos persistentes
+          const dur = Number(e.data.duration) || 0;
+          if (String(e.data.reason).includes("frame_freeze")) {
+            if (dur === 4 || dur === 8) {
+              console.log("%c[NetflixPlayerSkin] ⚡ Enviando comando de desengasgo (PLAY + SEEK +0.01s) para o iframe...", "color:#f59e0b;font-weight:bold;");
+              sendCommand({ type: "SEEK_RELATIVE", seconds: 0.01 });
+              sendCommand({ type: "PLAY" });
+            } else if (dur >= 10) {
+              console.warn("%c[NetflixPlayerSkin] 🚨 Travamento irrecuperável (>10s). Disparando comutação de emergência...", "color:#ef4444;font-weight:bold;");
+              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
+            }
+          }
         } else if (e.data.event === "recovered") {
           console.log(
             `%c[NixPlay Telemetria] ✅ Recuperado após ${e.data.stallDuration}s de travamento (Buffer agora: ${e.data.bufferAhead}s)`,

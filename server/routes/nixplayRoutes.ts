@@ -528,6 +528,21 @@ router.get("/api/native-player", async (req, res) => {
         if (frozenTicks >= 2) {
           reportStall('frame_freeze (áudio/vídeo congelado)');
         }
+        if (frozenTicks === 3) {
+          try {
+            video.currentTime = Math.max(0, (video.currentTime || 0) + 0.01);
+            video.play().catch(function(){});
+          } catch(e){}
+        } else if (frozenTicks === 6) {
+          try {
+            video.currentTime = Math.max(0, (video.currentTime || 0) - 0.2);
+            video.play().catch(function(){});
+          } catch(e){}
+        } else if (frozenTicks >= 10) {
+          try {
+            window.parent.postMessage({ type: 'WATCHPLAY_ERROR', reason: 'frame_freeze_unrecoverable' }, '*');
+          } catch(e){}
+        }
       } else {
         if (frozenTicks >= 2) clearStall();
         frozenTicks = 0;

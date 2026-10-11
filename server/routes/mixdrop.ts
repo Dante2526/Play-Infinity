@@ -553,6 +553,26 @@ const router = Router();
                   if (wall >= 0.7 && dt < 0.05) {
                     frozenTicks++;
                     if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
+                    
+                    // Auto-Healer: Descongelamento automático de frame travado
+                    if (frozenTicks === 3) {
+                      console.log("%c[MixDrop Auto-Healer] ⚡ Micro-nudge (+0.01s) aplicado para destravar video", "color:#f59e0b;font-weight:bold;");
+                      try {
+                        v.currentTime = Math.max(0, (v.currentTime || 0) + 0.01);
+                        v.play().catch(function() {});
+                      } catch(e) {}
+                    } else if (frozenTicks === 6) {
+                      console.log("%c[MixDrop Auto-Healer] ⚡ Macro-nudge (-0.2s + play) aplicado para destravar video", "color:#f59e0b;font-weight:bold;");
+                      try {
+                        v.currentTime = Math.max(0, (v.currentTime || 0) - 0.2);
+                        v.play().catch(function() {});
+                      } catch(e) {}
+                    } else if (frozenTicks >= 10) {
+                      console.log("%c[MixDrop Auto-Healer] 🚨 Frame freeze persistente (>10s). Notificando parent...", "color:#ef4444;font-weight:bold;");
+                      try {
+                        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
+                      } catch(e) {}
+                    }
                   } else {
                     if (frozenTicks >= 2) recovered();
                     frozenTicks = 0;

@@ -28,15 +28,10 @@ export function AdminPushNotifications() {
     const fetchUsers = async () => {
       try {
         const snap = await getDocs(collection(db, "usuarios"));
-        const snap2 = await getDocs(collection(db, "users"));
         const userMap = new Map();
         snap.forEach(doc => {
            const d = doc.data();
            if (d.email) userMap.set(d.email, { email: d.email, name: d.nome || d.name || "Usuário" });
-        });
-        snap2.forEach(doc => {
-           const d = doc.data();
-           if (d.email && !userMap.has(d.email)) userMap.set(d.email, { email: d.email, name: d.nome || d.name || "Usuário" });
         });
         setUsersList(Array.from(userMap.values()).sort((a,b) => a.name.localeCompare(b.name)));
       } catch(e) {

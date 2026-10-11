@@ -943,8 +943,6 @@ adminOpsRouter.post("/push", async (req: Request, res: Response) => {
         collectTokensFromSnapshot(snapshot);
       }
     } else {
-      // Push global: busca TODOS os usuários (projeção leve via select para não
-      // carregar campos pesados). O limit(500) antigo cortava a base silenciosamente.
       const snapshot = await db.collection("usuarios").select("fcmToken", "fcmTokens").get();
       collectTokensFromSnapshot(snapshot);
     }
