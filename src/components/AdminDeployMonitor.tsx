@@ -189,6 +189,60 @@ export function AdminDeployMonitor() {
   const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [expandCommitDetails, setExpandCommitDetails] = useState(false);
 
+  // Estado e ativação instantânea do DevTools Mobile (Eruda) na aba atual
+  const [erudaActive, setErudaActive] = useState<boolean>(() => {
+    return typeof localStorage !== "undefined" && localStorage.getItem("playinfinity_eruda_active") === "true";
+  });
+
+  const handleToggleEruda = (enable: boolean) => {
+    if (enable) {
+      try {
+        localStorage.setItem("playinfinity_eruda_active", "true");
+        const url = new URL(window.location.href);
+        url.searchParams.set("debug", "true");
+        window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+
+        if ((window as any).eruda) {
+          (window as any).eruda.init();
+          (window as any).eruda.show();
+        } else {
+          const script = document.createElement("script");
+          script.src = "https://cdn.jsdelivr.net/npm/eruda";
+          script.onload = () => {
+            if ((window as any).eruda) {
+              (window as any).eruda.init();
+              (window as any).eruda.show();
+            }
+          };
+          document.head.appendChild(script);
+        }
+        setErudaActive(true);
+      } catch (e) {
+        console.warn("Erro ao ativar Eruda:", e);
+      }
+    } else {
+      try {
+        localStorage.removeItem("playinfinity_eruda_active");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("debug");
+        url.searchParams.delete("eruda");
+        url.searchParams.delete("dev");
+        url.searchParams.delete("devtools");
+        const newSearch = url.searchParams.toString();
+        window.history.replaceState({}, "", url.pathname + (newSearch ? "?" + newSearch : "") + url.hash);
+
+        if ((window as any).eruda) {
+          try {
+            (window as any).eruda.destroy();
+          } catch (e) {}
+        }
+        setErudaActive(false);
+      } catch (e) {
+        console.warn("Erro ao desativar Eruda:", e);
+      }
+    }
+  };
+
   // Ticker de 1 segundo para atualizar o cronômetro e a barra de progresso em tempo real quando houver deploy em andamento
   useEffect(() => {
     const isRunning = githubData?.runs?.[0]?.status === "in_progress" || githubData?.runs?.[0]?.status === "queued";
@@ -895,6 +949,101 @@ export function AdminDeployMonitor() {
             </p>
           </div>
         )}
+
+        {/* Card Destaque: DevTools Mobile & Inspecionar Celular (Eruda) */}
+        <div className="p-6 bg-gradient-to-r from-orange-950/40 via-[#1c1c1e] to-purple-950/30 border border-orange-500/30 rounded-[24px] shadow-2xl space-y-4 my-8">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-orange-500/20 text-orange-400 rounded-2xl border border-orange-500/30 shrink-0">
+                <Terminal className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-lg font-black text-white">DevTools Mobile (Eruda Inspector)</h3>
+                  <span className="px-2.5 py-0.5 text-[10px] uppercase font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full">
+                    Ativo na Plataforma
+                  </span>
+                </div>
+                <p className="text-xs text-white/60 mt-0.5">
+                  Inspecione elementos, logs de JavaScript, requisições de rede (HLS/API) e armazenamento direto no navegador do celular.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 shrink-0 w-full sm:w-auto">
+              <a
+                href="https://play-infinity.stream/?debug=true"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 active:scale-95 text-white font-bold text-xs rounded-xl transition-all shadow-lg shadow-orange-600/20 cursor-pointer text-center w-full sm:w-auto"
+                title="Abrir em nova aba com DevTools ativo"
+              >
+                <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+                <span className="text-center">Abrir Link Direto</span>
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1 text-xs">
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-orange-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
+                📱 Como Ativar na Barra de Endereços
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
+                No celular, adicione qualquer um destes parâmetros na URL do site:
+              </p>
+              <code className="block p-2 bg-black/70 text-amber-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
+                https://play-infinity.stream/?debug=true
+              </code>
+              {!erudaActive ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(true)}
+                  className="w-full mt-1.5 py-2 px-3 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  <span>Ativar Nesta Aba</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleToggleEruda(false)}
+                  className="w-full mt-1.5 py-2 px-3 bg-red-600/30 hover:bg-red-600/50 border border-red-500/40 text-red-300 font-bold text-[11px] rounded-xl active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <XCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>Desativar Nesta Aba</span>
+                </button>
+              )}
+            </div>
+
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-emerald-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
+                ⚙️ O que Inspecionar no Celular
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
+                Ao abrir, toque na engrenagem flutuante no canto inferior direito para acessar:
+              </p>
+              <ul className="text-white/60 text-[11px] space-y-1.5 text-center flex flex-col items-center justify-center list-none w-full">
+                <li className="text-center"><strong className="text-white/90">Console:</strong> Erros de JS e logs do player</li>
+                <li className="text-center"><strong className="text-white/90">Network:</strong> Status de chamadas HLS/m3u8 e APIs</li>
+                <li className="text-center"><strong className="text-white/90">Elements:</strong> Árvore DOM e CSS em tempo real</li>
+                <li className="text-center"><strong className="text-white/90">Resources:</strong> LocalStorage e Cookies</li>
+              </ul>
+            </div>
+
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2 text-center flex flex-col items-center justify-center">
+              <span className="text-purple-400 font-bold flex items-center justify-center gap-1.5 text-xs text-center">
+                🔴 Como Desativar
+              </span>
+              <p className="text-white/70 text-[11px] leading-relaxed text-center">
+                Para fechar o painel e remover a engrenagem flutuante, basta acessar:
+              </p>
+              <code className="block p-2 bg-black/70 text-purple-300 font-mono text-[11px] rounded-xl border border-white/10 break-all select-all font-semibold text-center w-full">
+                https://play-infinity.stream/?debug=false
+              </code>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ======================================================== */}

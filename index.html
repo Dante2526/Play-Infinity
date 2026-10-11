@@ -36,6 +36,37 @@
           };
         }
 
+        // Ativação do DevTools Mobile (Eruda) via barra de endereços (?debug=true, ?dev=true, ?eruda=true, ?devtools=true)
+        try {
+          var search = window.location.search.toLowerCase();
+          var href = window.location.href.toLowerCase();
+          var isDebugRequested = search.indexOf('debug=true') !== -1 || 
+                                search.indexOf('dev=true') !== -1 || 
+                                search.indexOf('eruda=true') !== -1 || 
+                                search.indexOf('devtools=true') !== -1 ||
+                                href.indexOf('/devtools') !== -1;
+          
+          var isDebugDisabled = search.indexOf('debug=false') !== -1 || 
+                                search.indexOf('dev=false') !== -1 || 
+                                search.indexOf('eruda=false') !== -1 || 
+                                search.indexOf('devtools=false') !== -1;
+
+          if (isDebugDisabled) {
+            window.localStorage.removeItem('playinfinity_eruda_active');
+          } else if (isDebugRequested || window.localStorage.getItem('playinfinity_eruda_active') === 'true') {
+            window.localStorage.setItem('playinfinity_eruda_active', 'true');
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+            script.onload = function() {
+              if (window.eruda) {
+                window.eruda.init();
+                console.log('🚀 [DevTools Mobile] Eruda ativado com sucesso!');
+              }
+            };
+            document.head.appendChild(script);
+          }
+        } catch (e) {}
+
         // Detecção precoce de Smart TV
         try {
           var ua = (navigator.userAgent || '').toLowerCase();

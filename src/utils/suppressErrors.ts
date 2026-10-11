@@ -7,7 +7,12 @@ export function suppressExtensionErrors() {
     "This script should only be loaded in a browser extension",
     "e.forEach is not a function",
     "Tracking Prevention",
-    "ERR_BLOCKED_BY_CLIENT"
+    "ERR_BLOCKED_BY_CLIENT",
+    "Failed to fetch",
+    "TypeError: Failed to fetch",
+    "Load failed",
+    "NetworkError",
+    "net::ERR_"
   ];
 
   const shouldIgnore = (message: string) => {

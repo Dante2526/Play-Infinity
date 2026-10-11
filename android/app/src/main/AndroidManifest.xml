@@ -21,6 +21,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
 
@@ -33,7 +34,9 @@
         </provider>
     </application>
 
-    <!-- Hardware features (todos opcionais — o app funciona sem eles) -->
+    <!-- Hardware features (todos opcionais — garante compatibilidade com Smart TVs, TV Box e Celulares) -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.audio.output" android:required="false" />
     <uses-feature android:name="android.hardware.sensors.accelerometer" android:required="false" />
