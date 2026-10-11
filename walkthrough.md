@@ -1,3 +1,65 @@
+## 11/10/2026 - Telemetria do MixDrop no F12 (tela preta no meio da reprodução)
+
+**Problema relatado:** assistindo Carrie S1E2 no MixDrop, a tela piscou e ficou preta **durante a reprodução**. O print do console não tinha nenhum log de recarga (`Recarregando iframe...`) nem de fallback (`demorou mais de 10s`) — causa ainda NÃO confirmada.
+
+**Descobertas (por leitura de código, não reproduzidas):**
+- `buildMixdropStreamUrl` (`src/services/encontreiCatalog.ts`) coloca `&cb=Date.now()` → o efeito de `VideoPlayerModal.tsx` (~L1167) sempre vê URL "nova" e pode recarregar o iframe quando o `mixdropFileId` muda. Defeito real, mas não explica sozinho a tela preta do print.
+- Todos os players tratam `SEEK_RELATIVE` (auditado). Há `case "SEEK_RELATIVE"` duplicado em 3 trechos de `videoScrapers.ts` (segundo ramo é código morto, inofensivo).
+
+**Implementado (`server/routes/mixdrop.ts`, bloco `initMixdropTelemetry`):**
+- Linha do tempo (60 eventos) de `waiting/stalled/error/emptied/abort/seeking/pause/aba/online/offline` + erros JS do iframe.
+- Detecta: tempo parado (`frame_freeze`), **"tempo andando sem quadros" (tela preta)**, **pausa não solicitada** e erro de mídia com nome do código (rede/decodificação).
+- Reaproveita `NIXPLAY_TELEMETRY_EVENT` (a skin já imprime stall/recovered no F12). Comandos: `mixdropStats()` (contexto do iframe) ou `nixplayStats()`.
+
+**Validação:** 0 erros de sintaxe (TypeScript AST); JS do iframe validado com `new Function`; sem crase/`${}` no bloco (não quebra o template). `tsc` completo só acusa módulos ausentes (`axios`, `cheerio`, `stream`, `react`...) porque o workspace não tem `node_modules`.
+
+**Pendente:** reproduzir e ler a linha do tempo; só então corrigir (candidatas: queda do `/api/md-proxy`, rate limit 150/min da VPS, auto-healer). Deploy na VPS só com autorização.
+
+---
+
+## 11/10/2026 - Telemetria e Monitor de Engasgos do NixPlayer no F12
+
+
+**Problema relatado:** O usuário solicitou um mecanismo que aparecesse exclusivamente no console de desenvolvedor (F12) para monitorar como o player na fonte (NixPlayer) entrega os dados, detectando "engasgos/travadinhas" em tempo real para permitir diagnóstico e mitigação.
+
+**Implementação:**
+1. **Motor de Telemetria no Bridge (`server/routes/nixplayRoutes.ts` - `/api/native-player`):**
+   - Monitora eventos nativos `waiting` (buffer esgotado) e `stalled` (CDN parada sem dados).
+   - Watchdog de congelamento de tela (`frame_freeze`): detecta quando o vídeo congela mesmo sem o evento waiting do browser disparar.
+   - Cálculo contínuo de buffer à frente (`getBufferAhead()` em segundos).
+   - Leitura de métricas de decodificação (`getVideoPlaybackQuality()` para quadros perdidos / dropped frames).
+   - Emite mensagens estruturadas `NIXPLAY_TELEMETRY_EVENT` para a janela principal.
+2. **Visualização no F12 (`src/components/NetflixPlayerSkin.tsx`):**
+   - Escuta `NIXPLAY_TELEMETRY_EVENT` e formata alertas visuais coloridos e destacados no console (`console.group` com tags vermelhas/amarelas/verdes) detalhando: posição, duração do travamento, buffer restante, dropped frames e URL da CDN.
+   - Exposta a função global `window.nixplayStats()` para visualização instantânea de um raio-x completo do streaming via tabela formatada no console.
+
+**Validação:**
+- AST TypeScript sem erros.
+- Teste funcional automatizado (`scratch/test-telemetry.mjs`): 100% PASS.
+
+---
+
+## 11/10/2026 - Fix Avançar/Retroceder 10s no NixPlayer (Carrie a Estranha e Skin Netflix)
+
+**Problema relatado:** Ao assistir Carrie, A Estranha (2026) pelo NixPlayer com a Skin Netflix, clicar nos botões de avançar 10 segundos fazia o vídeo retornar sozinho ao tempo anterior sem obedecer ao comando.
+
+**Causa Raiz Identificada:**
+1. **Frontend (`NetflixPlayerSkin.tsx`):** `handleSeekRelative` calculava o novo tempo alvo e disparava `sendCommand({ type: 'SEEK_RELATIVE', seconds, time: newTarget })`. Porém, a camada de compatibilidade do `sendCommand` só convertia comandos com `type === 'SEEK_ABSOLUTE' || type === 'SEEK'` para as mensagens universais do iframe (`SEEK`, `seek`, `action: 'seek'`). O `SEEK_RELATIVE` era enviado apenas com sua assinatura crua.
+2. **Bridge Nixplay (`server/routes/nixplayRoutes.ts` - `/api/native-player`):** O listener de `message` do player HTML5 nativo que roda os vídeos do Nixplay só reconhecia `PLAY`, `PAUSE`, `SEEK` (apenas com `targetTime`) e `seek` (apenas com `time`). Ele ignorava totalmente `SEEK_RELATIVE`, `SEEK_ABSOLUTE`, `SKIP_INTRO` e `SET_PLAYBACK_RATE`. O elemento `<video>` real continuava reproduzindo no mesmo segundo. A interface avançava otimisticamente por 1,5s (lock de seek), mas assim que o lock expirava, o `timeupdate`/`sendStatus` do vídeo real (ainda inalterado) forçava o relógio a voltar sozinho.
+3. **Outros players:** O mesmo padrão de omissão de `SEEK_RELATIVE` e `SEEK_ABSOLUTE` foi encontrado e corrigido em `server/routes/vidsrcRoutes.ts` (`/api/vidsrc-player`) e em `src/components/VideoPlayerModal.tsx` (`handleLocalCommand` para mídias locais offline).
+
+**Alterações Realizadas (4 arquivos):**
+- `src/components/NetflixPlayerSkin.tsx`: `sendCommand` agora inclui `SEEK_RELATIVE` e despacha `SEEK` (`targetTime`), `SEEK_ABSOLUTE` (`time`), `seek` (`time`) e `action: 'seek'`. A condição de liberação `hasReachedTarget` no listener de `WATCHPLAY_STATUS` foi calibrada para aceitar tanto avanços (+10s) quanto retrocessos (-10s) com tolerância de ±1.2s.
+- `server/routes/nixplayRoutes.ts`: `/api/native-player` agora suporta `SEEK_RELATIVE` (via `time` absoluto ou soma com `seconds`), `SEEK_ABSOLUTE`, `SKIP_INTRO`, `SET_PLAYBACK_RATE` e `TOGGLE_PLAY`. Adicionados listeners para os eventos `seeking` e `seeked` no `<video>` para emitir `sendStatus` imediato à skin no momento em que o salto conclui.
+- `server/routes/vidsrcRoutes.ts`: Atualizados os handlers do bridge para suportar `SEEK_RELATIVE`, `SEEK_ABSOLUTE`, `SKIP_INTRO`, `SET_PLAYBACK_RATE` e evento `seeked`.
+- `src/components/VideoPlayerModal.tsx`: `handleLocalCommand` atualizado com suporte a `SEEK_RELATIVE`, `SKIP_INTRO` e `SET_PLAYBACK_RATE`.
+
+**Validação:**
+- Análise sintática AST TypeScript: 0 erros em todos os 4 arquivos modificados.
+- Teste funcional automatizado (`scratch/test-seek-protocol.mjs`): 5/5 testes passaram (validação de postMessages, simulação do player nativo com avanço +10s, retrocesso -10s e pular abertura +85s).
+
+---
+
 ## 06/10/2026 - HxH 2011: "eps 70+ não reproduzem" — worker do CONTEÚDO do HxH fora no Nixplay
 
 **Problema relatado:** após o fix das abas, o usuário reporta que "os eps do nixplay não reproduz a partir do ~70".

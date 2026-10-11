@@ -1833,10 +1833,27 @@ export function VideoPlayerModal({
             }
             break;
           case "SEEK":
-          case "SEEK_ABSOLUTE": {
-            const t = typeof cmd.time === "number" ? cmd.time : cmd.targetTime;
+          case "SEEK_ABSOLUTE":
+          case "SEEK_RELATIVE": {
+            let t = typeof cmd.time === "number" ? cmd.time : cmd.targetTime;
+            if (typeof t !== "number" && typeof cmd.seconds === "number") {
+              t = video.currentTime + cmd.seconds;
+            }
             if (typeof t === "number" && isFinite(t) && t >= 0) {
-              video.currentTime = t;
+              video.currentTime = Math.min(t, (video.duration || 99999));
+              sendLocalStatus();
+            }
+            break;
+          }
+          case "SKIP_INTRO": {
+            const sec = typeof cmd.seconds === "number" ? cmd.seconds : 85;
+            video.currentTime = Math.max(0, Math.min(video.currentTime + sec, (video.duration || 99999) - 5));
+            sendLocalStatus();
+            break;
+          }
+          case "SET_PLAYBACK_RATE": {
+            if (typeof cmd.rate === "number" && cmd.rate > 0) {
+              video.playbackRate = cmd.rate;
               sendLocalStatus();
             }
             break;

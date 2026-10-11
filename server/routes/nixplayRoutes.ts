@@ -332,6 +332,8 @@ router.get("/api/native-player", async (req, res) => {
       video.addEventListener('durationchange', sendStatus);
       video.addEventListener('volumechange', sendStatus);
       video.addEventListener('progress', sendStatus);
+      video.addEventListener('seeking', sendStatus);
+      video.addEventListener('seeked', sendStatus);
       video.addEventListener('error', function() {
         window.parent.postMessage({ type: 'WATCHPLAY_ERROR', reason: 'native_src_error' }, '*');
       });
@@ -384,15 +386,174 @@ router.get("/api/native-player", async (req, res) => {
       var cmd = e.data;
       if (!cmd || !cmd.type) return;
       try {
-        if (cmd.type === 'PLAY' || cmd.type === 'play') { video.play(); }
-        else if (cmd.type === 'PAUSE' || cmd.type === 'pause') { video.pause(); }
-        else if (cmd.type === 'SEEK' && typeof cmd.targetTime === 'number') { video.currentTime = cmd.targetTime; }
-        else if (cmd.type === 'seek' && typeof cmd.time === 'number') { video.currentTime = cmd.time; }
-        else if (cmd.type === 'SET_VOLUME' && typeof cmd.volume === 'number') { video.volume = cmd.volume; video.muted = (cmd.volume === 0); }
-        else if (cmd.type === 'setMuted') { video.muted = !!cmd.muted; }
+        if (cmd.type === 'PLAY' || cmd.type === 'play') {
+          video.play().catch(function(){});
+        }
+        else if (cmd.type === 'PAUSE' || cmd.type === 'pause') {
+          video.pause();
+        }
+        else if (cmd.type === 'TOGGLE_PLAY' || cmd.type === 'togglePlay') {
+          if (video.paused) { video.play().catch(function(){}); } else { video.pause(); }
+        }
+        else if (cmd.type === 'SEEK' || cmd.type === 'seek' || cmd.type === 'SEEK_ABSOLUTE' || cmd.type === 'SEEK_RELATIVE') {
+          var target = typeof cmd.time === 'number' ? cmd.time : cmd.targetTime;
+          if (typeof target !== 'number' && typeof cmd.seconds === 'number') {
+            target = (video.currentTime || 0) + cmd.seconds;
+          }
+          if (typeof target === 'number' && !isNaN(target)) {
+            video.currentTime = Math.max(0, Math.min(target, (video.duration || 99999)));
+          }
+        }
+        else if (cmd.type === 'SKIP_INTRO') {
+          var sec = Number(cmd.seconds) || 85;
+          video.currentTime = Math.max(0, Math.min((video.currentTime || 0) + sec, (video.duration || 99999) - 5));
+        }
+        else if (cmd.type === 'SET_PLAYBACK_RATE' || cmd.type === 'setPlaybackRate') {
+          video.playbackRate = Number(cmd.rate) || 1;
+        }
+        else if (cmd.type === 'SET_VOLUME' && typeof cmd.volume === 'number') {
+          video.volume = Math.max(0, Math.min(1, cmd.volume));
+          video.muted = (cmd.volume === 0);
+        }
+        else if (cmd.type === 'setMuted' || cmd.type === 'SET_MUTED') {
+          video.muted = !!cmd.muted;
+        }
+        else if (cmd.type === 'REQUEST_NIXPLAY_STATS') {
+          if (typeof window.nixplayStats === 'function') window.nixplayStats();
+        }
         sendStatus();
       } catch(err) {}
     });
+
+    // ========================================================
+    // TELEMETRIA NIXPLAY: DETECTOR DE ENGASGOS, BUFFER E FRAMES
+    // ========================================================
+    var stallStart = 0;
+    var totalStalls = 0;
+    var totalStallDuration = 0;
+
+    function getBufferAhead() {
+      if (!video || !video.buffered || video.buffered.length === 0) return 0;
+      var cur = video.currentTime || 0;
+      for (var i = 0; i < video.buffered.length; i++) {
+        if (video.buffered.start(i) <= cur && cur <= video.buffered.end(i)) {
+          return +(video.buffered.end(i) - cur).toFixed(2);
+        }
+      }
+      return 0;
+    }
+
+    function getQualityStats() {
+      if (video && typeof video.getVideoPlaybackQuality === 'function') {
+        try {
+          var q = video.getVideoPlaybackQuality();
+          return {
+            totalFrames: q.totalVideoFrames || 0,
+            droppedFrames: q.droppedVideoFrames || 0,
+            corruptedFrames: q.corruptedVideoFrames || 0
+          };
+        } catch(e) {}
+      }
+      return null;
+    }
+
+    function reportStall(reason) {
+      if (!video || video.paused || video.ended) return;
+      var now = Date.now();
+      if (stallStart === 0) {
+        stallStart = now;
+        totalStalls++;
+      }
+      var duration = +((now - stallStart) / 1000).toFixed(2);
+      var bufferSec = getBufferAhead();
+      var q = getQualityStats();
+
+      window.parent.postMessage({
+        type: 'NIXPLAY_TELEMETRY_EVENT',
+        event: 'stall',
+        reason: reason,
+        duration: duration,
+        bufferAhead: bufferSec,
+        currentTime: +(video.currentTime || 0).toFixed(1),
+        src: video.currentSrc || video.src || '',
+        videoWidth: video.videoWidth || 0,
+        videoHeight: video.videoHeight || 0,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        quality: q,
+        totalStalls: totalStalls
+      }, '*');
+    }
+
+    function clearStall() {
+      if (stallStart > 0) {
+        var duration = +((Date.now() - stallStart) / 1000).toFixed(2);
+        totalStallDuration += duration;
+        window.parent.postMessage({
+          type: 'NIXPLAY_TELEMETRY_EVENT',
+          event: 'recovered',
+          stallDuration: duration,
+          bufferAhead: getBufferAhead(),
+          currentTime: +(video.currentTime || 0).toFixed(1)
+        }, '*');
+        stallStart = 0;
+      }
+    }
+
+    video.addEventListener('waiting', function() { reportStall('waiting (buffer esgotado)'); });
+    video.addEventListener('stalled', function() { reportStall('stalled (CDN parou de responder dados)'); });
+    video.addEventListener('playing', clearStall);
+    video.addEventListener('canplay', clearStall);
+
+    // Watchdog de congelamento de tela (detecta quando o vídeo trava sem evento waiting nativo)
+    var lastCheckedTime = 0;
+    var lastCheckWallTime = Date.now();
+    var frozenTicks = 0;
+    setInterval(function() {
+      if (!video || video.paused || video.ended || video.seeking || video.readyState < 2) {
+        lastCheckedTime = video ? video.currentTime : 0;
+        lastCheckWallTime = Date.now();
+        frozenTicks = 0;
+        return;
+      }
+      var now = Date.now();
+      var wallDelta = (now - lastCheckWallTime) / 1000;
+      var timeDelta = (video.currentTime || 0) - lastCheckedTime;
+      lastCheckedTime = video.currentTime || 0;
+      lastCheckWallTime = now;
+
+      // Se passou ~0.7s no relógio real e o vídeo andou menos de 0.05s
+      if (wallDelta >= 0.7 && timeDelta < 0.05) {
+        frozenTicks++;
+        if (frozenTicks >= 2) {
+          reportStall('frame_freeze (áudio/vídeo congelado)');
+        }
+      } else {
+        if (frozenTicks >= 2) clearStall();
+        frozenTicks = 0;
+      }
+    }, 600);
+
+    // Comando sob demanda no console: window.nixplayStats()
+    window.nixplayStats = function() {
+      var q = getQualityStats();
+      var stats = {
+        'Tempo Atual': +(video.currentTime || 0).toFixed(2) + 's',
+        'Duração': +(video.duration || 0).toFixed(2) + 's',
+        'Pausado': video.paused,
+        'Buffer à Frente': getBufferAhead() + 's',
+        'Resolução': (video.videoWidth || 0) + 'x' + (video.videoHeight || 0),
+        'Estado de Rede': ['EMPTY (0)', 'IDLE (1)', 'LOADING (2)', 'NO_SOURCE (3)'][video.networkState] || video.networkState,
+        'Ready State': ['HAVE_NOTHING (0)', 'HAVE_METADATA (1)', 'HAVE_CURRENT_DATA (2)', 'HAVE_FUTURE_DATA (3)', 'HAVE_ENOUGH_DATA (4)'][video.readyState] || video.readyState,
+        'Engasgos Detectados': totalStalls,
+        'Tempo Total Travado': +(totalStallDuration).toFixed(2) + 's',
+        'Perda de Quadros': q ? (q.droppedFrames + ' drops / ' + q.totalFrames + ' frames total (' + (q.totalFrames ? ((q.droppedFrames / q.totalFrames) * 100).toFixed(2) : 0) + '%)') : 'N/A',
+        'URL da Fonte CDN': video.currentSrc || video.src
+      };
+      console.log('%c[NixPlay Telemetria] 📊 RELATÓRIO DO STREAMING', 'background:#1e293b;color:#38bdf8;font-weight:bold;padding:4px 8px;border-radius:4px;');
+      console.table(stats);
+      return stats;
+    };
   </script>
 </body>
 </html>`;

@@ -349,6 +349,234 @@ const router = Router();
               art.on("timeupdate", sendStatus);
               art.on("video:ended", notifyEnded);
 
+              // ===== TELEMETRIA MIXDROP (somente F12) =====
+              // Rastreia travamentos, tela preta e quedas do stream. Comando manual:
+              // mixdropStats() (contexto do iframe) ou nixplayStats() (contexto top).
+              (function initMixdropTelemetry() {
+                var TAG = "%c[MixDrop Telemetria]";
+                var TAG_CSS = "background:#e50914;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px;";
+                var startedAt = Date.now();
+                var timeline = [];
+                var totalStalls = 0;
+                var totalStallSec = 0;
+                var stallStart = 0;
+                var lastCmdAt = 0;
+                var ERR_NAMES = { 1: "ABORTED (cancelado)", 2: "NETWORK (rede/stream caiu)", 3: "DECODE (falha de decodificacao)", 4: "SRC_NOT_SUPPORTED (fonte invalida)" };
+
+                function vid() { return art.video || document.querySelector("video"); }
+
+                function bufAhead(v) {
+                  try {
+                    var cur = v.currentTime || 0;
+                    for (var i = 0; i < v.buffered.length; i++) {
+                      if (cur >= v.buffered.start(i) && cur <= v.buffered.end(i)) {
+                        return +(v.buffered.end(i) - cur).toFixed(2);
+                      }
+                    }
+                  } catch (e) {}
+                  return 0;
+                }
+
+                function quality(v) {
+                  if (v && typeof v.getVideoPlaybackQuality === "function") {
+                    try {
+                      var q = v.getVideoPlaybackQuality();
+                      return { totalFrames: q.totalVideoFrames || 0, droppedFrames: q.droppedVideoFrames || 0, corruptedFrames: q.corruptedVideoFrames || 0 };
+                    } catch (e) {}
+                  }
+                  return null;
+                }
+
+                function push(kind, extra) {
+                  var v = vid();
+                  var e = {
+                    "t+": ((Date.now() - startedAt) / 1000).toFixed(1) + "s",
+                    evento: kind,
+                    pos: v ? +(v.currentTime || 0).toFixed(1) : 0,
+                    buffer: v ? bufAhead(v) : 0,
+                    ready: v ? v.readyState : -1,
+                    rede: v ? v.networkState : -1,
+                    pausado: v ? v.paused : null,
+                    info: extra || ""
+                  };
+                  timeline.push(e);
+                  if (timeline.length > 60) timeline.shift();
+                  return e;
+                }
+
+                function warn(kind, extra) {
+                  var e = push(kind, extra);
+                  console.warn(TAG + " " + kind + (extra ? " - " + extra : ""), TAG_CSS, e);
+                }
+
+                function dump() {
+                  console.groupCollapsed(TAG + " LINHA DO TEMPO (ultimos " + timeline.length + " eventos)", TAG_CSS);
+                  console.table(timeline);
+                  console.groupEnd();
+                }
+
+                function toParent(ev, extra) {
+                  try {
+                    var m = { type: "NIXPLAY_TELEMETRY_EVENT", event: ev };
+                    for (var k in extra) m[k] = extra[k];
+                    window.parent.postMessage(m, "*");
+                  } catch (e) {}
+                }
+
+                function stall(reason) {
+                  var v = vid();
+                  if (!v || v.paused || v.ended) return;
+                  var now = Date.now();
+                  if (!stallStart) { stallStart = now; totalStalls++; }
+                  push("stall", reason);
+                  toParent("stall", {
+                    reason: "MixDrop: " + reason,
+                    duration: +((now - stallStart) / 1000).toFixed(2),
+                    bufferAhead: bufAhead(v),
+                    currentTime: +(v.currentTime || 0).toFixed(1),
+                    src: v.currentSrc || v.src || "",
+                    quality: quality(v),
+                    totalStalls: totalStalls
+                  });
+                }
+
+                function recovered() {
+                  if (!stallStart) return;
+                  var d = +((Date.now() - stallStart) / 1000).toFixed(2);
+                  totalStallSec += d;
+                  stallStart = 0;
+                  var v = vid();
+                  push("recovered", d + "s");
+                  toParent("recovered", { stallDuration: d, bufferAhead: v ? bufAhead(v) : 0, currentTime: v ? +(v.currentTime || 0).toFixed(1) : 0 });
+                }
+
+                function stats() {
+                  var v = vid();
+                  if (!v) { console.warn(TAG + " video indisponivel", TAG_CSS); return null; }
+                  var q = quality(v);
+                  var s = {
+                    "Tempo Atual": +(v.currentTime || 0).toFixed(2) + "s",
+                    "Duracao": +(v.duration || 0).toFixed(2) + "s",
+                    "Pausado": v.paused,
+                    "Buffer a Frente": bufAhead(v) + "s",
+                    "Resolucao": (v.videoWidth || 0) + "x" + (v.videoHeight || 0),
+                    "Estado de Rede": ["EMPTY (0)", "IDLE (1)", "LOADING (2)", "NO_SOURCE (3)"][v.networkState] || v.networkState,
+                    "Ready State": v.readyState + " (4 = ok, 0-2 = sem dados para tocar)",
+                    "Erro da midia": v.error ? (ERR_NAMES[v.error.code] || v.error.code) : "nenhum",
+                    "Engasgos": totalStalls,
+                    "Tempo Total Travado": +totalStallSec.toFixed(2) + "s",
+                    "Quadros": q ? (q.droppedFrames + " drops / " + q.totalFrames + " total") : "N/A",
+                    "Aba visivel": document.visibilityState,
+                    "Fonte": v.currentSrc || v.src
+                  };
+                  console.log(TAG + " RELATORIO", TAG_CSS);
+                  console.table(s);
+                  dump();
+                  return s;
+                }
+                window.mixdropStats = stats;
+
+                // Marca comandos do usuario para distinguir pausa solicitada de pausa inesperada
+                window.addEventListener("message", function(e) {
+                  var d = e.data;
+                  if (!d || typeof d !== "object") return;
+                  if (d.type === "REQUEST_NIXPLAY_STATS") { stats(); return; }
+                  if (/^(PLAY|PAUSE|TOGGLE_PLAY|SEEK|SEEK_ABSOLUTE|SEEK_RELATIVE|seek|SKIP_INTRO)$/.test(String(d.type))) {
+                    lastCmdAt = Date.now();
+                  }
+                });
+
+                function attach() {
+                  var v = vid();
+                  if (!v || v._mdTelemetry) return;
+                  v._mdTelemetry = true;
+                  v.addEventListener("loadedmetadata", function() { push("metadata", "dur=" + Math.round(v.duration || 0) + "s " + v.videoWidth + "x" + v.videoHeight); });
+                  v.addEventListener("waiting", function() { stall("waiting (buffer esgotado)"); });
+                  v.addEventListener("stalled", function() { stall("stalled (proxy/CDN parou de enviar dados)"); });
+                  v.addEventListener("playing", function() { recovered(); });
+                  v.addEventListener("canplay", function() { recovered(); });
+                  v.addEventListener("play", function() { push("play"); });
+                  v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
+                  v.addEventListener("seeked", function() { push("seeked"); });
+                  v.addEventListener("abort", function() { push("abort", "carga cancelada"); });
+                  v.addEventListener("ended", function() { push("ended"); });
+                  v.addEventListener("emptied", function() { warn("EMPTIED", "elemento de video foi esvaziado/reiniciado"); });
+                  v.addEventListener("pause", function() {
+                    if (v.ended) return;
+                    if (Date.now() - lastCmdAt > 1500) {
+                      warn("PAUSA NAO SOLICITADA", "o navegador/player pausou sozinho (aba oculta, autoplay, erro?)");
+                    } else {
+                      push("pause", "solicitada");
+                    }
+                  });
+                  v.addEventListener("error", function() {
+                    var er = v.error;
+                    warn("ERRO DE MIDIA", "codigo=" + (er ? er.code : "?") + " " + (er ? (ERR_NAMES[er.code] || "") : "") + (er && er.message ? " | " + er.message : ""));
+                    dump();
+                  });
+                }
+                attach();
+                art.on("ready", attach);
+
+                document.addEventListener("visibilitychange", function() { push("aba", document.visibilityState); });
+                window.addEventListener("error", function(e) { warn("ERRO JS NO IFRAME", (e && e.message) || ""); });
+                window.addEventListener("unhandledrejection", function(e) { warn("PROMISE REJEITADA NO IFRAME", String(e && e.reason)); });
+                window.addEventListener("offline", function() { warn("NAVEGADOR OFFLINE"); });
+                window.addEventListener("online", function() { push("navegador voltou online"); });
+
+                // Vigia de congelamento (tempo parado) e de "audio andando sem quadros" (tela preta)
+                var lastT = 0;
+                var lastWall = Date.now();
+                var lastFrames = 0;
+                var frozenTicks = 0;
+                var noFrameTicks = 0;
+                var noFrameReported = false;
+                setInterval(function() {
+                  var v = vid();
+                  if (!v) return;
+                  var now = Date.now();
+                  var cur = v.currentTime || 0;
+                  var q = quality(v);
+                  if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                    lastT = cur;
+                    lastWall = now;
+                    frozenTicks = 0;
+                    noFrameTicks = 0;
+                    if (q) lastFrames = q.totalFrames;
+                    return;
+                  }
+                  var dt = cur - lastT;
+                  var wall = (now - lastWall) / 1000;
+                  lastT = cur;
+                  lastWall = now;
+
+                  if (wall >= 0.7 && dt < 0.05) {
+                    frozenTicks++;
+                    if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
+                  } else {
+                    if (frozenTicks >= 2) recovered();
+                    frozenTicks = 0;
+                  }
+
+                  if (q) {
+                    if (dt > 0.35 && q.totalFrames === lastFrames) {
+                      noFrameTicks++;
+                      if (noFrameTicks >= 3 && !noFrameReported) {
+                        noFrameReported = true;
+                        warn("VIDEO SEM QUADROS (tela preta/congelada com tempo andando)", "frames=" + q.totalFrames + " drops=" + q.droppedFrames);
+                        dump();
+                      }
+                    } else {
+                      if (noFrameReported && q.totalFrames > lastFrames) { noFrameReported = false; push("quadros voltaram"); }
+                      noFrameTicks = 0;
+                    }
+                    lastFrames = q.totalFrames;
+                  }
+                }, 1000);
+
+                console.log(TAG + " ativa. Digite mixdropStats() para o relatorio e a linha do tempo.", TAG_CSS);
+              })();
+
               var _playBlocked = false; // Flag pra evitar loop de retry
 
               // Overlay de play: quando navegador bloqueia autoplay, mostra botão grande.

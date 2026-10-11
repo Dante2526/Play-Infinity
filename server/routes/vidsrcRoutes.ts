@@ -492,13 +492,29 @@ window.addEventListener('message',function(e){
   var cmd=e.data;
   if(!cmd||!cmd.type)return;
   try{
-    if(cmd.type==='PLAY'||cmd.type==='play'){video.play();}
+    if(cmd.type==='PLAY'||cmd.type==='play'){video.play().catch(function(){});}
     else if(cmd.type==='PAUSE'||cmd.type==='pause'){video.pause();}
-    else if(cmd.type==='SEEK'&&typeof cmd.targetTime==='number'){seekPending=true;video.currentTime=cmd.targetTime;if(typeof hls!=='undefined'&&hls){hls.startLoad();}}
-    else if(cmd.type==='seek'&&typeof cmd.time==='number'){seekPending=true;video.currentTime=cmd.time;if(typeof hls!=='undefined'&&hls){hls.startLoad();}}
-    else if(cmd.type==='SET_VOLUME'&&typeof cmd.volume==='number'){video.volume=cmd.volume;video.muted=(cmd.volume===0);}
-    else if(cmd.type==='setMuted'){video.muted=!!cmd.muted;}
-    else if(cmd.type==='SKIP_INTRO'&&typeof cmd.seconds==='number'){video.currentTime+=cmd.seconds;}
+    else if(cmd.type==='TOGGLE_PLAY'||cmd.type==='togglePlay'){if(video.paused){video.play().catch(function(){});}else{video.pause();}}
+    else if(cmd.type==='SEEK'||cmd.type==='seek'||cmd.type==='SEEK_ABSOLUTE'||cmd.type==='SEEK_RELATIVE'){
+      var target=typeof cmd.time==='number'?cmd.time:cmd.targetTime;
+      if(typeof target!=='number'&&typeof cmd.seconds==='number'){target=(video.currentTime||0)+cmd.seconds;}
+      if(typeof target==='number'&&!isNaN(target)){
+        seekPending=true;
+        video.currentTime=Math.max(0,Math.min(target,(video.duration||99999)));
+        if(typeof hls!=='undefined'&&hls){hls.startLoad();}
+      }
+    }
+    else if(cmd.type==='SKIP_INTRO'){
+      var sec=Number(cmd.seconds)||85;
+      seekPending=true;
+      video.currentTime=Math.max(0,Math.min((video.currentTime||0)+sec,(video.duration||99999)-5));
+      if(typeof hls!=='undefined'&&hls){hls.startLoad();}
+    }
+    else if(cmd.type==='SET_PLAYBACK_RATE'||cmd.type==='setPlaybackRate'){
+      video.playbackRate=Number(cmd.rate)||1;
+    }
+    else if(cmd.type==='SET_VOLUME'&&typeof cmd.volume==='number'){video.volume=Math.max(0,Math.min(1,cmd.volume));video.muted=(cmd.volume===0);}
+    else if(cmd.type==='setMuted'||cmd.type==='SET_MUTED'){video.muted=!!cmd.muted;}
     sendStatus();
   }catch(err){}
 });

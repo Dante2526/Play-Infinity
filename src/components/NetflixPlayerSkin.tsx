@@ -540,6 +540,20 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
   }, [playerStatus.currentTime, playerStatus.duration, mediaId, tmdbId, imdbId, title, isSeries, season, episode, imageUrl, backdropUrl, posterUrl, quality, activeServerKey]);
 
+  // Expor comando de telemetria sob demanda no console principal F12
+  useEffect(() => {
+    (window as any).nixplayStats = () => {
+      if (iframeRef.current?.contentWindow) {
+        iframeRef.current.contentWindow.postMessage({ type: "REQUEST_NIXPLAY_STATS" }, "*");
+      } else {
+        console.warn("[NixPlay Telemetria] Iframe do player não está acessível no momento.");
+      }
+    };
+    return () => {
+      delete (window as any).nixplayStats;
+    };
+  }, [iframeRef]);
+
   // Envia comandos universais para o iframe (compatível com WatchPlayer, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
@@ -557,11 +571,25 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           } else if (command.type === "TOGGLE_PLAY") {
             iframeRef.current.contentWindow.postMessage({ type: "togglePlay" }, "*");
             iframeRef.current.contentWindow.postMessage({ action: "togglePlay" }, "*");
-          } else if (command.type === "SEEK_ABSOLUTE" || command.type === "SEEK") {
-            const t = typeof command.time === "number" ? command.time : command.targetTime;
-            iframeRef.current.contentWindow.postMessage({ type: "SEEK", targetTime: t }, "*");
-            iframeRef.current.contentWindow.postMessage({ type: "seek", time: t }, "*");
-            iframeRef.current.contentWindow.postMessage({ action: "seek", time: t }, "*");
+          } else if (
+            command.type === "SEEK_ABSOLUTE" ||
+            command.type === "SEEK" ||
+            command.type === "SEEK_RELATIVE"
+          ) {
+            const t =
+              typeof command.time === "number"
+                ? command.time
+                : typeof command.targetTime === "number"
+                ? command.targetTime
+                : typeof command.seconds === "number"
+                ? playerStatus.currentTime + command.seconds
+                : undefined;
+            if (typeof t === "number" && !isNaN(t)) {
+              iframeRef.current.contentWindow.postMessage({ type: "SEEK", targetTime: t }, "*");
+              iframeRef.current.contentWindow.postMessage({ type: "SEEK_ABSOLUTE", time: t }, "*");
+              iframeRef.current.contentWindow.postMessage({ type: "seek", time: t }, "*");
+              iframeRef.current.contentWindow.postMessage({ action: "seek", time: t }, "*");
+            }
           } else if (command.type === "SET_VOLUME") {
             iframeRef.current.contentWindow.postMessage({ type: "setVolume", volume: command.volume }, "*");
           } else if (command.type === "SET_MUTED") {
@@ -573,7 +601,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       }
       window.postMessage(command, "*");
     },
-    [iframeRef]
+    [iframeRef, playerStatus.currentTime]
   );
 
   // Escuta mensagens e atualiza o estado da Skin Netflix
@@ -586,6 +614,36 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       // avisa a skin para sugerir um clique do usuário (gesto confiável) que ativa o som.
       if (msgType === "WATCHPLAY_AUTOPLAY_MUTED") {
         setAutoplayMutedBanner(true);
+        return;
+      }
+
+      // Telemetria do NixPlay recebida no F12
+      if (msgType === "NIXPLAY_TELEMETRY_EVENT") {
+        if (e.data.event === "stall") {
+          console.group(
+            `%c[NixPlay Telemetria] ⚠️ ENGASGO/TRAVAMENTO DETECTADO (${e.data.reason})`,
+            "background:#e50914;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px;"
+          );
+          console.log(`⏱️ Posição: ${e.data.currentTime}s | Duração travado: ${e.data.duration}s`);
+          console.log(
+            `📦 Buffer à frente: ${e.data.bufferAhead}s ${
+              e.data.bufferAhead < 0.5 ? "🔴 (CRÍTICO / SECO)" : "🟡 (BAIXO)"
+            }`
+          );
+          if (e.data.quality) {
+            console.log(
+              `🎞️ Quadros perdidos: ${e.data.quality.droppedFrames} de ${e.data.quality.totalFrames}`
+            );
+          }
+          console.log(`🌐 Servidor CDN: ${e.data.src}`);
+          console.log(`📊 Total de engasgos nesta sessão: ${e.data.totalStalls}`);
+          console.groupEnd();
+        } else if (e.data.event === "recovered") {
+          console.log(
+            `%c[NixPlay Telemetria] ✅ Recuperado após ${e.data.stallDuration}s de travamento (Buffer agora: ${e.data.bufferAhead}s)`,
+            "color:#4ade80;font-weight:bold;"
+          );
+        }
         return;
       }
       if (
@@ -630,8 +688,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               // Durante o lock pós-seek, se o status do player já chegou no novo ponto ou avançou,
               // sincronizamos de imediato e liberamos o lock
               const hasReachedTarget =
-                Math.abs(incomingTime - lastSeekTargetRef.current) <= 0.8 ||
-                (lastSeekTargetRef.current > prev.currentTime && incomingTime >= lastSeekTargetRef.current - 0.3);
+                Math.abs(incomingTime - lastSeekTargetRef.current) <= 1.2 ||
+                (lastSeekTargetRef.current > prev.currentTime && incomingTime >= lastSeekTargetRef.current - 0.5) ||
+                (lastSeekTargetRef.current < prev.currentTime && incomingTime <= lastSeekTargetRef.current + 0.5);
 
               if (hasReachedTarget) {
                 updatedTime = incomingTime;
