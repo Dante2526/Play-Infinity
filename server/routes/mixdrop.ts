@@ -5,6 +5,54 @@ import { isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl } from "../ut
 
 const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string; title: string; expiresAt: number }>();
 
+async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.top"): Promise<{ videoUrl: string; posterUrl: string; title: string } | null> {
+  const embedUrl = `https://${host}/e/${fileId}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+  try {
+    const upstream = await fetch(embedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!upstream.ok) return null;
+
+    const html = await upstream.text();
+    const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+    if (!packerMatch) return null;
+
+    const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
+    const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+    if (!wurlMatch || !wurlMatch[1]) return null;
+
+    let videoUrl = wurlMatch[1];
+    if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+
+    const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
+    const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
+    let posterUrl = posterMatch && posterMatch[1] ? posterMatch[1] : "";
+    if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
+    let pageTitle = titleMatch && titleMatch[1] ? titleMatch[1].trim() : "Play Infinity • MixDrop Stream";
+
+    const result = { videoUrl, posterUrl, title: pageTitle };
+    mixdropMemoryCache.set(fileId, {
+      ...result,
+      expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutos (tokens do MixDrop expiram rapidamente)
+    });
+
+    return result;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return null;
+  }
+}
+
 const router = Router();
 
   router.get("/api/md-stream", async (req, res) => {
@@ -59,63 +107,13 @@ const router = Router();
         posterUrl = cached.posterUrl;
         pageTitle = cached.title || pageTitle;
       } else {
-        const embedUrl = `https://${host}/e/${fileId}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        try {
-          const upstream = await fetch(embedUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (!upstream.ok) {
-            return sendFallbackHtml(502, `MixDrop retornou status HTTP ${upstream.status}`);
-          }
-
-          const html = await upstream.text();
-          const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
-          if (!packerMatch) {
-            return sendFallbackHtml(502, "Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
-          }
-
-          const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
-          const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
-          const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
-          const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
-
-          if (!wurlMatch || !wurlMatch[1]) {
-            return sendFallbackHtml(502, "URL de vídeo não encontrada no player do MixDrop.");
-          }
-
-          videoUrl = wurlMatch[1];
-          if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
-
-          if (posterMatch && posterMatch[1]) {
-            posterUrl = posterMatch[1];
-            if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
-          }
-
-          if (titleMatch && titleMatch[1]) {
-            pageTitle = titleMatch[1].trim();
-          }
-
-          mixdropMemoryCache.set(fileId, {
-            videoUrl,
-            posterUrl,
-            title: pageTitle,
-            expiresAt: Date.now() + 4 * 60 * 60 * 1000,
-          });
-        } catch (fetchErr: any) {
-          clearTimeout(timeoutId);
-          console.error("[MixDrop Scraper Error]:", fetchErr);
-          return sendFallbackHtml(502, "Tempo limite ou erro ao contatar servidor de mídia MixDrop.");
+        const fresh = await resolveFreshMixdropToken(fileId, host);
+        if (!fresh) {
+          return sendFallbackHtml(502, "Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
         }
+        videoUrl = fresh.videoUrl;
+        posterUrl = fresh.posterUrl;
+        pageTitle = fresh.title;
       }
 
       // Usa o PROXY — o token da CDN mxcontent.net é IP-locked (gerado pro IP do Render).
@@ -750,7 +748,7 @@ const router = Router();
   // Proxy de streaming direto do MixDrop com suporte a Range bytes (fallback resiliente)
   router.get("/api/md-proxy", async (req, res) => {
     try {
-      const videoUrl = String(req.query.url || "").trim();
+      let videoUrl = String(req.query.url || "").trim();
       if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
         return res.status(400).send("URL de vídeo inválida.");
       }
@@ -769,12 +767,30 @@ const router = Router();
         headers["Range"] = req.headers.range;
       }
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      let controller = new AbortController();
+      let timeoutId = setTimeout(() => controller.abort(), 15000);
       req.on("close", () => controller.abort());
 
-      const upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+      let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
       clearTimeout(timeoutId);
+
+      // Auto-Healer 403 Forbidden: se o token da CDN expirar, renova o token do fileId em tempo real
+      if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
+        const fileMatch = videoUrl.match(/\/v2\/([a-zA-Z0-9_-]+)\.mp4/) || videoUrl.match(/\/([a-zA-Z0-9_-]+)\.mp4/);
+        const fileId = fileMatch ? fileMatch[1] : "";
+        if (fileId) {
+          console.warn(`[MixDrop Proxy] Token CDN expirado (${upstream.status}) para fileId ${fileId}. Renovando token em tempo real...`);
+          mixdropMemoryCache.delete(fileId);
+          const fresh = await resolveFreshMixdropToken(fileId);
+          if (fresh && fresh.videoUrl) {
+            videoUrl = fresh.videoUrl;
+            controller = new AbortController();
+            timeoutId = setTimeout(() => controller.abort(), 15000);
+            upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+            clearTimeout(timeoutId);
+          }
+        }
+      }
 
       res.status(upstream.status);
 
