@@ -4,6 +4,7 @@ export interface EncontreiResult {
   mixdrop_vizer?: string | null;
   audio: string;
   server_name: string;
+  source?: string;
   season?: number;
   episode?: number;
 }
@@ -31,6 +32,7 @@ export async function findMovieByTmdbId(tmdbId: number, refresh: boolean = false
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
+      source: data.source || 'catálogo local',
     };
     _cache.set(cacheKey, result);
     return result;
@@ -53,6 +55,7 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
+      source: data.source || 'catálogo local',
       season: data.season, episode: data.episode,
     };
     _cache.set(cacheKey, result);

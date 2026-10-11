@@ -76,6 +76,15 @@ router.get("/api/nixplay-resolve", async (req, res) => {
       method: "GET",
       redirect: "manual",
       signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://nixplay.lat/",
+        "Origin": "https://nixplay.lat",
+        "Connection": "keep-alive",
+      },
     });
 
     clearTimeout(timeout);
@@ -195,7 +204,15 @@ router.get("/api/nixplay-episode-id", async (req, res) => {
       method: "GET",
       redirect: "manual",
       signal: resolveController.signal,
-      headers: { "User-Agent": "Mozilla/5.0" },
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://nixplay.lat/",
+        "Origin": "https://nixplay.lat",
+        "Connection": "keep-alive",
+      },
     });
     clearTimeout(resolveTimeout);
 
@@ -344,13 +361,22 @@ router.get("/api/native-player", async (req, res) => {
     var rawUrl = decodeURIComponent('${encodedUrl}');
     var needsResolve = rawUrl.indexOf('nixplay.lat') !== -1;
 
+    function applyNixProxy(url) {
+      if (!url) return url;
+      if (url.indexOf('/api/nixplay-proxy') !== -1) return url;
+      if (url.indexOf('http') === 0 && (url.indexOf('nixplay') !== -1 || url.indexOf('r2') !== -1 || url.indexOf('cloudflare') !== -1)) {
+        return '/api/nixplay-proxy?url=' + encodeURIComponent(url);
+      }
+      return url;
+    }
+
     if (needsResolve) {
-      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl, { signal: AbortSignal.timeout(15000) }))
+      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl))
         .then(function(r) { return r.json(); })
-        .then(function(data) { initVideo(data.url || rawUrl); })
-        .catch(function() { initVideo(rawUrl); });
+        .then(function(data) { initVideo(applyNixProxy(data.url || rawUrl)); })
+        .catch(function() { initVideo(applyNixProxy(rawUrl)); });
     } else {
-      initVideo(rawUrl);
+      initVideo(applyNixProxy(rawUrl));
     }
     window.addEventListener('message', function(e) {
                   if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
@@ -510,7 +536,7 @@ router.get("/api/native-player", async (req, res) => {
     var lastCheckWallTime = Date.now();
     var frozenTicks = 0;
     setInterval(function() {
-      if (!video || video.paused || video.ended || video.seeking || video.readyState < 2) {
+      if (!video || video.paused || video.ended || video.seeking) {
         lastCheckedTime = video ? video.currentTime : 0;
         lastCheckWallTime = Date.now();
         frozenTicks = 0;
@@ -575,6 +601,76 @@ router.get("/api/native-player", async (req, res) => {
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(html);
+});
+
+// Proxy de streaming seguro para Nixplay (evita quedas de conexão do Cloudflare R2 / Nixplay CDN)
+router.get("/api/nixplay-proxy", async (req, res) => {
+  try {
+    const targetUrl = String(req.query.url || "").trim();
+    if (!targetUrl) {
+      return res.status(400).send("URL de mídia inválida.");
+    }
+
+    const headers: Record<string, string> = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Referer": "https://nixplay.lat/",
+      "Origin": "https://nixplay.lat",
+      "Connection": "keep-alive",
+    };
+
+    if (req.headers.range) {
+      headers["Range"] = req.headers.range as string;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    req.on("close", () => controller.abort());
+
+    const upstream = await fetch(targetUrl, { signal: controller.signal, headers });
+    clearTimeout(timeoutId);
+
+    res.status(upstream.status);
+
+    for (const [key, value] of upstream.headers.entries()) {
+      const lk = key.toLowerCase();
+      if (lk === "content-length") continue;
+      if (["content-type", "content-range", "accept-ranges"].includes(lk)) {
+        res.setHeader(key, value);
+      }
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+
+    if (!upstream.body) {
+      return res.end();
+    }
+
+    const { Readable } = await import("stream");
+    // @ts-ignore
+    const source = Readable.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    source.pipe(res);
+
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+  } catch (err: any) {
+    if ((err as any)?.name === "AbortError") {
+      if (!res.headersSent) res.end();
+      return;
+    }
+    console.error("[nixplay-proxy] Erro:", err);
+    if (!res.headersSent) res.status(500).send("Erro no proxy do Nixplay");
+    else res.destroy();
+  }
 });
 
 // Endpoint de TESTE pra validar Cloudflare Worker

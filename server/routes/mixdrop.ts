@@ -537,7 +537,7 @@ const router = Router();
                   var now = Date.now();
                   var cur = v.currentTime || 0;
                   var q = quality(v);
-                  if (v.paused || v.ended || v.seeking || v.readyState < 2) {
+                  if (v.paused || v.ended || v.seeking) {
                     lastT = cur;
                     lastWall = now;
                     frozenTicks = 0;
@@ -756,7 +756,13 @@ const router = Router();
       }
 
       const headers: Record<string, string> = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://mxdrop.top/",
+        "Origin": "https://mxdrop.top",
+        "Connection": "keep-alive",
       };
 
       if (req.headers.range) {
@@ -933,7 +939,13 @@ const router = Router();
 
       // Headers de request pro upstream (CDN mxcontent.net) — inclui Range se veio do cliente
       const upstreamHeaders: Record<string, string> = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://mxdrop.top/",
+        "Origin": "https://mxdrop.top",
+        "Connection": "keep-alive",
       };
       if (req.headers.range) {
         upstreamHeaders["Range"] = req.headers.range as string;

@@ -268,6 +268,15 @@ export function VideoPlayerModal({
         const result = res?.mixdrop ?? null;
         const vizerResult = res?.mixdrop_vizer ?? null;
         const encontreiResult = res?.mixdrop_encontrei ?? null;
+        const srcLabel = (res?.source || "catálogo local").toUpperCase();
+
+        if (result) {
+          console.log(
+            `%c[MixDrop Rastreio] 🔎 Origem: ${srcLabel} | fileId: ${result} ${lookupMode === "tv" ? `(S${s}E${e})` : ""}`,
+            "background:#0284c7;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"
+          );
+        }
+
         setMixdropFileIds(prev => ({ ...prev, [key]: result }));
         setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
         setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
