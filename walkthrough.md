@@ -1,3 +1,32 @@
+## 11/10/2026 - Ajuste do Timeout do Watchdog do WatchPlayer para 17s
+
+**Alteração Realizada (`src/components/VideoPlayerModal.tsx`):**
+- O watchdog de segurança que monitora o início da reprodução foi atualizado para conceder **17 segundos** de tolerância quando o player ativo for o WatchPlayer (`selectedServerKey === 'srv_watchplay'` ou URL contendo `watchplay`), mantendo 10 segundos para outros servidores. Isso dá tempo suficiente para o WatchPlayer responder a handshake e bufferização antes de disparar o fallback silencioso automático.
+
+**Validação:**
+- `npx tsc --noEmit`: 0 erros.
+- `compile_applet` e `lint_applet`: Aprovados.
+
+---
+
+## 11/10/2026 - Rastreio MixDrop: Encontrei.me como Origem e Eliminação do Falso Fallback
+
+**Problema relatado:** Mesmo após recarregar com Ctrl+Shift+R, o console exibia `[MixDrop Rastreio] 🔎 Origem: VIZER | fileId: 4dngnomncd0rq7 (S1E3)` em vez do Encontrei.me. Além disso, no momento da inicialização ocorria `MixDrop com URL fabricada detectado -> Scraper não encontrou fileId real. Iniciando pelo próximo servidor...`, forçando o modal a tentar o WatchPlayer, esperar 10 segundos até o timeout e só então voltar ao MixDrop via fallback.
+
+**Causas Raiz Identificadas:**
+1. **Ausência da injeção do patch nos índices do Encontrei (`server/routes/encontreiLookup.ts`):** `applyCatalogPatches()` injetava os episódios de Carrie (288673) apenas em `_vizerEpisodeIndex`. Como `_encontreiEpisodeIndex` não continha as entradas e `ENCONTREI_COOKIE` não estava configurado no ambiente, o backend sempre selecionava o Vizer como melhor fonte (`bestSource = "vizer"`).
+2. **Corrida e descarte de requisição inflight no frontend (`src/components/VideoPlayerModal.tsx`):** `mixdropLookupInflightRef` usava um `Set<string>`. Quando o `useEffect` disparava a resolução de episódio e `setupInitialServer` chamava `lookupMixdropFileId` simultaneamente, a segunda chamada encontrava a chave no `Set` e retornava `null` imediatamente. Isso fazia o `setupInitialServer` acreditar falsamente que o fileId não existia ("Scraper não encontrou fileId real") e trocar o servidor para WatchPlayer, perdendo 10s no timeout.
+
+**Alterações Realizadas:**
+- `server/routes/encontreiLookup.ts`: `applyCatalogPatches()` agora injeta simultaneamente em `_encontreiEpisodeIndex`, `_encontreiSeriesSeasonsIndex` e `_encontreiMovieIndex` com `source: "encontrei"`. Como o resolvedor prioriza o Encontrei quando ambos estão disponíveis, o endpoint `/api/encontrei-lookup` retorna `source: "encontrei"` e `mixdrop_encontrei`.
+- `src/components/VideoPlayerModal.tsx`: `mixdropLookupInflightRef` agora armazena um `Map<string, Promise<string | null>>`. Chamadas simultâneas aguardam a mesma Promise já em andamento, recebendo o fileId real imediatamente sem cair em `null` nem disparar fallback falso para WatchPlayer.
+
+**Validação:**
+- `npx tsc --noEmit`: 0 erros.
+- `compile_applet` e `lint_applet`: Compilação e linting aprovados com sucesso.
+
+---
+
 ## 11/10/2026 - Telemetria do MixDrop no F12 (tela preta no meio da reprodução)
 
 **Problema relatado:** assistindo Carrie S1E2 no MixDrop, a tela piscou e ficou preta **durante a reprodução**. O print do console não tinha nenhum log de recarga (`Recarregando iframe...`) nem de fallback (`demorou mais de 10s`) — causa ainda NÃO confirmada.

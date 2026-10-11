@@ -1253,6 +1253,12 @@ function applyCatalogPatches() {
     if (movie.tmdb_id && !_vizerMovieIndex.has(movie.tmdb_id)) {
       _vizerMovieIndex.set(movie.tmdb_id, movie);
     }
+    if (movie.tmdb_id && !_encontreiMovieIndex.has(movie.tmdb_id)) {
+      _encontreiMovieIndex.set(movie.tmdb_id, {
+        ...movie,
+        source: "encontrei",
+      });
+    }
   }
   for (const ep of VIZER_CATALOG_PATCH.episodes) {
     if (!ep.tmdb_id || !ep.serie_id || !ep.season || !ep.episode) continue;
@@ -1266,6 +1272,19 @@ function applyCatalogPatches() {
     const curSeasons = _vizerSeriesSeasonsIndex.get(ep.tmdb_id) || [];
     if (!curSeasons.includes(ep.season)) {
       _vizerSeriesSeasonsIndex.set(ep.tmdb_id, [...curSeasons, ep.season].sort((a, b) => a - b));
+    }
+    // Injeta também no índice Encontrei (prioridade máxima HD dublado)
+    const encEp = {
+      ...ep,
+      source: "encontrei",
+      source_url: `https://encontrei.me/episodios/online/carrie-a-estranha-${ep.season}x${ep.episode}-dublado-${ep.episode_id}/`,
+    };
+    if (!_encontreiEpisodeIndex.has(key)) {
+      _encontreiEpisodeIndex.set(key, encEp);
+    }
+    const curEncSeasons = _encontreiSeriesSeasonsIndex.get(ep.tmdb_id) || [];
+    if (!curEncSeasons.includes(ep.season)) {
+      _encontreiSeriesSeasonsIndex.set(ep.tmdb_id, [...curEncSeasons, ep.season].sort((a, b) => a - b));
     }
   }
 }

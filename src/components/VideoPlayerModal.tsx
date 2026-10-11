@@ -227,7 +227,7 @@ export function VideoPlayerModal({
   const mixdropVizerFileIdsRef = useRef(mixdropVizerFileIds);
   mixdropVizerFileIdsRef.current = mixdropVizerFileIds;
   const [mixdropEncontreiFileIds, setMixdropEncontreiFileIds] = useState<Record<string, string | null>>({});
-  const mixdropLookupInflightRef = useRef<Set<string>>(new Set());
+  const mixdropLookupInflightRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const mixdropFileId = useMemo(() => {
     const lookupId = effectiveMovieId || tmdbId;
     if (!lookupId) return null;
@@ -259,33 +259,38 @@ export function VideoPlayerModal({
       const lookupMode = mediaType === "series" && !resolvedAsMovie ? "tv" : "movie";
       const key = lookupMode === "tv" ? `tv:${lookupId}:${s}:${e}` : `movie:${lookupId}`;
       if (!refresh && key in mixdropFileIdsRef.current) return mixdropFileIdsRef.current[key];
-      if (mixdropLookupInflightRef.current.has(key)) return null;
-      mixdropLookupInflightRef.current.add(key);
-      try {
-        const res = lookupMode === "tv"
-          ? await findEpisode(lookupId, s, e, refresh, title || undefined)
-          : await findMovieByTmdbId(lookupId, refresh, title || undefined);
-        const result = res?.mixdrop ?? null;
-        const vizerResult = res?.mixdrop_vizer ?? null;
-        const encontreiResult = res?.mixdrop_encontrei ?? null;
-        const srcLabel = (res?.source || "catálogo local").toUpperCase();
-
-        if (result) {
-          console.log(
-            `%c[MixDrop Rastreio] 🔎 Origem: ${srcLabel} | fileId: ${result} ${lookupMode === "tv" ? `(S${s}E${e})` : ""}`,
-            "background:#0284c7;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"
-          );
-        }
-
-        setMixdropFileIds(prev => ({ ...prev, [key]: result }));
-        setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
-        setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
-        return result;
-      } catch {
-        return null;
-      } finally {
-        mixdropLookupInflightRef.current.delete(key);
+      if (mixdropLookupInflightRef.current.has(key)) {
+        return await mixdropLookupInflightRef.current.get(key)!;
       }
+      const inflightPromise = (async () => {
+        try {
+          const res = lookupMode === "tv"
+            ? await findEpisode(lookupId, s, e, refresh, title || undefined)
+            : await findMovieByTmdbId(lookupId, refresh, title || undefined);
+          const result = res?.mixdrop ?? null;
+          const vizerResult = res?.mixdrop_vizer ?? null;
+          const encontreiResult = res?.mixdrop_encontrei ?? null;
+          const srcLabel = (res?.source || "catálogo local").toUpperCase();
+
+          if (result) {
+            console.log(
+              `%c[MixDrop Rastreio] 🔎 Origem: ${srcLabel} | fileId: ${result} ${lookupMode === "tv" ? `(S${s}E${e})` : ""}`,
+              "background:#0284c7;color:#fff;font-weight:bold;padding:3px 8px;border-radius:4px;"
+            );
+          }
+
+          setMixdropFileIds(prev => ({ ...prev, [key]: result }));
+          setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
+          setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
+          return result;
+        } catch {
+          return null;
+        } finally {
+          mixdropLookupInflightRef.current.delete(key);
+        }
+      })();
+      mixdropLookupInflightRef.current.set(key, inflightPromise);
+      return await inflightPromise;
     },
     [tmdbId, mediaType, effectiveMovieId, resolvedAsMovie, title]
   );
@@ -1309,12 +1314,13 @@ export function VideoPlayerModal({
     }
   };
 
-  // Watchdog inteligente de segurança: se o player demorar mais de 25s sem iniciar,
+  // Watchdog inteligente de segurança: se o player demorar sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
+  // WatchPlayer configurado para 17s de tolerância.
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = 10000; // 10 segundos
+    const timeoutDuration = (selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay')) ? 17000 : 10000;
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
