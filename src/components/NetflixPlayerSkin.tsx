@@ -639,16 +639,26 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           console.log(`📊 Total de engasgos nesta sessão: ${e.data.totalStalls}`);
           console.groupEnd();
 
-          // Auto-Healer no nível da Skin: desativa travamentos persistentes
+          // Auto-Healer no nível da Skin: desativa e redireciona travamentos/buffer seco recorrentes
           const dur = Number(e.data.duration) || 0;
-          if (String(e.data.reason).includes("frame_freeze")) {
-            if (dur === 4 || dur === 8) {
+          const stalls = Number(e.data.totalStalls) || 0;
+          const buf = Number(e.data.bufferAhead) || 0;
+          const reasonStr = String(e.data.reason || "");
+
+          if (reasonStr.includes("frame_freeze")) {
+            if (dur === 3 || dur === 6) {
               console.log("%c[NetflixPlayerSkin] ⚡ Enviando comando de desengasgo (PLAY + SEEK +0.01s) para o iframe...", "color:#f59e0b;font-weight:bold;");
               sendCommand({ type: "SEEK_RELATIVE", seconds: 0.01 });
               sendCommand({ type: "PLAY" });
-            } else if (dur >= 10) {
-              console.warn("%c[NetflixPlayerSkin] 🚨 Travamento irrecuperável (>10s). Disparando comutação de emergência...", "color:#ef4444;font-weight:bold;");
+            } else if (dur >= 8) {
+              console.warn("%c[NetflixPlayerSkin] 🚨 Frame freeze irrecuperável (>8s). Disparando comutação de emergência...", "color:#ef4444;font-weight:bold;");
               window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
+            }
+          } else if (reasonStr.includes("waiting") || buf < 0.1) {
+            // Buffer esgotado / seco recorrente: se engasgou 3x ou ficou travado > 6s com buffer seco, comuta
+            if (stalls >= 3 || dur >= 6) {
+              console.warn(`%c[NetflixPlayerSkin] 🚨 Servidor com buffer seco recorrente (${stalls} engasgos, buffer: ${buf}s). Comutando para servidor mais rápido...`, "color:#ef4444;font-weight:bold;");
+              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "buffer_depleted_frequent_stalls" }, "*");
             }
           }
         } else if (e.data.event === "recovered") {
