@@ -1659,20 +1659,20 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       let bestSource = "";
 
       if (vizerEp && vizerEp.servers?.mixdrop && encontreiEp && encontreiEp.servers?.mixdrop) {
-        // Ambos têm o episódio no MixDrop. Priorizamos Dublado.
-        if (vizerEp.audio !== "Dublado" && encontreiEp.audio === "Dublado") {
+        // Ambos têm o episódio no MixDrop. Priorizamos encontrei.me (links HD de alta velocidade)
+        if (encontreiEp.audio === "Dublado" || vizerEp.audio !== "Dublado") {
           bestEp = encontreiEp;
           bestSource = "encontrei";
         } else {
           bestEp = vizerEp;
           bestSource = "vizer";
         }
-      } else if (vizerEp && vizerEp.servers?.mixdrop) {
-        bestEp = vizerEp;
-        bestSource = "vizer";
       } else if (encontreiEp && encontreiEp.servers?.mixdrop) {
         bestEp = encontreiEp;
         bestSource = "encontrei";
+      } else if (vizerEp && vizerEp.servers?.mixdrop) {
+        bestEp = vizerEp;
+        bestSource = "vizer";
       }
 
       if (bestEp) {
@@ -1718,20 +1718,20 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       let bestSource = "";
 
       if (vizerMovie && vizerMovie.servers?.mixdrop && encontreiMovie && encontreiMovie.servers?.mixdrop) {
-        // Ambos têm o filme no MixDrop. Priorizamos Dublado.
-        if (vizerMovie.audio !== "Dublado" && encontreiMovie.audio === "Dublado") {
+        // Ambos têm o filme no MixDrop. Priorizamos encontrei.me (links HD de alta velocidade)
+        if (encontreiMovie.audio === "Dublado" || vizerMovie.audio !== "Dublado") {
           bestMovie = encontreiMovie;
           bestSource = "encontrei";
         } else {
           bestMovie = vizerMovie;
           bestSource = "vizer";
         }
-      } else if (vizerMovie && vizerMovie.servers?.mixdrop) {
-        bestMovie = vizerMovie;
-        bestSource = "vizer";
       } else if (encontreiMovie && encontreiMovie.servers?.mixdrop) {
         bestMovie = encontreiMovie;
         bestSource = "encontrei";
+      } else if (vizerMovie && vizerMovie.servers?.mixdrop) {
+        bestMovie = vizerMovie;
+        bestSource = "vizer";
       }
 
       if (bestMovie) {
