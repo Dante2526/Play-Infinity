@@ -11,10 +11,27 @@
 const fs = require('fs');
 const path = require('path');
 
-const CATALOG_PATH = path.join(__dirname, '..', 'data', 'encontrei-catalog.json');
+const CATALOG_PATHS = [
+  path.join(__dirname, '..', 'data', 'encontrei-catalog.json'),
+  path.join(__dirname, '..', 'public', 'data', 'encontrei-catalog.json'),
+  path.join(__dirname, '..', 'dist', 'data', 'encontrei-catalog.json'),
+];
+
+let CATALOG_PATH = null;
+for (const p of CATALOG_PATHS) {
+  if (fs.existsSync(p)) {
+    CATALOG_PATH = p;
+    break;
+  }
+}
+if (!CATALOG_PATH) {
+  console.error('[extract-ids] ❌ encontrei-catalog.json não encontrado em nenhum dos paths:');
+  CATALOG_PATHS.forEach(p => console.error(`  - ${p}`));
+  process.exit(1);
+}
 const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'available-tmdb-ids.json');
 
-console.log('[extract-ids] Lendo encontrei-catalog.json...');
+console.log(`[extract-ids] Lendo ${CATALOG_PATH}...`);
 const raw = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
 
 // Coletar tmdb_ids únicos de movies e episodes
