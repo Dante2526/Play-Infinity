@@ -29,7 +29,10 @@ if (!CATALOG_PATH) {
   CATALOG_PATHS.forEach(p => console.error(`  - ${p}`));
   process.exit(1);
 }
-const OUTPUT_PATH = path.join(__dirname, '..', 'data', 'available-tmdb-ids.json');
+const OUTPUT_PATHS = [
+  path.join(__dirname, '..', 'data', 'available-tmdb-ids.json'),        // pro import no mediaUtils.ts
+  path.join(__dirname, '..', 'public', 'data', 'available-tmdb-ids.json'), // pro servidor estático (vite build copia pra dist/data/)
+];
 
 console.log(`[extract-ids] Lendo ${CATALOG_PATH}...`);
 const raw = JSON.parse(fs.readFileSync(CATALOG_PATH, 'utf8'));
@@ -72,9 +75,17 @@ const output = {
   ids: sortedIds,
 };
 
-fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output));
-const sizeKB = Math.round(fs.statSync(OUTPUT_PATH).size / 1024);
-console.log(`[extract-ids] ✅ Salvo em ${OUTPUT_PATH} (${sizeKB} KB)`);
+// Salva em ambos os caminhos
+for (const OUTPUT_PATH of OUTPUT_PATHS) {
+  // Cria diretório se não existir
+  const dir = require('path').dirname(OUTPUT_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(OUTPUT_PATH, JSON.stringify(output));
+  const sizeKB = Math.round(fs.statSync(OUTPUT_PATH).size / 1024);
+  console.log(`[extract-ids] ✅ Salvo em ${OUTPUT_PATH} (${sizeKB} KB)`);
+}
 console.log(`[extract-ids]    movies: ${moviesCount}`);
 console.log(`[extract-ids]    episodes: ${episodesCount}`);
 console.log(`[extract-ids]    series: ${seriesCount}`);
