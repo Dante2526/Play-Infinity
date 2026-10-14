@@ -224,12 +224,15 @@ process.on("uncaughtException", (err) => {
   });
 
   // Limite dedicado por IP para streaming de TV ao vivo (/api/live-stream-proxy)
-  // Permite até 360 requisições por minuto por IP (suficiente para zapping rápido e múltiplos chunks HLS,
-  // mas impede drenagem massiva de banda e uso abusivo por terceiros).
+  // e proxy de MP4 do MixDrop (/api/md-proxy).
+  // Permite até 600 requisições por minuto por IP (suficiente para zapping rápido,
+  // múltiplos chunks HLS e Range requests de MP4 do player de vídeo).
+  // Bug anterior: /api/md-proxy caía no apiLimiter (150 req/min) e o player
+  // estourava o limite em 1 minuto de playback → "waiting (buffer esgotado)".
   const liveStreamLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
-    max: 360,
-    message: "Limite de taxa para streaming ao vivo excedido. Aguarde um instante.",
+    max: 600,
+    message: "Limite de taxa para streaming excedido. Aguarde um instante.",
     standardHeaders: true,
     legacyHeaders: false,
   });
@@ -275,8 +278,15 @@ process.on("uncaughtException", (err) => {
   ];
 
   app.use("/api", (req, res, next) => {
-    // Rotas de proxy de vídeo/hls precisam de limite mais alto para suportar buffer rápido
-    if (req.path.startsWith("/live-stream-proxy") || req.path.startsWith("/anime/hls-proxy")) {
+    // Rotas de proxy de vídeo/MP4/HLS precisam de limite mais alto para suportar
+    // buffer rápido e múltiplas Range requests do player.
+    // Inclui:
+    //   /live-stream-proxy  → HLS chunks de TV ao vivo
+    //   /md-proxy           → MP4 Range requests do MixDrop (player faz 5-10/min)
+    //   /anime/hls-proxy    → HLS de anime
+    if (req.path.startsWith("/live-stream-proxy")
+        || req.path.startsWith("/md-proxy")
+        || req.path.startsWith("/anime/hls-proxy")) {
       return liveStreamLimiter(req, res, next);
     }
     
