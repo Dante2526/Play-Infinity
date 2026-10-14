@@ -1,3 +1,5 @@
+import availableTmdbIdsData from "../../data/available-tmdb-ids.json";
+
 export type CatalogItem = {
   id: number;
   tmdbId?: number;
@@ -19,6 +21,17 @@ export type CatalogItem = {
   isAnime?: boolean;
   isDorama?: boolean;
 };
+
+// Set O(1) de todos os tmdb_ids disponíveis no catálogo encontrei (movies + episodes).
+// Carregado uma única vez no module load a partir de data/available-tmdb-ids.json (61KB).
+// Gerado por scripts/extract-available-tmdb-ids.cjs (roda antes do vite build).
+// Se o arquivo estiver vazio/ausente, availableTmdbIds.size === 0 e o filtro
+// deixa tudo passar (comportamento antigo, degradação graciosa).
+const availableTmdbIds: Set<number> = new Set(
+  Array.isArray((availableTmdbIdsData as any)?.ids)
+    ? (availableTmdbIdsData as any).ids
+    : []
+);
 
 /** Verifica se um item possui qualidade CAM (gravação de cinema) */
 export function checkIsCam(title?: string, quality?: string): boolean {
@@ -96,6 +109,14 @@ export const isMediaAvailable = (item: { id?: number; tmdbId?: number; title?: s
   if (id && UNAVAILABLE_TITLES_OR_IDS.includes(id)) return false;
   const name = (item.title || item.name || "").toLowerCase();
   if (name.includes("doraemon")) return false;
+  // Filtro real por catálogo: se temos a lista de tmdb_ids disponíveis carregada
+  // (snapshot do encontrei-catalog.json), só deixa passar items que tenham
+  // servidor de vídeo pronto (mixdrop/streamtape/doodstream).
+  // Se a lista estiver vazia (arquivo não gerado / primeiro load), deixa tudo
+  // passar pra não quebrar o app (degradação graciosa).
+  if (availableTmdbIds.size > 0 && id && !availableTmdbIds.has(id)) {
+    return false;
+  }
   return true;
 };
 
