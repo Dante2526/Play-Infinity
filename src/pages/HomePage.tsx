@@ -38,7 +38,7 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs } from "../data";;
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe, checkLiveAvailability, quickAvailabilityCheck } from "../utils/mediaUtils";;
 import { 
   searchMulti, 
   getDetails, 
@@ -317,45 +317,87 @@ export function HomePage({
 
         if (pool.length > 0 && isMounted) {
           const seen = new Set<number>();
-          const validTrending = pool
-            .filter((item: TMDBItem) => {
-              if (!item.id || seen.has(item.id)) return false;
-              seen.add(item.id);
-              return (
-                item.backdrop_path &&
-                item.backdrop_path.trim() !== "" &&
-                (item.title || item.name) &&
-                item.overview &&
-                item.overview.trim().length > 15 &&
-                isMediaAvailable({ id: item.id, title: item.title || item.name })
-              );
-            })
-            .slice(0, 7)
-            .map((item: TMDBItem) => {
-              const rawTitle = (item.title || item.name || "").trim();
+          // 1. Filtra por validade básica (sem checar disponibilidade ainda)
+          const validItems = pool.filter((item: TMDBItem) => {
+            if (!item.id || seen.has(item.id)) return false;
+            seen.add(item.id);
+            return (
+              item.backdrop_path &&
+              item.backdrop_path.trim() !== "" &&
+              (item.title || item.name) &&
+              item.overview &&
+              item.overview.trim().length > 15
+            );
+          });
+
+          // 2. Particiona usando quickAvailabilityCheck (síncrono, sem rede)
+          //    - 'available': tá no snapshot → definitivamente entra
+          //    - 'unavailable': tá na blacklist → definitivamente NÃO entra
+          //    - 'unknown': não tá no snapshot → precisa check live
+          const definitelyAvailable: TMDBItem[] = [];
+          const needsLiveCheck: TMDBItem[] = [];
+          for (const item of validItems) {
+            const status = quickAvailabilityCheck({ id: item.id, title: item.title || item.name });
+            if (status === 'available') {
+              definitelyAvailable.push(item);
+            } else if (status === 'unknown') {
+              needsLiveCheck.push(item);
+            }
+            // 'unavailable' é descartado
+          }
+
+          // 3. Check live em paralelo pra até 8 items não-no-snapshot
+          //    (limite pra não estressar API do encontrei + rate limit 600 req/min)
+          //    Carrie a Estranha (TMDB 288673), séries novas pós-snapshot, etc.
+          const itemsToCheck = needsLiveCheck.slice(0, 8);
+          const liveResults = await Promise.all(
+            itemsToCheck.map(async (item): Promise<TMDBItem | null> => {
               const isSeries = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
-              const year = (item.release_date || item.first_air_date || "").substring(0, 4) || new Date().getFullYear().toString();
-              const genres = getGenreNames(item.genre_ids || []);
-              
-              return {
-                id: item.id,
-                tmdbId: item.id,
-                title: rawTitle.toUpperCase(),
-                type: isSeries ? ('series' as const) : ('movie' as const),
-                year,
-                duration: isSeries ? "Série" : "Filme",
-                rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 4.8,
-                quality: checkIsCam(rawTitle) ? "CAM" : "HD",
-                genres: genres.length > 0 ? genres.slice(0, 3) : ["Em Alta", "Destaque"],
-                description: item.overview,
-                imageUrl: formatImageUrl(item.backdrop_path, 'original'),
-                posterUrl: formatImageUrl(item.poster_path, 'w500'),
-                logoText: rawTitle.toUpperCase(),
-                playerUrl: isSeries 
-                  ? `https://v1.watchplay.shop/tvshow/${item.id}/1/1`
-                  : `https://v1.watchplay.shop/movie/${item.id}`
-              };
-            });
+              try {
+                const available = await checkLiveAvailability(
+                  item.id,
+                  isSeries ? 'tv' : 'movie',
+                  1,
+                  1
+                );
+                return available ? item : null;
+              } catch {
+                return null;
+              }
+            })
+          );
+          const liveConfirmed = liveResults.filter((x): x is TMDBItem => x !== null);
+
+          // 4. Junta: definitivos do snapshot + confirmados via live check
+          //    Mantém ordem original (definitivos primeiro, depois live confirmed)
+          const finalItems = [...definitelyAvailable, ...liveConfirmed].slice(0, 7);
+
+          // 5. Mapeia pra formato do carrossel
+          const validTrending = finalItems.map((item: TMDBItem) => {
+            const rawTitle = (item.title || item.name || "").trim();
+            const isSeries = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
+            const year = (item.release_date || item.first_air_date || "").substring(0, 4) || new Date().getFullYear().toString();
+            const genres = getGenreNames(item.genre_ids || []);
+
+            return {
+              id: item.id,
+              tmdbId: item.id,
+              title: rawTitle.toUpperCase(),
+              type: isSeries ? ('series' as const) : ('movie' as const),
+              year,
+              duration: isSeries ? "Série" : "Filme",
+              rating: item.vote_average ? Number(item.vote_average.toFixed(1)) : 4.8,
+              quality: checkIsCam(rawTitle) ? "CAM" : "HD",
+              genres: genres.length > 0 ? genres.slice(0, 3) : ["Em Alta", "Destaque"],
+              description: item.overview,
+              imageUrl: formatImageUrl(item.backdrop_path, 'original'),
+              posterUrl: formatImageUrl(item.poster_path, 'w500'),
+              logoText: rawTitle.toUpperCase(),
+              playerUrl: isSeries
+                ? `https://v1.watchplay.shop/tvshow/${item.id}/1/1`
+                : `https://v1.watchplay.shop/movie/${item.id}`
+            };
+          });
 
           if (validTrending.length > 0) {
             setHeroItems(validTrending);
