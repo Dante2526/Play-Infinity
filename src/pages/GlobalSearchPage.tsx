@@ -167,8 +167,14 @@ export function GlobalSearchPage({
     const timeoutId = setTimeout(async () => {
       try {
         const queryLower = searchQuery.toLowerCase().trim();
-        const localMatches = allCatalogs.filter(item => 
-          item.title.toLowerCase().includes(queryLower) && isMediaAvailable(item)
+        // IMPORTANTE: NÃO filtrar por isMediaAvailable aqui.
+        // A sonda checkPlayableBatch abaixo faz a verificação real (chama
+        // /api/check-playable-batch que checa WatchPlayer/VIP/MixDrop/Nixplay).
+        // Filtrar aqui remove items novos (não no snapshot de 22/09/2026)
+        // como Carrie a Estranha (TMDB 288673, estreou 07/10/2026) mesmo
+        // estando disponível via MixDrop no encontrei.me.
+        const localMatches = allCatalogs.filter(item =>
+          item.title.toLowerCase().includes(queryLower)
         );
 
         const response = await searchMulti(searchQuery);
@@ -177,7 +183,7 @@ export function GlobalSearchPage({
         if (response && response.results) {
           const rawMediaResults = response.results.filter(r => {
             const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
-            return isMedia && Boolean(r.title || r.name) && isMediaAvailable({ id: r.id, title: r.title || r.name });
+            return isMedia && Boolean(r.title || r.name);
           });
 
           const formatted: CatalogItem[] = rawMediaResults
@@ -256,8 +262,11 @@ export function GlobalSearchPage({
   }, [searchQuery, allCatalogs]);
 
   // Filtrar resultados por tipo (Todos, Filmes, Séries)
+  // IMPORTANTE: NÃO aplicar isMediaAvailable aqui — a sonda checkPlayableBatch
+  // já validou os items em tmdbResults (linha 232). Aplicar de novo removeria
+  // items novos que não estão no snapshot (ex: Carrie, séries recém-estreadas).
   const displayedResults = React.useMemo(() => {
-    let list = tmdbResults.filter(isMediaAvailable);
+    let list = tmdbResults;
     if (activeFilter === 'movie') return list.filter(i => i.type === 'movie');
     if (activeFilter === 'tv') return list.filter(i => i.type === 'series');
     return list;
