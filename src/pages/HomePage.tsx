@@ -144,7 +144,32 @@ export function HomePage({
   onNavigateToLiveTv?: () => void,
   onNavigateToSagas?: () => void
 }) {
-  const [heroItems, setHeroItems] = useState<any[]>(featuredCarousel);
+  // Persistir último trending carregado no localStorage (TTL 24h).
+  // Assim, ao reabrir o site, o carrossel já mostra os últimos destaques
+  // (em vez dos 4 hardcoded em data.ts) antes do fetchTopTrending completar.
+  const HERO_CACHE_KEY = "playinfinity_hero_trending_v1";
+  const HERO_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
+
+  const loadCachedHero = (): any[] => {
+    try {
+      const cached = localStorage.getItem(HERO_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (
+          parsed &&
+          Array.isArray(parsed.items) &&
+          parsed.items.length > 0 &&
+          typeof parsed.timestamp === "number" &&
+          Date.now() - parsed.timestamp < HERO_CACHE_TTL
+        ) {
+          return parsed.items;
+        }
+      }
+    } catch {}
+    return featuredCarousel;
+  };
+
+  const [heroItems, setHeroItems] = useState<any[]>(loadCachedHero);
   const [heroIndex, setHeroIndex] = useState<number>(0);
   const heroItem = heroItems[heroIndex] || featuredCarousel[0];
 
@@ -401,6 +426,18 @@ export function HomePage({
 
           if (validTrending.length > 0) {
             setHeroItems(validTrending);
+            // Salva trending no localStorage pra próxima abertura do site
+            // mostrar os últimos destaques imediatamente (sem flash dos
+            // 4 hardcoded em data.ts). TTL 24h.
+            try {
+              localStorage.setItem(
+                HERO_CACHE_KEY,
+                JSON.stringify({
+                  timestamp: Date.now(),
+                  items: validTrending,
+                })
+              );
+            } catch {}
           }
         }
       } catch (err) {
