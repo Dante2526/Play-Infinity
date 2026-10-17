@@ -146,7 +146,12 @@ export function HomePage({
 }) {
   // Persistir último trending carregado no localStorage (TTL 24h).
   // Assim, ao reabrir o site, o carrossel já mostra os últimos destaques
-  // (em vez dos 4 hardcoded em data.ts) antes do fetchTopTrending completar.
+  // (em vez de 4 itens hardcoded em data.ts) antes do fetchTopTrending completar.
+  //
+  // OPÇÃO 1 (implementada): removido o fallback hardcoded em featuredCarousel.
+  // Agora heroItems inicializa como [] (vazio) e mostra SKELETON loading
+  // enquanto fetchTopTrending não completa. UX mais limpa e profissional.
+  // Segunda visita usa o cache do localStorage (instantâneo).
   const HERO_CACHE_KEY = "playinfinity_hero_trending_v1";
   const HERO_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 horas
 
@@ -166,12 +171,15 @@ export function HomePage({
         }
       }
     } catch {}
-    return featuredCarousel;
+    return []; // sem cache = array vazio (mostra skeleton)
   };
 
   const [heroItems, setHeroItems] = useState<any[]>(loadCachedHero);
   const [heroIndex, setHeroIndex] = useState<number>(0);
-  const heroItem = heroItems[heroIndex] || featuredCarousel[0];
+  // Se heroItems está vazio (primeira visita / cache expirou), heroItem é null
+  // e o render abaixo mostra o skeleton em vez de itens hardcoded.
+  const heroItem = heroItems[heroIndex] || null;
+  const isHeroLoading = heroItems.length === 0;
 
   // Gestos touch e drag no Banner Destaque Principal
   const heroTouchStartXRef = useRef(0);
@@ -644,17 +652,59 @@ export function HomePage({
   return (
     <>
       {/* FEATURED / HERO SECTION */}
-      <section 
+      <section
         onTouchStart={handleHeroTouchStart}
         onTouchMove={handleHeroTouchMove}
         onTouchEnd={handleHeroTouchEnd}
         className="relative w-full min-h-[85vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end flex-shrink-0 select-none group/hero touch-pan-y"
       >
+        {isHeroLoading ? (
+          // ─── SKELETON LOADING ───
+          // Mostra placeholder animado enquanto fetchTopTrending não completa
+          // (primeira visita do user ou após 24h sem abrir). Substitui os 4
+          // itens hardcoded em data.ts (Homem-Aranha/Deadpool/Casa Dragão/Fallout).
+          <div className="absolute inset-0 bg-[#0a0a0a] animate-pulse">
+            {/* Placeholder do backdrop */}
+            <div className="absolute inset-0 bg-gradient-to-b from-neutral-900 via-neutral-950 to-[#0a0a0a]" />
+            {/* Placeholder do conteúdo */}
+            <div className="relative z-10 w-full flex flex-col justify-end flex-1 px-6 md:px-20 pt-28 sm:pt-32 md:pt-36 pb-8 md:pb-12">
+              <div className="mt-auto flex flex-col items-center md:items-start text-center md:text-left">
+                {/* Placeholder do título */}
+                <div className="h-10 sm:h-12 md:h-16 w-3/4 max-w-md rounded-lg bg-white/10 mb-3" />
+                <div className="h-8 sm:h-10 md:h-12 w-1/2 max-w-sm rounded-lg bg-white/10 mb-5" />
+                {/* Placeholder dos meta details */}
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-4 w-12 rounded bg-white/10" />
+                  <div className="h-4 w-10 rounded bg-white/10" />
+                  <div className="h-4 w-16 rounded bg-white/10" />
+                </div>
+                {/* Placeholder dos genres */}
+                <div className="flex items-center gap-2 mb-5">
+                  <div className="h-6 w-20 rounded-md bg-white/10" />
+                  <div className="h-6 w-24 rounded-md bg-white/10" />
+                  <div className="h-6 w-16 rounded-md bg-white/10" />
+                </div>
+                {/* Placeholder da descrição */}
+                <div className="w-full md:max-w-2xl space-y-2 mb-6">
+                  <div className="h-4 w-full rounded bg-white/10" />
+                  <div className="h-4 w-11/12 rounded bg-white/10" />
+                  <div className="h-4 w-9/12 rounded bg-white/10" />
+                </div>
+                {/* Placeholder dos botões */}
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-32 rounded-lg bg-orange-600/30" />
+                  <div className="h-12 w-24 rounded-lg bg-white/10" />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+        <>
         {/* Background Image with smooth transition */}
         <div
-          key={heroItem.id}
+          key={heroItem!.id}
           className="absolute inset-0 bg-cover bg-[center_top] md:bg-top bg-no-repeat transition-all duration-700 ease-out"
-          style={{ backgroundImage: `url(${heroItem.imageUrl})` }}
+          style={{ backgroundImage: `url(${heroItem!.imageUrl})` }}
         ></div>
         {/* Gradients to blend with background */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/40 pointer-events-none"></div>
@@ -691,7 +741,7 @@ export function HomePage({
             </h1>
 
             {/* Tag de Imagem de Cinema (CAM) */}
-            {checkIsCam(heroItem.title, heroItem.quality) && (
+            {checkIsCam(heroItem?.title, heroItem?.quality) && (
               <div className="mb-3 flex items-center">
                 <span className="px-3 py-1 bg-amber-500/25 text-amber-300 border border-amber-500/50 rounded-full text-xs font-black uppercase tracking-wider flex items-center gap-1.5 shadow-[0_0_15px_rgba(245,158,11,0.3)]">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -702,11 +752,11 @@ export function HomePage({
 
             {/* Meta details */}
             <div className="flex items-center gap-2 sm:gap-3 text-xs sm:text-sm md:text-base font-medium text-neutral-300 mb-3 flex-wrap justify-center md:justify-start">
-              <span>{heroItem.year}</span>
+              <span>{heroItem?.year}</span>
               <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
               <div className="flex items-center gap-[2px]">
                 <Tv className="w-4 h-4 mr-1 opacity-70" />
-                <span>{heroItem.duration}</span>
+                <span>{heroItem?.duration}</span>
               </div>
               <span className="w-1 h-1 rounded-full bg-neutral-600"></span>
               <div className="flex text-orange-500">
@@ -729,7 +779,7 @@ export function HomePage({
 
             {/* Description */}
             <p className="text-sm md:text-base lg:text-lg text-neutral-300 max-w-[90%] md:max-w-2xl leading-relaxed mb-6 md:mb-8 line-clamp-4 md:line-clamp-none">
-              {heroItem.description}
+              {heroItem?.description}
             </p>
 
             {/* Actions & Carousel Indicators */}
@@ -740,30 +790,30 @@ export function HomePage({
                   role="button"
                   data-tv-primary="true"
                   onClick={() => onPlay?.(
-                    heroItem.title, 
-                    heroItem.playerUrl || (heroItem.type === 'series' ? `https://v1.watchplay.shop/tvshow/${heroItem.id}/1/1` : `https://v1.watchplay.shop/movie/${heroItem.id}`),
-                    heroItem.type || 'movie',
-                    heroItem.id,
-                    heroItem.imdbId,
+                    heroItem?.title, 
+                    heroItem?.playerUrl || (heroItem?.type === 'series' ? `https://v1.watchplay.shop/tvshow/${heroItem?.id}/1/1` : `https://v1.watchplay.shop/movie/${heroItem?.id}`),
+                    heroItem?.type || 'movie',
+                    heroItem?.id,
+                    heroItem?.imdbId,
                     1,
                     1,
-                    heroItem.quality,
-                    checkIsCam(heroItem.title, heroItem.quality),
+                    heroItem?.quality,
+                    checkIsCam(heroItem?.title, heroItem?.quality),
                     undefined,
                     false,
-                    heroItem.imageUrl,
-                    heroItem.imageUrl,
-                    heroItem.posterUrl
+                    heroItem?.imageUrl,
+                    heroItem?.imageUrl,
+                    heroItem?.posterUrl
                   )}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 md:py-4 px-5 sm:px-8 rounded-xl transition-all shadow-[0_0_20px_rgba(234,88,12,0.4)] hover:shadow-[0_0_30px_rgba(234,88,12,0.6)] cursor-pointer text-sm md:text-base whitespace-nowrap active:scale-95"
                 >
                   <Play className="w-5 h-5 fill-current shrink-0" />
-                  <span>{heroItem.type === 'series' ? 'Assistir Série' : 'Assistir Filme'}</span>
+                  <span>{heroItem?.type === 'series' ? 'Assistir Série' : 'Assistir Filme'}</span>
                 </button>
                 <button 
                   tabIndex={0}
                   role="button"
-                  onClick={() => onItemClick(heroItem.id, heroItem)}
+                  onClick={() => onItemClick(heroItem?.id || 0, heroItem)}
                   className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-neutral-800/80 hover:bg-neutral-700 backdrop-blur-md text-white font-semibold py-3 md:py-4 px-5 sm:px-8 rounded-xl transition-all border border-neutral-700 cursor-pointer text-sm md:text-base whitespace-nowrap active:scale-95"
                 >
                   <Info className="w-5 h-5 shrink-0" />
@@ -793,6 +843,8 @@ export function HomePage({
             </div>
           </div>
         </div>
+        </>
+        )}
       </section>
 
       {/* STRIPES / CONTENT ZONES */}
