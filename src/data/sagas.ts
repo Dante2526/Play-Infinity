@@ -374,5 +374,39 @@ export const sagas: Saga[] = [
       2454,
       10140
     ]
+  },
+  {
+    "id": "james-bond-007-cole-o",
+    "title": "James Bond 007",
+    "description": "A saga completa do agente secreto mais famoso do cinema. 26 filmes de 007, do clássico Dr. No (1962) ao No Time to Die (2021). Acompanhe Sean Connery, George Lazenby, Roger Moore, Timothy Dalton, Pierce Brosnan e Daniel Craig no papel do agente 007 a serviço de Sua Majestade.",
+    "backdrop_path": "/fIWsCpYR9iGDMSbMTSAzy8L7Kg5.jpg",
+    "movies": [
+      574,
+      585,
+      590,
+      595,
+      605,
+      607,
+      612,
+      617,
+      628,
+      636,
+      646,
+      651,
+      660,
+      666,
+      671,
+      675,
+      681,
+      710,
+      715,
+      722,
+      733,
+      10758,
+      10819,
+      10914,
+      11023,
+      605662
+    ]
   }
 ];
