@@ -273,7 +273,8 @@ process.on("uncaughtException", (err) => {
     "/bolodechocolate",
     "/stream-proxy",
     
-    "/vidsrc",
+    "/vidsrc-stream",
+    "/vidsrc-player",
     "/nixplay"
   ];
 
@@ -284,9 +285,13 @@ process.on("uncaughtException", (err) => {
     //   /live-stream-proxy  → HLS chunks de TV ao vivo
     //   /md-proxy           → MP4 Range requests do MixDrop (player faz 5-10/min)
     //   /anime/hls-proxy    → HLS de anime
-    if (req.path.startsWith("/live-stream-proxy")
-        || req.path.startsWith("/md-proxy")
-        || req.path.startsWith("/anime/hls-proxy")) {
+    //   /vidsrc-proxy       → HLS chunks de Seriesflix HD
+    if (
+      req.path.startsWith("/live-stream-proxy") ||
+      req.path.startsWith("/anime/hls-proxy") ||
+      req.path.startsWith("/md-proxy") ||
+      req.path.startsWith("/vidsrc-proxy")
+    ) {
       return liveStreamLimiter(req, res, next);
     }
     

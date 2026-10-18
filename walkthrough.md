@@ -1,3 +1,25 @@
+## 17/10/2026 - Otimização Estrutural dos 4 Gargalos de Reprodução VOD (Filmes e Séries)
+
+**Contexto e Diagnóstico via Graphify:**
+Análise da arquitetura de streaming revelou 4 pontos de atrito responsáveis por congelamentos, tela preta e atrasos:
+1. **Rate Limit Restritivo em Proxies de Mídia (`server.ts`):** O `/api/md-proxy` (MixDrop) e `/api/vidsrc-proxy` (Seriesflix HD) estavam submetidos ao `apiLimiter` (150 req/min) ou `scraperLimiter` (30 req/min), estrangulando requisições com múltiplos `Range` ou seeks frequentes e causando tela preta súbita.
+2. **Recarga Dupla do Iframe no MixDrop (`encontreiCatalog.ts`):** `buildMixdropStreamUrl` anexava `&cb=Date.now()`. Quando o modal resolvia o `fileId`, o `useEffect` detectava URL diferente e forçava uma segunda recarga do iframe.
+3. **Alocação Excessiva de RAM no Seriesflix HD (`vidsrcRoutes.ts`):** O proxy de segmentos HLS executava `await upstream.arrayBuffer()`, enchendo a RAM da VPS, e mantinha `content-length` que podia gerar `ERR_CONTENT_LENGTH_MISMATCH`.
+4. **Latência de Abertura no Nixplay Séries (`nixplayRoutes.ts`):** `/api/nixplay-check` disparava fetch síncrono externo a cada checagem em vez de consultar o `nixplayEpisodeCache` em memória.
+
+**Alterações Realizadas:**
+- `server.ts`: Rotas `/api/md-proxy` e `/api/vidsrc-proxy` movidas para o `liveStreamLimiter` (360 req/min). `scraperLimiter` refinado para focar estritamente em `/vidsrc-stream` e `/vidsrc-player`.
+- `src/services/encontreiCatalog.ts`: Removido `&cb=Date.now()` do `buildMixdropStreamUrl`. URLs agora são determinísticas por `fileId`.
+- `server/routes/vidsrcRoutes.ts`: Substituído `arrayBuffer()` por `Readable.fromWeb().pipe(res)` com propagação de erros e aborts. Header `content-length` removido.
+- `server/routes/nixplayRoutes.ts`: Implementada checagem antecipada no `nixplayEpisodeCache.get(resolvedId)` antes de bater na API externa, com timeout reduzido de 15s para 5s.
+
+**Validação:**
+- Teste automatizado de ponta a ponta (`scratch/test-vod-bottlenecks.mjs`): 4/4 PASS.
+- AST Tree-Sitter via Graphify: 0 erros de sintaxe nos 4 arquivos alterados.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 11/10/2026 - Ajuste do Timeout do Watchdog do WatchPlayer para 17s
 
 **Alteração Realizada (`src/components/VideoPlayerModal.tsx`):**

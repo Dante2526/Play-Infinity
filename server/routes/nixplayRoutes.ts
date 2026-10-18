@@ -21,12 +21,18 @@ router.get("/api/nixplay-check", async (req, res) => {
     const seriesName = name ? String(name) : undefined;
     const resolvedId = resolveNixplaySeriesId(String(tmdb_id), seriesName);
     if (resolvedId) {
+      // Reutiliza cache em memória se já existir
+      const cachedEp = nixplayEpisodeCache.get(resolvedId);
+      if (cachedEp && (Date.now() - cachedEp.fetchedAt < NIXPLAY_CACHE_TTL)) {
+        return res.json({ available: true, seriesId: resolvedId, totalEpisodes: cachedEp.episodes.length });
+      }
+
       // Busca o total de episódios do Nixplay (pra override do TMDB quando Nixplay tem mais)
       let totalEpisodes = 0;
       try {
         const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${resolvedId}`;
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
+        const timeout = setTimeout(() => controller.abort(), 5000);
         const response = await fetch(infoUrl, { signal: controller.signal });
         clearTimeout(timeout);
         if (response.ok) {

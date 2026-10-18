@@ -303,8 +303,8 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
       res.setHeader(k, v);
     }
 
-    // Pass through content headers
-    for (const h of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+    // Pass through content headers (sem content-length para evitar ERR_CONTENT_LENGTH_MISMATCH em cortes de conexão)
+    for (const h of ["content-type", "content-range", "accept-ranges"]) {
       const val = upstream.headers.get(h);
       if (val) res.setHeader(h, val);
     }
@@ -322,13 +322,29 @@ router.get("/api/vidsrc-proxy", async (req, res) => {
       return res.send(rewritten);
     }
 
-    // Senão: segmento binário — proxy bytes
+    // Senão: segmento binário — proxy streaming direto sem alocar todo o arquivo na RAM da VPS
+    res.status(upstream.status);
     res.setHeader("Cache-Control", "public, max-age=3600");
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (buf.length > 0 && buf[0] === 0x47) {
+    if (!upstream.headers.get("content-type")) {
       res.setHeader("Content-Type", "video/mp2t");
     }
-    return res.send(buf);
+    if (!upstream.body) {
+      return res.end();
+    }
+    const { Readable } = await import("stream");
+    const source = Readable.fromWeb(upstream.body as any);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    req.on("close", () => controller.abort());
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+    return source.pipe(res);
   } catch (err: any) {
     console.error("[vidsrc-proxy] Error:", err.message);
     return res.status(502).json({ error: err.message });
