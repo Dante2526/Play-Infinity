@@ -1,3 +1,23 @@
+## 18/10/2026 - Auditoria e Correção Integral do Painel Administrativo (4 Bugs Corrigidos)
+
+**Contexto e Diagnóstico via Graphify:**
+Auditoria completa das 6 abas e rotas do Painel Administrativo (`AdminPage.tsx`, `ServerBlocksAdmin.tsx`, `AdminHealthMonitor.tsx`, `EncontreiCookieAlert.tsx`, `AdminBugReports.tsx`, `AdminPushNotifications.tsx`, `AdminDeployMonitor.tsx`, `adminOps.ts`, `serverBlocks.ts` e `requireAdminAuth.ts`) revelou 4 bugs funcionais:
+1. **Notas e Descontos dos Clientes Ausentes na Lista (`src/pages/AdminPage.tsx`):** `handleSaveEdit` gravava `notes`, `fixedDiscount` e `oneTimeDiscount` no Firestore, mas `loadStats` omitia esses campos no `list.push()`, impedindo a exibição do botão `"Notas"` e zerando os campos ao abrir o modal de edição.
+2. **Sobrescrita Indevida do Token Admin na Aba Bloqueios (`src/components/ServerBlocksAdmin.tsx`):** O componente sobrescrevia manualmente `"x-admin-token"` com `getAdminToken()` (que lia `uid` ou e-mail do `sessionStorage`), substituindo o JWT válido do Firebase (`idToken`) injetado automaticamente pelo `adminFetch`.
+3. **Ausência da Flag `isAdmin` no `sessionStorage` (`src/pages/AdminPage.tsx`):** `App.tsx` checava `sessionStorage.getItem("isAdmin") === "true"` para proteger a sessão do administrador, mas `AdminPage.tsx` nunca gravava nem limpava essa chave.
+4. **Alerta/Badge de Cookie Encontrei Invisíveis no Topo e Duplicação no Health-Check (`src/pages/AdminPage.tsx` e `server/routes/adminOps.ts`):** `EncontreiCookieBadge` e `EncontreiCookieAlert` estavam importados em `AdminPage.tsx` sem serem renderizados no cabeçalho/topo, e `adminOps.ts` testava `vizer.reisen` duas vezes seguidas (`staticTargets` + `checkVizer()`).
+
+**Alterações Realizadas:**
+- `src/pages/AdminPage.tsx`: Populados `notes`, `fixedDiscount` e `oneTimeDiscount` em `loadStats`; sincronizado `sessionStorage` (`isAdmin = "true"` no login/checkAuth e `removeItem("isAdmin")` no logout); renderizados `<EncontreiCookieBadge />` no cabeçalho e `<EncontreiCookieAlert />` acima das abas (quando fora da aba Saúde).
+- `src/components/ServerBlocksAdmin.tsx`: Removida `getAdminToken()` e as sobrescritas manuais de `"x-admin-token"`, delegando 100% da autenticação JWT ao `adminFetch`.
+- `server/routes/adminOps.ts`: Removida a entrada duplicada de `vizer.reisen` em `staticTargets`, mantendo `checkVizer()`.
+
+**Validação:**
+- Teste automatizado TDD (`scratch/test-admin-panel.mjs`): 5/5 PASS.
+- Verificação TypeScript (`npx tsc --noEmit`) sem erros de código nos arquivos modificados e sincronização do grafo (`graphify update .`).
+
+---
+
 ## 18/10/2026 - Otimização de Performance Geral do App (5 Gargalos Eliminados via Graphify)
 
 **Contexto e Diagnóstico via Graphify:**

@@ -254,7 +254,6 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   };
 
   const staticTargets = [
-    { name: "Catálogo Vizer (novo domínio)", url: "https://www.vizer.reisen", type: "html" },
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html" },
     { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },

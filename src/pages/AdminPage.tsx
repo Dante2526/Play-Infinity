@@ -52,10 +52,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           if (user && user.email && adminEmails.includes(user.email)) {
             sessionStorage.setItem("adminEmail", user.email);
             sessionStorage.setItem("adminSessionToken", user.uid);
+            sessionStorage.setItem("isAdmin", "true");
             setIsAdmin(true);
           } else {
             sessionStorage.removeItem("adminSessionToken");
             sessionStorage.removeItem("adminEmail");
+            sessionStorage.removeItem("isAdmin");
             setIsAdmin(false);
           }
           setIsCheckingAuth(false);
@@ -63,6 +65,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       } catch (err) {
         sessionStorage.removeItem("adminSessionToken");
         sessionStorage.removeItem("adminEmail");
+        sessionStorage.removeItem("isAdmin");
         setIsAdmin(false);
         setIsCheckingAuth(false);
       }
@@ -148,6 +151,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         setIsAdmin(true);
         sessionStorage.setItem("adminSessionToken", userCredential.user.uid);
         sessionStorage.setItem("adminEmail", userCredential.user.email);
+        sessionStorage.setItem("isAdmin", "true");
       } else {
         await auth.signOut();
         setError("Acesso negado. Este e-mail não possui privilégios de administrador.");
@@ -258,7 +262,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
           expirationDate: data.dataExpiracao || data.expirationDate,
           initialPassword: data.senha || data.senhaInicial || data.initialPassword,
           createdAt: data.criadoEm || data.createdAt,
-          lastActive: data.ultimoAcesso || data.lastActive
+          lastActive: data.ultimoAcesso || data.lastActive,
+          notes: data.notes || "",
+          fixedDiscount: Number(data.fixedDiscount) || 0,
+          oneTimeDiscount: Number(data.oneTimeDiscount) || 0
         });
       });
 
@@ -847,10 +854,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <EncontreiCookieBadge />
             <button 
               onClick={() => {
                 sessionStorage.removeItem("adminSessionToken");
                 sessionStorage.removeItem("adminEmail");
+                sessionStorage.removeItem("isAdmin");
                 setIsAdmin(false);
               }}
               className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"
@@ -860,6 +869,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </button>
           </div>
         </div>
+
+        {adminSection !== "health" && <EncontreiCookieAlert />}
 
         {/* Navegação entre Abas do Painel */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 w-full">

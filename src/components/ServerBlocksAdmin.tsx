@@ -131,15 +131,6 @@ export function ServerBlocksAdmin() {
   const [editingReasonText, setEditingReasonText] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState(false);
 
-  const getAdminToken = () => {
-    return (
-      sessionStorage.getItem("adminSessionToken") ||
-      sessionStorage.getItem("adminEmail") ||
-      auth?.currentUser?.email ||
-      ""
-    );
-  };
-
   const loadBlocks = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -295,7 +286,6 @@ export function ServerBlocksAdmin() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-token": getAdminToken(),
         },
         body: JSON.stringify({
           tmdbId: selectedMedia.id,
@@ -332,7 +322,6 @@ export function ServerBlocksAdmin() {
     try {
       const res = await adminFetch(`/api/admin/server-blocks/${encodeURIComponent(id)}`, {
         method: "DELETE",
-        headers: { "x-admin-token": getAdminToken() },
       });
       const data = await res.json();
       if (!res.ok || !data.success) {
@@ -365,7 +354,6 @@ export function ServerBlocksAdmin() {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-token": getAdminToken(),
         },
         body: JSON.stringify({ reason: editingReasonText.trim() }),
       });
