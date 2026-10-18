@@ -1825,6 +1825,14 @@ router.get("/api/encontrei-lookup", async (req, res) => {
   }
 });
 
+let _downloadsCatalogCache: {
+  movieItems: Array<{ tmdbId: number; type: "movie"; mixdrop: string; audio: string }>;
+  seriesItems: Array<{ tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>;
+  allItems: any[];
+  expiresAt: number;
+} | null = null;
+const DOWNLOADS_CATALOG_TTL = 10 * 60 * 1000; // 10 minutos
+
 router.get("/api/downloads-catalog", (req, res) => {
   try {
     loadCatalogs();
@@ -1833,10 +1841,11 @@ router.get("/api/downloads-catalog", (req, res) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
     const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
 
-    // Junta filmes dos DOIS catálogos (vizer + encontrei), dedup por tmdbId
-    const movieMap = new Map<number, { tmdbId: number; type: "movie"; mixdrop: string; audio: string }>();
-    
-    if (type === "all" || type === "movie") {
+    const now = Date.now();
+    if (!_downloadsCatalogCache || now >= _downloadsCatalogCache.expiresAt) {
+      // Junta filmes dos DOIS catálogos (vizer + encontrei), dedup por tmdbId
+      const movieMap = new Map<number, { tmdbId: number; type: "movie"; mixdrop: string; audio: string }>();
+
       // Vizer primeiro
       if (_vizerCatalog) {
         for (const m of _vizerCatalog.movies || []) {
@@ -1863,12 +1872,10 @@ router.get("/api/downloads-catalog", (req, res) => {
           }
         }
       }
-    }
 
-    // Junta séries dos DOIS catálogos, dedup por tmdbId
-    const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
-    
-    if (type === "all" || type === "tv" || type === "series") {
+      // Junta séries dos DOIS catálogos, dedup por tmdbId
+      const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
+
       // Vizer
       if (_vizerCatalog) {
         for (const ep of _vizerCatalog.episodes || []) {
@@ -1894,8 +1901,6 @@ router.get("/api/downloads-catalog", (req, res) => {
           if (ep.tmdb_id && ep.servers?.mixdrop) {
             const existing = seriesMap.get(ep.tmdb_id);
             if (existing) {
-              // Se já existe, só incrementa se a season/episode não tiver sido contada
-              // (pra não duplicar eps que existem nos dois catálogos)
               const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
               const inVizer = _vizerEpisodeIndex.has(key);
               if (!inVizer) {
@@ -1916,13 +1921,27 @@ router.get("/api/downloads-catalog", (req, res) => {
           }
         }
       }
+
+      const movieItems = Array.from(movieMap.values());
+      const seriesItems = Array.from(seriesMap.values());
+      _downloadsCatalogCache = {
+        movieItems,
+        seriesItems,
+        allItems: [...movieItems, ...seriesItems],
+        expiresAt: now + DOWNLOADS_CATALOG_TTL,
+      };
     }
 
-    const movieItems = Array.from(movieMap.values());
-    const seriesItems = Array.from(seriesMap.values());
-    const allItems = [...movieItems, ...seriesItems];
-    const total = allItems.length;
-    const paginated = allItems.slice(offset, offset + limit);
+    const { movieItems, seriesItems, allItems } = _downloadsCatalogCache;
+    const filteredItems =
+      type === "movie"
+        ? movieItems
+        : type === "tv" || type === "series"
+          ? seriesItems
+          : allItems;
+
+    const total = filteredItems.length;
+    const paginated = filteredItems.slice(offset, offset + limit);
 
     res.setHeader("Cache-Control", "public, max-age=1800");
     return res.json({

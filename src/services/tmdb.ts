@@ -158,50 +158,79 @@ const tvSeasonsCache: Record<string, Season[]> = readSeasonsCache();
 
 type TmdbFetchOutcome<T> = { ok: boolean; status: number; data: T | null };
 
+const _clientTmdbCache = new Map<string, { outcome: TmdbFetchOutcome<any>; expiresAt: number }>();
+const _clientTmdbInflight = new Map<string, Promise<TmdbFetchOutcome<any>>>();
+const CLIENT_TMDB_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
+
 /**
  * Requisição bruta à rota interna /api/tmdb (Express proxy seguro).
  * Devolve o status HTTP real (distingue 404 de timeout/erro de rede) e registra
  * a URL em todo warning — sem isso não dá pra saber qual recurso falhou no DevTools.
+ * Possui cache em memória (10 min) e deduplicação de chamadas concorrentes.
  */
 async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
-  try {
-    let controller: AbortController | null = null;
-    let timeoutId: any = null;
-    if (typeof AbortController !== 'undefined') {
-      controller = new AbortController();
-      timeoutId = setTimeout(() => {
-        try { controller?.abort(); } catch(e){console.warn("Silenced error:", e);}
-      }, 6000);
-    }
-
-    const fetchOptions: RequestInit = {
-      ...options,
-      ...(controller ? { signal: controller.signal } : {})
-    };
-
-    const res = await fetch(url, fetchOptions);
-    if (timeoutId) clearTimeout(timeoutId);
-
-    if (!res.ok) {
-      console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
-      return { ok: false, status: res.status, data: null };
-    }
-
-    const data = await res.json();
-    if (data && typeof data === "object") {
-      if (!("status_code" in data) || (data as any).status_code === 1) {
-        return { ok: true, status: res.status, data: data as T };
-      }
-    }
-    return { ok: false, status: res.status, data: null };
-  } catch (err: any) {
-    if (err?.name === 'AbortError') {
-      console.warn(`[TMDB Service] Requisição abortada por timeout de 6s (${url}). Ativando fallback instantâneo...`);
-    } else {
-      console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}) em ${url}. Ativando fallback...`);
-    }
-    return { ok: false, status: 0, data: null };
+  const now = Date.now();
+  const cached = _clientTmdbCache.get(url);
+  if (cached && now < cached.expiresAt) {
+    return cached.outcome as TmdbFetchOutcome<T>;
   }
+
+  const existingInflight = _clientTmdbInflight.get(url);
+  if (existingInflight) {
+    return existingInflight as Promise<TmdbFetchOutcome<T>>;
+  }
+
+  const requestPromise = (async (): Promise<TmdbFetchOutcome<T>> => {
+    try {
+      let controller: AbortController | null = null;
+      let timeoutId: any = null;
+      if (typeof AbortController !== 'undefined') {
+        controller = new AbortController();
+        timeoutId = setTimeout(() => {
+          try { controller?.abort(); } catch(e){console.warn("Silenced error:", e);}
+        }, 6000);
+      }
+
+      const fetchOptions: RequestInit = {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {})
+      };
+
+      const res = await fetch(url, fetchOptions);
+      if (timeoutId) clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
+        return { ok: false, status: res.status, data: null };
+      }
+
+      const data = await res.json();
+      if (data && typeof data === "object") {
+        if (!("status_code" in data) || (data as any).status_code === 1) {
+          const outcome: TmdbFetchOutcome<T> = { ok: true, status: res.status, data: data as T };
+          if (_clientTmdbCache.size > 300) {
+            const firstKey = _clientTmdbCache.keys().next().value;
+            if (firstKey) _clientTmdbCache.delete(firstKey);
+          }
+          _clientTmdbCache.set(url, { outcome, expiresAt: Date.now() + CLIENT_TMDB_CACHE_TTL });
+          return outcome;
+        }
+      }
+      return { ok: false, status: res.status, data: null };
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        console.warn(`[TMDB Service] Requisição abortada por timeout de 6s (${url}). Ativando fallback instantâneo...`);
+      } else {
+        console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}) em ${url}. Ativando fallback...`);
+      }
+      return { ok: false, status: 0, data: null };
+    } finally {
+      _clientTmdbInflight.delete(url);
+    }
+  })();
+
+  _clientTmdbInflight.set(url, requestPromise);
+  return requestPromise;
 }
 
 /**

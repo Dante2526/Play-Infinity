@@ -1,3 +1,27 @@
+## 18/10/2026 - Otimização de Performance Geral do App (5 Gargalos Eliminados via Graphify)
+
+**Contexto e Diagnóstico via Graphify:**
+Auditoria nos God Nodes do projeto (`DetailsPage`, `HomePage`, `fetchTmdbSafe`, `getAllCatalogItems`, `App`) identificou 5 gargalos de performance afetando o tempo de carregamento inicial, a navegação entre telas e o uso de CPU/rede:
+1. **Zero Cache no Proxy e Serviço TMDB (`server/routes/tmdbProxy.ts` e `src/services/tmdb.ts`):** O `tmdbCache` (LRU 15 min) já existia em `server/utils/caches.ts`, mas não estava conectado ao `/api/tmdb`. Além disso, `fetchTmdbRaw` no cliente não possuía cache em memória, refazendo ~10 chamadas sempre que o usuário voltava dos Detalhes para a Home.
+2. **`refresh=1` Forçado na Home (`src/utils/mediaUtils.ts`):** `checkLiveAvailability` enviava `refresh: '1'` por padrão, obrigando `/api/encontrei-lookup` a ignorar o cache em memória de 24h e os patches (`applyCatalogPatches`) e acionar scrapers externos.
+3. **Reconexão e Escrita no Firestore a Cada Troca de Tela (`src/App.tsx`):** `viewState.type` estava nas dependências dos `useEffect` do `onSnapshot` e do heartbeat `updatePresence`, causando reconexões e escritas (`updateDoc`) no Firestore a cada clique de navegação.
+4. **Loop Síncrono de ~105 mil Itens em `/api/downloads-catalog` (`server/routes/encontreiLookup.ts`):** A rota reconstruía os mapas iterando ~92 mil episódios e ~12 mil filmes na thread principal a cada requisição.
+5. **Busca Linear Repetida no Histórico (`src/pages/HomePage.tsx` e `src/services/favorites.ts`):** `formatHistoryItem` executava `.find()` linear em todo o catálogo para cada item do "Continue Assistindo".
+
+**Alterações Realizadas:**
+- `server/routes/tmdbProxy.ts`: Conectado `tmdbCache` (LRU 15 min) com `Cache-Control: public, max-age=900` e deduplicação de requisições concorrentes (`_tmdbProxyInflight`).
+- `src/services/tmdb.ts`: Adicionado `_clientTmdbCache` (TTL 10 min) e `_clientTmdbInflight` em `fetchTmdbRaw`.
+- `src/utils/mediaUtils.ts`: Removido `refresh: '1'` de `checkLiveAvailability`, permitindo uso imediato do cache de 24h da VPS.
+- `src/App.tsx`: Criado `viewStateTypeRef` e removido `viewState.type` das dependências dos `useEffect` do Firestore (`onSnapshot` e `updatePresence`).
+- `server/routes/encontreiLookup.ts`: Adicionado `_downloadsCatalogCache` (TTL 10 min) em `/api/downloads-catalog`.
+- `src/services/favorites.ts` & `src/pages/HomePage.tsx`: Criado e exportado `getCatalogByIdMap()` com complexidade $O(1)$ para consulta instantânea por ID/TMDB ID em `formatHistoryItem`.
+
+**Validação:**
+- Teste automatizado TDD (`scratch/test-app-performance.mjs`): 6/6 PASS.
+- Validação TypeScript (`npx tsc --noEmit`) e sincronização do grafo (`graphify update .`).
+
+---
+
 ## 17/10/2026 - Otimização Estrutural dos 4 Gargalos de Reprodução VOD (Filmes e Séries)
 
 **Contexto e Diagnóstico via Graphify:**

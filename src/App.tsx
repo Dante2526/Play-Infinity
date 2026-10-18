@@ -380,6 +380,9 @@ export default function App() {
   // (token expirado → regras veem request.auth == null e negam a leitura).
   const [userDocEpoch, setUserDocEpoch] = useState(0);
   const userDocRetriesRef = useRef(0);
+  const viewStateTypeRef = useRef(viewState.type);
+  viewStateTypeRef.current = viewState.type;
+
   useEffect(() => {
     userDocRetriesRef.current = 0;
   }, [currentUser]);
@@ -387,8 +390,6 @@ export default function App() {
   // Monitora a existência do usuário no Firestore em tempo real com proteção anti-falso-positivo para mobile
   useEffect(() => {
     if (!currentUser) return;
-    // Se o admin estiver visualizando o painel administrativo, não deslogar
-    if (sessionStorage.getItem("isAdmin") === "true" && viewState.type === 'admin') return;
 
     let isSubscribed = true;
     const userRef = doc(db, "usuarios", currentUser.uid);
@@ -398,6 +399,8 @@ export default function App() {
 
     const unsubscribeUserDoc = onSnapshot(userRef, { includeMetadataChanges: false }, async (snap) => {
       if (!isSubscribed) return;
+      // Se o admin estiver visualizando o painel administrativo, não deslogar
+      if (sessionStorage.getItem("isAdmin") === "true" && viewStateTypeRef.current === 'admin') return;
 
       // Se o dispositivo estiver offline, não tenta revogar
       if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -509,7 +512,7 @@ export default function App() {
       isSubscribed = false;
       unsubscribeUserDoc();
     };
-  }, [currentUser, viewState.type, userDocEpoch]);
+  }, [currentUser, userDocEpoch]);
 
   const userInitial = (userDisplayName || currentUser?.displayName || currentUser?.email || (isDevEnvironment ? 'DEV' : 'N')).trim().charAt(0).toUpperCase() || 'P';
 
@@ -522,11 +525,11 @@ export default function App() {
     if (currentUser.email && adminEmails.includes(currentUser.email)) {
       return;
     }
-    if (viewState.type === 'admin') {
-      return;
-    }
 
     const updatePresence = async () => {
+      if (viewStateTypeRef.current === 'admin') {
+        return;
+      }
       try {
         const userRef = doc(db, "usuarios", currentUser.uid);
         // Usa updateDoc para não recriar documento se ele tiver sido excluído
@@ -546,7 +549,7 @@ export default function App() {
     updatePresence();
     const interval = setInterval(updatePresence, 3 * 60000); // A cada 3 minutos
     return () => clearInterval(interval);
-  }, [currentUser, viewState.type]);
+  }, [currentUser]);
 
   // Carrega e atualiza a contagem de episódios novos das séries favoritas
   useEffect(() => {

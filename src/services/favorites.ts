@@ -31,6 +31,7 @@ const FAVORITES_STORAGE_KEY = "playinfinity_user_favorites";
 
 // Cache singleton para evitar reconstrução desnecessária do Map a cada verificação
 let cachedCatalogItems: CatalogItem[] | null = null;
+let cachedCatalogMap: Map<number, CatalogItem> | null = null;
 
 // Catálogo completo inicial para busca de itens por ID (Memoizado O(1))
 export const getAllCatalogItems = (): CatalogItem[] => {
@@ -82,7 +83,19 @@ export const getAllCatalogItems = (): CatalogItem[] => {
   });
 
   cachedCatalogItems = Array.from(map.values()).filter(isMediaAvailable);
+  cachedCatalogMap = new Map<number, CatalogItem>();
+  for (const item of cachedCatalogItems) {
+    cachedCatalogMap.set(item.id, item);
+    if (item.tmdbId) cachedCatalogMap.set(item.tmdbId, item);
+  }
   return cachedCatalogItems;
+};
+
+export const getCatalogByIdMap = (): Map<number, CatalogItem> => {
+  if (!cachedCatalogMap) {
+    getAllCatalogItems();
+  }
+  return cachedCatalogMap!;
 };
 
 // Inicialmente vazio para contas novas

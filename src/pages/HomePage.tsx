@@ -97,6 +97,7 @@ import {
   toggleFavorite,
   isItemFavorite,
   getAllCatalogItems,
+  getCatalogByIdMap,
   SERIES_EPISODE_SCHEDULE,
   getScheduleForFavorites
 } from "../services/favorites";
@@ -258,12 +259,14 @@ export function HomePage({
 
   // Função auxiliar para mapear itens do histórico garantindo a capa/backdrop real
   const formatHistoryItem = (item: PlaybackHistoryItem) => {
-    const catalog = getAllCatalogItems();
-    const catalogItem = catalog.find(c => 
-      (item.id && c.id === Number(item.id)) || 
-      (item.tmdbId && (c.tmdbId === Number(item.tmdbId) || c.id === Number(item.tmdbId))) || 
-      (item.title && c.title.trim().toLowerCase() === item.title.trim().toLowerCase())
-    );
+    const catalogMap = getCatalogByIdMap();
+    let catalogItem =
+      (item.id ? catalogMap.get(Number(item.id)) : undefined) ||
+      (item.tmdbId ? catalogMap.get(Number(item.tmdbId)) : undefined);
+    if (!catalogItem && item.title) {
+      const targetTitle = item.title.trim().toLowerCase();
+      catalogItem = getAllCatalogItems().find(c => c.title.trim().toLowerCase() === targetTitle);
+    }
     const isChair = (url?: string) => !url || url.includes("photo-1489599849927-2ee91cede3ba");
     const resolvedBackdrop = !isChair(item.backdropUrl) ? item.backdropUrl : (!isChair(catalogItem?.backdropUrl) ? catalogItem?.backdropUrl : undefined);
     const resolvedPoster = !isChair(item.imageUrl) ? item.imageUrl : (!isChair(item.posterUrl) ? item.posterUrl : (!isChair(catalogItem?.imageUrl) ? catalogItem?.imageUrl : catalogItem?.posterUrl));

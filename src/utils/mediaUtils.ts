@@ -199,7 +199,6 @@ export async function checkLiveAvailability(
       const params = new URLSearchParams({
         tmdb_id: String(tmdbId),
         type,
-        refresh: '1',
       });
       if (type === 'tv') {
         params.set('season', String(season || 1));
