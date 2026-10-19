@@ -227,6 +227,9 @@ export function VideoPlayerModal({
   const mixdropVizerFileIdsRef = useRef(mixdropVizerFileIds);
   mixdropVizerFileIdsRef.current = mixdropVizerFileIds;
   const [mixdropEncontreiFileIds, setMixdropEncontreiFileIds] = useState<Record<string, string | null>>({});
+  const [streamtapeFileIds, setStreamtapeFileIds] = useState<Record<string, string | null>>({});
+  const streamtapeFileIdsRef = useRef(streamtapeFileIds);
+  streamtapeFileIdsRef.current = streamtapeFileIds;
   const mixdropLookupInflightRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const mixdropFileId = useMemo(() => {
     const lookupId = effectiveMovieId || tmdbId;
@@ -249,6 +252,13 @@ export function VideoPlayerModal({
     return key in mixdropEncontreiFileIds ? mixdropEncontreiFileIds[key] : null;
   }, [mixdropEncontreiFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
 
+  const streamtapeFileId = useMemo(() => {
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!lookupId) return null;
+    const key = mediaType === "series" && !resolvedAsMovie ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
+    return key in streamtapeFileIds ? streamtapeFileIds[key] : null;
+  }, [streamtapeFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
+
   // Resolve (e cacheia no mapa) o fileId do MixDrop de um episódio específico.
   // Quando o card chegou marcado como série mas é um filme (resolvedAsMovie),
   // consulta o catálogo como filme usando o id correto (effectiveMovieId).
@@ -270,6 +280,7 @@ export function VideoPlayerModal({
           const result = res?.mixdrop ?? null;
           const vizerResult = res?.mixdrop_vizer ?? null;
           const encontreiResult = res?.mixdrop_encontrei ?? null;
+          const stapeResult = res?.streamtape ?? null;
           const srcLabel = (res?.source || "catálogo local").toUpperCase();
 
           if (result) {
@@ -282,6 +293,7 @@ export function VideoPlayerModal({
           setMixdropFileIds(prev => ({ ...prev, [key]: result }));
           setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
           setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
+          setStreamtapeFileIds(prev => ({ ...prev, [key]: stapeResult }));
           return result;
         } catch {
           return null;
@@ -357,7 +369,9 @@ export function VideoPlayerModal({
       activeLower.includes("/api/live-stream-proxy") ||
       activeLower.includes("/api/vidsrc-stream") ||
       activeLower.includes("/api/vidsrc-proxy") ||
-      activeLower.includes("/api/vidsrc-player");
+      activeLower.includes("/api/vidsrc-player") ||
+      activeLower.includes("/api/streamtape-proxy-iframe") ||
+      activeLower.includes("/api/streamtape-stream");
 
     return !isIntegrated;
   }, [activeIframeUrl, urlInput, selectedServerKey]);
@@ -1085,6 +1099,17 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
+        },
+        {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
         }
       ];
     } else {
@@ -1138,6 +1163,17 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
+        },
+        {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
         }
       ];
     }
@@ -1170,7 +1206,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
@@ -2799,7 +2835,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape';
 
                     if (skinSupported) {
                       // Mantém o isLoading = true (spinner girando na frente do player)

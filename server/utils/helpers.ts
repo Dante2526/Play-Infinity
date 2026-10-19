@@ -137,7 +137,15 @@ const ALLOWED_STREAMING_DOMAINS = [
   "mxcontent.net",
   "nixplay.lat",
   "nixplay.com",
-  "nixplay.net"
+  "nixplay.net",
+  "streamtape.com",
+  "tapecontent.net",
+  "strtape.tech",
+  "streamtape.net",
+  "streamtape.cc",
+  "streamtape.site",
+  "tapenation.com",
+  "tape.xxx"
 ];
 
 const ALLOWED_LIVE_STREAMING_DOMAINS = [

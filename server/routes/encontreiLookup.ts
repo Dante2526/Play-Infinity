@@ -388,10 +388,12 @@ export async function resolveVizerEpisode(
   if (!pData) return null;
   const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
 
-  // Extrai apenas mixdrop (streamtape/byse/doodstream foram removidos — só usamos mixdrop)
+  // Extrai mixdrop e streamtape
   const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
   const mixdrop = mMix ? mMix[1] : null;
-  if (!mixdrop) return null;
+  const streamtape = mStape ? mStape[1] : null;
+  if (!mixdrop && !streamtape) return null;
 
   const epObj = {
     episode_id: parseInt(vid, 10),
@@ -400,7 +402,7 @@ export async function resolveVizerEpisode(
     episode,
     tmdb_id: tmdbId,
     audio: pData.current_audio || "Dublado",
-    servers: { mixdrop },
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "" },
     source_url: target.url,
     _fetchedAt: Date.now()
   };
@@ -417,6 +419,7 @@ export async function resolveVizerEpisode(
 
   return {
     mixdrop,
+    streamtape,
     audio: epObj.audio,
     server_name: "MixDrop",
     season,
@@ -461,16 +464,18 @@ export async function resolveVizerMovie(tmdbId: number, name?: string) {
   if (!pData) return null;
   const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
 
-  // Extrai apenas mixdrop (streamtape/byse/doodstream removidos)
+  // Extrai mixdrop e streamtape
   const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
   const mixdrop = mMix ? mMix[1] : null;
-  if (!mixdrop) return null;
+  const streamtape = mStape ? mStape[1] : null;
+  if (!mixdrop && !streamtape) return null;
 
   const movieObj = {
     video_id: vizerMovieId,
     tmdb_id: tmdbId,
     audio: pData.current_audio || "Dublado",
-    servers: { mixdrop },
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "" },
     _fetchedAt: Date.now()
   };
 
@@ -479,6 +484,7 @@ export async function resolveVizerMovie(tmdbId: number, name?: string) {
 
   return {
     mixdrop,
+    streamtape,
     audio: movieObj.audio,
     server_name: "MixDrop",
     source: "vizer-live",
@@ -787,20 +793,26 @@ async function encontreiEpisodeId(
   }
 }
 
-/** Extrai SÓ mixdrop de um playerData JSON. Tenta servers_dub primeiro, depois servers_leg.
+/** Extrai mixdrop e streamtape de um playerData JSON. Tenta servers_dub primeiro, depois servers_leg.
  *  Áudio = "Dublado" se servers_dub tem conteúdo, senão "Legendado". */
-function pickMixdrop(d: any): { mixdrop: string; audio: "Dublado" | "Legendado" } | null {
+function pickMixdrop(d: any): { mixdrop: string; streamtape?: string | null; audio: "Dublado" | "Legendado" } | null {
   if (!d || typeof d !== "object") return null;
   const dubRaw = String(d.servers_dub || "");
   const legRaw = String(d.servers_leg || "");
   const dub = dubRaw.replace(/&amp;/g, "&");
   const leg = legRaw.replace(/&amp;/g, "&");
   const audio: "Dublado" | "Legendado" = dubRaw.length > 0 ? "Dublado" : "Legendado";
-  const RE = /(?:^|&)mixdrop=([^&]+)/i;
-  const mDub = dub.match(RE);
-  if (mDub) return { mixdrop: mDub[1], audio: "Dublado" };
-  const mLeg = leg.match(RE);
-  if (mLeg) return { mixdrop: mLeg[1], audio: "Legendado" };
+  const RE_MIX = /(?:^|&)mixdrop=([^&]+)/i;
+  const RE_STAPE = /(?:^|&)streamtape=([^&]+)/i;
+  const mDub = dub.match(RE_MIX);
+  const mDubStape = dub.match(RE_STAPE);
+  const mLeg = leg.match(RE_MIX);
+  const mLegStape = leg.match(RE_STAPE);
+  const streamtape = mDubStape?.[1] || mLegStape?.[1] || null;
+
+  if (mDub) return { mixdrop: mDub[1], streamtape, audio: "Dublado" };
+  if (mLeg) return { mixdrop: mLeg[1], streamtape, audio: "Legendado" };
+  if (streamtape) return { mixdrop: "", streamtape, audio };
   return null;
 }
 
@@ -1716,11 +1728,13 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       if (bestEp) {
         const mixdrop_encontrei = encontreiEp?.servers?.mixdrop || null;
         const mixdrop_vizer = vizerEp?.servers?.mixdrop || null;
+        const streamtape = bestEp.servers?.streamtape || encontreiEp?.servers?.streamtape || vizerEp?.servers?.streamtape || null;
 
         result = {
           mixdrop: bestEp.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
+          streamtape,
           audio: bestEp.audio || "Dublado",
           server_name: "MixDrop",
           season: bestEp.season,
@@ -1794,11 +1808,13 @@ router.get("/api/encontrei-lookup", async (req, res) => {
         // possa tentar o Vizer se o Encontrei falhar e vice-versa
         const mixdrop_encontrei = encontreiMovie?.servers?.mixdrop || null;
         const mixdrop_vizer = vizerMovie?.servers?.mixdrop || null;
+        const streamtape = bestMovie.servers?.streamtape || encontreiMovie?.servers?.streamtape || vizerMovie?.servers?.streamtape || null;
 
         result = {
           mixdrop: bestMovie.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
+          streamtape,
           audio: bestMovie.audio || "Dublado",
           server_name: "MixDrop",
           source: bestSource,

@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792377725.7198462,
-    "ast_hash": "63f2c7f60e0d8e1a28f975467e7b8ae4",
+    "mtime": 1792407867.9350107,
+    "ast_hash": "a355c9171a3ad7fcc49d23e899788299",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -185,8 +185,8 @@
     "semantic_hash": "ba199d81330d41efb7e9277dd777d2a2"
   },
   "server.ts": {
-    "mtime": 1792311709.988584,
-    "ast_hash": "51d2351ccd32f7eb4bbdcb8e595fda80",
+    "mtime": 1792407641.272558,
+    "ast_hash": "a341a3c21209e55b23773eb0daf894c3",
     "semantic_hash": ""
   },
   "server/firebaseAdmin.ts": {
@@ -225,8 +225,8 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1792312964.0485256,
-    "ast_hash": "dd560add8a1ae4d0cb6827f3c42c8a33",
+    "mtime": 1792407475.1999712,
+    "ast_hash": "cfe870e3d2e1efd1d608ae4b694b1bec",
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
@@ -300,9 +300,9 @@
     "semantic_hash": "cdd8bb88918f8ba2d41814d8db037c30"
   },
   "server/utils/helpers.ts": {
-    "mtime": 1791750128.0101235,
-    "ast_hash": "7bf465c72a729b7972f06605959c9617",
-    "semantic_hash": "7bf465c72a729b7972f06605959c9617"
+    "mtime": 1792407903.05459,
+    "ast_hash": "eb00065ef8be277ce84351606542060c",
+    "semantic_hash": ""
   },
   "setup-vps.sh": {
     "mtime": 1791027274.1827161,
@@ -405,8 +405,8 @@
     "semantic_hash": "78a13e12251b711b2f028de6ba0a037e"
   },
   "src/components/NetflixPlayerSkin.tsx": {
-    "mtime": 1792311650.38003,
-    "ast_hash": "f858ce6d4519110bd1c3452b7e388904",
+    "mtime": 1792407857.7661157,
+    "ast_hash": "45b256d8476a565a36db39a9683034b8",
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792311650.3830318,
-    "ast_hash": "37a823b8b254dff248fba0b05a985a7e",
+    "mtime": 1792407833.2329159,
+    "ast_hash": "272124304887ecf569b62d5967310e7e",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -570,8 +570,8 @@
     "semantic_hash": "f9144c46fcabf3eae7ab7657ab994574"
   },
   "src/services/encontreiCatalog.ts": {
-    "mtime": 1792311650.5450191,
-    "ast_hash": "2d927a58f88413269da3d4d0ae5c26ba",
+    "mtime": 1792407492.849074,
+    "ast_hash": "e07a12527b7de4d6c339f7e9f225ef0b",
     "semantic_hash": ""
   },
   "src/services/episodeAvailability.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792375865.5771768,
-    "ast_hash": "60d75cddb1c887b240b98f492715ed5b",
+    "mtime": 1792377782.7826705,
+    "ast_hash": "0b90f1d9b1fc0d5cfa7399b7ab14c578",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1142,6 +1142,11 @@
   "public/data/available-tmdb-ids.json": {
     "mtime": 1792311650.3590298,
     "ast_hash": "8c8299471b2a4b41265295001c61caac",
+    "semantic_hash": ""
+  },
+  "server/routes/streamtapeRoutes.ts": {
+    "mtime": 1792407553.8036506,
+    "ast_hash": "497ae0ff678f9c9f1e70a23bbc978cf5",
     "semantic_hash": ""
   }
 }
