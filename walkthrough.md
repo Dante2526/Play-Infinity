@@ -1,3 +1,34 @@
+## 19/10/2026 - Reordenação de Servidores: StreamTape 1º Primário, MixDrop 2º Fallback e Desativação do DoodStream da Cadeia Ativa
+
+**Contexto e Motivação:**
+Após diagnóstico em lote que evidenciou bloqueio do DoodStream pela Cloudflare (`HTTP 403` e `x-frame-options: SAMEORIGIN`), o reprodutor foi reorganizado conforme solicitação do usuário:
+1. **StreamTape HD** assume o posto de **1º servidor primário padrão** para filmes e séries (MP4 direto de alta performance, sem iframes externos).
+2. **MixDrop HD** assume o posto de **2º servidor de fallback imediato**.
+3. **DoodStream HD** foi **removido da cadeia de reprodução ativa** e do seletor da skin, evitando qualquer travamento ou tela branca (seu código e endpoints permanecem preservados no backend, e o status falso simulado foi desarmado com retorno de erro 502 imediato com `WATCHPLAY_ERROR`).
+4. **WatchPlayer Oficial** (3º) e **VIP Player** (4º) seguem como retaguarda.
+
+**Alterações Realizadas (4 arquivos):**
+1. **`src/components/VideoPlayerModal.tsx`:**
+   - Reordenado `servers`: `srv_streamtape` no topo (1º lugar), `srv_mixdrop` em 2º lugar (séries e filmes).
+   - Removido `srv_doodstream` da lista ativa de `servers`.
+   - `initialServerKey || "srv_streamtape"` e `targetServerKey = ... || "srv_streamtape"` como padrão de abertura.
+   - Atualizado `skinSupported` para remover `srv_doodstream`.
+2. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Reordenada a lista `displayAudioServers`: `StreamTape HD` 1º, `MixDrop HD` 2º, omitindo DoodStream do menu visual.
+3. **`server/routes/doodstreamRoutes.ts`:**
+   - Desarmado o loop de `setInterval` com status simulado no modo embed.
+   - Retorno imediato de HTTP 502 com postMessage `WATCHPLAY_ERROR` se chamado sem direct stream MP4.
+4. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `26` e `versionName` para `"1.3.4"`.
+
+**Validação:**
+- Teste TDD de Reordenação (`scratch/test-server-order.mjs`): 7/7 PASS.
+- Teste TDD StreamTape (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD MixDrop Buffer (`scratch/test-mixdrop-stability.mjs`): 5/5 PASS.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Integração do Servidor DoodStream HD (3º Fallback VOD, Busca Live e Escudo Anti-Popup)
 
 **Contexto e Motivação:**

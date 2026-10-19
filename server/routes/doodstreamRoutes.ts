@@ -451,60 +451,19 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req: Request, res: R
 </html>`);
     }
 
-    // Caso contrário, renderiza o embed oficial protegido do DoodStream com escudo anti-popup
-    const embedUrl = resolved.embedUrl;
-    return res.send(`<!DOCTYPE html>
+    // Se não há stream direto MP4, o embed externo do DoodStream é bloqueado por Cloudflare SAMEORIGIN.
+    // Dispara WATCHPLAY_ERROR imediatamente (<50ms) para evitar tela branca e permitir fallback instantâneo.
+    return res.status(502).send(`<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <title>Play Infinity • DoodStream HD</title>
-  <style>
-    body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
-    iframe { width: 100%; height: 100%; border: none; }
-  </style>
-</head>
+<head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
 <body>
-  <iframe
-    id="doodframe"
-    src="${embedUrl}"
-    allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-    allowfullscreen
-    referrerpolicy="no-referrer"
-    sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"
-  ></iframe>
+  <div style="text-align:center;"><h2>DoodStream Indisponível</h2><p>Servidor DoodStream indisponível ou bloqueado por proteção de origem.</p></div>
   <script>
-    (function() {
-      // Bloqueio de popups e proteção estrita contra popunders
-      window.open = function() { console.warn("[Play Infinity] Popup do DoodStream bloqueado."); return null; };
-
-      // Notifica o parent que o reprodutor foi montado
-      try {
-        if (window.parent !== window) {
-          window.parent.postMessage({ type: "WATCHPLAY_READY" }, "*");
-        }
-      } catch(e) {}
-
-      // Emite status simulado para manter o watchdog do VideoPlayerModal ativo
-      var start = Date.now();
-      setInterval(function() {
-        try {
-          if (window.parent !== window) {
-            window.parent.postMessage({
-              type: "WATCHPLAY_STATUS",
-              currentTime: Math.floor((Date.now() - start) / 1000),
-              duration: 3600,
-              paused: false,
-              muted: false,
-              volume: 1,
-              buffered: 60,
-              playbackRate: 1,
-              readyState: 4
-            }, "*");
-          }
-        } catch(e) {}
-      }, 500);
-    })();
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Proteção de origem ou vídeo indisponível" }, "*");
+      }
+    } catch(e) {}
   </script>
 </body>
 </html>`);

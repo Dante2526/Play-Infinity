@@ -308,9 +308,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       return serversList;
     }
     return [
-      { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_streamtape", label: "StreamTape HD" },
-      { key: "srv_doodstream", label: "DoodStream HD" },
+      { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_watchplay", label: "WatchPlayer" },
       { key: "srv_vip", label: "VIP Player" },
       { key: "srv_vidsrc", label: "Seriesflix HD" },

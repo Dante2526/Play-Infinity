@@ -352,7 +352,7 @@ export function VideoPlayerModal({
   // definitiva do catálogo local; false => sondagem de rede, não ocultar eps do TMDB)
   const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = useState<EpisodeAvailabilityInfo | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_mixdrop");
+  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_streamtape");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
@@ -1054,6 +1054,19 @@ export function VideoPlayerModal({
     if (isSeries) {
       list = [
         {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
+        },
+        {
           key: "srv_mixdrop",
           label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
@@ -1071,32 +1084,6 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
-        },
-        {
-          key: "srv_streamtape",
-          label: "StreamTape HD",
-          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string, s?: number, e?: number) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
-            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
-          },
-          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
-        },
-        {
-          key: "srv_doodstream",
-          label: "DoodStream HD",
-          badge: "DoodStream • Áudio Dublado PT-BR • Sem Anúncios",
-          buildUrl: (id: string, s?: number, e?: number) => {
-            const fid = doodstreamFileId ? `&fileId=${encodeURIComponent(doodstreamFileId)}` : "";
-            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
-            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/doodstream-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
-          },
-          isMatch: (u: string) => u.includes("/api/doodstream-proxy-iframe") || u.includes("dood") || u.includes("playmogo"),
-          name: "DoodStream HD"
         },
         {
           key: "srv_watchplay",
@@ -1144,6 +1131,19 @@ export function VideoPlayerModal({
     } else {
       list = [
         {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
+        },
+        {
           key: "srv_mixdrop",
           label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
@@ -1161,32 +1161,6 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
-        },
-        {
-          key: "srv_streamtape",
-          label: "StreamTape HD",
-          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
-            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
-          },
-          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
-        },
-        {
-          key: "srv_doodstream",
-          label: "DoodStream HD",
-          badge: "DoodStream • Áudio Dublado PT-BR • Sem Anúncios",
-          buildUrl: (id: string) => {
-            const fid = doodstreamFileId ? `&fileId=${encodeURIComponent(doodstreamFileId)}` : "";
-            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
-            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/doodstream-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
-          },
-          isMatch: (u: string) => u.includes("/api/doodstream-proxy-iframe") || u.includes("dood") || u.includes("playmogo"),
-          name: "DoodStream HD"
         },
         {
           key: "srv_watchplay",
@@ -1521,9 +1495,9 @@ export function VideoPlayerModal({
           } catch (e) { }
         }
 
-        // Default: MixDrop (priority 1 — MP4 direto, mais robusto contra A/V desync).
-        // Antes era srv_watchplay (HLS, propenso a freeze).
-        let targetServerKey = initialServerKey || prefServer || "srv_mixdrop";
+        // Default: StreamTape (priority 1 — MP4 direto de alta velocidade).
+        // Fallback imediato: MixDrop (priority 2).
+        let targetServerKey = initialServerKey || prefServer || "srv_streamtape";
         let targetUrl: string;
 
         if (isSeries && targetSeason >= 5 && (String(tmdbId) === "126027" || String(resolvedId) === "126027")) {
@@ -2879,7 +2853,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_doodstream';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape';
 
                     if (skinSupported) {
                       // Mantém o isLoading = true (spinner girando na frente do player)
