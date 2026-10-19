@@ -1,3 +1,26 @@
+## 19/10/2026 - Miniatura de Prévia na Barra de Progresso / Timeline Scrubber (Estilo Netflix & Disney+)
+
+**Contexto e Motivação:**
+Implementação da miniatura flutuante de cenas durante o arrasto ou passagem do mouse/toque na barra de progresso (scrubber). Ao navegar pelo filme ou episódio, surge suavemente acima da agulha um card cinematográfico 16:9 exibindo a cena correspondente àquele timestamp, o tempo formatado em destaque e proteção dinâmica de bordas para nunca vazar das laterais da tela (Mobile-First).
+
+**Alterações Realizadas (3 arquivos):**
+1. **`src/services/tmdb.ts`:**
+   - Implementada a função `getTimelinePreviewImages(tmdbId, mediaType, season, episode)` que extrai galerias de cenas reais (backdrops para filmes e stills para episódios de séries) utilizando a camada resiliente de cache em memória `fetchTmdbRaw`.
+2. **`src/components/NetflixPlayerSkin.tsx`:**
+   - **Busca e Pré-Carregamento em Background:** Carrega antecipadamente as fotos de cenas ao abrir o vídeo e realiza pré-cache no navegador via `new Image().src`, garantindo alternância instantânea sem engasgos.
+   - **Touch Scrubbing Mobile:** Habilitada a atualização contínua de `hoverTime` e `hoverPosPercent` durante eventos de toque (`touchstart`, `touchmove`, `touchend`) no celular.
+   - **Card Flutuante 16:9:** Renderização responsiva (`w-32 sm:w-44`) com proporção 16:9, cantos arredondados, backdrop blur, anel de brilho Laranja Play Infinity, tag de cena/episódio e indicador apontando para a agulha da barra.
+   - **Proteção de Borda (Clamp):** Posição horizontal calculada matematicamente (`clampedPosPercent`) para manter o card sempre dentro do viewport, mesmo nos extremos (0% e 100%).
+3. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `32` e `versionName` para `"1.4.0"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-timeline-preview.mjs`): 23/23 PASS.
+- Validação sintática AST TypeScript (`tmdb.ts`, `NetflixPlayerSkin.tsx`): 0 erros.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Card de Próximo Filme da Saga / Continuação (Estilo Netflix & Disney+)
 
 **Contexto e Motivação:**

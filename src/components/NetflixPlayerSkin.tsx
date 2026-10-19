@@ -25,8 +25,10 @@ import {
   PictureInPicture2,
   Scan,
   Loader2,
+  Film,
 } from "lucide-react";
 import { savePlaybackProgress } from "../services/playbackHistory";
+import { getTimelinePreviewImages } from "../services/tmdb";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 
 const PiP = registerPlugin<any>("PiP");
@@ -260,6 +262,40 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPosPercent, setHoverPosPercent] = useState<number>(0);
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const [timelinePreviews, setTimelinePreviews] = useState<string[]>([]);
+
+  // Carrega lista de miniaturas de cenas reais (TMDB) para prévia na barra de progresso
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPreviews = async () => {
+      const targetId = tmdbId || (mediaId && !mediaId.startsWith('tt') ? Number(mediaId) : null);
+      if (!targetId || isNaN(targetId)) {
+        if (isMounted) setTimelinePreviews([]);
+        return;
+      }
+      try {
+        const imgs = await getTimelinePreviewImages(
+          targetId,
+          isSeries ? 'tv' : 'movie',
+          isSeries ? season : undefined,
+          isSeries ? episode : undefined
+        );
+        if (isMounted && imgs.length > 0) {
+          setTimelinePreviews(imgs);
+          // Pré-carrega as 12 primeiras imagens na memória para troca sem delay
+          imgs.slice(0, 12).forEach((url) => {
+            const preImg = new Image();
+            preImg.src = url;
+          });
+        }
+      } catch (err) {
+        console.warn("[NetflixPlayerSkin] Erro ao carregar miniaturas de timeline:", err);
+      }
+    };
+
+    fetchPreviews();
+    return () => { isMounted = false; };
+  }, [tmdbId, mediaId, isSeries, season, episode]);
 
   // Popups auxiliares (Velocidade, Episódios, Áudio & Legendas)
   const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
@@ -1136,6 +1172,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (isLocked || playerStatus.duration <= 0) return;
     wasPlayingBeforeScrubRef.current = !playerStatus.paused;
     const time = getTimeFromEvent(e.clientX, e.clientY);
+    const posPercent = (time / playerStatus.duration) * 100;
+    setHoverPosPercent(posPercent);
+    setHoverTime(time);
     scrubTimeRef.current = time;
     setIsScrubbing(true);
     setScrubTime(time);
@@ -1144,11 +1183,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const handleProgressBarTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (isLocked || playerStatus.duration <= 0) return;
-    // Removido e.preventDefault() para evitar warning "Unable to preventDefault inside passive event listener"
     const touch = e.touches[0];
     if (!touch) return;
     wasPlayingBeforeScrubRef.current = !playerStatus.paused;
     const time = getTimeFromEvent(touch.clientX, touch.clientY);
+    const posPercent = (time / playerStatus.duration) * 100;
+    setHoverPosPercent(posPercent);
+    setHoverTime(time);
     scrubTimeRef.current = time;
     setIsScrubbing(true);
     setScrubTime(time);
@@ -1158,6 +1199,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!isScrubbing) return;
       const time = getTimeFromEvent(e.clientX, e.clientY);
+      const posPercent = (time / playerStatus.duration) * 100;
+      setHoverPosPercent(posPercent);
+      setHoverTime(time);
       scrubTimeRef.current = time;
       setScrubTime(time);
     };
@@ -1168,6 +1212,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       const touch = e.touches[0];
       if (!touch) return;
       const time = getTimeFromEvent(touch.clientX, touch.clientY);
+      const posPercent = (time / playerStatus.duration) * 100;
+      setHoverPosPercent(posPercent);
+      setHoverTime(time);
       scrubTimeRef.current = time;
       setScrubTime(time);
     };
@@ -1182,6 +1229,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       sendCommand({ type: "SEEK_ABSOLUTE", time, resumePlay: shouldResume });
       setPlayerStatus((p) => ({ ...p, currentTime: time }));
       setIsScrubbing(false);
+      setHoverTime(null);
       setIsSeekingTransition(true);
 
       if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
@@ -1201,6 +1249,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       sendCommand({ type: "SEEK_ABSOLUTE", time, resumePlay: shouldResume });
       setPlayerStatus((p) => ({ ...p, currentTime: time }));
       setIsScrubbing(false);
+      setHoverTime(null);
       setIsSeekingTransition(true);
 
       if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
@@ -1225,7 +1274,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       window.removeEventListener("touchend", handleGlobalTouchEnd);
       window.removeEventListener("touchcancel", handleGlobalTouchEnd);
     };
-  }, [isScrubbing, getTimeFromEvent, sendCommand, handleUserActivity]);
+  }, [isScrubbing, getTimeFromEvent, sendCommand, handleUserActivity, playerStatus.duration]);
 
   // Atalhos de teclado
   useEffect(() => {
@@ -1298,6 +1347,31 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const remainingTime = hasValidDuration ? Math.max(0, duration - displayCurrentTime) : 0;
   const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
   const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
+
+  // Miniatura da cena correspondente ao ponto da timeline (hover ou touch)
+  const previewThumbnail = useMemo(() => {
+    if (timelinePreviews.length > 0 && hoverPosPercent !== null && hoverPosPercent !== undefined) {
+      const idx = Math.min(
+        timelinePreviews.length - 1,
+        Math.max(0, Math.floor((hoverPosPercent / 100) * timelinePreviews.length))
+      );
+      return timelinePreviews[idx];
+    }
+    if (isSeries && nextEpisode?.still_path) {
+      return `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}`;
+    }
+    return backdropUrl || imageUrl || null;
+  }, [timelinePreviews, hoverPosPercent, isSeries, nextEpisode, backdropUrl, imageUrl]);
+
+  // Posição horizontal do card com clamp nas laterais para nunca vazar da tela
+  const clampedPosPercent = useMemo(() => {
+    if (!progressBarRef.current) return Math.max(8, Math.min(92, hoverPosPercent));
+    const barWidth = progressBarRef.current.clientWidth || 300;
+    const halfCardPx = barWidth < 450 ? 64 : 88;
+    const targetPx = (hoverPosPercent / 100) * barWidth;
+    const clampedPx = Math.max(halfCardPx + 4, Math.min(barWidth - halfCardPx - 4, targetPx));
+    return (clampedPx / barWidth) * 100;
+  }, [hoverPosPercent]);
 
   // ========================================================
   // RECURSO: PRÓXIMO EPISÓDIO FLUTUANTE (NETFLIX & DISNEY+)
@@ -1932,13 +2006,47 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               onTouchStart={handleProgressBarTouchStart}
               className="relative flex-1 py-3 -my-3 h-10 flex items-center cursor-pointer group touch-none select-none"
             >
-              {/* Tooltip de Prévia ao passar o mouse */}
-              {hoverTime !== null && (
+              {/* Card Flutuante de Prévia da Timeline (Miniatura 16:9 + Timestamp Estilo Netflix & Disney+) */}
+              {(hoverTime !== null || isScrubbing) && hasValidDuration && (
                 <div
-                  className="absolute -top-7 -translate-x-1/2 z-30 px-2 py-0.5 rounded bg-black/90 border border-white/20 text-white text-[10px] sm:text-[11px] font-medium shadow-xl pointer-events-none"
-                  style={{ left: `${hoverPosPercent}%` }}
+                  className="absolute -top-28 sm:-top-36 -translate-x-1/2 z-50 pointer-events-none flex flex-col items-center animate-in fade-in zoom-in-95 duration-150 origin-bottom"
+                  style={{ left: `${clampedPosPercent}%` }}
                 >
-                  {formatTime(hoverTime)}
+                  <div className="w-32 sm:w-44 bg-neutral-950/95 backdrop-blur-2xl border border-white/20 rounded-xl overflow-hidden shadow-[0_15px_40px_rgba(0,0,0,0.95)] ring-1 ring-orange-500/30">
+                    {/* Miniatura 16:9 */}
+                    <div className="relative w-full aspect-video bg-neutral-900 overflow-hidden">
+                      {previewThumbnail ? (
+                        <img
+                          src={previewThumbnail}
+                          alt="Prévia da cena"
+                          className="w-full h-full object-cover"
+                          loading="eager"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-neutral-800 text-neutral-500">
+                          <Film className="w-6 h-6 opacity-40 text-orange-400" />
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+                      {/* Badge de Cena / Episódio */}
+                      <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-sm border border-white/10 text-[8px] font-black text-orange-400 uppercase tracking-wider">
+                        {isSeries ? (episode ? `E${episode}` : "Episódio") : "Cena"}
+                      </div>
+                    </div>
+
+                    {/* Rodapé com Timestamp em Destaque */}
+                    <div className="py-1 px-2 bg-neutral-950 flex items-center justify-between border-t border-white/10">
+                      <span className="text-[11px] sm:text-xs font-extrabold text-white tabular-nums tracking-wide">
+                        {formatTime(hoverTime ?? scrubTime)}
+                      </span>
+                      <span className="text-[8px] sm:text-[9px] font-bold text-neutral-400 uppercase tracking-wider">
+                        Prévia
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Triângulo Indicador da Agulha */}
+                  <div className="w-2 h-2 bg-neutral-950 border-r border-b border-white/20 rotate-45 -mt-1 shadow-md" />
                 </div>
               )}
 

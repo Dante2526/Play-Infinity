@@ -753,5 +753,39 @@ export const getTrailer = async (id: number, type: 'movie' | 'tv'): Promise<Trai
   return list.length > 0 ? list[0] : null;
 };
 
+/**
+ * Retorna lista de miniaturas de cenas reais (stills ou backdrops) para a barra de progresso (scrubber)
+ */
+export const getTimelinePreviewImages = async (
+  tmdbId: number,
+  mediaType: 'movie' | 'tv' | 'series',
+  season?: number,
+  episode?: number
+): Promise<string[]> => {
+  try {
+    if (!tmdbId || isNaN(Number(tmdbId))) return [];
+    const isTv = mediaType === 'tv' || mediaType === 'series';
+    let url = '';
+    if (isTv && season && episode) {
+      url = `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+    } else {
+      url = `/api/tmdb/movie/${tmdbId}/images`;
+    }
+
+    const outcome = await fetchTmdbRaw<any>(url);
+    if (outcome.ok && outcome.data) {
+      const images: any[] = isTv ? (outcome.data.stills || []) : (outcome.data.backdrops || []);
+      if (images && images.length > 0) {
+        return images
+          .filter(img => img && img.file_path)
+          .map(img => `https://image.tmdb.org/t/p/w300${img.file_path}`);
+      }
+    }
+  } catch (err) {
+    console.warn(`[getTimelinePreviewImages] Erro ao carregar imagens de prévia:`, err);
+  }
+  return [];
+};
+
 
 

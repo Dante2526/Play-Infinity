@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792443663.2903774,
-    "ast_hash": "a46569b39e70265248660a9f540640e0",
+    "mtime": 1792447607.2578776,
+    "ast_hash": "dbe1e6ebc163da2beb98e68f022f4da0",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -405,8 +405,8 @@
     "semantic_hash": "78a13e12251b711b2f028de6ba0a037e"
   },
   "src/components/NetflixPlayerSkin.tsx": {
-    "mtime": 1792443716.4359224,
-    "ast_hash": "7457e2b50f8a9d9e1eec6e867bdb2b54",
+    "mtime": 1792447599.1714413,
+    "ast_hash": "b857cc696ed022506e691abe3c005617",
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792443729.1247718,
-    "ast_hash": "5d0b5599f3a041259eea0fe56dddd136",
+    "mtime": 1792445187.9800346,
+    "ast_hash": "fb92832ad8587bbf7d899abfa0c30718",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -620,8 +620,8 @@
     "semantic_hash": "0c21a7717ba1af1b8d1b8839b46b095d"
   },
   "src/services/tmdb.ts": {
-    "mtime": 1792312890.6344619,
-    "ast_hash": "c583be02ca62e84c634c69ad83c005b2",
+    "mtime": 1792447487.9950476,
+    "ast_hash": "0c48d25004c1b6efeab574dcf537ea4e",
     "semantic_hash": ""
   },
   "src/services/watchedEpisodes.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792443812.2584581,
-    "ast_hash": "d958700149cf2e13eccb53004cbdc6f9",
+    "mtime": 1792447650.2957227,
+    "ast_hash": "6eac44d87c1afdb675ceb0182bf839cd",
     "semantic_hash": ""
   },
   "worker/README.md": {
