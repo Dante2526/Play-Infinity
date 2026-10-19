@@ -1060,6 +1060,18 @@ export function VideoPlayerModal({
           name: "MixDrop"
         },
         {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
+        },
+        {
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
@@ -1099,17 +1111,6 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
-        },
-        {
-          key: "srv_streamtape",
-          label: "StreamTape HD",
-          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string, s?: number, e?: number) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}`;
-          },
-          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
         }
       ];
     } else {
@@ -1132,6 +1133,18 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
+        },
+        {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD"
         },
         {
           key: "srv_watchplay",
@@ -1163,17 +1176,6 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
-        },
-        {
-          key: "srv_streamtape",
-          label: "StreamTape HD",
-          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}`;
-          },
-          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
         }
       ];
     }

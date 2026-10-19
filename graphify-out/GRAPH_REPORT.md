@@ -1,16 +1,16 @@
 # Graph Report - Play-Infinity  (2026-10-19)
 
 ## Corpus Check
-- 164 files · ~1,572,988 words
+- 164 files · ~1,573,621 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1147 nodes · 2398 edges · 81 communities (74 shown, 7 thin omitted)
+- 1148 nodes · 2404 edges · 82 communities (75 shown, 7 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 8 edges (avg confidence: 0.61)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `bddefd3d`
+- Built from commit: `c9c218f7`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -72,6 +72,7 @@
 - catalogWatcher.ts
 - Cloudflare Worker — Proxy Universal (Play-Infinity)
 - ContentRow.tsx
+- ContentRow.tsx
 - 2. Passo a Passo Técnico
 - Global Constraints
 - Design de Sistema: Notificações Push (Web e Android)
@@ -95,12 +96,12 @@
 10. `getFavoriteEpisodeNotifications()` - 17 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `ContentRowInner()` --references--> `react`  [EXTRACTED]
+  src/components/ContentRow.tsx → package.json
 - `EncontreiCookieBadge()` --indirect_call--> `check()`  [INFERRED]
   src/components/EncontreiCookieAlert.tsx → inspect_watchplayer.js
 - `lazyWithRetry()` --references--> `react`  [EXTRACTED]
   src/App.tsx → package.json
-- `ContentRowInner()` --references--> `react`  [EXTRACTED]
-  src/components/ContentRow.tsx → package.json
 - `NavItem()` --references--> `react`  [EXTRACTED]
   src/components/NavItem.tsx → package.json
 - `DetailsPage()` --references--> `react`  [EXTRACTED]
@@ -109,11 +110,11 @@
 ## Import Cycles
 - None detected.
 
-## Communities (81 total, 7 thin omitted)
+## Communities (82 total, 7 thin omitted)
 
 ### Community 0 - "encontreiLookup.ts"
-Cohesion: 0.06
-Nodes (52): applyCatalogPatches(), _encFreshTmdbCache, _encInflight, _encKnownMovieIds, _encKnownSerieIds, encKnownSetsLoad(), _encNeg, encNormTitle() (+44 more)
+Cohesion: 0.05
+Nodes (57): applyCatalogPatches(), _encFreshTmdbCache, _encInflight, _encKnownMovieIds, _encKnownSerieIds, encKnownSetsLoad(), _encNeg, encNormTitle() (+49 more)
 
 ### Community 1 - "firebaseAdmin.ts"
 Cohesion: 0.06
@@ -129,67 +130,67 @@ Nodes (45): autoprefixer, browserslist, @capacitor/android, @capacitor/assets, @
 
 ### Community 4 - "VideoPlayerModal.tsx"
 Cohesion: 0.09
-Nodes (47): CastMediaDetails, CastModal(), CastModalProps, RokuDiscovery, extractSrcFromInput(), fetchBlockedServers(), isSuperflixUrl(), parseMediaFromUrl() (+39 more)
+Nodes (34): CastMediaDetails, CastModal(), CastModalProps, RokuDiscovery, extractSrcFromInput(), fetchBlockedServers(), isSuperflixUrl(), parseMediaFromUrl() (+26 more)
 
 ### Community 5 - "HomePage.tsx"
-Cohesion: 0.12
-Nodes (34): NotificationModalProps, ReleaseCalendarPage(), ReleaseCalendarPageProps, animes, continueWatching, doramas, featured, featuredCarousel (+26 more)
+Cohesion: 0.11
+Nodes (33): NotificationModalProps, ReleaseCalendarPage(), ReleaseCalendarPageProps, animes, continueWatching, doramas, featured, featuredCarousel (+25 more)
 
 ### Community 6 - "GlobalSearchPage.tsx"
-Cohesion: 0.20
-Nodes (16): FilterChip(), GlobalCatalogPage(), handlePosterError(), handlePosterError(), LiveTvPage, NotificationModal, ProviderPage(), ReleaseCalendarPage (+8 more)
+Cohesion: 0.14
+Nodes (29): FilterChip(), GlobalCatalogPage(), handlePosterError(), GlobalSearchPage(), handlePosterError(), LiveTvPage, NotificationModal, ReleaseCalendarPage (+21 more)
 
 ### Community 7 - "downloadService.ts"
-Cohesion: 0.10
-Nodes (35): BidirectionalProgressBar(), BidirectionalProgressBarProps, FloatingDownloadWidget(), FloatingDownloadWidgetProps, SLIDES, WhatsNewModal(), DownloadsPage(), ActiveDownload (+27 more)
+Cohesion: 0.09
+Nodes (37): BidirectionalProgressBar(), BidirectionalProgressBarProps, FloatingDownloadWidget(), FloatingDownloadWidgetProps, SLIDES, WhatsNewModal(), DownloadsPage(), ActiveDownload (+29 more)
 
 ### Community 8 - "App.tsx"
 Cohesion: 0.09
-Nodes (34): AdminPage, App(), DetailsPage, DownloadsPage, FavoritesPage, GlobalCatalogPage, GlobalSearchPage, HomePage (+26 more)
+Nodes (37): AdminPage, App(), DetailsPage, DownloadsPage, FavoritesPage, GlobalCatalogPage, GlobalSearchPage, HomePage (+29 more)
 
 ### Community 9 - "LiveTvPage.tsx"
 Cohesion: 0.15
 Nodes (23): ChannelLogo(), ChannelLogoProps, LivePlayerModal(), LivePlayerModalProps, LiveTvPage(), LiveTvPageProps, INITIAL_LIVE_CHANNELS, LiveChannel (+15 more)
 
 ### Community 10 - "tmdb.ts"
-Cohesion: 0.08
-Nodes (36): UNAVAILABLE_SEASONS, handlePosterError(), HomePage(), removePlaybackItem(), CardIdentity, _clientTmdbCache, _clientTmdbInflight, DEFAULT_DETAILS (+28 more)
+Cohesion: 0.09
+Nodes (30): UNAVAILABLE_SEASONS, handlePosterError(), HomePage(), CardIdentity, _clientTmdbCache, _clientTmdbInflight, DEFAULT_DETAILS, DEFAULT_EMPTY_RESPONSE (+22 more)
 
 ### Community 11 - "adminApi.ts"
 Cohesion: 0.28
 Nodes (8): ActiveRunDetails, AdminDeployMonitor(), getWorkflowBadge(), GitHubRun, GitHubRunsResponse, parseCommitMessage(), RunStep, VpsTelemetryData
 
 ### Community 12 - "playbackHistory.ts"
-Cohesion: 0.15
-Nodes (29): formatTime(), NetflixPlayerSkin(), NetflixPlayerSkinProps, NetflixPlayerStatus, parseVtt(), PiP, timeToSeconds(), VttCue (+21 more)
+Cohesion: 0.11
+Nodes (35): formatTime(), NetflixPlayerSkin(), NetflixPlayerSkinProps, NetflixPlayerStatus, parseVtt(), PiP, timeToSeconds(), VttCue (+27 more)
 
 ### Community 13 - "mediaUtils.ts"
-Cohesion: 0.15
-Nodes (17): ADULT_ANIMATION_BLOCKLIST, availableTmdbIds, checkLiveAvailability(), checkTimestamps, cleanupExpiredLiveChecks(), isKidsSafe(), isMediaAvailable(), liveCheckedAvailable (+9 more)
+Cohesion: 0.17
+Nodes (14): ADULT_ANIMATION_BLOCKLIST, availableTmdbIds, checkLiveAvailability(), checkTimestamps, cleanupExpiredLiveChecks(), isKidsSafe(), liveCheckedAvailable, liveCheckedUnavailable (+6 more)
 
 ### Community 14 - "DetailsPage.tsx"
-Cohesion: 0.33
-Nodes (5): findStreamtapeInCatalog(), getLocalCatalog(), StreamtapeCacheEntry, streamtapeMemoryCache, streamtapeRouter
+Cohesion: 0.38
+Nodes (11): fetchWatchedFromCloud(), flushPendingWatchedSync(), getAllWatchedEpisodes(), getSeasonWatchedCount(), getStore(), isSeasonFullyWatched(), makeEpisodeKey(), markEpisodeWatched() (+3 more)
 
 ### Community 15 - "compilerOptions"
 Cohesion: 0.09
 Nodes (21): dist, DOM, DOM.Iterable, ES2022, node_modules, scratch, compilerOptions, allowJs (+13 more)
 
 ### Community 16 - "server.ts"
-Cohesion: 0.12
-Nodes (14): apiLimiter, app, appHelmet, bugUploadLimiter, commonHelmet, globalLimiter, liveStreamLimiter, playerHelmet (+6 more)
+Cohesion: 0.13
+Nodes (13): apiLimiter, app, appHelmet, bugUploadLimiter, commonHelmet, globalLimiter, liveStreamLimiter, playerHelmet (+5 more)
 
 ### Community 17 - "catalog.ts"
-Cohesion: 0.16
-Nodes (14): customStreams, episodesAvailabilityCache, router, StreamItem, webhookLimiter, executeAtomicSaveMostWatched(), getMostWatchedFilePath(), INITIAL_MOST_WATCHED (+6 more)
+Cohesion: 0.17
+Nodes (13): customStreams, episodesAvailabilityCache, router, StreamItem, webhookLimiter, executeAtomicSaveMostWatched(), getMostWatchedFilePath(), INITIAL_MOST_WATCHED (+5 more)
 
 ### Community 18 - "videoScrapers.ts"
-Cohesion: 0.13
-Nodes (24): resolveAnimesOnline(), resolveDirectAnimeStream(), resolveVixsrcStream(), speedtestLimiter, checkVipSeason(), checkVizerSeason(), router, _tmdbProxyInflight (+16 more)
+Cohesion: 0.12
+Nodes (26): resolveAnimesOnline(), resolveDirectAnimeStream(), resolveVixsrcStream(), router, speedtestLimiter, checkVipSeason(), checkVizerSeason(), router (+18 more)
 
 ### Community 19 - "helpers.ts"
-Cohesion: 0.13
-Nodes (16): router, mixdropMemoryCache, router, ALLOWED_LIVE_STREAMING_DOMAINS, ALLOWED_STREAMING_DOMAINS, checkTrackPlayRateLimit(), dnsResolutionCache, isAllowedLiveStreamingDomain() (+8 more)
+Cohesion: 0.14
+Nodes (16): router, mixdropMemoryCache, router, ALLOWED_LIVE_STREAMING_DOMAINS, ALLOWED_STREAMING_DOMAINS, dnsResolutionCache, isAllowedLiveStreamingDomain(), isPrivateOrLocalHost() (+8 more)
 
 ### Community 20 - "firebase.ts"
 Cohesion: 0.22
@@ -204,8 +205,8 @@ Cohesion: 0.25
 Nodes (9): CapacitorPlugin, PluginCall, PluginMethod, PiPPlugin, CapacitorPlugin, PluginCall, PluginMethod, RokuDiscoveryPlugin (+1 more)
 
 ### Community 23 - "react"
-Cohesion: 0.14
-Nodes (14): react, react, lazyWithRetry(), ContentCard, ContentCardInner(), ContentRow, ContentRowInner(), handlePosterError() (+6 more)
+Cohesion: 0.22
+Nodes (9): react, react, lazyWithRetry(), lazyWithRetry(), lazyWithRetry(), lazyWithRetry(), lazyWithRetry(), lazyWithRetry() (+1 more)
 
 ### Community 24 - "nixplayCatalog.ts"
 Cohesion: 0.22
@@ -221,11 +222,11 @@ Nodes (12): background_color, categories, description, display, icons, name, ori
 
 ### Community 27 - "Walkthrough: AnotaÃ§Ãµes e Descontos no Admin"
 Cohesion: 0.04
-Nodes (47): 01/10/2026 - Monitoramento do RobÃ´ Ampere, 03/10/2026 - CorreÃ§Ãµes Live TV e OtimizaÃ§Ãµes de Performance, 03/10/2026 - Correï¿½ï¿½es de VideoPlayer e Monitoramento, 03/10/2026 - Mega RefatoraÃ§Ã£o de Rotas (server.ts modularizado), 03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache, 04/10/2026 15:20:12 - Estabilidade e UX de Fallback de Servidores VOD, 04/10/2026 15:24:09 - Estabilidade e UX de Fallback de Servidores VOD, 05/10/2026 - Health Check Autenticado do encontrei.me (Cookie de Sessao) (+39 more)
+Nodes (48): 01/10/2026 - Monitoramento do RobÃ´ Ampere, 03/10/2026 - CorreÃ§Ãµes Live TV e OtimizaÃ§Ãµes de Performance, 03/10/2026 - Correï¿½ï¿½es de VideoPlayer e Monitoramento, 03/10/2026 - Mega RefatoraÃ§Ã£o de Rotas (server.ts modularizado), 03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache, 04/10/2026 15:20:12 - Estabilidade e UX de Fallback de Servidores VOD, 04/10/2026 15:24:09 - Estabilidade e UX de Fallback de Servidores VOD, 05/10/2026 - Health Check Autenticado do encontrei.me (Cookie de Sessao) (+40 more)
 
 ### Community 28 - "UserProfilePage.tsx"
-Cohesion: 0.10
-Nodes (36): VirtualRemote(), SpeechRecognitionErrorEvent, SpeechRecognitionEvent, SpeechRecognitionInstance, useVoiceSearch(), UseVoiceSearchOptions, Window, LiveTvPage (+28 more)
+Cohesion: 0.15
+Nodes (24): VirtualRemote(), DetailsPage(), handlePosterError(), LiveTvPage, NotificationModal, ReleaseCalendarPage, WebhookPanelModal, LiveTvPage (+16 more)
 
 ### Community 29 - "vidsrcRoutes.ts"
 Cohesion: 0.20
@@ -300,8 +301,8 @@ Cohesion: 0.11
 Nodes (18): 📌 1. Por que migramos para a VPS da Oracle Cloud?, 🖥️ 2. Dados do Servidor VPS (Oracle Cloud Infrastructure), ⚙️ 3. Tudo o que foi Feito e Otimizado no Sistema, 🌐 4. Como Configurar o DNS na Cloudflare (Passo a Passo), 🔍 5. Como Testar e Validar a Conexão, 🤖 6. Deploy 100% Automático via GitHub Actions (CI/CD), A. Proxy de Streaming HLS em Tempo Real (`proxy.mjs`), B. Otimização Avançada do Nginx (`/etc/nginx/sites-available/play-infinity`) (+10 more)
 
 ### Community 68 - "App"
-Cohesion: 0.16
-Nodes (20): SagasPage(), SagasPageProps, Saga, sagas, FavoritesPage(), GEEK_AVATARS, handlePosterError(), LiveTvPage (+12 more)
+Cohesion: 0.12
+Nodes (20): SpeechRecognitionErrorEvent, SpeechRecognitionEvent, SpeechRecognitionInstance, useVoiceSearch(), UseVoiceSearchOptions, Window, FavoritesPage(), handlePosterError() (+12 more)
 
 ### Community 69 - "catalogWatcher.ts"
 Cohesion: 0.33
@@ -314,6 +315,10 @@ Nodes (14): "Cloudflare bloqueou mesmo dentro da rede CF", Cloudflare Worker —
 ### Community 71 - "ContentRow.tsx"
 Cohesion: 0.40
 Nodes (4): CustomDatePicker(), CustomDatePickerProps, MONTH_NAMES, WEEK_DAYS
+
+### Community 72 - "ContentRow.tsx"
+Cohesion: 0.40
+Nodes (5): ContentCard, ContentCardInner(), ContentRow, ContentRowInner(), handlePosterError()
 
 ### Community 73 - "2. Passo a Passo Técnico"
 Cohesion: 0.25
@@ -348,7 +353,7 @@ Cohesion: 0.40
 Nodes (4): Descrição da Vulnerabilidade, Parecer e Justificativa do Produto, Registro de Ciência de Risco de Segurança, Riscos Associados
 
 ## Knowledge Gaps
-- **439 isolated node(s):** `config`, `name`, `private`, `version`, `type` (+434 more)
+- **440 isolated node(s):** `config`, `name`, `private`, `version`, `type` (+435 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **7 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -359,12 +364,12 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.124) - this node is a cross-community bridge._
 - **Why does `dependencies` connect `dependencies` to `devDependencies`, `react`?**
   _High betweenness centrality (0.121) - this node is a cross-community bridge._
-- **Why does `react` connect `react` to `dependencies`, `VideoPlayerModal.tsx`, `GlobalSearchPage.tsx`, `App.tsx`, `tmdb.ts`, `UserProfilePage.tsx`?**
+- **Why does `react` connect `react` to `dependencies`, `GlobalSearchPage.tsx`, `ContentRow.tsx`, `App.tsx`, `tmdb.ts`, `UserProfilePage.tsx`?**
   _High betweenness centrality (0.118) - this node is a cross-community bridge._
 - **What connects `config`, `name`, `private` to the rest of the system?**
-  _439 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _440 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `encontreiLookup.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.06127946127946128 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05446853516657853 - nodes in this community are weakly interconnected._
 - **Should `firebaseAdmin.ts` be split into smaller, more focused modules?**
   _Cohesion score 0.05660377358490566 - nodes in this community are weakly interconnected._
 - **Should `dependencies` be split into smaller, more focused modules?**

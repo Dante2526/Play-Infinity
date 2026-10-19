@@ -1027,7 +1027,7 @@ export async function resolveEncontreiEpisode(
     if (!picked) return null;
 
     // CORREÇÃO: formato alinhado ao catálogo — episode_id, serie_id, season, episode,
-    // tmdb_id, audio, servers:{mixdrop}, _fetchedAt
+    // tmdb_id, audio, servers:{mixdrop, streamtape}, _fetchedAt
     _encontreiEpisodeIndex.set(key, {
       episode_id: epId,
       serie_id: serieId,
@@ -1035,7 +1035,7 @@ export async function resolveEncontreiEpisode(
       episode,
       tmdb_id: tmdbId,
       audio: picked.audio,
-      servers: { mixdrop: picked.mixdrop },
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "" },
       source_url: `${ENC_BASE}/episodios/online/`,
       _fetchedAt: Date.now(),
     });
@@ -1048,6 +1048,7 @@ export async function resolveEncontreiEpisode(
 
     return {
       mixdrop: picked.mixdrop,
+      streamtape: picked.streamtape || null,
       mixdrop_encontrei: picked.mixdrop,
       mixdrop_vizer: null,
       audio: picked.audio,
@@ -1090,12 +1091,13 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
     _encontreiMovieIndex.set(tmdbId, {
       ...entry,
       audio: picked.audio,
-      servers: { mixdrop: picked.mixdrop, ...(entry.servers || {}) },
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", ...(entry.servers || {}) },
       _fetchedAt: Date.now(),
     });
 
     return {
       mixdrop: picked.mixdrop,
+      streamtape: picked.streamtape || null,
       mixdrop_encontrei: picked.mixdrop,
       mixdrop_vizer: null,
       audio: picked.audio,
@@ -1690,13 +1692,13 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       if (!encontreiEp && process.env.ENCONTREI_COOKIE) {
         try {
           const liveEnc = await resolveEncontreiEpisode(tmdbId, season, episode, lookupName);
-          if (liveEnc && liveEnc.mixdrop) {
+          if (liveEnc && (liveEnc.mixdrop || liveEnc.streamtape)) {
             encontreiEp = {
               season,
               episode,
               tmdb_id: tmdbId,
               audio: liveEnc.audio || "Dublado",
-              servers: { mixdrop: liveEnc.mixdrop },
+              servers: { mixdrop: liveEnc.mixdrop || "", streamtape: liveEnc.streamtape || "" },
               source: "encontrei-live",
               _fetchedAt: now,
             };
@@ -1770,11 +1772,11 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       if (!encontreiMovie && process.env.ENCONTREI_COOKIE) {
         try {
           const liveEnc = await resolveEncontreiMovie(tmdbId, lookupName);
-          if (liveEnc && liveEnc.mixdrop) {
+          if (liveEnc && (liveEnc.mixdrop || liveEnc.streamtape)) {
             encontreiMovie = {
               tmdb_id: tmdbId,
               audio: liveEnc.audio || "Dublado",
-              servers: { mixdrop: liveEnc.mixdrop },
+              servers: { mixdrop: liveEnc.mixdrop || "", streamtape: liveEnc.streamtape || "" },
               source: "encontrei-live",
               _fetchedAt: now,
             };

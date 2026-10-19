@@ -2,6 +2,12 @@ import { Router, Request, Response } from "express";
 import { Readable } from "stream";
 import fs from "fs";
 import path from "path";
+import {
+  resolveEncontreiEpisode,
+  resolveVizerEpisode,
+  resolveEncontreiMovie,
+  resolveVizerMovie,
+} from "./encontreiLookup";
 
 export const streamtapeRouter = Router();
 
@@ -254,9 +260,26 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     const id = req.query.id ? Number(req.query.id) : undefined;
     const season = req.query.s ? Number(req.query.s) : undefined;
     const episode = req.query.e ? Number(req.query.e) : undefined;
+    const name = req.query.name ? String(req.query.name) : undefined;
 
+    // 1. Se não veio fileId na query, consulta o catálogo estático local
     if (!fileId && id) {
       fileId = findStreamtapeInCatalog(id, season, episode) || "";
+
+      // 2. Se não estiver no catálogo estático, busca ao vivo (Encontrei.me primeiro, depois Vizer)
+      if (!fileId) {
+        try {
+          if (season !== undefined && episode !== undefined) {
+            const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+            fileId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
+          } else {
+            const liveEnc = await resolveEncontreiMovie(id, name);
+            fileId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
+          }
+        } catch (e) {
+          console.warn("[StreamTape Live Lookup Error]:", e);
+        }
+      }
     }
 
     if (!fileId) {
@@ -267,7 +290,29 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       `);
     }
 
-    const directUrl = await resolveStreamTapeToken(fileId);
+    let directUrl = await resolveStreamTapeToken(fileId);
+
+    // 3. Auto-recuperação: se o link do catálogo falhou (vídeo deletado/expirado), tenta buscar novo link ao vivo!
+    if (!directUrl && id) {
+      console.warn(`[StreamTape] fileId ${fileId} expirado ou removido. Buscando novo link ao vivo do Encontrei/Vizer...`);
+      try {
+        let freshId: string | null = null;
+        if (season !== undefined && episode !== undefined) {
+          const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+          freshId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
+        } else {
+          const liveEnc = await resolveEncontreiMovie(id, name);
+          freshId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
+        }
+        if (freshId && freshId !== fileId) {
+          fileId = freshId;
+          directUrl = await resolveStreamTapeToken(fileId);
+        }
+      } catch (e) {
+        console.warn("[StreamTape Auto-Recovery Error]:", e);
+      }
+    }
+
     if (!directUrl) {
       return res.status(502).send(`
         <!DOCTYPE html>

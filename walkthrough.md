@@ -1,23 +1,27 @@
-## 19/10/2026 - Integração do Servidor StreamTape HD (Fallback VOD e Skin Netflix 100%)
+## 19/10/2026 - Integração do Servidor StreamTape HD (Fallback VOD, Busca Live e Skin Netflix 100%)
 
 **Contexto e Motivação:**
-Reativação e integração completa do **StreamTape HD** como servidor secundário/fallback de alta velocidade para Filmes e Séries, aproveitando 34.395 fileIds já catalogados em `data/encontrei-catalog.json`. Conforme determinação do usuário, o DoodStream foi descartado e a implementação focou exclusivamente no StreamTape via bypass público ilimitado (sem limite de 25 downloads/dia da API).
+Reativação e integração completa do **StreamTape HD** como servidor secundário/fallback de alta velocidade para Filmes e Séries, aproveitando 34.395 fileIds já catalogados em `data/encontrei-catalog.json`. Conforme determinação do usuário, o DoodStream foi descartado e a implementação focou exclusivamente no StreamTape via bypass público ilimitado (sem limite de 25 downloads/dia da API) com suporte a busca ao vivo (Live Mode: Encontrei.me primeiro, Vizer como fallback).
 
 **Alterações Realizadas (7 arquivos):**
 1. **Allowlist de Segurança (`server/utils/helpers.ts`):** Adicionados domínios `streamtape.com`, `tapecontent.net`, `strtape.tech`, `streamtape.net`, `streamtape.cc`, `streamtape.site`, `tapenation.com` e `tape.xxx` em `ALLOWED_STREAMING_DOMAINS` e herdados por `ALLOWED_LIVE_STREAMING_DOMAINS`.
-2. **Extração do Catálogo (`server/routes/encontreiLookup.ts` & `src/services/encontreiCatalog.ts`):** Habilitada a captura da flag `streamtape` nas rotas do backend e no frontend (`findMovieByTmdbId`, `findEpisode` e `EncontreiResult`).
-3. **Router Dedicado (`server/routes/streamtapeRoutes.ts`):**
+2. **Extração do Catálogo e Busca Live (`server/routes/encontreiLookup.ts` & `src/services/encontreiCatalog.ts`):**
+   - Habilitada a captura da flag `streamtape` nas rotas do backend e no frontend (`findMovieByTmdbId`, `findEpisode` e `EncontreiResult`).
+   - `resolveEncontreiEpisode` e `resolveEncontreiMovie` agora capturam e retornam `streamtape` ao vivo (com prioridade no Encontrei.me e fallback no Vizer).
+3. **Router Dedicado e Auto-Recuperação (`server/routes/streamtapeRoutes.ts`):**
    - Função `resolveStreamTapeToken(fileId)` com cache LRU em memória (TTL 2h) e bypass de token público via script regex/eval seguro.
-   - Endpoint `/api/streamtape-resolve` (JSON).
+   - Endpoint `/api/streamtape-proxy-iframe` com resolução ao vivo sob demanda: se o `fileId` não estiver no catálogo ou se o link expirar, re-sonda automaticamente o Encontrei.me e o Vizer em tempo real para obter um novo fileId funcional.
    - Endpoint `/api/streamtape-stream` (Proxy de vídeo com suporte a Range HTTP 206, remoção de `Content-Length` anti-mismatch e propagação de aborts).
-   - Endpoint `/api/streamtape-proxy-iframe` (HTML wrapper com `<video>` nativo e protocolo `WATCHPLAY_STATUS` via `postMessage` a cada 300ms + suporte a comandos `PLAY`, `PAUSE`, `SEEK`, `SEEK_RELATIVE`, `SET_VOLUME`, etc.).
-4. **Proteção Anti-DDoS e Rate Limiting (`server.ts`):** Rotas `/api/streamtape-stream` e `/api/streamtape-proxy-iframe` adicionadas ao `liveStreamLimiter` (600 req/min) para impedir estrangulamento de requisições parciais (Range 206) e montado `streamtapeRouter`.
-5. **Integração no Modal de Vídeo (`src/components/VideoPlayerModal.tsx`):** Registrado `streamtapeFileId`, adicionado servidor `srv_streamtape` na lista de servidores (séries e filmes), adicionado no `isIntegrated` e no `skinSupported`.
-6. **Seção "Áudio / Servidor" na Skin Netflix (`src/components/NetflixPlayerSkin.tsx`):** Mapeado `srv_streamtape` em `selectedAudio` e incluído como opção selecionável sob "Áudio / Servidor".
-7. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `22` e `versionName` para `"1.3.0"`.
+4. **Proteção Anti-DDoS e Buffer Ilimitado (`server.ts`):** Rotas `/api/streamtape-stream` e `/api/streamtape-proxy-iframe` protegidas pelo `liveStreamLimiter` (600 req/min) — a mesma configuração que eliminou travamentos e garantiu buffer no MixDrop.
+5. **Ordem de Prioridade e Fallback (`VideoPlayerModal.tsx` & `NetflixPlayerSkin.tsx`):**
+   - **1º Player Principal:** MixDrop HD (`srv_mixdrop`) com ciclo completo (Vizer/Encontrei e auto-recuperação).
+   - **2º Fallback Imediato:** StreamTape HD (`srv_streamtape`) acionado assim que o fluxo do MixDrop esgota suas tentativas.
+   - **3º em diante:** WatchPlayer (`srv_watchplay`), VIP Player (`srv_vip`), Nixplay (`srv_nixplay`) e Seriesflix HD (`srv_vidsrc`).
+6. **Seção "Áudio / Servidor" na Skin Netflix (`src/components/NetflixPlayerSkin.tsx`):** Mapeado `srv_streamtape` em `selectedAudio` e posicionado como 2ª opção logo abaixo do MixDrop no menu do player.
+7. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `23` e `versionName` para `"1.3.1"`.
 
 **Validação:**
-- Teste TDD automatizado (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD automatizado (`scratch/test-streamtape.mjs`): 7/7 PASS.
 - Análise sintática AST TypeScript: 0 erros nos 7 arquivos modificados.
 - Grafo de conhecimento Graphify atualizado (`graphify update .`).
 
