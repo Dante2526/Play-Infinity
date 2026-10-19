@@ -39,7 +39,7 @@ export default function SagasPage({ onItemClick, onPlay }: SagasPageProps) {
   return (
     <div className="flex-1 w-full bg-[#0a0a0a] min-h-screen text-white pb-24 animate-in fade-in duration-300">
       {/* Banner Principal da Saga Ativa */}
-      <div className="relative w-full h-[50vh] md:h-[65vh] lg:h-[75vh]">
+      <div className="relative w-full min-h-[480px] sm:min-h-[540px] md:h-[65vh] lg:h-[75vh] flex flex-col justify-end pt-20 sm:pt-24">
         <div className="absolute inset-0">
           <img 
             src={`https://image.tmdb.org/t/p/original${activeSaga.backdrop_path}`}
@@ -50,22 +50,23 @@ export default function SagasPage({ onItemClick, onPlay }: SagasPageProps) {
           <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent" />
         </div>
 
-        <div className="absolute bottom-0 left-0 w-full p-4 sm:p-8 lg:p-12 z-10 flex flex-col md:flex-row gap-8 items-end">
-          <div className="flex-1 max-w-3xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] sm:text-xs font-black tracking-widest uppercase mb-2">
+        <div className="relative w-full p-4 sm:p-8 lg:p-12 pb-16 sm:pb-20 lg:pb-24 z-10 flex flex-col md:flex-row gap-6 sm:gap-8 items-start md:items-end">
+          <div className="flex-1 max-w-3xl space-y-3 sm:space-y-4">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] sm:text-xs font-black tracking-widest uppercase mb-1 sm:mb-2">
               <Film className="w-3.5 h-3.5" />
               Saga Completa
             </div>
-            <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter drop-shadow-2xl">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-black text-white tracking-tighter drop-shadow-2xl">
               {activeSaga.title}
             </h1>
-            <p className="text-sm md:text-base lg:text-lg text-neutral-300 max-w-2xl leading-relaxed drop-shadow-md">
+            <p className="text-xs sm:text-sm md:text-base lg:text-lg text-neutral-300 max-w-2xl leading-relaxed drop-shadow-md line-clamp-3 sm:line-clamp-none">
               {activeSaga.description}
             </p>
-            <div className="flex flex-wrap gap-3 pt-4">
+            <div className="flex flex-wrap gap-3 pt-2 sm:pt-4">
               <button 
                 onClick={() => sagaMovies[0] && onPlay?.(sagaMovies[0].title, `https://v1.watchplay.shop/movie/${sagaMovies[0].id}`, 'movie', sagaMovies[0].id, sagaMovies[0].imdb_id)}
-                className="px-6 sm:px-8 py-3.5 bg-white hover:bg-neutral-200 text-black font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-105 shadow-xl shadow-white/10"
+                disabled={isLoading || !sagaMovies[0]}
+                className="px-6 sm:px-8 py-3.5 bg-white hover:bg-neutral-200 text-black font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95 shadow-xl shadow-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="w-5 h-5 fill-black" />
                 Assistir Parte 1

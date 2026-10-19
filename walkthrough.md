@@ -1,3 +1,28 @@
+## 19/10/2026 - Correção Mobile-First da Página de Sagas e Restauração da Franquia James Bond 007
+
+**Contexto e Diagnóstico (Imagem mobile enviada pelo usuário):**
+1. **Sobreposição do botão "Assistir Parte 1" (`src/components/SagasPage.tsx`):** O banner possuía altura fixa de `h-[50vh]` com o conteúdo ancorado em `absolute bottom-0` (`p-4`). Logo abaixo, o container do seletor de sagas aplicava `-mt-8` (`margin-top: -2rem`) com `z-20`, puxando o carrossel 32px para cima e sobrepondo a metade inferior do botão branco no celular.
+2. **Filmes Aleatórios na Saga 007 (`src/data/sagas.ts`):** O catálogo de `james-bond-007-cole-o` continha IDs TMDB não relacionados ao agente secreto, exibindo filmes como *Monstros S.A.* (`585`), *The Matrix Revolutions* (`605`), *Men in Black* (`607`), *Interview with the Vampire* (`628`), *Central do Brasil* (`666`), *Harry Potter e a Pedra Filosofal* (`671`), *Harry Potter e a Ordem da Fênix* (`675`), *Waitress* (`10758`) e *Griet* (`605662`).
+
+**Alterações Realizadas (3 arquivos):**
+1. **`src/components/SagasPage.tsx`:**
+   - Banner com altura mínima responsiva: `min-h-[480px] sm:min-h-[540px] md:h-[65vh] lg:h-[75vh] flex flex-col justify-end pt-20 sm:pt-24`.
+   - Conteúdo relativo com padding inferior seguro: `relative w-full p-4 sm:p-8 lg:p-12 pb-16 sm:pb-20 lg:pb-24 z-10`. Com `pb-16` (64px) no banner e `-mt-8` (-32px) no seletor, resta uma folga limpa de 32px, eliminando qualquer colisão ou sobreposição no celular.
+   - Sinopse com `line-clamp-3 sm:line-clamp-none` para evitar deslocamento vertical em sinopses longas (ex.: *O Senhor dos Anéis*).
+   - Botão "Assistir Parte 1" com `disabled={isLoading || !sagaMovies[0]}` e `active:scale-95`.
+2. **`src/data/sagas.ts`:**
+   - Inseridos os 26 filmes oficiais da franquia James Bond 007 (Coleção TMDB ID 645) em rigorosa ordem cronológica (1962–2021), de *Dr. No* (`646`) a *No Time to Die* (`370172`).
+   - Atualizado o backdrop para a arte oficial da coleção: `/dOSECZImeyZldoq0ObieBE0lwie.jpg`.
+3. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `29` e `versionName` para `"1.3.7"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-sagas-page.mjs`): 10/10 PASS.
+- Validação sintática AST TypeScript: 0 erros.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Otimização Mobile-First e Rotação Física do Player de TV ao Vivo (LivePlayerModal)
 
 **Contexto e Diagnóstico (Imagens 1 e 2 enviadas pelo usuário):**
