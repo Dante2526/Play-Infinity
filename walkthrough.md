@@ -1,3 +1,30 @@
+## 19/10/2026 - Card de Próximo Episódio Flutuante (Estilo Netflix & Disney+)
+
+**Contexto e Motivação:**
+Implementação do recurso de reprodução contínua inteligente para séries. Quando o episódio atinge os créditos finais (últimos ~75 segundos ou 85%+ assistido), surge suavemente um card flutuante premium no estilo Netflix e Disney+ com contagem regressiva de 10s e prévia da cena do próximo capítulo, permitindo que o usuário avance instantaneamente sem precisar assistir aos créditos ou aguardar o fim da tela preta.
+
+**Alterações Realizadas (2 arquivos):**
+1. **`src/components/NetflixPlayerSkin.tsx`:**
+   - **Resolução Automática de Episódio (`nextEpisode`):** Localiza o próximo episódio na mesma temporada (`episodesList.find`) ou, caso seja o episódio final da temporada, prepara o primeiro episódio da temporada seguinte (`availableSeasons`).
+   - **Heurística de Detecção:** Disparo automático aos 75s restantes (`remainingTime <= 75 && playedPercent >= 85` com duração mínima de 120s). Se o usuário rebobinar para antes dos créditos (> 90s), o card se oculta automaticamente.
+   - **Contagem Regressiva de 10s:** Cronômetro regressivo que pausa quando o vídeo é pausado (`playerStatus.paused`) e avança automaticamente para o próximo episódio ao zerar (`handlePlayNextEpisode`).
+   - **Ação de Cancelamento:** Botão `✕` que dispensa a contagem e permite assistir aos créditos inteiros sem interrupção (`isPromptDismissed`).
+   - **Visual Mobile-First & Glassmorphism:**
+     - Layout adaptativo: `left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px]`, sem qualquer overflow horizontal.
+     - Miniatura real 16:9 (`still_path` TMDB `w300`) com overlay de play.
+     - Destaque oficial Play Infinity: Tag `T{season} • E{episode}` e cronômetro em Laranja (`orange-500` / `amber-500`).
+     - Barra de progresso regressiva animada diminuindo de 100% a 0% ao longo dos 10 segundos.
+     - Botão ergonômico de toque **[ ▶ Assistir Agora ]** (`active:scale-95`).
+2. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `30` e `versionName` para `"1.3.8"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-next-episode-card.mjs`): 10/10 PASS.
+- Validação sintática AST TypeScript: 0 erros.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Correção Mobile-First da Página de Sagas e Restauração da Franquia James Bond 007
 
 **Contexto e Diagnóstico (Imagem mobile enviada pelo usuário):**

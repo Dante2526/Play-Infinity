@@ -1285,6 +1285,138 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
   const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
 
+  // ========================================================
+  // RECURSO: PRÓXIMO EPISÓDIO FLUTUANTE (NETFLIX & DISNEY+)
+  // ========================================================
+  const nextEpisode = useMemo(() => {
+    if (!isSeries || !episodesList || episodesList.length === 0 || !episode) return null;
+    const currentEpNum = episode;
+    const nextInSameSeason = episodesList.find(e => e.episode_number === currentEpNum + 1);
+    if (nextInSameSeason) {
+      return {
+        ...nextInSameSeason,
+        seasonNumber: season || 1,
+        isNextSeason: false,
+      };
+    }
+    if (availableSeasons && season) {
+      const nextSeasonNum = season + 1;
+      if (availableSeasons.includes(nextSeasonNum)) {
+        return {
+          episode_number: 1,
+          name: `Temporada ${nextSeasonNum} • Episódio 1`,
+          overview: '',
+          seasonNumber: nextSeasonNum,
+          isNextSeason: true,
+          still_path: undefined,
+        };
+      }
+    }
+    return null;
+  }, [isSeries, episodesList, episode, season, availableSeasons]);
+
+  const [showNextEpisodePrompt, setShowNextEpisodePrompt] = useState<boolean>(false);
+  const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<number>(10);
+  const [isPromptDismissed, setIsPromptDismissed] = useState<boolean>(false);
+  const nextEpisodeTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Reseta estado do prompt ao trocar de episódio ou temporada
+  useEffect(() => {
+    setShowNextEpisodePrompt(false);
+    setIsPromptDismissed(false);
+    setNextEpisodeCountdown(10);
+    if (nextEpisodeTimerRef.current) {
+      clearInterval(nextEpisodeTimerRef.current);
+      nextEpisodeTimerRef.current = null;
+    }
+  }, [episode, season]);
+
+  // Handler para avançar para o próximo episódio
+  const handlePlayNextEpisode = useCallback(() => {
+    if (nextEpisodeTimerRef.current) {
+      clearInterval(nextEpisodeTimerRef.current);
+      nextEpisodeTimerRef.current = null;
+    }
+    setShowNextEpisodePrompt(false);
+    setIsPromptDismissed(true);
+
+    if (nextEpisode?.isNextSeason && onSeasonChange) {
+      onSeasonChange(nextEpisode.seasonNumber);
+      onEpisodeChange?.(1);
+    } else if (nextEpisode && onEpisodeChange) {
+      onEpisodeChange(nextEpisode.episode_number);
+    }
+  }, [nextEpisode, onSeasonChange, onEpisodeChange]);
+
+  // Handler para dispensar a contagem e ver os créditos completos
+  const handleDismissNextPrompt = useCallback(() => {
+    if (nextEpisodeTimerRef.current) {
+      clearInterval(nextEpisodeTimerRef.current);
+      nextEpisodeTimerRef.current = null;
+    }
+    setShowNextEpisodePrompt(false);
+    setIsPromptDismissed(true);
+  }, []);
+
+  // Monitora o progresso para ativar o card nos últimos 75 segundos (ou 95% do vídeo)
+  useEffect(() => {
+    if (!nextEpisode || isPromptDismissed || !hasValidDuration || duration < 120) return;
+    
+    // Dispara quando faltam 75s ou menos (e já assistiu pelo menos 85%)
+    if (remainingTime <= 75 && remainingTime > 2 && playedPercent >= 85) {
+      if (!showNextEpisodePrompt) {
+        setShowNextEpisodePrompt(true);
+        setNextEpisodeCountdown(10);
+      }
+    } else if (remainingTime > 90 && showNextEpisodePrompt) {
+      // Se o usuário retrocedeu o vídeo para antes dos créditos
+      setShowNextEpisodePrompt(false);
+      setNextEpisodeCountdown(10);
+      if (nextEpisodeTimerRef.current) {
+        clearInterval(nextEpisodeTimerRef.current);
+        nextEpisodeTimerRef.current = null;
+      }
+    }
+  }, [remainingTime, playedPercent, hasValidDuration, duration, nextEpisode, isPromptDismissed, showNextEpisodePrompt]);
+
+  // Contagem regressiva de 10s (pausa se o vídeo estiver pausado)
+  useEffect(() => {
+    if (!showNextEpisodePrompt) {
+      if (nextEpisodeTimerRef.current) {
+        clearInterval(nextEpisodeTimerRef.current);
+        nextEpisodeTimerRef.current = null;
+      }
+      return;
+    }
+
+    if (playerStatus.paused) {
+      if (nextEpisodeTimerRef.current) {
+        clearInterval(nextEpisodeTimerRef.current);
+        nextEpisodeTimerRef.current = null;
+      }
+      return;
+    }
+
+    nextEpisodeTimerRef.current = setInterval(() => {
+      setNextEpisodeCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(nextEpisodeTimerRef.current!);
+          nextEpisodeTimerRef.current = null;
+          handlePlayNextEpisode();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (nextEpisodeTimerRef.current) {
+        clearInterval(nextEpisodeTimerRef.current);
+        nextEpisodeTimerRef.current = null;
+      }
+    };
+  }, [showNextEpisodePrompt, playerStatus.paused, handlePlayNextEpisode]);
+
   // Formato do título central da Netflix: S1:E1 ou Nome do Filme
   const topTitleText = isSeries
     ? `S${season}:E${episode}`
@@ -2257,6 +2389,93 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             >
               Concluir
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          CARD FLUTUANTE: PRÓXIMO EPISÓDIO (ESTILO NETFLIX & DISNEY+)
+          ======================================================== */}
+      {showNextEpisodePrompt && nextEpisode && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="absolute bottom-16 sm:bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px] z-40 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 pointer-events-auto"
+        >
+          <div className="bg-neutral-950/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] overflow-hidden">
+            {/* Cabeçalho do Card */}
+            <div className="px-4 pt-3 pb-2 flex items-center justify-between border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
+                </span>
+                <span className="text-[11px] font-black uppercase tracking-wider text-neutral-300">
+                  Próximo em <span className="text-orange-400 font-extrabold text-xs">{nextEpisodeCountdown}s</span>
+                </span>
+              </div>
+              <button
+                onClick={handleDismissNextPrompt}
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer text-xs"
+                title="Assistir aos créditos"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Corpo do Card */}
+            <div className="p-3.5 flex gap-3.5 items-center">
+              {/* Thumbnail 16:9 */}
+              <div
+                onClick={handlePlayNextEpisode}
+                className="relative w-24 sm:w-28 aspect-video rounded-xl overflow-hidden bg-neutral-800 shrink-0 border border-white/10 group cursor-pointer"
+              >
+                <img
+                  src={nextEpisode.still_path ? `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}` : (backdropUrl || posterUrl || '')}
+                  alt={nextEpisode.name || `Episódio ${nextEpisode.episode_number}`}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  loading="lazy"
+                />
+                <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/40 text-xs pl-0.5">
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Informações e Ação */}
+              <div className="flex-1 min-w-0 flex flex-col justify-between space-y-1">
+                <div>
+                  <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest block">
+                    Temporada {nextEpisode.seasonNumber} • Episódio {nextEpisode.episode_number}
+                  </span>
+                  <h4 className="text-xs sm:text-sm font-bold text-white truncate leading-tight mt-0.5">
+                    {nextEpisode.name || `Episódio ${nextEpisode.episode_number}`}
+                  </h4>
+                  {nextEpisode.overview && (
+                    <p className="text-[11px] text-neutral-400 line-clamp-1 sm:line-clamp-2 leading-relaxed mt-0.5">
+                      {nextEpisode.overview}
+                    </p>
+                  )}
+                </div>
+
+                {/* Botão Assistir Agora */}
+                <button
+                  onClick={handlePlayNextEpisode}
+                  className="w-full py-2 px-3 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md shadow-white/10 cursor-pointer hover:shadow-orange-500/20 mt-1"
+                >
+                  <span>Assistir Agora</span>
+                  <Play className="w-3 h-3 fill-black" />
+                </button>
+              </div>
+            </div>
+
+            {/* Barra de Progresso Regressiva Laranja */}
+            <div className="h-1 w-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 transition-all duration-1000 ease-linear shadow-[0_0_10px_rgba(249,115,22,0.8)]"
+                style={{ width: `${(nextEpisodeCountdown / 10) * 100}%` }}
+              />
+            </div>
           </div>
         </div>
       )}
