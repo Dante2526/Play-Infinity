@@ -1,3 +1,25 @@
+## 19/10/2026 - Unificação Universal de Servidores: Remoção de Overrides Residuais e Sequenciamento Rigoroso
+
+**Contexto e Motivação:**
+Após diagnóstico minucioso que comprovou que o arquivo do episódio Fantasmas T5:E8 (`xwwe4pvxsvj37d`) foi deletado na origem do MixDrop (mesmo retornando HTTP 200 da página), identificamos que o player possuía duas regras condicionais hardcoded (`targetSeason >= 5 && tmdbId === 126027`) forçando a abertura pelo MixDrop em vez de respeitar a ordem padrão.
+Conforme solicitação do usuário, todos os overrides específicos foram removidos para que 100% das séries e filmes sigam estritamente a linha padrão unificada: **1º StreamTape HD -> 2º MixDrop HD -> 3º WatchPlayer Oficial -> 4º VIP Player Dublado -> 5º Nixplay -> 6º Seriesflix HD**.
+
+**Alterações Realizadas (2 arquivos):**
+1. **`src/components/VideoPlayerModal.tsx`:**
+   - Removido o bypass residual de Fantasmas T5 em `setupInitialServer` (linhas ~1503-1513) que forçava `targetServerKey = "srv_mixdrop"`.
+   - Removido o override em `handleSeasonChange` (linhas ~2118-2121) que forçava a troca para `srv_mixdrop`.
+   - Toda inicialização e troca de temporada agora respeita rigorosamente a cadeia unificada.
+2. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `27` e `versionName` para `"1.3.5"`.
+
+**Validação:**
+- Teste TDD de Reordenação e Unificação (`scratch/test-server-order.mjs`): 8/8 PASS.
+- Teste TDD StreamTape (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD MixDrop Buffer (`scratch/test-mixdrop-stability.mjs`): 5/5 PASS.
+- Grafo de conhecimento Graphify atualizado e sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Reordenação de Servidores: StreamTape 1º Primário, MixDrop 2º Fallback e Desativação do DoodStream da Cadeia Ativa
 
 **Contexto e Motivação:**

@@ -1,7 +1,7 @@
 # Graph Report - Play-Infinity  (2026-10-19)
 
 ## Corpus Check
-- 164 files · ~1,574,005 words
+- 164 files · ~1,574,079 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary

@@ -1500,18 +1500,7 @@ export function VideoPlayerModal({
         let targetServerKey = initialServerKey || prefServer || "srv_streamtape";
         let targetUrl: string;
 
-        if (isSeries && targetSeason >= 5 && (String(tmdbId) === "126027" || String(resolvedId) === "126027")) {
-          // Fantasmas T5 está homologada no MixDrop (Dublado PT-BR do Vizer) e no Seriesflix HD
-          const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
-          if (fid) {
-            targetServerKey = "srv_mixdrop";
-            targetUrl = buildMixdropStreamUrl(fid) || "";
-          } else {
-            targetServerKey = "srv_vidsrc";
-            const vsSrv = serversRef.current.find(s => s.key === "srv_vidsrc") || serversRef.current[0];
-            targetUrl = vsSrv.buildUrl(resolvedId, targetSeason, targetEpisode);
-          }
-        } else if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+        if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
         } else {
           let resolvedTargetUrl = "";
@@ -2114,11 +2103,7 @@ export function VideoPlayerModal({
     fallbackAttemptsRef.current.clear();
     mixdropAttemptRef.current = 1;
 
-    let targetKey = selectedServerKey;
-    if ((String(tmdbId) === "126027" || String(resolvedId) === "126027") && newSeason >= 5 && selectedServerKey === "srv_watchplay") {
-      targetKey = "srv_mixdrop";
-      setSelectedServerKey("srv_mixdrop");
-    }
+    const targetKey = selectedServerKey;
 
     const activeServer = servers.find(s => s.key === targetKey) || servers[0];
     let newUrl: string;

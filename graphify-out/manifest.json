@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792410411.3375168,
-    "ast_hash": "c2790acb19f1680637d1bf5b06f334ef",
+    "mtime": 1792420211.4544854,
+    "ast_hash": "8bc7208d2fa777ddd53e68c85f062856",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -110,7 +110,7 @@
     "semantic_hash": "331ef318616a37831a3cef798301577a"
   },
   "package.json": {
-    "mtime": 1792311650.3560288,
+    "mtime": 1792415898.2398534,
     "ast_hash": "f185b43855231c284e26f5b6b21bb24a",
     "semantic_hash": ""
   },
@@ -185,8 +185,8 @@
     "semantic_hash": "ba199d81330d41efb7e9277dd777d2a2"
   },
   "server.ts": {
-    "mtime": 1792407641.272558,
-    "ast_hash": "a341a3c21209e55b23773eb0daf894c3",
+    "mtime": 1792415003.7553048,
+    "ast_hash": "8fc1eb063cd0cd2ce8eea01a446cbc41",
     "semantic_hash": ""
   },
   "server/firebaseAdmin.ts": {
@@ -225,8 +225,8 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1792410355.8257587,
-    "ast_hash": "4bdd32452f04d4df0015fbaabd93424f",
+    "mtime": 1792414634.4655316,
+    "ast_hash": "e095ca375fa1ff10fcae40f61917e98d",
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
@@ -235,8 +235,8 @@
     "semantic_hash": "6c289d181cd4e9c0e16bcda9995ce455"
   },
   "server/routes/mixdrop.ts": {
-    "mtime": 1792311650.3710284,
-    "ast_hash": "f51d11f6719997e69aa0907465576f09",
+    "mtime": 1792413780.2769027,
+    "ast_hash": "18d27cb758297e4e5eec8442ca2b37b2",
     "semantic_hash": ""
   },
   "server/routes/nixplayRoutes.ts": {
@@ -300,8 +300,8 @@
     "semantic_hash": "cdd8bb88918f8ba2d41814d8db037c30"
   },
   "server/utils/helpers.ts": {
-    "mtime": 1792407903.05459,
-    "ast_hash": "eb00065ef8be277ce84351606542060c",
+    "mtime": 1792414433.1894698,
+    "ast_hash": "c44b69ddd6c65fe8c464689dda9c8a06",
     "semantic_hash": ""
   },
   "setup-vps.sh": {
@@ -405,8 +405,8 @@
     "semantic_hash": "78a13e12251b711b2f028de6ba0a037e"
   },
   "src/components/NetflixPlayerSkin.tsx": {
-    "mtime": 1792409134.2403345,
-    "ast_hash": "4d57c03113309718f43524898d5addf8",
+    "mtime": 1792418250.195873,
+    "ast_hash": "79eeb8b7d5e04dd3f685361711a9a2a0",
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792411215.1667242,
-    "ast_hash": "42d800e80c54620d0cd58680b4952a4d",
+    "mtime": 1792420189.3104088,
+    "ast_hash": "3a178ed1a1cc5a103e3821aeb1474269",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -570,8 +570,8 @@
     "semantic_hash": "f9144c46fcabf3eae7ab7657ab994574"
   },
   "src/services/encontreiCatalog.ts": {
-    "mtime": 1792407492.849074,
-    "ast_hash": "e07a12527b7de4d6c339f7e9f225ef0b",
+    "mtime": 1792414509.5121655,
+    "ast_hash": "7ee15df3e0005af9711ddfba9517d94e",
     "semantic_hash": ""
   },
   "src/services/episodeAvailability.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792411242.2843237,
-    "ast_hash": "1f76d2dd4768f532b0a355494109e50d",
+    "mtime": 1792418396.583284,
+    "ast_hash": "c7a2ca5962c741065d4ee0977d26757a",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,18 +1135,23 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792311650.3535397,
-    "ast_hash": "6bdc7e0bb1f0537c5bbc40c62255ef9a",
+    "mtime": 1792415373.8485537,
+    "ast_hash": "99471de5d7faabde896cb689e29a78b8",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792311650.3590298,
-    "ast_hash": "8c8299471b2a4b41265295001c61caac",
+    "mtime": 1792415373.8496337,
+    "ast_hash": "99471de5d7faabde896cb689e29a78b8",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
-    "mtime": 1792411225.1216543,
-    "ast_hash": "299d5e99de38b576c59d9b01389d80e3",
+    "mtime": 1792413787.769151,
+    "ast_hash": "c82cac3840a28a3fe2cd441ed32a8e33",
+    "semantic_hash": ""
+  },
+  "server/routes/doodstreamRoutes.ts": {
+    "mtime": 1792418266.583971,
+    "ast_hash": "4982ab81ebbbf6a03a716f062bb34716",
     "semantic_hash": ""
   }
 }
