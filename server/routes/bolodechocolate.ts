@@ -16,8 +16,8 @@ const router = Router();
 
 const BREADCRUMB_BASE = 17890309;
 
-// Cache em memória (5 min de TTL — a URL muda mas a chave pode ser estável)
-let cache: { url: string; ck_id: string; ck_key: string; expires: number } | null = null;
+// Cache em memória indexado por canal (5 min de TTL)
+const boloCacheMap = new Map<string, { url: string; ck_id: string; ck_key: string; expires: number }>();
 
 function decodeDCI(html: string): { url: string; ck_id: string; ck_key: string } | null {
   // Extrai o array DCI
@@ -62,9 +62,10 @@ router.get("/api/bolodechocolate", async (req, res) => {
 
     const canal = (req.query.canal as string) || "premiereclubes";
 
-    // Cache check (5 min)
-    if (cache && cache.expires > Date.now()) {
-      return res.json({ mpd_url: cache.url, ck_id: cache.ck_id, ck_key: cache.ck_key, cached: true });
+    // Cache check por canal (5 min)
+    const cached = boloCacheMap.get(canal);
+    if (cached && cached.expires > Date.now()) {
+      return res.json({ mpd_url: cached.url, ck_id: cached.ck_id, ck_key: cached.ck_key, cached: true });
     }
 
     // Fetch do bolodechocolate.fit
@@ -89,13 +90,13 @@ router.get("/api/bolodechocolate", async (req, res) => {
       return res.status(502).json({ error: "Não foi possível decodificar o stream (DCI array)" });
     }
 
-    // Atualiza cache (5 min)
-    cache = {
+    // Atualiza cache por canal (5 min)
+    boloCacheMap.set(canal, {
       url: decoded.url,
       ck_id: decoded.ck_id,
       ck_key: decoded.ck_key,
       expires: Date.now() + 5 * 60 * 1000,
-    };
+    });
 
     console.log(`[bolodechocolate] Canal: ${canal} | URL: ${decoded.url.substring(0, 80)}...`);
 

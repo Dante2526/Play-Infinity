@@ -1,3 +1,26 @@
+## 19/10/2026 - Otimização Integral da Reprodução de TV ao Vivo (5 Gargalos Eliminados)
+
+**Contexto e Diagnóstico via Graphify:**
+Auditoria completa no fluxo de streaming de canais de TV ao vivo (`liveChannels.ts`, `LivePlayerModal.tsx` e `bolodechocolate.ts`) identificou 5 gargalos críticos responsáveis por telas pretas, atrasos de 10s no buffer e falhas em dispositivos móveis:
+1. **IP Morto `195.178.110.110` (HTTP 403) como Servidor 1:** Mais de 15 canais esportivos primários tentavam este IP morto primeiro, congelando o player por 10 segundos até o timeout. Além disso, `LivePlayerModal.tsx` não tratava `MANIFEST_LOAD_ERROR` como irrecuperável, atrasando o failover.
+2. **Premiere 5, 6, 7 e outros canais sem servidor IPTV Kiwi ou duplicados (`src/data/liveChannels.ts`):** Premiere 5 a 7 possuíam apenas o IP morto, e havia canais duplicados no catálogo. Mapeados os IDs reais do provedor Kiwi (`/api/iptv/879`, `/api/iptv/885`, `/api/iptv/891`, ESPN 2-4, Combate e outros).
+3. **Incompatibilidade de rotas relativas `/api/` com Android/Capacitor (`src/components/LivePlayerModal.tsx`):** Chamadas para `/api/iptv/...` sem prefixar `proxyBase` quebravam no ambiente Capacitor mobile (`capacitor://localhost/api/...`).
+4. **Vazamento de cache global no Bolo de Chocolate e link 404 da Record TV:** `bolodechocolate.ts` utilizava cache global compartilhado para todos os canais, e a Record TV apontava para CDN morta (`cdntvms`). O cache foi isolado em `Map<string, CacheEntry>` indexado por canal e a Record TV migrada para IPTV Kiwi.
+5. **Ausência de Seletor Manual de Servidores na Barra de Controles (`src/components/LivePlayerModal.tsx`):** O usuário dependia unicamente de failover automático caso quisesse alternar entre servidores. Foi adicionado um menu dropdown intuitivo na barra de controles com badge de servidor ativo e indicação de qualidade (Full HD / HD).
+
+**Alterações Realizadas:**
+- `src/data/liveChannels.ts`: Reordenados os servidores colocando IPTV Kiwi como Servidor 1 em todos os esportivos; mapeados Premiere 1-7, SporTV 1-3, ESPN 1-5, Fox Sports, TNT Sports, Band Sports e Combate; removidos canais duplicados e atualizada Record TV.
+- `src/components/LivePlayerModal.tsx`: Adicionado tratamento de `MANIFEST_LOAD_ERROR` e `MANIFEST_LOAD_TIMEOUT` para troca instantânea; implementado seletor de servidores no player com toggle `showServerMenu`; prefixado `proxyBase` para rotas `/api/` no app Android.
+- `server/routes/bolodechocolate.ts`: Cache global substituído por `boloCacheMap = new Map<string, CacheEntry>()` por canal.
+- `android/app/build.gradle`: `versionCode` incrementado para `20` e `versionName` para `"1.2.9"`.
+
+**Validação:**
+- Teste TDD automatizado (`scratch/test-live-tv.mjs`): 5/5 PASS.
+- Validação TypeScript AST: 0 erros de sintaxe nos arquivos modificados.
+- Grafo de conhecimento Graphify atualizado (`graphify update .`).
+
+---
+
 ## 18/10/2026 - Auditoria e Correção Integral do Painel Administrativo (4 Bugs Corrigidos)
 
 **Contexto e Diagnóstico via Graphify:**

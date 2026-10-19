@@ -57,6 +57,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [showControls, setShowControls] = useState<boolean>(true);
   const [showChannelList, setShowChannelList] = useState<boolean>(false);
   const [showCastModal, setShowCastModal] = useState<boolean>(false);
+  const [showServerMenu, setShowServerMenu] = useState<boolean>(false);
   const [streamHealth, setStreamHealth] = useState<'online' | 'connecting' | 'error'>('connecting');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
 
@@ -266,9 +267,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   // Determina a URL atual baseada no servidor selecionado e status de proxy
   const currentServer = channel.servers[selectedServerIndex] || channel.servers[0];
   const proxyBase = import.meta.env.DEV ? '' : (import.meta.env.VITE_PROXY_URL || 'https://play-infinity.stream');
+  const rawUrl = currentServer?.url || '';
+  const isInternalApi = rawUrl.startsWith('/api/');
   const streamUrl = currentServer?.isProxy 
-    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(currentServer.url)}` 
-    : currentServer?.url;
+    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}` 
+    : (isInternalApi ? `${proxyBase}${rawUrl}` : rawUrl);
   
   // Detecta se é stream DASH (bolodechocolate) — usa dash.js em vez de hls.js
   const isDashStream = currentServer?.url?.includes("/api/bolodechocolate") || false;
@@ -543,8 +546,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             // Trocar de servidor imediatamente — sem contar 6 retries.
             const unrecoverableDetails = [
               Hls.ErrorDetails.LEVEL_PARSING_ERROR,
+              Hls.ErrorDetails.MANIFEST_LOAD_ERROR,
               (Hls.ErrorDetails as any).MANIFEST_PARSING_ERROR,
               (Hls.ErrorDetails as any).LEVEL_LOAD_ERROR,
+              (Hls.ErrorDetails as any).MANIFEST_LOAD_TIMEOUT,
             ];
             if (unrecoverableDetails.includes(data.details)) {
               console.warn(`[LivePlayer] Erro fatal não-recuperável (${data.details}), alternando para próximo servidor imediatamente...`);
@@ -1555,6 +1560,49 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             >
               <RotateCcw className="w-4 h-4" />
             </button>
+
+            {/* Seletor Manual de Servidores */}
+            {channel.servers && channel.servers.length > 1 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowServerMenu(prev => !prev)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                    showServerMenu ? 'bg-orange-600 text-white border-orange-500' : 'bg-white/5 hover:bg-white/10 text-neutral-300 border-white/5'
+                  }`}
+                  title="Escolher Servidor de Transmissão"
+                >
+                  <Radio className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                  <span className="hidden sm:inline">Servidor: </span>
+                  <span className="text-orange-400 max-w-[100px] truncate">{currentServer?.name || `S${selectedServerIndex + 1}`}</span>
+                </button>
+                {showServerMenu && (
+                  <div className="absolute bottom-11 left-0 z-50 w-56 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1 border-b border-white/10">
+                      Opções de Servidor
+                    </div>
+                    {channel.servers.map((s, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServerIndex(idx);
+                          setShowServerMenu(false);
+                        }}
+                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                          selectedServerIndex === idx
+                            ? 'bg-orange-600 text-white'
+                            : 'hover:bg-white/10 text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        <span className="truncate">{s.name || `Servidor ${idx + 1}`}</span>
+                        {selectedServerIndex === idx && <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-1.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Lado Direito: PiP, Fullscreen */}
