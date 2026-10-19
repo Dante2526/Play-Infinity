@@ -1,3 +1,35 @@
+## 19/10/2026 - Integração do Servidor DoodStream HD (3º Fallback VOD, Busca Live e Escudo Anti-Popup)
+
+**Contexto e Motivação:**
+Integração completa do **DoodStream HD** como 3º servidor de fallback para Filmes e Séries (MixDrop 1º -> StreamTape 2º -> DoodStream 3º -> WatchPlayer 4º), aproveitando 34.391 fileIds já catalogados em `data/encontrei-catalog.json` e busca ao vivo (Live Mode: Encontrei.me primeiro, Vizer como fallback).
+
+**Alterações Realizadas (7 arquivos + 1 novo router):**
+1. **Allowlist de Segurança (`server/utils/helpers.ts`):** Adicionados domínios do ecossistema DoodStream (`doodstream.com`, `dood.to`, `dood.so`, `dood.ws`, `dood.pm`, `dood.wf`, `dood.la`, `dood.sh`, `doodcdn.co`, `doods.pro`, `playmogo.com`, `cloudatacdn.com`, `ds2play.com`, `do0od.com`, `dood.watch`) em `ALLOWED_STREAMING_DOMAINS` e herdados por `ALLOWED_LIVE_STREAMING_DOMAINS`.
+2. **Extração do Catálogo e Busca Live (`server/routes/encontreiLookup.ts` & `src/services/encontreiCatalog.ts`):**
+   - Habilitada captura da flag `doodstream` nas interfaces TypeScript e rotas do backend e frontend (`findMovieByTmdbId`, `findEpisode` e `EncontreiResult`).
+   - `resolveEncontreiEpisode`, `resolveEncontreiMovie`, `resolveVizerEpisode` e `resolveVizerMovie` capturam e retornam `doodstream` ao vivo.
+3. **Router Dedicado com Escudo Anti-Popup (`server/routes/doodstreamRoutes.ts`):**
+   - Endpoint `/api/doodstream-proxy-iframe` com sandbox anti-popup (`sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"`), supressão de popups (`window.open = null`) e fallback imediato (< 50ms) com `WATCHPLAY_ERROR` se o vídeo estiver deletado/inexistente.
+   - Endpoint `/api/doodstream-resolve` com cache LRU em memória (TTL 2h) para extração de direct streaming url.
+   - Endpoint `/api/doodstream-stream` (Proxy de vídeo HTTP 206 RFC 9110 com `Content-Length` correto e cancelamento com AbortController).
+4. **Proteção Anti-DDoS e Buffer Ilimitado (`server.ts`):** Rotas `/api/doodstream-stream` e `/api/doodstream-proxy-iframe` protegidas pelo `liveStreamLimiter` (600 req/min).
+5. **Ordem de Prioridade e Fallback (`VideoPlayerModal.tsx` & `NetflixPlayerSkin.tsx`):**
+   - **1º Player Principal:** MixDrop HD (`srv_mixdrop`).
+   - **2º Fallback:** StreamTape HD (`srv_streamtape`).
+   - **3º Fallback:** DoodStream HD (`srv_doodstream`).
+   - **4º em diante:** WatchPlayer (`srv_watchplay`), VIP Player (`srv_vip`), Nixplay (`srv_nixplay`).
+6. **Seção "Áudio / Servidor" na Skin Netflix (`src/components/NetflixPlayerSkin.tsx`):** Mapeado `srv_doodstream` em `selectedAudio` e posicionado como 3ª opção no menu de áudio/servidores.
+7. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `25` e `versionName` para `"1.3.3"`.
+
+**Validação:**
+- Teste TDD automatizado (`scratch/test-doodstream.mjs`): 7/7 PASS.
+- Teste TDD StreamTape (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD MixDrop Buffer (`scratch/test-mixdrop-stability.mjs`): 5/5 PASS.
+- Análise sintática AST TypeScript: 0 erros (`npx tsc --noEmit`).
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Fix de Fallback Imediato do StreamTape (Zero Espera no Watchdog) e Atualização de Domínio do Vizer
 
 **Contexto e Diagnóstico do Bug (Fantasmas S5E8):**

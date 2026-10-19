@@ -145,7 +145,22 @@ const ALLOWED_STREAMING_DOMAINS = [
   "streamtape.cc",
   "streamtape.site",
   "tapenation.com",
-  "tape.xxx"
+  "tape.xxx",
+  "doodstream.com",
+  "dood.to",
+  "dood.so",
+  "dood.ws",
+  "dood.pm",
+  "dood.wf",
+  "dood.la",
+  "dood.sh",
+  "doodcdn.co",
+  "doods.pro",
+  "playmogo.com",
+  "cloudatacdn.com",
+  "ds2play.com",
+  "do0od.com",
+  "dood.watch"
 ];
 
 const ALLOWED_LIVE_STREAMING_DOMAINS = [

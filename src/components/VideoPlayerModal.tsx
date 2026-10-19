@@ -230,6 +230,9 @@ export function VideoPlayerModal({
   const [streamtapeFileIds, setStreamtapeFileIds] = useState<Record<string, string | null>>({});
   const streamtapeFileIdsRef = useRef(streamtapeFileIds);
   streamtapeFileIdsRef.current = streamtapeFileIds;
+  const [doodstreamFileIds, setDoodstreamFileIds] = useState<Record<string, string | null>>({});
+  const doodstreamFileIdsRef = useRef(doodstreamFileIds);
+  doodstreamFileIdsRef.current = doodstreamFileIds;
   const mixdropLookupInflightRef = useRef<Map<string, Promise<string | null>>>(new Map());
   const mixdropFileId = useMemo(() => {
     const lookupId = effectiveMovieId || tmdbId;
@@ -259,6 +262,13 @@ export function VideoPlayerModal({
     return key in streamtapeFileIds ? streamtapeFileIds[key] : null;
   }, [streamtapeFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
 
+  const doodstreamFileId = useMemo(() => {
+    const lookupId = effectiveMovieId || tmdbId;
+    if (!lookupId) return null;
+    const key = mediaType === "series" && !resolvedAsMovie ? `tv:${lookupId}:${season}:${episode}` : `movie:${lookupId}`;
+    return key in doodstreamFileIds ? doodstreamFileIds[key] : null;
+  }, [doodstreamFileIds, tmdbId, mediaType, season, episode, effectiveMovieId, resolvedAsMovie]);
+
   // Resolve (e cacheia no mapa) o fileId do MixDrop de um episódio específico.
   // Quando o card chegou marcado como série mas é um filme (resolvedAsMovie),
   // consulta o catálogo como filme usando o id correto (effectiveMovieId).
@@ -282,6 +292,7 @@ export function VideoPlayerModal({
           const vizerResult = res?.mixdrop_vizer ?? null;
           const encontreiResult = res?.mixdrop_encontrei ?? null;
           const stapeResult = res?.streamtape ?? null;
+          const doodResult = res?.doodstream ?? null;
           const srcLabel = (res?.source || "catálogo local").toUpperCase();
 
           if (result) {
@@ -295,6 +306,7 @@ export function VideoPlayerModal({
           setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
           setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
           setStreamtapeFileIds(prev => ({ ...prev, [key]: stapeResult }));
+          setDoodstreamFileIds(prev => ({ ...prev, [key]: doodResult }));
           return result;
         } catch {
           return null;
@@ -1074,6 +1086,19 @@ export function VideoPlayerModal({
           name: "StreamTape HD"
         },
         {
+          key: "srv_doodstream",
+          label: "DoodStream HD",
+          badge: "DoodStream • Áudio Dublado PT-BR • Sem Anúncios",
+          buildUrl: (id: string, s?: number, e?: number) => {
+            const fid = doodstreamFileId ? `&fileId=${encodeURIComponent(doodstreamFileId)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
+            return `/api/doodstream-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/doodstream-proxy-iframe") || u.includes("dood") || u.includes("playmogo"),
+          name: "DoodStream HD"
+        },
+        {
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
@@ -1151,6 +1176,19 @@ export function VideoPlayerModal({
           name: "StreamTape HD"
         },
         {
+          key: "srv_doodstream",
+          label: "DoodStream HD",
+          badge: "DoodStream • Áudio Dublado PT-BR • Sem Anúncios",
+          buildUrl: (id: string) => {
+            const fid = doodstreamFileId ? `&fileId=${encodeURIComponent(doodstreamFileId)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
+            return `/api/doodstream-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
+          },
+          isMatch: (u: string) => u.includes("/api/doodstream-proxy-iframe") || u.includes("dood") || u.includes("playmogo"),
+          name: "DoodStream HD"
+        },
+        {
           key: "srv_watchplay",
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
@@ -1212,7 +1250,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
@@ -2841,7 +2879,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_doodstream';
 
                     if (skinSupported) {
                       // Mantém o isLoading = true (spinner girando na frente do player)

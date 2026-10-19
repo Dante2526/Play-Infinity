@@ -3,6 +3,7 @@ export interface EncontreiResult {
   mixdrop_encontrei?: string | null;
   mixdrop_vizer?: string | null;
   streamtape?: string | null;
+  doodstream?: string | null;
   audio: string;
   server_name: string;
   source?: string;
@@ -33,6 +34,7 @@ export async function findMovieByTmdbId(tmdbId: number, refresh: boolean = false
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
       streamtape: data.streamtape || null,
+      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
       source: data.source || 'catálogo local',
     };
@@ -57,6 +59,7 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
       mixdrop_encontrei: data.mixdrop_encontrei || null,
       mixdrop_vizer: data.mixdrop_vizer || null,
       streamtape: data.streamtape || null,
+      doodstream: data.doodstream || null,
       audio: data.audio || 'Dublado', server_name: 'MixDrop',
       source: data.source || 'catálogo local',
       season: data.season, episode: data.episode,
@@ -71,5 +74,5 @@ export function buildMixdropStreamUrl(fileId: string | undefined): string | null
   return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${fileId}`)}`;
 }
 
-export interface EncontreiMovie { servers: { mixdrop?: string }; audio: string; server_name: string; }
-export interface EncontreiEpisode { season: number; episode: number; servers: { mixdrop?: string }; audio: string; server_name: string; }
+export interface EncontreiMovie { servers: { mixdrop?: string; streamtape?: string; doodstream?: string }; audio: string; server_name: string; }
+export interface EncontreiEpisode { season: number; episode: number; servers: { mixdrop?: string; streamtape?: string; doodstream?: string }; audio: string; server_name: string; }

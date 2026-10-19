@@ -292,7 +292,9 @@ process.on("uncaughtException", (err) => {
       req.path.startsWith("/md-proxy") ||
       req.path.startsWith("/vidsrc-proxy") ||
       req.path.startsWith("/streamtape-stream") ||
-      req.path.startsWith("/streamtape-proxy-iframe")
+      req.path.startsWith("/streamtape-proxy-iframe") ||
+      req.path.startsWith("/doodstream-stream") ||
+      req.path.startsWith("/doodstream-proxy-iframe")
     ) {
       return liveStreamLimiter(req, res, next);
     }
@@ -326,6 +328,7 @@ import nixplayRouter from "./server/routes/nixplayRoutes";
 import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
 import streamtapeRouter from "./server/routes/streamtapeRoutes";
+import { doodstreamRouter } from "./server/routes/doodstreamRoutes";
 
 import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from './server/middlewares/requireAdminAuth';
@@ -337,6 +340,7 @@ app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
 app.use(vidsrcRouter);
 app.use(streamtapeRouter);
+app.use(doodstreamRouter);
 
 // Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de Admin para qualquer rota /api/admin/*
 app.use("/api/admin", requireAdminAuth);
