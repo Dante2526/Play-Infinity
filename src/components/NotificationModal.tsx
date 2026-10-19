@@ -17,6 +17,7 @@ import {
 } from '../services/notifications';
 import { getFavoriteIds } from '../services/favorites';
 import { toggleEpisodeWatched, isEpisodeWatched } from '../services/watchedEpisodes';
+import { CatalogItem } from '../utils/mediaUtils';
 
 interface NotificationModalProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ interface NotificationModalProps {
     posterUrl?: string,
     isAnime?: boolean
   ) => void;
-  onNavigateToSeries: (seriesId: number) => void;
+  onNavigateToSeries: (seriesId: number, itemData?: CatalogItem) => void;
   onNavigateToCalendar: () => void;
 }
 
@@ -252,7 +253,20 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         onClose();
-                        onNavigateToSeries(notif.seriesId);
+                        onNavigateToSeries(notif.seriesId, {
+                          id: notif.seriesId,
+                          tmdbId: notif.seriesId,
+                          title: notif.seriesTitle,
+                          imageUrl: notif.seriesPoster,
+                          posterUrl: notif.seriesPoster,
+                          backdropUrl: notif.seriesBackdrop || notif.seriesPoster,
+                          type: 'series',
+                          genres: [],
+                          synopsis: '',
+                          year: new Date().getFullYear(),
+                          rating: '★',
+                          playerUrl: notif.playerUrl || `https://v1.watchplay.shop/tvshow/${notif.seriesId}/1/1`
+                        });
                       }}
                       className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"
                     >

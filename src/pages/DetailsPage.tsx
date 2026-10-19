@@ -158,7 +158,22 @@ export function DetailsPage({
   const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
   const [item, setItem] = useState<CatalogItem>(() => {
     if (initialItem) return initialItem;
-    return allCatalogs.find(i => i.id === itemId) || allCatalogs[0];
+    const found = allCatalogs.find(i => i.id === itemId || i.tmdbId === itemId);
+    if (found) return found;
+    return {
+      id: itemId,
+      tmdbId: itemId,
+      title: '',
+      imageUrl: '',
+      posterUrl: '',
+      backdropUrl: '',
+      type: 'series',
+      genres: [],
+      synopsis: '',
+      year: new Date().getFullYear(),
+      rating: '★',
+      playerUrl: `https://v1.watchplay.shop/tvshow/${itemId}/1/1`
+    } as CatalogItem;
   });
   
   const [tmdbDetails, setTmdbDetails] = useState<TMDBDetails | null>(null);
@@ -178,8 +193,25 @@ export function DetailsPage({
     if (initialItem) {
       setItem(initialItem);
     } else {
-      const found = allCatalogs.find(i => i.id === itemId);
-      if (found) setItem(found);
+      const found = allCatalogs.find(i => i.id === itemId || i.tmdbId === itemId);
+      if (found) {
+        setItem(found);
+      } else if (itemId) {
+        setItem(prev => (prev.id === itemId || prev.tmdbId === itemId ? prev : {
+          id: itemId,
+          tmdbId: itemId,
+          title: '',
+          imageUrl: '',
+          posterUrl: '',
+          backdropUrl: '',
+          type: 'series',
+          genres: [],
+          synopsis: '',
+          year: new Date().getFullYear(),
+          rating: '★',
+          playerUrl: `https://v1.watchplay.shop/tvshow/${itemId}/1/1`
+        } as CatalogItem));
+      }
     }
   }, [itemId, initialItem, allCatalogs]);
 

@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792375725.0560527,
-    "ast_hash": "3ed09d50316d7570549fe09ff7632d08",
+    "mtime": 1792377725.7198462,
+    "ast_hash": "63f2c7f60e0d8e1a28f975467e7b8ae4",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -310,8 +310,8 @@
     "semantic_hash": "af2bd18a7bdd45f4be5dc3c7a7b88bd7"
   },
   "src/App.tsx": {
-    "mtime": 1792312962.2958434,
-    "ast_hash": "38f03754fb15962ae776dbf3eb3f840f",
+    "mtime": 1792377658.000355,
+    "ast_hash": "f94b16f3faa0b9b5ef62f3664e3cfff8",
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
@@ -320,9 +320,9 @@
     "semantic_hash": "426b11b674b5e7e1494615bca2925893"
   },
   "src/components/AdminDeployMonitor.tsx": {
-    "mtime": 1791750128.0117338,
-    "ast_hash": "6e0a643483009db1bf71f05db00b3c35",
-    "semantic_hash": "6e0a643483009db1bf71f05db00b3c35"
+    "mtime": 1792377716.6352022,
+    "ast_hash": "f361498fa2633a098e06c0d108e72026",
+    "semantic_hash": ""
   },
   "src/components/AdminHealthMonitor.tsx": {
     "mtime": 1791328888.7335453,
@@ -410,9 +410,9 @@
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
-    "mtime": 1789731728.9920225,
-    "ast_hash": "c160b435d8e97fc61aea0592e97cad93",
-    "semantic_hash": "c160b435d8e97fc61aea0592e97cad93"
+    "mtime": 1792377649.62525,
+    "ast_hash": "5b51512a74f23d15d55ea98c94514566",
+    "semantic_hash": ""
   },
   "src/components/PaywallModal.tsx": {
     "mtime": 1791399120.2329683,
@@ -510,9 +510,9 @@
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
-    "mtime": 1791395493.1060283,
-    "ast_hash": "2a6a4b73fbe90e1cf6b0171d656d7bcb",
-    "semantic_hash": "2a6a4b73fbe90e1cf6b0171d656d7bcb"
+    "mtime": 1792377613.9730368,
+    "ast_hash": "032ba6ae9a154ce2919f9ec475e9186f",
+    "semantic_hash": ""
   },
   "src/pages/DownloadsPage.tsx": {
     "mtime": 1791499308.5919278,
@@ -1142,11 +1142,6 @@
   "public/data/available-tmdb-ids.json": {
     "mtime": 1792311650.3590298,
     "ast_hash": "8c8299471b2a4b41265295001c61caac",
-    "semantic_hash": ""
-  },
-  ".github/workflows/sync-drive.yml": {
-    "mtime": 1792311650.3505366,
-    "ast_hash": "a70a2e31f107d0f7988bbba6e1b01824",
     "semantic_hash": ""
   }
 }

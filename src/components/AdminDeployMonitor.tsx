@@ -167,6 +167,39 @@ function parseCommitMessage(rawMessage: string) {
   return { title: clean, body: "" };
 }
 
+/**
+ * Retorna as informações visuais da badge conforme o nome do workflow do GitHub Actions.
+ */
+function getWorkflowBadge(name?: string) {
+  const lower = (name || "").toLowerCase();
+  if (lower.includes("android") || lower.includes("apk") || lower.includes("aab")) {
+    return {
+      label: "Build Android APK",
+      className: "bg-blue-500/20 text-blue-300 border-blue-500/40",
+      dotClass: "bg-blue-400"
+    };
+  }
+  if (lower.includes("oracle") || lower.includes("vps") || lower.includes("deploy")) {
+    return {
+      label: "Deploy VPS",
+      className: "bg-orange-500/20 text-orange-300 border-orange-500/40",
+      dotClass: "bg-orange-400"
+    };
+  }
+  if (lower.includes("drive") || lower.includes("sync")) {
+    return {
+      label: "Google Drive",
+      className: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40",
+      dotClass: "bg-emerald-400"
+    };
+  }
+  return {
+    label: name || "Workflow",
+    className: "bg-neutral-800 text-neutral-300 border-neutral-700",
+    dotClass: "bg-neutral-400"
+  };
+}
+
 export function AdminDeployMonitor() {
   const githubRepo = "Dante2526/Play-Infinity";
 
@@ -631,6 +664,15 @@ export function AdminDeployMonitor() {
                       <span className="text-xs text-white/70 font-mono shrink-0">
                         #{latestRun.id}
                       </span>
+                      {(() => {
+                        const badge = getWorkflowBadge(latestRun.name);
+                        return (
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1.5 shrink-0 ${badge.className}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${badge.dotClass}`}></span>
+                            {badge.label}
+                          </span>
+                        );
+                      })()}
                     </div>
 
                     <div className="text-xl sm:text-2xl font-black text-white flex items-center gap-2 mt-0.5">
@@ -914,8 +956,19 @@ export function AdminDeployMonitor() {
                       )}
 
                       <div className="min-w-0 flex-1">
-                        <div className="text-white font-medium truncate">
-                          {parseCommitMessage(run.commit.message).title}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {(() => {
+                            const badge = getWorkflowBadge(run.name);
+                            return (
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold border flex items-center gap-1.5 shrink-0 ${badge.className}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${badge.dotClass}`}></span>
+                                {badge.label}
+                              </span>
+                            );
+                          })()}
+                          <span className="text-white font-medium truncate">
+                            {parseCommitMessage(run.commit.message).title}
+                          </span>
                         </div>
                         <div className="text-white/40 text-[11px] flex items-center gap-2 mt-0.5">
                           <span>{formatDateTime(run.created_at)}</span>

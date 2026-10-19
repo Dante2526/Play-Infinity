@@ -1207,8 +1207,8 @@ export default function App() {
               onPlayEpisode={(title, url, mediaType, tmdbId, imdbId, season, episode, quality, isCam, initialTime, autoFullscreen, imageUrl, backdropUrl, posterUrl, isAnime) => {
                 openPlayer(title, url, mediaType, tmdbId, imdbId, season, episode, quality, isCam, initialTime, autoFullscreen, imageUrl, backdropUrl, posterUrl, isAnime);
               }}
-              onNavigateToSeries={(seriesId) => {
-                navigateToDetails(seriesId);
+              onNavigateToSeries={(seriesId, itemData) => {
+                navigateToDetails(seriesId, itemData);
               }}
               onNavigateToCalendar={() => {
                 navigateTo({ type: 'calendar' });

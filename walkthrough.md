@@ -1,3 +1,23 @@
+## 19/10/2026 - Fix "Ver Série" nas Notificações, Badges de Workflows e Remoção do Google Drive
+
+**Contexto e Diagnóstico via Graphify:**
+1. **Bug do "Ver Série" abrindo Homem-Aranha (`DetailsPage.tsx`, `NotificationModal.tsx`, `App.tsx`):**
+   - Ao clicar em "Ver série" no modal de notificações para uma série que não constava na lista estática inicial da home (`src/data.ts`), `DetailsPage` executava `allCatalogs.find(...) || allCatalogs[0]`.
+   - O item no índice 0 é "HOMEM-ARANHA: UM NOVO DIA". `DetailsPage` assumia Homem-Aranha como item ativo e carregava seus dados do TMDB, substituindo a série real (ex: "Stuart Não Consegue Salvar o Universo").
+   - Solução: Eliminado o fallback cego `|| allCatalogs[0]`, criado objeto casca dinâmico para `itemId` e repassado o `itemData` completo a partir de `NotificationModal.tsx` e `App.tsx`.
+2. **Identificação Visual dos Workflows no Painel Admin (`AdminDeployMonitor.tsx`):**
+   - Adicionada função `getWorkflowBadge()` para exibir etiquetas coloridas (`[Deploy VPS]` em laranja e `[Build Android]` em azul) tanto no card de deploy ativo quanto na lista do histórico recente, eliminando a impressão de "commits duplicados".
+3. **Remoção do Workflow do Google Drive (`.github/workflows/sync-drive.yml`):**
+   - Removido o arquivo de sincronização com o Google Drive para cessar execuções desnecessárias no push.
+4. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado `versionCode` para 21 (`versionName "1.2.9"`).
+
+**Validação:**
+- Teste TDD automatizado (`scratch/test-fixes.mjs`): 5/5 PASS.
+- Sincronização do Grafo Graphify (`graphify update .`): 0 erros.
+
+---
+
 ## 19/10/2026 - Otimização Integral da Reprodução de TV ao Vivo (5 Gargalos Eliminados)
 
 **Contexto e Diagnóstico via Graphify:**
