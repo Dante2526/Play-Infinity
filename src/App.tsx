@@ -1169,6 +1169,7 @@ export default function App() {
             backdropUrl={playerModal.backdropUrl}
             posterUrl={playerModal.posterUrl}
             initialServerKey={playerModal.serverKey}
+            onPlayMovie={openPlayer}
           />
         )}
 

@@ -1,3 +1,32 @@
+## 19/10/2026 - Card de Próximo Filme da Saga / Continuação (Estilo Netflix & Disney+)
+
+**Contexto e Motivação:**
+Extensão do sistema de continuidade inteligente do reprodutor para filmes que possuem continuação ou pertencem a franquias/sagas (ex.: *Velozes & Furiosos 1 ➔ 2*, *John Wick 1 ➔ 2*, *Avatar 1 ➔ 2*, *Duna 1 ➔ 2*, *Harry Potter*, etc.). Ao alcançar os créditos finais do filme (~120s restantes ou 90%+ assistido em longa-metragens), o player exibe suavemente um card flutuante premium com miniatura 16:9, ano de lançamento, nome da saga, título da sequência, sinopse, contagem regressiva de 10s e botão direto para assistir a continuação.
+
+**Alterações Realizadas (4 arquivos):**
+1. **`src/App.tsx`:**
+   - Adicionada a propriedade `onPlayMovie={openPlayer}` no `<VideoPlayerModal ... />`, permitindo a transição direta entre o filme assistido e sua sequência dentro do mesmo modal em tela cheia.
+2. **`src/components/VideoPlayerModal.tsx`:**
+   - Implementado resolvedor em 2 níveis (`detectNextMovieInFranchise`):
+     - **1º Nível (Catálogo Local):** Consulta `sagas.ts` e identifica se o filme atual faz parte de uma franquia com sequência imediata.
+     - **2º Nível (TMDB Collections):** Para filmes fora do catálogo local, consulta `belongs_to_collection` e busca a lista de partes ordenadas por `release_date`.
+   - Adicionado callback `handlePlayNextMovie` acionando `onPlayMovie` com o próximo título e metadata de vídeo.
+   - Repassados `nextMovieInfo` e `onPlayNextMovie` para `NetflixPlayerSkin`.
+3. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Exportada a interface `NextMovieInfo` e adicionada aos props do componente.
+   - Heurística de disparo de filmes: `duration >= 600 && remainingTime <= 120 && remainingTime > 2 && playedPercent >= 90`.
+   - Card flutuante adaptativo: exibe tag da saga, ano, título do próximo filme, thumbnail 16:9, barra de progresso regressiva Laranja/Âmbar e botão **[ ▶ Assistir Próximo Filme ]**.
+   - Handler de clique unificado (`handlePlayNext`) com timer sincronizado ao estado de pausa do reprodutor.
+4. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `31` e `versionName` para `"1.3.9"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-next-movie-sequel.mjs`): 20/20 PASS.
+- Validação sintática AST TypeScript (`App.tsx`, `VideoPlayerModal.tsx`, `NetflixPlayerSkin.tsx`): 0 erros.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Card de Próximo Episódio Flutuante (Estilo Netflix & Disney+)
 
 **Contexto e Motivação:**

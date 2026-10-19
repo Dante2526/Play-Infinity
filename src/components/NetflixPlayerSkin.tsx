@@ -92,6 +92,18 @@ interface NetflixPlayerSkinProps {
   passThroughClicks?: boolean;
   isAnime?: boolean;
   subtitleUrl?: string | null;
+  nextMovieInfo?: NextMovieInfo | null;
+  onPlayNextMovie?: (movie: NextMovieInfo) => void;
+}
+
+export interface NextMovieInfo {
+  id: number;
+  title: string;
+  backdrop_path?: string;
+  poster_path?: string;
+  overview?: string;
+  release_date?: string;
+  sagaTitle?: string;
 }
 
 interface VttCue {
@@ -186,6 +198,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   activeServerKey = "srv_watchplay",
   onServerChange,
   serversList,
+  nextMovieInfo = null,
+  onPlayNextMovie,
 }) => {
   const isEffectiveExternal = Boolean(isExternalPlayer || passThroughClicks);
 
@@ -1315,12 +1329,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return null;
   }, [isSeries, episodesList, episode, season, availableSeasons]);
 
+  const isMovieContinuation = !isSeries && !!nextMovieInfo;
   const [showNextEpisodePrompt, setShowNextEpisodePrompt] = useState<boolean>(false);
   const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<number>(10);
   const [isPromptDismissed, setIsPromptDismissed] = useState<boolean>(false);
   const nextEpisodeTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Reseta estado do prompt ao trocar de episódio ou temporada
+  // Reseta estado do prompt ao trocar de episódio, temporada ou filme
   useEffect(() => {
     setShowNextEpisodePrompt(false);
     setIsPromptDismissed(false);
@@ -1329,10 +1344,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       clearInterval(nextEpisodeTimerRef.current);
       nextEpisodeTimerRef.current = null;
     }
-  }, [episode, season]);
+  }, [episode, season, tmdbId, mediaId, nextMovieInfo?.id]);
 
-  // Handler para avançar para o próximo episódio
-  const handlePlayNextEpisode = useCallback(() => {
+  // Handler unificado para avançar para o próximo episódio ou próximo filme
+  const handlePlayNext = useCallback(() => {
     if (nextEpisodeTimerRef.current) {
       clearInterval(nextEpisodeTimerRef.current);
       nextEpisodeTimerRef.current = null;
@@ -1340,13 +1355,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     setShowNextEpisodePrompt(false);
     setIsPromptDismissed(true);
 
-    if (nextEpisode?.isNextSeason && onSeasonChange) {
-      onSeasonChange(nextEpisode.seasonNumber);
-      onEpisodeChange?.(1);
-    } else if (nextEpisode && onEpisodeChange) {
-      onEpisodeChange(nextEpisode.episode_number);
+    if (isMovieContinuation && nextMovieInfo && onPlayNextMovie) {
+      onPlayNextMovie(nextMovieInfo);
+    } else if (isSeries) {
+      if (nextEpisode?.isNextSeason && onSeasonChange) {
+        onSeasonChange(nextEpisode.seasonNumber);
+        onEpisodeChange?.(1);
+      } else if (nextEpisode && onEpisodeChange) {
+        onEpisodeChange(nextEpisode.episode_number);
+      }
     }
-  }, [nextEpisode, onSeasonChange, onEpisodeChange]);
+  }, [isMovieContinuation, nextMovieInfo, onPlayNextMovie, isSeries, nextEpisode, onSeasonChange, onEpisodeChange]);
 
   // Handler para dispensar a contagem e ver os créditos completos
   const handleDismissNextPrompt = useCallback(() => {
@@ -1358,26 +1377,42 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     setIsPromptDismissed(true);
   }, []);
 
-  // Monitora o progresso para ativar o card nos últimos 75 segundos (ou 95% do vídeo)
+  // Monitora o progresso para ativar o card nos créditos finais (séries ou filmes de franquia)
   useEffect(() => {
-    if (!nextEpisode || isPromptDismissed || !hasValidDuration || duration < 120) return;
-    
-    // Dispara quando faltam 75s ou menos (e já assistiu pelo menos 85%)
-    if (remainingTime <= 75 && remainingTime > 2 && playedPercent >= 85) {
-      if (!showNextEpisodePrompt) {
-        setShowNextEpisodePrompt(true);
+    if (isPromptDismissed || !hasValidDuration) return;
+
+    if (isSeries && nextEpisode) {
+      // Séries: créditos finais nos últimos 75 segundos
+      if (duration >= 120 && remainingTime <= 75 && remainingTime > 2 && playedPercent >= 85) {
+        if (!showNextEpisodePrompt) {
+          setShowNextEpisodePrompt(true);
+          setNextEpisodeCountdown(10);
+        }
+      } else if (remainingTime > 90 && showNextEpisodePrompt) {
+        setShowNextEpisodePrompt(false);
         setNextEpisodeCountdown(10);
+        if (nextEpisodeTimerRef.current) {
+          clearInterval(nextEpisodeTimerRef.current);
+          nextEpisodeTimerRef.current = null;
+        }
       }
-    } else if (remainingTime > 90 && showNextEpisodePrompt) {
-      // Se o usuário retrocedeu o vídeo para antes dos créditos
-      setShowNextEpisodePrompt(false);
-      setNextEpisodeCountdown(10);
-      if (nextEpisodeTimerRef.current) {
-        clearInterval(nextEpisodeTimerRef.current);
-        nextEpisodeTimerRef.current = null;
+    } else if (isMovieContinuation && nextMovieInfo) {
+      // Filmes: créditos finais nos últimos 120 segundos (ou 90% assistido em longa-metragens >= 10min)
+      if (duration >= 600 && remainingTime <= 120 && remainingTime > 2 && playedPercent >= 90) {
+        if (!showNextEpisodePrompt) {
+          setShowNextEpisodePrompt(true);
+          setNextEpisodeCountdown(10);
+        }
+      } else if (remainingTime > 150 && showNextEpisodePrompt) {
+        setShowNextEpisodePrompt(false);
+        setNextEpisodeCountdown(10);
+        if (nextEpisodeTimerRef.current) {
+          clearInterval(nextEpisodeTimerRef.current);
+          nextEpisodeTimerRef.current = null;
+        }
       }
     }
-  }, [remainingTime, playedPercent, hasValidDuration, duration, nextEpisode, isPromptDismissed, showNextEpisodePrompt]);
+  }, [remainingTime, playedPercent, hasValidDuration, duration, isSeries, nextEpisode, isMovieContinuation, nextMovieInfo, isPromptDismissed, showNextEpisodePrompt]);
 
   // Contagem regressiva de 10s (pausa se o vídeo estiver pausado)
   useEffect(() => {
@@ -1402,7 +1437,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         if (prev <= 1) {
           clearInterval(nextEpisodeTimerRef.current!);
           nextEpisodeTimerRef.current = null;
-          handlePlayNextEpisode();
+          handlePlayNext();
           return 0;
         }
         return prev - 1;
@@ -1415,7 +1450,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         nextEpisodeTimerRef.current = null;
       }
     };
-  }, [showNextEpisodePrompt, playerStatus.paused, handlePlayNextEpisode]);
+  }, [showNextEpisodePrompt, playerStatus.paused, handlePlayNext]);
 
   // Formato do título central da Netflix: S1:E1 ou Nome do Filme
   const topTitleText = isSeries
@@ -2394,12 +2429,12 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       )}
 
       {/* ========================================================
-          CARD FLUTUANTE: PRÓXIMO EPISÓDIO (ESTILO NETFLIX & DISNEY+)
+          CARD FLUTUANTE: PRÓXIMO EPISÓDIO OU PRÓXIMO FILME DA SAGA
           ======================================================== */}
-      {showNextEpisodePrompt && nextEpisode && (
+      {showNextEpisodePrompt && ((isSeries && nextEpisode) || (isMovieContinuation && nextMovieInfo)) && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute bottom-16 sm:bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[390px] z-40 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 pointer-events-auto"
+          className="absolute bottom-16 sm:bottom-20 left-3 right-3 sm:left-auto sm:right-6 sm:w-[410px] z-40 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4 pointer-events-auto"
         >
           <div className="bg-neutral-950/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-[0_15px_50px_rgba(0,0,0,0.9)] overflow-hidden">
             {/* Cabeçalho do Card */}
@@ -2410,7 +2445,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-orange-500"></span>
                 </span>
                 <span className="text-[11px] font-black uppercase tracking-wider text-neutral-300">
-                  Próximo em <span className="text-orange-400 font-extrabold text-xs">{nextEpisodeCountdown}s</span>
+                  {isMovieContinuation ? "Próximo Filme em " : "Próximo em "}
+                  <span className="text-orange-400 font-extrabold text-xs">{nextEpisodeCountdown}s</span>
                 </span>
               </div>
               <button
@@ -2426,12 +2462,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <div className="p-3.5 flex gap-3.5 items-center">
               {/* Thumbnail 16:9 */}
               <div
-                onClick={handlePlayNextEpisode}
+                onClick={handlePlayNext}
                 className="relative w-24 sm:w-28 aspect-video rounded-xl overflow-hidden bg-neutral-800 shrink-0 border border-white/10 group cursor-pointer"
               >
                 <img
-                  src={nextEpisode.still_path ? `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}` : (backdropUrl || posterUrl || '')}
-                  alt={nextEpisode.name || `Episódio ${nextEpisode.episode_number}`}
+                  src={
+                    isMovieContinuation && nextMovieInfo
+                      ? (nextMovieInfo.backdrop_path ? `https://image.tmdb.org/t/p/w300${nextMovieInfo.backdrop_path}` : (nextMovieInfo.poster_path ? `https://image.tmdb.org/t/p/w300${nextMovieInfo.poster_path}` : (backdropUrl || posterUrl || '')))
+                      : (nextEpisode?.still_path ? `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}` : (backdropUrl || posterUrl || ''))
+                  }
+                  alt={isMovieContinuation ? (nextMovieInfo?.title || "Próximo Filme") : (nextEpisode?.name || `Episódio ${nextEpisode?.episode_number}`)}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   loading="lazy"
                 />
@@ -2445,25 +2485,35 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               {/* Informações e Ação */}
               <div className="flex-1 min-w-0 flex flex-col justify-between space-y-1">
                 <div>
-                  <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest block">
-                    Temporada {nextEpisode.seasonNumber} • Episódio {nextEpisode.episode_number}
-                  </span>
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest block truncate">
+                      {isMovieContinuation
+                        ? (nextMovieInfo?.sagaTitle || "Continuação da Franquia")
+                        : `Temporada ${nextEpisode?.seasonNumber} • Episódio ${nextEpisode?.episode_number}`
+                      }
+                    </span>
+                    {isMovieContinuation && nextMovieInfo?.release_date && (
+                      <span className="text-[10px] font-semibold text-neutral-400 shrink-0">
+                        {nextMovieInfo.release_date.slice(0, 4)}
+                      </span>
+                    )}
+                  </div>
                   <h4 className="text-xs sm:text-sm font-bold text-white truncate leading-tight mt-0.5">
-                    {nextEpisode.name || `Episódio ${nextEpisode.episode_number}`}
+                    {isMovieContinuation ? nextMovieInfo?.title : (nextEpisode?.name || `Episódio ${nextEpisode?.episode_number}`)}
                   </h4>
-                  {nextEpisode.overview && (
+                  {(isMovieContinuation ? nextMovieInfo?.overview : nextEpisode?.overview) && (
                     <p className="text-[11px] text-neutral-400 line-clamp-1 sm:line-clamp-2 leading-relaxed mt-0.5">
-                      {nextEpisode.overview}
+                      {isMovieContinuation ? nextMovieInfo?.overview : nextEpisode?.overview}
                     </p>
                   )}
                 </div>
 
                 {/* Botão Assistir Agora */}
                 <button
-                  onClick={handlePlayNextEpisode}
+                  onClick={handlePlayNext}
                   className="w-full py-2 px-3 bg-white hover:bg-neutral-200 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-md shadow-white/10 cursor-pointer hover:shadow-orange-500/20 mt-1"
                 >
-                  <span>Assistir Agora</span>
+                  <span>{isMovieContinuation ? "Assistir Próximo Filme" : "Assistir Agora"}</span>
                   <Play className="w-3 h-3 fill-black" />
                 </button>
               </div>

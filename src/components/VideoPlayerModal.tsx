@@ -7,7 +7,8 @@ import {
   Tv, Film, ChevronLeft, ChevronRight, ChevronDown, Layers, Maximize2, Minimize2, FastForward,
   SkipForward, RotateCcw, PictureInPicture2, Pause
 } from "lucide-react";
-import { NetflixPlayerSkin } from "./NetflixPlayerSkin";
+import { NetflixPlayerSkin, NextMovieInfo } from "./NetflixPlayerSkin";
+export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
@@ -20,7 +21,8 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
-import { getSeasonDetails, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
+import { getSeasonDetails, getDetails, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
+import { sagas } from "../data/sagas";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
@@ -28,6 +30,8 @@ import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { Chromecast } from '@caprockapps/capacitor-chromecast';
+
+
 interface VideoPlayerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -47,6 +51,24 @@ interface VideoPlayerModalProps {
   backdropUrl?: string;
   posterUrl?: string;
   initialServerKey?: string;
+  onPlayMovie?: (
+    title: string,
+    url?: string,
+    mediaType?: 'movie' | 'series',
+    tmdbId?: number,
+    imdbId?: string,
+    season?: number,
+    episode?: number,
+    quality?: string,
+    isCam?: boolean,
+    initialTime?: number,
+    autoFullscreen?: boolean,
+    imageUrl?: string,
+    backdropUrl?: string,
+    posterUrl?: string,
+    isAnime?: boolean,
+    serverKey?: string
+  ) => void;
 }
 
 function formatTime(sec: number): string {
@@ -181,6 +203,7 @@ export function VideoPlayerModal({
   backdropUrl,
   posterUrl,
   initialServerKey,
+  onPlayMovie,
 }: VideoPlayerModalProps) {
   const isCamMovie = isCam || checkIsCam(title, quality);
   const [showCastModal, setShowCastModal] = useState(false);
@@ -634,6 +657,106 @@ export function VideoPlayerModal({
       setError("Não foi possível identificar o ID do filme ou série (TMDB/IMDB). O reprodutor requer um ID válido para funcionar.");
     }
   }, [isOpen, resolvedId, error]);
+
+  // ========================================================
+  // RECURSO: DETECÇÃO DE CONTINUAÇÃO DE FILMES (SAGAS / SEQUEL)
+  // ========================================================
+  const [nextMovieInfo, setNextMovieInfo] = useState<NextMovieInfo | null>(null);
+
+  useEffect(() => {
+    if (!isOpen || isSeries) {
+      setNextMovieInfo(null);
+      return;
+    }
+
+    const currentMovieId = tmdbId || (resolvedId && !resolvedId.startsWith('tt') ? Number(resolvedId) : null);
+    if (!currentMovieId) return;
+
+    let isMounted = true;
+    const resolveSequel = async () => {
+      try {
+        // 1º Nível (Oficial TMDB): Coleção oficial da franquia diretamente dos estúdios
+        const movieData = await getDetails(Number(currentMovieId), 'movie');
+        if (movieData && (movieData as any).belongs_to_collection) {
+          const colId = (movieData as any).belongs_to_collection.id;
+          const colRes = await fetch(`https://play-infinity.stream/api/tmdb/collection/${colId}`);
+          if (colRes.ok) {
+            const colData = await colRes.json();
+            const parts = (colData.parts || []).sort((a: any, b: any) =>
+              (a.release_date || '').localeCompare(b.release_date || '')
+            );
+            const cIdx = parts.findIndex((p: any) => p.id === Number(currentMovieId));
+            if (cIdx !== -1 && cIdx < parts.length - 1) {
+              const nextPart = parts[cIdx + 1];
+              if (isMounted) {
+                setNextMovieInfo({
+                  id: nextPart.id,
+                  title: nextPart.title,
+                  backdrop_path: nextPart.backdrop_path,
+                  poster_path: nextPart.poster_path,
+                  overview: nextPart.overview,
+                  release_date: nextPart.release_date,
+                  sagaTitle: colData.name,
+                });
+                return;
+              }
+            }
+          }
+        }
+
+        // 2º Nível: Catálogo local de sagas.ts como retaguarda
+        const sagaMatch = sagas.find(s => s.movies.includes(Number(currentMovieId)));
+        if (sagaMatch) {
+          const idx = sagaMatch.movies.indexOf(Number(currentMovieId));
+          if (idx !== -1 && idx < sagaMatch.movies.length - 1) {
+            const nextId = sagaMatch.movies[idx + 1];
+            const details = await getDetails(nextId, 'movie');
+            if (isMounted && details) {
+              setNextMovieInfo({
+                id: nextId,
+                title: details.title || `Parte ${idx + 2}`,
+                backdrop_path: details.backdrop_path,
+                poster_path: details.poster_path,
+                overview: details.overview,
+                release_date: details.release_date,
+                sagaTitle: sagaMatch.title,
+              });
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[VideoPlayerModal] Erro ao resolver sequência de filme:", e);
+      }
+      if (isMounted) setNextMovieInfo(null);
+    };
+
+    resolveSequel();
+    return () => { isMounted = false; };
+  }, [isOpen, isSeries, tmdbId, resolvedId]);
+
+  const handlePlayNextMovie = useCallback((movie: NextMovieInfo) => {
+    if (onPlayMovie) {
+      onPlayMovie(
+        movie.title,
+        `https://v1.watchplay.shop/movie/${movie.id}`,
+        'movie',
+        movie.id,
+        undefined,
+        undefined,
+        undefined,
+        quality,
+        false,
+        0,
+        false,
+        movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : undefined,
+        movie.backdrop_path ? `https://image.tmdb.org/t/p/original${movie.backdrop_path}` : undefined,
+        movie.poster_path ? `https://image.tmdb.org/t/p/w500${movie.poster_path}` : undefined,
+        false,
+        selectedServerKey
+      );
+    }
+  }, [onPlayMovie, quality, selectedServerKey]);
 
   const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
   // NOVO: guarda o series_id do Nixplay retornado pelo /api/nixplay-check
@@ -2934,6 +3057,8 @@ export function VideoPlayerModal({
                 isMiniPlayer={isMiniPlayer}
                 passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
                 subtitleUrl={subtitleUrl}
+                nextMovieInfo={nextMovieInfo}
+                onPlayNextMovie={handlePlayNextMovie}
               />
             </div>
           </div>
