@@ -82,5 +82,12 @@
   "80": "Global Constraints",
   "81": "Plano Plus (Download Paywall) Design Spec",
   "82": "Registro de Ciência de Risco de Segurança",
-  "83": "task.md"
+  "83": "task.md",
+  "84": "serverBlocks.ts",
+  "85": "ProviderPage.tsx",
+  "86": "adminOps.ts",
+  "87": "doodstreamRoutes.ts",
+  "88": "streamtapeRoutes.ts",
+  "89": "ServerBlocksAdmin.tsx",
+  "90": "encSlugMatchesTitle"
 }

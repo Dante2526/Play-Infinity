@@ -1,3 +1,30 @@
+## 19/10/2026 - Otimização Mobile-First e Rotação Física do Player de TV ao Vivo (LivePlayerModal)
+
+**Contexto e Diagnóstico (Imagens 1 e 2 enviadas pelo usuário):**
+O usuário comparou o visual do site em paisagem (Imagem 1, layout expandido e harmônico) com o app Android instalado na versão 1.1.8 em modo retrato (Imagem 2, controles cortados à direita e vídeo distorcido/girado isoladamente):
+1. **Ausência do plugin `@capacitor/screen-orientation` em `LivePlayerModal.tsx`:** O player de TV chamava `(screen.orientation).lock()`, que é ignorado pela WebView do Android sem o plugin nativo do Capacitor.
+2. **Hack CSS `rotate(90deg)` isolado no vídeo:** Como a Activity não girava para paisagem, o código aplicava rotação de 90° apenas no elemento de vídeo, mantendo a barra de controles na horizontal dentro da largura restrita do celular em pé (380px).
+3. **Overflow horizontal na barra inferior de controles:** A barra de controles tentava exibir o slider de volume (140px), botões e seletores em linha única sem compactação, empurrando o seletor de servidores, o PiP e o botão de tela cheia para fora da tela.
+
+**Alterações Realizadas (2 arquivos):**
+1. **`src/components/LivePlayerModal.tsx`:**
+   - Importado e integrado `ScreenOrientation` e `Capacitor` do ecossistema nativo.
+   - Ativado `ScreenOrientation.lock({ orientation: 'landscape' })` ao abrir a TV no app Android, girando a tela física por completo em modo paisagem Full HD (idêntico ao site).
+   - `ScreenOrientation.unlock()` adicionado no fechamento (`handleClose`), no mini player e no unmount.
+   - Removido o hack de `rotate(90deg)` isolado no elemento de vídeo.
+   - **Mobile-First na barra inferior:** Slider de volume protegido com `hidden sm:flex` (em celulares o volume é controlado fisicamente pelos botões do aparelho), garantindo que todos os botões essenciais (Play, Prev, Next, Mute, Reload, Seletor de Servidor, PiP e Tela Cheia) caibam com folga mesmo em viewports estreitos (360px a 430px) sem qualquer overflow horizontal.
+   - **Mobile-First na barra superior:** Título e subtítulo do canal com `truncate` e badge de sinal estável limpo em telas pequenas.
+2. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `28` e `versionName` para `"1.3.6"`.
+
+**Validação:**
+- Teste TDD Responsivo & Orientação (`scratch/test-live-player-responsive.mjs`): 7/7 PASS.
+- Teste TDD Ordem dos Servidores (`scratch/test-server-order.mjs`): 8/8 PASS.
+- Zero erros de compilação em `LivePlayerModal.tsx`.
+- Grafo Graphify sincronizado.
+
+---
+
 ## 19/10/2026 - Unificação Universal de Servidores: Remoção de Overrides Residuais e Sequenciamento Rigoroso
 
 **Contexto e Motivação:**

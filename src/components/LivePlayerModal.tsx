@@ -24,6 +24,8 @@ import { LiveChannel } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
 import { CastModal } from './CastModal';
 import { detectConnectionQuality } from '../services/networkQuality';
+import { Capacitor } from '@capacitor/core';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 
 interface LivePlayerModalProps {
   channel: LiveChannel;
@@ -157,10 +159,23 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
   };
 
+  const handleClose = () => {
+    if (Capacitor.isNativePlatform()) {
+      ScreenOrientation.unlock().catch(() => {});
+    }
+    onClose();
+  };
+
   const handleToggleMiniPlayer = () => {
     if (isMiniPlayer) {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
+      }
       setIsMiniPlayer(false);
     } else {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.unlock().catch(() => {});
+      }
       // Some da tela cheia nativa antes de encolher, senão o navegador mantém o vídeo preso em tela cheia
       if (document.fullscreenElement) {
         document.exitFullscreen().catch(() => {});
@@ -978,34 +993,39 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
     }
 
-    // Em navegadores/dispositivos com suporte, tenta travar a orientação em paisagem de
-    // verdade (best-effort; se falhar ou não tiver suporte, o fallback de rotação por CSS
-    // abaixo garante a exibição deitada de qualquer forma)
-    if (typeof screen !== "undefined" && screen.orientation && typeof (screen.orientation as any).lock === "function") {
+    // Trava fisicamente a orientação em paisagem (landscape) no app Android Capacitor
+    if (Capacitor.isNativePlatform()) {
+      ScreenOrientation.lock({ orientation: "landscape" })
+        .then(() => setIsRotated(false))
+        .catch(() => {});
+    } else if (typeof screen !== "undefined" && screen.orientation && typeof (screen.orientation as any).lock === "function") {
       try {
         const lockPromise = (screen.orientation as any).lock("landscape");
         if (lockPromise && typeof lockPromise.catch === "function") {
           lockPromise.catch(() => {});
         }
-      } catch(_){console.warn("Silenced error:", _);}
+      } catch (_) {
+        console.warn("Silenced error:", _);
+      }
     }
 
-    // Escuta a orientação real do aparelho continuamente (não é uma checagem única):
-    // sempre que estiver na vertical, força o fallback de rotação via CSS imediatamente.
-    const mq = window.matchMedia("(orientation: portrait)");
-    const syncRotation = () => setIsRotated(mq.matches);
-    syncRotation();
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", syncRotation);
-    } else if (typeof (mq as any).addListener === "function") {
-      (mq as any).addListener(syncRotation);
-    }
+    const handleOrientationOrResize = () => {
+      if (typeof window !== "undefined" && window.innerWidth > window.innerHeight) {
+        setIsRotated(false);
+      }
+    };
+    window.addEventListener("resize", handleOrientationOrResize);
+    window.addEventListener("orientationchange", handleOrientationOrResize);
 
     return () => {
-      if (typeof mq.removeEventListener === "function") {
-        mq.removeEventListener("change", syncRotation);
-      } else if (typeof (mq as any).removeListener === "function") {
-        (mq as any).removeListener(syncRotation);
+      window.removeEventListener("resize", handleOrientationOrResize);
+      window.removeEventListener("orientationchange", handleOrientationOrResize);
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.unlock().catch(() => {});
+      } else if (typeof screen !== "undefined" && screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (_) {}
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1033,20 +1053,30 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         } catch {
           try {
             await requestFS.call(elem);
-          } catch(_){console.warn("Silenced error:", _);}
+          } catch (_) {
+            console.warn("Silenced error:", _);
+          }
         }
       }
       setIsFullscreen(true);
-      if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.lock({ orientation: "landscape" }).catch(() => {});
+      } else if (screen.orientation && typeof (screen.orientation as any).lock === "function") {
         try {
           (screen.orientation as any).lock("landscape").catch(() => {});
-        } catch(_){console.warn("Silenced error:", _);}
+        } catch (_) {
+          console.warn("Silenced error:", _);
+        }
       }
     } else {
-      if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
+      if (Capacitor.isNativePlatform()) {
+        ScreenOrientation.unlock().catch(() => {});
+      } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
         try {
           (screen.orientation as any).unlock();
-        } catch(_){console.warn("Silenced error:", _);}
+        } catch (_) {
+          console.warn("Silenced error:", _);
+        }
       }
       try {
         if (document.exitFullscreen) {
@@ -1058,7 +1088,9 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         } else if ((document as any).msExitFullscreen) {
           await (document as any).msExitFullscreen();
         }
-      } catch(_){console.warn("Silenced error:", _);}
+      } catch (_) {
+        console.warn("Silenced error:", _);
+      }
       setIsFullscreen(false);
     }
   };
@@ -1192,7 +1224,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             </button>
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={onClose}
+              onClick={handleClose}
               className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Fechar"
             >
@@ -1205,20 +1237,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       {/* Elemento de Vídeo — permanece montado o tempo todo (nunca desmonta ao entrar/sair do mini player) */}
       <div className={isMiniPlayer ? 'relative w-full aspect-video bg-black shrink-0' : 'contents'}>
         <div
-          style={
-            !isMiniPlayer && isRotated
-              ? {
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  width: '100dvh',
-                  height: '100dvw',
-                  maxWidth: '100dvh',
-                  maxHeight: '100dvw',
-                  transform: 'translate(-50%, -50%) rotate(90deg)',
-                }
-              : { position: 'relative', width: '100%', height: '100%' }
-          }
+          style={{ position: 'relative', width: '100%', height: '100%' }}
           className="flex items-center justify-center bg-black overflow-hidden select-none"
           onMouseMove={resetControlsTimeout}
           onTouchStart={resetControlsTimeout}
@@ -1358,40 +1377,40 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       {/* CONTROLES SUPERIORES (TOP BAR) */}
       {!isMiniPlayer && (
       <div 
-        className={`absolute top-0 left-0 w-full p-4 md:p-6 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
+        className={`absolute top-0 left-0 w-full p-3 sm:p-4 md:p-6 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
-            onClick={onClose}
-            className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md cursor-pointer border border-white/10"
+            onClick={handleClose}
+            className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md cursor-pointer border border-white/10 shrink-0"
             title="Voltar aos canais"
           >
-            <ChevronLeft className="w-5 h-5" />
+            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
 
           <ChannelLogo
             channel={channel}
             size="sm"
-            className="h-8 min-w-[50px] max-w-[90px] bg-black/40 px-1.5 py-1 rounded border border-white/10 shrink-0"
+            className="h-7 sm:h-8 min-w-[40px] max-w-[70px] sm:max-w-[90px] bg-black/40 px-1.5 py-1 rounded border border-white/10 shrink-0"
           />
 
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h2 className="text-white font-bold text-base md:text-lg drop-shadow">{channel.name}</h2>
+              <h2 className="text-white font-bold text-sm sm:text-base md:text-lg drop-shadow truncate max-w-[110px] xs:max-w-[160px] sm:max-w-xs md:max-w-md">{channel.name}</h2>
             </div>
             {channel.currentProgram && (
-              <p className="text-xs text-neutral-300 line-clamp-1 max-w-md drop-shadow">
+              <p className="text-[11px] sm:text-xs text-neutral-300 truncate max-w-[110px] xs:max-w-[160px] sm:max-w-xs md:max-w-md drop-shadow">
                 {channel.currentProgram}
               </p>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Status do stream (Flutuante Centralizado) */}
-          <div className="absolute top-16 md:top-6 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300 pointer-events-none">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Status do stream (Flutuante Centralizado em telas médias+) */}
+          <div className="hidden sm:flex absolute top-16 md:top-6 left-1/2 -translate-x-1/2 items-center gap-1.5 px-3 py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/10 text-xs text-neutral-300 pointer-events-none">
             <span className={`w-2 h-2 rounded-full ${
               hasError || streamHealth === 'error' ? 'bg-red-500' :
               (isLoading && !isPlaying) ? 'bg-yellow-500 animate-pulse' :
@@ -1409,21 +1428,21 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           {/* Botão Guia de Canais Rápido */}
           <button
             onClick={() => setShowChannelList(!showChannelList)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold backdrop-blur-md border transition-all cursor-pointer shrink-0 ${
               showChannelList ? 'bg-orange-600 text-white border-orange-500' : 'bg-black/60 hover:bg-black/80 text-neutral-200 border-white/10'
             }`}
           >
-            <ListFilter className="w-3.5 h-3.5" />
+            <ListFilter className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden md:inline">Guia de Canais</span>
           </button>
 
           {/* Botão Fechar */}
           <button
-            onClick={onClose}
-            className="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md cursor-pointer border border-white/10"
+            onClick={handleClose}
+            className="p-2 sm:p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-all backdrop-blur-md cursor-pointer border border-white/10 shrink-0"
             title="Fechar"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
       </div>
@@ -1490,72 +1509,74 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         }`}
         style={{ paddingBottom: 'max(1.75rem, env(safe-area-inset-bottom, 1.75rem))' }}
       >
-        <div className="flex items-center justify-between gap-4 max-w-5xl mx-auto">
+        <div className="flex items-center justify-between gap-1 sm:gap-4 max-w-5xl mx-auto w-full">
           {/* Lado Esquerdo: Play, Vol, Próximo/Anterior */}
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-1 sm:gap-2 md:gap-3 shrink min-w-0">
             <button
               onClick={handlePrevChannel}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
               title="Canal Anterior (Seta Esquerda)"
             >
-              <ChevronLeft className="w-5 h-5" />
+              <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
             <button
               onClick={togglePlay}
-              className="p-3 rounded-full bg-orange-600 hover:bg-orange-500 text-white transition-all shadow-lg shadow-orange-600/40 hover:scale-105 cursor-pointer"
+              className="p-2 sm:p-3 rounded-full bg-orange-600 hover:bg-orange-500 text-white transition-all shadow-lg shadow-orange-600/40 hover:scale-105 cursor-pointer shrink-0"
               title={isPlaying ? 'Pausar' : 'Reproduzir'}
             >
-              {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+              {isPlaying ? <Pause className="w-4 h-4 sm:w-5 sm:h-5 fill-white" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5 fill-white ml-0.5" />}
             </button>
 
             <button
               onClick={handleNextChannel}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
               title="Próximo Canal (Seta Direita)"
             >
-              <ChevronRight className="w-5 h-5" />
+              <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
             {/* Controle de Volume Aprimorado */}
-            <div className="flex items-center gap-2 ml-1 md:ml-2 bg-white/5 hover:bg-white/10 px-2.5 py-1.5 rounded-xl border border-white/5 transition-all">
+            <div className="flex items-center gap-1 sm:gap-2 ml-0.5 sm:ml-2 bg-white/5 hover:bg-white/10 px-1.5 sm:px-2.5 py-1.5 rounded-xl border border-white/5 transition-all shrink-0">
               <button
                 onClick={toggleMute}
                 className="p-1 rounded-lg hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
                 title={isMuted || volume === 0 ? 'Desmutar (M)' : 'Mutar (M)'}
               >
                 {isMuted || volume === 0 ? (
-                  <VolumeX className="w-5 h-5 text-red-400" />
+                  <VolumeX className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
                 ) : volume < 0.5 ? (
-                  <Volume1 className="w-5 h-5 text-neutral-200" />
+                  <Volume1 className="w-4 h-4 sm:w-5 sm:h-5 text-neutral-200" />
                 ) : (
-                  <Volume2 className="w-5 h-5 text-white" />
+                  <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 )}
               </button>
 
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={isMuted ? 0 : volume}
-                onChange={handleVolumeChange}
-                style={{
-                  background: `linear-gradient(to right, #ea580c ${isMuted ? 0 : Math.round(volume * 100)}%, #404040 ${isMuted ? 0 : Math.round(volume * 100)}%)`
-                }}
-                className="w-16 sm:w-24 md:w-32 accent-orange-500 cursor-pointer h-2 rounded-lg appearance-none transition-all"
-                title={`Volume: ${isMuted ? 0 : Math.round(volume * 100)}% (Use ↑ e ↓ para ajustar)`}
-              />
+              <div className="hidden sm:flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={handleVolumeChange}
+                  style={{
+                    background: `linear-gradient(to right, #ea580c ${isMuted ? 0 : Math.round(volume * 100)}%, #404040 ${isMuted ? 0 : Math.round(volume * 100)}%)`
+                  }}
+                  className="w-16 sm:w-20 md:w-32 accent-orange-500 cursor-pointer h-2 rounded-lg appearance-none transition-all"
+                  title={`Volume: ${isMuted ? 0 : Math.round(volume * 100)}% (Use ↑ e ↓ para ajustar)`}
+                />
 
-              <span className="text-xs font-bold text-neutral-300 min-w-[34px] text-right tabular-nums select-none">
-                {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
-              </span>
+                <span className="text-xs font-bold text-neutral-300 min-w-[34px] text-right tabular-nums select-none">
+                  {isMuted ? '0%' : `${Math.round(volume * 100)}%`}
+                </span>
+              </div>
             </div>
 
             {/* Recarregar Stream */}
             <button
               onClick={reloadStream}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
               title="Sincronizar / Recarregar Transmissão Ao Vivo"
             >
               <RotateCcw className="w-4 h-4" />
@@ -1563,18 +1584,18 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
             {/* Seletor Manual de Servidores */}
             {channel.servers && channel.servers.length > 1 && (
-              <div className="relative">
+              <div className="relative shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowServerMenu(prev => !prev)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
+                  className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border shrink-0 ${
                     showServerMenu ? 'bg-orange-600 text-white border-orange-500' : 'bg-white/5 hover:bg-white/10 text-neutral-300 border-white/5'
                   }`}
                   title="Escolher Servidor de Transmissão"
                 >
                   <Radio className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <span className="hidden sm:inline">Servidor: </span>
-                  <span className="text-orange-400 max-w-[100px] truncate">{currentServer?.name || `S${selectedServerIndex + 1}`}</span>
+                  <span className="hidden md:inline">Servidor: </span>
+                  <span className="text-orange-400 max-w-[70px] sm:max-w-[110px] truncate">{currentServer?.name || `S${selectedServerIndex + 1}`}</span>
                 </button>
                 {showServerMenu && (
                   <div className="absolute bottom-11 left-0 z-50 w-56 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
@@ -1606,11 +1627,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           </div>
 
           {/* Lado Direito: PiP, Fullscreen */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* Mini Player Flutuante (arrastável, continua tocando em qualquer página do app) */}
             <button
               onClick={handleToggleMiniPlayer}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
               title="Mini Player Flutuante"
             >
               <PictureInPicture2 className="w-4 h-4" />
@@ -1619,10 +1640,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             {/* Tela Cheia */}
             <button
               onClick={toggleFullscreen}
-              className="p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer"
+              className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0"
               title={isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia (F)'}
             >
-              {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+              {isFullscreen ? <Minimize className="w-4 h-4 sm:w-5 sm:h-5" /> : <Maximize className="w-4 h-4 sm:w-5 sm:h-5" />}
             </button>
           </div>
         </div>
