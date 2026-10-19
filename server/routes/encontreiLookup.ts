@@ -247,8 +247,9 @@ function loadVizerMovieIds() {
 // migração silenciosa de domínio.
 // ──────────────────────────────────────────────────────────────────────────
 const VIZER_DOMAINS = [
-  "https://www.vizer.reisen",  // domínio atual (2026-10)
-  "https://www.vizer.website", // domínio anterior, responde com redirect
+  "https://www.vizer.uno",     // domínio atual (2026-10)
+  "https://www.vizer.reisen",  // domínio anterior, responde com redirect para vizer.uno
+  "https://www.vizer.website", // domínio legado
 ];
 let _vizerWorkingDomain: string | null = null;
 
@@ -902,8 +903,9 @@ function encNormTitle(s: string): string {
 /** Slug da listagem casa com o título pedido? (sem título = aceita, bounded) */
 function encSlugMatchesTitle(slug: string, title?: string): boolean {
   if (!title) return true;
+  const cleanTitle = title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim();
   const s = encNormTitle(slug.replace(/-(dublado|legendado|nacional)$/i, ""));
-  const t = encNormTitle(title);
+  const t = encNormTitle(cleanTitle || title);
   if (!t) return true;
   return s.includes(t) || t.includes(s);
 }

@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792408809.3838322,
-    "ast_hash": "20b93d4c7bbbf4bc7170b46233791642",
+    "mtime": 1792410411.3375168,
+    "ast_hash": "c2790acb19f1680637d1bf5b06f334ef",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -225,8 +225,8 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1792408727.508272,
-    "ast_hash": "eeff8fd514a26204fa88512ed672fcec",
+    "mtime": 1792410355.8257587,
+    "ast_hash": "4bdd32452f04d4df0015fbaabd93424f",
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792409176.2809381,
-    "ast_hash": "ead7392a825cfa3be49c4564fd8c56bc",
+    "mtime": 1792411215.1667242,
+    "ast_hash": "42d800e80c54620d0cd58680b4952a4d",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792408861.7721264,
-    "ast_hash": "fc3305c6cb0fd577132438a1c2c6fd3f",
+    "mtime": 1792411242.2843237,
+    "ast_hash": "1f76d2dd4768f532b0a355494109e50d",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1145,8 +1145,8 @@
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
-    "mtime": 1792408771.8431547,
-    "ast_hash": "455c174235db0e4b580c44518e27894e",
+    "mtime": 1792411225.1216543,
+    "ast_hash": "299d5e99de38b576c59d9b01389d80e3",
     "semantic_hash": ""
   }
 }

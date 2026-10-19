@@ -1,3 +1,18 @@
+## 19/10/2026 - Fix de Fallback Imediato do StreamTape (Zero Espera no Watchdog) e Atualização de Domínio do Vizer
+
+**Contexto e Diagnóstico do Bug (Fantasmas S5E8):**
+1. **Espera de 10s no Watchdog Eliminada (`server/routes/streamtapeRoutes.ts`):** Quando o StreamTape retornava erro (404 arquivo inexistente, 502 vídeo expirado ou erro no elemento `<video>`), o backend devolvia HTML estático sem script de postMessage. O frontend ficava travado esperando os 10s do watchdog para então trocar de servidor. Adicionada a emissão imediata de `window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "..." })` para todos os fluxos de erro (404, 502, 500 e erro do `<video>`), garantindo comutação silenciosa em < 50ms.
+2. **Atualização de Domínio do Vizer (`server/routes/encontreiLookup.ts`):** O Vizer migrou seu domínio ativo para `https://www.vizer.uno`. A lista `VIZER_DOMAINS` foi atualizada adicionando `https://www.vizer.uno` como primário, eliminando atrasos e redirecionamentos intermediários.
+3. **Sanitização de Título na Busca Live (`VideoPlayerModal.tsx` & `encontreiLookup.ts`):** O título enviado pelo frontend continha o nome completo do episódio (ex: `"Fantasmas - T5:E8 A Vida e a Época de Esther Greene"`), o que quebrava o matching de slugs com a série base `"fantasmas"`. Adicionada sanitização (`split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim()`) tanto no frontend (`lookupMixdropFileId`, `srv_streamtape`, `srv_vip`) quanto no backend (`encSlugMatchesTitle`).
+4. **Ajuste de Tolerância do Watchdog (`VideoPlayerModal.tsx` & `streamtapeRoutes.ts`):** O watchdog de segurança para início da reprodução foi elevado de 10s para **no mínimo 15 segundos** (e 18s para o WatchPlayer). Isso evita quedas ou trocas prematuras em conexões oscilantes ou com buffering inicial mais longo, mantendo a comutação instantânea (< 50ms) caso o servidor emita erro real. O timeout de resolução HEAD do StreamTape também subiu para 15s.
+5. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `24` e `versionName` para `"1.3.2"`.
+
+**Validação:**
+- Teste TDD automatizado (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Sincronização do grafo Graphify (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Integração do Servidor StreamTape HD (Fallback VOD, Busca Live e Skin Netflix 100%)
 
 **Contexto e Motivação:**

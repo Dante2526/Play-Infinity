@@ -121,7 +121,7 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": embedUrl
       },
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(15000)
     });
 
     const location = headRes.headers.get("location");
@@ -286,7 +286,16 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       return res.status(404).send(`
         <!DOCTYPE html>
         <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body><div style="text-align:center;"><h2>StreamTape Indisponível</h2><p>Conteúdo não encontrado no catálogo do StreamTape.</p></div></body></html>
+        <body>
+          <div style="text-align:center;"><h2>StreamTape Indisponível</h2><p>Conteúdo não encontrado no catálogo do StreamTape.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Conteúdo não encontrado no catálogo" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
       `);
     }
 
@@ -317,7 +326,16 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       return res.status(502).send(`
         <!DOCTYPE html>
         <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body><div style="text-align:center;"><h2>Vídeo Expirado</h2><p>O arquivo no StreamTape foi removido ou está temporariamente offline.</p></div></body></html>
+        <body>
+          <div style="text-align:center;"><h2>Vídeo Expirado</h2><p>O arquivo no StreamTape foi removido ou está temporariamente offline.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Vídeo expirado ou removido" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
       `);
     }
 
@@ -380,7 +398,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
       });
       v.addEventListener("error", function() {
-        try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ERROR" }, "*"); } catch(e) {}
+        try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de vídeo" }, "*"); } catch(e) {}
       });
 
       // Receptor de comandos da NetflixPlayerSkin
@@ -415,7 +433,20 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.send(html);
   } catch (err: any) {
-    res.status(500).send("Erro ao renderizar reprodutor StreamTape.");
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+      <body>
+        <div style="text-align:center;"><h2>Erro no StreamTape</h2><p>Erro interno ao renderizar reprodutor.</p></div>
+        <script>
+          try {
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro interno no servidor" }, "*");
+            }
+          } catch(e) {}
+        </script>
+      </body></html>
+    `);
   }
 });
 

@@ -274,9 +274,10 @@ export function VideoPlayerModal({
       }
       const inflightPromise = (async () => {
         try {
+          const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : undefined;
           const res = lookupMode === "tv"
-            ? await findEpisode(lookupId, s, e, refresh, title || undefined)
-            : await findMovieByTmdbId(lookupId, refresh, title || undefined);
+            ? await findEpisode(lookupId, s, e, refresh, cleanTitle || undefined)
+            : await findMovieByTmdbId(lookupId, refresh, cleanTitle || undefined);
           const result = res?.mixdrop ?? null;
           const vizerResult = res?.mixdrop_vizer ?? null;
           const encontreiResult = res?.mixdrop_encontrei ?? null;
@@ -1065,7 +1066,8 @@ export function VideoPlayerModal({
           badge: "StreamTape • MP4 direto • Skin Netflix 100%",
           buildUrl: (id: string, s?: number, e?: number) => {
             const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
             return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
@@ -1089,7 +1091,8 @@ export function VideoPlayerModal({
             // devolve fontes blacklisted, ele retenta com esse series_id (ou resolve
             // pelo nome via resolveNixplaySeriesId). Evita VIP_UNAVAILABLE indevido.
             const nixId = nixplaySeriesId ? encodeURIComponent(String(nixplaySeriesId)) : "";
-            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
             return `/api/vip-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${nixId ? `&nixId=${nixId}` : ""}${nameParam}`;
           },
           isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
@@ -1140,7 +1143,8 @@ export function VideoPlayerModal({
           badge: "StreamTape • MP4 direto • Skin Netflix 100%",
           buildUrl: (id: string) => {
             const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
-            const nameParam = title ? `&name=${encodeURIComponent(title)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
             return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
@@ -1354,11 +1358,11 @@ export function VideoPlayerModal({
 
   // Watchdog inteligente de segurança: se o player demorar sem iniciar,
   // comuta automaticamente e silenciosamente para o próximo player disponível sem travar a experiência.
-  // WatchPlayer configurado para 17s de tolerância.
+  // Tolerância: no mínimo 15s para servidores diretos e 18s para WatchPlayer.
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = (selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay')) ? 17000 : 10000;
+    const timeoutDuration = (selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay')) ? 18000 : 15000;
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
