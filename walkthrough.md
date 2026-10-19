@@ -5,10 +5,16 @@
 2. **Atualização de Domínio do Vizer (`server/routes/encontreiLookup.ts`):** O Vizer migrou seu domínio ativo para `https://www.vizer.uno`. A lista `VIZER_DOMAINS` foi atualizada adicionando `https://www.vizer.uno` como primário, eliminando atrasos e redirecionamentos intermediários.
 3. **Sanitização de Título na Busca Live (`VideoPlayerModal.tsx` & `encontreiLookup.ts`):** O título enviado pelo frontend continha o nome completo do episódio (ex: `"Fantasmas - T5:E8 A Vida e a Época de Esther Greene"`), o que quebrava o matching de slugs com a série base `"fantasmas"`. Adicionada sanitização (`split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim()`) tanto no frontend (`lookupMixdropFileId`, `srv_streamtape`, `srv_vip`) quanto no backend (`encSlugMatchesTitle`).
 4. **Ajuste de Tolerância do Watchdog (`VideoPlayerModal.tsx` & `streamtapeRoutes.ts`):** O watchdog de segurança para início da reprodução foi elevado de 10s para **no mínimo 15 segundos** (e 18s para o WatchPlayer). Isso evita quedas ou trocas prematuras em conexões oscilantes ou com buffering inicial mais longo, mantendo a comutação instantânea (< 50ms) caso o servidor emita erro real. O timeout de resolução HEAD do StreamTape também subiu para 15s.
-5. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `24` e `versionName` para `"1.3.2"`.
+5. **Fix do Honeypot Anti-Scraping do StreamTape (`server/routes/streamtapeRoutes.ts`):** O StreamTape coloca divs ocultos com tokens falsos (`ideoolink` com `idb=`) para enganar scrapers estáticos. A regex antiga caía nesse honeypot e falhava com 502 em vídeos vivos (ex: VisionQuest S1E2 `z6yr690jWAtYO6b`). O resolver foi corrigido para executar a decodificação dinâmica estritamente dos elementos `botlink` e `robotlink` com `&stream=1`, retornando HTTP 302 direto da CDN (`tapecontent.net`).
+6. **Estabilidade de Buffer do MixDrop & RFC 9110 (`server/routes/mixdrop.ts` & `streamtapeRoutes.ts`):**
+   - O proxy `/api/md-proxy` e `/api/streamtape-stream` dropavam indevidamente o header `Content-Length`, gerando streams parciais chunked indeterminados. No Chrome/Android WebView, isso causava esgotamento do buffer aos 20-24s de vídeo e encerramento prematuro da conexão por timeout na CDN da origem. Agora repassa `Content-Length` em conformidade com HTTP 206 RFC 9110.
+   - Adicionado `moreVideoAttr: { preload: "auto" }` no ArtPlayer para assegurar pré-carregamento contínuo.
+   - O Auto-Healer de A/V sync e o vigia de congelamento foram protegidos para ignorar o buffer inicial de rede e só aplicar micro-ajustes se houver buffer local abastecido (`>= 2.0s`), eliminando seeks repetitivos que esvaziavam o pipeline.
+7. **Versionamento Android (`android/app/build.gradle`):** Incrementado `versionCode` para `24` e `versionName` para `"1.3.2"`.
 
 **Validação:**
-- Teste TDD automatizado (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD StreamTape (`scratch/test-streamtape.mjs`): 6/6 PASS.
+- Teste TDD MixDrop Buffer (`scratch/test-mixdrop-stability.mjs`): 5/5 PASS.
 - Sincronização do grafo Graphify (`graphify update .`).
 
 ---

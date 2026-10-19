@@ -196,7 +196,12 @@ const router = Router();
                 muted: false,
                 playsInline: true,
                 controls: [],
-                theme: "#e50914"
+                theme: "#e50914",
+                moreVideoAttr: {
+                  preload: "auto",
+                  playsinline: "true",
+                  "webkit-playsinline": "true"
+                }
               });
 
               window.artInstance = art;
@@ -299,9 +304,19 @@ const router = Router();
                       } catch(e) {}
                     }
 
-                    if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                    var bufA = 0;
+                    try {
+                      for (var bi = 0; bi < v.buffered.length; bi++) {
+                        if (cur >= v.buffered.start(bi) && cur <= v.buffered.end(bi)) {
+                          bufA = v.buffered.end(bi) - cur;
+                          break;
+                        }
+                      }
+                    } catch(e) {}
+
+                    if (!frameFresh && bufA >= 2.0 && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
                       stallTicks++;
-                      if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                      if (stallTicks >= 4 && (now - lastHealAt > 5000) && !isHealing) {
                         isHealing = true;
                         lastHealAt = now;
                         stallTicks = 0;
@@ -548,7 +563,8 @@ const router = Router();
                   lastT = cur;
                   lastWall = now;
 
-                  if (wall >= 0.7 && dt < 0.05) {
+                  var currentBuf = bufAhead(v);
+                  if (wall >= 0.7 && dt < 0.05 && currentBuf >= 0.8) {
                     frozenTicks++;
                     if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
                     
@@ -794,16 +810,11 @@ const router = Router();
 
       res.status(upstream.status);
 
-      // Content-Length é DROPPED em qualquer status. Mesmo em 206 (Range) um
-      // reset da CDN ou um aborto do cliente encerra o corpo antes do fim
-      // declarado → Chrome dispara net::ERR_CONTENT_LENGTH_MISMATCH. Sem o
-      // header a resposta vai chunked e termina no marcador de fim — o mismatch
-      // vira impossível. Content-Range/Accept-Ranges seguem sendo enviados:
-      // o player usa o total deles pra saber o tamanho do arquivo (seek).
+      // Repassa Content-Length, Content-Range e Accept-Ranges para conformidade RFC 9110 (Range 206)
+      // Isso permite que navegadores e players calculem buffers preditivos e fechem requisições Range limpas.
       for (const [key, value] of upstream.headers.entries()) {
         const lk = key.toLowerCase();
-        if (lk === "content-length") continue;
-        if (["content-type", "content-range", "accept-ranges"].includes(lk)) {
+        if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
           res.setHeader(key, value);
         }
       }

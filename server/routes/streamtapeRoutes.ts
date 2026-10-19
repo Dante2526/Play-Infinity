@@ -89,31 +89,49 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
       return null;
     }
 
-    // 1. Extração via padrão do script get_video (id=...&expires=...&ip=...&token=...)
-    let queryToken: string | null = null;
-    const paramMatch = html.match(/(id=[a-zA-Z0-9_-]+&expires=[0-9]+&ip=[^&'"]+&token=[a-zA-Z0-9_-]+)/);
-    if (paramMatch && paramMatch[1]) {
-      queryToken = paramMatch[1];
-    } else {
-      // 2. Fallback de substring dinâmico no script robotlink / botlink / ideoolink
+    // 1. Extração prioritária via script dinâmico ('botlink' ou 'robotlink')
+    // Nota crítica: StreamTape coloca divs ocultos com tokens FALSOS (honeypots como 'ideoolink')
+    // para enganar scrapers estáticos. A URL real é montada exclusivamente via script dinâmico.
+    let nextUrl: string | null = null;
+
+    const dynamicMatch = html.match(/document\.getElementById\(['"](?:botlink|robotlink)['"]\)\.innerHTML\s*=\s*(.+?);/);
+    if (dynamicMatch && dynamicMatch[1]) {
+      try {
+        const evaluated = new Function(`return ${dynamicMatch[1]};`)();
+        let target = String(evaluated).trim();
+        if (target.startsWith("//")) {
+          nextUrl = "https:" + target;
+        } else if (target.startsWith("http")) {
+          nextUrl = target;
+        } else {
+          nextUrl = "https://streamtape.com" + (target.startsWith("/") ? "" : "/") + target;
+        }
+        if (!nextUrl.includes("&stream=1")) {
+          nextUrl += "&stream=1";
+        }
+      } catch (e) {
+        console.warn(`[StreamTape Resolver] Falha ao avaliar script dinâmico para ${cleanId}:`, e);
+      }
+    }
+
+    // 2. Fallback secundário caso o padrão do script varie
+    if (!nextUrl) {
       const subMatch = html.match(/document\.getElementById\(['"][^'"]+link['"]\)\.innerHTML\s*=\s*['"][^'"]+['"]\s*\+\s*\((['"][^'"]+['"]\)\.substring\([0-9]+\)(?:\.substring\([0-9]+\))?)/);
       if (subMatch && subMatch[1]) {
         try {
           const evalStr = new Function(`return (${subMatch[1]})`)() as string;
           const cleanQuery = evalStr.replace(/^[/?&]+/, "");
           if (cleanQuery.includes("id=")) {
-            queryToken = cleanQuery;
+            nextUrl = `https://streamtape.com/get_video?${cleanQuery}&stream=1`;
           }
         } catch {}
       }
     }
 
-    if (!queryToken) {
-      console.warn(`[StreamTape Resolver] Não foi possível extrair o token do embed para fileId: ${cleanId}`);
+    if (!nextUrl) {
+      console.warn(`[StreamTape Resolver] Não foi possível extrair o link de vídeo para fileId: ${cleanId}`);
       return null;
     }
-
-    const nextUrl = `https://streamtape.com/get_video?${queryToken}`;
     const headRes = await fetch(nextUrl, {
       method: "HEAD",
       redirect: "manual",
@@ -214,11 +232,10 @@ streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Respons
 
     res.status(upstream.status);
 
-    // Droppa Content-Length para evitar ERR_CONTENT_LENGTH_MISMATCH em desconexões/seeks
+    // Repassa Content-Length, Content-Range e Accept-Ranges para conformidade RFC 9110 (Range 206)
     for (const [key, value] of upstream.headers.entries()) {
       const lk = key.toLowerCase();
-      if (lk === "content-length") continue;
-      if (["content-type", "content-range", "accept-ranges"].includes(lk)) {
+      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
         res.setHeader(key, value);
       }
     }
