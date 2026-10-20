@@ -88,21 +88,5 @@
   "86": "DetailsPage.tsx",
   "87": "doodstreamRoutes.ts",
   "88": "streamtapeRoutes.ts",
-  "89": "ProviderPage.tsx",
-  "90": "@capacitor/core",
-  "91": "@capacitor-firebase/messaging",
-  "92": "@capacitor/splash-screen",
-  "93": "express-rate-limit",
-  "94": "@caprockapps/capacitor-chromecast",
-  "95": "cheerio",
-  "96": "@consumet/extensions",
-  "97": "express-rate-limit",
-  "98": "firebase",
-  "99": "firebase-admin",
-  "100": "lru-cache",
-  "101": "motion",
-  "102": "express",
-  "103": "helmet",
-  "104": "ssh2",
-  "105": "@vitejs/plugin-react"
+  "89": "ProviderPage.tsx"
 }

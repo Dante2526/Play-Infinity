@@ -1,3 +1,32 @@
+## 20/10/2026 - Correção de Expiração de Token e Retomada no StreamTape (Pausa Longa)
+
+**Contexto e Motivação:**
+Quando o usuário pausava a reprodução no StreamTape por muito tempo (ex.: 1 hora de pausa) e depois clicava em "Play", o episódio reiniciava do começo (segundo 00:00) em vez de continuar do momento onde havia parado. O mesmo problema já havia sido resolvido com sucesso no MixDrop.
+
+**Causas Raízes Identificadas:**
+1. **Backend sem Auto-Healer:** Ao despausar, o elemento `<video>` solicita novos bytes via Range HTTP 206. Como o token da CDN expira, a CDN do StreamTape retornava HTTP 403 Forbidden. Diferente do MixDrop, o proxy `/api/streamtape-stream` repassava o 403 ao navegador, disparando erro de rede fatal.
+2. **Cache em Memória Excessivo:** O `streamtapeMemoryCache` retinha URLs por 2 horas (`CACHE_TTL_MS = 2 horas`), re-entregando URLs expiradas mesmo após tentativas de reload.
+3. **Ausência de `fileId` na URL do Stream:** A URL gerada não continha o `fileId`, impedindo a re-resolução imediata do token pelo proxy.
+4. **Falta de Cache-Buster e Retomada no Frontend:** No `VideoPlayerModal.tsx`, o servidor `srv_streamtape` não possuía `&cb=${Date.now()}` nem `&t=`, impedindo que o recarregamento proativo pós-pausa longa (> 3 min) atualizasse o iframe mantendo a posição salva.
+
+**Modificações Realizadas:**
+1. **`server/routes/streamtapeRoutes.ts`:**
+   - Adicionado **Auto-Healer HTTP 403/404/410** em `/api/streamtape-stream`: intercepta a expiração da CDN, invalida o cache, renova a URL do StreamTape em tempo real com `resolveStreamTapeToken` e repete a requisição mantendo o mesmo cabeçalho `Range` HTTP 206 solicitado pelo navegador.
+   - Adicionado mapa reverso `directUrlToFileId` e passagem explícita de `fileId` nas URLs de streaming.
+   - Reduzido `CACHE_TTL_MS` de 2 horas para 20 minutos.
+   - No `/api/streamtape-proxy-iframe`, adicionado suporte ao parâmetro `t` (tempo inicial), injeção de seek nos eventos `loadedmetadata`/`canplay` e auto-recovery inteligente antes de emitir erro fatal.
+2. **`src/components/VideoPlayerModal.tsx`:**
+   - Atualizados os construtores de URL (`buildUrl`) do StreamTape para séries e filmes com `&cb=${Date.now()}` e `&t=${Math.floor(lastKnownTimeRef.current)}`.
+   - Adicionada ativação imediata da skin no `handleServerSwitch` para o StreamTape (`serverKey === "srv_streamtape"`).
+
+**Validação Realizada:**
+- Teste TDD automatizado (`scratch/test-streamtape-autohealer.mjs`): 2/2 testes aprovados com sucesso (Auto-Healer com Range 206 e injeção de initialSeek).
+- Teste de regressão de temporadas (`scratch/test-dynamic-seasons.mjs`): aprovado.
+- Teste de regressão de segurança (`scratch/test-security-patches.mjs`): aprovado.
+- Compilação do servidor backend via esbuild (`dist/server.cjs`): 0 erros gerados.
+
+---
+
 ## 20/10/2026 - Detecção Automática e Dinâmica de Novas Temporadas (Sem Cache Stale)
 
 **Contexto e Motivação:**

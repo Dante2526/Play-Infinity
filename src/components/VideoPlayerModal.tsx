@@ -1194,7 +1194,8 @@ export function VideoPlayerModal({
             const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
             const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}`;
+            const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
           name: "StreamTape HD"
@@ -1271,7 +1272,8 @@ export function VideoPlayerModal({
             const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
             const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}`;
+            const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
           name: "StreamTape HD"
@@ -1398,7 +1400,7 @@ export function VideoPlayerModal({
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop");
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape");
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     setError(null);

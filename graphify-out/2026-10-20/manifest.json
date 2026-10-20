@@ -225,8 +225,8 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1792414634.4655316,
-    "ast_hash": "e095ca375fa1ff10fcae40f61917e98d",
+    "mtime": 1792501259.5637276,
+    "ast_hash": "646b43bc9a397879c0911abf2d79e24e",
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
@@ -260,8 +260,8 @@
     "semantic_hash": ""
   },
   "server/routes/tmdbProxy.ts": {
-    "mtime": 1792312888.7451968,
-    "ast_hash": "eaa88712ad196a100c995a5017f7cdd8",
+    "mtime": 1792501343.2421932,
+    "ast_hash": "e1f7433925d0f66774d9e9c9578725e6",
     "semantic_hash": ""
   },
   "server/routes/userOps.ts": {
@@ -570,14 +570,14 @@
     "semantic_hash": "f9144c46fcabf3eae7ab7657ab994574"
   },
   "src/services/encontreiCatalog.ts": {
-    "mtime": 1792414509.5121655,
-    "ast_hash": "7ee15df3e0005af9711ddfba9517d94e",
+    "mtime": 1792501343.241635,
+    "ast_hash": "2633d36c680854d29068b45e85115649",
     "semantic_hash": ""
   },
   "src/services/episodeAvailability.ts": {
-    "mtime": 1791371640.903491,
-    "ast_hash": "d3ab6497bad533a1499b20bb09d0e217",
-    "semantic_hash": "d3ab6497bad533a1499b20bb09d0e217"
+    "mtime": 1792501343.2389877,
+    "ast_hash": "f750625f74882bc0b32378c6273c5559",
+    "semantic_hash": ""
   },
   "src/services/favorites.ts": {
     "mtime": 1792312965.3797314,
@@ -620,8 +620,8 @@
     "semantic_hash": "0c21a7717ba1af1b8d1b8839b46b095d"
   },
   "src/services/tmdb.ts": {
-    "mtime": 1792494964.087572,
-    "ast_hash": "b2f65754db789c5df0b43998c11eb699",
+    "mtime": 1792501343.2280054,
+    "ast_hash": "a4b81aa0e26f90b6658e541c72bdfaea",
     "semantic_hash": ""
   },
   "src/services/watchedEpisodes.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792495167.4304447,
-    "ast_hash": "958b44386e9a7dee071ffe441ca37472",
+    "mtime": 1792501403.8524432,
+    "ast_hash": "9170288c3989f5d7095b96a86c6db0e9",
     "semantic_hash": ""
   },
   "worker/README.md": {

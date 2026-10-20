@@ -18,7 +18,8 @@ interface StreamtapeCacheEntry {
 }
 
 const streamtapeMemoryCache = new Map<string, StreamtapeCacheEntry>();
-const CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 horas
+const directUrlToFileId = new Map<string, string>();
+const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutos (evita retenção de tokens expirados da CDN)
 
 // Lazy-load de IDs do catálogo local se precisar buscar por tmdb_id
 let _localCatalog: any = null;
@@ -153,6 +154,7 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
       fileId: cleanId,
       expiresAt: Date.now() + CACHE_TTL_MS
     });
+    directUrlToFileId.set(location, cleanId);
 
     return location;
   } catch (err: any) {
@@ -192,7 +194,7 @@ streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Respon
       success: true,
       fileId,
       directUrl,
-      proxyUrl: `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}`
+      proxyUrl: `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || "Erro interno no resolvedor" });
@@ -201,11 +203,12 @@ streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Respon
 
 /**
  * GET /api/streamtape-stream
- * Proxy resiliente de streaming para CDNs do StreamTape (suporte a Range HTTP 206)
+ * Proxy resiliente de streaming para CDNs do StreamTape (suporte a Range HTTP 206 e Auto-Healer)
  */
 streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Response) => {
   try {
-    const videoUrl = String(req.query.url || "").trim();
+    let videoUrl = String(req.query.url || "").trim();
+    const fileId = String(req.query.fileId || "").trim();
     if (!videoUrl || (!videoUrl.includes("tapecontent.net") && !videoUrl.includes("streamtape"))) {
       return res.status(400).send("URL de streaming inválida.");
     }
@@ -223,12 +226,31 @@ streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Respons
       headers["Range"] = req.headers.range as string;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    let controller = new AbortController();
+    let timeoutId = setTimeout(() => controller.abort(), 15000);
     req.on("close", () => controller.abort());
 
-    const upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
     clearTimeout(timeoutId);
+
+    // Auto-Healer 403 Forbidden / 404 / 410: se o token da CDN expirar (após pausa longa), renova em tempo real mantendo o Range
+    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
+      const targetFileId = fileId || directUrlToFileId.get(videoUrl) || "";
+      if (targetFileId) {
+        console.warn(`[StreamTape Proxy] Token CDN expirado (${upstream.status}) para fileId ${targetFileId}. Renovando token em tempo real...`);
+        streamtapeMemoryCache.delete(targetFileId);
+        try { await upstream.text(); } catch (_) {}
+
+        const freshDirectUrl = await resolveStreamTapeToken(targetFileId);
+        if (freshDirectUrl) {
+          videoUrl = freshDirectUrl;
+          controller = new AbortController();
+          timeoutId = setTimeout(() => controller.abort(), 15000);
+          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+          clearTimeout(timeoutId);
+        }
+      }
+    }
 
     res.status(upstream.status);
 
@@ -278,6 +300,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     const season = req.query.s ? Number(req.query.s) : undefined;
     const episode = req.query.e ? Number(req.query.e) : undefined;
     const name = req.query.name ? String(req.query.name) : undefined;
+    const initialTime = Math.max(0, parseFloat(String(req.query.t || "0")));
 
     // 1. Se não veio fileId na query, consulta o catálogo estático local
     if (!fileId && id) {
@@ -288,10 +311,10 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         try {
           if (season !== undefined && episode !== undefined) {
             const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-            fileId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
+            fileId = (liveEnc as any)?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
           } else {
             const liveEnc = await resolveEncontreiMovie(id, name);
-            fileId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
+            fileId = (liveEnc as any)?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
           }
         } catch (e) {
           console.warn("[StreamTape Live Lookup Error]:", e);
@@ -325,10 +348,10 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         let freshId: string | null = null;
         if (season !== undefined && episode !== undefined) {
           const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-          freshId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
+          freshId = (liveEnc as any)?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
         } else {
           const liveEnc = await resolveEncontreiMovie(id, name);
-          freshId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
+          freshId = (liveEnc as any)?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
         }
         if (freshId && freshId !== fileId) {
           fileId = freshId;
@@ -356,8 +379,8 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       `);
     }
 
-    // Stream URL usando nosso proxy que garante headers e CORS
-    const streamUrl = `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}`;
+    // Stream URL usando nosso proxy que garante headers, CORS e renovação via Auto-Healer
+    const streamUrl = `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -378,6 +401,22 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     (function() {
       var v = document.getElementById("video");
       var hasEverPlayed = false;
+      var initialSeek = ${initialTime};
+
+      // Se foi passado timestamp inicial (ex: retomada após pausa longa ou Continuar Assistindo),
+      // posiciona no segundo salvo assim que os metadados do vídeo estiverem prontos
+      if (initialSeek > 0) {
+        var appliedInitial = false;
+        var applySeek = function() {
+          if (!appliedInitial && v && v.readyState >= 1) {
+            appliedInitial = true;
+            try { v.currentTime = initialSeek; } catch(e) {}
+          }
+        };
+        v.addEventListener("loadedmetadata", applySeek);
+        v.addEventListener("canplay", applySeek);
+        v.addEventListener("play", applySeek);
+      }
 
       function sendStatus() {
         if (!v) return;
@@ -414,7 +453,37 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       v.addEventListener("ended", function() {
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
       });
+
+      // Auto-recovery de erro no vídeo: se falhar após o vídeo já ter iniciado, tenta recarregar fonte com o tempo salvo
+      var hasRecoveredOnce = false;
       v.addEventListener("error", function() {
+        var cur = (v && v.currentTime > 2) ? v.currentTime : initialSeek;
+        if (!hasRecoveredOnce && cur > 2) {
+          hasRecoveredOnce = true;
+          console.warn("[StreamTape Iframe] Erro detectado no vídeo. Renovando token via auto-recovery na posição:", cur);
+          fetch("/api/streamtape-resolve?fileId=" + encodeURIComponent("${fileId}"))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data && data.proxyUrl) {
+                v.src = data.proxyUrl + "&_cb=" + Date.now();
+                var onReloadSeek = function() {
+                  try {
+                    v.currentTime = cur;
+                    v.play().catch(function(){});
+                  } catch(e) {}
+                };
+                v.addEventListener("loadedmetadata", onReloadSeek, { once: true });
+                v.addEventListener("canplay", onReloadSeek, { once: true });
+                v.load();
+                return;
+              }
+              throw new Error("Sem proxyUrl");
+            })
+            .catch(function() {
+              try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de vídeo" }, "*"); } catch(e) {}
+            });
+          return;
+        }
         try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de vídeo" }, "*"); } catch(e) {}
       });
 
@@ -424,8 +493,20 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         var d = event.data;
         if (d.type === "PAUSE" && v) v.pause();
         if (d.type === "PLAY" && v) v.play().catch(function(){});
-        if (d.type === "SEEK" && v && typeof d.targetTime === "number") v.currentTime = d.targetTime;
-        if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") v.currentTime = d.time;
+        if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
+          if (v.readyState >= 1) {
+            v.currentTime = d.targetTime;
+          } else {
+            initialSeek = d.targetTime;
+          }
+        }
+        if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") {
+          if (v.readyState >= 1) {
+            v.currentTime = d.time;
+          } else {
+            initialSeek = d.time;
+          }
+        }
         if (d.type === "SEEK_RELATIVE" && v && typeof d.seconds === "number") v.currentTime = v.currentTime + d.seconds;
         if (d.type === "MUTE" && v) v.muted = true;
         if (d.type === "UNMUTE" && v) v.muted = false;
