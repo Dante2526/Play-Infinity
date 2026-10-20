@@ -432,9 +432,9 @@ export function VideoPlayerModal({
   const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
     try {
       localStorage.removeItem("playinfinity_autoskip_intro");
-      return parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+      return parseInt(localStorage.getItem("playinfinity_skip_duration") || "75", 10);
     } catch {
-      return 85;
+      return 75;
     }
   });
   const [isIntroActive, setIsIntroActive] = useState<boolean>(false);
@@ -2129,7 +2129,7 @@ export function VideoPlayerModal({
     return () => window.removeEventListener("online", handleOnline);
   }, [error, servers, handleServerSwitch]);
 
-  // Função para Pular Abertura (+85 segundos ou customizado)
+  // Função para Pular Abertura (+75 segundos ou customizado)
   const handleSkipIntro = (customSeconds?: number) => {
     const sec = customSeconds || skipDurationSeconds;
     if (iframeRef.current?.contentWindow) {
@@ -2149,7 +2149,7 @@ export function VideoPlayerModal({
 
   // Função para desfazer o salto caso tenha passado do ponto
   const handleUndoSkip = () => {
-    const secToRewind = -(lastSkippedSeconds || skipDurationSeconds || 85);
+    const secToRewind = -(lastSkippedSeconds || skipDurationSeconds || 75);
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");

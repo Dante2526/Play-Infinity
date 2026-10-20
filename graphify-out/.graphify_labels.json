@@ -85,6 +85,21 @@
   "83": "task.md",
   "84": "AppErrorBoundary",
   "85": "@capacitor-firebase/messaging",
+  "86": "@capacitor/status-bar",
   "87": "doodstreamRoutes.ts",
-  "88": "streamtapeRoutes.ts"
+  "88": "streamtapeRoutes.ts",
+  "89": "@caprockapps/capacitor-chromecast",
+  "90": "cheerio",
+  "91": "@consumet/extensions",
+  "92": "express-rate-limit",
+  "93": "firebase",
+  "94": "firebase-admin",
+  "95": "lru-cache",
+  "96": "motion",
+  "97": "express",
+  "98": "helmet",
+  "99": "react-dom",
+  "100": "ssh2",
+  "101": "@vitejs/plugin-react",
+  "102": "encSlugMatchesTitle"
 }

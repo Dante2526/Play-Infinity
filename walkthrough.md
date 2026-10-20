@@ -1,3 +1,16 @@
+## 20/10/2026 - Ajuste do Tempo de Pular Abertura para 75 Segundos
+
+**Contexto e Motivação:**
+Solicitada a redução do salto do botão e atalho de "Pular Abertura" de 85 segundos para 75 segundos, permitindo um salto mais seguro sem risco de avançar além do primeiro segundo de início da história em aberturas mais curtas.
+
+**Modificações Realizadas:**
+1. **`src/components/VideoPlayerModal.tsx`:** Valor padrão do salto e retorno (undo) ajustado para 75 segundos.
+2. **`src/components/NetflixPlayerSkin.tsx`:** Tooltip do botão de pular abertura atualizado para `(+75s) - Tecla S`.
+3. **`server/routes/mixdrop.ts`:** Handler `SKIP_INTRO` ajustado com fallback padrão para 75 segundos.
+4. **`server/routes/videoScrapers.ts`:** Script do player bridge atualizado com padrão de 75 segundos.
+
+---
+
 ## 20/10/2026 - Calibração do Watchdog Anti-Engasgo (Eliminação de Falsos Positivos com Buffer Alto)
 
 **Contexto e Motivação:**

@@ -1890,9 +1890,9 @@ const router = Router();
 
             // 3. Funções de controle de vídeo e telemetria para o NetflixPlayerSkin
             var introSkippedForCurrentVideo = false;
-            var skipDurationSeconds = 85;
+            var skipDurationSeconds = 75;
             try {
-              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "75", 10);
             } catch(e) {}
 
             function getVideoElement() {
@@ -1949,7 +1949,7 @@ const router = Router();
             }
 
             function doSkipIntro(seconds) {
-              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 85);
+              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 75);
               var video = getVideoElement();
               if (video) {
                 var current = video.currentTime || 0;
