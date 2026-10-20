@@ -24,7 +24,8 @@ import { LiveChannel } from '../data/liveChannels';
 import { ChannelLogo } from './ChannelLogo';
 import { CastModal } from './CastModal';
 import { detectConnectionQuality } from '../services/networkQuality';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+const PiP = registerPlugin<any>('PiP');
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 
 interface LivePlayerModalProps {
@@ -51,6 +52,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(1);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [isNativePiP, setIsNativePiP] = useState<boolean>(false);
   const [isRotated, setIsRotated] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
@@ -81,6 +83,27 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const cardDimensionsRef = useRef<{ width: number; height: number }>({ width: 300, height: 200 });
   const miniContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Escuta Picture-in-Picture nativo do Android
+  useEffect(() => {
+    const handlePiPChange = (e: any) => {
+      let isPiP = false;
+      if (e?.detail?.isPiP !== undefined) {
+        isPiP = e.detail.isPiP;
+      } else if (e?.isPiP !== undefined) {
+        isPiP = e.isPiP;
+      }
+      setIsNativePiP(isPiP);
+      if (isPiP) {
+        setIsFullscreen(false);
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+    window.addEventListener('pipModeChanged', handlePiPChange);
+    return () => window.removeEventListener('pipModeChanged', handlePiPChange);
+  }, []);
 
   // Mantém o mini player contido na tela se a janela for redimensionada
   useEffect(() => {
@@ -161,12 +184,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
   const handleClose = () => {
     if (Capacitor.isNativePlatform()) {
+      PiP.setVideoPlaying({ isPlaying: false }).catch(() => {});
       ScreenOrientation.unlock().catch(() => {});
     }
     onClose();
   };
 
-  const handleToggleMiniPlayer = () => {
+  const toggleInAppMiniPlayer = () => {
     if (isMiniPlayer) {
       if (Capacitor.isNativePlatform()) {
         ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
@@ -193,6 +217,16 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       }
       setIsMiniPlayer(true);
     }
+  };
+
+  const handleToggleMiniPlayer = () => {
+    if (Capacitor.isNativePlatform()) {
+      PiP.enter().catch(() => {
+        toggleInAppMiniPlayer();
+      });
+      return;
+    }
+    toggleInAppMiniPlayer();
   };
 
   // Limpa histórico de falhas ao trocar de canal
@@ -1181,11 +1215,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           : undefined
       }
       className={
-        isMiniPlayer
-          ? `fixed z-[100] select-none w-[220px] xs:w-[260px] sm:w-[320px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90 bg-black overflow-hidden flex flex-col ${
-              !miniPosition ? 'bottom-4 right-4' : ''
-            } ${isDragging ? 'transition-none' : 'transition-[left,top] duration-150'} animate-in slide-in-from-bottom-5`
-          : 'live-player-modal fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden'
+        isNativePiP
+          ? 'fixed inset-0 z-[999999] bg-black w-full h-full p-0 m-0 overflow-hidden select-none'
+          : isMiniPlayer
+            ? `fixed z-[100] select-none w-[220px] xs:w-[260px] sm:w-[320px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90 bg-black overflow-hidden flex flex-col ${
+                !miniPosition ? 'bottom-4 right-4' : ''
+              } ${isDragging ? 'transition-none' : 'transition-[left,top] duration-150'} animate-in slide-in-from-bottom-5`
+            : 'live-player-modal fixed inset-0 z-[100] bg-black flex flex-col items-center justify-center select-none overflow-hidden'
       }
     >
       {/* Overlay global durante o arraste, evita que o clique caia sobre o vídeo */}
@@ -1199,7 +1235,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Cabeçalho do Mini Player Flutuante (arrastável) */}
-      {isMiniPlayer && (
+      {isMiniPlayer && !isNativePiP && (
         <div
           onPointerDown={handleMiniHeaderPointerDown}
           onPointerMove={handleMiniHeaderPointerMove}
@@ -1235,7 +1271,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Elemento de Vídeo — permanece montado o tempo todo (nunca desmonta ao entrar/sair do mini player) */}
-      <div className={isMiniPlayer ? 'relative w-full aspect-video bg-black shrink-0' : 'contents'}>
+      <div className={(isMiniPlayer && !isNativePiP) ? 'relative w-full aspect-video bg-black shrink-0' : 'contents'}>
         <div
           style={{ position: 'relative', width: '100%', height: '100%' }}
           className="flex items-center justify-center bg-black overflow-hidden select-none"
@@ -1302,7 +1338,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       </div>
 
       {/* Botão flutuante para ativar áudio se o navegador iniciar em mudo */}
-      {!isMiniPlayer && isMuted && !isLoading && !hasError && (
+      {!isMiniPlayer && !isNativePiP && isMuted && !isLoading && !hasError && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -1316,7 +1352,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Spinner de Carregamento Inicial (Sintonizando canal) - Apenas antes do início do vídeo */}
-      {!isMiniPlayer && isLoading && !isPlaying && (
+      {!isMiniPlayer && !isNativePiP && isLoading && !isPlaying && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 backdrop-blur-xs pointer-events-none z-20">
           <div className="relative">
             <div className="w-16 h-16 rounded-full border-4 border-orange-500/20 border-t-orange-500 animate-spin"></div>
@@ -1333,7 +1369,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Indicador Discreto de Buffering / Ajuste (Não bloqueia a tela nem tampa o vídeo) */}
-      {!isMiniPlayer && !isLoading && isBuffering && (
+      {!isMiniPlayer && !isNativePiP && !isLoading && isBuffering && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/80 border border-orange-500/40 backdrop-blur-md text-white text-xs font-medium shadow-xl pointer-events-none animate-in fade-in duration-300">
           <div className="w-3.5 h-3.5 rounded-full border-2 border-orange-500/30 border-t-orange-500 animate-spin shrink-0"></div>
           <span className="text-orange-300">Ajustando transmissão...</span>
@@ -1341,7 +1377,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* Banner de Erro com Troca de Servidor Rápida */}
-      {!isMiniPlayer && hasError && (
+      {!isMiniPlayer && !isNativePiP && hasError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/85 backdrop-blur-md z-30 p-6 text-center">
           <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mb-4 text-red-500">
             <AlertCircle className="w-8 h-8" />
@@ -1375,7 +1411,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* CONTROLES SUPERIORES (TOP BAR) */}
-      {!isMiniPlayer && (
+      {!isMiniPlayer && !isNativePiP && (
       <div 
         className={`absolute top-0 left-0 w-full p-3 sm:p-4 md:p-6 flex justify-between items-center bg-gradient-to-b from-black/90 via-black/40 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -1449,7 +1485,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* GAVETA LATERAL DE CANAIS RÁPIDA (QUICK CHANNEL SWITCHER) */}
-      {!isMiniPlayer && showChannelList && (
+      {!isMiniPlayer && !isNativePiP && showChannelList && (
         <div className="absolute top-16 right-4 md:right-6 bottom-20 w-80 max-w-[85vw] bg-black/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3 z-40 flex flex-col shadow-2xl overflow-hidden animate-in fade-in slide-in-from-right-4 duration-200">
           <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
             <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5">
@@ -1502,7 +1538,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       )}
 
       {/* CONTROLES INFERIORES (BOTTOM BAR) */}
-      {!isMiniPlayer && (
+      {!isMiniPlayer && !isNativePiP && (
       <div 
         className={`absolute bottom-0 left-0 w-full px-4 pt-4 md:px-6 md:pt-6 bg-gradient-to-t from-black/95 via-black/60 to-transparent transition-opacity duration-300 z-30 pointer-events-auto ${
           showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'

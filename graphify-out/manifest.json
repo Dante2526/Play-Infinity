@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792447607.2578776,
-    "ast_hash": "dbe1e6ebc163da2beb98e68f022f4da0",
+    "mtime": 1792456870.9290683,
+    "ast_hash": "c05613775904621a9628859a5753b508",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -20,9 +20,9 @@
     "semantic_hash": "8dfb2fc130e7d02164a508a1212c86eb"
   },
   "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java": {
-    "mtime": 1790697077.9303372,
-    "ast_hash": "a37a1bd59f2f40d808218e0622e6b0f9",
-    "semantic_hash": "a37a1bd59f2f40d808218e0622e6b0f9"
+    "mtime": 1792456433.22795,
+    "ast_hash": "d04568f2abaa20f941e15d48e4aecb69",
+    "semantic_hash": ""
   },
   "android/app/src/main/java/com/playinfinity/app/RokuDiscoveryPlugin.java": {
     "mtime": 1790452881.2643056,
@@ -390,8 +390,8 @@
     "semantic_hash": "199529f293a9c986df0cbd3d8abf2eb5"
   },
   "src/components/LivePlayerModal.tsx": {
-    "mtime": 1792422102.8346593,
-    "ast_hash": "3978eb93212eb2340eaa09652bebbded",
+    "mtime": 1792456944.167852,
+    "ast_hash": "23a9876b94d9783a0eeb87c9d0fb2a48",
     "semantic_hash": ""
   },
   "src/components/LiveTvPage.tsx": {
@@ -405,8 +405,8 @@
     "semantic_hash": "78a13e12251b711b2f028de6ba0a037e"
   },
   "src/components/NetflixPlayerSkin.tsx": {
-    "mtime": 1792447599.1714413,
-    "ast_hash": "b857cc696ed022506e691abe3c005617",
+    "mtime": 1792457042.5064638,
+    "ast_hash": "11016790620db7bcad3b70843c8832c3",
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792445187.9800346,
-    "ast_hash": "fb92832ad8587bbf7d899abfa0c30718",
+    "mtime": 1792456786.6744802,
+    "ast_hash": "ea1d0ff16c9d89c5914093a3d6a3bb5a",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {

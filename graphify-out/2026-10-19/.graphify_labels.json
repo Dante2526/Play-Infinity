@@ -102,5 +102,6 @@
   "100": "react-dom",
   "101": "ssh2",
   "102": "@vitejs/plugin-react",
-  "103": "encSlugMatchesTitle"
+  "103": "encSlugMatchesTitle",
+  "104": "hls.js"
 }

@@ -559,9 +559,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }, 1200);
   };
 
-  // Picture-in-Picture (Mini-Player Flutuante In-App)
+  // Picture-in-Picture: Prioriza o PiP nativo do Android quando no APK; fallback para in-app no navegador
   const handleTogglePiP = () => {
-    if (onTogglePiP) {
+    if (Capacitor.isNativePlatform()) {
+      PiP.enter()
+        .catch(() => {
+          if (onTogglePiP) onTogglePiP();
+        });
+    } else if (onTogglePiP) {
       onTogglePiP();
     }
   };
@@ -1348,31 +1353,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const playedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (displayCurrentTime / duration) * 100)) : 0;
   const bufferedPercent = hasValidDuration && duration > 0 ? Math.min(100, Math.max(0, (playerStatus.buffered / duration) * 100)) : 0;
 
-  // Miniatura da cena correspondente ao ponto da timeline (hover ou touch)
-  const previewThumbnail = useMemo(() => {
-    if (timelinePreviews.length > 0 && hoverPosPercent !== null && hoverPosPercent !== undefined) {
-      const idx = Math.min(
-        timelinePreviews.length - 1,
-        Math.max(0, Math.floor((hoverPosPercent / 100) * timelinePreviews.length))
-      );
-      return timelinePreviews[idx];
-    }
-    if (isSeries && nextEpisode?.still_path) {
-      return `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}`;
-    }
-    return backdropUrl || imageUrl || null;
-  }, [timelinePreviews, hoverPosPercent, isSeries, nextEpisode, backdropUrl, imageUrl]);
-
-  // Posição horizontal do card com clamp nas laterais para nunca vazar da tela
-  const clampedPosPercent = useMemo(() => {
-    if (!progressBarRef.current) return Math.max(8, Math.min(92, hoverPosPercent));
-    const barWidth = progressBarRef.current.clientWidth || 300;
-    const halfCardPx = barWidth < 450 ? 64 : 88;
-    const targetPx = (hoverPosPercent / 100) * barWidth;
-    const clampedPx = Math.max(halfCardPx + 4, Math.min(barWidth - halfCardPx - 4, targetPx));
-    return (clampedPx / barWidth) * 100;
-  }, [hoverPosPercent]);
-
   // ========================================================
   // RECURSO: PRÓXIMO EPISÓDIO FLUTUANTE (NETFLIX & DISNEY+)
   // ========================================================
@@ -1402,6 +1382,33 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
     return null;
   }, [isSeries, episodesList, episode, season, availableSeasons]);
+
+  // Miniatura da cena correspondente ao ponto da timeline (hover ou touch)
+  const previewThumbnail = useMemo(() => {
+    if (timelinePreviews.length > 0 && hoverPosPercent !== null && hoverPosPercent !== undefined) {
+      const idx = Math.min(
+        timelinePreviews.length - 1,
+        Math.max(0, Math.floor((hoverPosPercent / 100) * timelinePreviews.length))
+      );
+      return timelinePreviews[idx];
+    }
+    if (isSeries && nextEpisode?.still_path) {
+      return `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}`;
+    }
+    return backdropUrl || imageUrl || null;
+  }, [timelinePreviews, hoverPosPercent, isSeries, nextEpisode, backdropUrl, imageUrl]);
+
+  // Posição horizontal do card com clamp nas laterais para nunca vazar da tela
+  const clampedPosPercent = useMemo(() => {
+    if (!progressBarRef.current) return Math.max(8, Math.min(92, hoverPosPercent));
+    const barWidth = progressBarRef.current.clientWidth || 300;
+    const halfCardPx = barWidth < 450 ? 64 : 88;
+    const targetPx = (hoverPosPercent / 100) * barWidth;
+    const clampedPx = Math.max(halfCardPx + 4, Math.min(barWidth - halfCardPx - 4, targetPx));
+    return (clampedPx / barWidth) * 100;
+  }, [hoverPosPercent]);
+
+
 
   const isMovieContinuation = !isSeries && !!nextMovieInfo;
   const [showNextEpisodePrompt, setShowNextEpisodePrompt] = useState<boolean>(false);

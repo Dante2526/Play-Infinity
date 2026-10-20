@@ -194,7 +194,7 @@
       "label": "PiPPlugin",
       "file_type": "code",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L8",
+      "source_location": "L11",
       "_origin": "ast",
       "id": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin",
       "community": 22,
@@ -227,7 +227,7 @@
       "label": ".setPlayingStatus()",
       "file_type": "code",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L10",
+      "source_location": "L13",
       "_origin": "ast",
       "id": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_setplayingstatus",
       "community": 22,
@@ -255,6 +255,17 @@
       "community": 22,
       "community_name": "RokuDiscoveryPlugin",
       "norm_label": "pluginmethod"
+    },
+    {
+      "label": ".enter()",
+      "file_type": "code",
+      "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
+      "source_location": "L20",
+      "_origin": "ast",
+      "id": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_enter",
+      "community": 22,
+      "community_name": "RokuDiscoveryPlugin",
+      "norm_label": ".enter()"
     },
     {
       "label": "RokuDiscoveryPlugin.java",
@@ -741,8 +752,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_firebase_messaging",
-      "community": 85,
-      "community_name": "@capacitor-firebase/messaging",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor-firebase/messaging"
     },
     {
@@ -752,8 +763,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "capacitor_firebase_messaging",
-      "community": 85,
-      "community_name": "@capacitor-firebase/messaging",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor-firebase/messaging"
     },
     {
@@ -785,8 +796,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_filesystem",
-      "community": 101,
-      "community_name": "ssh2",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/filesystem"
     },
     {
@@ -796,8 +807,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "capacitor_filesystem",
-      "community": 101,
-      "community_name": "ssh2",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/filesystem"
     },
     {
@@ -807,8 +818,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_screen_orientation",
-      "community": 103,
-      "community_name": "encSlugMatchesTitle",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/screen-orientation"
     },
     {
@@ -818,8 +829,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "capacitor_screen_orientation",
-      "community": 103,
-      "community_name": "encSlugMatchesTitle",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/screen-orientation"
     },
     {
@@ -851,8 +862,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_status_bar",
-      "community": 89,
-      "community_name": "ServerBlocksAdmin.tsx",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/status-bar"
     },
     {
@@ -862,8 +873,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "capacitor_status_bar",
-      "community": 89,
-      "community_name": "ServerBlocksAdmin.tsx",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/status-bar"
     },
     {
@@ -873,8 +884,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "package_dependencies_caprockapps_capacitor_chromecast",
-      "community": 90,
-      "community_name": "encSlugMatchesTitle",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@caprockapps/capacitor-chromecast"
     },
     {
@@ -884,8 +895,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "caprockapps_capacitor_chromecast",
-      "community": 90,
-      "community_name": "encSlugMatchesTitle",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@caprockapps/capacitor-chromecast"
     },
     {
@@ -895,8 +906,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "package_dependencies_consumet_extensions",
-      "community": 92,
-      "community_name": "@consumet/extensions",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@consumet/extensions"
     },
     {
@@ -906,8 +917,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "consumet_extensions",
-      "community": 92,
-      "community_name": "@consumet/extensions",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@consumet/extensions"
     },
     {
@@ -917,8 +928,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "package_dependencies_vitejs_plugin_react",
-      "community": 102,
-      "community_name": "@vitejs/plugin-react",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@vitejs/plugin-react"
     },
     {
@@ -928,8 +939,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "vitejs_plugin_react",
-      "community": 102,
-      "community_name": "@vitejs/plugin-react",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@vitejs/plugin-react"
     },
     {
@@ -939,8 +950,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "package_dependencies_cheerio",
-      "community": 91,
-      "community_name": "cheerio",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "cheerio"
     },
     {
@@ -950,8 +961,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "cheerio",
-      "community": 91,
-      "community_name": "cheerio",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "cheerio"
     },
     {
@@ -983,8 +994,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "package_dependencies_express",
-      "community": 98,
-      "community_name": "express",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express"
     },
     {
@@ -994,8 +1005,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "package_json_express",
-      "community": 98,
-      "community_name": "express",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express"
     },
     {
@@ -1049,8 +1060,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "package_dependencies_firebase_admin",
-      "community": 95,
-      "community_name": "firebase-admin",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "firebase-admin"
     },
     {
@@ -1060,8 +1071,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "firebase_admin",
-      "community": 95,
-      "community_name": "firebase-admin",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "firebase-admin"
     },
     {
@@ -1071,8 +1082,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "package_dependencies_helmet",
-      "community": 99,
-      "community_name": "helmet",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "helmet"
     },
     {
@@ -1082,8 +1093,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "package_json_helmet",
-      "community": 99,
-      "community_name": "helmet",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "helmet"
     },
     {
@@ -1093,8 +1104,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "package_dependencies_hls_js",
-      "community": 104,
-      "community_name": "hls.js",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "hls.js"
     },
     {
@@ -1104,8 +1115,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "hls_js",
-      "community": 104,
-      "community_name": "hls.js",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "hls.js"
     },
     {
@@ -1115,8 +1126,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "package_dependencies_lru_cache",
-      "community": 96,
-      "community_name": "lru-cache",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "lru-cache"
     },
     {
@@ -1126,8 +1137,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "lru_cache",
-      "community": 96,
-      "community_name": "lru-cache",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "lru-cache"
     },
     {
@@ -1159,8 +1170,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "package_dependencies_motion",
-      "community": 97,
-      "community_name": "motion",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "motion"
     },
     {
@@ -1170,8 +1181,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "motion",
-      "community": 97,
-      "community_name": "motion",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "motion"
     },
     {
@@ -1181,8 +1192,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "package_dependencies_react",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "react"
     },
     {
@@ -1192,8 +1203,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "react",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "react"
     },
     {
@@ -1203,8 +1214,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "package_dependencies_react_dom",
-      "community": 100,
-      "community_name": "react-dom",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "react-dom"
     },
     {
@@ -1214,8 +1225,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "react_dom",
-      "community": 100,
-      "community_name": "react-dom",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "react-dom"
     },
     {
@@ -2468,8 +2479,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_firebaseadmin",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "firebaseadmin.ts"
     },
     {
@@ -2479,8 +2490,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "server_firebaseadmin_initializeapp_cert_getapps",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "{ initializeapp, cert, getapps }"
     },
     {
@@ -2490,8 +2501,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "server_firebaseadmin_getfirestore",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "{ getfirestore }"
     },
     {
@@ -2501,8 +2512,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "server_firebaseadmin_getmessaging",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "{ getmessaging }"
     },
     {
@@ -2512,8 +2523,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "server_firebaseadmin_getadmindb",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "getadmindb()"
     },
     {
@@ -2534,8 +2545,8 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "server_firebaseadmin_getadminfieldvalue",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "getadminfieldvalue()"
     },
     {
@@ -2545,8 +2556,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_middlewares_requireadminauth",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "requireadminauth.ts"
     },
     {
@@ -2556,8 +2567,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "server_middlewares_requireadminauth_getfirebaseauth",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "getfirebaseauth()"
     },
     {
@@ -2567,8 +2578,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "server_middlewares_requireadminauth_verifyfirebaseusertoken",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "verifyfirebaseusertoken()"
     },
     {
@@ -2578,8 +2589,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "server_middlewares_requireadminauth_requireadminauth",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "requireadminauth()"
     },
     {
@@ -2589,8 +2600,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_routes_adminops",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "adminops.ts"
     },
     {
@@ -2600,8 +2611,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "server_routes_adminops_adminopsrouter",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "adminopsrouter"
     },
     {
@@ -2611,8 +2622,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "server_routes_adminops_oracle_vps_port",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "oracle_vps_port"
     },
     {
@@ -2622,8 +2633,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "server_routes_adminops_getsshprivatekey",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "getsshprivatekey()"
     },
     {
@@ -2633,8 +2644,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "server_routes_adminops_executesystemorsshcommand",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "executesystemorsshcommand()"
     },
     {
@@ -2644,8 +2655,8 @@
       "source_location": "L82",
       "_origin": "ast",
       "id": "server_routes_adminops_executesshcommand",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "executesshcommand()"
     },
     {
@@ -3282,8 +3293,8 @@
       "source_location": "L732",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getencontreiresolverstatus",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 89,
+      "community_name": "ServerBlocksAdmin.tsx",
       "norm_label": "getencontreiresolverstatus()"
     },
     {
@@ -3722,8 +3733,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_routes_payments",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "payments.ts"
     },
     {
@@ -3733,8 +3744,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "server_routes_payments_router",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "router"
     },
     {
@@ -3744,8 +3755,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "server_routes_payments_getasaasheaders",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "getasaasheaders()"
     },
     {
@@ -3755,8 +3766,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "server_routes_payments_getasaasbaseurl",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "getasaasbaseurl()"
     },
     {
@@ -3766,8 +3777,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_routes_serverblocks",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "serverblocks.ts"
     },
     {
@@ -3777,8 +3788,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "server_routes_serverblocks_router",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "router"
     },
     {
@@ -3788,8 +3799,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "server_routes_serverblocks_serverblock",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "serverblock"
     },
     {
@@ -3799,8 +3810,8 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks_file",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "blocks_file"
     },
     {
@@ -3810,8 +3821,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks_dir",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "blocks_dir"
     },
     {
@@ -3821,8 +3832,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "_blocks"
     },
     {
@@ -3832,8 +3843,8 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocksbytmdb",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "_blocksbytmdb"
     },
     {
@@ -3843,8 +3854,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "server_routes_serverblocks_loadblocks",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "loadblocks()"
     },
     {
@@ -3854,8 +3865,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "server_routes_serverblocks_ensureloaded",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "ensureloaded()"
     },
     {
@@ -3865,8 +3876,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "server_routes_serverblocks_persistblocks",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "persistblocks()"
     },
     {
@@ -3876,8 +3887,8 @@
       "source_location": "L120",
       "_origin": "ast",
       "id": "server_routes_serverblocks_isadmintoken",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "isadmintoken()"
     },
     {
@@ -3887,8 +3898,8 @@
       "source_location": "L182",
       "_origin": "ast",
       "id": "server_routes_serverblocks_valid_server_keys",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "valid_server_keys"
     },
     {
@@ -4107,8 +4118,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_routes_userops",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "userops.ts"
     },
     {
@@ -4118,8 +4129,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "server_routes_userops_useropsrouter",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "useropsrouter"
     },
     {
@@ -4789,8 +4800,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "server_utils_helpers_checktrackplayratelimit",
-      "community": 17,
-      "community_name": "catalog.ts",
+      "community": 19,
+      "community_name": "helpers.ts",
       "norm_label": "checktrackplayratelimit()"
     },
     {
@@ -4899,8 +4910,8 @@
       "source_location": "L402",
       "_origin": "ast",
       "id": "server_utils_helpers_isprivateorlocalip",
-      "community": 19,
-      "community_name": "helpers.ts",
+      "community": 18,
+      "community_name": "videoScrapers.ts",
       "norm_label": "isprivateorlocalip()"
     },
     {
@@ -4910,8 +4921,8 @@
       "source_location": "L428",
       "_origin": "ast",
       "id": "server_utils_helpers_validatesafeurl",
-      "community": 19,
-      "community_name": "helpers.ts",
+      "community": 18,
+      "community_name": "videoScrapers.ts",
       "norm_label": "validatesafeurl()"
     },
     {
@@ -4932,8 +4943,8 @@
       "source_location": "L510",
       "_origin": "ast",
       "id": "server_utils_helpers_timingsafecompare",
-      "community": 16,
-      "community_name": "server.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "timingsafecompare()"
     },
     {
@@ -4984,8 +4995,8 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "src_app_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -5193,8 +5204,8 @@
       "source_location": "L199",
       "_origin": "ast",
       "id": "src_app_app",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "app()"
     },
     {
@@ -5990,10 +6001,21 @@
       "norm_label": "liveplayermodal.tsx"
     },
     {
+      "label": "PiP",
+      "file_type": "code",
+      "source_file": "src/components/LivePlayerModal.tsx",
+      "source_location": "L28",
+      "_origin": "ast",
+      "id": "src_components_liveplayermodal_pip",
+      "community": 9,
+      "community_name": "LiveTvPage.tsx",
+      "norm_label": "pip"
+    },
+    {
       "label": "LivePlayerModalProps",
       "file_type": "code",
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L30",
+      "source_location": "L31",
       "_origin": "ast",
       "id": "src_components_liveplayermodal_liveplayermodalprops",
       "community": 9,
@@ -6004,7 +6026,7 @@
       "label": "LivePlayerModal()",
       "file_type": "code",
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L38",
+      "source_location": "L39",
       "_origin": "ast",
       "id": "src_components_liveplayermodal_liveplayermodal",
       "community": 9,
@@ -6051,8 +6073,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_navitem",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "navitem.tsx"
     },
     {
@@ -6062,8 +6084,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_components_navitem_navitem",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "navitem()"
     },
     {
@@ -6183,8 +6205,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_notificationmodal",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "notificationmodal.tsx"
     },
     {
@@ -6205,8 +6227,8 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "src_components_notificationmodal_notificationmodal",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "notificationmodal()"
     },
     {
@@ -6216,8 +6238,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_paywallmodal",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 25,
+      "community_name": "PaywallModal.tsx",
       "norm_label": "paywallmodal.tsx"
     },
     {
@@ -6227,8 +6249,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_components_paywallmodal_paywallmodalprops",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 25,
+      "community_name": "PaywallModal.tsx",
       "norm_label": "paywallmodalprops"
     },
     {
@@ -6238,8 +6260,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_components_paywallmodal_paywallmodal",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 25,
+      "community_name": "PaywallModal.tsx",
       "norm_label": "paywallmodal()"
     },
     {
@@ -6249,8 +6271,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_releasecalendarpage",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "releasecalendarpage.tsx"
     },
     {
@@ -6271,8 +6293,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "src_components_releasecalendarpage_releasecalendarpage",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "releasecalendarpage()"
     },
     {
@@ -6623,8 +6645,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "whatsnewmodal.tsx"
     },
     {
@@ -6634,8 +6656,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal_slides",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "slides"
     },
     {
@@ -6645,8 +6667,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal_whatsnewmodal",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "whatsnewmodal()"
     },
     {
@@ -7030,8 +7052,8 @@
       "source_location": "L74",
       "_origin": "ast",
       "id": "src_hooks_usesubscription_starttrial",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 25,
+      "community_name": "PaywallModal.tsx",
       "norm_label": "starttrial()"
     },
     {
@@ -7118,8 +7140,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_usevoicesearch",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "usevoicesearch()"
     },
     {
@@ -7173,8 +7195,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_pages_adminpage_adminpage",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 69,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "adminpage()"
     },
     {
@@ -7184,8 +7206,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_pages_detailspage",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "detailspage.tsx"
     },
     {
@@ -7195,8 +7217,8 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "src_pages_detailspage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7206,8 +7228,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "src_pages_detailspage_webhookpanelmodal",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "webhookpanelmodal"
     },
     {
@@ -7217,8 +7239,8 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "src_pages_detailspage_releasecalendarpage",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "releasecalendarpage"
     },
     {
@@ -7228,8 +7250,8 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "src_pages_detailspage_livetvpage",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "livetvpage"
     },
     {
@@ -7239,8 +7261,8 @@
       "source_location": "L101",
       "_origin": "ast",
       "id": "src_pages_detailspage_notificationmodal",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "notificationmodal"
     },
     {
@@ -7250,8 +7272,8 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "src_pages_detailspage_handlepostererror",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7305,8 +7327,8 @@
       "source_location": "L65",
       "_origin": "ast",
       "id": "src_pages_favoritespage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7360,8 +7382,8 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "src_pages_favoritespage_handlepostererror",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7371,8 +7393,8 @@
       "source_location": "L129",
       "_origin": "ast",
       "id": "src_pages_favoritespage_favoritespage",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "favoritespage()"
     },
     {
@@ -7415,8 +7437,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "globalsearchpage.tsx"
     },
     {
@@ -7426,8 +7448,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7437,8 +7459,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_webhookpanelmodal",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "webhookpanelmodal"
     },
     {
@@ -7448,8 +7470,8 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_releasecalendarpage",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "releasecalendarpage"
     },
     {
@@ -7459,8 +7481,8 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_livetvpage",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "livetvpage"
     },
     {
@@ -7470,8 +7492,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_notificationmodal",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "notificationmodal"
     },
     {
@@ -7481,8 +7503,8 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_handlepostererror",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7492,8 +7514,8 @@
       "source_location": "L129",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_globalsearchpage",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "globalsearchpage()"
     },
     {
@@ -7514,8 +7536,8 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "src_pages_homepage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7624,8 +7646,8 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "src_pages_providerpage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7712,8 +7734,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_lazywithretry",
-      "community": 28,
-      "community_name": "react",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "lazywithretry()"
     },
     {
@@ -7767,8 +7789,8 @@
       "source_location": "L123",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_handlepostererror",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7789,8 +7811,8 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_userprofilepage",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "userprofilepage()"
     },
     {
@@ -7833,8 +7855,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_comments",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "comments.ts"
     },
     {
@@ -7844,8 +7866,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_services_comments_commentitem",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "commentitem"
     },
     {
@@ -7855,8 +7877,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "src_services_comments_default_community_comments",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "default_community_comments"
     },
     {
@@ -7866,8 +7888,8 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "src_services_comments_formattimeago",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "formattimeago()"
     },
     {
@@ -7877,8 +7899,8 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "src_services_comments_getcommentsforitem",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "getcommentsforitem()"
     },
     {
@@ -7888,8 +7910,8 @@
       "source_location": "L97",
       "_origin": "ast",
       "id": "src_services_comments_savecommentsforitem",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "savecommentsforitem()"
     },
     {
@@ -7899,8 +7921,8 @@
       "source_location": "L114",
       "_origin": "ast",
       "id": "src_services_comments_addcomment",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "addcomment()"
     },
     {
@@ -7910,8 +7932,8 @@
       "source_location": "L145",
       "_origin": "ast",
       "id": "src_services_comments_togglecommentlike",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "togglecommentlike()"
     },
     {
@@ -8306,8 +8328,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "src_services_episodeavailability_checkplayablebatch",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "checkplayablebatch()"
     },
     {
@@ -8339,8 +8361,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_favorites",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "favorites.ts"
     },
     {
@@ -8350,8 +8372,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_services_favorites_seriesscheduleepisode",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "seriesscheduleepisode"
     },
     {
@@ -8361,8 +8383,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_services_favorites_getallcatalogitems",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getallcatalogitems()"
     },
     {
@@ -8372,8 +8394,8 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "src_services_favorites_getcatalogbyidmap",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getcatalogbyidmap()"
     },
     {
@@ -8383,8 +8405,8 @@
       "source_location": "L102",
       "_origin": "ast",
       "id": "src_services_favorites_default_favorite_ids",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "default_favorite_ids"
     },
     {
@@ -8394,8 +8416,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "src_services_favorites_getfavoriteids",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getfavoriteids()"
     },
     {
@@ -8405,8 +8427,8 @@
       "source_location": "L119",
       "_origin": "ast",
       "id": "src_services_favorites_syncfavoritestocloud",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "syncfavoritestocloud()"
     },
     {
@@ -8416,8 +8438,8 @@
       "source_location": "L135",
       "_origin": "ast",
       "id": "src_services_favorites_fetchfavoritesfromcloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "fetchfavoritesfromcloud()"
     },
     {
@@ -8427,8 +8449,8 @@
       "source_location": "L159",
       "_origin": "ast",
       "id": "src_services_favorites_savefavoriteids",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "savefavoriteids()"
     },
     {
@@ -8438,8 +8460,8 @@
       "source_location": "L172",
       "_origin": "ast",
       "id": "src_services_favorites_getfavoritetimestamps",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getfavoritetimestamps()"
     },
     {
@@ -8449,8 +8471,8 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "src_services_favorites_savefavoritetimestamps",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "savefavoritetimestamps()"
     },
     {
@@ -8460,8 +8482,8 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "src_services_favorites_togglefavorite",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "togglefavorite()"
     },
     {
@@ -8471,8 +8493,8 @@
       "source_location": "L207",
       "_origin": "ast",
       "id": "src_services_favorites_isitemfavorite",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "isitemfavorite()"
     },
     {
@@ -8482,8 +8504,8 @@
       "source_location": "L212",
       "_origin": "ast",
       "id": "src_services_favorites_buildcatalogitemfromtmdb",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "buildcatalogitemfromtmdb()"
     },
     {
@@ -8493,8 +8515,8 @@
       "source_location": "L233",
       "_origin": "ast",
       "id": "src_services_favorites_tmdbfavoritecache",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "tmdbfavoritecache"
     },
     {
@@ -8504,8 +8526,8 @@
       "source_location": "L236",
       "_origin": "ast",
       "id": "src_services_favorites_getstaticfavoriteitems",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getstaticfavoriteitems()"
     },
     {
@@ -8515,8 +8537,8 @@
       "source_location": "L246",
       "_origin": "ast",
       "id": "src_services_favorites_resolvefavoriteitems",
-      "community": 68,
-      "community_name": "App",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "resolvefavoriteitems()"
     },
     {
@@ -8526,8 +8548,8 @@
       "source_location": "L283",
       "_origin": "ast",
       "id": "src_services_favorites_series_episode_schedule",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "series_episode_schedule"
     },
     {
@@ -8537,8 +8559,8 @@
       "source_location": "L285",
       "_origin": "ast",
       "id": "src_services_favorites_getdayofweekfromdate",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getdayofweekfromdate()"
     },
     {
@@ -8548,8 +8570,8 @@
       "source_location": "L309",
       "_origin": "ast",
       "id": "src_services_favorites_fetchdynamicscheduleforfavorites",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "fetchdynamicscheduleforfavorites()"
     },
     {
@@ -8559,8 +8581,8 @@
       "source_location": "L450",
       "_origin": "ast",
       "id": "src_services_favorites_getscheduleforfavorites",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getscheduleforfavorites()"
     },
     {
@@ -8790,8 +8812,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_notifications",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "notifications.ts"
     },
     {
@@ -8801,8 +8823,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_services_notifications_episodenotification",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "episodenotification"
     },
     {
@@ -8812,8 +8834,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_services_notifications_syncnotificationsinbackground",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "syncnotificationsinbackground()"
     },
     {
@@ -8823,8 +8845,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "src_services_notifications_getreadnotificationids",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getreadnotificationids()"
     },
     {
@@ -8834,8 +8856,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "src_services_notifications_syncreadnotificationstocloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "syncreadnotificationstocloud()"
     },
     {
@@ -8845,8 +8867,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_services_notifications_fetchreadnotificationsfromcloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "fetchreadnotificationsfromcloud()"
     },
     {
@@ -8856,8 +8878,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "src_services_notifications_marknotificationasread",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "marknotificationasread()"
     },
     {
@@ -8867,8 +8889,8 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "src_services_notifications_markallnotificationsasread",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "markallnotificationsasread()"
     },
     {
@@ -8878,8 +8900,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "src_services_notifications_formatreleasedago",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "formatreleasedago()"
     },
     {
@@ -8889,8 +8911,8 @@
       "source_location": "L157",
       "_origin": "ast",
       "id": "src_services_notifications_getfavoriteepisodenotifications",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getfavoriteepisodenotifications()"
     },
     {
@@ -9329,8 +9351,8 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "src_services_pushnotifications_removefcmtokenfromcloud",
-      "community": 68,
-      "community_name": "App",
+      "community": 20,
+      "community_name": "firebase.ts",
       "norm_label": "removefcmtokenfromcloud()"
     },
     {
@@ -9373,8 +9395,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "src_services_tmdb_tmdbitem",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "tmdbitem"
     },
     {
@@ -9417,8 +9439,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "src_services_tmdb_tmdbdetails",
-      "community": 5,
-      "community_name": "HomePage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "tmdbdetails"
     },
     {
@@ -9505,8 +9527,8 @@
       "source_location": "L147",
       "_origin": "ast",
       "id": "src_services_tmdb_writeseasonscache",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 4,
+      "community_name": "VideoPlayerModal.tsx",
       "norm_label": "writeseasonscache()"
     },
     {
@@ -9626,8 +9648,8 @@
       "source_location": "L262",
       "_origin": "ast",
       "id": "src_services_tmdb_searchmulti",
-      "community": 86,
-      "community_name": "@capacitor/splash-screen",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "searchmulti()"
     },
     {
@@ -9703,8 +9725,8 @@
       "source_location": "L403",
       "_origin": "ast",
       "id": "src_services_tmdb_persistfailmemo",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 4,
+      "community_name": "VideoPlayerModal.tsx",
       "norm_label": "persistfailmemo()"
     },
     {
@@ -9714,8 +9736,8 @@
       "source_location": "L413",
       "_origin": "ast",
       "id": "src_services_tmdb_lookupdetails",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 4,
+      "community_name": "VideoPlayerModal.tsx",
       "norm_label": "lookupdetails()"
     },
     {
@@ -9725,8 +9747,8 @@
       "source_location": "L484",
       "_origin": "ast",
       "id": "src_services_tmdb_getdetails",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getdetails()"
     },
     {
@@ -9890,8 +9912,8 @@
       "source_location": "L641",
       "_origin": "ast",
       "id": "src_services_tmdb_gettrailerlist",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "gettrailerlist()"
     },
     {
@@ -9901,8 +9923,8 @@
       "source_location": "L751",
       "_origin": "ast",
       "id": "src_services_tmdb_gettrailer",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "gettrailer()"
     },
     {
@@ -9923,8 +9945,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_watchedepisodes",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "watchedepisodes.ts"
     },
     {
@@ -9934,8 +9956,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getstore",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getstore()"
     },
     {
@@ -9945,8 +9967,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_syncwatchedtocloud",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "syncwatchedtocloud()"
     },
     {
@@ -9956,8 +9978,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_flushpendingwatchedsync",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "flushpendingwatchedsync()"
     },
     {
@@ -9967,8 +9989,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_fetchwatchedfromcloud",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "fetchwatchedfromcloud()"
     },
     {
@@ -9978,8 +10000,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_savestore",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "savestore()"
     },
     {
@@ -9989,8 +10011,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_makeepisodekey",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "makeepisodekey()"
     },
     {
@@ -10000,8 +10022,8 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_isepisodewatched",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "isepisodewatched()"
     },
     {
@@ -10011,8 +10033,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_markepisodewatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "markepisodewatched()"
     },
     {
@@ -10022,8 +10044,8 @@
       "source_location": "L117",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_toggleepisodewatched",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "toggleepisodewatched()"
     },
     {
@@ -10033,8 +10055,8 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_markseasonwatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "markseasonwatched()"
     },
     {
@@ -10044,8 +10066,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getseasonwatchedcount",
-      "community": 68,
-      "community_name": "App",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getseasonwatchedcount()"
     },
     {
@@ -10055,8 +10077,8 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_isseasonfullywatched",
-      "community": 68,
-      "community_name": "App",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "isseasonfullywatched()"
     },
     {
@@ -10066,8 +10088,8 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getallwatchedepisodes",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getallwatchedepisodes()"
     },
     {
@@ -10077,8 +10099,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_types",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "types.ts"
     },
     {
@@ -10088,8 +10110,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_types_onplayhandler",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "onplayhandler"
     },
     {
@@ -10187,8 +10209,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_utils_errortranslator",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 69,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "errortranslator.ts"
     },
     {
@@ -10198,8 +10220,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_utils_errortranslator_getfriendlyerrormessage",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 69,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "getfriendlyerrormessage()"
     },
     {
@@ -10209,8 +10231,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_utils_mediautils",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "mediautils.ts"
     },
     {
@@ -10231,8 +10253,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "src_utils_mediautils_availabletmdbids",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "availabletmdbids"
     },
     {
@@ -10242,8 +10264,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_utils_mediautils_checkiscam",
-      "community": 68,
-      "community_name": "App",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "checkiscam()"
     },
     {
@@ -10253,8 +10275,8 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "src_utils_mediautils_watchplay_anime_ids",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "watchplay_anime_ids"
     },
     {
@@ -10264,8 +10286,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "src_utils_mediautils_watchplay_dorama_ids",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "watchplay_dorama_ids"
     },
     {
@@ -10275,8 +10297,8 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "src_utils_mediautils_unavailable_titles_or_ids",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "unavailable_titles_or_ids"
     },
     {
@@ -10286,8 +10308,8 @@
       "source_location": "L103",
       "_origin": "ast",
       "id": "src_utils_mediautils_unavailable_seasons",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "unavailable_seasons"
     },
     {
@@ -10297,8 +10319,8 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "src_utils_mediautils_ismediaavailable",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "ismediaavailable()"
     },
     {
@@ -10308,8 +10330,8 @@
       "source_location": "L136",
       "_origin": "ast",
       "id": "src_utils_mediautils_livecheckedavailable",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "livecheckedavailable"
     },
     {
@@ -10319,8 +10341,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "src_utils_mediautils_livecheckedunavailable",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "livecheckedunavailable"
     },
     {
@@ -10330,8 +10352,8 @@
       "source_location": "L140",
       "_origin": "ast",
       "id": "src_utils_mediautils_pendinglivechecks",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "pendinglivechecks"
     },
     {
@@ -10341,8 +10363,8 @@
       "source_location": "L142",
       "_origin": "ast",
       "id": "src_utils_mediautils_checktimestamps",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "checktimestamps"
     },
     {
@@ -10352,8 +10374,8 @@
       "source_location": "L145",
       "_origin": "ast",
       "id": "src_utils_mediautils_cleanupexpiredlivechecks",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "cleanupexpiredlivechecks()"
     },
     {
@@ -10363,8 +10385,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "src_utils_mediautils_checkliveavailability",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "checkliveavailability()"
     },
     {
@@ -10374,8 +10396,8 @@
       "source_location": "L244",
       "_origin": "ast",
       "id": "src_utils_mediautils_quickavailabilitycheck",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "quickavailabilitycheck()"
     },
     {
@@ -10385,8 +10407,8 @@
       "source_location": "L259",
       "_origin": "ast",
       "id": "src_utils_mediautils_titlesimilarity",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "titlesimilarity()"
     },
     {
@@ -10396,8 +10418,8 @@
       "source_location": "L279",
       "_origin": "ast",
       "id": "src_utils_mediautils_titleslooklikesame",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "titleslooklikesame()"
     },
     {
@@ -10407,8 +10429,8 @@
       "source_location": "L283",
       "_origin": "ast",
       "id": "src_utils_mediautils_adult_animation_blocklist",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "adult_animation_blocklist"
     },
     {
@@ -10418,8 +10440,8 @@
       "source_location": "L311",
       "_origin": "ast",
       "id": "src_utils_mediautils_iskidssafe",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "iskidssafe()"
     },
     {
@@ -10429,8 +10451,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_utils_safestorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safestorage.ts"
     },
     {
@@ -10440,8 +10462,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_utils_safestorage_memorystorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "memorystorage"
     },
     {
@@ -10451,8 +10473,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_utils_safestorage_safelocalstorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safelocalstorage"
     },
     {
@@ -10462,8 +10484,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_utils_safestorage_safesessionstorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safesessionstorage"
     },
     {
@@ -10473,8 +10495,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_utils_safestorage_clearlocaluserdata",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "clearlocaluserdata()"
     },
     {
@@ -10550,8 +10572,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "trace_user",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "trace-user.ts"
     },
     {
@@ -10561,8 +10583,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "trace_user_main",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "main()"
     },
     {
@@ -10572,8 +10594,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "trace_user2",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "trace-user2.ts"
     },
     {
@@ -10583,8 +10605,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "trace_user2_main",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "main()"
     },
     {
@@ -13165,7 +13187,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L8",
+      "source_location": "L11",
       "weight": 1.0,
       "_origin": "ast",
       "source": "android_app_src_main_java_com_playinfinity_app_pipplugin",
@@ -13188,7 +13210,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L8",
+      "source_location": "L11",
       "weight": 1.0,
       "context": "attribute",
       "_origin": "ast",
@@ -13200,7 +13222,18 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L10",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin",
+      "target": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_enter",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
+      "source_location": "L13",
       "weight": 1.0,
       "_origin": "ast",
       "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin",
@@ -13211,7 +13244,7 @@
       "relation": "inherits",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L8",
+      "source_location": "L11",
       "weight": 1.0,
       "_origin": "ast",
       "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin",
@@ -13245,7 +13278,7 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L10",
+      "source_location": "L13",
       "weight": 1.0,
       "context": "parameter_type",
       "_origin": "ast",
@@ -13257,11 +13290,35 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
-      "source_location": "L10",
+      "source_location": "L13",
       "weight": 1.0,
       "context": "attribute",
       "_origin": "ast",
       "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_setplayingstatus",
+      "target": "android_app_src_main_java_com_playinfinity_app_pipplugin_java_pluginmethod",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
+      "source_location": "L20",
+      "weight": 1.0,
+      "context": "parameter_type",
+      "_origin": "ast",
+      "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_enter",
+      "target": "android_app_src_main_java_com_playinfinity_app_pipplugin_java_plugincall",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "source_file": "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java",
+      "source_location": "L20",
+      "weight": 1.0,
+      "context": "attribute",
+      "_origin": "ast",
+      "source": "android_app_src_main_java_com_playinfinity_app_pipplugin_pipplugin_enter",
       "target": "android_app_src_main_java_com_playinfinity_app_pipplugin_java_pluginmethod",
       "confidence_score": 1.0
     },
@@ -24211,7 +24268,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L38",
+      "source_location": "L39",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_liveplayermodal",
@@ -24222,11 +24279,22 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L30",
+      "source_location": "L31",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_liveplayermodal",
       "target": "src_components_liveplayermodal_liveplayermodalprops",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "src/components/LivePlayerModal.tsx",
+      "source_location": "L28",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "src_components_liveplayermodal",
+      "target": "src_components_liveplayermodal_pip",
       "confidence_score": 1.0
     },
     {
@@ -24282,7 +24350,7 @@
       "context": "field",
       "confidence": "EXTRACTED",
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L31",
+      "source_location": "L32",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_liveplayermodal_liveplayermodalprops",
@@ -24295,7 +24363,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/LivePlayerModal.tsx",
-      "source_location": "L791",
+      "source_location": "L825",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_liveplayermodal_liveplayermodal",
@@ -24782,18 +24850,6 @@
       "confidence_score": 1.0
     },
     {
-      "relation": "references",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/components/NetflixPlayerSkin.tsx",
-      "source_location": "L443",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "src_components_netflixplayerskin_netflixplayerskin",
-      "target": "src_components_netflixplayerskin_pip"
-    },
-    {
       "relation": "re_exports",
       "context": "re-export",
       "confidence": "EXTRACTED",
@@ -24834,7 +24890,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/NetflixPlayerSkin.tsx",
-      "source_location": "L1998",
+      "source_location": "L2005",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_netflixplayerskin_netflixplayerskin",
@@ -24847,7 +24903,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/NetflixPlayerSkin.tsx",
-      "source_location": "L575",
+      "source_location": "L580",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_netflixplayerskin_netflixplayerskin",
@@ -26439,7 +26495,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2247",
+      "source_location": "L2255",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26451,7 +26507,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L864",
+      "source_location": "L865",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26463,7 +26519,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2253",
+      "source_location": "L2261",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26475,7 +26531,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L639",
+      "source_location": "L640",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26488,7 +26544,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L1347",
+      "source_location": "L1355",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26500,7 +26556,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L1199",
+      "source_location": "L1207",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26536,7 +26592,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L1064",
+      "source_location": "L1072",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26548,7 +26604,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L965",
+      "source_location": "L966",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26560,7 +26616,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L679",
+      "source_location": "L680",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26572,7 +26628,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L1057",
+      "source_location": "L1065",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26584,7 +26640,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L926",
+      "source_location": "L927",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26596,7 +26652,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L896",
+      "source_location": "L897",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26608,7 +26664,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2716",
+      "source_location": "L2728",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26620,7 +26676,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2770",
+      "source_location": "L2782",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26632,7 +26688,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2690",
+      "source_location": "L2702",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26644,7 +26700,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L1890",
+      "source_location": "L1898",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26656,7 +26712,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2719",
+      "source_location": "L2731",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -26668,7 +26724,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/components/VideoPlayerModal.tsx",
-      "source_location": "L2810",
+      "source_location": "L2822",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_videoplayermodal_videoplayermodal",
@@ -41233,5 +41289,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1ee18c8669e2432942de9e667af050bb90ad51df"
+  "built_at_commit": "a664dc193b86dff127949e119cce2203b933944d"
 }

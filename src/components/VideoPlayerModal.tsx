@@ -424,6 +424,7 @@ export function VideoPlayerModal({
   const [iframeVisible, setIframeVisible] = useState<boolean>(false);
   // Controle de Picture-in-Picture nativo do Android
   const [isNativePiP, setIsNativePiP] = useState<boolean>(false);
+  const wasExpandedBeforePiPRef = useRef<boolean>(false);
   // Marca o timestamp da última troca de mídia/episódio para descartar mensagens residuais
   const transitionEpochRef = useRef<number>(0);
 
@@ -1001,6 +1002,8 @@ export function VideoPlayerModal({
       setIsNativePiP(isPiP);
 
       if (isPiP) {
+        // Guarda se estava expandido antes de entrar no PiP nativo
+        wasExpandedBeforePiPRef.current = isFullscreen || isWidescreen;
         // Se entrou no PiP nativo do Android, desfaz a rotação forçada e tela cheia interna
         // Isso evita que o vídeo fique "cortado" dentro da janela do PiP
         setIsRotated(false);
@@ -1008,6 +1011,11 @@ export function VideoPlayerModal({
         setIsFullscreen(false);
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => { });
+        }
+      } else {
+        // Ao retornar do PiP, restaura widescreen se estava expandido
+        if (wasExpandedBeforePiPRef.current) {
+          setIsWidescreen(true);
         }
       }
     };
@@ -2575,13 +2583,15 @@ export function VideoPlayerModal({
           : undefined
       }
       className={
-        isMiniPlayer
-          ? `fixed z-50 pointer-events-auto select-none ${!miniPosition ? "bottom-4 right-4" : ""
-          } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
-          : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${isExpanded
-            ? "p-0 m-0 bg-black w-full h-full overflow-hidden"
-            : `p-2 sm:p-4 md:p-6 bg-black/95 ${!isSmartTV ? "backdrop-blur-xl" : ""}`
-          }`
+        isNativePiP
+          ? "fixed inset-0 z-[999999] w-full h-full bg-black p-0 m-0 overflow-hidden select-none"
+          : isMiniPlayer
+            ? `fixed z-50 pointer-events-auto select-none ${!miniPosition ? "bottom-4 right-4" : ""
+            } ${isDragging ? "transition-none" : "transition-[left,top] duration-150"} animate-in slide-in-from-bottom-5`
+            : `fixed inset-0 z-50 flex items-center justify-center animate-in fade-in duration-200 ${isExpanded
+              ? "p-0 m-0 bg-black w-full h-full overflow-hidden"
+              : `p-2 sm:p-4 md:p-6 bg-black/95 ${!isSmartTV ? "backdrop-blur-xl" : ""}`
+            }`
       }
     >
       {/* Overlay global enquanto arrasta para evitar que iframes capturem o cursor */}
@@ -2595,15 +2605,17 @@ export function VideoPlayerModal({
       )}
 
       <div
-        className={`relative bg-[#111111] overflow-hidden flex flex-col transition-all duration-300 ${isMiniPlayer
-            ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
-            : isExpanded
-              ? "w-full h-full max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
-              : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
+        className={`relative bg-[#111111] overflow-hidden flex flex-col transition-all duration-300 ${isNativePiP
+            ? "w-full h-full max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+            : isMiniPlayer
+              ? "w-[300px] xs:w-[340px] sm:w-[380px] rounded-2xl border border-neutral-700 shadow-2xl shadow-black/90"
+              : isExpanded
+                ? "w-full h-full max-w-none max-h-none border-0 rounded-none bg-black p-0 m-0"
+                : "w-full max-w-5xl border border-neutral-800 rounded-2xl md:rounded-3xl shadow-[0_0_60px_rgba(0,0,0,0.9)] max-h-[96vh]"
           }`}
       >
         {/* Header do Mini-Player Flutuante (Arrastável) */}
-        {isMiniPlayer && (
+        {isMiniPlayer && !isNativePiP && (
           <div
             onPointerDown={handleMiniHeaderPointerDown}
             onPointerMove={handleMiniHeaderPointerMove}
@@ -2642,7 +2654,7 @@ export function VideoPlayerModal({
         )}
 
         {/* Modal Header Padrão (apenas quando não expandido em tela cheia e nem mini player) */}
-        {!isExpanded && !isMiniPlayer && (
+        {!isExpanded && !isMiniPlayer && !isNativePiP && (
           <div className="flex items-center justify-between px-3 sm:px-5 py-2.5 sm:py-3 border-b border-neutral-800/80 bg-[#161616] gap-2">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="w-8 h-8 rounded-full bg-orange-600/20 text-orange-500 border border-orange-500/30 flex items-center justify-center shrink-0">
@@ -2674,7 +2686,7 @@ export function VideoPlayerModal({
         )}
 
         {/* Series Controls: Season & Episode Quick Selector (apenas para séries e quando não expandido e nem mini player) */}
-        {!isExpanded && !isMiniPlayer && isSeries && (
+        {!isExpanded && !isMiniPlayer && !isNativePiP && isSeries && (
           <div className="px-4 sm:px-6 py-2.5 bg-gradient-to-r from-[#121214] via-[#161618] to-[#121214] border-b border-white/5 flex flex-wrap items-center justify-between gap-3 shadow-inner">
 
             {/* Bloco de Temporadas */}
@@ -2832,13 +2844,13 @@ export function VideoPlayerModal({
           id="player-stage-container"
           onMouseMove={handleStageMouseMove}
           onMouseLeave={handleStageMouseLeave}
-          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${isExpanded ? "w-full h-full flex-1 fixed inset-0 z-[999999]" : "aspect-video"
+          className={`relative w-full bg-black flex items-center justify-center overflow-hidden group select-none ${isExpanded || isNativePiP ? "w-full h-full flex-1 fixed inset-0 z-[999999]" : "aspect-video"
             }`}
         >
           {/* Inner Viewport Rotacionável para modo Paisagem (Widescreen Deitado) no Celular */}
           <div
             style={
-              isRotated
+              (isRotated && !isNativePiP)
                 ? {
                   position: "absolute",
                   top: "50%",
@@ -2860,7 +2872,7 @@ export function VideoPlayerModal({
             className="flex items-center justify-center bg-black overflow-hidden select-none"
           >
             {/* Notificação Flutuante de Avanço Automático */}
-            {autoNextNotice && !isMiniPlayer && (
+            {autoNextNotice && !isMiniPlayer && !isNativePiP && (
               <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-2.5 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25 pointer-events-none">
                 <FastForward className="w-4 h-4 animate-pulse text-white" />
                 <span>Episódio concluído! Reproduzindo Episódio {autoNextNotice.nextEp}...</span>
@@ -2868,7 +2880,7 @@ export function VideoPlayerModal({
             )}
 
             {/* Notificação Flutuante de Abertura Pulada */}
-            {skipNotice && !isMiniPlayer && (
+            {skipNotice && !isMiniPlayer && !isNativePiP && (
               <div className="absolute top-16 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 text-white text-xs sm:text-sm font-bold rounded-full shadow-2xl backdrop-blur-md flex items-center gap-3 animate-in fade-in slide-in-from-top-4 duration-300 border border-white/25">
                 <div className="flex items-center gap-2">
                   <SkipForward className="w-4 h-4 fill-current text-white" />

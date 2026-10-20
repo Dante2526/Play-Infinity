@@ -1,3 +1,32 @@
+## 19/10/2026 - Correção do Mini Player (Picture-in-Picture) no APK Android
+
+**Contexto e Motivação:**
+No aplicativo APK para Android, ao ativar o modo Picture-in-Picture (PiP) flutuante pelo sistema ou botão do reprodutor, o modal exibia a interface inteira da página encolhida em miniatura (cabeçalho com título, botão fechar, seletor de temporadas e botões de episódios da série) com bordas arredondadas e margens, em vez de isolar 100% o vídeo de borda a borda na janela flutuante.
+
+**Alterações Realizadas (5 arquivos):**
+1. **`android/app/src/main/java/com/playinfinity/app/PiPPlugin.java`:**
+   - Implementado método `@PluginMethod public void enter(PluginCall call)` com `enterPictureInPictureMode(params)` e aspect ratio 16:9, permitindo que a interface web acione o Picture-in-Picture nativo do Android via ponte Capacitor.
+2. **`src/components/NetflixPlayerSkin.tsx`:**
+   - `handleTogglePiP`: aciona `PiP.enter()` nativo no APK (`Capacitor.isNativePlatform()`), mantendo o mini-player in-app como fallback suave para navegadores desktop.
+   - Corrigida a ordem de declaração de `nextEpisode` para uso anterior à inicialização da miniatura da timeline (`previewThumbnail`).
+3. **`src/components/VideoPlayerModal.tsx`:**
+   - **Isolamento de Janela 100%:** Quando `isNativePiP === true`, o container do modal e o card interno passam para `fixed inset-0 z-[999999] w-full h-full bg-black p-0 m-0 overflow-hidden`.
+   - **Supressão de Elementos Visuais:** Ocultados cabeçalho padrão, seletor rápido de temporadas/episódios, mini player header e avisos flutuantes durante o PiP.
+   - **Stage de Vídeo Borda a Borda:** `#player-stage-container` expande em tela cheia (`isExpanded || isNativePiP`) e previne rotações acidentais de paisagem (`isRotated && !isNativePiP`).
+   - **Restauração de Estado:** Armazena `wasExpandedBeforePiPRef` para restaurar automaticamente o modo widescreen se o usuário estava em tela cheia ao sair do PiP.
+4. **`src/components/LivePlayerModal.tsx`:**
+   - Adicionado listener de `pipModeChanged` e integração com `PiP.enter()` e `PiP.setVideoPlaying`.
+   - Isolamento total de vídeo na TV ao vivo, suprimindo barras superior/inferior e gaveta de canais no PiP nativo.
+5. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `33` e `versionName` para `"1.4.1"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-native-pip-isolation.mjs`): 12/12 PASS.
+- Validação de tipos TypeScript (`tsc --noEmit`): 0 erros em todos os arquivos alterados.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Miniatura de Prévia na Barra de Progresso / Timeline Scrubber (Estilo Netflix & Disney+)
 
 **Contexto e Motivação:**
