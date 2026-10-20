@@ -11017,6 +11017,12 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
     const episode = req3.query.e ? Number(req3.query.e) : void 0;
     const name = req3.query.name ? String(req3.query.name) : void 0;
     const initialTime = Math.max(0, parseFloat(String(req3.query.t || "0")));
+    if (id && season !== void 0 && episode !== void 0) {
+      const catalogFid = findStreamtapeInCatalog(id, season, episode);
+      if (catalogFid) {
+        fileId = catalogFid;
+      }
+    }
     if (!fileId && id) {
       fileId = findStreamtapeInCatalog(id, season, episode) || "";
       if (!fileId) {
@@ -12052,16 +12058,18 @@ adminOpsRouter.post("/vps-action", async (req3, res) => {
   let actionDescription = "";
   switch (action) {
     case "restart-all":
-      commandToRun = "(sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando de reinicializa\xE7\xE3o enviado (PM2 restart all agendado).'";
-      actionDescription = "Reiniciar todos os processos PM2 na VPS";
+    case "reload-all":
+      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
+      actionDescription = "Recarregar todos os servi\xE7os na VPS com Zero-Downtime (sem queda de conex\xF5es)";
       break;
     case "restart-proxy":
       commandToRun = "sudo fuser -k 8080/tcp || true; sudo pm2 restart video-proxy";
       actionDescription = "Reiniciar servi\xE7o do Proxy de TV (e eliminar processos fantasmas)";
       break;
     case "restart-app":
-      commandToRun = "(sleep 1 && sudo pm2 restart play-infinity-app) > /dev/null 2>&1 & echo 'Comando de reinicializa\xE7\xE3o enviado (play-infinity-app agendado).'";
-      actionDescription = "Reiniciar aplica\xE7\xE3o web (play-infinity-app)";
+    case "reload-app":
+      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 reload play-infinity-app) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
+      actionDescription = "Recarregar aplica\xE7\xE3o web com Zero-Downtime (play-infinity-app)";
       break;
     case "git-pull-build":
       commandToRun = `
@@ -12081,17 +12089,17 @@ adminOpsRouter.post("/vps-action", async (req3, res) => {
         echo "\u{1F4E6} Instalando depend\xEAncias e gerando build..."
         npm run build || echo "Aviso no build"
         
-        echo "\u{1F504} Agendando reinicializa\xE7\xE3o dos servi\xE7os PM2..."
-        (sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 &
+        echo "\u{1F504} Recarregando os servi\xE7os PM2 com Zero-Downtime..."
+        (sleep 1 && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 &
         
-        echo "\u2705 A\xE7\xE3o conclu\xEDda com sucesso! Os servi\xE7os est\xE3o sendo atualizados."
+        echo "\u2705 A\xE7\xE3o conclu\xEDda com sucesso! Os servi\xE7os foram recarregados sem quedas."
       `;
-      actionDescription = "Atualiza\xE7\xE3o manual via Git Pull e Build na VPS";
+      actionDescription = "Atualiza\xE7\xE3o manual via Git Pull e Build na VPS (Zero-Downtime)";
       break;
     default:
       return res.status(400).json({
         success: false,
-        error: "A\xE7\xE3o inv\xE1lida. A\xE7\xF5es permitidas: restart-all, restart-proxy, restart-app, git-pull-build."
+        error: "A\xE7\xE3o inv\xE1lida. A\xE7\xF5es permitidas: restart-all, reload-all, restart-proxy, restart-app, reload-app, git-pull-build."
       });
   }
   try {
@@ -12852,7 +12860,27 @@ async function startServer() {
       console.error("[Server Listen Error]:", err);
     });
     server.setTimeout(3e4);
+    if (typeof process.send === "function") {
+      process.send("ready");
+      console.log("[Server] Sinal 'ready' emitido para o PM2.");
+    }
     startCatalogWatcher();
+    let isShuttingDown = false;
+    const gracefulShutdown = (signal) => {
+      if (isShuttingDown) return;
+      isShuttingDown = true;
+      console.log(`[Server] Recebido ${signal}. Drenando conex\xF5es ativas...`);
+      server.close(() => {
+        console.log("[Server] Todas as conex\xF5es ativas encerradas com sucesso.");
+        process.exit(0);
+      });
+      setTimeout(() => {
+        console.warn("[Server] Timeout de shutdown atingido (10s). Encerrando.");
+        process.exit(0);
+      }, 1e4).unref();
+    };
+    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
   }
 }
 startServer().catch((err) => console.error("Server start error:", err));

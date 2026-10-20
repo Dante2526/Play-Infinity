@@ -1517,7 +1517,9 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
-    const timeoutDuration = (selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay')) ? 18000 : 15000;
+    const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
+    const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
+    const timeoutDuration = isWatchplay ? 18000 : (isMixdrop ? 25000 : 15000);
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -1643,7 +1645,7 @@ export function VideoPlayerModal({
         let targetServerKey = initialServerKey || prefServer || "srv_streamtape";
         let targetUrl: string;
 
-        if (isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+        if (!isSeries && isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
         } else {
           let resolvedTargetUrl = "";
@@ -2295,11 +2297,15 @@ export function VideoPlayerModal({
       cleanUrl.startsWith("/api/myembed-stream") ||
       cleanUrl.startsWith("/api/vip-proxy-iframe") ||
       cleanUrl.startsWith("/api/md-stream") ||
+      cleanUrl.startsWith("/api/streamtape-proxy-iframe") ||
+      cleanUrl.startsWith("/api/vidsrc-player") ||
+      cleanUrl.startsWith("/api/vidsrc-stream") ||
       cleanUrl.includes("watchplay.shop") ||
       cleanUrl.includes("myembed.biz") ||
       cleanUrl.includes("playerflix.ink") ||
       cleanUrl.includes("mixdrop.") ||
       cleanUrl.includes("mxdrop.") ||
+      cleanUrl.includes("streamtape") ||
       cleanUrl.startsWith("/api/native-player") ||
       cleanUrl.includes("nixplay.lat") ||
       cleanUrl.endsWith(".mp4")

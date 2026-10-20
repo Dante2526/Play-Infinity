@@ -1,4 +1,17 @@
-﻿## 20/10/2026 - Atualização dos Botões do Painel ADM para 'Recarregar Serviços (Zero-Downtime)'
+﻿## 20/10/2026 - Correção de Cold Start ao Clicar em Continuar Assistindo no Android
+
+**Contexto e Motivação:**
+Ao abrir o app limpo no Android pela primeira vez (cold start) e clicar em um card de série no 'Continuar Assistindo', o player apresentava erro ('Conteúdo Indisponível / Episódio não encontrado - Tentar novamente') e só começava a reproduzir ao fechar e abrir de novo ou ao clicar no botão de recarregar.
+
+**Causa Raiz Identificada:**
+1. **URL Expirada no Histórico:** O item do histórico salvava o \playerUrl\ com o token temporário da CDN de dias atrás. Ao reabrir, o modal tentava reutilizar o \defaultUrl\ antes de gerar um novo link.
+2. **Race Condition de Cold Start:** Nos primeiros 300ms de abertura do app, a busca assíncrona dos IDs do catálogo ainda não havia retornado. Na versão 1.1.8, o MixDrop caía em uma URL fabricada (\mxdrop.top/e/id\) que resultava em 404/502. Na segunda tentativa (ou ao clicar em Tentar Novamente), o cache já estava aquecido e funcionava.
+
+**Modificações Realizadas:**
+1. **\src/components/VideoPlayerModal.tsx\:** Para séries, o modal agora ignora o \defaultUrl\ antigo salvo no histórico e sempre gera uma URL fresca para o episódio (\s\ e \e\), garantindo resolução instantânea e tokens válidos logo na primeira abertura.
+
+---
+## 20/10/2026 - Atualização dos Botões do Painel ADM para 'Recarregar Serviços (Zero-Downtime)'
 
 **Contexto e Motivação:**
 Com a transição da infraestrutura de deploy e PM2 para Cluster Mode e Graceful Shutdown, os botões manuais do Painel Administrativo ainda executavam \pm2 restart\. A interface e as rotas de backend foram atualizadas para refletir o novo comportamento de recarregamento suave.
@@ -1183,3 +1196,26 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 
 
 
+
+
+
+## 20/10/2026 - Correcao de Cold Start no Android (403 no StreamTape e Watchdog MixDrop) + UI Zero-Downtime
+
+**Contexto:** Usuario reportou que no app Android, ao abrir pela primeira vez (cold start) e tentar continuar assistindo episodios de series (ex: Cyberpunk T2E6), o player apresentava erro 403 Forbidden no console e falhava em cascata exibindo 'Nao existe esse episodio / Conteudo indisponivel', mas ao recarregar o video comecava a tocar.
+
+**Causas Raizes Identificadas:**
+1. A rota interna `/api/streamtape-proxy-iframe` nao constava na whitelist de URLs permitidas de `handleExtract` em `VideoPlayerModal.tsx`. Ao abrir o modal, a rota relativa era enviada indevidamente para `/api/extract-player`, que retornava 403 Forbidden (`validateSafeUrl` bloqueia URLs relativas) em 0ms.
+2. O fallback para MixDrop no cold start precisa descompactar o JavaScript e inicializar o ArtPlayer no mobile (~16s), mas o watchdog de timeout do player estava travado em 15s (`timeoutDuration`), abortando a conexao prematuramente antes do primeiro frame. Ao recarregar, o cache em memoria da VPS ja continha o link e tocava em 1s.
+3. O clique nos cards de 'Continuar Assistindo' em `HomePage.tsx` nao repassava `item.serverKey` para o handler `onPlay`.
+
+**Alteracoes Realizadas:**
+- **`src/components/VideoPlayerModal.tsx`:** Adicionadas as rotas `/api/streamtape-proxy-iframe`, `/api/vidsrc-player`, `/api/vidsrc-stream` e `streamtape` na whitelist do `handleExtract`. O timeout do watchdog para servidores MixDrop (`md-stream`) foi aumentado de 15s para 25s em cold starts.
+- **`src/pages/HomePage.tsx`:** Repasse de `item.serverKey` e `isAnime` no callback `onPlay` dos cards de Continue Assistindo.
+- **`src/components/AdminDeployMonitor.tsx`:** Botoes renomeados para 'Zero-Downtime' conforme solicitado.
+- **`src/pages/AdminPage.tsx`:** Badge `EncontreiCookieBadge` removido do cabecalho ao lado do botao Sair.
+- **`server/routes/encontreiLookup.ts`:** Correcao dos tipos de retorno adicionando `streamtape` e `doodstream` em `pickMixdrop`, `resolveEncontreiEpisode` e `resolveEncontreiMovie`.
+
+**Validacao:**
+- Teste deterministico validou resposta 200 e tag `<video>` com `WATCHPLAY_STATUS` em `/api/streamtape-proxy-iframe?id=105248&s=2&e=6`.
+- Compilacao do backend via esbuild (`dist/server.cjs`) executada com sucesso.
+- Sincronizacao dos assets do backend Android (`android/app/src/main/assets/public/server.cjs`).

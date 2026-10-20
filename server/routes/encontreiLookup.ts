@@ -802,7 +802,7 @@ async function encontreiEpisodeId(
 
 /** Extrai mixdrop e streamtape de um playerData JSON. Tenta servers_dub primeiro, depois servers_leg.
  *  Áudio = "Dublado" se servers_dub tem conteúdo, senão "Legendado". */
-function pickMixdrop(d: any): { mixdrop: string; streamtape?: string | null; audio: "Dublado" | "Legendado" } | null {
+function pickMixdrop(d: any): { mixdrop: string; streamtape?: string | null; doodstream?: string | null; audio: "Dublado" | "Legendado" } | null {
   if (!d || typeof d !== "object") return null;
   const dubRaw = String(d.servers_dub || "");
   const legRaw = String(d.servers_leg || "");
@@ -1011,6 +1011,8 @@ export async function resolveEncontreiEpisode(
   mixdrop: string;
   mixdrop_encontrei: string;
   mixdrop_vizer: null;
+  streamtape?: string | null;
+  doodstream?: string | null;
   audio: string;
   server_name: string;
   season: number;
@@ -1080,6 +1082,8 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
   mixdrop: string;
   mixdrop_encontrei: string;
   mixdrop_vizer: null;
+  streamtape?: string | null;
+  doodstream?: string | null;
   audio: string;
   server_name: string;
   source: string;

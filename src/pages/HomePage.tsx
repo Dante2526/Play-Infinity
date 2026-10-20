@@ -1024,7 +1024,9 @@ export function HomePage({
                         true, // Auto-fullscreen imediato
                         item.imageUrl,
                         item.backdropUrl,
-                        item.posterUrl
+                        item.posterUrl,
+                        false,
+                        item.serverKey
                       );
                     } else if (onPlay) {
                       // Fallback estático
