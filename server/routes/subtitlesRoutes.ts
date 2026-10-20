@@ -224,13 +224,26 @@ subtitlesRouter.get("/api/subtitle-file", (req, res) => {
   if (!b64Path) return res.status(400).send("Path missing");
 
   try {
-    const filePath = Buffer.from(b64Path, "base64").toString("utf-8");
-    if (!fs.existsSync(filePath)) {
+    const decoded = Buffer.from(b64Path, "base64").toString("utf-8");
+    const resolvedPath = path.resolve(decoded);
+    const resolvedCacheDir = path.resolve(CACHE_DIR);
+
+    // Proteção rigorosa contra Path Traversal / LFI (CWE-22)
+    // Garante que o arquivo solicitado resida estritamente dentro de CACHE_DIR
+    const isWithinCache = resolvedPath.startsWith(resolvedCacheDir + path.sep) || resolvedPath === resolvedCacheDir;
+    if (!isWithinCache) {
+      console.warn(`[Subtitles] Tentativa de Path Traversal bloqueada: ${decoded}`);
+      return res.status(403).send("Acesso negado.");
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
       return res.status(404).send("File not found");
     }
-    res.setHeader("Content-Type", "text/vtt");
+
+    res.setHeader("Content-Type", "text/vtt; charset=utf-8");
     res.setHeader("Access-Control-Allow-Origin", "*");
-    fs.createReadStream(filePath).pipe(res);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    fs.createReadStream(resolvedPath).pipe(res);
   } catch (e) {
     res.status(500).send("Error reading file");
   }

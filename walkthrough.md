@@ -1,3 +1,28 @@
+## 20/10/2026 - Auditoria de Segurança e Mitigação Imediata (SEC-01 e SEC-04)
+
+**Contexto e Motivação:**
+Auditoria de segurança ofensiva/defensiva baseada na metodologia da Cloudflare identificou 7 pontos de atenção no repositório, com foco crítico em uma vulnerabilidade de Leitura Arbitrária de Arquivos (LFI/Path Traversal) em legendas e um risco de Stored XSS via upload de imagens de bug report.
+
+**Vulnerabilidades Corrigidas:**
+1. **SEC-01 (CRÍTICA): Leitura Arbitrária de Arquivos (LFI) em `/api/subtitle-file`:**
+   - **Arquivo:** `server/routes/subtitlesRoutes.ts`
+   - **Causa:** O parâmetro base64 `path` era decodificado e lido diretamente do disco via `fs.createReadStream(filePath)` sem conferir se pertencia à pasta permitida.
+   - **Correção:** Implementada validação canônica com `path.resolve` e verificação estrita de fronteira (`resolvedPath.startsWith(resolvedCacheDir + path.sep)`). Tentativas de navegação arbitrária fora do cache são bloqueadas com `403 Forbidden`. Adicionado cabeçalho `X-Content-Type-Options: nosniff`.
+2. **SEC-04 (ALTA): Stored XSS e Path Traversal em `/api/upload-bug-image`:**
+   - **Arquivo:** `server.ts`
+   - **Causa:** Concluía upload usando o nome fornecido pelo usuário e validava apenas cabeçalho de string data URL, permitindo extensão `.html` ou payload malicioso.
+   - **Correção:**
+     - Adicionado validador de *magic bytes* em memória para arquivos PNG, JPEG, GIF e WEBP.
+     - Ignorado qualquer nome vindo do cliente; arquivos salvos com `crypto.randomUUID()` e extensão fixa pelo tipo MIME autêntico.
+     - Configurado `express.static('/uploads')` com cabeçalhos de segurança `Content-Security-Policy: default-src 'none'; sandbox` e `X-Content-Type-Options: nosniff`.
+
+**Validação Realizada:**
+- Teste TDD automatizado (`scratch/test-security-patches.mjs`): 6/6 asserções de segurança passando com 100% de sucesso.
+- Compilação do backend via esbuild (`dist/server.cjs`): 0 erros gerados.
+- Grafo de conhecimento Graphify atualizado (`graphify update .`).
+
+---
+
 ## 20/10/2026 - Correção das Miniaturas Dinâmicas na Barra de Progresso (Timeline Scrubber)
 
 **Contexto e Motivação:**

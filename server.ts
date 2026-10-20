@@ -145,15 +145,67 @@ process.on("uncaughtException", (err) => {
     message: { error: 'Muitos envios de imagem em pouco tempo. Tente novamente mais tarde.' }
   });
 
+  // Helper para validação estrita de magic bytes de imagens (CWE-434 / CWE-79)
+  function detectImageMimeAndExtension(buffer: Buffer): { mime: string; ext: string } | null {
+    if (buffer.length < 8) return null;
+
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47 &&
+      buffer[4] === 0x0d &&
+      buffer[5] === 0x0a &&
+      buffer[6] === 0x1a &&
+      buffer[7] === 0x0a
+    ) {
+      return { mime: "image/png", ext: ".png" };
+    }
+
+    // JPEG: FF D8 FF
+    if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+      return { mime: "image/jpeg", ext: ".jpg" };
+    }
+
+    // GIF: GIF87a ou GIF89a
+    if (
+      buffer[0] === 0x47 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46 &&
+      buffer[3] === 0x38 &&
+      (buffer[4] === 0x37 || buffer[4] === 0x39) &&
+      buffer[5] === 0x61
+    ) {
+      return { mime: "image/gif", ext: ".gif" };
+    }
+
+    // WEBP: RIFF....WEBP
+    if (
+      buffer.length >= 12 &&
+      buffer[0] === 0x52 &&
+      buffer[1] === 0x49 &&
+      buffer[2] === 0x46 &&
+      buffer[3] === 0x46 &&
+      buffer[8] === 0x57 &&
+      buffer[9] === 0x45 &&
+      buffer[10] === 0x42 &&
+      buffer[11] === 0x50
+    ) {
+      return { mime: "image/webp", ext: ".webp" };
+    }
+
+    return null;
+  }
+
   app.post('/api/upload-bug-image', bugUploadLimiter, (req, res) => {
     try {
-      const { imageBase64, filename } = req.body;
-      if (!imageBase64 || !filename) {
+      const { imageBase64 } = req.body;
+      if (!imageBase64) {
         return res.status(400).json({ error: 'Dados da imagem incompletos.' });
       }
 
-      // Valida: precisa ser data URL de imagem (PNG/JPG/GIF/WEBP) —
-      // impede salvar conteúdo arbitrário (executáveis, scripts etc.)
+      // Valida: precisa ser data URL de imagem (PNG/JPG/GIF/WEBP)
       if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(imageBase64)) {
         return res.status(400).json({ error: 'Formato inválido. Apenas imagens PNG, JPG, GIF ou WEBP.' });
       }
@@ -173,12 +225,20 @@ process.on("uncaughtException", (err) => {
         return res.status(400).json({ error: 'A imagem excede o limite de 5MB.' });
       }
 
-      const safeFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
+      // Validação estrita de magic bytes para impedir injeção de scripts/HTML disfarçados
+      const detected = detectImageMimeAndExtension(buffer);
+      if (!detected) {
+        return res.status(400).json({ error: 'Arquivo inválido: o conteúdo não corresponde a uma imagem autêntica.' });
+      }
+
+      // Gera nome com UUID criptográfico seguro e extensão restrita pelo MIME real
+      // Ignora qualquer nome arbitrário fornecido pelo cliente para mitigar Path Traversal e Stored XSS
+      const safeFilename = `${crypto.randomUUID()}${detected.ext}`;
       const filePath = path.join(uploadDir, safeFilename);
 
       fs.writeFileSync(filePath, buffer);
 
-      res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}` });
+      res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}`, filename: safeFilename });
     } catch (err: any) {
       console.error('[Upload API] Erro:', err);
       res.status(500).json({ error: 'Erro ao processar imagem no servidor.' });
@@ -189,8 +249,13 @@ process.on("uncaughtException", (err) => {
   app.use(express.json({ limit: '10kb' }));
   app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 
-  // Pasta estática para uploads
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+  // Pasta estática para uploads com cabeçalhos de segurança (sandbox e nosniff)
+  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    }
+  }));
 
   // ========================================================
   // PROTEÇÃO CONTRA DDOS (Camada de Aplicação)
