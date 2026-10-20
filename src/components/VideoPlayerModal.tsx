@@ -1892,7 +1892,8 @@ export function VideoPlayerModal({
             handleEpisodeChange(nextEp);
             setTimeout(() => setAutoNextNotice(null), 4500);
           } else {
-            const totalSeasons = seriesDetails?.number_of_seasons || 0;
+            const availNums = (availableSeasons || []).map(Number);
+            const totalSeasons = Math.max(seriesDetails?.number_of_seasons || 0, ...(availNums.length > 0 ? availNums : [1]));
             const hasNextSeason = totalSeasons > 0 && season < totalSeasons;
 
             if (hasNextSeason) {

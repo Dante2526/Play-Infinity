@@ -512,7 +512,7 @@ const router = Router();
                   v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
                   v.addEventListener("seeked", function() { push("seeked"); });
                   v.addEventListener("abort", function() { push("abort", "carga cancelada"); });
-                  v.addEventListener("ended", function() { push("ended"); });
+                  v.addEventListener("ended", function() { push("ended"); notifyEnded(); });
                   v.addEventListener("emptied", function() { warn("EMPTIED", "elemento de video foi esvaziado/reiniciado"); });
                   v.addEventListener("pause", function() {
                     if (v.ended) return;

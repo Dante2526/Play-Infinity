@@ -1357,31 +1357,48 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // RECURSO: PRÓXIMO EPISÓDIO FLUTUANTE (NETFLIX & DISNEY+)
   // ========================================================
   const nextEpisode = useMemo(() => {
-    if (!isSeries || !episodesList || episodesList.length === 0 || !episode) return null;
-    const currentEpNum = episode;
-    const nextInSameSeason = episodesList.find(e => e.episode_number === currentEpNum + 1);
-    if (nextInSameSeason) {
-      return {
-        ...nextInSameSeason,
-        seasonNumber: season || 1,
-        isNextSeason: false,
-      };
-    }
-    if (availableSeasons && season) {
-      const nextSeasonNum = season + 1;
-      if (availableSeasons.includes(nextSeasonNum)) {
+    if (!isSeries || !episode) return null;
+    const currentEpNum = Number(episode);
+    const curSeasonNum = Number(season || 1);
+
+    if (episodesList && episodesList.length > 0) {
+      const nextInSameSeason = episodesList.find(e => Number(e.episode_number) === currentEpNum + 1);
+      if (nextInSameSeason) {
         return {
-          episode_number: 1,
-          name: `Temporada ${nextSeasonNum} • Episódio 1`,
-          overview: '',
-          seasonNumber: nextSeasonNum,
-          isNextSeason: true,
-          still_path: undefined,
+          ...nextInSameSeason,
+          seasonNumber: curSeasonNum,
+          isNextSeason: false,
         };
       }
     }
+
+    if (totalEpisodes && currentEpNum < totalEpisodes) {
+      const nextEpNum = currentEpNum + 1;
+      return {
+        episode_number: nextEpNum,
+        name: `Episódio ${nextEpNum}`,
+        overview: '',
+        seasonNumber: curSeasonNum,
+        isNextSeason: false,
+        still_path: undefined,
+      };
+    }
+
+    const nextSeasonNum = curSeasonNum + 1;
+    const availList = (availableSeasons || []).map(Number);
+    if (availList.includes(nextSeasonNum) || (totalEpisodes && currentEpNum >= totalEpisodes)) {
+      return {
+        episode_number: 1,
+        name: `Temporada ${nextSeasonNum} • Episódio 1`,
+        overview: '',
+        seasonNumber: nextSeasonNum,
+        isNextSeason: true,
+        still_path: undefined,
+      };
+    }
+
     return null;
-  }, [isSeries, episodesList, episode, season, availableSeasons]);
+  }, [isSeries, episodesList, episode, season, availableSeasons, totalEpisodes]);
 
   // Galeria local instantânea de cenas dos episódios da temporada (já em memória via episodesList)
   const seasonEpisodeStills = useMemo(() => {
@@ -1472,13 +1489,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (isPromptDismissed || !hasValidDuration) return;
 
     if (isSeries && nextEpisode) {
-      // Séries: créditos finais nos últimos 75 segundos
-      if (duration >= 120 && remainingTime <= 75 && remainingTime > 2 && playedPercent >= 85) {
+      // Séries: créditos finais nos últimos 120 segundos ou quando o vídeo chega ao fim
+      const isNearEnd = (duration >= 120 && remainingTime <= 80 && playedPercent >= 80) || (remainingTime <= 5 && duration > 0);
+      if (isNearEnd) {
         if (!showNextEpisodePrompt) {
           setShowNextEpisodePrompt(true);
           setNextEpisodeCountdown(10);
         }
-      } else if (remainingTime > 90 && showNextEpisodePrompt) {
+      } else if (remainingTime > 95 && showNextEpisodePrompt) {
         setShowNextEpisodePrompt(false);
         setNextEpisodeCountdown(10);
         if (nextEpisodeTimerRef.current) {
@@ -1514,7 +1532,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       return;
     }
 
-    if (playerStatus.paused) {
+    const isVideoAtEnd = remainingTime <= 2 || (hasValidDuration && displayCurrentTime >= duration - 1);
+    if (playerStatus.paused && !isVideoAtEnd) {
       if (nextEpisodeTimerRef.current) {
         clearInterval(nextEpisodeTimerRef.current);
         nextEpisodeTimerRef.current = null;

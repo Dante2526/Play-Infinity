@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792495064.2609918,
-    "ast_hash": "179aefe47aadc293532233ceae476291",
+    "mtime": 1792502700.8965673,
+    "ast_hash": "eae499b8346c0b9befcf3740a8c1fda8",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792501403.8524432,
-    "ast_hash": "9170288c3989f5d7095b96a86c6db0e9",
+    "mtime": 1792502856.4502575,
+    "ast_hash": "12113a49de9ca616dfe04cc133982956",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1145,8 +1145,8 @@
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
-    "mtime": 1792413787.769151,
-    "ast_hash": "c82cac3840a28a3fe2cd441ed32a8e33",
+    "mtime": 1792502756.056921,
+    "ast_hash": "7f3c06646c003a55dbd84fbe30ca1844",
     "semantic_hash": ""
   },
   "server/routes/doodstreamRoutes.ts": {

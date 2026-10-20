@@ -1,3 +1,32 @@
+## 20/10/2026 - Correção da Janela de Exibição e Ativação do Card de Próximo Episódio (120s)
+
+**Contexto e Motivação:**
+Ao assistir a episódios de séries (ex: Cyberpunk no MixDrop), o card de prévia do próximo episódio ("Próximo em 10s" estilo Netflix/Disney+) não apareceu nos créditos finais e o vídeo finalizou em tela preta no segundo zero sem disparar o card flutuante nem a transição automática de episódio.
+
+**Causas Raízes Identificadas:**
+1. **Janela de Tempo Incompatível (75s vs 120s):** O código de séries estava configurado rígidamente para `remainingTime <= 75`, enquanto os créditos de encerramento duram 90s a 120s. Quem assistia esperando nos últimos 120 segundos não via o card.
+2. **Trava `remainingTime > 2` no Término:** O monitoramento continha `remainingTime > 2`, o que desativava o card quando o vídeo chegava ao segundo 0 ou terminava.
+3. **Pausa ao Final do Arquivo Congelava Countdown:** Quando o vídeo finalizava e o player entrava em pausa no último segundo, o timer da contagem regressiva era cancelado por causa de `playerStatus.paused`.
+4. **MixDrop Faltava `notifyEnded` no `<video>` Nativo:** Em `server/routes/mixdrop.ts`, o listener de evento `ended` do elemento `<video>` nativo não chamava `notifyEnded()` para emitir `WATCHPLAY_VIDEO_ENDED`.
+5. **Transição de Temporada Bloqueada por TMDB Oficial:** Cyberpunk no TMDB oficial declara apenas 1 temporada (`number_of_seasons = 1`). Ao terminar o episódio 10, o modal calculava `season < seriesDetails.number_of_seasons` (1 < 1 = falso) e declarava "Fim da série alcançado", ignorando a Temporada 2 adicionada pelo catálogo.
+
+**Modificações Realizadas:**
+1. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Janela de acionamento do card de séries atualizada para **120 segundos** (`remainingTime <= 120`) ou término (`remainingTime <= 5`).
+   - Removida a trava `remainingTime > 2`: o card permanece visível e interativo se o vídeo chegar a zero.
+   - Na contagem regressiva, se o vídeo pausar por ter chegado ao fim do arquivo (`isVideoAtEnd`), o countdown de 10s continua rodando e avança automaticamente.
+   - Refatorado `nextEpisode` com coerção numérica e suporte a transição de temporada (`Temporada 2 • Episódio 1`).
+2. **`src/components/VideoPlayerModal.tsx`:**
+   - Atualizado cálculo de `totalSeasons` no evento `isEnded` para usar `Math.max(seriesDetails.number_of_seasons, ...availableSeasons)`, garantindo a transição da T1 para a T2.
+3. **`server/routes/mixdrop.ts`:**
+   - Adicionada emissão de `notifyEnded()` no evento nativo `ended` do `<video>`.
+
+**Validação Realizada:**
+- Teste TDD automatizado (`scratch/test-next-episode-card.mjs`): 3/3 testes aprovados (janela de 120s, countdown com vídeo finalizado e transição T1 -> T2).
+- Compilação backend com esbuild: 0 erros.
+
+---
+
 ## 20/10/2026 - Correção de Expiração de Token e Retomada no StreamTape (Pausa Longa)
 
 **Contexto e Motivação:**
