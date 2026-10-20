@@ -130,15 +130,35 @@ const DEFAULT_SEASON: Season = {
 
 // Cache persistente das últimas temporadas conhecidas por série (via TMDB).
 // Garante que abas reais (ex: T3 do HxH) nunca sumam quando a API do TMDB
-// falhar temporariamente — a UI reusa a última lista conhecida.
+// falhar temporariamente — a UI reusa a última lista conhecida com TTL de 15 min.
 const TV_SEASONS_CACHE_KEY = "play-infinity:tmdb-seasons-cache";
+const TV_SEASONS_CACHE_TTL = 15 * 60 * 1000; // 15 minutos (permite descobrir novas temporadas sem travar)
+
+interface CachedSeasonEntry {
+  timestamp: number;
+  seasons: Season[];
+}
 
 function readSeasonsCache(): Record<string, Season[]> {
   try {
     const raw = typeof localStorage !== "undefined" ? localStorage.getItem(TV_SEASONS_CACHE_KEY) : null;
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object") return {};
+
+    const clean: Record<string, Season[]> = {};
+    const now = Date.now();
+    for (const [id, entry] of Object.entries(parsed)) {
+      if (entry && typeof entry === "object" && Array.isArray((entry as any).seasons) && typeof (entry as any).timestamp === "number") {
+        if (now - (entry as any).timestamp < TV_SEASONS_CACHE_TTL) {
+          clean[id] = (entry as any).seasons;
+        }
+      } else if (Array.isArray(entry)) {
+        // Formato legado sem timestamp: aceita no primeiro load
+        clean[id] = entry;
+      }
+    }
+    return clean;
   } catch {
     return {};
   }
@@ -147,7 +167,12 @@ function readSeasonsCache(): Record<string, Season[]> {
 function writeSeasonsCache(cache: Record<string, Season[]>) {
   try {
     if (typeof localStorage !== "undefined") {
-      localStorage.setItem(TV_SEASONS_CACHE_KEY, JSON.stringify(cache));
+      const now = Date.now();
+      const toStore: Record<string, CachedSeasonEntry> = {};
+      for (const [id, seasons] of Object.entries(cache)) {
+        toStore[id] = { timestamp: now, seasons };
+      }
+      localStorage.setItem(TV_SEASONS_CACHE_KEY, JSON.stringify(toStore));
     }
   } catch {
     // Quota/privacidade — falha silenciosa, não quebra o app

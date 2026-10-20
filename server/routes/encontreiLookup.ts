@@ -1415,6 +1415,16 @@ router.get("/api/series-seasons-available", async (req, res) => {
     // Sonda network só pras seasons que não estão no catálogo e não estão em cache
     if (!probeCached && seasonsToProbe.length > 0) {
       const probeSeason = async (season: number): Promise<boolean> => {
+        // 0. Sonda Encontrei.me Live (Prioritário: links MixDrop/StreamTape com Cookie autenticado na VPS)
+        try {
+          if (process.env.ENCONTREI_COOKIE) {
+            const encLive = await resolveEncontreiEpisode(tmdbId, season, 1);
+            if (encLive && (encLive.mixdrop || encLive.streamtape || encLive.doodstream)) {
+              return true;
+            }
+          }
+        } catch {}
+
         // 1. Sonda VIP Player (Dublado PT-BR homologado, mais rápido)
         try {
           const vipOk = await checkVipSeason(tmdbId, season);

@@ -52,7 +52,7 @@ const _tmdbProxyInflight = new Map<string, Promise<{ status: number; data: any }
       try {
         const result = await inflight;
         if (result.status === 200) {
-          res.setHeader("Cache-Control", "public, max-age=900");
+          res.setHeader("Cache-Control", "public, max-age=120, stale-while-revalidate=300");
         }
         return res.status(result.status).json(result.data);
       } finally {

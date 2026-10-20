@@ -1,5 +1,15 @@
 // Serviço de verificação de disponibilidade real de episódios nos servidores homologados (WatchPlayer e VIP Player)
 
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
+    if (isNative) {
+      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
+    }
+  }
+  return '';
+}
+
 interface AvailableEpisodesResponse {
   success: boolean;
   id: string;
@@ -58,7 +68,7 @@ export async function checkPlayableBatch(items: PlayableCheckItem[]): Promise<Se
   }
 
   try {
-    const res = await fetch("/api/check-playable-batch", {
+    const res = await fetch(`${getApiBase()}/api/check-playable-batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -104,7 +114,10 @@ export async function getAvailableSeasonsForSeries(
   const cacheKey = `${idStr}:${(candidateSeasons || []).slice().sort((a, b) => a - b).join(",")}`;
   const cached = !forceRefresh ? clientSeasonsCache.get(cacheKey) : null;
   if (cached && Date.now() - cached.timestamp < CLIENT_CACHE_TTL) {
-    if (cached.seasons && cached.seasons.length > 0 && (!candidateSeasons || cached.seasons.length >= candidateSeasons.length)) {
+    // Se temos candidateSeasons e cached.seasons não contém todas as temporadas candidatas,
+    // não use o cache para permitir que novas temporadas (ex: T2) sejam descobertas na VPS!
+    const hasAllCandidates = !candidateSeasons || candidateSeasons.every(c => cached.seasons.includes(c));
+    if (cached.seasons && cached.seasons.length > 0 && hasAllCandidates) {
       return cached.seasons;
     }
   }
@@ -114,7 +127,7 @@ export async function getAvailableSeasonsForSeries(
       ? `&candidate_seasons=${encodeURIComponent(candidateSeasons.join(","))}`
       : "";
     const refreshParam = forceRefresh ? "&force_refresh=true" : "";
-    const res = await fetch(`/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}${candidatesParam}${refreshParam}&_cb=${Date.now()}`, {
+    const res = await fetch(`${getApiBase()}/api/series-seasons-available?tmdb_id=${encodeURIComponent(idStr)}${candidatesParam}${refreshParam}&_cb=${Date.now()}`, {
       cache: "no-store",
     });
     if (res.ok) {
@@ -166,7 +179,7 @@ export async function getAvailableEpisodes(
 
   try {
     const res = await fetch(
-      `/api/check-season?tmdbId=${encodeURIComponent(idStr)}&season=${season}&count=${totalSeasonEpisodes}`
+      `${getApiBase()}/api/check-season?tmdbId=${encodeURIComponent(idStr)}&season=${season}&count=${totalSeasonEpisodes}`
     );
 
     if (!res.ok) {

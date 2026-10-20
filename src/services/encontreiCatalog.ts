@@ -1,3 +1,13 @@
+function getApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
+    if (isNative) {
+      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
+    }
+  }
+  return '';
+}
+
 export interface EncontreiResult {
   mixdrop: string | null;
   mixdrop_encontrei?: string | null;
@@ -25,7 +35,7 @@ export async function findMovieByTmdbId(tmdbId: number, refresh: boolean = false
     return _cache.get(cacheKey) || null;
   }
   try {
-    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie${refresh ? '&refresh=1' : ''}${name ? `&name=${encodeURIComponent(name)}` : ''}`);
+    const res = await fetch(`${getApiBase()}/api/encontrei-lookup?tmdb_id=${tmdbId}&type=movie${refresh ? '&refresh=1' : ''}${name ? `&name=${encodeURIComponent(name)}` : ''}`);
     if (!res.ok) { return null; }
     const data = await res.json();
     if (data.error) { return null; }
@@ -50,7 +60,7 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
     return _cache.get(cacheKey) || null;
   }
   try {
-    const res = await fetch(`/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}${refresh ? '&refresh=1' : ''}${name ? `&name=${encodeURIComponent(name)}` : ''}`);
+    const res = await fetch(`${getApiBase()}/api/encontrei-lookup?tmdb_id=${tmdbId}&type=tv&season=${season}&episode=${episode}${refresh ? '&refresh=1' : ''}${name ? `&name=${encodeURIComponent(name)}` : ''}`);
     if (!res.ok) { return null; }
     const data = await res.json();
     if (data.error) { return null; }

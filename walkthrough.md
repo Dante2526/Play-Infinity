@@ -1,3 +1,35 @@
+## 20/10/2026 - Detecção Automática e Dinâmica de Novas Temporadas (Sem Cache Stale)
+
+**Contexto e Motivação:**
+Quando uma nova temporada de série (ex: Cyberpunk: Mercenários Temporada 2) era lançada no Encontrei.me via MixDrop ou no TMDB, o cliente precisava forçar a limpeza de cache (Ctrl+Shift+R) para que a nova aba de temporada aparecesse na tela.
+
+**Causas Raízes Identificadas:**
+1. A função de sondagem de rede (`probeSeason` em `server/routes/encontreiLookup.ts`) verificava VIP Player, WatchPlayer, Vizer e Nixplay, mas **não sondava o Encontrei.me ao vivo com o Cookie autenticado**. Portanto, novos lançamentos exclusivos do Encontrei.me nunca eram aprovados pela VPS no primeiro request.
+2. O cache local de temporadas no navegador (`tvSeasonsCache` no `src/services/tmdb.ts`) era persistido no `localStorage` com **TTL infinito (sem expiração)**, travando séries visitadas anteriormente nas temporadas antigas.
+3. As chamadas em `episodeAvailability.ts` e `encontreiCatalog.ts` usavam rotas relativas sem prepender a URL da VPS Oracle no APK Android nativo (Capacitor).
+4. O cabeçalho `Cache-Control` do proxy do TMDB (`server/routes/tmdbProxy.ts`) mantinha 15 minutos de retenção rígida no navegador.
+
+**Modificações Realizadas (5 arquivos):**
+1. **`server/routes/encontreiLookup.ts`:**
+   - Adicionada sondagem prioritária do Encontrei.me Live (`resolveEncontreiEpisode(tmdbId, season, 1)`) dentro de `probeSeason`. Temporadas novas lançadas no Encontrei.me agora são detectadas e aprovadas instantaneamente pela VPS no primeiro clique.
+2. **`src/services/tmdb.ts`:**
+   - Adicionado controle de validade (`TV_SEASONS_CACHE_TTL = 15 minutos`) e timestamps no `localStorage` para `tvSeasonsCache`, com compatibilidade reversa para o formato antigo.
+3. **`src/services/episodeAvailability.ts`:**
+   - Adicionada função `getApiBase()` apontando para a VPS Oracle no APK nativo.
+   - Adicionada checagem `hasAllCandidates`: se o TMDB anunciar uma temporada nova que não está no cache em memória, o cliente ignora o cache antigo e re-consulta a VPS.
+4. **`src/services/encontreiCatalog.ts`:**
+   - Adicionada função `getApiBase()` nas buscas de filme e episódio para resolução no APK Android.
+5. **`server/routes/tmdbProxy.ts`:**
+   - Atualizado cabeçalho HTTP para `public, max-age=120, stale-while-revalidate=300`.
+
+**Validação Realizada:**
+- Teste TDD automatizado (`scratch/test-dynamic-seasons.mjs`): 5/5 asserções aprovadas com sucesso.
+- Teste TDD de regressão de segurança (`scratch/test-security-patches.mjs`): 6/6 aprovados.
+- Compilação do backend via esbuild (`dist/server.cjs`): 0 erros gerados.
+- Sincronização do grafo de conhecimento Graphify.
+
+---
+
 ## 20/10/2026 - Auditoria de Segurança e Mitigação Imediata (SEC-01 e SEC-04)
 
 **Contexto e Motivação:**
