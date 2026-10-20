@@ -53,13 +53,18 @@ async function main() {
         console.error("❌ O Google Drive está exigindo Login! Configure a implantação como 'Quem tem acesso: Qualquer pessoa'.");
         process.exit(1);
       }
+
+      if (!text.includes("OK:") && !text.includes("atualizado") && !text.includes("gravado")) {
+        console.error(`❌ O Google Drive recusou a gravação de ${fileName}! Resposta recebida: ${text}`);
+        process.exit(1);
+      }
     } catch (err) {
       console.error(`Erro ao enviar ${fileName}:`, err.message);
       process.exit(1);
     }
   }
 
-  console.log("🏁 Todos os arquivos foram enviados com sucesso ao Google Drive!");
+  console.log("🏁 Todos os arquivos foram enviados e confirmados com sucesso no Google Drive!");
 }
 
 main().catch(err => {
