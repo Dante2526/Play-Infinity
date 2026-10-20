@@ -653,6 +653,8 @@ export function VideoPlayerModal({
     return "";
   }, [tmdbId, imdbId, urlInput, isSeries]);
 
+  const effectiveTmdbId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : undefined);
+
   useEffect(() => {
     if (isOpen && !resolvedId && !error) {
       setError("Não foi possível identificar o ID do filme ou série (TMDB/IMDB). O reprodutor requer um ID válido para funcionar.");
@@ -3033,7 +3035,7 @@ export function VideoPlayerModal({
             <div className={`absolute inset-0 pointer-events-none ${isNativePiP ? 'hidden' : ''}`}>
               <NetflixPlayerSkin
                 mediaId={resolvedId}
-                tmdbId={tmdbId}
+                tmdbId={effectiveTmdbId}
                 imdbId={imdbId}
                 title={title}
                 isSeries={isSeries}

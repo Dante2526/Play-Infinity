@@ -1383,20 +1383,29 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return null;
   }, [isSeries, episodesList, episode, season, availableSeasons]);
 
+  // Galeria local instantânea de cenas dos episódios da temporada (já em memória via episodesList)
+  const seasonEpisodeStills = useMemo(() => {
+    if (!isSeries || !episodesList || episodesList.length === 0) return [];
+    return episodesList
+      .filter((e) => e && e.still_path)
+      .map((e) => `https://image.tmdb.org/t/p/w300${e.still_path}`);
+  }, [isSeries, episodesList]);
+
   // Miniatura da cena correspondente ao ponto da timeline (hover ou touch)
   const previewThumbnail = useMemo(() => {
-    if (timelinePreviews.length > 0 && hoverPosPercent !== null && hoverPosPercent !== undefined) {
+    const activeGallery = timelinePreviews.length > 0 ? timelinePreviews : seasonEpisodeStills;
+    if (activeGallery.length > 0 && hoverPosPercent !== null && hoverPosPercent !== undefined) {
       const idx = Math.min(
-        timelinePreviews.length - 1,
-        Math.max(0, Math.floor((hoverPosPercent / 100) * timelinePreviews.length))
+        activeGallery.length - 1,
+        Math.max(0, Math.floor((hoverPosPercent / 100) * activeGallery.length))
       );
-      return timelinePreviews[idx];
+      return activeGallery[idx];
     }
     if (isSeries && nextEpisode?.still_path) {
       return `https://image.tmdb.org/t/p/w300${nextEpisode.still_path}`;
     }
     return backdropUrl || imageUrl || null;
-  }, [timelinePreviews, hoverPosPercent, isSeries, nextEpisode, backdropUrl, imageUrl]);
+  }, [timelinePreviews, seasonEpisodeStills, hoverPosPercent, isSeries, nextEpisode, backdropUrl, imageUrl]);
 
   // Posição horizontal do card com clamp nas laterais para nunca vazar da tela
   const clampedPosPercent = useMemo(() => {

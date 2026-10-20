@@ -39,7 +39,6 @@
   "37": "ExampleInstrumentedTest.java",
   "38": "remote-proxy.mjs",
   "39": "smoke-routes.mjs",
-  "40": "AdminPage.tsx",
   "41": "superflix-proxy.js",
   "42": "ExampleUnitTest.java",
   "43": "gradlew",
@@ -85,10 +84,7 @@
   "83": "task.md",
   "84": "AppErrorBoundary",
   "85": "@capacitor-firebase/messaging",
-  "86": "@capacitor/splash-screen",
   "87": "doodstreamRoutes.ts",
   "88": "streamtapeRoutes.ts",
-  "89": "ServerBlocksAdmin.tsx",
-  "93": "express-rate-limit",
-  "94": "firebase"
+  "93": "express-rate-limit"
 }

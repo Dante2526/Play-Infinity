@@ -1,3 +1,32 @@
+## 20/10/2026 - Correção das Miniaturas Dinâmicas na Barra de Progresso (Timeline Scrubber)
+
+**Contexto e Motivação:**
+Ao arrastar ou passar o dedo na barra de progresso do player, a imagem de prévia permanecia fixa/estática em uma única foto em vez de alternar suavemente entre as diferentes cenas do filme ou episódio de acordo com a posição da agulha.
+
+**Causa Raiz Identificada:**
+1. No APK nativo do Android (Capacitor), chamadas relativas ao proxy `/api/tmdb` falhavam por tentarem resolver em `capacitor://localhost/api/tmdb`, fazendo a busca de cenas retornar vazia.
+2. No `VideoPlayerModal.tsx`, a prop `tmdbId` ficava `undefined` quando a mídia era aberta via `resolvedId` numérico.
+3. Quando a lista de miniaturas ficava vazia, o player caía em um fallback de foto única (`nextEpisode?.still_path` estático).
+
+**Alterações Realizadas (4 arquivos):**
+1. **`src/services/tmdb.ts`:**
+   - Adicionada função `getTmdbApiBase()` garantindo que no APK Android todas as requisições ao proxy TMDB usem o domínio seguro da VPS Oracle (`https://play-infinity.stream`).
+   - Implementado enriquecimento de cenas em 3 níveis em `getTimelinePreviewImages`: stills específicos do episódio -> stills de episódios da temporada -> backdrops da série / filme, garantindo sempre entre 10 e 30 cenas reais espalhadas pela timeline.
+2. **`src/components/VideoPlayerModal.tsx`:**
+   - Definido `effectiveTmdbId` garantindo que tanto `tmdbId` explícito quanto IDs numéricos resolvidos sejam repassados corretamente para o player skin.
+3. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Criada galeria instantânea em memória `seasonEpisodeStills` a partir de `episodesList`.
+   - `previewThumbnail` agora alterna proporcionalmente na `activeGallery` (`timelinePreviews` ou `seasonEpisodeStills`), mudando de cena a cada avanço percentual da barra.
+4. **`android/app/build.gradle`:**
+   - `versionCode` incrementado para `34` e `versionName` para `"1.4.2"`.
+
+**Validação:**
+- Teste TDD Automatizado (`scratch/test-dynamic-timeline-preview.mjs`): 7/7 PASS.
+- Validação de tipos TypeScript (`tsc --noEmit`): 0 erros nos arquivos alterados.
+- Grafo de conhecimento Graphify sincronizado (`graphify update .`).
+
+---
+
 ## 19/10/2026 - Correção do Mini Player (Picture-in-Picture) no APK Android
 
 **Contexto e Motivação:**

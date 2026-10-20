@@ -168,6 +168,16 @@ const CLIENT_TMDB_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
  * a URL em todo warning — sem isso não dá pra saber qual recurso falhou no DevTools.
  * Possui cache em memória (10 min) e deduplicação de chamadas concorrentes.
  */
+function getTmdbApiBase(): string {
+  if (typeof window !== 'undefined') {
+    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
+    if (isNative) {
+      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
+    }
+  }
+  return '';
+}
+
 async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
   const now = Date.now();
   const cached = _clientTmdbCache.get(url);
@@ -196,7 +206,8 @@ async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
         ...(controller ? { signal: controller.signal } : {})
       };
 
-      const res = await fetch(url, fetchOptions);
+      const resolvedUrl = url.startsWith('/api') ? `${getTmdbApiBase()}${url}` : url;
+      const res = await fetch(resolvedUrl, fetchOptions);
       if (timeoutId) clearTimeout(timeoutId);
 
       if (!res.ok) {
@@ -765,21 +776,66 @@ export const getTimelinePreviewImages = async (
   try {
     if (!tmdbId || isNaN(Number(tmdbId))) return [];
     const isTv = mediaType === 'tv' || mediaType === 'series';
-    let url = '';
+    const collected: string[] = [];
+
     if (isTv && season && episode) {
-      url = `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+      // 1. Tenta stills reais do episódio específico
+      const epUrl = `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+      const epOutcome = await fetchTmdbRaw<any>(epUrl);
+      if (epOutcome.ok && epOutcome.data?.stills && epOutcome.data.stills.length > 0) {
+        epOutcome.data.stills.forEach((img: any) => {
+          if (img && img.file_path) {
+            collected.push(`https://image.tmdb.org/t/p/w300${img.file_path}`);
+          }
+        });
+      }
+
+      // 2. Se tiver menos de 8 imagens, busca os stills dos episódios da temporada
+      if (collected.length < 8) {
+        const seasonUrl = `/api/tmdb/tv/${tmdbId}/season/${season}`;
+        const seasonOutcome = await fetchTmdbRaw<any>(seasonUrl);
+        if (seasonOutcome.ok && seasonOutcome.data?.episodes && seasonOutcome.data.episodes.length > 0) {
+          seasonOutcome.data.episodes.forEach((ep: any) => {
+            if (ep && ep.still_path) {
+              const fullUrl = `https://image.tmdb.org/t/p/w300${ep.still_path}`;
+              if (!collected.includes(fullUrl)) {
+                collected.push(fullUrl);
+              }
+            }
+          });
+        }
+      }
+
+      // 3. Se ainda tiver poucas imagens, enriquece com os backdrops de cenas da série
+      if (collected.length < 8) {
+        const tvUrl = `/api/tmdb/tv/${tmdbId}/images`;
+        const tvOutcome = await fetchTmdbRaw<any>(tvUrl);
+        if (tvOutcome.ok && tvOutcome.data?.backdrops && tvOutcome.data.backdrops.length > 0) {
+          tvOutcome.data.backdrops.slice(0, 20).forEach((img: any) => {
+            if (img && img.file_path) {
+              const fullUrl = `https://image.tmdb.org/t/p/w300${img.file_path}`;
+              if (!collected.includes(fullUrl)) {
+                collected.push(fullUrl);
+              }
+            }
+          });
+        }
+      }
     } else {
-      url = `/api/tmdb/movie/${tmdbId}/images`;
+      // Filmes: backdrops de cenas reais do filme
+      const movieUrl = `/api/tmdb/movie/${tmdbId}/images`;
+      const movieOutcome = await fetchTmdbRaw<any>(movieUrl);
+      if (movieOutcome.ok && movieOutcome.data?.backdrops && movieOutcome.data.backdrops.length > 0) {
+        movieOutcome.data.backdrops.slice(0, 30).forEach((img: any) => {
+          if (img && img.file_path) {
+            collected.push(`https://image.tmdb.org/t/p/w300${img.file_path}`);
+          }
+        });
+      }
     }
 
-    const outcome = await fetchTmdbRaw<any>(url);
-    if (outcome.ok && outcome.data) {
-      const images: any[] = isTv ? (outcome.data.stills || []) : (outcome.data.backdrops || []);
-      if (images && images.length > 0) {
-        return images
-          .filter(img => img && img.file_path)
-          .map(img => `https://image.tmdb.org/t/p/w300${img.file_path}`);
-      }
+    if (collected.length > 0) {
+      return collected;
     }
   } catch (err) {
     console.warn(`[getTimelinePreviewImages] Erro ao carregar imagens de prévia:`, err);
