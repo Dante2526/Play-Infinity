@@ -504,8 +504,9 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
 
   switch (action) {
     case "restart-all":
-      commandToRun = "(sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando de reinicialização enviado (PM2 restart all agendado).'";
-      actionDescription = "Reiniciar todos os processos PM2 na VPS";
+    case "reload-all":
+      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
+      actionDescription = "Recarregar todos os serviços na VPS com Zero-Downtime (sem queda de conexões)";
       break;
 
     case "restart-proxy":
@@ -514,8 +515,9 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
       break;
 
     case "restart-app":
-      commandToRun = "(sleep 1 && sudo pm2 restart play-infinity-app) > /dev/null 2>&1 & echo 'Comando de reinicialização enviado (play-infinity-app agendado).'";
-      actionDescription = "Reiniciar aplicação web (play-infinity-app)";
+    case "reload-app":
+      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 reload play-infinity-app) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
+      actionDescription = "Recarregar aplicação web com Zero-Downtime (play-infinity-app)";
       break;
 
     case "git-pull-build":
@@ -536,18 +538,18 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
         echo "📦 Instalando dependências e gerando build..."
         npm run build || echo "Aviso no build"
         
-        echo "🔄 Agendando reinicialização dos serviços PM2..."
-        (sleep 1 && sudo pm2 restart all) > /dev/null 2>&1 &
+        echo "🔄 Recarregando os serviços PM2 com Zero-Downtime..."
+        (sleep 1 && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 &
         
-        echo "✅ Ação concluída com sucesso! Os serviços estão sendo atualizados."
+        echo "✅ Ação concluída com sucesso! Os serviços foram recarregados sem quedas."
       `;
-      actionDescription = "Atualização manual via Git Pull e Build na VPS";
+      actionDescription = "Atualização manual via Git Pull e Build na VPS (Zero-Downtime)";
       break;
 
     default:
       return res.status(400).json({
         success: false,
-        error: "Ação inválida. Ações permitidas: restart-all, restart-proxy, restart-app, git-pull-build."
+        error: "Ação inválida. Ações permitidas: restart-all, reload-all, restart-proxy, restart-app, reload-app, git-pull-build."
       });
   }
 

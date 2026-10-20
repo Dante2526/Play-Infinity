@@ -1191,11 +1191,17 @@ export function VideoPlayerModal({
           label: "StreamTape HD",
           badge: "StreamTape • MP4 direto • Skin Netflix 100%",
           buildUrl: (id: string, s?: number, e?: number) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const epS = s ?? season ?? 1;
+            const epE = e ?? episode ?? 1;
+            const lookupId = effectiveMovieId || tmdbId || id;
+            const targetKey = `tv:${lookupId}:${epS}:${epE}`;
+            const fidVal = streamtapeFileIdsRef.current[targetKey];
+            const isSameEp = epS === season && epE === episode;
+            const fid = (fidVal || (isSameEp ? streamtapeFileId : null)) ? `&fileId=${encodeURIComponent(fidVal || streamtapeFileId || "")}` : "";
             const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
+            const tParam = (isSameEp && lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${epS}&e=${epE}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
           name: "StreamTape HD"
@@ -1205,15 +1211,17 @@ export function VideoPlayerModal({
           label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: (id: string, s?: number, e?: number) => {
-            // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
-            if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+            const epS = s ?? season ?? 1;
+            const epE = e ?? episode ?? 1;
+            const lookupId = effectiveMovieId || tmdbId || id;
+            const targetKey = `tv:${lookupId}:${epS}:${epE}`;
+            const targetFid = mixdropFileIdsRef.current[targetKey] || (epS === season && epE === episode ? mixdropFileId : null);
+            if (targetFid) {
+              return buildMixdropStreamUrl(targetFid) || `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
             }
-            // Prioridade 2: defaultUrl se já é uma URL do MixDrop
-            if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
+            if (epS === season && epE === episode && defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
               return defaultUrl;
             }
-            // Prioridade 3: fallback (pode ser versão cam)
             return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
@@ -2205,14 +2213,18 @@ export function VideoPlayerModal({
     fallbackAttemptsRef.current.clear();
     mixdropAttemptRef.current = 1;
 
+    // Resolve o fileId do novo episódio para alimentar o cache de todos os servidores
+    let fid: string | null = null;
+    if (tmdbId) {
+      fid = await lookupMixdropFileId(season, newEpisode);
+    }
+
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
     let newUrl: string;
     if (selectedServerKey === "srv_mixdrop" && tmdbId) {
-      // Resolve o fileId DESTE episódio antes de montar a URL —
-      // nunca reutiliza o fileId do episódio anterior (erro E4→E5→E6).
-      const fid = await lookupMixdropFileId(season, newEpisode);
-      newUrl = fid
-        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+      const targetFid = fid || mixdropFileIdsRef.current[`tv:${tmdbId}:${season}:${newEpisode}`];
+      newUrl = targetFid
+        ? buildMixdropStreamUrl(targetFid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
       newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);

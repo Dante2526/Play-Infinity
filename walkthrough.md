@@ -1,4 +1,31 @@
-﻿## 20/10/2026 - Pipeline de Sincronização Leve para Google Drive e Gemini Mobile (Opção A)
+﻿## 20/10/2026 - Atualização dos Botões do Painel ADM para 'Recarregar Serviços (Zero-Downtime)'
+
+**Contexto e Motivação:**
+Com a transição da infraestrutura de deploy e PM2 para Cluster Mode e Graceful Shutdown, os botões manuais do Painel Administrativo ainda executavam \pm2 restart\. A interface e as rotas de backend foram atualizadas para refletir o novo comportamento de recarregamento suave.
+
+**Modificações Realizadas:**
+1. **\server/routes/adminOps.ts\:** Endpoints \estart-all\ e \estart-app\ agora executam \sudo pm2 reload ecosystem.config.cjs --update-env\, mantendo o processo com Zero-Downtime mesmo quando acionado manualmente pelo admin.
+2. **\src/components/AdminDeployMonitor.tsx\:** Botões de ação atualizados para **'Recarregar Serviços (Zero-Downtime)'** com descrições e tooltips claras.
+
+---
+## 20/10/2026 - Correção de Replay do Episódio Anterior ao Clicar em Próximo Episódio
+
+**Contexto e Motivação:**
+Ao clicar em "Assistir Agora" no card de próximo episódio (ex: Temp 2 Ep 6), a interface atualizava a nomenclatura para o episódio 6, porém o player reiniciava a reprodução do episódio 5 anterior.
+
+**Causa Raiz Identificada:**
+1. **Frontend (\src/components/VideoPlayerModal.tsx\):** O método \uildUrl\ do StreamTape e MixDrop usava o \streamtapeFileId\ / \mixdropFileId\ da closure do React (que ainda continha o \ileId\ do episódio 5 porque o estado do React ainda não havia re-renderizado de forma assíncrona). Com isso, a URL gerada continha \&fileId=FILEID_DO_EP_5\ mesmo passando \e=6\.
+2. **Backend (\server/routes/streamtapeRoutes.ts\):** O endpoint \/api/streamtape-proxy-iframe\ confiava cegamente no \ileId\ recebido na query sem verificar se o catálogo local tinha o episódio correto solicitado em \s\ e \e\.
+
+**Modificações Realizadas:**
+1. **\server/routes/streamtapeRoutes.ts\:** Blindagem estrita no backend: se a requisição contém \id\, \season\ e \episode\, o servidor sempre busca o \ileId\ correto do episódio solicitado no catálogo local, impedindo que qualquer cliente repita o episódio anterior.
+2. **\src/components/VideoPlayerModal.tsx\:**
+   - \uildUrl\ do StreamTape e MixDrop agora verificam se o \s\ e \e\ passados são exatamente iguais ao episódio atual antes de usar qualquer ID de cache, e buscam o \	argetKey\ exato (\	v:id:s:e\).
+   - \	Param\ (tempo salvo) só é anexado se for o mesmo episódio, evitando que o próximo episódio inicie com o tempo do anterior.
+   - \handleEpisodeChange\ pré-resolve o novo episódio antes de montar a URL.
+
+---
+## 20/10/2026 - Pipeline de Sincronização Leve para Google Drive e Gemini Mobile (Opção A)
 
 **Contexto e Motivação:**
 Configurada a sincronização automática do código do repositório para o Google Drive para permitir consultas em tempo real pelo app móvel do Gemini (@Google Drive), eliminando o problema anterior de arquivos JSON gigantes de catálogo que estouravam os limites de tokens da IA.
@@ -1152,5 +1179,7 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 - Log de descoberta: `[vizer-fresh] SÃ©rie nova mapeada: tmdb=290233 â†’ serie_id=82931 (dentro-do-circulo-dublado)`.
 
 **Deploy:** push autorizado pelo usuÃ¡rio â€” `versionCode 15` / `versionName 1.2.4` (APK/AAB via GitHub Actions no push pra main). Deploy na VPS Oracle (PM2) segue manual pelo dono.
+
+
 
 

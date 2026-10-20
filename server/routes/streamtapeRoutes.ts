@@ -302,7 +302,17 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     const name = req.query.name ? String(req.query.name) : undefined;
     const initialTime = Math.max(0, parseFloat(String(req.query.t || "0")));
 
-    // 1. Se não veio fileId na query, consulta o catálogo estático local
+    // 1. Para séries com id, season e episode:
+    // Sempre prioriza o fileId exato deste episódio no catálogo local para evitar que clientes
+    // ou WebViews reutilizem o fileId do episódio anterior por atraso de renderização.
+    if (id && season !== undefined && episode !== undefined) {
+      const catalogFid = findStreamtapeInCatalog(id, season, episode);
+      if (catalogFid) {
+        fileId = catalogFid;
+      }
+    }
+
+    // 2. Se não achou ainda no catálogo, busca ao vivo
     if (!fileId && id) {
       fileId = findStreamtapeInCatalog(id, season, episode) || "";
 

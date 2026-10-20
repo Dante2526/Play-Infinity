@@ -405,7 +405,7 @@ export function AdminDeployMonitor() {
   }, [fetchVpsData, fetchGithubRuns, fetchBotLogs, githubData?.runs?.[0]?.status]);
 
   // Executar ação de manutenção na VPS (Reiniciar, Git pull & build)
-  const handleVpsAction = async (action: "restart-all" | "restart-proxy" | "restart-app" | "git-pull-build", title: string) => {
+  const handleVpsAction = async (action: "restart-all" | "reload-all" | "restart-proxy" | "restart-app" | "reload-app" | "git-pull-build", title: string) => {
     setActionLoading(action);
     try {
       const res = await adminFetch("/api/admin/vps-action", {
@@ -557,13 +557,13 @@ export function AdminDeployMonitor() {
           </button>
 
           <button
-            onClick={() => handleVpsAction("restart-all", "Reiniciar Serviços (PM2)")}
+            onClick={() => handleVpsAction("restart-all", "Recarregar Serviços (Zero-Downtime)")}
             disabled={actionLoading !== null}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 active:scale-95 text-red-400 rounded-xl text-xs font-semibold border border-red-500/20 transition-all cursor-pointer disabled:opacity-50"
-            title="Reiniciar todos os serviços PM2 na VPS imediatamente"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 active:scale-95 text-orange-400 rounded-xl text-xs font-semibold border border-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
+            title="Recarregar aplicação em modo cluster sem derrubar quem está assistindo"
           >
-            <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-red-400" : ""}`} />
-            Reiniciar Serviços
+            <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
+            Recarregar Serviços (Zero-Downtime)
           </button>
         </div>
       </div>
@@ -604,13 +604,13 @@ export function AdminDeployMonitor() {
             </button>
 
             <button
-              onClick={() => handleVpsAction("restart-all", "Reiniciar Serviços (PM2)")}
+              onClick={() => handleVpsAction("restart-all", "Recarregar Serviços (Zero-Downtime)")}
               disabled={actionLoading !== null}
               className="flex items-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
-              title="Reiniciar todos os processos da VPS imediatamente"
+              title="Recarregar todos os processos da VPS sem derrubar streams ativos"
             >
               <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
-              {actionLoading === "restart-all" ? "Reiniciando..." : "Reiniciar Serviços"}
+              {actionLoading === "restart-all" ? "Recarregando..." : "Recarregar Serviços (Zero-Downtime)"}
             </button>
           </div>
         </div>
@@ -1350,12 +1350,13 @@ export function AdminDeployMonitor() {
 
               <div className="flex flex-wrap gap-3">
                 <button
-                  onClick={() => handleVpsAction("restart-all", "Reiniciar Todos os Processos PM2")}
+                  onClick={() => handleVpsAction("restart-all", "Recarregar Serviços PM2 (Zero-Downtime)")}
                   disabled={actionLoading !== null}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 w-full sm:w-auto"
+                  title="Recarregar com Zero-Downtime: atualiza uma instância por vez sem 502"
                 >
                   <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
-                  {actionLoading === "restart-all" ? "Reiniciando..." : "Reiniciar Todos os Serviços (PM2)"}
+                  {actionLoading === "restart-all" ? "Recarregando sem quedas..." : "Recarregar Serviços (Zero-Downtime)"}
                 </button>
 
                 <button
