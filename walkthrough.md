@@ -1,4 +1,18 @@
-﻿## 20/10/2026 - Implementação de Deploy Zero-Downtime (PM2 Cluster + Graceful Shutdown)
+﻿## 20/10/2026 - Pipeline de Sincronização Leve para Google Drive e Gemini Mobile (Opção A)
+
+**Contexto e Motivação:**
+Configurada a sincronização automática do código do repositório para o Google Drive para permitir consultas em tempo real pelo app móvel do Gemini (@Google Drive), eliminando o problema anterior de arquivos JSON gigantes de catálogo que estouravam os limites de tokens da IA.
+
+**Modificações Realizadas:**
+1. **\scripts/generate-drive-markdown.cjs\:** Gerador que filtra estritamente catálogos, assets e arquivos pesados, agrupando o código em 3 arquivos Markdown leves com sumário:
+   - \1_Frontend_Telas_e_Players.md\ (~1.1 MB)
+   - \2_Backend_e_Rotas.md\ (~630 KB)
+   - \3_Arquitetura_e_Tipos.md\ (~280 KB)
+2. **\scripts/sync-to-gdrive.cjs\:** Script que envia os arquivos gerados via Webhook para o Google Apps Script.
+3. **\.github/workflows/sync-drive.yml\:** Workflow do GitHub Actions para sincronização automática em push.
+
+---
+## 20/10/2026 - Implementação de Deploy Zero-Downtime (PM2 Cluster + Graceful Shutdown)
 
 **Contexto e Motivação:**
 Durante os deploys na VPS Oracle, a execução de \pm2 restart\ derrubava a conexão TCP de streams em andamento, gerando \
@@ -1138,4 +1152,5 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 - Log de descoberta: `[vizer-fresh] SÃ©rie nova mapeada: tmdb=290233 â†’ serie_id=82931 (dentro-do-circulo-dublado)`.
 
 **Deploy:** push autorizado pelo usuÃ¡rio â€” `versionCode 15` / `versionName 1.2.4` (APK/AAB via GitHub Actions no push pra main). Deploy na VPS Oracle (PM2) segue manual pelo dono.
+
 
