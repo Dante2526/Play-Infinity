@@ -1,3 +1,22 @@
+## 20/10/2026 - Calibração do Watchdog Anti-Engasgo (Eliminação de Falsos Positivos com Buffer Alto)
+
+**Contexto e Motivação:**
+Durante a reprodução no MixDrop, o player piscou três vezes na tela preta e disparou erro fatal (`buffer_depleted_frequent_stalls`) mesmo quando o vídeo tinha **52.97 segundos de buffer carregado à frente** e o travamento real havia durado apenas 2 segundos.
+
+**Causa Raiz Identificada:**
+O watchdog da `NetflixPlayerSkin.tsx` continha uma condição cega: `if (stalls >= 3 || dur >= 6)`. Essa regra acumulava qualquer micro-espera de 0.1s ao longo da sessão inteira. Ao atingir o 3º micro-engasgo (mesmo espaçado e com quase 1 minuto de vídeo no buffer), a skin emitia `WATCHPLAY_ERROR` e forçava o fechamento/recarregamento do iframe repetidamente.
+
+**Modificações Realizadas:**
+1. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Adicionada verificação estrita de buffer seco: se houver buffer (`buf >= 1.5s`), é **proibido** emitir erro fatal ou comutar.
+   - Só aciona fallback automático de emergência se o vídeo estiver com buffer verdadeiramente zerado (`buf < 0.5s`) **E** travado continuamente por mais de **7 segundos**, ou em caso de 5+ engasgos severos com buffer seco.
+   - Oscilações curtas de 1 a 3 segundos da CDN agora são tratadas com buffer suave, sem derrubar a reprodução.
+
+**Validação Realizada:**
+- Teste de calibração automatizado (`scratch/test-watchdog-calibration.mjs`): 4/4 cenários aprovados (rejeição com 53s de buffer, tolerância a oscilação de 2s, e ativação apenas com congelamento real > 7s).
+
+---
+
 ## 20/10/2026 - Correção da Janela de Exibição e Ativação do Card de Próximo Episódio (120s)
 
 **Contexto e Motivação:**

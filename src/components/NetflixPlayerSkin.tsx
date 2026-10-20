@@ -711,9 +711,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
             }
           } else if (reasonStr.includes("waiting") || buf < 0.1) {
-            // Buffer esgotado / seco recorrente: se engasgou 3x ou ficou travado > 6s com buffer seco, comuta
-            if (stalls >= 3 || dur >= 6) {
-              console.warn(`%c[NetflixPlayerSkin] 🚨 Servidor com buffer seco recorrente (${stalls} engasgos, buffer: ${buf}s). Comutando para servidor mais rápido...`, "color:#ef4444;font-weight:bold;");
+            // Buffer seco persistente: só comuta se o vídeo estiver REALMENTE sem buffer (buf < 0.5s)
+            // e travado continuamente por mais de 7 segundos, OU 5+ engasgos severos com buffer seco.
+            // Se houver buffer à frente (ex: buf >= 1.5s), NUNCA dispara erro fatal nem derruba o player.
+            const isBufferReallyDry = buf < 0.5;
+            const isLongContinuousFreeze = dur >= 7 && isBufferReallyDry;
+            const isSevereRecurrentStall = stalls >= 5 && dur >= 3 && isBufferReallyDry;
+
+            if (isLongContinuousFreeze || isSevereRecurrentStall) {
+              console.warn(`%c[NetflixPlayerSkin] 🚨 Servidor com buffer seco irrecuperável (${stalls} engasgos, travado: ${dur}s, buffer: ${buf}s). Comutando para servidor mais rápido...`, "color:#ef4444;font-weight:bold;");
               window.postMessage({ type: "WATCHPLAY_ERROR", reason: "buffer_depleted_frequent_stalls" }, "*");
             }
           }

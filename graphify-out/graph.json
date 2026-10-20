@@ -554,8 +554,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "inspect_watchplayer",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "inspect_watchplayer.js"
     },
     {
@@ -565,8 +565,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "inspect_watchplayer_check",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "check()"
     },
     {
@@ -752,8 +752,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_firebase_messaging",
-      "community": 89,
-      "community_name": "ProviderPage.tsx",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor-firebase/messaging"
     },
     {
@@ -763,8 +763,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "capacitor_firebase_messaging",
-      "community": 89,
-      "community_name": "ProviderPage.tsx",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor-firebase/messaging"
     },
     {
@@ -818,8 +818,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_screen_orientation",
-      "community": 90,
-      "community_name": "@capacitor/screen-orientation",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/screen-orientation"
     },
     {
@@ -829,8 +829,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "capacitor_screen_orientation",
-      "community": 90,
-      "community_name": "@capacitor/screen-orientation",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/screen-orientation"
     },
     {
@@ -862,8 +862,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "package_dependencies_capacitor_status_bar",
-      "community": 91,
-      "community_name": "@capacitor/status-bar",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/status-bar"
     },
     {
@@ -873,8 +873,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "capacitor_status_bar",
-      "community": 91,
-      "community_name": "@capacitor/status-bar",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@capacitor/status-bar"
     },
     {
@@ -884,8 +884,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "package_dependencies_caprockapps_capacitor_chromecast",
-      "community": 92,
-      "community_name": "@caprockapps/capacitor-chromecast",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@caprockapps/capacitor-chromecast"
     },
     {
@@ -895,8 +895,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "caprockapps_capacitor_chromecast",
-      "community": 92,
-      "community_name": "@caprockapps/capacitor-chromecast",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@caprockapps/capacitor-chromecast"
     },
     {
@@ -906,8 +906,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "package_dependencies_consumet_extensions",
-      "community": 94,
-      "community_name": "@consumet/extensions",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@consumet/extensions"
     },
     {
@@ -917,8 +917,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "consumet_extensions",
-      "community": 94,
-      "community_name": "@consumet/extensions",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@consumet/extensions"
     },
     {
@@ -928,8 +928,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "package_dependencies_vitejs_plugin_react",
-      "community": 103,
-      "community_name": "@vitejs/plugin-react",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@vitejs/plugin-react"
     },
     {
@@ -939,8 +939,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "vitejs_plugin_react",
-      "community": 103,
-      "community_name": "@vitejs/plugin-react",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "@vitejs/plugin-react"
     },
     {
@@ -950,8 +950,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "package_dependencies_cheerio",
-      "community": 93,
-      "community_name": "cheerio",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "cheerio"
     },
     {
@@ -961,8 +961,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "cheerio",
-      "community": 93,
-      "community_name": "cheerio",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "cheerio"
     },
     {
@@ -994,8 +994,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "package_dependencies_express",
-      "community": 100,
-      "community_name": "express",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express"
     },
     {
@@ -1005,8 +1005,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "package_json_express",
-      "community": 100,
-      "community_name": "express",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express"
     },
     {
@@ -1016,8 +1016,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "package_dependencies_express_rate_limit",
-      "community": 95,
-      "community_name": "express-rate-limit",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express-rate-limit"
     },
     {
@@ -1027,8 +1027,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "express_rate_limit",
-      "community": 95,
-      "community_name": "express-rate-limit",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "express-rate-limit"
     },
     {
@@ -1060,8 +1060,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "package_dependencies_firebase_admin",
-      "community": 96,
-      "community_name": "firebase-admin",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "firebase-admin"
     },
     {
@@ -1071,8 +1071,8 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "firebase_admin",
-      "community": 96,
-      "community_name": "firebase-admin",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "firebase-admin"
     },
     {
@@ -1082,8 +1082,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "package_dependencies_helmet",
-      "community": 101,
-      "community_name": "helmet",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "helmet"
     },
     {
@@ -1093,8 +1093,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "package_json_helmet",
-      "community": 101,
-      "community_name": "helmet",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "helmet"
     },
     {
@@ -1104,8 +1104,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "package_dependencies_hls_js",
-      "community": 97,
-      "community_name": "hls.js",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "hls.js"
     },
     {
@@ -1115,8 +1115,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "hls_js",
-      "community": 97,
-      "community_name": "hls.js",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "hls.js"
     },
     {
@@ -1126,8 +1126,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "package_dependencies_lru_cache",
-      "community": 98,
-      "community_name": "lru-cache",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "lru-cache"
     },
     {
@@ -1137,8 +1137,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "lru_cache",
-      "community": 98,
-      "community_name": "lru-cache",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "lru-cache"
     },
     {
@@ -1170,8 +1170,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "package_dependencies_motion",
-      "community": 99,
-      "community_name": "motion",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "motion"
     },
     {
@@ -1181,8 +1181,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "motion",
-      "community": 99,
-      "community_name": "motion",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "motion"
     },
     {
@@ -1214,8 +1214,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "package_dependencies_react_dom",
-      "community": 102,
-      "community_name": "react-dom",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "react-dom"
     },
     {
@@ -1225,8 +1225,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "react_dom",
-      "community": 102,
-      "community_name": "react-dom",
+      "community": 2,
+      "community_name": "dependencies",
       "norm_label": "react-dom"
     },
     {
@@ -2479,8 +2479,8 @@
       "source_location": "L511",
       "_origin": "ast",
       "id": "server_startserver",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "startserver()"
     },
     {
@@ -2545,8 +2545,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "server_firebaseadmin_getadminmessaging",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "getadminmessaging()"
     },
     {
@@ -2996,8 +2996,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_router",
-      "community": 0,
-      "community_name": "encontreiLookup.ts",
+      "community": 16,
+      "community_name": "server.ts",
       "norm_label": "router"
     },
     {
@@ -3040,8 +3040,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_checkvipseason",
-      "community": 0,
-      "community_name": "encontreiLookup.ts",
+      "community": 18,
+      "community_name": "videoScrapers.ts",
       "norm_label": "checkvipseason()"
     },
     {
@@ -3788,8 +3788,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_routes_serverblocks",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "serverblocks.ts"
     },
     {
@@ -3799,8 +3799,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "server_routes_serverblocks_router",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "router"
     },
     {
@@ -3810,8 +3810,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "server_routes_serverblocks_serverblock",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "serverblock"
     },
     {
@@ -3821,8 +3821,8 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks_file",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "blocks_file"
     },
     {
@@ -3832,8 +3832,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks_dir",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "blocks_dir"
     },
     {
@@ -3843,8 +3843,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocks",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "_blocks"
     },
     {
@@ -3854,8 +3854,8 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "server_routes_serverblocks_blocksbytmdb",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "_blocksbytmdb"
     },
     {
@@ -3865,8 +3865,8 @@
       "source_location": "L47",
       "_origin": "ast",
       "id": "server_routes_serverblocks_loadblocks",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "loadblocks()"
     },
     {
@@ -3876,8 +3876,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "server_routes_serverblocks_ensureloaded",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "ensureloaded()"
     },
     {
@@ -3887,8 +3887,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "server_routes_serverblocks_persistblocks",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "persistblocks()"
     },
     {
@@ -3909,8 +3909,8 @@
       "source_location": "L182",
       "_origin": "ast",
       "id": "server_routes_serverblocks_valid_server_keys",
-      "community": 68,
-      "community_name": "App",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "valid_server_keys"
     },
     {
@@ -4327,8 +4327,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_services_catalogwatcher",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "catalogwatcher.ts"
     },
     {
@@ -4338,8 +4338,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_data_dir",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "data_dir"
     },
     {
@@ -4349,8 +4349,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalog_path",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "catalog_path"
     },
     {
@@ -4360,8 +4360,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_public_catalog_path",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "public_catalog_path"
     },
     {
@@ -4371,8 +4371,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_state_path",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "state_path"
     },
     {
@@ -4382,8 +4382,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogepisode",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "catalogepisode"
     },
     {
@@ -4393,8 +4393,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogseries",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "catalogseries"
     },
     {
@@ -4404,8 +4404,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogdata",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "catalogdata"
     },
     {
@@ -4415,8 +4415,8 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_extracttokensfromuserdoc",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "extracttokensfromuserdoc()"
     },
     {
@@ -4426,8 +4426,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_prettyseriesnamefromslug",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "prettyseriesnamefromslug()"
     },
     {
@@ -4437,8 +4437,8 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_startcatalogwatcher",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "startcatalogwatcher()"
     },
     {
@@ -4448,8 +4448,8 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_checkcatalogupdates",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "checkcatalogupdates()"
     },
     {
@@ -4459,8 +4459,8 @@
       "source_location": "L146",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_sendnotificationsforupdatedseries",
-      "community": 40,
-      "community_name": "notifications.ts",
+      "community": 28,
+      "community_name": "react",
       "norm_label": "sendnotificationsforupdatedseries()"
     },
     {
@@ -5226,8 +5226,8 @@
       "source_location": "L199",
       "_origin": "ast",
       "id": "src_app_app",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "app()"
     },
     {
@@ -5644,8 +5644,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_contentrow",
-      "community": 23,
-      "community_name": "react",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "contentrow.tsx"
     },
     {
@@ -5655,8 +5655,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_components_contentrow_handlepostererror",
-      "community": 23,
-      "community_name": "react",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "handlepostererror()"
     },
     {
@@ -5666,8 +5666,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_components_contentrow_contentrowinner",
-      "community": 23,
-      "community_name": "react",
+      "community": 85,
+      "community_name": "@capacitor-firebase/messaging",
       "norm_label": "contentrowinner()"
     },
     {
@@ -5677,8 +5677,8 @@
       "source_location": "L228",
       "_origin": "ast",
       "id": "src_components_contentrow_contentcardinner",
-      "community": 23,
-      "community_name": "react",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "contentcardinner()"
     },
     {
@@ -5688,8 +5688,8 @@
       "source_location": "L313",
       "_origin": "ast",
       "id": "src_components_contentrow_contentcard",
-      "community": 23,
-      "community_name": "react",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "contentcard"
     },
     {
@@ -5699,8 +5699,8 @@
       "source_location": "L321",
       "_origin": "ast",
       "id": "src_components_contentrow_contentrow",
-      "community": 23,
-      "community_name": "react",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "contentrow"
     },
     {
@@ -5710,8 +5710,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_customdatepicker",
-      "community": 86,
-      "community_name": "DetailsPage.tsx",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "customdatepicker.tsx"
     },
     {
@@ -5721,8 +5721,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_components_customdatepicker_customdatepickerprops",
-      "community": 86,
-      "community_name": "DetailsPage.tsx",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "customdatepickerprops"
     },
     {
@@ -5732,8 +5732,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "src_components_customdatepicker_month_names",
-      "community": 86,
-      "community_name": "DetailsPage.tsx",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "month_names"
     },
     {
@@ -5743,8 +5743,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "src_components_customdatepicker_week_days",
-      "community": 86,
-      "community_name": "DetailsPage.tsx",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "week_days"
     },
     {
@@ -5754,8 +5754,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "src_components_customdatepicker_customdatepicker",
-      "community": 86,
-      "community_name": "DetailsPage.tsx",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "customdatepicker()"
     },
     {
@@ -5765,8 +5765,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_encontreicookiealert",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "encontreicookiealert.tsx"
     },
     {
@@ -5776,8 +5776,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_components_encontreicookiealert_encontreistatus",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "encontreistatus"
     },
     {
@@ -5787,8 +5787,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_components_encontreicookiealert_encontreicookiealert",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "encontreicookiealert()"
     },
     {
@@ -5798,8 +5798,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "src_components_encontreicookiealert_encontreicookiebadge",
-      "community": 13,
-      "community_name": "mediaUtils.ts",
+      "community": 21,
+      "community_name": "GlobalErrorModal.tsx",
       "norm_label": "encontreicookiebadge()"
     },
     {
@@ -5908,8 +5908,8 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "src_components_globalerrormodal_reportapperror",
-      "community": 21,
-      "community_name": "GlobalErrorModal.tsx",
+      "community": 25,
+      "community_name": "PaywallModal.tsx",
       "norm_label": "reportapperror()"
     },
     {
@@ -6095,8 +6095,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_navitem",
-      "community": 85,
-      "community_name": "@capacitor-firebase/messaging",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "navitem.tsx"
     },
     {
@@ -6106,8 +6106,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "src_components_navitem_navitem",
-      "community": 85,
-      "community_name": "@capacitor-firebase/messaging",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "navitem()"
     },
     {
@@ -6227,8 +6227,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_notificationmodal",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "notificationmodal.tsx"
     },
     {
@@ -6249,8 +6249,8 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "src_components_notificationmodal_notificationmodal",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "notificationmodal()"
     },
     {
@@ -6667,8 +6667,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "whatsnewmodal.tsx"
     },
     {
@@ -6678,8 +6678,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal_slides",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "slides"
     },
     {
@@ -6689,8 +6689,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_components_whatsnewmodal_whatsnewmodal",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "whatsnewmodal()"
     },
     {
@@ -6887,8 +6887,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_data_sagas",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "sagas.ts"
     },
     {
@@ -6898,8 +6898,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_data_sagas_saga",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "saga"
     },
     {
@@ -6909,8 +6909,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_data_sagas_sagas",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "sagas"
     },
     {
@@ -6920,8 +6920,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_data_serverblacklist",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "serverblacklist.ts"
     },
     {
@@ -6931,8 +6931,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "src_data_serverblacklist_blacklistedserverentry",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "blacklistedserverentry"
     },
     {
@@ -6942,8 +6942,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "src_data_serverblacklist_server_blacklist",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "server_blacklist"
     },
     {
@@ -6953,8 +6953,8 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "src_data_serverblacklist_isserverblacklisted",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "isserverblacklisted()"
     },
     {
@@ -6964,8 +6964,8 @@
       "source_location": "L210",
       "_origin": "ast",
       "id": "src_data_serverblacklist_assertserverallowed",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "assertserverallowed()"
     },
     {
@@ -6975,8 +6975,8 @@
       "source_location": "L219",
       "_origin": "ast",
       "id": "src_data_serverblacklist_filterallowedservers",
-      "community": 18,
-      "community_name": "videoScrapers.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "filterallowedservers()"
     },
     {
@@ -7096,8 +7096,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "usevoicesearch.ts"
     },
     {
@@ -7107,8 +7107,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_speechrecognitionevent",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "speechrecognitionevent"
     },
     {
@@ -7118,8 +7118,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_speechrecognitionerrorevent",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "speechrecognitionerrorevent"
     },
     {
@@ -7129,8 +7129,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_speechrecognitioninstance",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "speechrecognitioninstance"
     },
     {
@@ -7140,8 +7140,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_window",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "window"
     },
     {
@@ -7151,8 +7151,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_usevoicesearchoptions",
-      "community": 9,
-      "community_name": "LiveTvPage.tsx",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "usevoicesearchoptions"
     },
     {
@@ -7162,8 +7162,8 @@
       "source_location": "L40",
       "_origin": "ast",
       "id": "src_hooks_usevoicesearch_usevoicesearch",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "usevoicesearch()"
     },
     {
@@ -7228,8 +7228,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_pages_detailspage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "detailspage.tsx"
     },
     {
@@ -7250,8 +7250,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "src_pages_detailspage_webhookpanelmodal",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "webhookpanelmodal"
     },
     {
@@ -7261,8 +7261,8 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "src_pages_detailspage_releasecalendarpage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "releasecalendarpage"
     },
     {
@@ -7272,8 +7272,8 @@
       "source_location": "L100",
       "_origin": "ast",
       "id": "src_pages_detailspage_livetvpage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "livetvpage"
     },
     {
@@ -7283,8 +7283,8 @@
       "source_location": "L101",
       "_origin": "ast",
       "id": "src_pages_detailspage_notificationmodal",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "notificationmodal"
     },
     {
@@ -7294,8 +7294,8 @@
       "source_location": "L128",
       "_origin": "ast",
       "id": "src_pages_detailspage_handlepostererror",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7305,8 +7305,8 @@
       "source_location": "L142",
       "_origin": "ast",
       "id": "src_pages_detailspage_detailspage",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "detailspage()"
     },
     {
@@ -7404,8 +7404,8 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "src_pages_favoritespage_handlepostererror",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7415,8 +7415,8 @@
       "source_location": "L129",
       "_origin": "ast",
       "id": "src_pages_favoritespage_favoritespage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "favoritespage()"
     },
     {
@@ -7459,8 +7459,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "globalsearchpage.tsx"
     },
     {
@@ -7481,8 +7481,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_webhookpanelmodal",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "webhookpanelmodal"
     },
     {
@@ -7492,8 +7492,8 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_releasecalendarpage",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "releasecalendarpage"
     },
     {
@@ -7503,8 +7503,8 @@
       "source_location": "L87",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_livetvpage",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "livetvpage"
     },
     {
@@ -7514,8 +7514,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_notificationmodal",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "notificationmodal"
     },
     {
@@ -7525,8 +7525,8 @@
       "source_location": "L115",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_handlepostererror",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7536,8 +7536,8 @@
       "source_location": "L129",
       "_origin": "ast",
       "id": "src_pages_globalsearchpage_globalsearchpage",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "globalsearchpage()"
     },
     {
@@ -7745,8 +7745,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_pages_userprofilepage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "userprofilepage.tsx"
     },
     {
@@ -7767,8 +7767,8 @@
       "source_location": "L92",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_webhookpanelmodal",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "webhookpanelmodal"
     },
     {
@@ -7778,8 +7778,8 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_releasecalendarpage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "releasecalendarpage"
     },
     {
@@ -7789,8 +7789,8 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_livetvpage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "livetvpage"
     },
     {
@@ -7800,8 +7800,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_notificationmodal",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "notificationmodal"
     },
     {
@@ -7811,8 +7811,8 @@
       "source_location": "L123",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_handlepostererror",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "handlepostererror()"
     },
     {
@@ -7822,8 +7822,8 @@
       "source_location": "L140",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_geek_avatars",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "geek_avatars"
     },
     {
@@ -7833,8 +7833,8 @@
       "source_location": "L155",
       "_origin": "ast",
       "id": "src_pages_userprofilepage_userprofilepage",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "userprofilepage()"
     },
     {
@@ -7976,8 +7976,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "src_services_downloadservice_downloadavailability",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "downloadavailability"
     },
     {
@@ -8053,8 +8053,8 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "src_services_downloadservice_sanitizedownloadfilename",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 7,
+      "community_name": "downloadService.ts",
       "norm_label": "sanitizedownloadfilename()"
     },
     {
@@ -8064,8 +8064,8 @@
       "source_location": "L139",
       "_origin": "ast",
       "id": "src_services_downloadservice_checkmoviedownloadavailability",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 7,
+      "community_name": "downloadService.ts",
       "norm_label": "checkmoviedownloadavailability()"
     },
     {
@@ -8075,8 +8075,8 @@
       "source_location": "L161",
       "_origin": "ast",
       "id": "src_services_downloadservice_checkepisodedownloadavailability",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 7,
+      "community_name": "downloadService.ts",
       "norm_label": "checkepisodedownloadavailability()"
     },
     {
@@ -8427,8 +8427,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "src_services_favorites_getallcatalogitems",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getallcatalogitems()"
     },
     {
@@ -8438,8 +8438,8 @@
       "source_location": "L94",
       "_origin": "ast",
       "id": "src_services_favorites_getcatalogbyidmap",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "getcatalogbyidmap()"
     },
     {
@@ -8460,8 +8460,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "src_services_favorites_getfavoriteids",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "getfavoriteids()"
     },
     {
@@ -8482,8 +8482,8 @@
       "source_location": "L135",
       "_origin": "ast",
       "id": "src_services_favorites_fetchfavoritesfromcloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "fetchfavoritesfromcloud()"
     },
     {
@@ -8504,8 +8504,8 @@
       "source_location": "L172",
       "_origin": "ast",
       "id": "src_services_favorites_getfavoritetimestamps",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "getfavoritetimestamps()"
     },
     {
@@ -8515,8 +8515,8 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "src_services_favorites_savefavoritetimestamps",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "savefavoritetimestamps()"
     },
     {
@@ -8526,8 +8526,8 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "src_services_favorites_togglefavorite",
-      "community": 6,
-      "community_name": "GlobalSearchPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "togglefavorite()"
     },
     {
@@ -8537,8 +8537,8 @@
       "source_location": "L207",
       "_origin": "ast",
       "id": "src_services_favorites_isitemfavorite",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "isitemfavorite()"
     },
     {
@@ -8548,8 +8548,8 @@
       "source_location": "L212",
       "_origin": "ast",
       "id": "src_services_favorites_buildcatalogitemfromtmdb",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "buildcatalogitemfromtmdb()"
     },
     {
@@ -8570,8 +8570,8 @@
       "source_location": "L236",
       "_origin": "ast",
       "id": "src_services_favorites_getstaticfavoriteitems",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "getstaticfavoriteitems()"
     },
     {
@@ -8581,8 +8581,8 @@
       "source_location": "L246",
       "_origin": "ast",
       "id": "src_services_favorites_resolvefavoriteitems",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "resolvefavoriteitems()"
     },
     {
@@ -8625,8 +8625,8 @@
       "source_location": "L450",
       "_origin": "ast",
       "id": "src_services_favorites_getscheduleforfavorites",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "getscheduleforfavorites()"
     },
     {
@@ -8856,8 +8856,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_notifications",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "notifications.ts"
     },
     {
@@ -8867,8 +8867,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_services_notifications_episodenotification",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "episodenotification"
     },
     {
@@ -8878,8 +8878,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_services_notifications_syncnotificationsinbackground",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "syncnotificationsinbackground()"
     },
     {
@@ -8889,8 +8889,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "src_services_notifications_getreadnotificationids",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "getreadnotificationids()"
     },
     {
@@ -8900,8 +8900,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "src_services_notifications_syncreadnotificationstocloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "syncreadnotificationstocloud()"
     },
     {
@@ -8911,8 +8911,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_services_notifications_fetchreadnotificationsfromcloud",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "fetchreadnotificationsfromcloud()"
     },
     {
@@ -8922,8 +8922,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "src_services_notifications_marknotificationasread",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "marknotificationasread()"
     },
     {
@@ -8933,8 +8933,8 @@
       "source_location": "L126",
       "_origin": "ast",
       "id": "src_services_notifications_markallnotificationsasread",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "markallnotificationsasread()"
     },
     {
@@ -8944,8 +8944,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "src_services_notifications_formatreleasedago",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "formatreleasedago()"
     },
     {
@@ -8955,8 +8955,8 @@
       "source_location": "L157",
       "_origin": "ast",
       "id": "src_services_notifications_getfavoriteepisodenotifications",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 40,
+      "community_name": "notifications.ts",
       "norm_label": "getfavoriteepisodenotifications()"
     },
     {
@@ -9142,8 +9142,8 @@
       "source_location": "L93",
       "_origin": "ast",
       "id": "src_services_playbackhistory_playbackhistoryitem",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "playbackhistoryitem"
     },
     {
@@ -9351,8 +9351,8 @@
       "source_location": "L566",
       "_origin": "ast",
       "id": "src_services_playbackhistory_removeplaybackitem",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 12,
+      "community_name": "playbackHistory.ts",
       "norm_label": "removeplaybackitem()"
     },
     {
@@ -9395,8 +9395,8 @@
       "source_location": "L89",
       "_origin": "ast",
       "id": "src_services_pushnotifications_removefcmtokenfromcloud",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 23,
+      "community_name": "react",
       "norm_label": "removefcmtokenfromcloud()"
     },
     {
@@ -9483,8 +9483,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "src_services_tmdb_tmdbdetails",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 6,
+      "community_name": "GlobalSearchPage.tsx",
       "norm_label": "tmdbdetails"
     },
     {
@@ -9505,8 +9505,8 @@
       "source_location": "L88",
       "_origin": "ast",
       "id": "src_services_tmdb_getgenrenames",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 14,
+      "community_name": "DetailsPage.tsx",
       "norm_label": "getgenrenames()"
     },
     {
@@ -9714,8 +9714,8 @@
       "source_location": "L298",
       "_origin": "ast",
       "id": "src_services_tmdb_searchmulti",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 4,
+      "community_name": "VideoPlayerModal.tsx",
       "norm_label": "searchmulti()"
     },
     {
@@ -9824,8 +9824,8 @@
       "source_location": "L524",
       "_origin": "ast",
       "id": "src_services_tmdb_getseasondetails",
-      "community": 10,
-      "community_name": "tmdb.ts",
+      "community": 4,
+      "community_name": "VideoPlayerModal.tsx",
       "norm_label": "getseasondetails()"
     },
     {
@@ -9967,8 +9967,8 @@
       "source_location": "L660",
       "_origin": "ast",
       "id": "src_services_tmdb_trailervideo",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 1,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "trailervideo"
     },
     {
@@ -9978,8 +9978,8 @@
       "source_location": "L677",
       "_origin": "ast",
       "id": "src_services_tmdb_gettrailerlist",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "gettrailerlist()"
     },
     {
@@ -9989,8 +9989,8 @@
       "source_location": "L787",
       "_origin": "ast",
       "id": "src_services_tmdb_gettrailer",
-      "community": 14,
-      "community_name": "DetailsPage.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "gettrailer()"
     },
     {
@@ -10011,8 +10011,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_services_watchedepisodes",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "watchedepisodes.ts"
     },
     {
@@ -10022,8 +10022,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getstore",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getstore()"
     },
     {
@@ -10033,8 +10033,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_syncwatchedtocloud",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "syncwatchedtocloud()"
     },
     {
@@ -10044,8 +10044,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_flushpendingwatchedsync",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "flushpendingwatchedsync()"
     },
     {
@@ -10055,8 +10055,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_fetchwatchedfromcloud",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "fetchwatchedfromcloud()"
     },
     {
@@ -10066,8 +10066,8 @@
       "source_location": "L85",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_savestore",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "savestore()"
     },
     {
@@ -10077,8 +10077,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_makeepisodekey",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "makeepisodekey()"
     },
     {
@@ -10088,8 +10088,8 @@
       "source_location": "L99",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_isepisodewatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "isepisodewatched()"
     },
     {
@@ -10099,8 +10099,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_markepisodewatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "markepisodewatched()"
     },
     {
@@ -10110,8 +10110,8 @@
       "source_location": "L117",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_toggleepisodewatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "toggleepisodewatched()"
     },
     {
@@ -10121,8 +10121,8 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_markseasonwatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "markseasonwatched()"
     },
     {
@@ -10132,8 +10132,8 @@
       "source_location": "L138",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getseasonwatchedcount",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getseasonwatchedcount()"
     },
     {
@@ -10143,8 +10143,8 @@
       "source_location": "L148",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_isseasonfullywatched",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "isseasonfullywatched()"
     },
     {
@@ -10154,8 +10154,8 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "src_services_watchedepisodes_getallwatchedepisodes",
-      "community": 4,
-      "community_name": "VideoPlayerModal.tsx",
+      "community": 13,
+      "community_name": "mediaUtils.ts",
       "norm_label": "getallwatchedepisodes()"
     },
     {
@@ -10385,8 +10385,8 @@
       "source_location": "L107",
       "_origin": "ast",
       "id": "src_utils_mediautils_ismediaavailable",
-      "community": 1,
-      "community_name": "firebaseAdmin.ts",
+      "community": 5,
+      "community_name": "HomePage.tsx",
       "norm_label": "ismediaavailable()"
     },
     {
@@ -10517,8 +10517,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "src_utils_safestorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safestorage.ts"
     },
     {
@@ -10528,8 +10528,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "src_utils_safestorage_memorystorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "memorystorage"
     },
     {
@@ -10539,8 +10539,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "src_utils_safestorage_safelocalstorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safelocalstorage"
     },
     {
@@ -10550,8 +10550,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "src_utils_safestorage_safesessionstorage",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "safesessionstorage"
     },
     {
@@ -10561,8 +10561,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "src_utils_safestorage_clearlocaluserdata",
-      "community": 7,
-      "community_name": "downloadService.ts",
+      "community": 8,
+      "community_name": "App.tsx",
       "norm_label": "clearlocaluserdata()"
     },
     {
@@ -12199,10 +12199,21 @@
       "norm_label": "walkthrough.md"
     },
     {
-      "label": "20/10/2026 - Corre\u00e7\u00e3o da Janela de Exibi\u00e7\u00e3o e Ativa\u00e7\u00e3o do Card de Pr\u00f3ximo Epis\u00f3dio (120s)",
+      "label": "20/10/2026 - Calibra\u00e7\u00e3o do Watchdog Anti-Engasgo (Elimina\u00e7\u00e3o de Falsos Positivos com Buffer Alto)",
       "file_type": "document",
       "source_file": "walkthrough.md",
       "source_location": "L1",
+      "_origin": "ast",
+      "id": "walkthrough_20_10_2026_calibra\u00e7\u00e3o_do_watchdog_anti_engasgo_elimina\u00e7\u00e3o_de_falsos_positivos_com_buffer_alto",
+      "community": 72,
+      "community_name": "ContentRow.tsx",
+      "norm_label": "20/10/2026 - calibracao do watchdog anti-engasgo (eliminacao de falsos positivos com buffer alto)"
+    },
+    {
+      "label": "20/10/2026 - Corre\u00e7\u00e3o da Janela de Exibi\u00e7\u00e3o e Ativa\u00e7\u00e3o do Card de Pr\u00f3ximo Epis\u00f3dio (120s)",
+      "file_type": "document",
+      "source_file": "walkthrough.md",
+      "source_location": "L20",
       "_origin": "ast",
       "id": "walkthrough_20_10_2026_corre\u00e7\u00e3o_da_janela_de_exibi\u00e7\u00e3o_e_ativa\u00e7\u00e3o_do_card_de_pr\u00f3ximo_epis\u00f3dio_120s",
       "community": 72,
@@ -12213,7 +12224,7 @@
       "label": "20/10/2026 - Corre\u00e7\u00e3o de Expira\u00e7\u00e3o de Token e Retomada no StreamTape (Pausa Longa)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L30",
+      "source_location": "L49",
       "_origin": "ast",
       "id": "walkthrough_20_10_2026_corre\u00e7\u00e3o_de_expira\u00e7\u00e3o_de_token_e_retomada_no_streamtape_pausa_longa",
       "community": 72,
@@ -12224,7 +12235,7 @@
       "label": "20/10/2026 - Detec\u00e7\u00e3o Autom\u00e1tica e Din\u00e2mica de Novas Temporadas (Sem Cache Stale)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L59",
+      "source_location": "L78",
       "_origin": "ast",
       "id": "walkthrough_20_10_2026_detec\u00e7\u00e3o_autom\u00e1tica_e_din\u00e2mica_de_novas_temporadas_sem_cache_stale",
       "community": 72,
@@ -12235,7 +12246,7 @@
       "label": "20/10/2026 - Auditoria de Seguran\u00e7a e Mitiga\u00e7\u00e3o Imediata (SEC-01 e SEC-04)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L91",
+      "source_location": "L110",
       "_origin": "ast",
       "id": "walkthrough_20_10_2026_auditoria_de_seguran\u00e7a_e_mitiga\u00e7\u00e3o_imediata_sec_01_e_sec_04",
       "community": 72,
@@ -12246,7 +12257,7 @@
       "label": "20/10/2026 - Corre\u00e7\u00e3o das Miniaturas Din\u00e2micas na Barra de Progresso (Timeline Scrubber)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L116",
+      "source_location": "L135",
       "_origin": "ast",
       "id": "walkthrough_20_10_2026_corre\u00e7\u00e3o_das_miniaturas_din\u00e2micas_na_barra_de_progresso_timeline_scrubber",
       "community": 72,
@@ -12257,7 +12268,7 @@
       "label": "19/10/2026 - Corre\u00e7\u00e3o do Mini Player (Picture-in-Picture) no APK Android",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L145",
+      "source_location": "L164",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_corre\u00e7\u00e3o_do_mini_player_picture_in_picture_no_apk_android",
       "community": 72,
@@ -12268,7 +12279,7 @@
       "label": "19/10/2026 - Miniatura de Pr\u00e9via na Barra de Progresso / Timeline Scrubber (Estilo Netflix & Disney+)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L174",
+      "source_location": "L193",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_miniatura_de_pr\u00e9via_na_barra_de_progresso_timeline_scrubber_estilo_netflix_disney",
       "community": 72,
@@ -12279,7 +12290,7 @@
       "label": "19/10/2026 - Card de Pr\u00f3ximo Filme da Saga / Continua\u00e7\u00e3o (Estilo Netflix & Disney+)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L197",
+      "source_location": "L216",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_card_de_pr\u00f3ximo_filme_da_saga_continua\u00e7\u00e3o_estilo_netflix_disney",
       "community": 72,
@@ -12290,7 +12301,7 @@
       "label": "19/10/2026 - Card de Pr\u00f3ximo Epis\u00f3dio Flutuante (Estilo Netflix & Disney+)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L226",
+      "source_location": "L245",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_card_de_pr\u00f3ximo_epis\u00f3dio_flutuante_estilo_netflix_disney",
       "community": 72,
@@ -12301,7 +12312,7 @@
       "label": "19/10/2026 - Corre\u00e7\u00e3o Mobile-First da P\u00e1gina de Sagas e Restaura\u00e7\u00e3o da Franquia James Bond 007",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L253",
+      "source_location": "L272",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_corre\u00e7\u00e3o_mobile_first_da_p\u00e1gina_de_sagas_e_restaura\u00e7\u00e3o_da_franquia_james_bond_007",
       "community": 72,
@@ -12312,7 +12323,7 @@
       "label": "19/10/2026 - Otimiza\u00e7\u00e3o Mobile-First e Rota\u00e7\u00e3o F\u00edsica do Player de TV ao Vivo (LivePlayerModal)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L278",
+      "source_location": "L297",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_otimiza\u00e7\u00e3o_mobile_first_e_rota\u00e7\u00e3o_f\u00edsica_do_player_de_tv_ao_vivo_liveplayermodal",
       "community": 72,
@@ -12323,7 +12334,7 @@
       "label": "19/10/2026 - Unifica\u00e7\u00e3o Universal de Servidores: Remo\u00e7\u00e3o de Overrides Residuais e Sequenciamento Rigoroso",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L305",
+      "source_location": "L324",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_unifica\u00e7\u00e3o_universal_de_servidores_remo\u00e7\u00e3o_de_overrides_residuais_e_sequenciamento_rigoroso",
       "community": 72,
@@ -12334,7 +12345,7 @@
       "label": "19/10/2026 - Reordena\u00e7\u00e3o de Servidores: StreamTape 1\u00ba Prim\u00e1rio, MixDrop 2\u00ba Fallback e Desativa\u00e7\u00e3o do DoodStream da Cadeia Ativa",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L327",
+      "source_location": "L346",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_reordena\u00e7\u00e3o_de_servidores_streamtape_1o_prim\u00e1rio_mixdrop_2o_fallback_e_desativa\u00e7\u00e3o_do_doodstream_da_cadeia_ativa",
       "community": 72,
@@ -12345,7 +12356,7 @@
       "label": "19/10/2026 - Integra\u00e7\u00e3o do Servidor DoodStream HD (3\u00ba Fallback VOD, Busca Live e Escudo Anti-Popup)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L358",
+      "source_location": "L377",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_integra\u00e7\u00e3o_do_servidor_doodstream_hd_3o_fallback_vod_busca_live_e_escudo_anti_popup",
       "community": 72,
@@ -12356,7 +12367,7 @@
       "label": "19/10/2026 - Fix de Fallback Imediato do StreamTape (Zero Espera no Watchdog) e Atualiza\u00e7\u00e3o de Dom\u00ednio do Vizer",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L390",
+      "source_location": "L409",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_fix_de_fallback_imediato_do_streamtape_zero_espera_no_watchdog_e_atualiza\u00e7\u00e3o_de_dom\u00ednio_do_vizer",
       "community": 72,
@@ -12367,7 +12378,7 @@
       "label": "19/10/2026 - Integra\u00e7\u00e3o do Servidor StreamTape HD (Fallback VOD, Busca Live e Skin Netflix 100%)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L411",
+      "source_location": "L430",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_integra\u00e7\u00e3o_do_servidor_streamtape_hd_fallback_vod_busca_live_e_skin_netflix_100",
       "community": 72,
@@ -12378,7 +12389,7 @@
       "label": "19/10/2026 - Fix \"Ver S\u00e9rie\" nas Notifica\u00e7\u00f5es, Badges de Workflows e Remo\u00e7\u00e3o do Google Drive",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L440",
+      "source_location": "L459",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_fix_ver_s\u00e9rie_nas_notifica\u00e7\u00f5es_badges_de_workflows_e_remo\u00e7\u00e3o_do_google_drive",
       "community": 72,
@@ -12389,7 +12400,7 @@
       "label": "19/10/2026 - Otimiza\u00e7\u00e3o Integral da Reprodu\u00e7\u00e3o de TV ao Vivo (5 Gargalos Eliminados)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L460",
+      "source_location": "L479",
       "_origin": "ast",
       "id": "walkthrough_19_10_2026_otimiza\u00e7\u00e3o_integral_da_reprodu\u00e7\u00e3o_de_tv_ao_vivo_5_gargalos_eliminados",
       "community": 72,
@@ -12400,7 +12411,7 @@
       "label": "18/10/2026 - Auditoria e Corre\u00e7\u00e3o Integral do Painel Administrativo (4 Bugs Corrigidos)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L483",
+      "source_location": "L502",
       "_origin": "ast",
       "id": "walkthrough_18_10_2026_auditoria_e_corre\u00e7\u00e3o_integral_do_painel_administrativo_4_bugs_corrigidos",
       "community": 72,
@@ -12411,7 +12422,7 @@
       "label": "18/10/2026 - Otimiza\u00e7\u00e3o de Performance Geral do App (5 Gargalos Eliminados via Graphify)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L503",
+      "source_location": "L522",
       "_origin": "ast",
       "id": "walkthrough_18_10_2026_otimiza\u00e7\u00e3o_de_performance_geral_do_app_5_gargalos_eliminados_via_graphify",
       "community": 72,
@@ -12422,7 +12433,7 @@
       "label": "17/10/2026 - Otimiza\u00e7\u00e3o Estrutural dos 4 Gargalos de Reprodu\u00e7\u00e3o VOD (Filmes e S\u00e9ries)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L527",
+      "source_location": "L546",
       "_origin": "ast",
       "id": "walkthrough_17_10_2026_otimiza\u00e7\u00e3o_estrutural_dos_4_gargalos_de_reprodu\u00e7\u00e3o_vod_filmes_e_s\u00e9ries",
       "community": 72,
@@ -12433,7 +12444,7 @@
       "label": "11/10/2026 - Ajuste do Timeout do Watchdog do WatchPlayer para 17s",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L549",
+      "source_location": "L568",
       "_origin": "ast",
       "id": "walkthrough_11_10_2026_ajuste_do_timeout_do_watchdog_do_watchplayer_para_17s",
       "community": 72,
@@ -12444,7 +12455,7 @@
       "label": "11/10/2026 - Rastreio MixDrop: Encontrei.me como Origem e Elimina\u00e7\u00e3o do Falso Fallback",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L560",
+      "source_location": "L579",
       "_origin": "ast",
       "id": "walkthrough_11_10_2026_rastreio_mixdrop_encontrei_me_como_origem_e_elimina\u00e7\u00e3o_do_falso_fallback",
       "community": 72,
@@ -12455,7 +12466,7 @@
       "label": "11/10/2026 - Telemetria do MixDrop no F12 (tela preta no meio da reprodu\u00e7\u00e3o)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L578",
+      "source_location": "L597",
       "_origin": "ast",
       "id": "walkthrough_11_10_2026_telemetria_do_mixdrop_no_f12_tela_preta_no_meio_da_reprodu\u00e7\u00e3o",
       "community": 72,
@@ -12466,7 +12477,7 @@
       "label": "11/10/2026 - Telemetria e Monitor de Engasgos do NixPlayer no F12",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L597",
+      "source_location": "L616",
       "_origin": "ast",
       "id": "walkthrough_11_10_2026_telemetria_e_monitor_de_engasgos_do_nixplayer_no_f12",
       "community": 72,
@@ -12477,7 +12488,7 @@
       "label": "11/10/2026 - Fix Avan\u00e7ar/Retroceder 10s no NixPlayer (Carrie a Estranha e Skin Netflix)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L619",
+      "source_location": "L638",
       "_origin": "ast",
       "id": "walkthrough_11_10_2026_fix_avan\u00e7ar_retroceder_10s_no_nixplayer_carrie_a_estranha_e_skin_netflix",
       "community": 72,
@@ -12488,7 +12499,7 @@
       "label": "06/10/2026 - HxH 2011: \"eps 70+ n\u00e3o reproduzem\" \u2014 worker do CONTE\u00daDO do HxH fora no Nixplay",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L640",
+      "source_location": "L659",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_hxh_2011_eps_70_n\u00e3o_reproduzem_worker_do_conte\u00fado_do_hxh_fora_no_nixplay",
       "community": 72,
@@ -12499,7 +12510,7 @@
       "label": "06/10/2026 - `ERR_CONTENT_LENGTH_MISMATCH` em `/api/mixdrop-proxy` (segunda ocorr\u00eancia)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L663",
+      "source_location": "L682",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_err_content_length_mismatch_em_api_mixdrop_proxy_segunda_ocorr\u00eancia",
       "community": 72,
@@ -12510,7 +12521,7 @@
       "label": "06/10/2026 - 404 `/api/tmdb/tv/*` em item catalogado como s\u00e9rie (id \u00e9 de FILME)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L679",
+      "source_location": "L698",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_404_api_tmdb_tv_em_item_catalogado_como_s\u00e9rie_id_\u00e9_de_filme",
       "community": 72,
@@ -12521,7 +12532,7 @@
       "label": "06/10/2026 - Erros de console ao assistir via MixDrop (proxy, TMDB 404, permiss\u00e3o Firebase)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L699",
+      "source_location": "L718",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_erros_de_console_ao_assistir_via_mixdrop_proxy_tmdb_404_permiss\u00e3o_firebase",
       "community": 72,
@@ -12532,7 +12543,7 @@
       "label": "06/10/2026 - Fix HxH 2011 (aba T3 sumindo + epis\u00f3dios ocultos)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L729",
+      "source_location": "L748",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_fix_hxh_2011_aba_t3_sumindo_epis\u00f3dios_ocultos",
       "community": 72,
@@ -12543,7 +12554,7 @@
       "label": "05/10/2026 - Health Check Autenticado do encontrei.me (Cookie de Sessao)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L748",
+      "source_location": "L767",
       "_origin": "ast",
       "id": "walkthrough_05_10_2026_health_check_autenticado_do_encontrei_me_cookie_de_sessao",
       "community": 72,
@@ -12554,7 +12565,7 @@
       "label": "03/10/2026 - Corre\u00c3\u00a7\u00c3\u00b5es Live TV e Otimiza\u00c3\u00a7\u00c3\u00b5es de Performance",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L759",
+      "source_location": "L778",
       "_origin": "ast",
       "id": "walkthrough_03_10_2026_corre\u00e3_\u00e3\u03bces_live_tv_e_otimiza\u00e3_\u00e3\u03bces_de_performance",
       "community": 72,
@@ -12565,7 +12576,7 @@
       "label": "03/10/2026 - Mega Refatora\u00c3\u00a7\u00c3\u00a3o de Rotas (server.ts modularizado)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L768",
+      "source_location": "L787",
       "_origin": "ast",
       "id": "walkthrough_03_10_2026_mega_refatora\u00e3_\u00e3_o_de_rotas_server_ts_modularizado",
       "community": 72,
@@ -12576,7 +12587,7 @@
       "label": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L786",
+      "source_location": "L805",
       "_origin": "ast",
       "id": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
       "community": 27,
@@ -12587,7 +12598,7 @@
       "label": "Tarefas Realizadas",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L788",
+      "source_location": "L807",
       "_origin": "ast",
       "id": "walkthrough_tarefas_realizadas",
       "community": 27,
@@ -12598,7 +12609,7 @@
       "label": "Verifica\u00c3\u00a7\u00c3\u00a3o P\u00c3\u00b3s-C\u00c3\u00b3digo",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L807",
+      "source_location": "L826",
       "_origin": "ast",
       "id": "walkthrough_verifica\u00e3_\u00e3_o_p\u00e33s_c\u00e33digo",
       "community": 27,
@@ -12609,7 +12620,7 @@
       "label": "Relat\u00c3\u00b3rio de Code Review (Self)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L812",
+      "source_location": "L831",
       "_origin": "ast",
       "id": "walkthrough_relat\u00e33rio_de_code_review_self",
       "community": 27,
@@ -12620,7 +12631,7 @@
       "label": "01/10/2026 - Monitoramento do Rob\u00c3\u00b4 Ampere",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L822",
+      "source_location": "L841",
       "_origin": "ast",
       "id": "walkthrough_01_10_2026_monitoramento_do_rob\u00e3_ampere",
       "community": 27,
@@ -12631,7 +12642,7 @@
       "label": "03/10/2026 - Corre\u00ef\u00bf\u00bd\u00ef\u00bf\u00bdes de VideoPlayer e Monitoramento",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L837",
+      "source_location": "L856",
       "_origin": "ast",
       "id": "walkthrough_03_10_2026_corre\u00ef_1_2\u00ef_1_2es_de_videoplayer_e_monitoramento",
       "community": 27,
@@ -12642,7 +12653,7 @@
       "label": "03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L844",
+      "source_location": "L863",
       "_origin": "ast",
       "id": "walkthrough_03_10_2026_noite_refinamento_de_watchdog_fallback_e_cache",
       "community": 74,
@@ -12653,7 +12664,7 @@
       "label": "04/10/2026 15:20:12 - Estabilidade e UX de Fallback de Servidores VOD",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L854",
+      "source_location": "L873",
       "_origin": "ast",
       "id": "walkthrough_04_10_2026_15_20_12_estabilidade_e_ux_de_fallback_de_servidores_vod",
       "community": 74,
@@ -12664,7 +12675,7 @@
       "label": "04/10/2026 15:24:09 - Estabilidade e UX de Fallback de Servidores VOD",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L866",
+      "source_location": "L885",
       "_origin": "ast",
       "id": "walkthrough_04_10_2026_15_24_09_estabilidade_e_ux_de_fallback_de_servidores_vod",
       "community": 74,
@@ -12675,7 +12686,7 @@
       "label": "06/10/2026 - Auto-corre\u00e7\u00e3o de identidade de cards + memo de 404 (HxH/Nixplay encerrado)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L887",
+      "source_location": "L906",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_auto_corre\u00e7\u00e3o_de_identidade_de_cards_memo_de_404_hxh_nixplay_encerrado",
       "community": 27,
@@ -12686,7 +12697,7 @@
       "label": "06/10/2026 - VIP Player: retry com series_id do Nixplay quando Ajax s\u00f3 devolve fontes blacklisted",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L896",
+      "source_location": "L915",
       "_origin": "ast",
       "id": "walkthrough_06_10_2026_vip_player_retry_com_series_id_do_nixplay_quando_ajax_s\u00f3_devolve_fontes_blacklisted",
       "community": 76,
@@ -12697,7 +12708,7 @@
       "label": "07/10/2026 - Corre\u00e7\u00e3o do Servidor Nixplay (Hunter x Hunter)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L903",
+      "source_location": "L922",
       "_origin": "ast",
       "id": "walkthrough_07_10_2026_corre\u00e7\u00e3o_do_servidor_nixplay_hunter_x_hunter",
       "community": 76,
@@ -12708,7 +12719,7 @@
       "label": "Corre\u00e7\u00e3o de Hunter x Hunter no VIP Player / WatchPlayer (07/10/2026)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L919",
+      "source_location": "L938",
       "_origin": "ast",
       "id": "walkthrough_corre\u00e7\u00e3o_de_hunter_x_hunter_no_vip_player_watchplayer_07_10_2026",
       "community": 27,
@@ -12719,7 +12730,7 @@
       "label": "07/10/2026 - Sistema de Reporte de Bugs",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L927",
+      "source_location": "L946",
       "_origin": "ast",
       "id": "walkthrough_07_10_2026_sistema_de_reporte_de_bugs",
       "community": 27,
@@ -12730,7 +12741,7 @@
       "label": "07/10/2026 - Corre\u00e7\u00e3o O Dia do Chacal (MixDrop) & Asaas 401 & UI",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L938",
+      "source_location": "L957",
       "_origin": "ast",
       "id": "walkthrough_07_10_2026_corre\u00e7\u00e3o_o_dia_do_chacal_mixdrop_asaas_401_ui",
       "community": 27,
@@ -12741,7 +12752,7 @@
       "label": "08/10/2026 - Resolver Ao Vivo pra Conte\u00fado NOVO (Carrie a Estranha / MixDrop)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L947",
+      "source_location": "L966",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_resolver_ao_vivo_pra_conte\u00fado_novo_carrie_a_estranha_mixdrop",
       "community": 27,
@@ -12752,7 +12763,7 @@
       "label": "08/10/2026 - Blinda Nixplay: Cache em Disco + Retry do Check (n\u00e3o some mais do seletor)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L957",
+      "source_location": "L976",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_blinda_nixplay_cache_em_disco_retry_do_check_n\u00e3o_some_mais_do_seletor",
       "community": 27,
@@ -12763,7 +12774,7 @@
       "label": "07/10/2026 - Sincroniza\u00e7\u00e3o de Notifica\u00e7\u00f5es Lidas (Sininho) na Nuvem",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L967",
+      "source_location": "L986",
       "_origin": "ast",
       "id": "walkthrough_07_10_2026_sincroniza\u00e7\u00e3o_de_notifica\u00e7\u00f5es_lidas_sininho_na_nuvem",
       "community": 27,
@@ -12774,7 +12785,7 @@
       "label": "08/10/2026 - Implementa\u00e7\u00e3o de Push Notifications (FCM)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L976",
+      "source_location": "L995",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_implementa\u00e7\u00e3o_de_push_notifications_fcm",
       "community": 27,
@@ -12785,7 +12796,7 @@
       "label": "08/10/2026 - Rob\u00f4 de Cria\u00e7\u00e3o Ampere (VPS)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L983",
+      "source_location": "L1002",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_rob\u00f4_de_cria\u00e7\u00e3o_ampere_vps",
       "community": 27,
@@ -12796,7 +12807,7 @@
       "label": "08/10/2026 - Notifica\u00e7\u00f5es Autom\u00e1ticas de Novos Epis\u00f3dios (Favoritos)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L987",
+      "source_location": "L1006",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_notifica\u00e7\u00f5es_autom\u00e1ticas_de_novos_epis\u00f3dios_favoritos",
       "community": 27,
@@ -12807,7 +12818,7 @@
       "label": "08/10/2026 - Corre\u00e7\u00e3o Profunda da L\u00f3gica de Push Notifications (FCM) \u2014 Auditoria + Fixes",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L996",
+      "source_location": "L1015",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_corre\u00e7\u00e3o_profunda_da_l\u00f3gica_de_push_notifications_fcm_auditoria_fixes",
       "community": 27,
@@ -12818,7 +12829,7 @@
       "label": "08/10/2026 - Ativa\u00e7\u00e3o do Push Web (VAPID Key FCM) + Deploy",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1011",
+      "source_location": "L1030",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_ativa\u00e7\u00e3o_do_push_web_vapid_key_fcm_deploy",
       "community": 27,
@@ -12829,7 +12840,7 @@
       "label": "08/10/2026 - REGRA DO DONO: Push pro GitHub Exige Autoriza\u00e7\u00e3o Expl\u00edcita",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1019",
+      "source_location": "L1038",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_regra_do_dono_push_pro_github_exige_autoriza\u00e7\u00e3o_expl\u00edcita",
       "community": 27,
@@ -12840,7 +12851,7 @@
       "label": "08/10/2026 - Auditoria e Corre\u00e7\u00e3o do Sistema de Reportar Bugs",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1023",
+      "source_location": "L1042",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_auditoria_e_corre\u00e7\u00e3o_do_sistema_de_reportar_bugs",
       "community": 27,
@@ -12851,7 +12862,7 @@
       "label": "08/10/2026 - Download 100% In-App + Playback Offline com Skin Netflix",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1035",
+      "source_location": "L1054",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_download_100_in_app_playback_offline_com_skin_netflix",
       "community": 27,
@@ -12862,7 +12873,7 @@
       "label": "08/10/2026 - Fix: Condi\ufffd\ufffdo de corrida no MixDrop (Fallback fantasma)",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1045",
+      "source_location": "L1064",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_fix_condi_o_de_corrida_no_mixdrop_fallback_fantasma",
       "community": 27,
@@ -12873,7 +12884,7 @@
       "label": "08/10/2026 - Carrie 2026 no Vizer + Fallback Duplo de Dom\u00ednio (vizer.website \u2192 vizer.reisen) + Health Check Anti-Migra\u00e7\u00e3o",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1057",
+      "source_location": "L1076",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_carrie_2026_no_vizer_fallback_duplo_de_dom\u00ednio_vizer_website_vizer_reisen_health_check_anti_migra\u00e7\u00e3o",
       "community": 27,
@@ -12884,7 +12895,7 @@
       "label": "08/10/2026 (2) - Scan Incremental do Vizer (modelo do encontrei.me) + Fix rate-limiter p\u00f3s-rename md-stream",
       "file_type": "document",
       "source_file": "walkthrough.md",
-      "source_location": "L1079",
+      "source_location": "L1098",
       "_origin": "ast",
       "id": "walkthrough_08_10_2026_2_scan_incremental_do_vizer_modelo_do_encontrei_me_fix_rate_limiter_p\u00f3s_rename_md_stream",
       "community": 27,
@@ -25044,7 +25055,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "src/components/NetflixPlayerSkin.tsx",
-      "source_location": "L2033",
+      "source_location": "L2039",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_components_netflixplayerskin_netflixplayerskin",
@@ -40780,7 +40791,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L759",
+      "source_location": "L778",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40791,7 +40802,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L768",
+      "source_location": "L787",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40802,7 +40813,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L748",
+      "source_location": "L767",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40813,7 +40824,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L679",
+      "source_location": "L698",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40824,7 +40835,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L663",
+      "source_location": "L682",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40835,7 +40846,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L699",
+      "source_location": "L718",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40846,7 +40857,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L729",
+      "source_location": "L748",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40857,7 +40868,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L640",
+      "source_location": "L659",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40868,7 +40879,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L549",
+      "source_location": "L568",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40879,7 +40890,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L619",
+      "source_location": "L638",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40890,7 +40901,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L560",
+      "source_location": "L579",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40901,7 +40912,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L578",
+      "source_location": "L597",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40912,7 +40923,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L597",
+      "source_location": "L616",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40923,7 +40934,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L527",
+      "source_location": "L546",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40934,7 +40945,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L483",
+      "source_location": "L502",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40945,7 +40956,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L503",
+      "source_location": "L522",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40956,7 +40967,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L226",
+      "source_location": "L245",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40967,7 +40978,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L197",
+      "source_location": "L216",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40978,7 +40989,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L145",
+      "source_location": "L164",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -40989,7 +41000,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L253",
+      "source_location": "L272",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41000,7 +41011,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L390",
+      "source_location": "L409",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41011,7 +41022,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L440",
+      "source_location": "L459",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41022,7 +41033,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L358",
+      "source_location": "L377",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41033,7 +41044,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L411",
+      "source_location": "L430",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41044,7 +41055,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L174",
+      "source_location": "L193",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41055,7 +41066,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L460",
+      "source_location": "L479",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41066,7 +41077,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L278",
+      "source_location": "L297",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41077,7 +41088,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L327",
+      "source_location": "L346",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41088,7 +41099,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L305",
+      "source_location": "L324",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41099,7 +41110,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L91",
+      "source_location": "L110",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41114,6 +41125,17 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
+      "target": "walkthrough_20_10_2026_calibra\u00e7\u00e3o_do_watchdog_anti_engasgo_elimina\u00e7\u00e3o_de_falsos_positivos_com_buffer_alto",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "walkthrough.md",
+      "source_location": "L20",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "walkthrough",
       "target": "walkthrough_20_10_2026_corre\u00e7\u00e3o_da_janela_de_exibi\u00e7\u00e3o_e_ativa\u00e7\u00e3o_do_card_de_pr\u00f3ximo_epis\u00f3dio_120s",
       "confidence_score": 1.0
     },
@@ -41121,7 +41143,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L116",
+      "source_location": "L135",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41132,7 +41154,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L30",
+      "source_location": "L49",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41143,7 +41165,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L59",
+      "source_location": "L78",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41154,7 +41176,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L786",
+      "source_location": "L805",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough",
@@ -41165,7 +41187,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L822",
+      "source_location": "L841",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41176,7 +41198,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L837",
+      "source_location": "L856",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41187,7 +41209,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L844",
+      "source_location": "L863",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41198,7 +41220,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L887",
+      "source_location": "L906",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41209,7 +41231,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L896",
+      "source_location": "L915",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41220,7 +41242,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L938",
+      "source_location": "L957",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41231,7 +41253,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L967",
+      "source_location": "L986",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41242,7 +41264,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L927",
+      "source_location": "L946",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41253,7 +41275,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1079",
+      "source_location": "L1098",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41264,7 +41286,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1011",
+      "source_location": "L1030",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41275,7 +41297,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1023",
+      "source_location": "L1042",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41286,7 +41308,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L957",
+      "source_location": "L976",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41297,7 +41319,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1057",
+      "source_location": "L1076",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41308,7 +41330,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L996",
+      "source_location": "L1015",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41319,7 +41341,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1035",
+      "source_location": "L1054",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41330,7 +41352,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1045",
+      "source_location": "L1064",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41341,7 +41363,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L976",
+      "source_location": "L995",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41352,7 +41374,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L987",
+      "source_location": "L1006",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41363,7 +41385,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L1019",
+      "source_location": "L1038",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41374,7 +41396,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L947",
+      "source_location": "L966",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41385,7 +41407,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L983",
+      "source_location": "L1002",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41396,7 +41418,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L919",
+      "source_location": "L938",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41407,7 +41429,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L812",
+      "source_location": "L831",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41418,7 +41440,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L788",
+      "source_location": "L807",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41429,7 +41451,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L807",
+      "source_location": "L826",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_walkthrough_anota\u00e3_\u00e3\u03bces_e_descontos_no_admin",
@@ -41440,7 +41462,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L854",
+      "source_location": "L873",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_03_10_2026_noite_refinamento_de_watchdog_fallback_e_cache",
@@ -41451,7 +41473,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L866",
+      "source_location": "L885",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_03_10_2026_noite_refinamento_de_watchdog_fallback_e_cache",
@@ -41462,7 +41484,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "walkthrough.md",
-      "source_location": "L903",
+      "source_location": "L922",
       "weight": 1.0,
       "_origin": "ast",
       "source": "walkthrough_06_10_2026_vip_player_retry_com_series_id_do_nixplay_quando_ajax_s\u00f3_devolve_fontes_blacklisted",
@@ -41625,5 +41647,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "487b4a9c6498a4306811b637fefd22ebe029ff49"
+  "built_at_commit": "6634e3737b746220cc3163f2911ab92ef69509ad"
 }
