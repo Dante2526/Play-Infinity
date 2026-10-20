@@ -2,13 +2,18 @@ const fs = require("fs");
 const path = require("path");
 
 const DOCS_DIR = path.resolve(__dirname, "..", ".tmp", "drive-docs");
-const WEBHOOK_URL = process.env.GDRIVE_WEBHOOK_URL;
+const WEBHOOK_URL = (process.env.GDRIVE_WEBHOOK_URL || "").trim();
 const SECRET_TOKEN = process.env.GDRIVE_SECRET_TOKEN || "play-infinity-secret";
 
 async function main() {
   if (!WEBHOOK_URL) {
-    console.error("❌ Erro: GDRIVE_WEBHOOK_URL não definida nos secrets do GitHub.");
+    console.error("❌ ERRO FATAL: GDRIVE_WEBHOOK_URL não configurada no GitHub Secrets.");
     process.exit(1);
+  }
+
+  if (!WEBHOOK_URL.includes("/exec")) {
+    console.warn("⚠️ AVISO: A URL do webhook deve terminar com '/exec' (URL de Implantação do App da Web).");
+    console.warn(`URL recebida: ${WEBHOOK_URL}`);
   }
 
   const filesToSync = [
@@ -37,17 +42,24 @@ async function main() {
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: payload
+        body: payload,
+        redirect: "follow"
       });
 
       const text = await res.text();
-      console.log(`Resposta do Google Drive para ${fileName}: HTTP ${res.status} - ${text.substring(0, 100)}`);
+      console.log(`[Status ${res.status}] Resposta para ${fileName}: ${text.substring(0, 150)}`);
+
+      if (text.includes("accounts.google.com") || text.includes("Sign in")) {
+        console.error("❌ O Google Drive está exigindo Login! Configure a implantação como 'Quem tem acesso: Qualquer pessoa'.");
+        process.exit(1);
+      }
     } catch (err) {
       console.error(`Erro ao enviar ${fileName}:`, err.message);
+      process.exit(1);
     }
   }
 
-  console.log("🏁 Sincronização com o Google Drive finalizada!");
+  console.log("🏁 Todos os arquivos foram enviados com sucesso ao Google Drive!");
 }
 
 main().catch(err => {

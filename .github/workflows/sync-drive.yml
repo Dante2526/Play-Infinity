@@ -27,8 +27,9 @@ jobs:
           GDRIVE_WEBHOOK_URL: ${{ secrets.GDRIVE_WEBHOOK_URL }}
           GDRIVE_SECRET_TOKEN: ${{ secrets.GDRIVE_SECRET_TOKEN }}
         run: |
-          if [ -n "$GDRIVE_WEBHOOK_URL" ]; then
-            node scripts/sync-to-gdrive.cjs
-          else
-            echo "⚠️ Secret GDRIVE_WEBHOOK_URL não configurada no repositório. Pulei o envio."
+          if [ -z "$GDRIVE_WEBHOOK_URL" ]; then
+            echo "❌ ERRO FATAL: A secret GDRIVE_WEBHOOK_URL não foi encontrada nos Secrets do repositório!"
+            echo "Acesse Settings > Secrets and variables > Actions e adicione GDRIVE_WEBHOOK_URL."
+            exit 1
           fi
+          node scripts/sync-to-gdrive.cjs
