@@ -32,7 +32,9 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // server/firebaseAdmin.ts
 var firebaseAdmin_exports = {};
 __export(firebaseAdmin_exports, {
-  getAdminDb: () => getAdminDb
+  getAdminDb: () => getAdminDb,
+  getAdminFieldValue: () => getAdminFieldValue,
+  getAdminMessaging: () => getAdminMessaging
 });
 function getAdminDb() {
   if (adminDb) return adminDb;
@@ -41,18 +43,18 @@ function getAdminDb() {
     let defaultApp = apps.find((a) => a.name === "[DEFAULT]") || null;
     if (!defaultApp) {
       const possiblePaths = [
-        import_path2.default.join(process.cwd(), "secrets", "firebase-service-account.json"),
-        import_path2.default.join(process.cwd(), "firebase-service-account.json")
+        import_path.default.join(process.cwd(), "secrets", "firebase-service-account.json"),
+        import_path.default.join(process.cwd(), "firebase-service-account.json")
       ];
       let serviceAccountPath = null;
       for (const p of possiblePaths) {
-        if (import_fs2.default.existsSync(p)) {
+        if (import_fs.default.existsSync(p)) {
           serviceAccountPath = p;
           break;
         }
       }
       if (serviceAccountPath) {
-        const serviceAccount = JSON.parse(import_fs2.default.readFileSync(serviceAccountPath, "utf-8"));
+        const serviceAccount = JSON.parse(import_fs.default.readFileSync(serviceAccountPath, "utf-8"));
         defaultApp = initializeApp({
           credential: cert(serviceAccount)
         });
@@ -66,6 +68,7 @@ function getAdminDb() {
       } else {
         const projectId = process.env.VITE_FIREBASE_PROJECT_ID || "play-infinity-63eaa";
         defaultApp = initializeApp({ projectId });
+        console.warn("[Firebase Admin] ATEN\xC7\xC3O: sem credenciais de service account (arquivo secrets/firebase-service-account.json ou env FIREBASE_SERVICE_ACCOUNT). Leitura do Firestore e envio de Push (FCM) N\xC3O funcionar\xE3o at\xE9 configurar as credenciais.");
         console.log("[Firebase Admin] Inicializado com projectId:", projectId);
       }
     }
@@ -76,17 +79,47 @@ function getAdminDb() {
     return null;
   }
 }
-var import_fs2, import_path2, import_module, import_meta, req, initializeApp, cert, getApps, getFirestore, adminDb;
+function getAdminMessaging() {
+  if (adminMessaging) return adminMessaging;
+  const db2 = getAdminDb();
+  if (!db2) return null;
+  try {
+    const apps = getApps();
+    const defaultApp = apps.find((a) => a.name === "[DEFAULT]") || null;
+    if (defaultApp) {
+      adminMessaging = getMessaging(defaultApp);
+      return adminMessaging;
+    }
+  } catch (error) {
+    console.error("[Firebase Admin] Erro ao inicializar Messaging:", error);
+  }
+  return null;
+}
+function getAdminFieldValue() {
+  if (adminFieldValue) return adminFieldValue;
+  try {
+    const { FieldValue } = req("firebase-admin/firestore");
+    adminFieldValue = FieldValue;
+    return adminFieldValue;
+  } catch (error) {
+    console.error("[Firebase Admin] Erro ao obter FieldValue:", error);
+    return null;
+  }
+}
+var import_fs, import_path, import_module, import_meta, req, initializeApp, cert, getApps, getFirestore, getMessaging, adminDb, adminMessaging, adminFieldValue;
 var init_firebaseAdmin = __esm({
   "server/firebaseAdmin.ts"() {
-    import_fs2 = __toESM(require("fs"), 1);
-    import_path2 = __toESM(require("path"), 1);
+    import_fs = __toESM(require("fs"), 1);
+    import_path = __toESM(require("path"), 1);
     import_module = require("module");
     import_meta = {};
     req = typeof require !== "undefined" ? require : (0, import_module.createRequire)(import_meta.url);
     ({ initializeApp, cert, getApps } = req("firebase-admin/app"));
     ({ getFirestore } = req("firebase-admin/firestore"));
+    ({ getMessaging } = req("firebase-admin/messaging"));
     adminDb = null;
+    adminMessaging = null;
+    adminFieldValue = null;
   }
 });
 
@@ -196,7 +229,7 @@ async function requireAdminAuth(req3, res, next) {
     });
     return;
   }
-  req3.adminUser = decodedUser;
+  req3.adminUser = decodedUser || { email: "admin@playinfinity.stream" };
   next();
 }
 var import_module2, import_meta2, req2, adminAuth;
@@ -216,24 +249,150 @@ __export(server_exports, {
   db: () => db
 });
 module.exports = __toCommonJS(server_exports);
-var import_express16 = __toESM(require("express"), 1);
-var import_path7 = __toESM(require("path"), 1);
-var import_fs7 = __toESM(require("fs"), 1);
+var import_express18 = __toESM(require("express"), 1);
+var import_path11 = __toESM(require("path"), 1);
+var import_fs11 = __toESM(require("fs"), 1);
 var import_dotenv = __toESM(require("dotenv"), 1);
-var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
+var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
 var import_helmet = __toESM(require("helmet"), 1);
+var import_crypto3 = __toESM(require("crypto"), 1);
 var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
 
+// server/services/catalogWatcher.ts
+var import_fs2 = __toESM(require("fs"), 1);
+var import_path2 = __toESM(require("path"), 1);
+init_firebaseAdmin();
+var DATA_DIR = import_path2.default.join(process.cwd(), "data");
+var CATALOG_PATH = import_path2.default.join(DATA_DIR, "encontrei-catalog.json");
+var PUBLIC_CATALOG_PATH = import_path2.default.join(process.cwd(), "public", "data", "encontrei-catalog.json");
+var STATE_PATH = import_path2.default.join(DATA_DIR, "catalog-state.json");
+function extractTokensFromUserDoc(data) {
+  const tokens = /* @__PURE__ */ new Set();
+  if (typeof data.fcmToken === "string" && data.fcmToken.trim()) {
+    tokens.add(data.fcmToken);
+  }
+  if (Array.isArray(data.fcmTokens)) {
+    for (const t of data.fcmTokens) {
+      if (typeof t === "string" && t.trim()) {
+        tokens.add(t);
+      }
+    }
+  }
+  return [...tokens];
+}
+function prettySeriesNameFromSlug(slug) {
+  const cleaned = String(slug || "").replace(/-(dublado|legendado|nacional)$/i, "").replace(/-/g, " ").trim();
+  if (!cleaned) return "";
+  return cleaned.split(" ").map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(" ");
+}
+function startCatalogWatcher() {
+  console.log("[CatalogWatcher] Iniciando servi\xE7o de monitoramento autom\xE1tico de novos epis\xF3dios...");
+  setInterval(() => {
+    checkCatalogUpdates();
+  }, 60 * 60 * 1e3);
+  setTimeout(() => checkCatalogUpdates(), 1e4);
+}
+async function checkCatalogUpdates() {
+  try {
+    const activeCatalogPath = import_fs2.default.existsSync(CATALOG_PATH) ? CATALOG_PATH : PUBLIC_CATALOG_PATH;
+    if (!import_fs2.default.existsSync(activeCatalogPath)) {
+      console.warn("[CatalogWatcher] Arquivo encontrei-catalog.json n\xE3o encontrado.");
+      return;
+    }
+    const catalogRaw = import_fs2.default.readFileSync(activeCatalogPath, "utf-8");
+    const catalogData = JSON.parse(catalogRaw);
+    const episodes = catalogData.episodes || [];
+    const currentCounts = {};
+    const tmdbToSerieId = /* @__PURE__ */ new Map();
+    for (const ep of episodes) {
+      if (typeof ep.tmdb_id === "number" && ep.tmdb_id > 0) {
+        currentCounts[ep.tmdb_id] = (currentCounts[ep.tmdb_id] || 0) + 1;
+        if (!tmdbToSerieId.has(ep.tmdb_id) && typeof ep.serie_id === "number") {
+          tmdbToSerieId.set(ep.tmdb_id, ep.serie_id);
+        }
+      }
+    }
+    let previousCounts = {};
+    if (import_fs2.default.existsSync(STATE_PATH)) {
+      try {
+        previousCounts = JSON.parse(import_fs2.default.readFileSync(STATE_PATH, "utf-8"));
+      } catch {
+        previousCounts = {};
+      }
+    }
+    const updatedTmdbIds = [];
+    for (const tmdbIdStr of Object.keys(currentCounts)) {
+      const current = currentCounts[tmdbIdStr];
+      const previous = previousCounts[tmdbIdStr] || 0;
+      if (current > previous && previous > 0) {
+        updatedTmdbIds.push(parseInt(tmdbIdStr, 10));
+      }
+    }
+    if (updatedTmdbIds.length > 0) {
+      console.log(`[CatalogWatcher] Detectados novos epis\xF3dios para ${updatedTmdbIds.length} s\xE9ries (TMDB: ${updatedTmdbIds.join(", ")}). Disparando Push...`);
+      await sendNotificationsForUpdatedSeries(updatedTmdbIds, catalogData, tmdbToSerieId);
+    }
+    if (!import_fs2.default.existsSync(DATA_DIR)) {
+      import_fs2.default.mkdirSync(DATA_DIR, { recursive: true });
+    }
+    import_fs2.default.writeFileSync(STATE_PATH, JSON.stringify(currentCounts), "utf-8");
+  } catch (error) {
+    console.error("[CatalogWatcher] Erro ao checar cat\xE1logo:", error);
+  }
+}
+async function sendNotificationsForUpdatedSeries(updatedTmdbIds, catalogData, tmdbToSerieId) {
+  const db2 = getAdminDb();
+  const messaging = getAdminMessaging();
+  if (!db2 || !messaging) {
+    console.warn("[CatalogWatcher] Firebase Admin indispon\xEDvel: push de novos epis\xF3dios pulado.");
+    return;
+  }
+  const seriesNameBySerieId = /* @__PURE__ */ new Map();
+  for (const s of catalogData.series || []) {
+    if (typeof s.serie_id === "number" && s.slug) {
+      seriesNameBySerieId.set(s.serie_id, prettySeriesNameFromSlug(s.slug));
+    }
+  }
+  for (const tmdbId of updatedTmdbIds) {
+    try {
+      const serieId = tmdbToSerieId.get(tmdbId);
+      const seriesName = serieId ? seriesNameBySerieId.get(serieId) || "" : "";
+      const seriesLabel = seriesName || "sua s\xE9rie favorita";
+      const snapshot = await db2.collection("usuarios").where("favoritos", "array-contains", tmdbId).get();
+      if (snapshot.empty) continue;
+      const tokens = [];
+      snapshot.forEach((docSnap) => {
+        tokens.push(...extractTokensFromUserDoc(docSnap.data()));
+      });
+      if (tokens.length === 0) continue;
+      const title = `Novo Epis\xF3dio! \u{1F37F}`;
+      const body = seriesName ? `Novo epis\xF3dio de "${seriesName}" acaba de ficar dispon\xEDvel. Vem assistir no Play Infinity!` : `Acabou de sair um epis\xF3dio in\xE9dito de uma s\xE9rie que est\xE1 na sua Lista de Favoritos. Vem assistir!`;
+      const uniqueTokens = [...new Set(tokens)];
+      for (let i = 0; i < uniqueTokens.length; i += 500) {
+        const chunk = uniqueTokens.slice(i, i + 500);
+        const message = {
+          notification: { title, body },
+          tokens: chunk
+        };
+        await messaging.sendEachForMulticast(message);
+      }
+      console.log(`[CatalogWatcher] Push enviado para ${uniqueTokens.length} dispositivos (TMDB ID: ${tmdbId}, S\xE9rie: ${seriesLabel}).`);
+    } catch (err) {
+      console.error(`[CatalogWatcher] Erro ao notificar s\xE9rie TMDB ${tmdbId}:`, err);
+    }
+  }
+}
+
 // server/routes/subtitlesRoutes.ts
 var import_express = require("express");
-var import_fs = __toESM(require("fs"), 1);
-var import_path = __toESM(require("path"), 1);
+var import_fs3 = __toESM(require("fs"), 1);
+var import_path3 = __toESM(require("path"), 1);
 var cheerio = __toESM(require("cheerio"), 1);
 var subtitlesRouter = (0, import_express.Router)();
-var CACHE_DIR = import_path.default.join(process.cwd(), "data", "subtitles-cache");
-if (!import_fs.default.existsSync(CACHE_DIR)) {
-  import_fs.default.mkdirSync(CACHE_DIR, { recursive: true });
+var CACHE_DIR = import_path3.default.join(process.cwd(), "data", "subtitles-cache");
+if (!import_fs3.default.existsSync(CACHE_DIR)) {
+  import_fs3.default.mkdirSync(CACHE_DIR, { recursive: true });
 }
 var MIN_VALID_CUES = 20;
 function srtToVtt(srt) {
@@ -341,18 +500,18 @@ subtitlesRouter.get("/api/subtitles", async (req3, res) => {
     const s = season ? String(season) : "1";
     const e = episode ? String(episode) : "1";
     const cacheKey = `${mediaType}_${tmdbId}_s${s}_e${e}_${lang}.vtt`;
-    const cachePath = import_path.default.join(CACHE_DIR, cacheKey);
-    if (import_fs.default.existsSync(cachePath)) {
-      const stat = import_fs.default.statSync(cachePath);
+    const cachePath = import_path3.default.join(CACHE_DIR, cacheKey);
+    if (import_fs3.default.existsSync(cachePath)) {
+      const stat = import_fs3.default.statSync(cachePath);
       const isExpired = Date.now() - stat.mtimeMs > 30 * 24 * 60 * 60 * 1e3;
       if (!isExpired) {
-        const cached = import_fs.default.readFileSync(cachePath, "utf-8");
+        const cached = import_fs3.default.readFileSync(cachePath, "utf-8");
         if (countVttCues(cached) >= MIN_VALID_CUES) {
           const b642 = Buffer.from(cachePath).toString("base64");
           return res.json({ success: true, url: `/api/subtitle-file?path=${b642}` });
         }
         console.warn(`[Subtitles] Cache inv\xE1lido para ${cacheKey} (${countVttCues(cached)} cues < ${MIN_VALID_CUES}), rebuscando...`);
-        import_fs.default.unlinkSync(cachePath);
+        import_fs3.default.unlinkSync(cachePath);
       }
     }
     const TMDB_KEY = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
@@ -392,7 +551,7 @@ subtitlesRouter.get("/api/subtitles", async (req3, res) => {
     if (!vttText) {
       return res.status(404).json({ error: "Legenda PT-BR com conte\xFAdo suficiente n\xE3o encontrada." });
     }
-    import_fs.default.writeFileSync(cachePath, vttText, "utf-8");
+    import_fs3.default.writeFileSync(cachePath, vttText, "utf-8");
     const b64 = Buffer.from(cachePath).toString("base64");
     return res.json({ success: true, url: `/api/subtitle-file?path=${b64}` });
   } catch (err) {
@@ -404,13 +563,21 @@ subtitlesRouter.get("/api/subtitle-file", (req3, res) => {
   const b64Path = req3.query.path;
   if (!b64Path) return res.status(400).send("Path missing");
   try {
-    const filePath = Buffer.from(b64Path, "base64").toString("utf-8");
-    if (!import_fs.default.existsSync(filePath)) {
+    const decoded = Buffer.from(b64Path, "base64").toString("utf-8");
+    const resolvedPath = import_path3.default.resolve(decoded);
+    const resolvedCacheDir = import_path3.default.resolve(CACHE_DIR);
+    const isWithinCache = resolvedPath.startsWith(resolvedCacheDir + import_path3.default.sep) || resolvedPath === resolvedCacheDir;
+    if (!isWithinCache) {
+      console.warn(`[Subtitles] Tentativa de Path Traversal bloqueada: ${decoded}`);
+      return res.status(403).send("Acesso negado.");
+    }
+    if (!import_fs3.default.existsSync(resolvedPath)) {
       return res.status(404).send("File not found");
     }
-    res.setHeader("Content-Type", "text/vtt");
+    res.setHeader("Content-Type", "text/vtt; charset=utf-8");
     res.setHeader("Access-Control-Allow-Origin", "*");
-    import_fs.default.createReadStream(filePath).pipe(res);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    import_fs3.default.createReadStream(resolvedPath).pipe(res);
   } catch (e) {
     res.status(500).send("Error reading file");
   }
@@ -512,12 +679,32 @@ var ALLOWED_STREAMING_DOMAINS = [
   "mxdrop.to",
   "mxdrop.top",
   "mxcontent.net",
-  "pomfy.stream",
-  "pomfy.top",
-  "pomfy.vip",
   "nixplay.lat",
   "nixplay.com",
-  "nixplay.net"
+  "nixplay.net",
+  "streamtape.com",
+  "tapecontent.net",
+  "strtape.tech",
+  "streamtape.net",
+  "streamtape.cc",
+  "streamtape.site",
+  "tapenation.com",
+  "tape.xxx",
+  "doodstream.com",
+  "dood.to",
+  "dood.so",
+  "dood.ws",
+  "dood.pm",
+  "dood.wf",
+  "dood.la",
+  "dood.sh",
+  "doodcdn.co",
+  "doods.pro",
+  "playmogo.com",
+  "cloudatacdn.com",
+  "ds2play.com",
+  "do0od.com",
+  "dood.watch"
 ];
 var ALLOWED_LIVE_STREAMING_DOMAINS = [
   "up.kiwi",
@@ -551,6 +738,12 @@ var ALLOWED_LIVE_STREAMING_DOMAINS = [
   "186.233.118.171",
   "198.13.16.163",
   "186.233.118.163",
+  "195.178.110.110",
+  "170.83.16.50",
+  "45.162.64.114",
+  "170.83.49.66",
+  "181.78.197.59",
+  "190.83.2.182",
   ...ALLOWED_STREAMING_DOMAINS
 ];
 if (!process.env.PROXY_SECRET && process.env.NODE_ENV === "production") {
@@ -591,7 +784,7 @@ function isAllowedLiveStreamingDomain(hostname) {
     return host === d || host.endsWith("." + d);
   });
   if (isAllowed) return true;
-  if (/embedplayer[a-z0-9-]*\.(xyz|site|top|biz|org|net|online|link|cc|to|me|com)$/i.test(host) || /playerflix\.(ink|biz|to|net)$/i.test(host) || /myembed\.(biz|me|to)$/i.test(host) || /warezcdn\.(net|com)$/i.test(host) || /embedder\.(net|com)$/i.test(host) || /pomfy\.(stream|top|vip)$/i.test(host) || /nixplay\.(lat|net|com)$/i.test(host) || /eloialu[a-z0-9-]*\.(xyz|site|top|biz|online|net|com)$/i.test(host)) {
+  if (/embedplayer[a-z0-9-]*\.(xyz|site|top|biz|org|net|online|link|cc|to|me|com)$/i.test(host) || /playerflix\.(ink|biz|to|net)$/i.test(host) || /myembed\.(biz|me|to)$/i.test(host) || /warezcdn\.(net|com)$/i.test(host) || /embedder\.(net|com)$/i.test(host) || /nixplay\.(lat|net|com)$/i.test(host) || /eloialu[a-z0-9-]*\.(xyz|site|top|biz|online|net|com)$/i.test(host)) {
     return true;
   }
   if (/\.(qzz\.io|akamaihd\.net|cloudfront\.net|fastly\.net|amagi\.tv|wurl\.com|otteravision\.com|streamlock\.net)$/i.test(host)) {
@@ -745,7 +938,8 @@ function timingSafeCompare(a, b) {
 var router = (0, import_express2.Router)();
 var getAsaasHeaders = () => ({
   "access_token": process.env.ASAAS_API_KEY || "",
-  "Content-Type": "application/json"
+  "Content-Type": "application/json",
+  "User-Agent": "PlayInfinity/1.0.0"
 });
 var getAsaasBaseUrl = () => process.env.ASAAS_ENVIRONMENT === "sandbox" ? "https://sandbox.asaas.com/api/v3" : "https://api.asaas.com/v3";
 router.post("/api/create-subscription", async (req3, res) => {
@@ -1017,6 +1211,7 @@ var import_express6 = require("express");
 // server/routes/diagnostics.ts
 var import_express3 = require("express");
 var cheerio2 = __toESM(require("cheerio"), 1);
+var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
 
 // src/data/serverBlacklist.ts
 var SERVER_BLACKLIST = [
@@ -1147,6 +1342,18 @@ var SERVER_BLACKLIST = [
     ],
     reason: "A infraestrutura original ativou prote\xE7\xE3o Cloudflare severa (Turnstile) bloqueando nosso proxy (403), e tamb\xE9m est\xE1 retornando 522 Connection Timed Out. O player est\xE1 morto no momento.",
     blockedAt: "2026-09"
+  },
+  {
+    id: "pomfy",
+    name: "Pomfy Stream",
+    keys: ["srv_pomfy", "pomfy"],
+    patterns: [
+      /pomfy\.(stream|top|vip)/i,
+      "/api/pomfy-stream",
+      "pomfy"
+    ],
+    reason: "Removido por solicita\xE7\xE3o do usu\xE1rio. Inst\xE1vel.",
+    blockedAt: "2026-10"
   }
 ];
 function isServerBlacklisted(urlOrKey) {
@@ -1210,6 +1417,14 @@ var tmdbCache = new import_lru_cache.LRUCache({
 
 // server/routes/diagnostics.ts
 var router2 = (0, import_express3.Router)();
+var speedtestLimiter = (0, import_express_rate_limit.default)({
+  windowMs: 1 * 60 * 1e3,
+  max: 15,
+  // Max 15 req/min por IP
+  message: "Limite de testes de velocidade excedido.",
+  standardHeaders: true,
+  legacyHeaders: false
+});
 router2.get("/api/extract-player", async (req3, res) => {
   const targetUrl = req3.query.url;
   const validation = validateSafeUrl(targetUrl);
@@ -1695,10 +1910,10 @@ async function resolveVixsrcStream(tmdbId, type, season = 1, episode = 1) {
     return null;
   }
 }
-router2.get("/api/speedtest-down", (req3, res) => {
+router2.get("/api/speedtest-down", speedtestLimiter, (req3, res) => {
   try {
     const bytesRaw = Number(req3.query.bytes);
-    const bytesToDownload = !isNaN(bytesRaw) && bytesRaw > 0 ? Math.min(bytesRaw, 200 * 1024 * 1024) : 25 * 1024 * 1024;
+    const bytesToDownload = !isNaN(bytesRaw) && bytesRaw > 0 ? Math.min(bytesRaw, 25 * 1024 * 1024) : 25 * 1024 * 1024;
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Length", bytesToDownload.toString());
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1892,7 +2107,19 @@ router3.get("/api/vidsrc-stream", async (req3, res) => {
     res.setHeader(CORS["Access-Control-Allow-Origin"], "*");
     const tmdb = req3.query.tmdb || "126027";
     const season = req3.query.season || "1";
-    const episode = req3.query.episode || "1";
+    let episode = req3.query.episode || "1";
+    if (parseInt(episode) > 50) {
+      try {
+        const fetch2 = require("node-fetch");
+        const tmdbRes = await fetch2(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+        const tmdbData = await tmdbRes.json();
+        if (tmdbData.episodes) {
+          const idx = tmdbData.episodes.findIndex((ep) => ep.episode_number === parseInt(episode));
+          if (idx >= 0) episode = String(idx + 1);
+        }
+      } catch (err) {
+      }
+    }
     console.log(`[vidsrc-stream] tmdb=${tmdb} s${season}e${episode}`);
     const m3u8 = await getRewrittenM3u8(tmdb, season, episode);
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
@@ -1937,7 +2164,7 @@ router3.get("/api/vidsrc-proxy", async (req3, res) => {
     for (const [k, v] of Object.entries(CORS)) {
       res.setHeader(k, v);
     }
-    for (const h of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+    for (const h of ["content-type", "content-range", "accept-ranges"]) {
       const val = upstream.headers.get(h);
       if (val) res.setHeader(h, val);
     }
@@ -1950,12 +2177,28 @@ router3.get("/api/vidsrc-proxy", async (req3, res) => {
       res.setHeader("Cache-Control", "no-store");
       return res.send(rewritten);
     }
+    res.status(upstream.status);
     res.setHeader("Cache-Control", "public, max-age=3600");
-    const buf = Buffer.from(await upstream.arrayBuffer());
-    if (buf.length > 0 && buf[0] === 71) {
+    if (!upstream.headers.get("content-type")) {
       res.setHeader("Content-Type", "video/mp2t");
     }
-    return res.send(buf);
+    if (!upstream.body) {
+      return res.end();
+    }
+    const { Readable: Readable4 } = await import("stream");
+    const source = Readable4.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    req3.on("close", () => controller.abort());
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+    return source.pipe(res);
   } catch (err) {
     console.error("[vidsrc-proxy] Error:", err.message);
     return res.status(502).json({ error: err.message });
@@ -1964,7 +2207,19 @@ router3.get("/api/vidsrc-proxy", async (req3, res) => {
 router3.get("/api/vidsrc-player", async (req3, res) => {
   const tmdb = req3.query.tmdb || "126027";
   const season = req3.query.season || "1";
-  const episode = req3.query.episode || "1";
+  let episode = req3.query.episode || "1";
+  if (parseInt(episode) > 50) {
+    try {
+      const fetch2 = require("node-fetch");
+      const tmdbRes = await fetch2(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbData = await tmdbRes.json();
+      if (tmdbData.episodes) {
+        const idx = tmdbData.episodes.findIndex((ep) => ep.episode_number === parseInt(episode));
+        if (idx >= 0) episode = String(idx + 1);
+      }
+    } catch (err) {
+    }
+  }
   const streamUrl = `/api/vidsrc-stream?tmdb=${tmdb}&season=${season}&episode=${episode}`;
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -2102,13 +2357,29 @@ window.addEventListener('message',function(e){
   var cmd=e.data;
   if(!cmd||!cmd.type)return;
   try{
-    if(cmd.type==='PLAY'||cmd.type==='play'){video.play();}
+    if(cmd.type==='PLAY'||cmd.type==='play'){video.play().catch(function(){});}
     else if(cmd.type==='PAUSE'||cmd.type==='pause'){video.pause();}
-    else if(cmd.type==='SEEK'&&typeof cmd.targetTime==='number'){seekPending=true;video.currentTime=cmd.targetTime;if(typeof hls!=='undefined'&&hls){hls.startLoad();}}
-    else if(cmd.type==='seek'&&typeof cmd.time==='number'){seekPending=true;video.currentTime=cmd.time;if(typeof hls!=='undefined'&&hls){hls.startLoad();}}
-    else if(cmd.type==='SET_VOLUME'&&typeof cmd.volume==='number'){video.volume=cmd.volume;video.muted=(cmd.volume===0);}
-    else if(cmd.type==='setMuted'){video.muted=!!cmd.muted;}
-    else if(cmd.type==='SKIP_INTRO'&&typeof cmd.seconds==='number'){video.currentTime+=cmd.seconds;}
+    else if(cmd.type==='TOGGLE_PLAY'||cmd.type==='togglePlay'){if(video.paused){video.play().catch(function(){});}else{video.pause();}}
+    else if(cmd.type==='SEEK'||cmd.type==='seek'||cmd.type==='SEEK_ABSOLUTE'||cmd.type==='SEEK_RELATIVE'){
+      var target=typeof cmd.time==='number'?cmd.time:cmd.targetTime;
+      if(typeof target!=='number'&&typeof cmd.seconds==='number'){target=(video.currentTime||0)+cmd.seconds;}
+      if(typeof target==='number'&&!isNaN(target)){
+        seekPending=true;
+        video.currentTime=Math.max(0,Math.min(target,(video.duration||99999)));
+        if(typeof hls!=='undefined'&&hls){hls.startLoad();}
+      }
+    }
+    else if(cmd.type==='SKIP_INTRO'){
+      var sec=Number(cmd.seconds)||85;
+      seekPending=true;
+      video.currentTime=Math.max(0,Math.min((video.currentTime||0)+sec,(video.duration||99999)-5));
+      if(typeof hls!=='undefined'&&hls){hls.startLoad();}
+    }
+    else if(cmd.type==='SET_PLAYBACK_RATE'||cmd.type==='setPlaybackRate'){
+      video.playbackRate=Number(cmd.rate)||1;
+    }
+    else if(cmd.type==='SET_VOLUME'&&typeof cmd.volume==='number'){video.volume=Math.max(0,Math.min(1,cmd.volume));video.muted=(cmd.volume===0);}
+    else if(cmd.type==='setMuted'||cmd.type==='SET_MUTED'){video.muted=!!cmd.muted;}
     sendStatus();
   }catch(err){}
 });
@@ -2185,8 +2456,8 @@ var vidsrcRoutes_default = router3;
 
 // server/routes/encontreiLookup.ts
 var import_express5 = require("express");
-var import_fs3 = __toESM(require("fs"), 1);
-var import_path3 = __toESM(require("path"), 1);
+var import_fs4 = __toESM(require("fs"), 1);
+var import_path4 = __toESM(require("path"), 1);
 var router4 = (0, import_express5.Router)();
 var vipSeasonCache = /* @__PURE__ */ new Map();
 var vipMovieCache = /* @__PURE__ */ new Map();
@@ -2279,21 +2550,54 @@ async function checkWatchPlayerMovie(tmdb) {
   }
 }
 var _tmdbToSerieIdMap = /* @__PURE__ */ new Map();
+var ENC_BASE = "https://encontrei.me";
+var ENC_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+var ENC_NEG_TTL_MS = 3 * 60 * 1e3;
+var ENC_BREAKER_MS = 10 * 60 * 1e3;
+var ENC_FETCH_TIMEOUT_MS = 4e3;
+var _encCookieDownUntil = 0;
+var _encInflight = /* @__PURE__ */ new Map();
+var _encNeg = /* @__PURE__ */ new Map();
+function fetchWithTimeout(url, opts = {}, ms = ENC_FETCH_TIMEOUT_MS) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
+async function once(key, fn) {
+  const negExp = _encNeg.get(key);
+  if (negExp && Date.now() < negExp) return null;
+  const existing = _encInflight.get(key);
+  if (existing) return existing;
+  const p = (async () => {
+    try {
+      const r = await fn();
+      if (r === null) _encNeg.set(key, Date.now() + ENC_NEG_TTL_MS);
+      return r;
+    } catch (e) {
+      _encNeg.set(key, Date.now() + ENC_NEG_TTL_MS);
+      throw e;
+    } finally {
+      _encInflight.delete(key);
+    }
+  })();
+  _encInflight.set(key, p);
+  return p;
+}
 var _tmdbToVizerMovieIdMap = /* @__PURE__ */ new Map();
 var _vizerMovieIdsLoaded = false;
 var _vizerMovieIdsMtime = 0;
 function loadVizerMovieIds() {
   const possiblePaths = [
-    import_path3.default.join(process.cwd(), "public", "data", "vizer-movie-ids.json"),
-    import_path3.default.join(process.cwd(), "data", "vizer-movie-ids.json")
+    import_path4.default.join(process.cwd(), "public", "data", "vizer-movie-ids.json"),
+    import_path4.default.join(process.cwd(), "data", "vizer-movie-ids.json")
   ];
   for (const p of possiblePaths) {
-    if (import_fs3.default.existsSync(p)) {
+    if (import_fs4.default.existsSync(p)) {
       try {
-        const stat = import_fs3.default.statSync(p);
+        const stat = import_fs4.default.statSync(p);
         const mtime = stat.mtimeMs;
         if (_vizerMovieIdsLoaded && mtime <= _vizerMovieIdsMtime) return;
-        const raw = import_fs3.default.readFileSync(p, "utf-8");
+        const raw = import_fs4.default.readFileSync(p, "utf-8");
         const map = JSON.parse(raw);
         _tmdbToVizerMovieIdMap.clear();
         for (const [k, v] of Object.entries(map)) {
@@ -2314,6 +2618,67 @@ function loadVizerMovieIds() {
     }
   }
 }
+var VIZER_DOMAINS = [
+  "https://www.vizer.uno",
+  // domínio atual (2026-10)
+  "https://www.vizer.reisen",
+  // domínio anterior, responde com redirect para vizer.uno
+  "https://www.vizer.website"
+  // domínio legado
+];
+var _vizerWorkingDomain = null;
+async function vizerFetchJson(doQuery, timeoutMs, refererPath) {
+  const order = _vizerWorkingDomain ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)] : [...VIZER_DOMAINS];
+  for (const base of order) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(`${base}/index.php?app=videobox&module=video&controller=view&${doQuery}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+          "X-Requested-With": "XMLHttpRequest",
+          "Accept": "application/json",
+          ...refererPath ? { "Referer": `${base}${refererPath}` } : {}
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = await res.json().catch(() => null);
+      if (!data) continue;
+      if (typeof data.redirect === "string" && data.redirect && !data.episodes && !data.servers_dub) {
+        const redirBase = new URL(data.redirect).origin;
+        try {
+          const r2Controller = new AbortController();
+          const r2Timer = setTimeout(() => r2Controller.abort(), timeoutMs);
+          const r2 = await fetch(data.redirect, {
+            headers: {
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+              "X-Requested-With": "XMLHttpRequest",
+              "Accept": "application/json"
+            },
+            signal: r2Controller.signal
+          });
+          clearTimeout(r2Timer);
+          if (r2.ok) {
+            const data2 = await r2.json().catch(() => null);
+            if (data2 && (data2.episodes || data2.servers_dub)) {
+              _vizerWorkingDomain = redirBase;
+              return data2;
+            }
+          }
+        } catch {
+        }
+        continue;
+      }
+      _vizerWorkingDomain = base;
+      return data;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
 var vizerSeasonCache = /* @__PURE__ */ new Map();
 var VIZER_SEASON_TTL = 30 * 60 * 1e3;
 async function checkVizerSeason(tmdb, season) {
@@ -2328,169 +2693,557 @@ async function checkVizerSeason(tmdb, season) {
   if (cached && Date.now() - cached.timestamp < VIZER_SEASON_TTL) {
     return cached.ok;
   }
+  const data = await vizerFetchJson(
+    `do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`,
+    3e3
+  );
+  const ok = !!(data && Array.isArray(data.episodes) && data.episodes.length > 0);
+  vizerSeasonCache.set(key, { ok, timestamp: Date.now() });
+  return ok;
+}
+async function resolveVizerEpisode(tmdbId, season, episode, name) {
+  loadCatalogs();
+  let serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) {
+    await ensureVizerFreshContent("series", name);
+    serieId = _tmdbToSerieIdMap.get(tmdbId);
+  }
+  if (!serieId) return null;
+  const data = await vizerFetchJson(
+    `do=episodesList&id=${serieId}&season=${season}&audio=Dublado`,
+    4e3
+  );
+  if (!data) return null;
+  const eps = data.episodes || [];
+  if (!eps.length) return null;
+  const target = eps.find((e) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+  if (!target) return null;
+  const vidMatch = String(target.url || "").match(/-(\d+)\/?$/);
+  if (!vidMatch) return null;
+  const vid = vidMatch[1];
+  const pData = await vizerFetchJson(`do=playerData&id=${vid}`, 3500);
+  if (!pData) return null;
+  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
+  const mDood = sStr.match(/(?:^|&)doodstream=([^&]+)/i);
+  const mixdrop = mMix ? mMix[1] : null;
+  const streamtape = mStape ? mStape[1] : null;
+  const doodstream = mDood ? mDood[1] : null;
+  if (!mixdrop && !streamtape && !doodstream) return null;
+  const epObj = {
+    episode_id: parseInt(vid, 10),
+    serie_id: serieId,
+    season,
+    episode,
+    tmdb_id: tmdbId,
+    audio: pData.current_audio || "Dublado",
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "" },
+    source_url: target.url,
+    _fetchedAt: Date.now()
+  };
+  const key = `${tmdbId}:${season}:${episode}`;
+  _vizerEpisodeIndex.set(key, epObj);
+  const curSeasons = _vizerSeriesSeasonsIndex.get(tmdbId) || [];
+  if (!curSeasons.includes(season)) {
+    _vizerSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
+  }
+  return {
+    mixdrop,
+    streamtape,
+    doodstream,
+    audio: epObj.audio,
+    server_name: "MixDrop",
+    season,
+    episode,
+    source: "vizer-live",
+    mixdrop_vizer: mixdrop,
+    mixdrop_encontrei: null
+  };
+}
+async function resolveVizerMovie(tmdbId, name) {
+  loadVizerMovieIds();
+  let vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  if (!vizerMovieId) {
+    loadCatalogs();
+    await ensureVizerFreshContent("movies", name);
+    vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
+  }
+  if (!vizerMovieId) return null;
+  const pData = await vizerFetchJson(
+    `do=playerData&id=${vizerMovieId}`,
+    3500,
+    `/filmes/online/x-${vizerMovieId}/`
+  );
+  if (!pData) return null;
+  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
+  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
+  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
+  const mDood = sStr.match(/(?:^|&)doodstream=([^&]+)/i);
+  const mixdrop = mMix ? mMix[1] : null;
+  const streamtape = mStape ? mStape[1] : null;
+  const doodstream = mDood ? mDood[1] : null;
+  if (!mixdrop && !streamtape && !doodstream) return null;
+  const movieObj = {
+    video_id: vizerMovieId,
+    tmdb_id: tmdbId,
+    audio: pData.current_audio || "Dublado",
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "" },
+    _fetchedAt: Date.now()
+  };
+  _vizerMovieIndex.set(tmdbId, movieObj);
+  return {
+    mixdrop,
+    streamtape,
+    doodstream,
+    audio: movieObj.audio,
+    server_name: "MixDrop",
+    source: "vizer-live",
+    mixdrop_vizer: mixdrop,
+    mixdrop_encontrei: null
+  };
+}
+var VIZER_FRESH_LISTING_TTL_MS = 10 * 60 * 1e3;
+var VIZER_FRESH_MAX_CANDIDATES = 12;
+var _vizerFreshListing = null;
+var _vizerFreshTmdbCache = /* @__PURE__ */ new Map();
+var _vizerKnownSerieIds = /* @__PURE__ */ new Set();
+var _vizerKnownMovieIds = /* @__PURE__ */ new Set();
+var _vizerKnownSetsLoaded = false;
+function vizerKnownSetsLoad() {
+  if (_vizerKnownSetsLoaded) return;
+  _vizerKnownSetsLoaded = true;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3e3);
-    const url = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${numericSeason}&audio=Dublado`;
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json"
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      vizerSeasonCache.set(key, { ok: false, timestamp: Date.now() });
-      return false;
+    loadVizerMovieIds();
+    for (const ep of _vizerCatalog?.episodes || []) {
+      const id = Number(ep.serie_id);
+      if (id > 0) _vizerKnownSerieIds.add(id);
     }
-    const data = await res.json();
-    const ok = Array.isArray(data.episodes) && data.episodes.length > 0;
-    vizerSeasonCache.set(key, { ok, timestamp: Date.now() });
-    return ok;
+    for (const vid of _tmdbToVizerMovieIdMap.values()) {
+      if (vid > 0) _vizerKnownMovieIds.add(vid);
+    }
   } catch {
-    return false;
   }
 }
-async function resolveVizerEpisode(tmdbId, season, episode) {
-  loadCatalogs();
-  const serieId = _tmdbToSerieIdMap.get(tmdbId);
-  if (!serieId) return null;
+async function vizerFetchHtml(pagePath, timeoutMs = 8e3) {
+  const order = _vizerWorkingDomain ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)] : [...VIZER_DOMAINS];
+  for (const base of order) {
+    try {
+      const res = await fetch(`${base}${pagePath}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "Accept": "text/html"
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      if (!res.ok) continue;
+      const html = await res.text().catch(() => null);
+      if (!html || html.length < 500) continue;
+      _vizerWorkingDomain = base;
+      return html;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+async function ensureVizerFreshListing() {
+  if (_vizerFreshListing && Date.now() - _vizerFreshListing.at < VIZER_FRESH_LISTING_TTL_MS) return;
+  const series = [];
+  const movies = [];
+  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+    const html = await vizerFetchHtml(p);
+    if (!html) continue;
+    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !series.some((x) => x.id === id)) series.push({ slug: m[1], id });
+    }
+    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !movies.some((x) => x.id === id)) movies.push({ slug: m[1], id });
+    }
+  }
+  _vizerFreshListing = { series, movies, at: Date.now() };
+}
+async function ensureVizerFreshContent(kind, title) {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4e3);
-    const listUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
-    const res = await fetch(listUrl, {
+    loadCatalogs();
+    vizerKnownSetsLoad();
+    await ensureVizerFreshListing();
+    if (!_vizerFreshListing) return;
+    const known = kind === "series" ? _vizerKnownSerieIds : _vizerKnownMovieIds;
+    const items = kind === "series" ? _vizerFreshListing.series : _vizerFreshListing.movies;
+    const tag = kind === "series" ? "s" : "f";
+    const candidates = items.filter((it) => {
+      if (known.has(it.id)) return false;
+      if (_vizerFreshTmdbCache.has(`${tag}:${it.slug}`)) return false;
+      return encSlugMatchesTitle(it.slug, title);
+    }).slice(0, VIZER_FRESH_MAX_CANDIDATES);
+    for (const it of candidates) {
+      const cacheKey = `${tag}:${it.slug}`;
+      const pagePath = kind === "series" ? `/series/online/${it.slug}-${it.id}/` : `/filmes/online/${it.slug}-${it.id}/`;
+      const html = await vizerFetchHtml(pagePath);
+      if (!html) {
+        _vizerFreshTmdbCache.set(cacheKey, null);
+        continue;
+      }
+      const tm = html.match(/data-tmdb-id="(\d+)"/);
+      const tmdb = tm ? parseInt(tm[1], 10) : 0;
+      _vizerFreshTmdbCache.set(cacheKey, tmdb || null);
+      if (!tmdb) continue;
+      if (kind === "series") {
+        if (!_tmdbToSerieIdMap.has(tmdb)) {
+          _tmdbToSerieIdMap.set(tmdb, it.id);
+          console.log(`[vizer-fresh] S\xE9rie nova mapeada: tmdb=${tmdb} \u2192 serie_id=${it.id} (${it.slug})`);
+        }
+      } else {
+        if (!_tmdbToVizerMovieIdMap.has(tmdb)) {
+          _tmdbToVizerMovieIdMap.set(tmdb, it.id);
+          console.log(`[vizer-fresh] Filme novo mapeado: tmdb=${tmdb} \u2192 vizer_movie_id=${it.id} (${it.slug})`);
+        }
+        if (!_vizerMovieIndex.has(tmdb)) {
+          _vizerMovieIndex.set(tmdb, {
+            video_id: it.id,
+            tmdb_id: tmdb,
+            title: it.slug.replace(/-/g, " "),
+            servers: {},
+            _fetchedAt: Date.now()
+          });
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[vizer-fresh] Erro no scan incremental:", e?.message || e);
+  }
+}
+async function encontreiPlayerData(id) {
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) {
+    if (!_encCookieWarned) {
+      console.warn("[encontrei-live] ENCONTREI_COOKIE n\xE3o configurado \u2014 resolver live desativado");
+      _encCookieWarned = true;
+    }
+    return null;
+  }
+  if (Date.now() < _encCookieDownUntil) return null;
+  const url = `${ENC_BASE}/index.php?app=videobox&module=video&controller=view&do=playerData&id=${id}`;
+  try {
+    const res = await fetchWithTimeout(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
         "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json"
+        "Referer": `${ENC_BASE}/`
       },
-      signal: controller.signal
+      redirect: "manual"
     });
-    clearTimeout(timeout);
+    if (res.status >= 300 && res.status < 400) {
+      console.error("[encontrei-live] cookie expirado (redirect) \u2014 pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    if (!res.ok) {
+      console.warn(`[encontrei-live] HTTP ${res.status} para video_id=${id}`);
+      return null;
+    }
+    const ct = res.headers.get("content-type") || "";
+    if (!ct.includes("json") && !ct.includes("javascript")) {
+      console.error("[encontrei-live] resposta n\xE3o-JSON \u2014 cookie inv\xE1lido, pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      console.warn(`[encontrei-live] timeout para video_id=${id}`);
+    } else {
+      console.error(`[encontrei-live] erro de rede para video_id=${id}:`, e?.message || e);
+    }
+    return null;
+  }
+}
+var _encCookieWarned = false;
+function getEncontreiResolverStatus() {
+  const cookieConfigured = !!(process.env.ENCONTREI_COOKIE || "").trim();
+  const now = Date.now();
+  const breakerActive = now < _encCookieDownUntil;
+  const breakerMsRemaining = breakerActive ? _encCookieDownUntil - now : 0;
+  return {
+    cookieConfigured,
+    breakerActive,
+    breakerUntil: _encCookieDownUntil,
+    breakerMsRemaining,
+    inflightCount: _encInflight.size,
+    negativeCacheCount: _encNeg.size,
+    cookieSource: cookieConfigured ? "ENCONTREI_COOKIE env" : "not_set"
+  };
+}
+async function encontreiEpisodeId(serieId, season, episode) {
+  if (Date.now() < _encCookieDownUntil) return null;
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) return null;
+  const url = `${ENC_BASE}/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
+  try {
+    const res = await fetchWithTimeout(url, {
+      headers: {
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      redirect: "manual"
+    });
+    if (res.status >= 300 && res.status < 400) {
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
     if (!res.ok) return null;
-    const data = await res.json();
-    const eps = data.episodes || [];
+    const json = await res.json();
+    const eps = Array.isArray(json?.episodes) ? json.episodes : Array.isArray(json) ? json : Array.isArray(json?.[season]) ? json[season] : [];
     if (!eps.length) return null;
     const target = eps.find((e) => parseInt(e.number, 10) === episode) || eps[episode - 1];
     if (!target) return null;
-    const vidMatch = target.url.match(/-(\d+)\/?$/);
-    if (!vidMatch) return null;
-    const vid = vidMatch[1];
-    const pController = new AbortController();
-    const pTimeout = setTimeout(() => pController.abort(), 3500);
-    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vid}`;
-    const pRes = await fetch(pUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json"
-      },
-      signal: pController.signal
-    });
-    clearTimeout(pTimeout);
-    if (!pRes.ok) return null;
-    const pData = await pRes.json();
-    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
-    let mixdrop = null;
-    let streamtape = null;
-    let byse = null;
-    let doodstream = null;
-    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
-      const [, k, v] = match;
-      if (k === "mixdrop") mixdrop = v;
-      else if (k === "streamtape") streamtape = v;
-      else if (k === "byse") byse = v;
-      else if (k === "doodstream") doodstream = v;
+    const m = String(target.url || "").match(/-(\d+)\/?$/);
+    if (m) return parseInt(m[1], 10);
+    if (target.id) return parseInt(target.id, 10);
+    if (target.episode_id) return parseInt(target.episode_id, 10);
+    return null;
+  } catch (e) {
+    if (e?.name === "AbortError") {
+      console.warn(`[encontrei-live] timeout em episodesList(serie=${serieId}, s${season}e${episode})`);
+    } else {
+      console.error(`[encontrei-live] erro em episodesList(serie=${serieId}):`, e?.message || e);
     }
-    if (!mixdrop) return null;
-    const epObj = {
-      episode_id: parseInt(vid, 10),
+    return null;
+  }
+}
+function pickMixdrop(d) {
+  if (!d || typeof d !== "object") return null;
+  const dubRaw = String(d.servers_dub || "");
+  const legRaw = String(d.servers_leg || "");
+  const dub = dubRaw.replace(/&amp;/g, "&");
+  const leg = legRaw.replace(/&amp;/g, "&");
+  const audio = dubRaw.length > 0 ? "Dublado" : "Legendado";
+  const RE_MIX = /(?:^|&)mixdrop=([^&]+)/i;
+  const RE_STAPE = /(?:^|&)streamtape=([^&]+)/i;
+  const RE_DOOD = /(?:^|&)doodstream=([^&]+)/i;
+  const mDub = dub.match(RE_MIX);
+  const mDubStape = dub.match(RE_STAPE);
+  const mDubDood = dub.match(RE_DOOD);
+  const mLeg = leg.match(RE_MIX);
+  const mLegStape = leg.match(RE_STAPE);
+  const mLegDood = leg.match(RE_DOOD);
+  const streamtape = mDubStape?.[1] || mLegStape?.[1] || null;
+  const doodstream = mDubDood?.[1] || mLegDood?.[1] || null;
+  if (mDub) return { mixdrop: mDub[1], streamtape, doodstream, audio: "Dublado" };
+  if (mLeg) return { mixdrop: mLeg[1], streamtape, doodstream, audio: "Legendado" };
+  if (streamtape) return { mixdrop: "", streamtape, doodstream, audio };
+  if (doodstream) return { mixdrop: "", streamtape: null, doodstream, audio };
+  return null;
+}
+var ENC_FRESH_LISTING_TTL_MS = 10 * 60 * 1e3;
+var ENC_FRESH_MAX_CANDIDATES = 12;
+var _encFreshListing = null;
+var _encFreshTmdbCache = /* @__PURE__ */ new Map();
+var _encKnownSerieIds = /* @__PURE__ */ new Set();
+var _encKnownMovieIds = /* @__PURE__ */ new Set();
+var _encKnownSetsLoaded = false;
+function encKnownSetsLoad() {
+  if (_encKnownSetsLoaded) return;
+  _encKnownSetsLoaded = true;
+  try {
+    const cat = _encontreiCatalog?.value;
+    for (const s of cat?.series || []) {
+      const id = Number(s.serie_id);
+      if (id > 0) _encKnownSerieIds.add(id);
+    }
+    for (const mv of cat?.movies || []) {
+      const id = Number(mv.video_id);
+      if (id > 0) _encKnownMovieIds.add(id);
+    }
+  } catch {
+  }
+}
+async function encontreiGetHtml(path12) {
+  const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
+  if (!cookie) return null;
+  if (Date.now() < _encCookieDownUntil) return null;
+  try {
+    const res = await fetchWithTimeout(`${ENC_BASE}${path12}`, {
+      headers: {
+        "User-Agent": ENC_UA,
+        "Cookie": cookie,
+        "Accept": "text/html",
+        "Referer": `${ENC_BASE}/`
+      },
+      redirect: "manual"
+    });
+    if (res.status >= 300 && res.status < 400) {
+      console.error("[encontrei-fresh] cookie expirado (redirect) \u2014 pausando 10min");
+      _encCookieDownUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
+  }
+}
+function encNormTitle(s) {
+  return String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+function encSlugMatchesTitle(slug, title) {
+  if (!title) return true;
+  const cleanTitle = title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim();
+  const s = encNormTitle(slug.replace(/-(dublado|legendado|nacional)$/i, ""));
+  const t = encNormTitle(cleanTitle || title);
+  if (!t) return true;
+  return s.includes(t) || t.includes(s);
+}
+async function ensureEncontreiFreshListing() {
+  if (_encFreshListing && Date.now() - _encFreshListing.at < ENC_FRESH_LISTING_TTL_MS) return;
+  const series = [];
+  const movies = [];
+  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+    const html = await encontreiGetHtml(p);
+    if (!html) continue;
+    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !series.some((x) => x.id === id)) series.push({ slug: m[1], id });
+    }
+    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
+      const id = parseInt(m[2], 10);
+      if (id > 0 && !movies.some((x) => x.id === id)) movies.push({ slug: m[1], id });
+    }
+  }
+  _encFreshListing = { series, movies, at: Date.now() };
+}
+async function ensureEncontreiFreshContent(kind, title) {
+  try {
+    encKnownSetsLoad();
+    await ensureEncontreiFreshListing();
+    if (!_encFreshListing) return;
+    const known = kind === "series" ? _encKnownSerieIds : _encKnownMovieIds;
+    const items = kind === "series" ? _encFreshListing.series : _encFreshListing.movies;
+    const tag = kind === "series" ? "s" : "f";
+    const candidates = items.filter((it) => {
+      if (known.has(it.id)) return false;
+      if (_encFreshTmdbCache.has(`${tag}:${it.slug}`)) return false;
+      return encSlugMatchesTitle(it.slug, title);
+    }).slice(0, ENC_FRESH_MAX_CANDIDATES);
+    for (const it of candidates) {
+      const cacheKey = `${tag}:${it.slug}`;
+      const pagePath = kind === "series" ? `/series/online/${it.slug}-${it.id}/` : `/filmes/online/${it.slug}-${it.id}/`;
+      const html = await encontreiGetHtml(pagePath);
+      if (!html) {
+        _encFreshTmdbCache.set(cacheKey, null);
+        continue;
+      }
+      const tm = html.match(/data-tmdb-id="(\d+)"/);
+      const tmdb = tm ? parseInt(tm[1], 10) : 0;
+      _encFreshTmdbCache.set(cacheKey, tmdb || null);
+      if (!tmdb) continue;
+      if (kind === "series") {
+        if (!_tmdbToSerieIdMap.has(tmdb)) {
+          _tmdbToSerieIdMap.set(tmdb, it.id);
+          console.log(`[encontrei-fresh] S\xE9rie nova mapeada: tmdb=${tmdb} \u2192 serie_id=${it.id} (${it.slug})`);
+        }
+      } else {
+        if (!_encontreiMovieIndex.has(tmdb)) {
+          _encontreiMovieIndex.set(tmdb, {
+            video_id: it.id,
+            tmdb_id: tmdb,
+            title: it.slug.replace(/-/g, " "),
+            servers: {},
+            _fetchedAt: Date.now()
+          });
+          console.log(`[encontrei-fresh] Filme novo mapeado: tmdb=${tmdb} \u2192 video_id=${it.id} (${it.slug})`);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("[encontrei-fresh] Erro no scan incremental:", e?.message || e);
+  }
+}
+async function resolveEncontreiEpisode(tmdbId, season, episode, name) {
+  loadCatalogs();
+  let serieId = _tmdbToSerieIdMap.get(tmdbId);
+  if (!serieId) {
+    await ensureEncontreiFreshContent("series", name);
+    serieId = _tmdbToSerieIdMap.get(tmdbId);
+  }
+  if (!serieId) return null;
+  const key = `${tmdbId}:${season}:${episode}`;
+  return once(key, async () => {
+    const epId = await encontreiEpisodeId(serieId, season, episode);
+    if (!epId) return null;
+    const data = await encontreiPlayerData(epId);
+    if (!data) return null;
+    const picked = pickMixdrop(data);
+    if (!picked) return null;
+    _encontreiEpisodeIndex.set(key, {
+      episode_id: epId,
       serie_id: serieId,
       season,
       episode,
       tmdb_id: tmdbId,
-      audio: pData.current_audio || "Dublado",
-      servers: { mixdrop, streamtape, byse, doodstream },
-      source_url: target.url,
+      audio: picked.audio,
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "" },
+      source_url: `${ENC_BASE}/episodios/online/`,
       _fetchedAt: Date.now()
-    };
-    const key = `${tmdbId}:${season}:${episode}`;
-    _encontreiEpisodeIndex.set(key, epObj);
+    });
     const curSeasons = _encontreiSeriesSeasonsIndex.get(tmdbId) || [];
     if (!curSeasons.includes(season)) {
       _encontreiSeriesSeasonsIndex.set(tmdbId, [...curSeasons, season].sort((a, b) => a - b));
     }
     return {
-      mixdrop,
-      streamtape,
-      byse,
-      doodstream,
-      audio: epObj.audio,
+      mixdrop: picked.mixdrop,
+      streamtape: picked.streamtape || null,
+      doodstream: picked.doodstream || null,
+      mixdrop_encontrei: picked.mixdrop,
+      mixdrop_vizer: null,
+      audio: picked.audio,
       server_name: "MixDrop",
       season,
       episode,
-      source: "vizer-live"
+      source: "encontrei-live"
     };
-  } catch {
-    return null;
-  }
+  });
 }
-async function resolveVizerMovie(tmdbId) {
-  loadVizerMovieIds();
-  const vizerMovieId = _tmdbToVizerMovieIdMap.get(tmdbId);
-  if (!vizerMovieId) return null;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
-    const pUrl = `https://www.vizer.website/index.php?app=videobox&module=video&controller=view&do=playerData&id=${vizerMovieId}`;
-    const pRes = await fetch(pUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "X-Requested-With": "XMLHttpRequest",
-        "Accept": "application/json",
-        "Referer": `https://www.vizer.website/filmes/online/x-${vizerMovieId}/`
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    if (!pRes.ok) return null;
-    const pData = await pRes.json();
-    const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
-    let mixdrop = null;
-    let streamtape = null;
-    let byse = null;
-    let doodstream = null;
-    for (const match of sStr.matchAll(/([a-z]+)=([^&]+)/g)) {
-      const [, k, v] = match;
-      if (k === "mixdrop") mixdrop = v;
-      else if (k === "streamtape") streamtape = v;
-      else if (k === "byse") byse = v;
-      else if (k === "doodstream") doodstream = v;
-    }
-    if (!mixdrop) return null;
-    const movieObj = {
-      video_id: vizerMovieId,
-      tmdb_id: tmdbId,
-      audio: pData.current_audio || "Dublado",
-      servers: { mixdrop, streamtape, byse, doodstream },
-      _fetchedAt: Date.now()
-    };
-    _vizerMovieIndex.set(tmdbId, movieObj);
-    return {
-      mixdrop,
-      streamtape,
-      byse,
-      doodstream,
-      audio: movieObj.audio,
-      server_name: "MixDrop",
-      source: "vizer-live"
-    };
-  } catch {
-    return null;
+async function resolveEncontreiMovie(tmdbId, name) {
+  loadCatalogs();
+  let entry = _encontreiMovieIndex.get(tmdbId);
+  if (!entry) {
+    await ensureEncontreiFreshContent("movies", name);
+    entry = _encontreiMovieIndex.get(tmdbId);
   }
+  if (!entry) return null;
+  const videoId = entry.video_id || entry.episode_id;
+  if (!videoId) return null;
+  return once(`movie:${tmdbId}`, async () => {
+    const data = await encontreiPlayerData(videoId);
+    if (!data) return null;
+    const picked = pickMixdrop(data);
+    if (!picked) return null;
+    _encontreiMovieIndex.set(tmdbId, {
+      ...entry,
+      audio: picked.audio,
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "", ...entry.servers || {} },
+      _fetchedAt: Date.now()
+    });
+    return {
+      mixdrop: picked.mixdrop,
+      streamtape: picked.streamtape || null,
+      doodstream: picked.doodstream || null,
+      mixdrop_encontrei: picked.mixdrop,
+      mixdrop_vizer: null,
+      audio: picked.audio,
+      server_name: "MixDrop",
+      source: "encontrei-live"
+    };
+  });
 }
 var _encontreiCatalog = null;
 var _encontreiMovieIndex = /* @__PURE__ */ new Map();
@@ -2504,20 +3257,20 @@ var _vizerSeriesSeasonsIndex = /* @__PURE__ */ new Map();
 var _vizerLastMtime = 0;
 function tryLoadCatalog(filename, catalogRef, movieIndexRef, episodeIndexRef, seasonsIndexRef, mtimeRef, logName) {
   const possiblePaths = [
-    import_path3.default.join(process.cwd(), "public", "data", filename),
-    import_path3.default.join(process.cwd(), "data", filename)
+    import_path4.default.join(process.cwd(), "public", "data", filename),
+    import_path4.default.join(process.cwd(), "data", filename)
   ];
   let raw = "";
   let currentMtime = 0;
   for (const p of possiblePaths) {
-    if (import_fs3.default.existsSync(p)) {
+    if (import_fs4.default.existsSync(p)) {
       try {
-        const stat = import_fs3.default.statSync(p);
+        const stat = import_fs4.default.statSync(p);
         currentMtime = stat.mtimeMs;
         if (catalogRef.value && (movieIndexRef.size > 0 || episodeIndexRef.size > 0) && currentMtime <= mtimeRef.value) {
           return true;
         }
-        raw = import_fs3.default.readFileSync(p, "utf-8");
+        raw = import_fs4.default.readFileSync(p, "utf-8");
         break;
       } catch (_) {
       }
@@ -2601,6 +3354,60 @@ function loadCatalogs() {
     } },
     "encontrei-lookup"
   );
+  applyCatalogPatches();
+}
+var PATCH_FETCHED_AT = Date.now();
+var VIZER_CATALOG_PATCH = {
+  movies: [],
+  episodes: [
+    { episode_id: 82941, serie_id: 82940, season: 1, episode: 1, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "pjkr4deehg7r646" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x1-dublado-82941/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82942, serie_id: 82940, season: 1, episode: 2, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "ow7v46wrber04l" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x2-dublado-82942/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82943, serie_id: 82940, season: 1, episode: 3, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "4dngnomncd0rq7" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x3-dublado-82943/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82944, serie_id: 82940, season: 1, episode: 4, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "elno6gn4fojqdp" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x4-dublado-82944/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82945, serie_id: 82940, season: 1, episode: 5, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "wln1kqlwcg1p0" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x5-dublado-82945/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82946, serie_id: 82940, season: 1, episode: 6, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "67qnpxewinn70m" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x6-dublado-82946/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82947, serie_id: 82940, season: 1, episode: 7, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "elno6gp0hpwdpk" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x7-dublado-82947/", _fetchedAt: PATCH_FETCHED_AT },
+    { episode_id: 82948, serie_id: 82940, season: 1, episode: 8, tmdb_id: 288673, audio: "Dublado", servers: { mixdrop: "jd9lqr0es44pj0" }, source_url: "https://www.vizer.reisen/episodios/online/carrie-a-estranha-1x8-dublado-82948/", _fetchedAt: PATCH_FETCHED_AT }
+  ]
+};
+function applyCatalogPatches() {
+  for (const movie of VIZER_CATALOG_PATCH.movies) {
+    if (movie.tmdb_id && !_vizerMovieIndex.has(movie.tmdb_id)) {
+      _vizerMovieIndex.set(movie.tmdb_id, movie);
+    }
+    if (movie.tmdb_id && !_encontreiMovieIndex.has(movie.tmdb_id)) {
+      _encontreiMovieIndex.set(movie.tmdb_id, {
+        ...movie,
+        source: "encontrei"
+      });
+    }
+  }
+  for (const ep of VIZER_CATALOG_PATCH.episodes) {
+    if (!ep.tmdb_id || !ep.serie_id || !ep.season || !ep.episode) continue;
+    if (!_tmdbToSerieIdMap.has(ep.tmdb_id)) {
+      _tmdbToSerieIdMap.set(ep.tmdb_id, ep.serie_id);
+    }
+    const key = `${ep.tmdb_id}:${ep.season}:${ep.episode}`;
+    if (!_vizerEpisodeIndex.has(key)) {
+      _vizerEpisodeIndex.set(key, ep);
+    }
+    const curSeasons = _vizerSeriesSeasonsIndex.get(ep.tmdb_id) || [];
+    if (!curSeasons.includes(ep.season)) {
+      _vizerSeriesSeasonsIndex.set(ep.tmdb_id, [...curSeasons, ep.season].sort((a, b) => a - b));
+    }
+    const encEp = {
+      ...ep,
+      source: "encontrei",
+      source_url: `https://encontrei.me/episodios/online/carrie-a-estranha-${ep.season}x${ep.episode}-dublado-${ep.episode_id}/`
+    };
+    if (!_encontreiEpisodeIndex.has(key)) {
+      _encontreiEpisodeIndex.set(key, encEp);
+    }
+    const curEncSeasons = _encontreiSeriesSeasonsIndex.get(ep.tmdb_id) || [];
+    if (!curEncSeasons.includes(ep.season)) {
+      _encontreiSeriesSeasonsIndex.set(ep.tmdb_id, [...curEncSeasons, ep.season].sort((a, b) => a - b));
+    }
+  }
 }
 function getEncontreiSeasonEpisodes(tmdbId, season) {
   loadCatalogs();
@@ -2657,6 +3464,15 @@ router4.get("/api/series-seasons-available", async (req3, res) => {
     }
     if (!probeCached && seasonsToProbe.length > 0) {
       const probeSeason = async (season) => {
+        try {
+          if (process.env.ENCONTREI_COOKIE) {
+            const encLive = await resolveEncontreiEpisode(tmdbId, season, 1);
+            if (encLive && (encLive.mixdrop || encLive.streamtape || encLive.doodstream)) {
+              return true;
+            }
+          }
+        } catch {
+        }
         try {
           const vipOk = await checkVipSeason(tmdbId, season);
           if (vipOk) return true;
@@ -2790,7 +3606,7 @@ router4.all("/api/check-playable-batch", async (req3, res) => {
       }
       unverifiedItems.push(item);
     }
-    const itemsToProbe = unverifiedItems.slice(0, 15);
+    const itemsToProbe = unverifiedItems.slice(0, 25);
     if (itemsToProbe.length > 0) {
       await Promise.all(
         itemsToProbe.map(async (item) => {
@@ -2867,6 +3683,8 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
     const type = req3.query.type || "movie";
     const season = parseInt(req3.query.season, 10) || 1;
     const episode = parseInt(req3.query.episode, 10) || 1;
+    const forceLive = req3.query.refresh === "1";
+    const lookupName = req3.query.name || void 0;
     if (!tmdbId) {
       return res.status(400).json({ error: "tmdb_id \xE9 obrigat\xF3rio" });
     }
@@ -2875,43 +3693,62 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
       const key = `${tmdbId}:${season}:${episode}`;
       const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1e3;
       const now = Date.now();
-      let vizerEp = _vizerEpisodeIndex.get(key);
+      let vizerEp = forceLive ? void 0 : _vizerEpisodeIndex.get(key);
       if (vizerEp && vizerEp._fetchedAt && now - vizerEp._fetchedAt > VIZER_ON_DEMAND_TTL) {
         _vizerEpisodeIndex.delete(key);
         vizerEp = void 0;
       }
-      let encontreiEp = _encontreiEpisodeIndex.get(key);
+      let encontreiEp = forceLive ? void 0 : _encontreiEpisodeIndex.get(key);
       if (encontreiEp && encontreiEp._fetchedAt && now - encontreiEp._fetchedAt > VIZER_ON_DEMAND_TTL) {
         _encontreiEpisodeIndex.delete(key);
         encontreiEp = void 0;
       }
+      if (!encontreiEp && process.env.ENCONTREI_COOKIE) {
+        try {
+          const liveEnc = await resolveEncontreiEpisode(tmdbId, season, episode, lookupName);
+          if (liveEnc && (liveEnc.mixdrop || liveEnc.streamtape || liveEnc.doodstream)) {
+            encontreiEp = {
+              season,
+              episode,
+              tmdb_id: tmdbId,
+              audio: liveEnc.audio || "Dublado",
+              servers: { mixdrop: liveEnc.mixdrop || "", streamtape: liveEnc.streamtape || "", doodstream: liveEnc.doodstream || "" },
+              source: "encontrei-live",
+              _fetchedAt: now
+            };
+            _encontreiEpisodeIndex.set(key, encontreiEp);
+          }
+        } catch (_) {
+        }
+      }
       let bestEp = null;
       let bestSource = "";
       if (vizerEp && vizerEp.servers?.mixdrop && encontreiEp && encontreiEp.servers?.mixdrop) {
-        if (vizerEp.audio !== "Dublado" && encontreiEp.audio === "Dublado") {
+        if (encontreiEp.audio === "Dublado" || vizerEp.audio !== "Dublado") {
           bestEp = encontreiEp;
           bestSource = "encontrei";
         } else {
           bestEp = vizerEp;
           bestSource = "vizer";
         }
-      } else if (vizerEp && vizerEp.servers?.mixdrop) {
-        bestEp = vizerEp;
-        bestSource = "vizer";
       } else if (encontreiEp && encontreiEp.servers?.mixdrop) {
         bestEp = encontreiEp;
         bestSource = "encontrei";
+      } else if (vizerEp && vizerEp.servers?.mixdrop) {
+        bestEp = vizerEp;
+        bestSource = "vizer";
       }
       if (bestEp) {
         const mixdrop_encontrei = encontreiEp?.servers?.mixdrop || null;
         const mixdrop_vizer = vizerEp?.servers?.mixdrop || null;
+        const streamtape = bestEp.servers?.streamtape || encontreiEp?.servers?.streamtape || vizerEp?.servers?.streamtape || null;
+        const doodstream = bestEp.servers?.doodstream || encontreiEp?.servers?.doodstream || vizerEp?.servers?.doodstream || null;
         result = {
           mixdrop: bestEp.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
-          streamtape: bestEp.servers.streamtape || null,
-          byse: bestEp.servers.byse || null,
-          doodstream: bestEp.servers.doodstream || null,
+          streamtape,
+          doodstream,
           audio: bestEp.audio || "Dublado",
           server_name: "MixDrop",
           season: bestEp.season,
@@ -2919,7 +3756,7 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
           source: bestSource
         };
       } else {
-        const live = await resolveVizerEpisode(tmdbId, season, episode);
+        const live = await resolveEncontreiEpisode(tmdbId, season, episode, lookupName) || await resolveVizerEpisode(tmdbId, season, episode, lookupName);
         if (live) {
           result = live;
         }
@@ -2927,56 +3764,73 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
     } else {
       const VIZER_ON_DEMAND_TTL = 24 * 60 * 60 * 1e3;
       const now = Date.now();
-      let vizerMovie = _vizerMovieIndex.get(tmdbId);
+      let vizerMovie = forceLive ? void 0 : _vizerMovieIndex.get(tmdbId);
       if (vizerMovie && vizerMovie._fetchedAt && now - vizerMovie._fetchedAt > VIZER_ON_DEMAND_TTL) {
         _vizerMovieIndex.delete(tmdbId);
         vizerMovie = void 0;
       }
-      let encontreiMovie = _encontreiMovieIndex.get(tmdbId);
+      let encontreiMovie = forceLive ? void 0 : _encontreiMovieIndex.get(tmdbId);
       if (encontreiMovie && encontreiMovie._fetchedAt && now - encontreiMovie._fetchedAt > VIZER_ON_DEMAND_TTL) {
         _encontreiMovieIndex.delete(tmdbId);
         encontreiMovie = void 0;
       }
+      if (!encontreiMovie && process.env.ENCONTREI_COOKIE) {
+        try {
+          const liveEnc = await resolveEncontreiMovie(tmdbId, lookupName);
+          if (liveEnc && (liveEnc.mixdrop || liveEnc.streamtape || liveEnc.doodstream)) {
+            encontreiMovie = {
+              tmdb_id: tmdbId,
+              audio: liveEnc.audio || "Dublado",
+              servers: { mixdrop: liveEnc.mixdrop || "", streamtape: liveEnc.streamtape || "", doodstream: liveEnc.doodstream || "" },
+              source: "encontrei-live",
+              _fetchedAt: now
+            };
+            _encontreiMovieIndex.set(tmdbId, encontreiMovie);
+          }
+        } catch (_) {
+        }
+      }
       let bestMovie = null;
       let bestSource = "";
       if (vizerMovie && vizerMovie.servers?.mixdrop && encontreiMovie && encontreiMovie.servers?.mixdrop) {
-        if (vizerMovie.audio !== "Dublado" && encontreiMovie.audio === "Dublado") {
+        if (encontreiMovie.audio === "Dublado" || vizerMovie.audio !== "Dublado") {
           bestMovie = encontreiMovie;
           bestSource = "encontrei";
         } else {
           bestMovie = vizerMovie;
           bestSource = "vizer";
         }
-      } else if (vizerMovie && vizerMovie.servers?.mixdrop) {
-        bestMovie = vizerMovie;
-        bestSource = "vizer";
       } else if (encontreiMovie && encontreiMovie.servers?.mixdrop) {
         bestMovie = encontreiMovie;
         bestSource = "encontrei";
+      } else if (vizerMovie && vizerMovie.servers?.mixdrop) {
+        bestMovie = vizerMovie;
+        bestSource = "vizer";
       }
       if (bestMovie) {
         const mixdrop_encontrei = encontreiMovie?.servers?.mixdrop || null;
         const mixdrop_vizer = vizerMovie?.servers?.mixdrop || null;
+        const streamtape = bestMovie.servers?.streamtape || encontreiMovie?.servers?.streamtape || vizerMovie?.servers?.streamtape || null;
+        const doodstream = bestMovie.servers?.doodstream || encontreiMovie?.servers?.doodstream || vizerMovie?.servers?.doodstream || null;
         result = {
           mixdrop: bestMovie.servers.mixdrop,
           mixdrop_encontrei,
           mixdrop_vizer,
-          streamtape: bestMovie.servers.streamtape || null,
-          byse: bestMovie.servers.byse || null,
-          doodstream: bestMovie.servers.doodstream || null,
+          streamtape,
+          doodstream,
           audio: bestMovie.audio || "Dublado",
           server_name: "MixDrop",
           source: bestSource
         };
       } else {
-        const live = await resolveVizerMovie(tmdbId);
+        const live = await resolveEncontreiMovie(tmdbId, lookupName) || await resolveVizerMovie(tmdbId, lookupName);
         if (live) {
           result = live;
         }
       }
     }
     if (!result) {
-      return res.status(200).json({ error: "N\xE3o encontrado nos cat\xE1logos (vizer + encontrei)", tmdb_id: tmdbId });
+      return res.status(200).json({ error: "N\xE3o encontrado nos cat\xE1logos (vizer + encontrei) nem nos resolvers live", tmdb_id: tmdbId });
     }
     res.setHeader("Cache-Control", "public, max-age=3600");
     return res.json(result);
@@ -2985,14 +3839,17 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
+var _downloadsCatalogCache = null;
+var DOWNLOADS_CATALOG_TTL = 10 * 60 * 1e3;
 router4.get("/api/downloads-catalog", (req3, res) => {
   try {
     loadCatalogs();
     const type = req3.query.type || "all";
     const limit = Math.min(Math.max(parseInt(req3.query.limit, 10) || 50, 1), 100);
     const offset = Math.max(parseInt(req3.query.offset, 10) || 0, 0);
-    const movieMap = /* @__PURE__ */ new Map();
-    if (type === "all" || type === "movie") {
+    const now = Date.now();
+    if (!_downloadsCatalogCache || now >= _downloadsCatalogCache.expiresAt) {
+      const movieMap = /* @__PURE__ */ new Map();
       if (_vizerCatalog) {
         for (const m of _vizerCatalog.movies || []) {
           if (m.tmdb_id && m.servers?.mixdrop && !movieMap.has(m.tmdb_id)) {
@@ -3017,9 +3874,7 @@ router4.get("/api/downloads-catalog", (req3, res) => {
           }
         }
       }
-    }
-    const seriesMap = /* @__PURE__ */ new Map();
-    if (type === "all" || type === "tv" || type === "series") {
+      const seriesMap = /* @__PURE__ */ new Map();
       if (_vizerCatalog) {
         for (const ep of _vizerCatalog.episodes || []) {
           if (ep.tmdb_id && ep.servers?.mixdrop) {
@@ -3063,12 +3918,19 @@ router4.get("/api/downloads-catalog", (req3, res) => {
           }
         }
       }
+      const movieItems2 = Array.from(movieMap.values());
+      const seriesItems2 = Array.from(seriesMap.values());
+      _downloadsCatalogCache = {
+        movieItems: movieItems2,
+        seriesItems: seriesItems2,
+        allItems: [...movieItems2, ...seriesItems2],
+        expiresAt: now + DOWNLOADS_CATALOG_TTL
+      };
     }
-    const movieItems = Array.from(movieMap.values());
-    const seriesItems = Array.from(seriesMap.values());
-    const allItems = [...movieItems, ...seriesItems];
-    const total = allItems.length;
-    const paginated = allItems.slice(offset, offset + limit);
+    const { movieItems, seriesItems, allItems } = _downloadsCatalogCache;
+    const filteredItems = type === "movie" ? movieItems : type === "tv" || type === "series" ? seriesItems : allItems;
+    const total = filteredItems.length;
+    const paginated = filteredItems.slice(offset, offset + limit);
     res.setHeader("Cache-Control", "public, max-age=1800");
     return res.json({
       total,
@@ -3084,6 +3946,155 @@ router4.get("/api/downloads-catalog", (req3, res) => {
   }
 });
 var encontreiLookup_default = router4;
+
+// server/services/nixplayCatalog.ts
+var import_fs5 = __toESM(require("fs"), 1);
+var import_path5 = __toESM(require("path"), 1);
+var nixplayMovies = /* @__PURE__ */ new Set();
+var nixplaySeries = /* @__PURE__ */ new Set();
+var nixplaySeriesNameToId = /* @__PURE__ */ new Map();
+var CACHE_PATH = import_path5.default.join(process.cwd(), "data", "nixplay-catalog-cache.json");
+var SYNC_THROTTLE_MS = 30 * 60 * 1e3;
+var isCatalogLoaded = false;
+var lastSyncAttemptAt = 0;
+var syncInflight = null;
+function loadDiskCache() {
+  try {
+    if (!import_fs5.default.existsSync(CACHE_PATH)) return false;
+    const data = JSON.parse(import_fs5.default.readFileSync(CACHE_PATH, "utf-8"));
+    if (!data || !Array.isArray(data.movies) || !Array.isArray(data.series)) return false;
+    nixplayMovies.clear();
+    for (const m of data.movies) nixplayMovies.add(String(m));
+    nixplaySeries.clear();
+    for (const s of data.series) nixplaySeries.add(String(s));
+    nixplaySeriesNameToId.clear();
+    if (Array.isArray(data.names)) {
+      for (const pair of data.names) {
+        if (Array.isArray(pair) && pair.length === 2) {
+          nixplaySeriesNameToId.set(String(pair[0]), String(pair[1]));
+        }
+      }
+    }
+    console.log(`[NixplayCatalog] Cache do disco carregado: ${nixplayMovies.size} filmes, ${nixplaySeries.size} s\xE9ries.`);
+    return nixplaySeries.size > 0 || nixplayMovies.size > 0;
+  } catch (err) {
+    console.warn("[NixplayCatalog] Falha ao ler cache do disco:", err);
+    return false;
+  }
+}
+function saveDiskCache() {
+  try {
+    const dir = import_path5.default.dirname(CACHE_PATH);
+    if (!import_fs5.default.existsSync(dir)) import_fs5.default.mkdirSync(dir, { recursive: true });
+    import_fs5.default.writeFileSync(CACHE_PATH, JSON.stringify({
+      savedAt: Date.now(),
+      movies: [...nixplayMovies],
+      series: [...nixplaySeries],
+      names: [...nixplaySeriesNameToId.entries()]
+    }), "utf-8");
+    console.log(`[NixplayCatalog] Cache salvo no disco (${nixplayMovies.size} filmes, ${nixplaySeries.size} s\xE9ries).`);
+  } catch (err) {
+    console.warn("[NixplayCatalog] Falha ao salvar cache no disco:", err);
+  }
+}
+async function runLiveSync() {
+  let moviesOk = false;
+  let seriesOk = false;
+  try {
+    const moviesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_vod_streams", { signal: AbortSignal.timeout(15e3) });
+    if (moviesRes.ok) {
+      const movies = await moviesRes.json();
+      if (Array.isArray(movies) && movies.length > 0) {
+        nixplayMovies.clear();
+        movies.forEach((m) => {
+          if (m.tmdb_id) nixplayMovies.add(String(m.tmdb_id));
+        });
+      }
+      moviesOk = true;
+      console.log(`[NixplayCatalog] \u{1F3AC} ${nixplayMovies.size} filmes indexados.`);
+    }
+  } catch (err) {
+    console.warn("[NixplayCatalog] Falha ao sincronizar filmes:", err);
+  }
+  try {
+    const seriesRes = await fetch("https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series", { signal: AbortSignal.timeout(15e3) });
+    if (seriesRes.ok) {
+      const series = await seriesRes.json();
+      if (Array.isArray(series) && series.length > 0) {
+        nixplaySeries.clear();
+        nixplaySeriesNameToId.clear();
+        series.forEach((s) => {
+          if (s.series_id) {
+            nixplaySeries.add(String(s.series_id));
+            if (s.name) {
+              nixplaySeriesNameToId.set(s.name.toLowerCase(), String(s.series_id));
+            }
+          }
+        });
+      }
+      seriesOk = true;
+      console.log(`[NixplayCatalog] \u{1F4FA} ${nixplaySeries.size} s\xE9ries indexadas (${nixplaySeriesNameToId.size} nomes mapeados).`);
+    }
+  } catch (err) {
+    console.warn("[NixplayCatalog] Falha ao sincronizar s\xE9ries:", err);
+  }
+  return seriesOk || moviesOk;
+}
+function maybeBackgroundSync() {
+  if (syncInflight) return;
+  if (Date.now() - lastSyncAttemptAt < SYNC_THROTTLE_MS) return;
+  lastSyncAttemptAt = Date.now();
+  syncInflight = (async () => {
+    try {
+      const ok = await runLiveSync();
+      if (ok) saveDiskCache();
+    } finally {
+      syncInflight = null;
+    }
+  })();
+  syncInflight.catch((err) => console.warn("[NixplayCatalog] Erro na re-sincroniza\xE7\xE3o em background:", err));
+}
+async function loadNixplayCatalog() {
+  if (!isCatalogLoaded && loadDiskCache()) {
+    isCatalogLoaded = true;
+  }
+  if (!isCatalogLoaded) {
+    lastSyncAttemptAt = Date.now();
+    const ok = await runLiveSync();
+    if (ok) {
+      isCatalogLoaded = true;
+      saveDiskCache();
+    }
+    return;
+  }
+  maybeBackgroundSync();
+}
+function isNixplayAvailable(tmdbId, isSeries) {
+  if (String(tmdbId) === "46298") return false;
+  if (!isCatalogLoaded) return false;
+  const idStr = String(tmdbId);
+  return isSeries ? nixplaySeries.has(idStr) : nixplayMovies.has(idStr);
+}
+function resolveNixplaySeriesId(tmdbId, seriesName) {
+  if (String(tmdbId) === "46298") return null;
+  if (!isCatalogLoaded) return null;
+  const idStr = String(tmdbId);
+  if (nixplaySeries.has(idStr)) {
+    return idStr;
+  }
+  if (seriesName) {
+    const nameLower = seriesName.toLowerCase();
+    if (nixplaySeriesNameToId.has(nameLower)) {
+      return nixplaySeriesNameToId.get(nameLower);
+    }
+    for (const [mapName, mapId] of nixplaySeriesNameToId) {
+      if (mapName.includes(nameLower) || nameLower.includes(mapName)) {
+        return mapId;
+      }
+    }
+  }
+  return null;
+}
 
 // server/routes/videoScrapers.ts
 var router5 = (0, import_express6.Router)();
@@ -4484,47 +5495,47 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
           /* BLINDAGEM COMPLETA DOS CONTROLES NATIVOS DO ARTPLAYER:
              Oculta a barra de controles e menus nativos para a Skin Netflix assumir,
              mas NUNCA destr\xF3i a camada de v\xEDdeo nem impede o funcionamento do player. */
-          .art-top,
-          .art-bottom,
-          .art-controls,
-          .art-controls-left,
-          .art-controls-center,
-          .art-controls-right,
-          .art-settings,
-          .art-setting,
-          .art-subtitle-setting,
-          .art-contextmenu,
-          .art-danmuku,
-          .art-fast-forward,
-          .art-lock,
-          .art-poster,
-          .art-notice,
-          .art-notice-inner,
-          .art-info,
-          .art-info-panel,
-          .art-progress,
-          .art-progress-loaded,
-          .art-progress-played,
-          .art-progress-highlight,
-          .art-progress-tip,
-          .art-control,
-          .art-control-fullscreen,
-          .art-control-volume,
-          .art-control-play,
-          .art-control-time,
-          [class*="art-control"],
-          .art-volume-panel,
-          .art-icon-state,
-          .wp-seek-10,
-          .wp-seek-back,
-          .wp-seek-forward,
-          [class*="wp-seek"],
-          #pip-skip-intro-btn,
-          #pip-skip-toast,
-          #tv-player .art-bottom,
-          #tv-player .art-controls,
-          #tv-player [class*="art-control"],
-          #tv-player .art-progress {
+          body.hide-native-controls .art-top,
+          body.hide-native-controls .art-bottom,
+          body.hide-native-controls .art-controls,
+          body.hide-native-controls .art-controls-left,
+          body.hide-native-controls .art-controls-center,
+          body.hide-native-controls .art-controls-right,
+          body.hide-native-controls .art-settings,
+          body.hide-native-controls .art-setting,
+          body.hide-native-controls .art-subtitle-setting,
+          body.hide-native-controls .art-contextmenu,
+          body.hide-native-controls .art-danmuku,
+          body.hide-native-controls .art-fast-forward,
+          body.hide-native-controls .art-lock,
+          body.hide-native-controls .art-poster,
+          body.hide-native-controls .art-notice,
+          body.hide-native-controls .art-notice-inner,
+          body.hide-native-controls .art-info,
+          body.hide-native-controls .art-info-panel,
+          body.hide-native-controls .art-progress,
+          body.hide-native-controls .art-progress-loaded,
+          body.hide-native-controls .art-progress-played,
+          body.hide-native-controls .art-progress-highlight,
+          body.hide-native-controls .art-progress-tip,
+          body.hide-native-controls .art-control,
+          body.hide-native-controls .art-control-fullscreen,
+          body.hide-native-controls .art-control-volume,
+          body.hide-native-controls .art-control-play,
+          body.hide-native-controls .art-control-time,
+          body.hide-native-controls [class*="art-control"],
+          body.hide-native-controls .art-volume-panel,
+          body.hide-native-controls .art-icon-state,
+          body.hide-native-controls .wp-seek-10,
+          body.hide-native-controls .wp-seek-back,
+          body.hide-native-controls .wp-seek-forward,
+          body.hide-native-controls [class*="wp-seek"],
+          body.hide-native-controls #pip-skip-intro-btn,
+          body.hide-native-controls #pip-skip-toast,
+          body.hide-native-controls #tv-player .art-bottom,
+          body.hide-native-controls #tv-player .art-controls,
+          body.hide-native-controls #tv-player [class*="art-control"],
+          body.hide-native-controls #tv-player .art-progress {
             display: none !important;
             opacity: 0 !important;
             visibility: hidden !important;
@@ -4547,6 +5558,15 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
 
         <script>
           (function() {
+            // Recebe estado da skin do iframe pai para mostrar/ocultar controles nativos
+            window.addEventListener("message", function(e) {
+              if (e.data && e.data.type === "NETFLIX_SKIN_ACTIVE") {
+                document.body.classList.add("hide-native-controls");
+              } else if (e.data && e.data.type === "NETFLIX_SKIN_INACTIVE") {
+                document.body.classList.remove("hide-native-controls");
+              }
+            });
+
             // 0. Otimiza\xE7\xE3o Agressiva de Buffer e Fast-Seek no Hls.js
             function applyHlsFastSeekConfig(cfg) {
               if (!cfg) return;
@@ -4658,6 +5678,56 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
               // D) Detec\xE7\xE3o proativa do v\xEDdeo (Filmes via #tv-player e S\xE9ries)
               var v = getVideoElement();
               if (v) {
+                // NOVO v2.2: restaurar posi\xE7\xE3o de playback ap\xF3s reload do AV Sync
+                // Espera readyState >= 3 (HAVE_FUTURE_DATA) antes de tentar seek
+                // porque em HLS, seek com readyState baixo (s\xF3 metadata) falha
+                // e o player fica em tela preta.
+                if (!window._piSeekRestored && v.readyState >= 3) {
+                  try {
+                    var seekPos = sessionStorage.getItem('_pi_avsync_seek_pos');
+                    if (seekPos) {
+                      var pos = parseFloat(seekPos);
+                      if (pos > 1 && !isNaN(pos)) {
+                        // Retry at\xE9 5x (a cada 60ms pelo setInterval): espera artInstance ficar pronto
+                        if (window._piSeekRetries === undefined) window._piSeekRetries = 0;
+                        window._piSeekRetries++;
+                        try {
+                          var seeked = false;
+                          if (window.artInstance && typeof window.artInstance.seek === 'number') {
+                            window.artInstance.seek = pos;
+                            seeked = true;
+                          } else if (window.artInstance && typeof window.artInstance.currentTime !== 'undefined') {
+                            window.artInstance.currentTime = pos;
+                            seeked = true;
+                          } else {
+                            v.currentTime = pos;
+                            seeked = true;
+                          }
+                          if (seeked) {
+                            console.warn('[A/V Sync v2] Restaurando posi\xE7\xE3o ap\xF3s reload:', pos, 's (readyState=' + v.readyState + ', retry #' + window._piSeekRetries + ')');
+                            // Dispara play logo depois (HLS pode precisar do play pra requisitar segmentos da posi\xE7\xE3o)
+                            try { v.play().catch(function(){}); } catch(e) {}
+                            // Marca como restaurado e limpa sessionStorage
+                            sessionStorage.removeItem('_pi_avsync_seek_pos');
+                            window._piSeekRestored = true;
+                          }
+                        } catch(e) {
+                          console.warn('[A/V Sync v2] Erro no seek de restore:', e?.message || e);
+                          // Se falhou 5x, desiste
+                          if (window._piSeekRetries >= 5) {
+                            sessionStorage.removeItem('_pi_avsync_seek_pos');
+                            window._piSeekRestored = true;
+                          }
+                        }
+                      } else {
+                        // Posi\xE7\xE3o inv\xE1lida, remove
+                        sessionStorage.removeItem('_pi_avsync_seek_pos');
+                        window._piSeekRestored = true;
+                      }
+                    }
+                  } catch(e) {}
+                }
+
                 // Se o v\xEDdeo estiver pausado mas j\xE1 com metadados ou pronto, tenta dar play
                 if (v.paused && (v.readyState >= 1 || v.currentTime > 0)) {
                   v.play().catch(function() {
@@ -4772,9 +5842,9 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
 
             // 3. Fun\xE7\xF5es de controle de v\xEDdeo e telemetria para o NetflixPlayerSkin
             var introSkippedForCurrentVideo = false;
-            var skipDurationSeconds = 85;
+            var skipDurationSeconds = 75;
             try {
-              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "85", 10);
+              skipDurationSeconds = parseInt(localStorage.getItem("playinfinity_skip_duration") || "75", 10);
             } catch(e) {}
 
             function getVideoElement() {
@@ -4831,7 +5901,7 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
             }
 
             function doSkipIntro(seconds) {
-              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 85);
+              var sec = Number(seconds) !== undefined && !isNaN(Number(seconds)) ? Number(seconds) : (skipDurationSeconds || 75);
               var video = getVideoElement();
               if (video) {
                 var current = video.currentTime || 0;
@@ -5180,6 +6250,7 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
 
             // Monitor e Auto-Healer de Integridade \xC1udio/V\xEDdeo (A/V Sync & Frame Freeze Recovery)
             // Corrige automaticamente quando a voz/\xE1udio continua mas a imagem do v\xEDdeo congela no navegador/GPU
+            // v2: threshold 4 (era 2 \u2192 menos disparos falsos), reload ap\xF3s 2 heals falhados, cleanup do interval
             (function initAVSyncAutoHealer() {
               var lastFrameCallbackTime = Date.now();
               var lastCheckedCurrentTime = 0;
@@ -5187,6 +6258,30 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
               var stallTicks = 0;
               var isHealing = false;
               var lastHealAt = 0;
+              // NOVO v2: tracking de heals falhos consecutivos e frames frescos sustentados
+              var consecutiveFailedHeals = 0;
+              var consecutiveFreshTicks = 0;
+              var checkIntervalId = null;
+              // NOVO v2: estado persistido entre reloads pra evitar loop infinito
+              var sessionState = { reloadCount: 0, firstReloadAt: 0 };
+              try {
+                var saved = sessionStorage.getItem('_pi_avsync_state');
+                if (saved) {
+                  var parsed = JSON.parse(saved);
+                  // S\xF3 considera se foi nos \xFAltimos 60s
+                  if (parsed.firstReloadAt && Date.now() - parsed.firstReloadAt < 60000) {
+                    sessionState = parsed;
+                    console.warn('[A/V Sync v2 DEBUG] IIFE init: sessionState recuperado do sessionStorage:', JSON.stringify(sessionState));
+                  } else {
+                    sessionStorage.removeItem('_pi_avsync_state');
+                    console.warn('[A/V Sync v2 DEBUG] IIFE init: sessionStorage expirado (>60s), removido');
+                  }
+                } else {
+                  console.warn('[A/V Sync v2 DEBUG] IIFE init: nenhum sessionStorage encontrado (primeira sess\xE3o ou sessionStorage n\xE3o persiste)');
+                }
+              } catch(e) {
+                console.warn('[A/V Sync v2 DEBUG] IIFE init: erro lendo sessionStorage:', e?.message || e);
+              }
 
               function trackFrameRender(v) {
                 if (!v) return;
@@ -5216,6 +6311,7 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
 
                 if (v.paused || v.ended || v.seeking || v.readyState < 2) {
                   stallTicks = 0;
+                  consecutiveFreshTicks = 0;
                   lastCheckedCurrentTime = v.currentTime || 0;
                   return;
                 }
@@ -5246,14 +6342,77 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
                     } catch(e) {}
                   }
 
-                  // Se o \xE1udio est\xE1 avan\xE7ando h\xE1 mais de 1.5s mas NENHUM frame de v\xEDdeo foi apresentado:
-                  if (!frameIsFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                  if (frameIsFresh) {
+                    // NOVO v2: s\xF3 reseta o contador de heals falhos se o frame ficar fresco
+                    // por ~2.4s (3 ticks) \u2014 recupera\xE7\xE3o sustentada, n\xE3o moment\xE2nea
+                    consecutiveFreshTicks++;
+                    // CORRE\xC7\xC3O v2.1: era 3 ticks (2.4s) \u2014 agressivo demais, resetava entre reloads
+                    // porque o frame recuperava brevemente. Agora 30 ticks (24s) = recupera\xE7\xE3o REAL.
+                    if (consecutiveFreshTicks >= 30) {
+                      if (consecutiveFailedHeals > 0 || sessionState.reloadCount > 0) {
+                        console.warn('[A/V Sync v2 DEBUG] Recupera\xE7\xE3o sustentada (24s est\xE1vel). Resetando contadores.');
+                      }
+                      consecutiveFailedHeals = 0;
+                      // Limpa estado de session se recovery foi sustentado
+                      if (sessionState.reloadCount > 0) {
+                        sessionState = { reloadCount: 0, firstReloadAt: 0 };
+                        try { sessionStorage.removeItem('_pi_avsync_state'); } catch(e) {}
+                      }
+                    }
+                    stallTicks = 0;
+                  } else if (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function') {
+                    consecutiveFreshTicks = 0;
                     stallTicks++;
-                    if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                    // NOVO v2: threshold 4 (era 2) \u2014 requer 3.2s de stall sustentado antes de heal
+                    if (stallTicks >= 4 && (now - lastHealAt > 3500) && !isHealing) {
+                      // NOVO v2: se 2 heals falharam consecutivamente nesta sess\xE3o, escalar
+                      if (consecutiveFailedHeals >= 2) {
+                        // Se ainda n\xE3o fizemos 2 reloads em 60s, fazer reload do iframe
+                        if (sessionState.reloadCount < 2) {
+                          // NOVO v2.2: salvar posi\xE7\xE3o de playback antes de reload pra restaurar depois
+                          // (evita epis\xF3dio voltar do come\xE7o ap\xF3s reload)
+                          try {
+                            var savedPos = v.currentTime || 0;
+                            if (savedPos > 1) {
+                              sessionStorage.setItem('_pi_avsync_seek_pos', String(savedPos));
+                              console.warn('[A/V Sync v2 DEBUG] Posi\xE7\xE3o salva pra restore:', savedPos, 's');
+                            }
+                          } catch(e) {}
+                          sessionState.reloadCount = (sessionState.reloadCount || 0) + 1;
+                          if (!sessionState.firstReloadAt) sessionState.firstReloadAt = now;
+                          console.warn('[A/V Sync v2 DEBUG] Reload disparado. Novo reloadCount:', sessionState.reloadCount, 'firstReloadAt:', sessionState.firstReloadAt, 'agora:', now);
+                          try { sessionStorage.setItem('_pi_avsync_state', JSON.stringify(sessionState)); } catch(e) {
+                            console.warn('[A/V Sync v2 DEBUG] ERRO salvando sessionStorage:', e?.message || e);
+                          }
+                          // Verificar se salvou mesmo
+                          try {
+                            var verify = sessionStorage.getItem('_pi_avsync_state');
+                            console.warn('[A/V Sync v2 DEBUG] Verifica\xE7\xE3o p\xF3s-save:', verify);
+                          } catch(e) {}
+                          console.warn('[Play Infinity A/V Sync] 2 heals falharam consecutivos. Recarregando player para recriar pipeline HLS...');
+                          // Para o interval antes de recarregar
+                          if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+                          try { window.location.reload(); } catch(e) {
+                            console.error('[Play Infinity A/V Recovery Error]: reload falhou', e);
+                          }
+                          return;
+                        } else {
+                          // 2 reloads em 60s n\xE3o resolveram \u2014 desistir e notificar parent pra trocar de servidor
+                          console.error('[Play Infinity A/V Sync] Player persiste congelado ap\xF3s 2 reloads em 60s. Acionando fallback de servidor.');
+                          try {
+                            window.parent.postMessage({ type: "WATCHPLAY_UNAVAILABLE", reason: "av_sync_persistent_freeze" }, "*");
+                          } catch(e) {}
+                          if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+                          try { sessionStorage.removeItem('_pi_avsync_state'); } catch(e) {}
+                          return;
+                        }
+                      }
+
                       console.warn('[Play Infinity A/V Sync] Imagem congelada com \xE1udio em reprodu\xE7\xE3o detectada. Executando auto-healing instant\xE2neo...');
                       isHealing = true;
                       lastHealAt = now;
                       stallTicks = 0;
+                      consecutiveFailedHeals++; // NOVO v2: incrementa contador antes do heal
 
                       try {
                         var hls = (window.artInstance && window.artInstance.hls) || window.hls;
@@ -5279,7 +6438,16 @@ router5.get("/api/watchplayer-stream", async (req3, res) => {
                 }
               }
 
-              setInterval(checkAVHealth, 800);
+              checkIntervalId = setInterval(checkAVHealth, 800);
+
+              // NOVO v2: cleanup ao descarregar \u2014 evita leak de interval se iframe for removido
+              window.addEventListener('beforeunload', function() {
+                if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+              });
+              // pagehide \xE9 mais confi\xE1vel em mobile (iOS especialmente)
+              window.addEventListener('pagehide', function() {
+                if (checkIntervalId) { clearInterval(checkIntervalId); checkIntervalId = null; }
+              });
             })();
 
             // Blindagem do Artplayer: oculta controles via style (N\xC3O remove do DOM para n\xE3o quebrar o player)
@@ -5425,7 +6593,10 @@ router5.get("/api/check-season", async (req3, res) => {
         season,
         availableEpisodes: sortedEps,
         totalAvailable: sortedEps.length,
-        cached: false
+        cached: false,
+        // Resposta definitiva baseada no catálogo local (confiável): o front pode
+        // ocultar episódios "fantasma" com segurança.
+        verifiedFromCatalog: true
       });
     }
     const isCheckUnavailable = (content, url, status) => {
@@ -5539,7 +6710,11 @@ router5.get("/api/check-season", async (req3, res) => {
       season,
       availableEpisodes,
       totalAvailable: availableEpisodes.length,
-      cached: false
+      cached: false,
+      // Resposta baseada em sondagem de rede (não definitiva): o front NÃO deve
+      // ocultar episódios declarados pelo TMDB com base nisso — uma falha de
+      // probe não significa que o episódio não existe.
+      verifiedFromCatalog: false
     });
   } catch (err) {
     console.error("[check-season] Erro ao verificar disponibilidade da temporada:", err);
@@ -5853,8 +7028,11 @@ router5.get("/api/myembed-stream", async (req3, res) => {
     const idMatch = rawId.match(/(?:filme|movie|serie|series|tvshow|tv)\/([a-zA-Z0-9_-]+)/i) || rawId.match(/(tt\d+|\d+)/);
     const id = idMatch ? idMatch[1] : rawId;
     const type = req3.query.type || (rawId.includes("serie") ? "tv" : "movie");
-    const season = req3.query.s ? String(req3.query.s) : "1";
-    const episode = req3.query.e ? String(req3.query.e) : "1";
+    let season = req3.query.s ? String(req3.query.s) : "1";
+    let episode = req3.query.e ? String(req3.query.e) : "1";
+    if (parseInt(episode) > 50) {
+      season = "1";
+    }
     let resolvedId = id;
     if (id.startsWith("tt")) {
       try {
@@ -5906,6 +7084,20 @@ router5.get("/api/myembed-stream", async (req3, res) => {
           });
           if (validOptions.length > 0) {
             ajaxHadValidSources = true;
+          } else if ((type === "tv" || type === "series") && !req3.query.__nixretry) {
+            const providedSeriesId = req3.query.series_id ? String(req3.query.series_id) : null;
+            let nixRetryId = providedSeriesId;
+            if (!nixRetryId && req3.query.name) {
+              const loadPromise = loadNixplayCatalog().catch(() => {
+              });
+              await Promise.race([loadPromise, new Promise((r) => setTimeout(r, 1200))]);
+              nixRetryId = resolveNixplaySeriesId(resolvedId, String(req3.query.name));
+            }
+            if (nixRetryId && String(nixRetryId) !== resolvedId && String(nixRetryId) !== id) {
+              console.warn(`[MyEmbed Stream] Ajax ${resolvedId} s\xF3 retornou fontes blacklisted. Retentando com series_id do Nixplay: ${nixRetryId}`);
+              const retryUrl = `/api/myembed-stream?id=${encodeURIComponent(String(nixRetryId))}&type=${encodeURIComponent(type)}&s=${encodeURIComponent(season)}&e=${encodeURIComponent(episode)}&__nixretry=1`;
+              return res.redirect(307, retryUrl);
+            }
           }
           for (const vipOption of validOptions) {
             if (!vipOption || !vipOption.embed) continue;
@@ -5955,19 +7147,19 @@ router5.get("/api/myembed-stream", async (req3, res) => {
       width: 100%;
       height: 100%;
     }
-    /* Oculta totalmente qualquer elemento de interface nativa do Artplayer para dar lugar exclusivo \xE0 Skin Netflix */
-    .art-video-player .art-bottom,
-    .art-video-player .art-mask,
-    .art-video-player .art-state,
-    .art-video-player .art-contextmenus,
-    .art-video-player .art-loading,
-    .art-video-player .art-notice,
-    .art-video-player .art-controls,
-    .art-video-player .art-layer-state,
-    .art-video-player .art-progress,
-    .art-video-player .art-control,
-    .art-video-player .art-backdrop,
-    .art-video-player .art-layers {
+    /* Oculta interface nativa APENAS quando a classe hide-native-controls estiver ativa (Skin Netflix presente) */
+    body.hide-native-controls .art-video-player .art-bottom,
+    body.hide-native-controls .art-video-player .art-mask,
+    body.hide-native-controls .art-video-player .art-state,
+    body.hide-native-controls .art-video-player .art-contextmenus,
+    body.hide-native-controls .art-video-player .art-loading,
+    body.hide-native-controls .art-video-player .art-notice,
+    body.hide-native-controls .art-video-player .art-controls,
+    body.hide-native-controls .art-video-player .art-layer-state,
+    body.hide-native-controls .art-video-player .art-progress,
+    body.hide-native-controls .art-video-player .art-control,
+    body.hide-native-controls .art-video-player .art-backdrop,
+    body.hide-native-controls .art-video-player .art-layers {
       display: none !important;
       opacity: 0 !important;
       visibility: hidden !important;
@@ -5981,6 +7173,15 @@ router5.get("/api/myembed-stream", async (req3, res) => {
   <div id="artplayer-container"></div>
   <script>
     (function() {
+      // Recebe estado da skin do iframe pai para mostrar/ocultar controles nativos
+      window.addEventListener("message", function(e) {
+        if (e.data && e.data.type === "NETFLIX_SKIN_ACTIVE") {
+          document.body.classList.add("hide-native-controls");
+        } else if (e.data && e.data.type === "NETFLIX_SKIN_INACTIVE") {
+          document.body.classList.remove("hide-native-controls");
+        }
+      });
+
       // Neutraliza popups e janelas secund\xE1rias
       window.open = function() { return null; };
       window.alert = function() {};
@@ -6087,7 +7288,6 @@ router5.get("/api/myembed-stream", async (req3, res) => {
         gesture: false,
         miniProgressBar: false,
         backdrop: false,
-        controls: [],
         icons: { state: '' },
         theme: "#e50914"
       });
@@ -6538,11 +7738,12 @@ router5.get("/api/myembed-stream", async (req3, res) => {
           }, 500);
 
           // Fast-Fail: Detecta erros fatais instantaneamente para n\xE3o prender o usu\xE1rio
-          setInterval(function() {
+          var fastFailInterval = setInterval(function() {
             var v = (window.artInstance && window.artInstance.video) ? window.artInstance.video : document.querySelector('video');
             if (!v) return;
             if (v.error || v.networkState === 3) {
               console.warn('[Play Infinity VIP] Erro fatal nativo detectado (networkState 3 ou v.error). Emitindo VIP_UNAVAILABLE.');
+              clearInterval(fastFailInterval);
               try { window.parent.postMessage({ type: "VIP_UNAVAILABLE", reason: "video_playback_error" }, "*"); } catch(e) {}
             }
           }, 1000);
@@ -6821,52 +8022,6 @@ router5.get("/api/myembed-stream", async (req3, res) => {
     return res.status(500).send("Erro ao processar stream do MyEmbed.");
   }
 });
-router5.get("/api/pomfy-stream", async (req3, res) => {
-  try {
-    const { id, type, s, e } = req3.query;
-    if (!id) {
-      return res.status(400).send("Faltando par\xE2metro 'id'.");
-    }
-    const baseUrl = type === "tv" ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` : `https://api.pomfy.stream/filme/${id}`;
-    const response = await fetch(baseUrl, {
-      signal: AbortSignal.timeout(15e3),
-      headers: {
-        "Sec-Fetch-Dest": "iframe",
-        "Sec-Fetch-Mode": "navigate",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-      }
-    });
-    if (!response.ok) {
-      return res.redirect(302, baseUrl);
-    }
-    const html = await response.text();
-    const tokenMatch = html.match(/statusToken="([^"]+)"/);
-    if (tokenMatch && tokenMatch[1]) {
-      const token = tokenMatch[1];
-      const tokenUrl = `https://api.pomfy.stream/api/play-token?t=${token}`;
-      const tokenResp = await fetch(tokenUrl, {
-        signal: AbortSignal.timeout(15e3),
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Referer": baseUrl
-        }
-      });
-      if (tokenResp.ok) {
-        const json = await tokenResp.json();
-        const finalUrl = json.byseUrl || json.url || json.flyfileUrl;
-        if (finalUrl) {
-          return res.redirect(302, finalUrl);
-        }
-      }
-    }
-    return res.redirect(302, baseUrl);
-  } catch (err) {
-    console.error("[Pomfy Proxy Error]:", err);
-    const { id, type, s, e } = req3.query;
-    const baseUrl = type === "tv" ? `https://api.pomfy.stream/serie/${id}/${s || 1}/${e || 1}` : `https://api.pomfy.stream/filme/${id}`;
-    return res.redirect(302, baseUrl);
-  }
-});
 router5.get("/api/embedplay-direct", (_req, res) => {
   return res.status(403).json({
     error: "Servidor EmbedPlay est\xE1 bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer."
@@ -6877,16 +8032,36 @@ router5.get("/api/byse-stream", (_req, res) => {
     error: "Servidor BYSE/Streamberry est\xE1 bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer."
   });
 });
+router5.get("/api/watchplay-proxy-iframe", async (req3, res) => {
+  let { id, s, e } = req3.query;
+  let season = parseInt(s) || 1;
+  let episode = parseInt(e) || 1;
+  if (episode > 50) {
+    season = 1;
+  }
+  res.redirect(`https://v1.watchplay.shop/tvshow/${id}/${season}/${episode}?cb=${Date.now()}`);
+});
+router5.get("/api/vip-proxy-iframe", async (req3, res) => {
+  let { id, s, e, nixId, name } = req3.query;
+  let season = parseInt(s) || 1;
+  let episode = parseInt(e) || 1;
+  if (episode > 50) {
+    season = 1;
+  }
+  const seriesIdParam = nixId ? `&series_id=${encodeURIComponent(nixId)}` : "";
+  const nameParam = name ? `&name=${encodeURIComponent(name)}` : "";
+  res.redirect(`/api/myembed-stream?id=${id}&type=tv&s=${season}&e=${episode}${seriesIdParam}${nameParam}&cb=${Date.now()}`);
+});
 var videoScrapers_default = router5;
 
 // server/routes/catalog.ts
 var import_express7 = require("express");
-var import_express_rate_limit = __toESM(require("express-rate-limit"), 1);
+var import_express_rate_limit2 = __toESM(require("express-rate-limit"), 1);
 var import_crypto2 = __toESM(require("crypto"), 1);
 
 // server/services/mostWatched.ts
-var import_fs4 = __toESM(require("fs"), 1);
-var import_path4 = __toESM(require("path"), 1);
+var import_fs6 = __toESM(require("fs"), 1);
+var import_path6 = __toESM(require("path"), 1);
 var _dirname = typeof __dirname !== "undefined" ? __dirname : process.cwd();
 var INITIAL_MOST_WATCHED = [
   {
@@ -7013,7 +8188,7 @@ var INITIAL_MOST_WATCHED = [
   }
 ];
 function getMostWatchedFilePath() {
-  return import_path4.default.join(process.cwd(), "data", "most-watched.json");
+  return import_path6.default.join(process.cwd(), "data", "most-watched.json");
 }
 function loadMostWatchedFromDisk() {
   if (process.env.VERCEL) {
@@ -7021,8 +8196,8 @@ function loadMostWatchedFromDisk() {
   }
   try {
     const filePath = getMostWatchedFilePath();
-    if (import_fs4.default.existsSync(filePath)) {
-      const raw = import_fs4.default.readFileSync(filePath, "utf-8");
+    if (import_fs6.default.existsSync(filePath)) {
+      const raw = import_fs6.default.readFileSync(filePath, "utf-8");
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed;
@@ -7044,17 +8219,17 @@ async function executeAtomicSaveMostWatched() {
   }
   isSavingMostWatched = true;
   try {
-    const dir = import_path4.default.join(process.cwd(), "data");
-    await import_fs4.default.promises.mkdir(dir, { recursive: true });
+    const dir = import_path6.default.join(process.cwd(), "data");
+    await import_fs6.default.promises.mkdir(dir, { recursive: true });
     const filePath = getMostWatchedFilePath();
     const tempPath = `${filePath}.${Date.now()}.${Math.random().toString(36).slice(2, 8)}.tmp`;
     const payload = JSON.stringify(mostWatchedMemoryCache, null, 2);
-    await import_fs4.default.promises.writeFile(tempPath, payload, "utf-8");
+    await import_fs6.default.promises.writeFile(tempPath, payload, "utf-8");
     try {
-      await import_fs4.default.promises.rename(tempPath, filePath);
+      await import_fs6.default.promises.rename(tempPath, filePath);
     } catch {
-      await import_fs4.default.promises.copyFile(tempPath, filePath);
-      await import_fs4.default.promises.unlink(tempPath).catch(() => {
+      await import_fs6.default.promises.copyFile(tempPath, filePath);
+      await import_fs6.default.promises.unlink(tempPath).catch(() => {
       });
     }
   } catch (err) {
@@ -7080,7 +8255,7 @@ function scheduleAsyncSaveMostWatched() {
 var customStreams = [];
 var episodesAvailabilityCache = /* @__PURE__ */ new Map();
 var EPISODES_CACHE_TTL = 30 * 60 * 1e3;
-var webhookLimiter = (0, import_express_rate_limit.default)({
+var webhookLimiter = (0, import_express_rate_limit2.default)({
   windowMs: 60 * 1e3,
   max: 10,
   message: { success: false, error: "Limite de tentativas excedido para o webhook." },
@@ -7345,8 +8520,48 @@ var catalog_default = router6;
 // server/routes/mixdrop.ts
 var import_express8 = require("express");
 var mixdropMemoryCache = /* @__PURE__ */ new Map();
+async function resolveFreshMixdropToken(fileId, host = "mxdrop.top") {
+  const embedUrl = `https://${host}/e/${fileId}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12e3);
+  try {
+    const upstream = await fetch(embedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!upstream.ok) return null;
+    const html = await upstream.text();
+    const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+    if (!packerMatch) return null;
+    const unpacked = new Function("return " + packerMatch[0].slice(4))();
+    const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+    if (!wurlMatch || !wurlMatch[1]) return null;
+    let videoUrl = wurlMatch[1];
+    if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+    const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
+    const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
+    let posterUrl = posterMatch && posterMatch[1] ? posterMatch[1] : "";
+    if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
+    let pageTitle = titleMatch && titleMatch[1] ? titleMatch[1].trim() : "Play Infinity \u2022 MixDrop Stream";
+    const result = { videoUrl, posterUrl, title: pageTitle };
+    mixdropMemoryCache.set(fileId, {
+      ...result,
+      expiresAt: Date.now() + 10 * 60 * 1e3
+      // 10 minutos (tokens do MixDrop expiram rapidamente)
+    });
+    return result;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    return null;
+  }
+}
 var router7 = (0, import_express8.Router)();
-router7.get("/api/mixdrop-stream", async (req3, res) => {
+router7.get("/api/md-stream", async (req3, res) => {
   try {
     const rawUrl = String(req3.query.url || "").trim();
     if (!rawUrl) {
@@ -7392,56 +8607,15 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
       posterUrl = cached.posterUrl;
       pageTitle = cached.title || pageTitle;
     } else {
-      const embedUrl = `https://${host}/e/${fileId}`;
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15e3);
-      try {
-        const upstream = await fetch(embedUrl, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-          },
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-        if (!upstream.ok) {
-          return sendFallbackHtml(502, `MixDrop retornou status HTTP ${upstream.status}`);
-        }
-        const html = await upstream.text();
-        const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
-        if (!packerMatch) {
-          return sendFallbackHtml(502, "N\xE3o foi poss\xEDvel desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
-        }
-        const unpacked = new Function("return " + packerMatch[0].slice(4))();
-        const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
-        const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
-        const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
-        if (!wurlMatch || !wurlMatch[1]) {
-          return sendFallbackHtml(502, "URL de v\xEDdeo n\xE3o encontrada no player do MixDrop.");
-        }
-        videoUrl = wurlMatch[1];
-        if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
-        if (posterMatch && posterMatch[1]) {
-          posterUrl = posterMatch[1];
-          if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
-        }
-        if (titleMatch && titleMatch[1]) {
-          pageTitle = titleMatch[1].trim();
-        }
-        mixdropMemoryCache.set(fileId, {
-          videoUrl,
-          posterUrl,
-          title: pageTitle,
-          expiresAt: Date.now() + 4 * 60 * 60 * 1e3
-        });
-      } catch (fetchErr) {
-        clearTimeout(timeoutId);
-        console.error("[MixDrop Scraper Error]:", fetchErr);
-        return sendFallbackHtml(502, "Tempo limite ou erro ao contatar servidor de m\xEDdia MixDrop.");
+      const fresh = await resolveFreshMixdropToken(fileId, host);
+      if (!fresh) {
+        return sendFallbackHtml(502, "N\xE3o foi poss\xEDvel desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
       }
+      videoUrl = fresh.videoUrl;
+      posterUrl = fresh.posterUrl;
+      pageTitle = fresh.title;
     }
-    const streamUrl = `/api/mixdrop-proxy?url=${encodeURIComponent(videoUrl)}`;
+    const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}`;
     if (req3.query.format === "json") {
       const isHttps = req3.headers["x-forwarded-proto"] === "https" || req3.protocol === "https";
       const originHost = req3.headers.host;
@@ -7516,7 +8690,12 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
                 muted: false,
                 playsInline: true,
                 controls: [],
-                theme: "#e50914"
+                theme: "#e50914",
+                moreVideoAttr: {
+                  preload: "auto",
+                  playsinline: "true",
+                  "webkit-playsinline": "true"
+                }
               });
 
               window.artInstance = art;
@@ -7619,9 +8798,19 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
                       } catch(e) {}
                     }
 
-                    if (!frameFresh && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
+                    var bufA = 0;
+                    try {
+                      for (var bi = 0; bi < v.buffered.length; bi++) {
+                        if (cur >= v.buffered.start(bi) && cur <= v.buffered.end(bi)) {
+                          bufA = v.buffered.end(bi) - cur;
+                          break;
+                        }
+                      }
+                    } catch(e) {}
+
+                    if (!frameFresh && bufA >= 2.0 && (typeof v.requestVideoFrameCallback === 'function' || typeof v.getVideoPlaybackQuality === 'function')) {
                       stallTicks++;
-                      if (stallTicks >= 2 && (now - lastHealAt > 3500) && !isHealing) {
+                      if (stallTicks >= 4 && (now - lastHealAt > 5000) && !isHealing) {
                         isHealing = true;
                         lastHealAt = now;
                         stallTicks = 0;
@@ -7666,6 +8855,255 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
               art.on("pause", sendStatus);
               art.on("timeupdate", sendStatus);
               art.on("video:ended", notifyEnded);
+
+              // ===== TELEMETRIA MIXDROP (somente F12) =====
+              // Rastreia travamentos, tela preta e quedas do stream. Comando manual:
+              // mixdropStats() (contexto do iframe) ou nixplayStats() (contexto top).
+              (function initMixdropTelemetry() {
+                var TAG = "%c[MixDrop Telemetria]";
+                var TAG_CSS = "background:#e50914;color:#fff;font-weight:bold;padding:2px 6px;border-radius:3px;";
+                var startedAt = Date.now();
+                var timeline = [];
+                var totalStalls = 0;
+                var totalStallSec = 0;
+                var stallStart = 0;
+                var lastCmdAt = 0;
+                var ERR_NAMES = { 1: "ABORTED (cancelado)", 2: "NETWORK (rede/stream caiu)", 3: "DECODE (falha de decodificacao)", 4: "SRC_NOT_SUPPORTED (fonte invalida)" };
+
+                function vid() { return art.video || document.querySelector("video"); }
+
+                function bufAhead(v) {
+                  try {
+                    var cur = v.currentTime || 0;
+                    for (var i = 0; i < v.buffered.length; i++) {
+                      if (cur >= v.buffered.start(i) && cur <= v.buffered.end(i)) {
+                        return +(v.buffered.end(i) - cur).toFixed(2);
+                      }
+                    }
+                  } catch (e) {}
+                  return 0;
+                }
+
+                function quality(v) {
+                  if (v && typeof v.getVideoPlaybackQuality === "function") {
+                    try {
+                      var q = v.getVideoPlaybackQuality();
+                      return { totalFrames: q.totalVideoFrames || 0, droppedFrames: q.droppedVideoFrames || 0, corruptedFrames: q.corruptedVideoFrames || 0 };
+                    } catch (e) {}
+                  }
+                  return null;
+                }
+
+                function push(kind, extra) {
+                  var v = vid();
+                  var e = {
+                    "t+": ((Date.now() - startedAt) / 1000).toFixed(1) + "s",
+                    evento: kind,
+                    pos: v ? +(v.currentTime || 0).toFixed(1) : 0,
+                    buffer: v ? bufAhead(v) : 0,
+                    ready: v ? v.readyState : -1,
+                    rede: v ? v.networkState : -1,
+                    pausado: v ? v.paused : null,
+                    info: extra || ""
+                  };
+                  timeline.push(e);
+                  if (timeline.length > 60) timeline.shift();
+                  return e;
+                }
+
+                function warn(kind, extra) {
+                  var e = push(kind, extra);
+                  console.warn(TAG + " " + kind + (extra ? " - " + extra : ""), TAG_CSS, e);
+                }
+
+                function dump() {
+                  console.groupCollapsed(TAG + " LINHA DO TEMPO (ultimos " + timeline.length + " eventos)", TAG_CSS);
+                  console.table(timeline);
+                  console.groupEnd();
+                }
+
+                function toParent(ev, extra) {
+                  try {
+                    var m = { type: "NIXPLAY_TELEMETRY_EVENT", event: ev };
+                    for (var k in extra) m[k] = extra[k];
+                    window.parent.postMessage(m, "*");
+                  } catch (e) {}
+                }
+
+                function stall(reason) {
+                  var v = vid();
+                  if (!v || v.paused || v.ended) return;
+                  var now = Date.now();
+                  if (!stallStart) { stallStart = now; totalStalls++; }
+                  push("stall", reason);
+                  toParent("stall", {
+                    reason: "MixDrop: " + reason,
+                    duration: +((now - stallStart) / 1000).toFixed(2),
+                    bufferAhead: bufAhead(v),
+                    currentTime: +(v.currentTime || 0).toFixed(1),
+                    src: v.currentSrc || v.src || "",
+                    quality: quality(v),
+                    totalStalls: totalStalls
+                  });
+                }
+
+                function recovered() {
+                  if (!stallStart) return;
+                  var d = +((Date.now() - stallStart) / 1000).toFixed(2);
+                  totalStallSec += d;
+                  stallStart = 0;
+                  var v = vid();
+                  push("recovered", d + "s");
+                  toParent("recovered", { stallDuration: d, bufferAhead: v ? bufAhead(v) : 0, currentTime: v ? +(v.currentTime || 0).toFixed(1) : 0 });
+                }
+
+                function stats() {
+                  var v = vid();
+                  if (!v) { console.warn(TAG + " video indisponivel", TAG_CSS); return null; }
+                  var q = quality(v);
+                  var s = {
+                    "Tempo Atual": +(v.currentTime || 0).toFixed(2) + "s",
+                    "Duracao": +(v.duration || 0).toFixed(2) + "s",
+                    "Pausado": v.paused,
+                    "Buffer a Frente": bufAhead(v) + "s",
+                    "Resolucao": (v.videoWidth || 0) + "x" + (v.videoHeight || 0),
+                    "Estado de Rede": ["EMPTY (0)", "IDLE (1)", "LOADING (2)", "NO_SOURCE (3)"][v.networkState] || v.networkState,
+                    "Ready State": v.readyState + " (4 = ok, 0-2 = sem dados para tocar)",
+                    "Erro da midia": v.error ? (ERR_NAMES[v.error.code] || v.error.code) : "nenhum",
+                    "Engasgos": totalStalls,
+                    "Tempo Total Travado": +totalStallSec.toFixed(2) + "s",
+                    "Quadros": q ? (q.droppedFrames + " drops / " + q.totalFrames + " total") : "N/A",
+                    "Aba visivel": document.visibilityState,
+                    "Fonte": v.currentSrc || v.src
+                  };
+                  console.log(TAG + " RELATORIO", TAG_CSS);
+                  console.table(s);
+                  dump();
+                  return s;
+                }
+                window.mixdropStats = stats;
+
+                // Marca comandos do usuario para distinguir pausa solicitada de pausa inesperada
+                window.addEventListener("message", function(e) {
+                  var d = e.data;
+                  if (!d || typeof d !== "object") return;
+                  if (d.type === "REQUEST_NIXPLAY_STATS") { stats(); return; }
+                  if (/^(PLAY|PAUSE|TOGGLE_PLAY|SEEK|SEEK_ABSOLUTE|SEEK_RELATIVE|seek|SKIP_INTRO)$/.test(String(d.type))) {
+                    lastCmdAt = Date.now();
+                  }
+                });
+
+                function attach() {
+                  var v = vid();
+                  if (!v || v._mdTelemetry) return;
+                  v._mdTelemetry = true;
+                  v.addEventListener("loadedmetadata", function() { push("metadata", "dur=" + Math.round(v.duration || 0) + "s " + v.videoWidth + "x" + v.videoHeight); });
+                  v.addEventListener("waiting", function() { stall("waiting (buffer esgotado)"); });
+                  v.addEventListener("stalled", function() { stall("stalled (proxy/CDN parou de enviar dados)"); });
+                  v.addEventListener("playing", function() { recovered(); });
+                  v.addEventListener("canplay", function() { recovered(); });
+                  v.addEventListener("play", function() { push("play"); });
+                  v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
+                  v.addEventListener("seeked", function() { push("seeked"); });
+                  v.addEventListener("abort", function() { push("abort", "carga cancelada"); });
+                  v.addEventListener("ended", function() { push("ended"); notifyEnded(); });
+                  v.addEventListener("emptied", function() { warn("EMPTIED", "elemento de video foi esvaziado/reiniciado"); });
+                  v.addEventListener("pause", function() {
+                    if (v.ended) return;
+                    if (Date.now() - lastCmdAt > 1500) {
+                      warn("PAUSA NAO SOLICITADA", "o navegador/player pausou sozinho (aba oculta, autoplay, erro?)");
+                    } else {
+                      push("pause", "solicitada");
+                    }
+                  });
+                  v.addEventListener("error", function() {
+                    var er = v.error;
+                    warn("ERRO DE MIDIA", "codigo=" + (er ? er.code : "?") + " " + (er ? (ERR_NAMES[er.code] || "") : "") + (er && er.message ? " | " + er.message : ""));
+                    dump();
+                  });
+                }
+                attach();
+                art.on("ready", attach);
+
+                document.addEventListener("visibilitychange", function() { push("aba", document.visibilityState); });
+                window.addEventListener("error", function(e) { warn("ERRO JS NO IFRAME", (e && e.message) || ""); });
+                window.addEventListener("unhandledrejection", function(e) { warn("PROMISE REJEITADA NO IFRAME", String(e && e.reason)); });
+                window.addEventListener("offline", function() { warn("NAVEGADOR OFFLINE"); });
+                window.addEventListener("online", function() { push("navegador voltou online"); });
+
+                // Vigia de congelamento (tempo parado) e de "audio andando sem quadros" (tela preta)
+                var lastT = 0;
+                var lastWall = Date.now();
+                var lastFrames = 0;
+                var frozenTicks = 0;
+                var noFrameTicks = 0;
+                var noFrameReported = false;
+                setInterval(function() {
+                  var v = vid();
+                  if (!v) return;
+                  var now = Date.now();
+                  var cur = v.currentTime || 0;
+                  var q = quality(v);
+                  if (v.paused || v.ended || v.seeking) {
+                    lastT = cur;
+                    lastWall = now;
+                    frozenTicks = 0;
+                    noFrameTicks = 0;
+                    if (q) lastFrames = q.totalFrames;
+                    return;
+                  }
+                  var dt = cur - lastT;
+                  var wall = (now - lastWall) / 1000;
+                  lastT = cur;
+                  lastWall = now;
+
+                  var currentBuf = bufAhead(v);
+                  if (wall >= 0.7 && dt < 0.05 && currentBuf >= 0.8) {
+                    frozenTicks++;
+                    if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
+                    
+                    // Auto-Healer: Descongelamento autom\xE1tico de frame travado
+                    if (frozenTicks === 3) {
+                      console.log("%c[MixDrop Auto-Healer] \u26A1 Micro-nudge (+0.01s) aplicado para destravar video", "color:#f59e0b;font-weight:bold;");
+                      try {
+                        v.currentTime = Math.max(0, (v.currentTime || 0) + 0.01);
+                        v.play().catch(function() {});
+                      } catch(e) {}
+                    } else if (frozenTicks === 6) {
+                      console.log("%c[MixDrop Auto-Healer] \u26A1 Macro-nudge (-0.2s + play) aplicado para destravar video", "color:#f59e0b;font-weight:bold;");
+                      try {
+                        v.currentTime = Math.max(0, (v.currentTime || 0) - 0.2);
+                        v.play().catch(function() {});
+                      } catch(e) {}
+                    } else if (frozenTicks >= 10) {
+                      console.log("%c[MixDrop Auto-Healer] \u{1F6A8} Frame freeze persistente (>10s). Notificando parent...", "color:#ef4444;font-weight:bold;");
+                      try {
+                        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
+                      } catch(e) {}
+                    }
+                  } else {
+                    if (frozenTicks >= 2) recovered();
+                    frozenTicks = 0;
+                  }
+
+                  if (q) {
+                    if (dt > 0.35 && q.totalFrames === lastFrames) {
+                      noFrameTicks++;
+                      if (noFrameTicks >= 3 && !noFrameReported) {
+                        noFrameReported = true;
+                        warn("VIDEO SEM QUADROS (tela preta/congelada com tempo andando)", "frames=" + q.totalFrames + " drops=" + q.droppedFrames);
+                        dump();
+                      }
+                    } else {
+                      if (noFrameReported && q.totalFrames > lastFrames) { noFrameReported = false; push("quadros voltaram"); }
+                      noFrameTicks = 0;
+                    }
+                    lastFrames = q.totalFrames;
+                  }
+                }, 1000);
+
+                console.log(TAG + " ativa. Digite mixdropStats() para o relatorio e a linha do tempo.", TAG_CSS);
+              })();
 
               var _playBlocked = false; // Flag pra evitar loop de retry
 
@@ -7773,7 +9211,7 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
                     }
                     break;
                   case "SKIP_INTRO":
-                    var sec = Number(e.data.seconds) || 85;
+                    var sec = Number(e.data.seconds) || 75;
                     var cur = (v ? v.currentTime : 0) || 0;
                     var maxD = (v && v.duration > 0 ? v.duration : 99999);
                     var target = Math.max(0, Math.min(cur + sec, maxD - 5));
@@ -7816,26 +9254,49 @@ router7.get("/api/mixdrop-stream", async (req3, res) => {
     return res.status(500).send("Erro interno ao processar stream do MixDrop.");
   }
 });
-router7.get("/api/mixdrop-proxy", async (req3, res) => {
+router7.get("/api/md-proxy", async (req3, res) => {
   try {
-    const videoUrl = String(req3.query.url || "").trim();
+    let videoUrl = String(req3.query.url || "").trim();
     if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
       return res.status(400).send("URL de v\xEDdeo inv\xE1lida.");
     }
     const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Referer": "https://mxdrop.top/",
+      "Origin": "https://mxdrop.top",
+      "Connection": "keep-alive"
     };
     if (req3.headers.range) {
       headers["Range"] = req3.headers.range;
     }
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15e3);
+    let controller = new AbortController();
+    let timeoutId = setTimeout(() => controller.abort(), 15e3);
     req3.on("close", () => controller.abort());
-    const upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
     clearTimeout(timeoutId);
+    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
+      const fileMatch = videoUrl.match(/\/v2\/([a-zA-Z0-9_-]+)\.mp4/) || videoUrl.match(/\/([a-zA-Z0-9_-]+)\.mp4/);
+      const fileId = fileMatch ? fileMatch[1] : "";
+      if (fileId) {
+        console.warn(`[MixDrop Proxy] Token CDN expirado (${upstream.status}) para fileId ${fileId}. Renovando token em tempo real...`);
+        mixdropMemoryCache.delete(fileId);
+        const fresh = await resolveFreshMixdropToken(fileId);
+        if (fresh && fresh.videoUrl) {
+          videoUrl = fresh.videoUrl;
+          controller = new AbortController();
+          timeoutId = setTimeout(() => controller.abort(), 15e3);
+          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+          clearTimeout(timeoutId);
+        }
+      }
+    }
     res.status(upstream.status);
     for (const [key, value] of upstream.headers.entries()) {
-      if (["content-type", "content-length", "content-range", "accept-ranges"].includes(key.toLowerCase())) {
+      const lk = key.toLowerCase();
+      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
         res.setHeader(key, value);
       }
     }
@@ -7843,11 +9304,158 @@ router7.get("/api/mixdrop-proxy", async (req3, res) => {
     if (!upstream.body) {
       return res.end();
     }
-    const { Readable: Readable2 } = await import("stream");
-    Readable2.fromWeb(upstream.body).pipe(res);
+    const { Readable: Readable4 } = await import("stream");
+    const source = Readable4.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    source.pipe(res);
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
   } catch (err) {
+    if (err?.name === "AbortError") {
+      if (!res.headersSent) res.end();
+      return;
+    }
     console.error("[MixDrop Proxy Error]:", err);
-    res.status(500).send("Erro no proxy do MixDrop");
+    if (!res.headersSent) {
+      res.status(500).send("Erro no proxy do MixDrop");
+    } else {
+      res.destroy();
+    }
+  }
+});
+router7.get("/api/download", async (req3, res) => {
+  try {
+    const rawUrl = String(req3.query.url || "").trim();
+    const filename = String(req3.query.filename || "video.mp4").trim();
+    if (!rawUrl) {
+      return res.status(400).send("Par\xE2metro 'url' \xE9 obrigat\xF3rio.");
+    }
+    let fileId = null;
+    let host = "mxdrop.top";
+    if (/^[a-zA-Z0-9_-]{5,40}$/.test(rawUrl) && !rawUrl.includes("/") && !rawUrl.includes(":")) {
+      fileId = rawUrl;
+    } else {
+      const safeCheck = validateSafeUrl(rawUrl);
+      if (!safeCheck.valid || !safeCheck.parsedUrl) {
+        return res.status(400).send("URL inv\xE1lida ou n\xE3o autorizada.");
+      }
+      const parsedHost = safeCheck.parsedUrl.hostname.toLowerCase();
+      if (!parsedHost.includes("mixdrop.") && !parsedHost.includes("mxdrop.")) {
+        return res.status(400).send("Dom\xEDnio fornecido n\xE3o pertence \xE0 rede MixDrop.");
+      }
+      host = parsedHost;
+      const fileMatch = safeCheck.parsedUrl.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
+      fileId = fileMatch ? fileMatch[1] : null;
+    }
+    if (!fileId) {
+      return res.status(400).send("ID de arquivo do MixDrop n\xE3o encontrado na URL.");
+    }
+    let videoUrl = "";
+    const cached = mixdropMemoryCache.get(fileId);
+    if (cached && cached.expiresAt > Date.now() + 6e4) {
+      videoUrl = cached.videoUrl;
+    } else {
+      const embedUrl = `https://${host}/e/${fileId}`;
+      const controller2 = new AbortController();
+      const timeoutId2 = setTimeout(() => controller2.abort(), 15e3);
+      try {
+        const upstream = await fetch(embedUrl, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+          },
+          signal: controller2.signal
+        });
+        clearTimeout(timeoutId2);
+        if (!upstream.ok) {
+          return res.status(502).send(`MixDrop retornou status HTTP ${upstream.status}`);
+        }
+        const html = await upstream.text();
+        const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
+        if (!packerMatch) {
+          return res.status(502).send("N\xE3o foi poss\xEDvel desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
+        }
+        const unpacked = new Function("return " + packerMatch[0].slice(4))();
+        const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
+        if (!wurlMatch || !wurlMatch[1]) {
+          return res.status(502).send("URL de v\xEDdeo n\xE3o encontrada no player do MixDrop.");
+        }
+        videoUrl = wurlMatch[1];
+        if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+        mixdropMemoryCache.set(fileId, {
+          videoUrl,
+          posterUrl: "",
+          title: filename,
+          expiresAt: Date.now() + 4 * 60 * 60 * 1e3
+        });
+      } catch (fetchErr) {
+        clearTimeout(timeoutId2);
+        console.error("[MixDrop Download Scraper Error]:", fetchErr);
+        return res.status(502).send("Tempo limite ou erro ao contatar MixDrop.");
+      }
+    }
+    const safeFilename = filename.replace(/[^\w\.\- ]/g, "_").substring(0, 200);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeFilename}"`);
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const upstreamHeaders = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Referer": "https://mxdrop.top/",
+      "Origin": "https://mxdrop.top",
+      "Connection": "keep-alive"
+    };
+    if (req3.headers.range) {
+      upstreamHeaders["Range"] = req3.headers.range;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6e4);
+    req3.on("close", () => controller.abort());
+    try {
+      const upstream = await fetch(videoUrl, { signal: controller.signal, headers: upstreamHeaders });
+      clearTimeout(timeoutId);
+      if (!upstream.ok) {
+        return res.status(502).send(`CDN retornou status ${upstream.status}`);
+      }
+      const keepLength = upstream.status === 206 && !!upstream.body && !upstream.headers.get("content-encoding");
+      for (const [key, value] of upstream.headers.entries()) {
+        if (["content-length", "content-range", "accept-ranges", "content-type"].includes(key.toLowerCase())) {
+          if (key.toLowerCase() === "content-type") {
+            continue;
+          }
+          if (key.toLowerCase() === "content-length" && !keepLength) continue;
+          res.setHeader(key, value);
+        }
+      }
+      if (!upstream.body) {
+        return res.end();
+      }
+      const { Readable: Readable4 } = await import("stream");
+      const sourceReadable = Readable4.fromWeb(upstream.body);
+      sourceReadable.on("error", () => {
+        if (res.writableEnded) return;
+        if (upstream.status === 206) res.destroy();
+        else res.end();
+      });
+      sourceReadable.pipe(res);
+    } catch (proxyErr) {
+      clearTimeout(timeoutId);
+      console.error("[MixDrop Download Proxy Error]:", proxyErr);
+      return res.status(502).send("Erro no proxy do download.");
+    }
+  } catch (err) {
+    console.error("[MixDrop Download Error]:", err);
+    return res.status(500).send("Erro interno no download.");
   }
 });
 var mixdrop_default = router7;
@@ -8210,7 +9818,7 @@ var iptv_default = router9;
 var import_express11 = require("express");
 var router10 = (0, import_express11.Router)();
 var BREADCRUMB_BASE = 17890309;
-var cache = null;
+var boloCacheMap = /* @__PURE__ */ new Map();
 function decodeDCI(html) {
   const match = html.match(/var DCI = \[([\s\S]*?)\]/);
   if (!match) return null;
@@ -8244,8 +9852,9 @@ router10.get("/api/bolodechocolate", async (req3, res) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "public, max-age=60");
     const canal = req3.query.canal || "premiereclubes";
-    if (cache && cache.expires > Date.now()) {
-      return res.json({ mpd_url: cache.url, ck_id: cache.ck_id, ck_key: cache.ck_key, cached: true });
+    const cached = boloCacheMap.get(canal);
+    if (cached && cached.expires > Date.now()) {
+      return res.json({ mpd_url: cached.url, ck_id: cached.ck_id, ck_key: cached.ck_key, cached: true });
     }
     const embedUrl = `https://bolodechocolate.fit/embed/${canal}.html`;
     const upstream = await fetch(embedUrl, {
@@ -8264,12 +9873,12 @@ router10.get("/api/bolodechocolate", async (req3, res) => {
     if (!decoded) {
       return res.status(502).json({ error: "N\xE3o foi poss\xEDvel decodificar o stream (DCI array)" });
     }
-    cache = {
+    boloCacheMap.set(canal, {
       url: decoded.url,
       ck_id: decoded.ck_id,
       ck_key: decoded.ck_key,
       expires: Date.now() + 5 * 60 * 1e3
-    };
+    });
     console.log(`[bolodechocolate] Canal: ${canal} | URL: ${decoded.url.substring(0, 80)}...`);
     return res.json({
       mpd_url: decoded.url,
@@ -8286,25 +9895,56 @@ var bolodechocolate_default = router10;
 
 // server/routes/nixplayRoutes.ts
 var import_express12 = require("express");
-
-// server/services/nixplayCatalog.ts
-var nixplayMovies = /* @__PURE__ */ new Set();
-var nixplaySeries = /* @__PURE__ */ new Set();
-var isCatalogLoaded = false;
-function isNixplayAvailable(tmdbId, isSeries) {
-  if (!isCatalogLoaded) return false;
-  const idStr = String(tmdbId);
-  return isSeries ? nixplaySeries.has(idStr) : nixplayMovies.has(idStr);
-}
-
-// server/routes/nixplayRoutes.ts
 var router11 = (0, import_express12.Router)();
-router11.get("/api/nixplay-check", (req3, res) => {
-  const { tmdb_id, type } = req3.query;
+router11.get("/api/nixplay-check", async (req3, res) => {
+  const { tmdb_id, type, name } = req3.query;
   if (!tmdb_id || !type) return res.status(400).json({ error: "Missing tmdb_id or type" });
+  await loadNixplayCatalog();
   const isSeries = type === "series";
-  const available = isNixplayAvailable(String(tmdb_id), isSeries);
-  return res.json({ available });
+  if (isSeries) {
+    const seriesName = name ? String(name) : void 0;
+    const resolvedId = resolveNixplaySeriesId(String(tmdb_id), seriesName);
+    if (resolvedId) {
+      const cachedEp = nixplayEpisodeCache.get(resolvedId);
+      if (cachedEp && Date.now() - cachedEp.fetchedAt < NIXPLAY_CACHE_TTL) {
+        return res.json({ available: true, seriesId: resolvedId, totalEpisodes: cachedEp.episodes.length });
+      }
+      let totalEpisodes = 0;
+      try {
+        const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${resolvedId}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5e3);
+        const response = await fetch(infoUrl, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (response.ok) {
+          const data = await response.json();
+          const eps = data.episodes || {};
+          if (Array.isArray(eps)) {
+            totalEpisodes = eps.length;
+          } else if (typeof eps === "object") {
+            for (const sk of Object.keys(eps)) {
+              if (Array.isArray(eps[sk])) totalEpisodes += eps[sk].length;
+            }
+          }
+          const flatEps = [];
+          if (Array.isArray(eps)) {
+            flatEps.push(...eps);
+          } else {
+            for (const sk of Object.keys(eps).sort((a, b) => Number(a) - Number(b))) {
+              if (Array.isArray(eps[sk])) flatEps.push(...eps[sk]);
+            }
+          }
+          nixplayEpisodeCache.set(resolvedId, { episodes: flatEps, fetchedAt: Date.now() });
+        }
+      } catch (e) {
+      }
+      return res.json({ available: true, seriesId: resolvedId, totalEpisodes });
+    }
+    return res.json({ available: false });
+  } else {
+    const available = isNixplayAvailable(String(tmdb_id), false);
+    return res.json({ available });
+  }
 });
 router11.get("/api/nixplay-resolve", async (req3, res) => {
   const nixUrl = req3.query.url;
@@ -8315,7 +9955,16 @@ router11.get("/api/nixplay-resolve", async (req3, res) => {
     const upstream = await fetch(nixUrl, {
       method: "GET",
       redirect: "manual",
-      signal: controller.signal
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://nixplay.lat/",
+        "Origin": "https://nixplay.lat",
+        "Connection": "keep-alive"
+      }
     });
     clearTimeout(timeout);
     const location = upstream.headers.get("location");
@@ -8331,9 +9980,142 @@ router11.get("/api/nixplay-resolve", async (req3, res) => {
     return res.status(502).json({ error: err?.message || "Erro ao resolver URL" });
   }
 });
-router11.get("/api/native-player", (req3, res) => {
-  const videoUrl = req3.query.url;
+var nixplayEpisodeCache = /* @__PURE__ */ new Map();
+var NIXPLAY_CACHE_TTL = 6 * 60 * 60 * 1e3;
+router11.get("/api/nixplay-episode-id", async (req3, res) => {
+  const seriesId = req3.query.seriesId;
+  const season = parseInt(req3.query.season, 10) || 1;
+  const episode = parseInt(req3.query.episode, 10) || 1;
+  if (!seriesId) return res.status(400).json({ error: "Missing seriesId" });
+  try {
+    let cached = nixplayEpisodeCache.get(seriesId);
+    if (!cached || Date.now() - cached.fetchedAt > NIXPLAY_CACHE_TTL) {
+      const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${seriesId}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15e3);
+      const response = await fetch(infoUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (!response.ok) {
+        return res.status(502).json({ error: `Nixplay API retornou ${response.status}` });
+      }
+      const data = await response.json();
+      const episodesData = data.episodes || {};
+      const flatEps = [];
+      if (Array.isArray(episodesData)) {
+        flatEps.push(...episodesData);
+      } else if (typeof episodesData === "object") {
+        for (const seasonKey of Object.keys(episodesData).sort((a, b) => Number(a) - Number(b))) {
+          const seasonEps = episodesData[seasonKey];
+          if (Array.isArray(seasonEps)) {
+            flatEps.push(...seasonEps);
+          }
+        }
+      }
+      cached = { episodes: flatEps, fetchedAt: Date.now() };
+      nixplayEpisodeCache.set(seriesId, cached);
+    }
+    let globalEp;
+    if (season === 1) {
+      globalEp = episode;
+    } else {
+      globalEp = episode;
+    }
+    if (globalEp < 1 || globalEp > cached.episodes.length) {
+      return res.status(404).json({
+        error: `Epis\xF3dio ${globalEp} n\xE3o encontrado (s\xE9rie tem ${cached.episodes.length} eps)`,
+        totalEpisodes: cached.episodes.length
+      });
+    }
+    const ep = cached.episodes[globalEp - 1];
+    const epId = ep.id || ep.episode_id;
+    if (!epId) {
+      return res.status(404).json({ error: "ID do epis\xF3dio n\xE3o encontrado" });
+    }
+    const nixUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${epId}.mp4`;
+    const resolveController = new AbortController();
+    const resolveTimeout = setTimeout(() => resolveController.abort(), 8e3);
+    const upstream = await fetch(nixUrl, {
+      method: "GET",
+      redirect: "manual",
+      signal: resolveController.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Encoding": "identity",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://nixplay.lat/",
+        "Origin": "https://nixplay.lat",
+        "Connection": "keep-alive"
+      }
+    });
+    clearTimeout(resolveTimeout);
+    let finalUrl = nixUrl;
+    if ((upstream.status === 302 || upstream.status === 301) && upstream.headers.get("location")) {
+      finalUrl = upstream.headers.get("location");
+    }
+    return res.json({
+      success: true,
+      episodeId: epId,
+      nixplayUrl: nixUrl,
+      videoUrl: finalUrl,
+      totalEpisodes: cached.episodes.length
+    });
+  } catch (err) {
+    console.error("[nixplay-episode-id] Erro:", err?.message);
+    return res.status(500).json({ error: err?.message || "Erro interno" });
+  }
+});
+router11.get("/api/native-player", async (req3, res) => {
+  let videoUrl = req3.query.url;
   if (!videoUrl) return res.status(400).send("Missing url parameter");
+  if (videoUrl.includes("nixplay.lat/series/")) {
+    try {
+      const match = videoUrl.match(/\/(\d+)\.mp4$/);
+      if (match) {
+        const fullId = match[1];
+        const seriesId = fullId.slice(0, -6);
+        const seasonStr = fullId.slice(-6, -3);
+        const episodeStr = fullId.slice(-3);
+        const tmdbSeason = parseInt(seasonStr, 10);
+        const tmdbEpisode = parseInt(episodeStr, 10);
+        let cached = nixplayEpisodeCache.get(seriesId);
+        if (!cached || Date.now() - cached.fetchedAt > NIXPLAY_CACHE_TTL) {
+          const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${seriesId}`;
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 15e3);
+          const response = await fetch(infoUrl, { signal: controller.signal });
+          clearTimeout(timeout);
+          if (response.ok) {
+            const data = await response.json();
+            const episodesData = data.episodes || {};
+            const flatEps = [];
+            if (Array.isArray(episodesData)) {
+              flatEps.push(...episodesData);
+            } else if (typeof episodesData === "object") {
+              for (const sk of Object.keys(episodesData).sort((a, b) => Number(a) - Number(b))) {
+                if (Array.isArray(episodesData[sk])) flatEps.push(...episodesData[sk]);
+              }
+            }
+            cached = { episodes: flatEps, fetchedAt: Date.now() };
+            nixplayEpisodeCache.set(seriesId, cached);
+          }
+        }
+        if (cached) {
+          const globalEp = tmdbSeason === 1 ? tmdbEpisode : tmdbEpisode;
+          if (globalEp >= 1 && globalEp <= cached.episodes.length) {
+            const correctEp = cached.episodes[globalEp - 1];
+            const correctId = correctEp.id || correctEp.episode_id;
+            if (correctId) {
+              videoUrl = `https://nixplay.lat/series/testelogado-vods/GwXanZ3Dj/${correctId}.mp4`;
+              console.log(`[nixplay] Epis\xF3dio remapeado: TMDB S${tmdbSeason}E${tmdbEpisode} \u2192 Nixplay ID ${correctId} (ep global ${globalEp})`);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("[nixplay] Erro ao remapear epis\xF3dio, usando URL original:", e);
+    }
+  }
   const encodedUrl = encodeURIComponent(videoUrl);
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -8381,6 +10163,8 @@ router11.get("/api/native-player", (req3, res) => {
       video.addEventListener('durationchange', sendStatus);
       video.addEventListener('volumechange', sendStatus);
       video.addEventListener('progress', sendStatus);
+      video.addEventListener('seeking', sendStatus);
+      video.addEventListener('seeked', sendStatus);
       video.addEventListener('error', function() {
         window.parent.postMessage({ type: 'WATCHPLAY_ERROR', reason: 'native_src_error' }, '*');
       });
@@ -8391,13 +10175,22 @@ router11.get("/api/native-player", (req3, res) => {
     var rawUrl = decodeURIComponent('${encodedUrl}');
     var needsResolve = rawUrl.indexOf('nixplay.lat') !== -1;
 
+    function applyNixProxy(url) {
+      if (!url) return url;
+      if (url.indexOf('/api/nixplay-proxy') !== -1) return url;
+      if (url.indexOf('http') === 0 && (url.indexOf('nixplay') !== -1 || url.indexOf('r2') !== -1 || url.indexOf('cloudflare') !== -1)) {
+        return '/api/nixplay-proxy?url=' + encodeURIComponent(url);
+      }
+      return url;
+    }
+
     if (needsResolve) {
-      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl, { signal: AbortSignal.timeout(15000) }))
+      fetch('/api/nixplay-resolve?url=' + encodeURIComponent(rawUrl))
         .then(function(r) { return r.json(); })
-        .then(function(data) { initVideo(data.url || rawUrl); })
-        .catch(function() { initVideo(rawUrl); });
+        .then(function(data) { initVideo(applyNixProxy(data.url || rawUrl)); })
+        .catch(function() { initVideo(applyNixProxy(rawUrl)); });
     } else {
-      initVideo(rawUrl);
+      initVideo(applyNixProxy(rawUrl));
     }
     window.addEventListener('message', function(e) {
                   if (e.data && e.data.type === 'SET_SUBTITLE_URL') {
@@ -8433,20 +10226,252 @@ router11.get("/api/native-player", (req3, res) => {
       var cmd = e.data;
       if (!cmd || !cmd.type) return;
       try {
-        if (cmd.type === 'PLAY' || cmd.type === 'play') { video.play(); }
-        else if (cmd.type === 'PAUSE' || cmd.type === 'pause') { video.pause(); }
-        else if (cmd.type === 'SEEK' && typeof cmd.targetTime === 'number') { video.currentTime = cmd.targetTime; }
-        else if (cmd.type === 'seek' && typeof cmd.time === 'number') { video.currentTime = cmd.time; }
-        else if (cmd.type === 'SET_VOLUME' && typeof cmd.volume === 'number') { video.volume = cmd.volume; video.muted = (cmd.volume === 0); }
-        else if (cmd.type === 'setMuted') { video.muted = !!cmd.muted; }
+        if (cmd.type === 'PLAY' || cmd.type === 'play') {
+          video.play().catch(function(){});
+        }
+        else if (cmd.type === 'PAUSE' || cmd.type === 'pause') {
+          video.pause();
+        }
+        else if (cmd.type === 'TOGGLE_PLAY' || cmd.type === 'togglePlay') {
+          if (video.paused) { video.play().catch(function(){}); } else { video.pause(); }
+        }
+        else if (cmd.type === 'SEEK' || cmd.type === 'seek' || cmd.type === 'SEEK_ABSOLUTE' || cmd.type === 'SEEK_RELATIVE') {
+          var target = typeof cmd.time === 'number' ? cmd.time : cmd.targetTime;
+          if (typeof target !== 'number' && typeof cmd.seconds === 'number') {
+            target = (video.currentTime || 0) + cmd.seconds;
+          }
+          if (typeof target === 'number' && !isNaN(target)) {
+            video.currentTime = Math.max(0, Math.min(target, (video.duration || 99999)));
+          }
+        }
+        else if (cmd.type === 'SKIP_INTRO') {
+          var sec = Number(cmd.seconds) || 85;
+          video.currentTime = Math.max(0, Math.min((video.currentTime || 0) + sec, (video.duration || 99999) - 5));
+        }
+        else if (cmd.type === 'SET_PLAYBACK_RATE' || cmd.type === 'setPlaybackRate') {
+          video.playbackRate = Number(cmd.rate) || 1;
+        }
+        else if (cmd.type === 'SET_VOLUME' && typeof cmd.volume === 'number') {
+          video.volume = Math.max(0, Math.min(1, cmd.volume));
+          video.muted = (cmd.volume === 0);
+        }
+        else if (cmd.type === 'setMuted' || cmd.type === 'SET_MUTED') {
+          video.muted = !!cmd.muted;
+        }
+        else if (cmd.type === 'REQUEST_NIXPLAY_STATS') {
+          if (typeof window.nixplayStats === 'function') window.nixplayStats();
+        }
         sendStatus();
       } catch(err) {}
     });
+
+    // ========================================================
+    // TELEMETRIA NIXPLAY: DETECTOR DE ENGASGOS, BUFFER E FRAMES
+    // ========================================================
+    var stallStart = 0;
+    var totalStalls = 0;
+    var totalStallDuration = 0;
+
+    function getBufferAhead() {
+      if (!video || !video.buffered || video.buffered.length === 0) return 0;
+      var cur = video.currentTime || 0;
+      for (var i = 0; i < video.buffered.length; i++) {
+        if (video.buffered.start(i) <= cur && cur <= video.buffered.end(i)) {
+          return +(video.buffered.end(i) - cur).toFixed(2);
+        }
+      }
+      return 0;
+    }
+
+    function getQualityStats() {
+      if (video && typeof video.getVideoPlaybackQuality === 'function') {
+        try {
+          var q = video.getVideoPlaybackQuality();
+          return {
+            totalFrames: q.totalVideoFrames || 0,
+            droppedFrames: q.droppedVideoFrames || 0,
+            corruptedFrames: q.corruptedVideoFrames || 0
+          };
+        } catch(e) {}
+      }
+      return null;
+    }
+
+    function reportStall(reason) {
+      if (!video || video.paused || video.ended) return;
+      var now = Date.now();
+      if (stallStart === 0) {
+        stallStart = now;
+        totalStalls++;
+      }
+      var duration = +((now - stallStart) / 1000).toFixed(2);
+      var bufferSec = getBufferAhead();
+      var q = getQualityStats();
+
+      window.parent.postMessage({
+        type: 'NIXPLAY_TELEMETRY_EVENT',
+        event: 'stall',
+        reason: reason,
+        duration: duration,
+        bufferAhead: bufferSec,
+        currentTime: +(video.currentTime || 0).toFixed(1),
+        src: video.currentSrc || video.src || '',
+        videoWidth: video.videoWidth || 0,
+        videoHeight: video.videoHeight || 0,
+        networkState: video.networkState,
+        readyState: video.readyState,
+        quality: q,
+        totalStalls: totalStalls
+      }, '*');
+    }
+
+    function clearStall() {
+      if (stallStart > 0) {
+        var duration = +((Date.now() - stallStart) / 1000).toFixed(2);
+        totalStallDuration += duration;
+        window.parent.postMessage({
+          type: 'NIXPLAY_TELEMETRY_EVENT',
+          event: 'recovered',
+          stallDuration: duration,
+          bufferAhead: getBufferAhead(),
+          currentTime: +(video.currentTime || 0).toFixed(1)
+        }, '*');
+        stallStart = 0;
+      }
+    }
+
+    video.addEventListener('waiting', function() { reportStall('waiting (buffer esgotado)'); });
+    video.addEventListener('stalled', function() { reportStall('stalled (CDN parou de responder dados)'); });
+    video.addEventListener('playing', clearStall);
+    video.addEventListener('canplay', clearStall);
+
+    // Watchdog de congelamento de tela (detecta quando o v\xEDdeo trava sem evento waiting nativo)
+    var lastCheckedTime = 0;
+    var lastCheckWallTime = Date.now();
+    var frozenTicks = 0;
+    setInterval(function() {
+      if (!video || video.paused || video.ended || video.seeking) {
+        lastCheckedTime = video ? video.currentTime : 0;
+        lastCheckWallTime = Date.now();
+        frozenTicks = 0;
+        return;
+      }
+      var now = Date.now();
+      var wallDelta = (now - lastCheckWallTime) / 1000;
+      var timeDelta = (video.currentTime || 0) - lastCheckedTime;
+      lastCheckedTime = video.currentTime || 0;
+      lastCheckWallTime = now;
+
+      // Se passou ~0.7s no rel\xF3gio real e o v\xEDdeo andou menos de 0.05s
+      if (wallDelta >= 0.7 && timeDelta < 0.05) {
+        frozenTicks++;
+        if (frozenTicks >= 2) {
+          reportStall('frame_freeze (\xE1udio/v\xEDdeo congelado)');
+        }
+        if (frozenTicks === 3) {
+          try {
+            video.currentTime = Math.max(0, (video.currentTime || 0) + 0.01);
+            video.play().catch(function(){});
+          } catch(e){}
+        } else if (frozenTicks === 6) {
+          try {
+            video.currentTime = Math.max(0, (video.currentTime || 0) - 0.2);
+            video.play().catch(function(){});
+          } catch(e){}
+        } else if (frozenTicks >= 10) {
+          try {
+            window.parent.postMessage({ type: 'WATCHPLAY_ERROR', reason: 'frame_freeze_unrecoverable' }, '*');
+          } catch(e){}
+        }
+      } else {
+        if (frozenTicks >= 2) clearStall();
+        frozenTicks = 0;
+      }
+    }, 600);
+
+    // Comando sob demanda no console: window.nixplayStats()
+    window.nixplayStats = function() {
+      var q = getQualityStats();
+      var stats = {
+        'Tempo Atual': +(video.currentTime || 0).toFixed(2) + 's',
+        'Dura\xE7\xE3o': +(video.duration || 0).toFixed(2) + 's',
+        'Pausado': video.paused,
+        'Buffer \xE0 Frente': getBufferAhead() + 's',
+        'Resolu\xE7\xE3o': (video.videoWidth || 0) + 'x' + (video.videoHeight || 0),
+        'Estado de Rede': ['EMPTY (0)', 'IDLE (1)', 'LOADING (2)', 'NO_SOURCE (3)'][video.networkState] || video.networkState,
+        'Ready State': ['HAVE_NOTHING (0)', 'HAVE_METADATA (1)', 'HAVE_CURRENT_DATA (2)', 'HAVE_FUTURE_DATA (3)', 'HAVE_ENOUGH_DATA (4)'][video.readyState] || video.readyState,
+        'Engasgos Detectados': totalStalls,
+        'Tempo Total Travado': +(totalStallDuration).toFixed(2) + 's',
+        'Perda de Quadros': q ? (q.droppedFrames + ' drops / ' + q.totalFrames + ' frames total (' + (q.totalFrames ? ((q.droppedFrames / q.totalFrames) * 100).toFixed(2) : 0) + '%)') : 'N/A',
+        'URL da Fonte CDN': video.currentSrc || video.src
+      };
+      console.log('%c[NixPlay Telemetria] \u{1F4CA} RELAT\xD3RIO DO STREAMING', 'background:#1e293b;color:#38bdf8;font-weight:bold;padding:4px 8px;border-radius:4px;');
+      console.table(stats);
+      return stats;
+    };
   </script>
 </body>
 </html>`;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(html);
+});
+router11.get("/api/nixplay-proxy", async (req3, res) => {
+  try {
+    const targetUrl = String(req3.query.url || "").trim();
+    if (!targetUrl) {
+      return res.status(400).send("URL de m\xEDdia inv\xE1lida.");
+    }
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Referer": "https://nixplay.lat/",
+      "Origin": "https://nixplay.lat",
+      "Connection": "keep-alive"
+    };
+    if (req3.headers.range) {
+      headers["Range"] = req3.headers.range;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15e3);
+    req3.on("close", () => controller.abort());
+    const upstream = await fetch(targetUrl, { signal: controller.signal, headers });
+    clearTimeout(timeoutId);
+    res.status(upstream.status);
+    for (const [key, value] of upstream.headers.entries()) {
+      const lk = key.toLowerCase();
+      if (lk === "content-length") continue;
+      if (["content-type", "content-range", "accept-ranges"].includes(lk)) {
+        res.setHeader(key, value);
+      }
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (!upstream.body) {
+      return res.end();
+    }
+    const { Readable: Readable4 } = await import("stream");
+    const source = Readable4.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    source.pipe(res);
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      if (!res.headersSent) res.end();
+      return;
+    }
+    console.error("[nixplay-proxy] Erro:", err);
+    if (!res.headersSent) res.status(500).send("Erro no proxy do Nixplay");
+    else res.destroy();
+  }
 });
 router11.get("/api/proxy-test", async (req3, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -8496,20 +10521,20 @@ var nixplayRoutes_default = router11;
 
 // server/routes/serverBlocks.ts
 var import_express13 = require("express");
-var import_fs5 = __toESM(require("fs"), 1);
-var import_path5 = __toESM(require("path"), 1);
+var import_fs7 = __toESM(require("fs"), 1);
+var import_path7 = __toESM(require("path"), 1);
 var router12 = (0, import_express13.Router)();
-var BLOCKS_FILE = import_path5.default.join(process.cwd(), "data", "server-blocks.json");
-var BLOCKS_DIR = import_path5.default.dirname(BLOCKS_FILE);
+var BLOCKS_FILE = import_path7.default.join(process.cwd(), "data", "server-blocks.json");
+var BLOCKS_DIR = import_path7.default.dirname(BLOCKS_FILE);
 var _blocks = [];
 var _blocksByTmdb = /* @__PURE__ */ new Map();
 var _loaded = false;
 var ADMIN_TOKEN_HEADER = "x-admin-token";
 function loadBlocks() {
   try {
-    if (!import_fs5.default.existsSync(BLOCKS_FILE)) {
-      if (!import_fs5.default.existsSync(BLOCKS_DIR)) {
-        import_fs5.default.mkdirSync(BLOCKS_DIR, { recursive: true });
+    if (!import_fs7.default.existsSync(BLOCKS_FILE)) {
+      if (!import_fs7.default.existsSync(BLOCKS_DIR)) {
+        import_fs7.default.mkdirSync(BLOCKS_DIR, { recursive: true });
       }
       const seed = [
         {
@@ -8533,10 +10558,10 @@ function loadBlocks() {
           blockedBy: "system-seed"
         }
       ];
-      import_fs5.default.writeFileSync(BLOCKS_FILE, JSON.stringify(seed, null, 2), "utf-8");
+      import_fs7.default.writeFileSync(BLOCKS_FILE, JSON.stringify(seed, null, 2), "utf-8");
       _blocks = seed;
     } else {
-      const raw = import_fs5.default.readFileSync(BLOCKS_FILE, "utf-8");
+      const raw = import_fs7.default.readFileSync(BLOCKS_FILE, "utf-8");
       _blocks = JSON.parse(raw || "[]");
     }
   } catch (err) {
@@ -8559,10 +10584,10 @@ function ensureLoaded() {
 }
 function persistBlocks() {
   try {
-    if (!import_fs5.default.existsSync(BLOCKS_DIR)) {
-      import_fs5.default.mkdirSync(BLOCKS_DIR, { recursive: true });
+    if (!import_fs7.default.existsSync(BLOCKS_DIR)) {
+      import_fs7.default.mkdirSync(BLOCKS_DIR, { recursive: true });
     }
-    import_fs5.default.writeFileSync(BLOCKS_FILE, JSON.stringify(_blocks, null, 2), "utf-8");
+    import_fs7.default.writeFileSync(BLOCKS_FILE, JSON.stringify(_blocks, null, 2), "utf-8");
   } catch (err) {
     console.error("[server-blocks] Falha ao persistir:", err);
   }
@@ -8757,30 +10782,905 @@ router12.patch("/api/admin/server-blocks/:id", async (req3, res) => {
 });
 var serverBlocks_default = router12;
 
-// server/routes/adminOps.ts
+// server/routes/streamtapeRoutes.ts
 var import_express14 = require("express");
-var import_fs6 = __toESM(require("fs"), 1);
-var import_path6 = __toESM(require("path"), 1);
+var import_stream2 = require("stream");
+var import_fs8 = __toESM(require("fs"), 1);
+var import_path8 = __toESM(require("path"), 1);
+var streamtapeRouter = (0, import_express14.Router)();
+var streamtapeMemoryCache = /* @__PURE__ */ new Map();
+var directUrlToFileId = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS = 20 * 60 * 1e3;
+var _localCatalog = null;
+function getLocalCatalog() {
+  if (!_localCatalog) {
+    try {
+      const p = import_path8.default.join(process.cwd(), "data", "encontrei-catalog.json");
+      if (import_fs8.default.existsSync(p)) {
+        _localCatalog = JSON.parse(import_fs8.default.readFileSync(p, "utf8"));
+      }
+    } catch (e) {
+      console.warn("[StreamTape] Falha ao carregar encontrei-catalog.json:", e);
+    }
+  }
+  return _localCatalog;
+}
+function findStreamtapeInCatalog(tmdbId, season, episode) {
+  const cat = getLocalCatalog();
+  if (!cat) return null;
+  if (season !== void 0 && episode !== void 0) {
+    const ep = (cat.episodes || []).find(
+      (x) => Number(x.tmdb_id) === Number(tmdbId) && Number(x.season) === Number(season) && Number(x.episode) === Number(episode)
+    );
+    if (ep?.servers?.streamtape) return ep.servers.streamtape;
+  } else {
+    const m = (cat.movies || []).find((x) => Number(x.tmdb_id) === Number(tmdbId));
+    if (m?.servers?.streamtape) return m.servers.streamtape;
+  }
+  return null;
+}
+async function resolveStreamTapeToken(fileId) {
+  const cleanId = String(fileId || "").trim();
+  if (!cleanId) return null;
+  const cached = streamtapeMemoryCache.get(cleanId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.directUrl;
+  }
+  const embedUrl = `https://streamtape.com/e/${cleanId}/`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12e3);
+  try {
+    const upstream = await fetch(embedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (!upstream.ok) return null;
+    const html = await upstream.text();
+    if (html.includes("Video not found") || html.includes("has been deleted")) {
+      return null;
+    }
+    let nextUrl = null;
+    const dynamicMatch = html.match(/document\.getElementById\(['"](?:botlink|robotlink)['"]\)\.innerHTML\s*=\s*(.+?);/);
+    if (dynamicMatch && dynamicMatch[1]) {
+      try {
+        const evaluated = new Function(`return ${dynamicMatch[1]};`)();
+        let target = String(evaluated).trim();
+        if (target.startsWith("//")) {
+          nextUrl = "https:" + target;
+        } else if (target.startsWith("http")) {
+          nextUrl = target;
+        } else {
+          nextUrl = "https://streamtape.com" + (target.startsWith("/") ? "" : "/") + target;
+        }
+        if (!nextUrl.includes("&stream=1")) {
+          nextUrl += "&stream=1";
+        }
+      } catch (e) {
+        console.warn(`[StreamTape Resolver] Falha ao avaliar script din\xE2mico para ${cleanId}:`, e);
+      }
+    }
+    if (!nextUrl) {
+      const subMatch = html.match(/document\.getElementById\(['"][^'"]+link['"]\)\.innerHTML\s*=\s*['"][^'"]+['"]\s*\+\s*\((['"][^'"]+['"]\)\.substring\([0-9]+\)(?:\.substring\([0-9]+\))?)/);
+      if (subMatch && subMatch[1]) {
+        try {
+          const evalStr = new Function(`return (${subMatch[1]})`)();
+          const cleanQuery = evalStr.replace(/^[/?&]+/, "");
+          if (cleanQuery.includes("id=")) {
+            nextUrl = `https://streamtape.com/get_video?${cleanQuery}&stream=1`;
+          }
+        } catch {
+        }
+      }
+    }
+    if (!nextUrl) {
+      console.warn(`[StreamTape Resolver] N\xE3o foi poss\xEDvel extrair o link de v\xEDdeo para fileId: ${cleanId}`);
+      return null;
+    }
+    const headRes = await fetch(nextUrl, {
+      method: "HEAD",
+      redirect: "manual",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": embedUrl
+      },
+      signal: AbortSignal.timeout(15e3)
+    });
+    const location = headRes.headers.get("location");
+    if (!location) {
+      console.warn(`[StreamTape Resolver] HEAD em get_video n\xE3o retornou Location redirect (status: ${headRes.status})`);
+      return null;
+    }
+    streamtapeMemoryCache.set(cleanId, {
+      directUrl: location,
+      fileId: cleanId,
+      expiresAt: Date.now() + CACHE_TTL_MS
+    });
+    directUrlToFileId.set(location, cleanId);
+    return location;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err?.name !== "AbortError") {
+      console.error(`[StreamTape Resolver] Erro ao resolver fileId ${cleanId}:`, err?.message || err);
+    }
+    return null;
+  }
+}
+streamtapeRouter.get("/api/streamtape-resolve", async (req3, res) => {
+  try {
+    let fileId = String(req3.query.fileId || "").trim();
+    const tmdbId = Number(req3.query.tmdbId || req3.query.id);
+    const season = req3.query.s ? Number(req3.query.s) : void 0;
+    const episode = req3.query.e ? Number(req3.query.e) : void 0;
+    if (!fileId && tmdbId) {
+      fileId = findStreamtapeInCatalog(tmdbId, season, episode) || "";
+    }
+    if (!fileId) {
+      return res.status(404).json({ success: false, error: "File ID do StreamTape n\xE3o encontrado para este conte\xFAdo." });
+    }
+    const directUrl = await resolveStreamTapeToken(fileId);
+    if (!directUrl) {
+      return res.status(502).json({ success: false, error: "V\xEDdeo do StreamTape indispon\xEDvel ou expirado." });
+    }
+    res.json({
+      success: true,
+      fileId,
+      directUrl,
+      proxyUrl: `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err?.message || "Erro interno no resolvedor" });
+  }
+});
+streamtapeRouter.get("/api/streamtape-stream", async (req3, res) => {
+  try {
+    let videoUrl = String(req3.query.url || "").trim();
+    const fileId = String(req3.query.fileId || "").trim();
+    if (!videoUrl || !videoUrl.includes("tapecontent.net") && !videoUrl.includes("streamtape")) {
+      return res.status(400).send("URL de streaming inv\xE1lida.");
+    }
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Referer": "https://streamtape.com/",
+      "Origin": "https://streamtape.com",
+      "Connection": "keep-alive"
+    };
+    if (req3.headers.range) {
+      headers["Range"] = req3.headers.range;
+    }
+    let controller = new AbortController();
+    let timeoutId = setTimeout(() => controller.abort(), 15e3);
+    req3.on("close", () => controller.abort());
+    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+    clearTimeout(timeoutId);
+    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
+      const targetFileId = fileId || directUrlToFileId.get(videoUrl) || "";
+      if (targetFileId) {
+        console.warn(`[StreamTape Proxy] Token CDN expirado (${upstream.status}) para fileId ${targetFileId}. Renovando token em tempo real...`);
+        streamtapeMemoryCache.delete(targetFileId);
+        try {
+          await upstream.text();
+        } catch (_) {
+        }
+        const freshDirectUrl = await resolveStreamTapeToken(targetFileId);
+        if (freshDirectUrl) {
+          videoUrl = freshDirectUrl;
+          controller = new AbortController();
+          timeoutId = setTimeout(() => controller.abort(), 15e3);
+          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+          clearTimeout(timeoutId);
+        }
+      }
+    }
+    res.status(upstream.status);
+    for (const [key, value] of upstream.headers.entries()) {
+      const lk = key.toLowerCase();
+      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
+        res.setHeader(key, value);
+      }
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (!upstream.body) return res.end();
+    const source = import_stream2.Readable.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    source.pipe(res);
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      if (!res.headersSent) res.end();
+      return;
+    }
+    console.error("[StreamTape Proxy Error]:", err?.message || err);
+    if (!res.headersSent) res.status(500).send("Erro no proxy de v\xEDdeo");
+    else res.destroy();
+  }
+});
+streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
+  try {
+    let fileId = String(req3.query.fileId || "").trim();
+    const id = req3.query.id ? Number(req3.query.id) : void 0;
+    const season = req3.query.s ? Number(req3.query.s) : void 0;
+    const episode = req3.query.e ? Number(req3.query.e) : void 0;
+    const name = req3.query.name ? String(req3.query.name) : void 0;
+    const initialTime = Math.max(0, parseFloat(String(req3.query.t || "0")));
+    if (!fileId && id) {
+      fileId = findStreamtapeInCatalog(id, season, episode) || "";
+      if (!fileId) {
+        try {
+          if (season !== void 0 && episode !== void 0) {
+            const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+            fileId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
+          } else {
+            const liveEnc = await resolveEncontreiMovie(id, name);
+            fileId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
+          }
+        } catch (e) {
+          console.warn("[StreamTape Live Lookup Error]:", e);
+        }
+      }
+    }
+    if (!fileId) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body>
+          <div style="text-align:center;"><h2>StreamTape Indispon\xEDvel</h2><p>Conte\xFAdo n\xE3o encontrado no cat\xE1logo do StreamTape.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Conte\xFAdo n\xE3o encontrado no cat\xE1logo" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
+      `);
+    }
+    let directUrl = await resolveStreamTapeToken(fileId);
+    if (!directUrl && id) {
+      console.warn(`[StreamTape] fileId ${fileId} expirado ou removido. Buscando novo link ao vivo do Encontrei/Vizer...`);
+      try {
+        let freshId = null;
+        if (season !== void 0 && episode !== void 0) {
+          const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+          freshId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
+        } else {
+          const liveEnc = await resolveEncontreiMovie(id, name);
+          freshId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
+        }
+        if (freshId && freshId !== fileId) {
+          fileId = freshId;
+          directUrl = await resolveStreamTapeToken(fileId);
+        }
+      } catch (e) {
+        console.warn("[StreamTape Auto-Recovery Error]:", e);
+      }
+    }
+    if (!directUrl) {
+      return res.status(502).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body>
+          <div style="text-align:center;"><h2>V\xEDdeo Expirado</h2><p>O arquivo no StreamTape foi removido ou est\xE1 temporariamente offline.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: V\xEDdeo expirado ou removido" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
+      `);
+    }
+    const streamUrl = `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`;
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
+    #container { width: 100%; height: 100%; position: relative; }
+    video { width: 100%; height: 100%; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <video id="video" src="${streamUrl}" playsinline webkit-playsinline></video>
+  </div>
+  <script>
+    (function() {
+      var v = document.getElementById("video");
+      var hasEverPlayed = false;
+      var initialSeek = ${initialTime};
+
+      // Se foi passado timestamp inicial (ex: retomada ap\xF3s pausa longa ou Continuar Assistindo),
+      // posiciona no segundo salvo assim que os metadados do v\xEDdeo estiverem prontos
+      if (initialSeek > 0) {
+        var appliedInitial = false;
+        var applySeek = function() {
+          if (!appliedInitial && v && v.readyState >= 1) {
+            appliedInitial = true;
+            try { v.currentTime = initialSeek; } catch(e) {}
+          }
+        };
+        v.addEventListener("loadedmetadata", applySeek);
+        v.addEventListener("canplay", applySeek);
+        v.addEventListener("play", applySeek);
+      }
+
+      function sendStatus() {
+        if (!v) return;
+        var dur = v.duration || 0;
+        var cur = v.currentTime || 0;
+        var bufferedEnd = 0;
+        if (v.buffered && v.buffered.length > 0) {
+          bufferedEnd = v.buffered.end(v.buffered.length - 1);
+        }
+        try {
+          window.parent.postMessage({
+            type: "WATCHPLAY_STATUS",
+            currentTime: cur,
+            duration: dur,
+            paused: !!v.paused,
+            muted: !!v.muted,
+            volume: typeof v.volume === "number" ? v.volume : 1,
+            buffered: bufferedEnd,
+            playbackRate: v.playbackRate || 1,
+            readyState: v.readyState || 0
+          }, "*");
+        } catch(e) {}
+      }
+
+      setInterval(sendStatus, 300);
+
+      v.addEventListener("play", function() {
+        hasEverPlayed = true;
+        try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PLAYING" }, "*"); } catch(e) {}
+      });
+      v.addEventListener("pause", function() {
+        try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PAUSED" }, "*"); } catch(e) {}
+      });
+      v.addEventListener("ended", function() {
+        try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
+      });
+
+      // Auto-recovery de erro no v\xEDdeo: se falhar ap\xF3s o v\xEDdeo j\xE1 ter iniciado, tenta recarregar fonte com o tempo salvo
+      var hasRecoveredOnce = false;
+      v.addEventListener("error", function() {
+        var cur = (v && v.currentTime > 2) ? v.currentTime : initialSeek;
+        if (!hasRecoveredOnce && cur > 2) {
+          hasRecoveredOnce = true;
+          console.warn("[StreamTape Iframe] Erro detectado no v\xEDdeo. Renovando token via auto-recovery na posi\xE7\xE3o:", cur);
+          fetch("/api/streamtape-resolve?fileId=" + encodeURIComponent("${fileId}"))
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+              if (data && data.proxyUrl) {
+                v.src = data.proxyUrl + "&_cb=" + Date.now();
+                var onReloadSeek = function() {
+                  try {
+                    v.currentTime = cur;
+                    v.play().catch(function(){});
+                  } catch(e) {}
+                };
+                v.addEventListener("loadedmetadata", onReloadSeek, { once: true });
+                v.addEventListener("canplay", onReloadSeek, { once: true });
+                v.load();
+                return;
+              }
+              throw new Error("Sem proxyUrl");
+            })
+            .catch(function() {
+              try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de v\xEDdeo" }, "*"); } catch(e) {}
+            });
+          return;
+        }
+        try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de v\xEDdeo" }, "*"); } catch(e) {}
+      });
+
+      // Receptor de comandos da NetflixPlayerSkin
+      window.addEventListener("message", function(event) {
+        if (!event.data) return;
+        var d = event.data;
+        if (d.type === "PAUSE" && v) v.pause();
+        if (d.type === "PLAY" && v) v.play().catch(function(){});
+        if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
+          if (v.readyState >= 1) {
+            v.currentTime = d.targetTime;
+          } else {
+            initialSeek = d.targetTime;
+          }
+        }
+        if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") {
+          if (v.readyState >= 1) {
+            v.currentTime = d.time;
+          } else {
+            initialSeek = d.time;
+          }
+        }
+        if (d.type === "SEEK_RELATIVE" && v && typeof d.seconds === "number") v.currentTime = v.currentTime + d.seconds;
+        if (d.type === "SKIP_INTRO" && v) {
+          var secIntro = typeof d.seconds === "number" ? d.seconds : 75;
+          v.currentTime = Math.max(0, Math.min(v.currentTime + secIntro, (v.duration || 99999) - 5));
+        }
+        if (d.type === "MUTE" && v) v.muted = true;
+        if (d.type === "UNMUTE" && v) v.muted = false;
+        if (d.type === "SET_VOLUME" && v && typeof d.volume === "number") v.volume = d.volume;
+        if (d.type === "SET_PLAYBACK_RATE" && v && typeof d.rate === "number") v.playbackRate = d.rate;
+      });
+
+      // Autoplay com fallback para muted se bloqueado pelo browser
+      var playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(function() {
+          v.muted = true;
+          v.play().catch(function(){});
+        });
+      }
+    })();
+  </script>
+</body>
+</html>`;
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(html);
+  } catch (err) {
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+      <body>
+        <div style="text-align:center;"><h2>Erro no StreamTape</h2><p>Erro interno ao renderizar reprodutor.</p></div>
+        <script>
+          try {
+            if (window.parent !== window) {
+              window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro interno no servidor" }, "*");
+            }
+          } catch(e) {}
+        </script>
+      </body></html>
+    `);
+  }
+});
+var streamtapeRoutes_default = streamtapeRouter;
+
+// server/routes/doodstreamRoutes.ts
+var import_express15 = require("express");
+var import_stream3 = require("stream");
+var import_fs9 = __toESM(require("fs"), 1);
+var import_path9 = __toESM(require("path"), 1);
+var doodstreamRouter = (0, import_express15.Router)();
+var doodstreamMemoryCache = /* @__PURE__ */ new Map();
+var CACHE_TTL_MS2 = 2 * 60 * 60 * 1e3;
+var _localCatalog2 = null;
+function getLocalCatalog2() {
+  if (!_localCatalog2) {
+    try {
+      const p = import_path9.default.join(process.cwd(), "data", "encontrei-catalog.json");
+      if (import_fs9.default.existsSync(p)) {
+        _localCatalog2 = JSON.parse(import_fs9.default.readFileSync(p, "utf8"));
+      }
+    } catch (e) {
+      console.warn("[DoodStream] Falha ao carregar encontrei-catalog.json:", e);
+    }
+  }
+  return _localCatalog2;
+}
+function findDoodstreamInCatalog(tmdbId, season, episode) {
+  const cat = getLocalCatalog2();
+  if (!cat) return null;
+  if (season !== void 0 && episode !== void 0) {
+    const ep = (cat.episodes || []).find(
+      (x) => Number(x.tmdb_id) === Number(tmdbId) && Number(x.season) === Number(season) && Number(x.episode) === Number(episode)
+    );
+    if (ep?.servers?.doodstream) return ep.servers.doodstream;
+  } else {
+    const m = (cat.movies || []).find((x) => Number(x.tmdb_id) === Number(tmdbId));
+    if (m?.servers?.doodstream) return m.servers.doodstream;
+  }
+  return null;
+}
+async function resolveDoodStreamToken(fileId) {
+  const cleanId = String(fileId || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!cleanId) return null;
+  const cached = doodstreamMemoryCache.get(cleanId);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached;
+  }
+  const primaryDomain = "playmogo.com";
+  const embedUrl = `https://${primaryDomain}/e/${cleanId}`;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8e3);
+    const upstream = await fetch(embedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": "https://encontrei.me/"
+      },
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+    if (upstream.status === 404) {
+      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS2 });
+      return { alive: false, embedUrl };
+    }
+    const html = await upstream.text();
+    if (html.includes("Video not found") || html.includes("video you are looking for is not found") || html.includes("no_video_3.svg")) {
+      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS2 });
+      return { alive: false, embedUrl };
+    }
+    let directUrl = void 0;
+    const passMatch = html.match(/\/pass_md5\/([a-zA-Z0-9_\/-]+)/);
+    if (passMatch) {
+      try {
+        const passRes = await fetch(`https://${primaryDomain}${passMatch[0]}`, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Referer": embedUrl
+          },
+          signal: AbortSignal.timeout(6e3)
+        });
+        if (passRes.ok) {
+          const passData = await passRes.text();
+          if (passData && passData.startsWith("http")) {
+            const token = passMatch[1].split("/").pop();
+            const rand = Math.random().toString(36).substring(2, 12);
+            directUrl = `${passData}${rand}?token=${token}&expiry=${Date.now()}`;
+          }
+        }
+      } catch {
+      }
+    }
+    const entry = {
+      alive: true,
+      directUrl,
+      embedUrl,
+      fileId: cleanId,
+      expiresAt: Date.now() + CACHE_TTL_MS2
+    };
+    doodstreamMemoryCache.set(cleanId, entry);
+    return entry;
+  } catch (err) {
+    if (err?.name !== "AbortError") {
+      console.warn(`[DoodStream Resolver] Erro ao resolver fileId ${cleanId}:`, err?.message || err);
+    }
+    return { alive: true, embedUrl };
+  }
+}
+doodstreamRouter.get("/api/doodstream-resolve", async (req3, res) => {
+  try {
+    let fileId = String(req3.query.fileId || "").trim();
+    const tmdbId = Number(req3.query.tmdbId || req3.query.id);
+    const season = req3.query.s ? Number(req3.query.s) : void 0;
+    const episode = req3.query.e ? Number(req3.query.e) : void 0;
+    if (!fileId && tmdbId) {
+      fileId = findDoodstreamInCatalog(tmdbId, season, episode) || "";
+    }
+    if (!fileId) {
+      return res.status(400).json({ error: "fileId ou id \xE9 obrigat\xF3rio" });
+    }
+    const resolved = await resolveDoodStreamToken(fileId);
+    if (!resolved || !resolved.alive) {
+      return res.status(404).json({ error: "V\xEDdeo n\xE3o encontrado ou expirado no DoodStream" });
+    }
+    return res.json({
+      fileId,
+      directUrl: resolved.directUrl || null,
+      embedUrl: resolved.embedUrl
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Erro interno no DoodStream resolver" });
+  }
+});
+doodstreamRouter.get("/api/doodstream-stream", async (req3, res) => {
+  try {
+    const videoUrl = String(req3.query.url || "").trim();
+    if (!videoUrl || !videoUrl.includes("dood") && !videoUrl.includes("cloudatacdn.com") && !videoUrl.includes("playmogo.com")) {
+      return res.status(400).send("URL de streaming inv\xE1lida.");
+    }
+    const headers = {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "Accept": "*/*",
+      "Accept-Encoding": "identity",
+      "Referer": "https://playmogo.com/",
+      "Origin": "https://playmogo.com",
+      "Connection": "keep-alive"
+    };
+    if (req3.headers.range) {
+      headers["Range"] = req3.headers.range;
+    }
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15e3);
+    req3.on("close", () => controller.abort());
+    const upstream = await fetch(videoUrl, { signal: controller.signal, headers });
+    clearTimeout(timeoutId);
+    res.status(upstream.status);
+    for (const [key, value] of upstream.headers.entries()) {
+      const lk = key.toLowerCase();
+      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
+        res.setHeader(key, value);
+      }
+    }
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (!upstream.body) return res.end();
+    const source = import_stream3.Readable.fromWeb(upstream.body);
+    let sourceFailed = false;
+    source.on("error", () => {
+      if (sourceFailed || res.writableEnded) return;
+      sourceFailed = true;
+      controller.abort();
+      if (upstream.status === 206) res.destroy();
+      else res.end();
+    });
+    source.pipe(res);
+    res.on("close", () => controller.abort());
+    res.on("error", () => controller.abort());
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      if (!res.headersSent) res.end();
+      return;
+    }
+    console.error("[DoodStream Proxy Error]:", err?.message || err);
+    if (!res.headersSent) res.status(500).send("Erro no proxy de v\xEDdeo");
+    else res.destroy();
+  }
+});
+doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req3, res) => {
+  try {
+    let fileId = String(req3.query.fileId || "").trim();
+    const id = req3.query.id ? Number(req3.query.id) : void 0;
+    const season = req3.query.s ? Number(req3.query.s) : void 0;
+    const episode = req3.query.e ? Number(req3.query.e) : void 0;
+    const name = req3.query.name ? String(req3.query.name) : void 0;
+    if (!fileId && id) {
+      fileId = findDoodstreamInCatalog(id, season, episode) || "";
+      if (!fileId) {
+        try {
+          if (season !== void 0 && episode !== void 0) {
+            const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+            fileId = liveEnc?.doodstream || (await resolveVizerEpisode(id, season, episode, name))?.doodstream || "";
+          } else {
+            const liveEnc = await resolveEncontreiMovie(id, name);
+            fileId = liveEnc?.doodstream || (await resolveVizerMovie(id, name))?.doodstream || "";
+          }
+        } catch (e) {
+          console.warn("[DoodStream Live Lookup Error]:", e);
+        }
+      }
+    }
+    if (!fileId) {
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body>
+          <div style="text-align:center;"><h2>Conte\xFAdo Indispon\xEDvel</h2><p>Este t\xEDtulo n\xE3o est\xE1 dispon\xEDvel no servidor DoodStream HD.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Conte\xFAdo n\xE3o encontrado no cat\xE1logo" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
+      `);
+    }
+    let resolved = await resolveDoodStreamToken(fileId);
+    if ((!resolved || !resolved.alive) && id) {
+      console.warn(`[DoodStream] fileId ${fileId} expirado ou removido. Buscando novo link ao vivo do Encontrei/Vizer...`);
+      try {
+        let freshId = null;
+        if (season !== void 0 && episode !== void 0) {
+          const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
+          freshId = liveEnc?.doodstream || (await resolveVizerEpisode(id, season, episode, name))?.doodstream || null;
+        } else {
+          const liveEnc = await resolveEncontreiMovie(id, name);
+          freshId = liveEnc?.doodstream || (await resolveVizerMovie(id, name))?.doodstream || null;
+        }
+        if (freshId && freshId !== fileId) {
+          fileId = freshId;
+          resolved = await resolveDoodStreamToken(fileId);
+        }
+      } catch (e) {
+        console.warn("[DoodStream Auto-Recovery Error]:", e);
+      }
+    }
+    if (!resolved || !resolved.alive) {
+      return res.status(502).send(`
+        <!DOCTYPE html>
+        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+        <body>
+          <div style="text-align:center;"><h2>V\xEDdeo Expirado</h2><p>O arquivo no DoodStream foi removido ou est\xE1 temporariamente offline.</p></div>
+          <script>
+            try {
+              if (window.parent !== window) {
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: V\xEDdeo expirado ou removido" }, "*");
+              }
+            } catch(e) {}
+          </script>
+        </body></html>
+      `);
+    }
+    if (resolved.directUrl) {
+      const streamUrl = `/api/doodstream-stream?url=${encodeURIComponent(resolved.directUrl)}`;
+      return res.send(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <style>
+    body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
+    #container { width: 100%; height: 100%; position: relative; }
+    video { width: 100%; height: 100%; object-fit: contain; }
+  </style>
+</head>
+<body>
+  <div id="container">
+    <video id="video" src="${streamUrl}" playsinline webkit-playsinline preload="auto"></video>
+  </div>
+  <script>
+    (function() {
+      var v = document.getElementById("video");
+      if (!v) return;
+
+      function notifyReady() {
+        try {
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "WATCHPLAY_READY" }, "*");
+          }
+        } catch(e) {}
+      }
+
+      function sendStatus() {
+        if (!v) return;
+        var dur = v.duration || 0;
+        var cur = v.currentTime || 0;
+        var bufferedEnd = 0;
+        if (v.buffered && v.buffered.length > 0) {
+          bufferedEnd = v.buffered.end(v.buffered.length - 1);
+        }
+        try {
+          if (window.parent !== window) {
+            window.parent.postMessage({
+              type: "WATCHPLAY_STATUS",
+              currentTime: cur,
+              duration: dur,
+              paused: !!v.paused,
+              muted: !!v.muted,
+              volume: typeof v.volume === "number" ? v.volume : 1,
+              buffered: bufferedEnd,
+              playbackRate: v.playbackRate || 1,
+              readyState: v.readyState || 0
+            }, "*");
+          }
+        } catch(e) {}
+      }
+
+      v.addEventListener("loadedmetadata", function() {
+        notifyReady();
+        sendStatus();
+      });
+      v.addEventListener("play", sendStatus);
+      v.addEventListener("pause", sendStatus);
+      v.addEventListener("timeupdate", sendStatus);
+      v.addEventListener("ended", function() {
+        try {
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*");
+          }
+        } catch(e) {}
+      });
+      v.addEventListener("error", function() {
+        try {
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Falha na reprodu\xE7\xE3o do stream" }, "*");
+          }
+        } catch(e) {}
+      });
+
+      var playPromise = v.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(function() {
+          v.muted = true;
+          v.play().catch(function() {});
+        });
+      }
+
+      setInterval(sendStatus, 300);
+
+      window.addEventListener("message", function(e) {
+        if (!e.data || typeof e.data !== "object") return;
+        switch(e.data.type) {
+          case "PLAY": v.play().catch(function(){}); break;
+          case "PAUSE": v.pause(); break;
+          case "TOGGLE_PLAY": if (v.paused) v.play().catch(function(){}); else v.pause(); break;
+          case "SEEK":
+          case "SEEK_ABSOLUTE":
+            var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+            if (typeof t === "number" && !isNaN(t)) v.currentTime = t;
+            break;
+          case "SEEK_RELATIVE":
+            var dt = Number(e.data.seconds || 0);
+            if (!isNaN(dt)) v.currentTime = Math.max(0, Math.min(v.duration || 99999, v.currentTime + dt));
+            break;
+          case "SKIP_INTRO":
+            var skipSec = typeof e.data.seconds === "number" ? e.data.seconds : 75;
+            v.currentTime = Math.max(0, Math.min((v.duration || 99999) - 5, v.currentTime + skipSec));
+            break;
+          case "SET_VOLUME":
+            if (typeof e.data.volume === "number") {
+              v.volume = Math.max(0, Math.min(1, e.data.volume));
+              if (v.volume > 0) v.muted = false;
+            }
+            break;
+          case "SET_MUTED": v.muted = !!e.data.muted; break;
+          case "SET_PLAYBACK_RATE":
+            if (typeof e.data.rate === "number") v.playbackRate = e.data.rate;
+            break;
+          case "REQUEST_STATUS": sendStatus(); break;
+        }
+      });
+    })();
+  </script>
+</body>
+</html>`);
+    }
+    return res.status(502).send(`<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
+<body>
+  <div style="text-align:center;"><h2>DoodStream Indispon\xEDvel</h2><p>Servidor DoodStream indispon\xEDvel ou bloqueado por prote\xE7\xE3o de origem.</p></div>
+  <script>
+    try {
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Prote\xE7\xE3o de origem ou v\xEDdeo indispon\xEDvel" }, "*");
+      }
+    } catch(e) {}
+  </script>
+</body>
+</html>`);
+  } catch (err) {
+    console.error("[DoodStream Proxy Iframe Error]:", err?.message || err);
+    return res.status(500).send("Erro interno ao carregar DoodStream HD");
+  }
+});
+
+// server/routes/adminOps.ts
+var import_express16 = require("express");
+var import_fs10 = __toESM(require("fs"), 1);
+var import_path10 = __toESM(require("path"), 1);
+init_firebaseAdmin();
 var import_child_process = require("child_process");
 var import_ssh2 = require("ssh2");
-var adminOpsRouter = (0, import_express14.Router)();
+var adminOpsRouter = (0, import_express16.Router)();
 var ORACLE_VPS_HOST = process.env.ORACLE_VPS_HOST || "147.15.57.146";
 var ORACLE_VPS_PORT = parseInt(process.env.ORACLE_VPS_PORT || "22", 10);
 var ORACLE_VPS_USER = process.env.ORACLE_VPS_USER || "ubuntu";
 var ORACLE_HEALTH_URL = process.env.ORACLE_HEALTH_URL || "https://play-infinity.stream/api/health";
 function getSshPrivateKey() {
   const possiblePaths = [
-    import_path6.default.join(process.cwd(), "oracle-vps.key"),
-    import_path6.default.join(process.cwd(), "secrets", "oracle-vps.key"),
+    import_path10.default.join(process.cwd(), "oracle-vps.key"),
+    import_path10.default.join(process.cwd(), "secrets", "oracle-vps.key"),
     "/home/ubuntu/play-infinity/secrets/oracle-vps.key",
     "/home/ubuntu/.ssh/id_rsa",
     "/home/ubuntu/.ssh/id_ed25519",
     "/etc/secrets/oracle-vps.key"
   ];
   for (const p of possiblePaths) {
-    if (import_fs6.default.existsSync(p)) {
+    if (import_fs10.default.existsSync(p)) {
       try {
-        return import_fs6.default.readFileSync(p, "utf-8");
+        return import_fs10.default.readFileSync(p, "utf-8");
       } catch (err) {
         console.warn(`[AdminOps] Falha ao ler chave em ${p}:`, err);
       }
@@ -8792,7 +11692,7 @@ function getSshPrivateKey() {
   return null;
 }
 async function executeSystemOrSshCommand(command, timeoutMs = 25e3) {
-  const isDirectOnVps = process.platform === "linux" && (import_fs6.default.existsSync("/home/ubuntu/play-infinity") || import_fs6.default.existsSync("/home/ubuntu/.pm2") || process.cwd().includes("/home/ubuntu"));
+  const isDirectOnVps = process.platform === "linux" && (import_fs10.default.existsSync("/home/ubuntu/play-infinity") || import_fs10.default.existsSync("/home/ubuntu/.pm2") || process.cwd().includes("/home/ubuntu"));
   if (isDirectOnVps) {
     try {
       return await new Promise((resolve) => {
@@ -8873,16 +11773,94 @@ function executeSshCommand(command, timeoutMs = 25e3) {
 }
 adminOpsRouter.get("/health-check", async (req3, res) => {
   const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
-  const targets = [
-    { name: "Cat\xE1logo Vizer", url: "https://vizer.website", type: "html" },
-    { name: "Cat\xE1logo Encontrei.me", url: "https://encontrei.me", type: "html" },
+  const encontreiCookie = process.env.ENCONTREI_COOKIE || "";
+  const checkEncontrei = async () => {
+    const start = Date.now();
+    try {
+      const headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+      };
+      if (encontreiCookie) {
+        headers["Cookie"] = encontreiCookie;
+      }
+      const response = await fetch("https://encontrei.me", {
+        signal: AbortSignal.timeout(8e3),
+        headers,
+        redirect: "follow"
+      });
+      const latency = Date.now() - start;
+      const statusCode = response.status;
+      const finalUrl = response.url || "";
+      const body = await response.text();
+      const pageTitle = (body.match(/<title>([^<]*)<\/title>/) || [""])[1] || "";
+      const isLoginPage = finalUrl.includes("/login") || body.includes("elUser_login") || /^\s*login\b/i.test(pageTitle);
+      if (statusCode >= 200 && statusCode < 400 && !isLoginPage) {
+        return {
+          name: "Cat\xE1logo Encontrei.me",
+          url: "https://encontrei.me",
+          status: "ONLINE",
+          latencyMs: latency,
+          statusCode
+        };
+      }
+      return {
+        name: "Cat\xE1logo Encontrei.me",
+        url: "https://encontrei.me",
+        status: "OFFLINE",
+        latencyMs: latency,
+        statusCode,
+        error: isLoginPage ? encontreiCookie ? 'Sess\xE3o expirada/inv\xE1lida: recapturar ENCONTREI_COOKIE (logar no site com "Manter-me conectado" + F12 > Network > Cookie).' : "ENCONTREI_COOKIE n\xE3o configurado: site exige login e redireciona para /login/." : `Resposta inv\xE1lida HTTP ${statusCode}`
+      };
+    } catch (error) {
+      return {
+        name: "Cat\xE1logo Encontrei.me",
+        url: "https://encontrei.me",
+        status: "OFFLINE",
+        latencyMs: null,
+        statusCode: 0,
+        error: `Poss\xEDvel bloqueio Cloudflare ao IP da VPS: ${error?.message || "fetch falhou"}`
+      };
+    }
+  };
+  const checkVizer = async () => {
+    const start = Date.now();
+    const primaryBase = "https://www.vizer.reisen";
+    try {
+      const res2 = await fetch(primaryBase, {
+        signal: AbortSignal.timeout(8e3),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
+      });
+      const latency = Date.now() - start;
+      return {
+        name: "Cat\xE1logo Vizer",
+        url: primaryBase,
+        status: res2.ok ? "ONLINE" : "OFFLINE",
+        latencyMs: latency,
+        statusCode: res2.status
+      };
+    } catch (error) {
+      return {
+        name: "Cat\xE1logo Vizer",
+        url: primaryBase,
+        status: "OFFLINE",
+        latencyMs: null,
+        statusCode: 0,
+        error: `Falha ao conectar no Vizer: ${error?.message || "fetch falhou"}`
+      };
+    }
+  };
+  const staticTargets = [
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html" },
     { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
     { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
   ];
-  const results = await Promise.all(
-    targets.map(async (target) => {
+  const [encontreiResult, vizerResult, ...staticResults] = await Promise.all([
+    checkEncontrei(),
+    checkVizer(),
+    ...staticTargets.map(async (target) => {
       try {
         const start = Date.now();
         const response = await fetch(target.url, {
@@ -8910,7 +11888,8 @@ adminOpsRouter.get("/health-check", async (req3, res) => {
         };
       }
     })
-  );
+  ]);
+  const results = [encontreiResult, vizerResult, ...staticResults];
   res.json({ success: true, timestamp: Date.now(), results });
 });
 adminOpsRouter.get("/vps-telemetry", async (_req, res) => {
@@ -8964,7 +11943,7 @@ adminOpsRouter.get("/vps-telemetry", async (_req, res) => {
     pm2Processes: []
   };
   try {
-    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && pm2 jlist && echo "===DELIM_PM2_ROOT===" && sudo pm2 jlist`;
+    const sshCmd = `free -m && echo "===DELIM_UPTIME===" && uptime && echo "===DELIM_PM2===" && sudo -u ubuntu pm2 jlist && echo "===DELIM_PM2_ROOT===" && sudo pm2 jlist`;
     const sshResult = await executeSystemOrSshCommand(sshCmd, 12e3);
     vpsHardware.hasSsh = true;
     const parts = sshResult.stdout.split("===DELIM_UPTIME===");
@@ -9332,15 +12311,150 @@ adminOpsRouter.post("/github-trigger", async (req3, res) => {
     error: `N\xE3o foi poss\xEDvel disparar o workflow no GitHub: ${lastError}`
   });
 });
+adminOpsRouter.get("/encontrei-status", (_req, res) => {
+  try {
+    const status = getEncontreiResolverStatus();
+    res.json({
+      success: true,
+      ...status,
+      timestamp: Date.now()
+    });
+  } catch (err) {
+    console.error("[adminOps] erro em /encontrei-status:", err);
+    res.status(500).json({
+      success: false,
+      error: "Erro interno ao obter status do encontrei resolver",
+      details: err?.message || String(err)
+    });
+  }
+});
+adminOpsRouter.post("/delete-bug-image", (req3, res) => {
+  try {
+    const { imageUrl } = req3.body;
+    if (!imageUrl || typeof imageUrl !== "string") {
+      return res.status(400).json({ success: false, error: "imageUrl \xE9 obrigat\xF3rio." });
+    }
+    const prefix = "/uploads/bug_reports/";
+    if (!imageUrl.startsWith(prefix) || imageUrl.includes("..")) {
+      return res.status(400).json({ success: false, error: "Caminho de imagem inv\xE1lido." });
+    }
+    const filename = import_path10.default.basename(imageUrl);
+    const filePath = import_path10.default.join(process.cwd(), "uploads", "bug_reports", filename);
+    if (import_fs10.default.existsSync(filePath)) {
+      import_fs10.default.unlinkSync(filePath);
+      console.log(`[adminOps] Imagem de bug removida do disco: ${filePath}`);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[adminOps] Erro ao deletar imagem de bug:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+adminOpsRouter.post("/push", async (req3, res) => {
+  try {
+    const { title, body, targetEmails } = req3.body;
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: "T\xEDtulo e mensagem s\xE3o obrigat\xF3rios." });
+    }
+    const messaging = getAdminMessaging();
+    const db2 = getAdminDb();
+    if (!messaging) {
+      return res.status(500).json({ success: false, error: "Firebase Messaging n\xE3o inicializado" });
+    }
+    if (!db2) {
+      return res.status(500).json({ success: false, error: "Firebase Firestore n\xE3o inicializado" });
+    }
+    const tokenOwners = /* @__PURE__ */ new Map();
+    const seenDocs = /* @__PURE__ */ new Map();
+    const collectTokensFromSnapshot = (snapshot) => {
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const tokens = [];
+        if (typeof data.fcmToken === "string" && data.fcmToken) tokens.push(data.fcmToken);
+        if (Array.isArray(data.fcmTokens)) {
+          for (const t of data.fcmTokens) {
+            if (typeof t === "string" && t) tokens.push(t);
+          }
+        }
+        if (tokens.length === 0) return;
+        const unique = [...new Set(tokens)];
+        seenDocs.set(docSnap.id, unique);
+        for (const token of unique) {
+          const owners = tokenOwners.get(token) || [];
+          owners.push(docSnap.ref);
+          tokenOwners.set(token, owners);
+        }
+      });
+    };
+    if (targetEmails && Array.isArray(targetEmails) && targetEmails.length > 0) {
+      for (let i = 0; i < targetEmails.length; i += 10) {
+        const chunk = targetEmails.slice(i, i + 10);
+        const snapshot = await db2.collection("usuarios").where("email", "in", chunk).get();
+        collectTokensFromSnapshot(snapshot);
+      }
+    } else {
+      const snapshot = await db2.collection("usuarios").select("fcmToken", "fcmTokens").get();
+      collectTokensFromSnapshot(snapshot);
+    }
+    const allTokens = [...tokenOwners.keys()];
+    if (allTokens.length === 0) {
+      return res.json({ success: true, count: 0, sent: 0, cleanedInvalid: 0 });
+    }
+    let sent = 0;
+    const invalidTokens = /* @__PURE__ */ new Set();
+    for (let i = 0; i < allTokens.length; i += 500) {
+      const chunk = allTokens.slice(i, i + 500);
+      const message = { notification: { title, body }, tokens: chunk };
+      const response = await messaging.sendEachForMulticast(message);
+      sent += response.successCount;
+      response.responses.forEach((r, idx) => {
+        if (!r.success && r.error) {
+          const errCode = String(r.error?.code || r.error?.message || "");
+          if (/unregistered|invalid/i.test(errCode)) {
+            invalidTokens.add(chunk[idx]);
+          }
+        }
+      });
+    }
+    let cleanedInvalid = 0;
+    if (invalidTokens.size > 0) {
+      for (const [docId, tokens] of seenDocs.entries()) {
+        const remaining = tokens.filter((t) => !invalidTokens.has(t));
+        if (remaining.length === tokens.length) continue;
+        try {
+          const update = { fcmTokens: remaining };
+          if (remaining.length === 0) {
+            const FieldValue = getAdminFieldValue();
+            if (FieldValue) {
+              update.fcmToken = FieldValue.delete();
+            } else {
+              update.fcmToken = null;
+            }
+          } else {
+            update.fcmToken = remaining[remaining.length - 1];
+          }
+          await db2.collection("usuarios").doc(docId).update(update);
+          cleanedInvalid++;
+        } catch (err) {
+          console.warn("[adminOps] Falha ao limpar token FCM inv\xE1lido do usu\xE1rio", docId, err?.message || err);
+        }
+      }
+    }
+    res.json({ success: true, count: allTokens.length, sent, cleanedInvalid });
+  } catch (error) {
+    console.error("[adminOps] Erro ao disparar push:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // server.ts
 init_requireAdminAuth();
 
 // server/routes/userOps.ts
-var import_express15 = require("express");
+var import_express17 = require("express");
 init_firebaseAdmin();
 init_requireAdminAuth();
-var userOpsRouter = (0, import_express15.Router)();
+var userOpsRouter = (0, import_express17.Router)();
 userOpsRouter.post("/api/start-trial", async (req3, res) => {
   const authHeader = req3.header("authorization") || req3.header("Authorization");
   let token = "";
@@ -9379,11 +12493,11 @@ userOpsRouter.post("/api/start-trial", async (req3, res) => {
 });
 
 // server.ts
-if (import_fs7.default.existsSync(".env.local")) {
+if (import_fs11.default.existsSync(".env.local")) {
   import_dotenv.default.config({ path: ".env.local" });
 }
 import_dotenv.default.config();
-var app = (0, import_express16.default)();
+var app = (0, import_express18.default)();
 app.use(subtitlesRouter);
 var PORT = 3e3;
 var db = null;
@@ -9450,9 +12564,70 @@ var playerHelmet = (0, import_helmet.default)({ ...commonHelmet, contentSecurity
 app.use(
   (req3, res, next) => req3.path.startsWith("/api/") ? playerHelmet(req3, res, next) : appHelmet(req3, res, next)
 );
-app.use(import_express16.default.json({ limit: "10kb" }));
-app.use(import_express16.default.urlencoded({ extended: true, limit: "10kb" }));
-var globalLimiter = (0, import_express_rate_limit2.default)({
+app.use("/api/upload-bug-image", import_express18.default.json({ limit: "10mb" }));
+var bugUploadLimiter = (0, import_express_rate_limit3.default)({
+  windowMs: 60 * 60 * 1e3,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Muitos envios de imagem em pouco tempo. Tente novamente mais tarde." }
+});
+function detectImageMimeAndExtension(buffer) {
+  if (buffer.length < 8) return null;
+  if (buffer[0] === 137 && buffer[1] === 80 && buffer[2] === 78 && buffer[3] === 71 && buffer[4] === 13 && buffer[5] === 10 && buffer[6] === 26 && buffer[7] === 10) {
+    return { mime: "image/png", ext: ".png" };
+  }
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) {
+    return { mime: "image/jpeg", ext: ".jpg" };
+  }
+  if (buffer[0] === 71 && buffer[1] === 73 && buffer[2] === 70 && buffer[3] === 56 && (buffer[4] === 55 || buffer[4] === 57) && buffer[5] === 97) {
+    return { mime: "image/gif", ext: ".gif" };
+  }
+  if (buffer.length >= 12 && buffer[0] === 82 && buffer[1] === 73 && buffer[2] === 70 && buffer[3] === 70 && buffer[8] === 87 && buffer[9] === 69 && buffer[10] === 66 && buffer[11] === 80) {
+    return { mime: "image/webp", ext: ".webp" };
+  }
+  return null;
+}
+app.post("/api/upload-bug-image", bugUploadLimiter, (req3, res) => {
+  try {
+    const { imageBase64 } = req3.body;
+    if (!imageBase64) {
+      return res.status(400).json({ error: "Dados da imagem incompletos." });
+    }
+    if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(imageBase64)) {
+      return res.status(400).json({ error: "Formato inv\xE1lido. Apenas imagens PNG, JPG, GIF ou WEBP." });
+    }
+    const uploadDir = import_path11.default.join(process.cwd(), "uploads", "bug_reports");
+    if (!import_fs11.default.existsSync(uploadDir)) {
+      import_fs11.default.mkdirSync(uploadDir, { recursive: true });
+    }
+    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+    const buffer = Buffer.from(base64Data, "base64");
+    if (buffer.length > 5 * 1024 * 1024) {
+      return res.status(400).json({ error: "A imagem excede o limite de 5MB." });
+    }
+    const detected = detectImageMimeAndExtension(buffer);
+    if (!detected) {
+      return res.status(400).json({ error: "Arquivo inv\xE1lido: o conte\xFAdo n\xE3o corresponde a uma imagem aut\xEAntica." });
+    }
+    const safeFilename = `${import_crypto3.default.randomUUID()}${detected.ext}`;
+    const filePath = import_path11.default.join(uploadDir, safeFilename);
+    import_fs11.default.writeFileSync(filePath, buffer);
+    res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}`, filename: safeFilename });
+  } catch (err) {
+    console.error("[Upload API] Erro:", err);
+    res.status(500).json({ error: "Erro ao processar imagem no servidor." });
+  }
+});
+app.use(import_express18.default.json({ limit: "10kb" }));
+app.use(import_express18.default.urlencoded({ extended: true, limit: "10kb" }));
+app.use("/uploads", import_express18.default.static(import_path11.default.join(process.cwd(), "uploads"), {
+  setHeaders: (res) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+  }
+}));
+var globalLimiter = (0, import_express_rate_limit3.default)({
   windowMs: 1 * 60 * 1e3,
   // 1 minuto
   max: 600,
@@ -9461,7 +12636,7 @@ var globalLimiter = (0, import_express_rate_limit2.default)({
   standardHeaders: true,
   legacyHeaders: false
 });
-var apiLimiter = (0, import_express_rate_limit2.default)({
+var apiLimiter = (0, import_express_rate_limit3.default)({
   windowMs: 1 * 60 * 1e3,
   // 1 minuto
   max: 150,
@@ -9470,7 +12645,7 @@ var apiLimiter = (0, import_express_rate_limit2.default)({
   standardHeaders: true,
   legacyHeaders: false
 });
-var scraperLimiter = (0, import_express_rate_limit2.default)({
+var scraperLimiter = (0, import_express_rate_limit3.default)({
   windowMs: 1 * 60 * 1e3,
   // 1 minuto
   max: 30,
@@ -9479,23 +12654,25 @@ var scraperLimiter = (0, import_express_rate_limit2.default)({
   standardHeaders: true,
   legacyHeaders: false
 });
-var liveStreamLimiter = (0, import_express_rate_limit2.default)({
+var liveStreamLimiter = (0, import_express_rate_limit3.default)({
   windowMs: 1 * 60 * 1e3,
   // 1 minuto
-  max: 360,
-  message: "Limite de taxa para streaming ao vivo excedido. Aguarde um instante.",
+  max: 600,
+  message: "Limite de taxa para streaming excedido. Aguarde um instante.",
   standardHeaders: true,
   legacyHeaders: false
 });
 app.use(globalLimiter);
 if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-  const distPath = import_path7.default.join(process.cwd(), "dist");
-  if (import_fs7.default.existsSync(distPath)) {
-    app.use(import_express16.default.static(distPath, {
+  const distPath = import_path11.default.join(process.cwd(), "dist");
+  if (import_fs11.default.existsSync(distPath)) {
+    app.use(import_express18.default.static(distPath, {
       maxAge: "30d",
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html") || filePath.endsWith("metadata.json")) {
-          res.setHeader("Cache-Control", "public, max-age=0, must-revalidate");
+          res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+          res.setHeader("Pragma", "no-cache");
+          res.setHeader("Expires", "0");
         } else if (filePath.includes("/assets/")) {
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
@@ -9506,14 +12683,16 @@ if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
 var scrapingPrefixes = [
   "/watchplayer-stream",
   "/myembed-stream",
-  "/mixdrop-stream",
+  "/md-stream",
+  // ex-/mixdrop-stream (renomeado p/ driblar adblockers) — precisa continuar com limite restrito
   "/bolodechocolate",
   "/stream-proxy",
-  "/vidsrc",
+  "/vidsrc-stream",
+  "/vidsrc-player",
   "/nixplay"
 ];
 app.use("/api", (req3, res, next) => {
-  if (req3.path.startsWith("/live-stream-proxy") || req3.path.startsWith("/anime/hls-proxy")) {
+  if (req3.path.startsWith("/live-stream-proxy") || req3.path.startsWith("/anime/hls-proxy") || req3.path.startsWith("/md-proxy") || req3.path.startsWith("/vidsrc-proxy") || req3.path.startsWith("/streamtape-stream") || req3.path.startsWith("/streamtape-proxy-iframe") || req3.path.startsWith("/doodstream-stream") || req3.path.startsWith("/doodstream-proxy-iframe")) {
     return liveStreamLimiter(req3, res, next);
   }
   if (scrapingPrefixes.some((prefix) => req3.path.startsWith(prefix))) {
@@ -9522,9 +12701,9 @@ app.use("/api", (req3, res, next) => {
   return apiLimiter(req3, res, next);
 });
 app.get(["/privacy", "/privacidade"], (req3, res, next) => {
-  const distPath = import_path7.default.join(process.cwd(), "dist");
-  if (import_fs7.default.existsSync(distPath)) {
-    res.sendFile(import_path7.default.join(distPath, "index.html"));
+  const distPath = import_path11.default.join(process.cwd(), "dist");
+  if (import_fs11.default.existsSync(distPath)) {
+    res.sendFile(import_path11.default.join(distPath, "index.html"));
   } else {
     next();
   }
@@ -9534,6 +12713,8 @@ app.use(encontreiLookup_default);
 app.use(bolodechocolate_default);
 app.use(nixplayRoutes_default);
 app.use(vidsrcRoutes_default);
+app.use(streamtapeRoutes_default);
+app.use(doodstreamRouter);
 app.use("/api/admin", requireAdminAuth);
 app.use(serverBlocks_default);
 app.use("/api/admin", adminOpsRouter);
@@ -9626,20 +12807,20 @@ async function startServer() {
       server: {
         middlewareMode: true,
         watch: {
-          ignored: ["**/data/**", "**/scratch/**", "**/*.tmp*", "**/*.log", "**/.system_generated/**", "**/*.md"]
+          ignored: ["**/data/**", "**/scratch/**", "**/*.tmp*", "**/*.log", "**/.system_generated/**", "**/*.md", "**/uploads/**"]
         }
       },
       appType: "spa"
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path7.default.join(process.cwd(), "dist");
-    if (import_fs7.default.existsSync(distPath)) {
+    const distPath = import_path11.default.join(process.cwd(), "dist");
+    if (import_fs11.default.existsSync(distPath)) {
       app.get("*", (_req, res) => {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
-        res.sendFile(import_path7.default.join(distPath, "index.html"));
+        res.sendFile(import_path11.default.join(distPath, "index.html"));
       });
     }
   }
@@ -9671,6 +12852,7 @@ async function startServer() {
       console.error("[Server Listen Error]:", err);
     });
     server.setTimeout(3e4);
+    startCatalogWatcher();
   }
 }
 startServer().catch((err) => console.error("Server start error:", err));

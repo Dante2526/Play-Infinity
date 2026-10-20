@@ -2040,7 +2040,7 @@ export function VideoPlayerModal({
             break;
           }
           case "SKIP_INTRO": {
-            const sec = typeof cmd.seconds === "number" ? cmd.seconds : 85;
+            const sec = typeof cmd.seconds === "number" ? cmd.seconds : 75;
             video.currentTime = Math.max(0, Math.min(video.currentTime + sec, (video.duration || 99999) - 5));
             sendLocalStatus();
             break;
@@ -2135,9 +2135,11 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
+        iframeRef.current.contentWindow.postMessage({ type: "SEEK_RELATIVE", seconds: sec }, "*");
       } catch (e) { console.warn("Silenced error:", e); }
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: sec }, "*");
+    window.postMessage({ type: "SEEK_RELATIVE", seconds: sec }, "*");
 
     setLastSkippedSeconds(sec);
     setSkipNotice(`Abertura pulada (+${sec}s)`);
@@ -2153,9 +2155,11 @@ export function VideoPlayerModal({
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
+        iframeRef.current.contentWindow.postMessage({ type: "SEEK_RELATIVE", seconds: secToRewind }, "*");
       } catch (e) { console.warn("Silenced error:", e); }
     }
     window.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
+    window.postMessage({ type: "SEEK_RELATIVE", seconds: secToRewind }, "*");
     setLastSkippedSeconds(null);
     setSkipNotice(`Retornado (${Math.abs(secToRewind)}s)`);
     setTimeout(() => {
