@@ -1,4 +1,17 @@
-﻿## 20/10/2026 - Correção do Pular Abertura no StreamTape, DoodStream e Redundância Universal
+﻿## 20/10/2026 - Implementação de Deploy Zero-Downtime (PM2 Cluster + Graceful Shutdown)
+
+**Contexto e Motivação:**
+Durante os deploys na VPS Oracle, a execução de \pm2 restart\ derrubava a conexão TCP de streams em andamento, gerando \
+et::ERR_CONTENT_LENGTH_MISMATCH\ e breves erros \502 Bad Gateway\ no navegador do cliente enquanto a aplicação reiniciava.
+
+**Solução Implementada:**
+1. **Modo Cluster PM2 (\ecosystem.config.cjs\):** Configurado para rodar 2 instâncias em paralelo com balanceamento automático. Durante o deploy, o PM2 reinicia uma instância por vez (\pm2 reload\), garantindo que o serviço nunca fique fora do ar.
+2. **Graceful Shutdown (\server.ts\):** O servidor agora escuta \SIGTERM\ e \SIGINT\. Ao receber o sinal, para de aceitar novas requisições e drena as requisições ativas por até 10s antes de fechar o processo.
+3. **Sinal 'ready' (\server.ts\):** O Node.js envia \process.send('ready')\ após o socket HTTP estar ativo. O PM2 só desliga a instância antiga após a nova estar 100% pronta.
+4. **Pipeline CI/CD (\.github/workflows/main.yml\):** Script de deploy atualizado para incluir \ecosystem.config.cjs\ e executar \sudo pm2 reload ecosystem.config.cjs --update-env\.
+
+---
+## 20/10/2026 - Correção do Pular Abertura no StreamTape, DoodStream e Redundância Universal
 
 **Contexto e Motivação:**
 O botão de Pular Abertura (+75s) funcionava no MixDrop no navegador, mas não pulava no StreamTape ou no aplicativo Android.
@@ -1125,3 +1138,4 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 - Log de descoberta: `[vizer-fresh] SÃ©rie nova mapeada: tmdb=290233 â†’ serie_id=82931 (dentro-do-circulo-dublado)`.
 
 **Deploy:** push autorizado pelo usuÃ¡rio â€” `versionCode 15` / `versionName 1.2.4` (APK/AAB via GitHub Actions no push pra main). Deploy na VPS Oracle (PM2) segue manual pelo dono.
+

@@ -30,7 +30,7 @@ jobs:
 
       - name: 📦 Compactar arquivos de Deploy
         run: |
-          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json data/encontrei-catalog.json watchdog.sh
+          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json data/encontrei-catalog.json watchdog.sh ecosystem.config.cjs
 
       - name: 🔑 Configurar Chave SSH
         run: |
@@ -51,9 +51,12 @@ jobs:
           # Enviar pacote compactado
           scp $SSH_OPTS /tmp/deploy-payload.tar.gz ${USER}@${HOST}:/home/ubuntu/app-deploy.tar.gz
           
-          # Extrair e reiniciar PM2
+          # Extrair e recarregar PM2 com Zero Downtime (Cluster Mode)
           ssh $SSH_OPTS ${USER}@${HOST} << 'EOF'
             tar -xzf /home/ubuntu/app-deploy.tar.gz -C /home/ubuntu/play-infinity/
-            sudo pm2 restart play-infinity-app || sudo pm2 restart all
-            echo "✅ Deploy concluído com sucesso!"
+            cd /home/ubuntu/play-infinity
+            # Recarrega as instâncias em modo cluster sem derrubar requisições ativas
+            sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 start ecosystem.config.cjs || sudo pm2 restart play-infinity-app
+            sudo pm2 save
+            echo "✅ Deploy Zero-Downtime concluído com sucesso!"
           EOF

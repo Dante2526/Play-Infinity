@@ -561,9 +561,34 @@ app.use(castRouter);
         console.error("[Server Listen Error]:", err);
       });
       server.setTimeout(30000);
+
+      // Notifica o PM2 de que o servidor está pronto para conexões (Zero-Downtime)
+      if (typeof process.send === "function") {
+        process.send("ready");
+        console.log("[Server] Sinal 'ready' emitido para o PM2.");
+      }
       
       // Inicia a checagem automática de episódios para PUSH Notification
       startCatalogWatcher();
+
+      // Graceful Shutdown para Zero-Downtime Deploys (drena requisições ativas sem cortar stream)
+      let isShuttingDown = false;
+      const gracefulShutdown = (signal: string) => {
+        if (isShuttingDown) return;
+        isShuttingDown = true;
+        console.log(`[Server] Recebido ${signal}. Drenando conexões ativas...`);
+        server.close(() => {
+          console.log("[Server] Todas as conexões ativas encerradas com sucesso.");
+          process.exit(0);
+        });
+        setTimeout(() => {
+          console.warn("[Server] Timeout de shutdown atingido (10s). Encerrando.");
+          process.exit(0);
+        }, 10000).unref();
+      };
+
+      process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+      process.on("SIGINT", () => gracefulShutdown("SIGINT"));
     }
   }
 
