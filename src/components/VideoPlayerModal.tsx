@@ -24,6 +24,7 @@ import {
 import { isServerBlacklisted } from "../data/serverBlacklist";
 import { getSeasonDetails, getDetails, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { sagas } from "../data/sagas";
+import { createMixdropSourceRouting } from "../services/mixdropSourceRouting";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import { fetchPlaybackHealth, rankPlaybackServers, chooseHealthStartupServer, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
@@ -427,6 +428,9 @@ export function VideoPlayerModal({
   const playbackConfirmedRef = useRef<boolean>(false);
   const healthPlaybackStartedRef = useRef(false);
   const serverSelectionEpochRef = useRef(0);
+  const mixdropRoutingRef = useRef(createMixdropSourceRouting());
+  const mixdropRoutingIdentity = `${mediaType === 'series' && !resolvedAsMovie ? 'tv' : 'movie'}:${effectiveMovieId || tmdbId || imdbId || title}:${season}:${episode}`;
+  mixdropRoutingRef.current.ensure(mixdropRoutingIdentity);
   const healthRef = useRef<{ identity: string; servers: ServerHealthMap }>({ identity: '', servers: {} });
   const [serverHealth, setServerHealth] = useState<{ identity: string; servers: ServerHealthMap }>({ identity: '', servers: {} });
   // Controle de visibilidade do iframe: oculta o iframe nativo (com botões feios/gigantes) até o vídeo começar a rodar
@@ -879,13 +883,35 @@ export function VideoPlayerModal({
     return () => { cancelled = true; };
   }, [isOpen, tmdbId]);
 
+  const buildBalancedMixdropUrl = useCallback((fileId?: string | null, targetSeason = season, targetEpisode = episode, exclude: string[] = []) => {
+    const id = effectiveMovieId || tmdbId;
+    const tv = mediaType === 'series' && !resolvedAsMovie;
+    const sameEpisode = targetSeason === season && targetEpisode === episode;
+    return buildMixdropStreamUrl(fileId, id ? { id,
+      season: tv ? targetSeason : undefined, episode: tv ? targetEpisode : undefined,
+      name: title?.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim(),
+      time: sameEpisode ? (exclude.length ? mixdropRoutingRef.current.seekTarget ?? lastKnownTimeRef.current : lastKnownTimeRef.current) : 0,
+      paused: sameEpisode && mixdropRoutingRef.current.paused, exclude } : undefined);
+  }, [effectiveMovieId, tmdbId, mediaType, resolvedAsMovie, title, season, episode]);
+
+  useEffect(() => {
+    const command = (event: MessageEvent) => {
+      if (event.source !== window || selectedServerKey !== 'srv_mixdrop' || !event.data?.type) return;
+      mixdropRoutingRef.current.command(event.data.type, event.data, lastKnownTimeRef.current);
+      if (mixdropRoutingRef.current.seekTarget !== undefined) lastKnownTimeRef.current = mixdropRoutingRef.current.seekTarget;
+    };
+    window.addEventListener('message', command);
+    return () => window.removeEventListener('message', command);
+  }, [selectedServerKey]);
+
   // Fallback do MixDrop quando não há fileId no catálogo (versão cam)
   const buildMixdropFallbackUrl = useCallback(() => {
+    if (effectiveMovieId || tmdbId) return buildBalancedMixdropUrl()!;
     if (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
       return defaultUrl;
     }
     return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || resolvedId}`)}`;
-  }, [defaultUrl, imdbId, resolvedId]);
+  }, [defaultUrl, imdbId, resolvedId, effectiveMovieId, tmdbId, buildBalancedMixdropUrl]);
 
   // Carregamento dinâmico de temporadas e episódios reais via TMDB
   const [seriesDetails, setSeriesDetails] = useState<TMDBDetails | null>(null);
@@ -1225,15 +1251,16 @@ export function VideoPlayerModal({
             const lookupId = effectiveMovieId || tmdbId || id;
             const targetKey = `tv:${lookupId}:${epS}:${epE}`;
             const targetFid = mixdropFileIdsRef.current[targetKey] || (epS === season && epE === episode ? mixdropFileId : null);
+            if (effectiveMovieId || tmdbId) return buildBalancedMixdropUrl(targetFid, epS, epE)!;
             if (targetFid) {
-              return buildMixdropStreamUrl(targetFid) || `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
+              return buildBalancedMixdropUrl(targetFid, epS, epE) || `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}`;
             }
             if (epS === season && epE === episode && defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
               return defaultUrl;
             }
             return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${imdbId || id}`)}&cb=${Date.now()}`;
           },
-          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
+          isMatch: (u: string) => u.includes('/api/md-stream') || u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
         },
         {
@@ -1300,9 +1327,10 @@ export function VideoPlayerModal({
           label: "MixDrop",
           badge: "MixDrop VIP HD • Áudio Dublado PT-BR • Skin Netflix",
           buildUrl: () => {
+            if (effectiveMovieId || tmdbId) return buildBalancedMixdropUrl(mixdropFileId)!;
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
             if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || buildMixdropFallbackUrl();
+              return buildBalancedMixdropUrl(mixdropFileId) || buildMixdropFallbackUrl();
             }
             // Prioridade 2: defaultUrl se já é uma URL do MixDrop
             if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
@@ -1311,7 +1339,7 @@ export function VideoPlayerModal({
             // Prioridade 3: fallback (pode ser versão cam)
             return buildMixdropFallbackUrl();
           },
-          isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
+          isMatch: (u: string) => u.includes('/api/md-stream') || u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
         },
         {
@@ -1376,7 +1404,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title, buildMixdropFallbackUrl]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title, buildMixdropFallbackUrl, buildBalancedMixdropUrl]);
   const healthContentId = String(effectiveMovieId || tmdbId || resolvedId || '');
   const healthIdentity = `${isSeries ? 'tv' : 'movie'}:${healthContentId}:${isSeries ? `${season}:${episode}` : ''}`;
   const healthIdentityRef = useRef(healthIdentity);
@@ -1414,7 +1442,7 @@ export function VideoPlayerModal({
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback(async (serverKey: string) => {
     const selectionEpoch = ++serverSelectionEpochRef.current;
-    mixdropAttemptRef.current = 1; // Reseta tentativa intra-servidor
+    if (serverKey === 'srv_mixdrop') mixdropRoutingRef.current.reset(mixdropRoutingIdentity);
     hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
     const srv = servers.find(s => s.key === serverKey);
@@ -1435,7 +1463,7 @@ export function VideoPlayerModal({
       // para nunca tocar o embed do episódio anterior.
       const fid = await lookupMixdropFileId(season, episode);
       newUrl = fid
-        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+        ? buildBalancedMixdropUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
       if (serverKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(season, episode));
@@ -1450,40 +1478,33 @@ export function VideoPlayerModal({
     // NÃO definimos setIsLoading(false) aqui. 
     // Para servidores com skin (VIP, Watchplay, Mixdrop), o spinner só some quando houver confirmação real (WATCHPLAY_STATUS).
     // Para outros servidores, o onLoad do iframe vai limpar o isLoading.
-  }, [servers, isSeries, resolvedId, season, episode, tmdbId, lookupMixdropFileId, buildMixdropFallbackUrl]);
+  }, [servers, isSeries, resolvedId, season, episode, tmdbId, lookupMixdropFileId, buildMixdropFallbackUrl, buildBalancedMixdropUrl, mixdropRoutingIdentity]);
 
   // Fallback silencioso automático: comuta para o próximo player sem intervenção ou botões na tela
   const fallbackAttemptsRef = useRef<Set<string>>(new Set());
-  const mixdropAttemptRef = useRef<number>(1);
   const retrySameServerRef = useRef<boolean>(false);
   const forceRetrySameServerRef = useRef<boolean>(false);
   const hasPlayedRef = useRef<boolean>(false);
   const pausedAtRef = useRef<number | null>(null);
 
-  const handleSilentFallback = useCallback(() => {
-    // 1. Fallback intra-servidor do MixDrop: se o primário falhou, tenta o outro catálogo
-    if (selectedServerKey === "srv_mixdrop" && mixdropAttemptRef.current === 1) {
-      // Se o link primário veio do Vizer (mixdrop === mixdrop_vizer), tenta o Encontrei
-      // Se o link primário veio do Encontrei (mixdrop === mixdrop_encontrei), tenta o Vizer
-      const isPrimaryVizer = mixdropFileId && mixdropVizerFileId && mixdropFileId === mixdropVizerFileId;
-      const fallbackFileId = isPrimaryVizer ? mixdropEncontreiFileId : mixdropVizerFileId;
-
-      if (fallbackFileId && fallbackFileId !== mixdropFileId) {
-        const fallbackUrl = buildMixdropStreamUrl(fallbackFileId);
-        if (fallbackUrl) {
-          const fallbackSource = isPrimaryVizer ? "Encontrei" : "Vizer";
-          console.warn(`[VideoPlayerModal] MixDrop primário falhou. Tentando MixDrop do ${fallbackSource}...`);
-          mixdropAttemptRef.current = 2;
-          hasSeekedInitialTimeRef.current = false;
-          transitionEpochRef.current = Date.now();
-          setIsLoading(true);
-          setError(null);
-          setUrlInput(fallbackUrl);
-          setActiveIframeUrl(fallbackUrl);
-          setExtractedSource(fallbackUrl);
-          return; // Não pula de servidor ainda
+  const handleSilentFallback = useCallback(async () => {
+    // The iframe reports its actual selected file; do not infer it from the
+    // catalogue's old preference after adaptive routing selected another copy.
+    if (selectedServerKey === 'srv_mixdrop' && (effectiveMovieId || tmdbId)) {
+      const selectionEpoch = serverSelectionEpochRef.current;
+      const next = await mixdropRoutingRef.current.next({ id: (effectiveMovieId || tmdbId)!,
+        season: isSeries ? season : undefined, episode: isSeries ? episode : undefined,
+        name: title?.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() });
+      if (selectionEpoch !== serverSelectionEpochRef.current || next.kind === 'cancelled' || next.kind === 'busy') return;
+      if (next.kind === 'selected') {
+        const url = buildBalancedMixdropUrl(next.fileId, season, episode, next.exclude);
+        if (url) {
+          hasSeekedInitialTimeRef.current = false; transitionEpochRef.current = Date.now();
+          setIsLoading(true); setError(null); setActiveIframeUrl(url); setUrlInput(url); setExtractedSource(url);
+          return;
         }
       }
+      retrySameServerRef.current = true; forceRetrySameServerRef.current = false;
     }
 
     // 2. Retry do mesmo servidor em caso de timeout de token (pausa longa)
@@ -1512,7 +1533,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     setError("Este conteúdo ainda não está disponível nos servidores oficiais em versão Dublado PT-BR. Nossos servidores são atualizados constantemente.");
     setIsLoading(false);
-  }, [servers, selectedServerKey, handleServerSwitch, mixdropFileId, mixdropVizerFileId, mixdropEncontreiFileId]);
+  }, [servers, selectedServerKey, handleServerSwitch, effectiveMovieId, tmdbId, isSeries, season, episode, title, buildBalancedMixdropUrl]);
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
@@ -1581,8 +1602,8 @@ export function VideoPlayerModal({
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
-    // Allow the StreamTape iframe to resolve a fresh token and retry once.
-    const timeoutDuration = selectedServerKey === "srv_streamtape" ? 30000 : (isWatchplay ? 18000 : (isMixdrop ? 25000 : 15000));
+    // Allow bounded source selection, token renewal and one alternate file.
+    const timeoutDuration = selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -1609,7 +1630,6 @@ export function VideoPlayerModal({
       playbackConfirmedRef.current = false; // Reset de reprodução real
       setIframeVisible(false); // Oculta iframe até rodar
       // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
-      mixdropAttemptRef.current = 1;
       retrySameServerRef.current = false;
       forceRetrySameServerRef.current = false;
       hasPlayedRef.current = false;
@@ -1720,7 +1740,7 @@ export function VideoPlayerModal({
           if (targetServerKey === "srv_mixdrop") {
             const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
             if (fid) {
-              resolvedTargetUrl = buildMixdropStreamUrl(fid) || "";
+              resolvedTargetUrl = buildBalancedMixdropUrl(fid, targetSeason, targetEpisode) || "";
             }
           }
 
@@ -1739,7 +1759,7 @@ export function VideoPlayerModal({
         // fabricada sempre dá 502 ("possivelmente deletado") e queimava ~20s do
         // usuário (502 → recovery → comutação lenta). Se sobrou só ela, inicia
         // buscando o fileId real de forma transparente, ou vai pro próximo servidor.
-        if (targetServerKey === "srv_mixdrop" && targetUrl) {
+        if (targetServerKey === "srv_mixdrop" && targetUrl && !(effectiveMovieId || tmdbId)) {
           let looksFabricated = false;
           try {
             const decoded = decodeURIComponent(targetUrl);
@@ -1751,7 +1771,7 @@ export function VideoPlayerModal({
             const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
             if (fid) {
               console.log("[VideoPlayerModal] FileId resolvido com sucesso na inicialização:", fid);
-              targetUrl = buildMixdropStreamUrl(fid) || "";
+              targetUrl = buildBalancedMixdropUrl(fid, targetSeason, targetEpisode) || "";
             } else {
               console.warn("[VideoPlayerModal] Scraper não encontrou fileId real. Iniciando pelo próximo servidor...");
               const nextSrv = serversRef.current.find(s => s.key !== "srv_mixdrop");
@@ -1765,6 +1785,7 @@ export function VideoPlayerModal({
           }
         }
 
+        if (targetServerKey === 'srv_mixdrop' && (effectiveMovieId || tmdbId)) targetUrl = buildBalancedMixdropUrl(undefined, targetSeason, targetEpisode) || targetUrl;
         if (initialSelectionEpoch !== serverSelectionEpochRef.current) return;
         setSelectedServerKey(targetServerKey);
 
@@ -1777,7 +1798,6 @@ export function VideoPlayerModal({
       setActiveIframeUrl(null);
       setError(null);
       fallbackAttemptsRef.current.clear();
-      mixdropAttemptRef.current = 1;
     }
     return () => { serverSelectionEpochRef.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1847,6 +1867,10 @@ export function VideoPlayerModal({
   useEffect(() => {
     const handlePlayerWindowMessages = (event: MessageEvent) => {
       if (!isTrustedPlayerEvent(event)) return;
+      if (event.data?.type === 'WATCHPLAY_SOURCE' && event.data.provider === 'mixdrop') {
+        mixdropRoutingRef.current.track(String(event.data.fileId || '')); return;
+      }
+
       if (!event.data) return;
 
       // Remove overlay preto quando o player estiver pronto (duration > 0)
@@ -1930,7 +1954,6 @@ export function VideoPlayerModal({
             retrySameServerRef.current = false;
             const wasFallback = fallbackAttemptsRef.current.size > 0;
             fallbackAttemptsRef.current.clear();
-            mixdropAttemptRef.current = 1;
 
             if (isSeries && tmdbId && !wasFallback) {
               try {
@@ -2007,9 +2030,20 @@ export function VideoPlayerModal({
         event.data.type === "STREAM_DISCONNECTED"
       ) {
         const reason = String(event.data.reason || "");
-        if (selectedServerKey === "srv_mixdrop" && reason.includes("possivelmente deletado")) {
+        if (selectedServerKey === 'srv_mixdrop') {
+          if (event.data.mixdropFileId) mixdropRoutingRef.current.track(String(event.data.mixdropFileId));
+          if (event.data.mixdropExhausted) mixdropRoutingRef.current.exhaust();
+        }
+        if (selectedServerKey === "srv_mixdrop" && !(effectiveMovieId || tmdbId) && reason.includes("possivelmente deletado")) {
           mixdropRecoveryRef.current();
           return;
+        }
+
+        if (selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) {
+          // The iframe already exhausted distinct catalogue files. Do not start
+          // that same cycle again before moving to another approved provider.
+          retrySameServerRef.current = true;
+          forceRetrySameServerRef.current = false;
         }
 
         console.warn(`[VideoPlayerModal] Servidor informou erro/indisponibilidade (${event.data.reason || event.data.type}). Acionando fallback automático para próximo servidor homologado...`);
@@ -2181,7 +2215,6 @@ export function VideoPlayerModal({
       if (error) {
         console.log("[VideoPlayerModal] Conexão restaurada. Tentando reconectar servidor automaticamente...");
         fallbackAttemptsRef.current.clear();
-        mixdropAttemptRef.current = 1;
         setError(null);
         setIsLoading(true);
         const srv = servers[0];
@@ -2279,7 +2312,6 @@ export function VideoPlayerModal({
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
-    mixdropAttemptRef.current = 1;
 
     // Resolve o fileId do novo episódio para alimentar o cache de todos os servidores
     let fid: string | null = null;
@@ -2294,7 +2326,7 @@ export function VideoPlayerModal({
     if (selectedServerKey === "srv_mixdrop" && tmdbId) {
       const targetFid = fid || mixdropFileIdsRef.current[`tv:${tmdbId}:${season}:${newEpisode}`];
       newUrl = targetFid
-        ? buildMixdropStreamUrl(targetFid) || buildMixdropFallbackUrl()
+        ? buildBalancedMixdropUrl(targetFid, season, newEpisode) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
       newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
@@ -2334,7 +2366,6 @@ export function VideoPlayerModal({
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
-    mixdropAttemptRef.current = 1;
 
     const targetKey = selectedServerKey;
     if (targetKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(newSeason, 1));
@@ -2344,7 +2375,7 @@ export function VideoPlayerModal({
     if (targetKey === "srv_mixdrop" && tmdbId) {
       const fid = await lookupMixdropFileId(newSeason, 1);
       newUrl = fid
-        ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
+        ? buildBalancedMixdropUrl(fid, newSeason, 1) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
       newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
@@ -3108,7 +3139,6 @@ export function VideoPlayerModal({
                   <button
                     onClick={() => {
                       fallbackAttemptsRef.current.clear();
-                      mixdropAttemptRef.current = 1;
                       setError(null);
                       setIsLoading(true);
                       const srv = servers[0];

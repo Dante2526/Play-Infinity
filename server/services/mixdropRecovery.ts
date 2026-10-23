@@ -2,6 +2,7 @@
 // imported helpers/constants); the browser regression tests execute that HTML.
 export function createMixdropRecovery(video: HTMLVideoElement, options: {
   sourceUrl: string;
+  reloadAfterMs?: number; stallTimeoutMs?: number; retryWindowMs?: number;
   onFatal: (reason: string) => void;
 }) {
   let holding = false;
@@ -122,7 +123,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     lastTime = current;
     if (!holding || !wantsPlay || fatalSent) return;
     const duration = Date.now() - stalledAt;
-    if (duration >= 20000 && (!reloadedAt || Date.now() - reloadedAt >= 20000)) {
+    if (duration >= (options.stallTimeoutMs ?? 20000) && (!reloadedAt || Date.now() - reloadedAt >= (options.retryWindowMs ?? 20000))) {
       fail("mixdrop_buffer_unrecoverable"); return;
     }
     if (video.seeking) return;
@@ -137,7 +138,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
       video.play().catch(() => fail("mixdrop_resume_blocked"));
       return;
     }
-    if (duration >= 12000) reloadSource();
+    if (duration >= (options.reloadAfterMs ?? 12000)) reloadSource();
   }, 1000);
 
   return {

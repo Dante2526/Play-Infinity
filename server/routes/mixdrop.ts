@@ -5,6 +5,9 @@ import { isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl } from "../ut
 
 import { proxyMixdropVideo, isMixdropMediaUrl } from "../services/mixdropProxy";
 import { createMixdropRecovery } from "../services/mixdropRecovery";
+import { createMediaSourcePool } from "../services/mediaSourcePool";
+import { readHealthPrefix } from "../services/playbackHealth";
+import { getMixdropSources } from "./encontreiLookup";
 
 const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string; title: string; expiresAt: number }>();
 
@@ -43,6 +46,7 @@ async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.t
     let pageTitle = titleMatch && titleMatch[1] ? titleMatch[1].trim() : "Play Infinity • MixDrop Stream";
 
     const result = { videoUrl, posterUrl, title: pageTitle };
+    if (mixdropMemoryCache.size >= 1000) mixdropMemoryCache.delete(mixdropMemoryCache.keys().next().value!);
     mixdropMemoryCache.set(fileId, {
       ...result,
       expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutos (tokens do MixDrop expiram rapidamente)
@@ -71,11 +75,54 @@ function refreshMixdropUrl(fileId: string, expiredUrl: string): Promise<string |
   return refresh;
 }
 
+const mixdropResolutions = new Map<string, Promise<Awaited<ReturnType<typeof resolveFreshMixdropToken>>>>();
+function resolveMixdropToken(fileId: string, refresh = false) {
+  const pending = mixdropResolutions.get(fileId); if (pending) return pending;
+  const cached = mixdropMemoryCache.get(fileId);
+  if (!refresh && cached && cached.expiresAt > Date.now() + 60000) return Promise.resolve(cached);
+  const request = resolveFreshMixdropToken(fileId).finally(() => mixdropResolutions.delete(fileId));
+  mixdropResolutions.set(fileId, request); return request;
+}
+const mixdropPool = createMediaSourcePool({
+  resolve: async (fileId, refresh) => (await resolveMixdropToken(fileId, refresh))?.videoUrl || null,
+  probe: async (url, signal) => {
+    if (!isMixdropMediaUrl(url)) return false;
+    const response = await fetch(url, { signal, headers: { Range: 'bytes=0-1023', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36', Referer: 'https://mxdrop.top/', Origin: 'https://mxdrop.top' } });
+    const bytes = await readHealthPrefix(response, 1024);
+    return response.ok && bytes.length >= 12 && new TextDecoder().decode(bytes.subarray(4, 8)) === 'ftyp';
+  },
+});
+const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, String.fromCharCode(92) + 'u003c');
+
 const router = Router();
 
   router.get("/api/md-stream", async (req, res) => {
     try {
-      const rawUrl = String(req.query.url || "").trim();
+      let rawUrl = String(req.query.url || "").trim();
+      const id = req.query.id ? Number(req.query.id) : undefined;
+      const season = req.query.s ? Number(req.query.s) : undefined, episode = req.query.e ? Number(req.query.e) : undefined;
+      const context = id ? { id, season, episode, name: String(req.query.name || '').slice(0, 160) } : null;
+      let selected: Awaited<ReturnType<typeof mixdropPool.select>> = null;
+      if (req.query.id) {
+        if (!id || !Number.isInteger(id) || id < 1 || id > 9999999999 ||
+            (season === undefined) !== (episode === undefined) ||
+            (season !== undefined && (!Number.isInteger(season) || season < 1 || season > 999)) ||
+            (episode !== undefined && (!Number.isInteger(episode) || episode < 1 || episode > 9999))) return res.status(400).json({ error: 'Conteúdo inválido' });
+        const exclude = String(req.query.exclude || '').split(',').filter(Boolean).slice(0, 4);
+        if (exclude.some(value => !/^[a-zA-Z0-9_-]{1,100}$/.test(value))) return res.status(400).json({ error: 'Arquivo inválido' });
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const work = (async () => {
+          const first = await mixdropPool.select(await getMixdropSources(id, season, episode, context!.name), exclude);
+          return first || mixdropPool.select(await getMixdropSources(id, season, episode, context!.name, true), exclude);
+        })();
+        try { selected = await Promise.race([work, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 18000); })]); }
+        finally { clearTimeout(timer); }
+        if (!selected) {
+          if (req.query.format === 'json') return res.status(502).json({ success: false, error: 'Nenhuma fonte MixDrop verificada para este conteúdo.' });
+          return res.status(502).send('<html><body><script>window.parent.postMessage({type:"WATCHPLAY_ERROR",reason:"MixDrop: fontes indisponíveis",mixdropExhausted:true},"*")</script></body></html>');
+        }
+        rawUrl = 'https://mxdrop.top/e/' + selected.fileId;
+      }
       if (!rawUrl) {
         return res.status(400).send("Parâmetro 'url' é obrigatório.");
       }
@@ -120,7 +167,7 @@ const router = Router();
       let posterUrl = "";
       let pageTitle = "Play Infinity • MixDrop Stream";
 
-      if (cached && cached.expiresAt > Date.now() + 60000) {
+      if (req.query.refresh !== '1' && cached && cached.expiresAt > Date.now() + 60000) {
         videoUrl = cached.videoUrl;
         posterUrl = cached.posterUrl;
         pageTitle = cached.title || pageTitle;
@@ -134,6 +181,7 @@ const router = Router();
         pageTitle = fresh.title;
       }
 
+      if (selected) videoUrl = selected.directUrl;
       // Keep the same VPS egress for CDN tokens and preserve the original
       // embed ID even when the MP4 object has a different filename.
       const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}&fileId=${encodeURIComponent(fileId)}`;
@@ -142,7 +190,7 @@ const router = Router();
         const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
         const originHost = req.headers.host;
         const fullProxyUrl = `${isHttps ? 'https' : 'http'}://${originHost}${streamUrl}`;
-        return res.json({ videoUrl: fullProxyUrl });
+        return res.json({ success: true, videoUrl: fullProxyUrl, proxyUrl: streamUrl, fileId, source: selected?.source || 'direct' });
       }
 
       return res.send(`
@@ -201,6 +249,7 @@ const router = Router();
           <div id="artplayer-container"></div>
           <script>
             (function() {
+              window.parent.postMessage({ type: 'WATCHPLAY_SOURCE', provider: 'mixdrop', fileId: ${scriptJson(fileId)}, source: ${scriptJson(selected?.source || 'direct')}, playerFrameUrl: window.location.href }, '*');
               var videoUrl = ${JSON.stringify(streamUrl)};
               var posterUrl = ${JSON.stringify(posterUrl)};
 
@@ -209,7 +258,7 @@ const router = Router();
                 url: videoUrl,
                 type: "mp4",
                 poster: posterUrl || "",
-                autoplay: true,
+                autoplay: ${req.query.paused !== '1'},
                 muted: false,
                 playsInline: true,
                 controls: [],
@@ -224,8 +273,9 @@ const router = Router();
               window.artInstance = art;
               var bufferRecovery = (${createMixdropRecovery.toString()})(art.video, {
                 sourceUrl: videoUrl,
+                reloadAfterMs: ${context ? 4000 : 12000}, stallTimeoutMs: ${context ? 10000 : 20000}, retryWindowMs: ${context ? 6000 : 20000},
                 onFatal: function(reason) {
-                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*");
+                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, mixdropFileId: ${scriptJson(fileId)} }, "*");
                 }
               });
               window.addEventListener("pagehide", function() { bufferRecovery.destroy(); });
@@ -361,12 +411,15 @@ const router = Router();
               })();
 
               art.on("ready", function() {
+                var resumeAt = ${Math.max(0, Number(req.query.t) || 0)};
+                if (resumeAt > 0) { try { art.currentTime = resumeAt; } catch(e) {} }
                 notifyReady();
                 var v = art.video || document.querySelector("video");
                 if (v) {
                   v.setAttribute("referrerpolicy", "no-referrer");
                   v.setAttribute("playsinline", "true");
                 }
+                if (${req.query.paused === '1'}) { art.pause(); return; }
                 // Autoplay com fallback: tenta com som, se navegador bloquear, tenta mudo
                 art.play().catch(function() {
                   console.log("[MixDrop] Autoplay com som bloqueado pelo navegador, tentando mudo...");
@@ -813,8 +866,11 @@ const router = Router();
     let legacyId = "";
     try { legacyId = new URL(videoUrl).pathname.match(/\/([a-zA-Z0-9_-]+)\.mp4$/)?.[1] || ""; } catch {}
     const fileId = explicitId || legacyId;
+    const release = mixdropPool.begin(fileId);
+    res.once('close', release); res.once('finish', release);
     await proxyMixdropVideo(req, res, {
       videoUrl,
+      observe: (ok, latencyMs) => mixdropPool.report(fileId, ok, latencyMs),
       renewUrl: fileId ? () => refreshMixdropUrl(fileId, videoUrl) : undefined,
     });
   });

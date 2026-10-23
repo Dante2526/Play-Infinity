@@ -79,9 +79,19 @@ export async function findEpisode(tmdbId: number, season: number, episode: numbe
   } catch { return null; }
 }
 
-export function buildMixdropStreamUrl(fileId: string | undefined): string | null {
-  if (!fileId) return null;
-  return `/api/md-stream?url=${encodeURIComponent(`https://mxdrop.top/e/${fileId}`)}`;
+export function buildMixdropStreamUrl(fileId: string | undefined | null, context?: { id: number; season?: number; episode?: number; name?: string; time?: number; paused?: boolean; exclude?: string[] }): string | null {
+  if (!fileId && !context?.id) return null;
+  const params = new URLSearchParams();
+  if (fileId) params.set('url', `https://mxdrop.top/e/${fileId}`);
+  if (context?.id) {
+    params.set('id', String(context.id));
+    if (context.season !== undefined && context.episode !== undefined) { params.set('s', String(context.season)); params.set('e', String(context.episode)); }
+    if (context.name) params.set('name', context.name);
+    if (context.time && context.time > 0) params.set('t', String(context.time));
+    if (context.paused) params.set('paused', '1');
+    if (context.exclude?.length) params.set('exclude', context.exclude.join(','));
+  }
+  return '/api/md-stream?' + params;
 }
 
 export interface EncontreiMovie { servers: { mixdrop?: string; streamtape?: string; doodstream?: string }; audio: string; server_name: string; }

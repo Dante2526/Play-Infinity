@@ -25,6 +25,7 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
+import { getVizerDomainOrder, rememberVizerDomain } from "../services/vizerDomains";
 
 const router = Router();
 
@@ -242,17 +243,10 @@ function loadVizerMovieIds() {
 // O vizer.website atualmente responde os endpoints AJAX com HTTP 200 + JSON
 // {"redirect": "https://www.vizer.reisen/..."} (redirect em nível de aplicação)
 // e a homepage com redirect HTTP. O vizerFetchJson persegue esse redirect,
-// memoriza o domínio que funcionou (_vizerWorkingDomain) e cai para o próximo
+// memoriza o domínio que funcionou no serviço compartilhado e cai para o próximo
 // domínio da lista em caso de timeout/erro — blindando o resolver contra a
 // migração silenciosa de domínio.
 // ──────────────────────────────────────────────────────────────────────────
-const VIZER_DOMAINS = [
-  "https://www.vizer.uno",     // domínio atual (2026-10)
-  "https://www.vizer.reisen",  // domínio anterior, responde com redirect para vizer.uno
-  "https://www.vizer.website", // domínio legado
-];
-let _vizerWorkingDomain: string | null = null;
-
 /**
  * Faz um request AJAX no endpoint videobox do Vizer com fallback duplo de
  * domínio. Retorna o JSON parseado do primeiro domínio que responder com
@@ -266,9 +260,7 @@ async function vizerFetchJson(
   timeoutMs: number,
   refererPath?: string
 ): Promise<any | null> {
-  const order = _vizerWorkingDomain
-    ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)]
-    : [...VIZER_DOMAINS];
+  const order = getVizerDomainOrder();
 
   for (const base of order) {
     try {
@@ -306,7 +298,7 @@ async function vizerFetchJson(
           if (r2.ok) {
             const data2 = await r2.json().catch(() => null);
             if (data2 && (data2.episodes || data2.servers_dub)) {
-              _vizerWorkingDomain = redirBase;
+              rememberVizerDomain(redirBase);
               return data2;
             }
           }
@@ -314,7 +306,7 @@ async function vizerFetchJson(
         continue; // redirect falhou → tenta o próximo domínio da lista
       }
 
-      _vizerWorkingDomain = base;
+      rememberVizerDomain(res.url || base);
       return data;
     } catch {
       continue; // timeout/erro de rede → próximo domínio
@@ -547,9 +539,7 @@ function vizerKnownSetsLoad(): void {
 
 /** HTML GET no Vizer (listagens/páginas de item) com fallback duplo de domínio. */
 async function vizerFetchHtml(pagePath: string, timeoutMs: number = 8000): Promise<string | null> {
-  const order = _vizerWorkingDomain
-    ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)]
-    : [...VIZER_DOMAINS];
+  const order = getVizerDomainOrder();
   for (const base of order) {
     try {
       const res = await fetch(`${base}${pagePath}`, {
@@ -563,7 +553,7 @@ async function vizerFetchHtml(pagePath: string, timeoutMs: number = 8000): Promi
       if (!res.ok) continue;
       const html = await res.text().catch(() => null);
       if (!html || html.length < 500) continue;
-      _vizerWorkingDomain = base;
+      rememberVizerDomain(res.url || base);
       return html;
     } catch {
       continue; // timeout/erro de rede → próximo domínio
@@ -2010,3 +2000,56 @@ router.get("/api/downloads-catalog", (req, res) => {
 });
 
 export default router;
+
+
+/** Cached catalogue remains useful even when live domain checks fail. */
+export function getVizerCatalogStatus() {
+  loadCatalogs();
+  return { movies: _vizerMovieIndex.size, episodes: _vizerEpisodeIndex.size, series: _vizerSeriesSeasonsIndex.size };
+}
+
+/** Read both catalogue copies independently, including StreamTape-only entries.
+ * A shared lookup avoids duplicate live scans when viewers start together. */
+const catalogueMediaSourcePending = new Map<string, Promise<Array<{ fileId: string; source: 'encontrei' | 'vizer'; audio: string }>>>();
+const catalogueMediaSourceCache = new Map<string, { expires: number; sources: Array<{ fileId: string; source: 'encontrei' | 'vizer'; audio: string }> }>();
+async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: number, season?: number, episode?: number, name?: string, refresh = false) {
+  loadCatalogs();
+  const key = `${provider}:${season === undefined ? 'movie' : 'tv'}:${id}:${season || 0}:${episode || 0}:${name || ''}`;
+  const cached = catalogueMediaSourceCache.get(key);
+  if (!refresh && cached && cached.expires > Date.now()) return cached.sources;
+  if (catalogueMediaSourcePending.has(key)) return catalogueMediaSourcePending.get(key)!;
+  if (catalogueMediaSourcePending.size >= 6) return [];
+  const pending = (async () => {
+    const tv = season !== undefined && episode !== undefined;
+    const epKey = `${id}:${season}:${episode}`;
+    const lookups = [
+      { source: 'encontrei' as const, entry: tv ? _encontreiEpisodeIndex.get(epKey) : _encontreiMovieIndex.get(id),
+        live: () => tv ? resolveEncontreiEpisode(id, season!, episode!, name) : resolveEncontreiMovie(id, name) },
+      { source: 'vizer' as const, entry: tv ? _vizerEpisodeIndex.get(epKey) : _vizerMovieIndex.get(id),
+        live: () => tv ? resolveVizerEpisode(id, season!, episode!, name) : resolveVizerMovie(id, name) },
+    ];
+    const results = await Promise.all(lookups.map(async lookup => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const entry = refresh ? null : lookup.entry;
+        const live = entry?.servers?.[provider] ? null : await Promise.race([
+          lookup.live(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 4000); }),
+        ]);
+        const fileId = entry?.servers?.[provider] || live?.[provider];
+        return /^[a-zA-Z0-9_-]{1,100}$/.test(fileId || '') ? { fileId: String(fileId), source: lookup.source, audio: entry?.audio || live?.audio || 'Dublado' } : null;
+      } catch { return null; }
+      finally { clearTimeout(timer); }
+    }));
+    const sources = results.filter((value): value is NonNullable<typeof value> => !!value);
+    if (sources.length) {
+      if (catalogueMediaSourceCache.size >= 500) catalogueMediaSourceCache.delete(catalogueMediaSourceCache.keys().next().value!);
+      catalogueMediaSourceCache.set(key, { expires: Date.now() + 30000, sources });
+    }
+    return sources;
+  })().finally(() => catalogueMediaSourcePending.delete(key));
+  catalogueMediaSourcePending.set(key, pending);
+  return pending;
+}
+
+export const getStreamtapeSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('streamtape', id, season, episode, name, refresh);
+export const getMixdropSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('mixdrop', id, season, episode, name, refresh);

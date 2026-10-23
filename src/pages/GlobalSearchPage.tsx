@@ -37,7 +37,7 @@ import {
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, isMediaAvailable } from "../utils/mediaUtils";;
-import { checkPlayableBatch } from "../services/episodeAvailability";
+import { searchCatalog } from "../services/catalogSearch";
 import { 
   searchMulti, 
   getDetails, 
@@ -154,117 +154,30 @@ export function GlobalSearchPage({
 
   const allCatalogs = React.useMemo(() => getAllCatalogItems(), []);
 
-  // Busca em tempo real com TMDB API e validação rigorosa de disponibilidade no catálogo
+  // Search metadata and confirm new sources without relying on the build snapshot.
   React.useEffect(() => {
+    const controller = new AbortController();
     if (!searchQuery.trim()) {
       setTmdbResults([]);
       setIsSearching(false);
-      return;
+      return () => controller.abort();
     }
-
-    let isMounted = true;
+    setTmdbResults([]);
     setIsSearching(true);
     const timeoutId = setTimeout(async () => {
       try {
-        const queryLower = searchQuery.toLowerCase().trim();
-        // IMPORTANTE: NÃO filtrar por isMediaAvailable aqui.
-        // A sonda checkPlayableBatch abaixo faz a verificação real (chama
-        // /api/check-playable-batch que checa WatchPlayer/VIP/MixDrop/Nixplay).
-        // Filtrar aqui remove items novos (não no snapshot de 22/09/2026)
-        // como Carrie a Estranha (TMDB 288673, estreou 07/10/2026) mesmo
-        // estando disponível via MixDrop no encontrei.me.
-        const localMatches = allCatalogs.filter(item =>
-          item.title.toLowerCase().includes(queryLower)
-        );
-
-        const response = await searchMulti(searchQuery);
-        if (!isMounted) return;
-
-        if (response && response.results) {
-          const rawMediaResults = response.results.filter(r => {
-            const isMedia = r.media_type === 'movie' || r.media_type === 'tv' || (!r.media_type && (Boolean(r.title) || Boolean(r.name)));
-            return isMedia && Boolean(r.title || r.name);
-          });
-
-          const formatted: CatalogItem[] = rawMediaResults
-            .map(r => {
-              const isTv = r.media_type === 'tv' || (!r.media_type && Boolean(r.name && !r.title));
-              const title = r.title || r.name || "Sem título";
-              const year = r.release_date ? parseInt(r.release_date.substring(0, 4)) : r.first_air_date ? parseInt(r.first_air_date.substring(0, 4)) : 2024;
-              const poster = formatImageUrl(r.poster_path, 'w500');
-              const backdrop = formatImageUrl(r.backdrop_path || r.poster_path, 'original');
-              const genres = getGenreNames(r.genre_ids || []);
-              
-              return {
-                id: r.id,
-                tmdbId: r.id,
-                title,
-                imageUrl: poster,
-                posterUrl: poster,
-                backdropUrl: backdrop,
-                type: isTv ? 'series' : 'movie',
-                genres,
-                synopsis: r.overview || "Sem sinopse disponível em português.",
-                year,
-                rating: r.vote_average ? `${r.vote_average.toFixed(1)} ★` : "14",
-                duration: isTv ? "Série" : "Filme",
-                match: Math.min(99, Math.max(70, Math.round((r.vote_average || 7.5) * 10))),
-                playerUrl: isTv 
-                  ? `https://v1.watchplay.shop/tvshow/${r.id}/1/1`
-                  : `https://v1.watchplay.shop/movie/${r.id}`
-              };
-            });
-
-          // Mescla resultados do TMDB com os itens locais correspondentes
-          const seen = new Set<number>();
-          const combined: CatalogItem[] = [];
-
-          for (const item of [...localMatches, ...formatted]) {
-            if (!seen.has(item.id)) {
-              seen.add(item.id);
-              combined.push(item);
-            }
-          }
-
-          // Filtra a lista usando a sonda (WatchPlayer/VIP/MixDrop/Nixplay)
-          try {
-            const playableSet = await checkPlayableBatch(
-              combined.map(item => ({ id: item.id, type: item.type === 'movie' ? 'movie' : 'tv' }))
-            );
-            
-            if (!isMounted) return;
-
-            // Mantém apenas os itens que a sonda confirmou ter em algum servidor
-            const trulyAvailable = combined.filter(item => playableSet.has(item.id));
-            setTmdbResults(trulyAvailable);
-          } catch(err) {
-            console.warn("Falha ao checar batch playability:", err);
-            // Em caso de erro na API, falha de forma graciosa e mostra todos
-            if (isMounted) setTmdbResults(combined);
-          }
-
-        } else if (localMatches.length > 0) {
-          setTmdbResults(localMatches);
-        } else {
-          setTmdbResults([]);
-        }
+        await searchCatalog(searchQuery, allCatalogs, controller.signal, setTmdbResults);
       } catch (err) {
         console.warn("Erro ao buscar no catálogo:", err);
       } finally {
-        if (isMounted) setIsSearching(false);
+        if (!controller.signal.aborted) setIsSearching(false);
       }
     }, 350);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-    };
+    return () => { controller.abort(); clearTimeout(timeoutId); };
   }, [searchQuery, allCatalogs]);
 
   // Filtrar resultados por tipo (Todos, Filmes, Séries)
-  // IMPORTANTE: NÃO aplicar isMediaAvailable aqui — a sonda checkPlayableBatch
-  // já validou os items em tmdbResults (linha 232). Aplicar de novo removeria
-  // items novos que não estão no snapshot (ex: Carrie, séries recém-estreadas).
+  // Availability was confirmed by searchCatalog, including sources added after the snapshot.
   const displayedResults = React.useMemo(() => {
     let list = tmdbResults;
     if (activeFilter === 'movie') return list.filter(i => i.type === 'movie');

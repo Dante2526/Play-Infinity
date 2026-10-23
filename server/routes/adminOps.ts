@@ -5,7 +5,8 @@ import { getAdminMessaging, getAdminDb, getAdminFieldValue } from "../firebaseAd
 import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
-import { getEncontreiResolverStatus } from "./encontreiLookup";
+import { getEncontreiResolverStatus, getVizerCatalogStatus } from "./encontreiLookup";
+import { checkVizerHealth } from "../services/vizerDomains";
 
 export const adminOpsRouter = Router();
 
@@ -220,38 +221,8 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     }
   };
 
-  // Vizer usa validação dedicada: com fetch simples + redirect:follow, um 30x
-  // (migração silenciosa de domínio, ex: vizer.beauty → vizer.website → vizer.reisen)
-  // retornava 200 no domínio novo e o painel marcava ONLINE sem avisar nada.
-  const checkVizer = async () => {
-    const start = Date.now();
-    const primaryBase = "https://www.vizer.reisen";
-    try {
-      const res = await fetch(primaryBase, {
-        signal: AbortSignal.timeout(8000),
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-      });
-      const latency = Date.now() - start;
-      return {
-        name: "Catálogo Vizer",
-        url: primaryBase,
-        status: res.ok ? ("ONLINE" as const) : ("OFFLINE" as const),
-        latencyMs: latency,
-        statusCode: res.status
-      };
-    } catch (error: any) {
-      return {
-        name: "Catálogo Vizer",
-        url: primaryBase,
-        status: "OFFLINE" as const,
-        latencyMs: null,
-        statusCode: 0,
-        error: `Falha ao conectar no Vizer: ${error?.message || "fetch falhou"}`
-      };
-    }
-  };
+  // Use the resolver's domain order; a failed live check never deletes the snapshot.
+  const checkVizer = async () => ({ ...(await checkVizerHealth()), catalog: getVizerCatalogStatus() });
 
   const staticTargets = [
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },

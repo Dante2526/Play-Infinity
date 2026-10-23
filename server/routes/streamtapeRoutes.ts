@@ -1,172 +1,56 @@
 import { Router, Request, Response } from "express";
 import { proxyStreamtapeMedia } from "../services/streamtapeMediaProxy";
 import { createStreamtapeRecovery } from "../services/streamtapeRecovery";
-import fs from "fs";
-import path from "path";
-import {
-  resolveEncontreiEpisode,
-  resolveVizerEpisode,
-  resolveEncontreiMovie,
-  resolveVizerMovie,
-} from "./encontreiLookup";
+import { createStreamtapeResolver } from "../services/streamtapeResolver";
+import { createStreamtapeSourcePool } from "../services/streamtapeSources";
+import { getStreamtapeSources } from "./encontreiLookup";
 
 export const streamtapeRouter = Router();
 
-interface StreamtapeCacheEntry {
-  directUrl: string;
-  fileId: string;
-  expiresAt: number;
-}
-
-const streamtapeMemoryCache = new Map<string, StreamtapeCacheEntry>();
+const tokenResolver = createStreamtapeResolver();
 const directUrlToFileId = new Map<string, string>();
-const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutos (evita retenção de tokens expirados da CDN)
-
-// Lazy-load de IDs do catálogo local se precisar buscar por tmdb_id
-let _localCatalog: any = null;
-function getLocalCatalog() {
-  if (!_localCatalog) {
-    try {
-      const p = path.join(process.cwd(), "data", "encontrei-catalog.json");
-      if (fs.existsSync(p)) {
-        _localCatalog = JSON.parse(fs.readFileSync(p, "utf8"));
-      }
-    } catch (e) {
-      console.warn("[StreamTape] Falha ao carregar encontrei-catalog.json:", e);
-    }
+async function resolveStreamTapeDetails(fileId: string, refresh = false) {
+  const result = await tokenResolver.resolve(fileId, refresh);
+  if (result.directUrl) {
+    if (directUrlToFileId.size >= 1000) directUrlToFileId.delete(directUrlToFileId.keys().next().value!);
+    directUrlToFileId.set(result.directUrl, fileId);
+  } else if (result.failure) {
+    // Never log signed URLs, upstream HTML, cookies or raw exception messages.
+    console.warn('[StreamTape Resolver]', JSON.stringify({ fileId, ...result.failure }));
   }
-  return _localCatalog;
+  return result;
 }
 
-function findStreamtapeInCatalog(tmdbId: number, season?: number, episode?: number): string | null {
-  const cat = getLocalCatalog();
-  if (!cat) return null;
-
-  if (season !== undefined && episode !== undefined) {
-    const ep = (cat.episodes || []).find((x: any) => 
-      Number(x.tmdb_id) === Number(tmdbId) && 
-      Number(x.season) === Number(season) && 
-      Number(x.episode) === Number(episode)
-    );
-    if (ep?.servers?.streamtape) return ep.servers.streamtape;
-  } else {
-    const m = (cat.movies || []).find((x: any) => Number(x.tmdb_id) === Number(tmdbId));
-    if (m?.servers?.streamtape) return m.servers.streamtape;
-  }
-  return null;
+const sourcePool = createStreamtapeSourcePool({ resolve: (fileId, refresh) => resolveStreamTapeToken(fileId, refresh) });
+function readIdentity(req: Request) {
+  const raw = req.query.tmdbId || req.query.id;
+  if (!raw) return null;
+  const id = Number(raw), season = req.query.s ? Number(req.query.s) : undefined,
+    episode = req.query.e ? Number(req.query.e) : undefined;
+  if (!Number.isInteger(id) || id < 1 || id > 9999999999 ||
+      (season === undefined) !== (episode === undefined) ||
+      (season !== undefined && (!Number.isInteger(season) || season < 1 || season > 999)) ||
+      (episode !== undefined && (!Number.isInteger(episode) || episode < 1 || episode > 9999))) throw new Error('invalid_identity');
+  return { id, season, episode, name: String(req.query.name || '').slice(0, 160) };
 }
+async function selectIdentitySource(identity: NonNullable<ReturnType<typeof readIdentity>>, exclude: string[] = []) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const work = (async () => {
+    const sources = await getStreamtapeSources(identity.id, identity.season, identity.episode, identity.name);
+    const selected = await sourcePool.select(sources, exclude);
+    if (selected) return selected;
+    // A removed/replaced file may still be present in a local snapshot. Refresh
+    // both exact catalogue lookups once before leaving this provider.
+    return sourcePool.select(await getStreamtapeSources(identity.id, identity.season, identity.episode, identity.name, true), exclude);
+  })();
+  try { return await Promise.race([work, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 18000); })]); }
+  finally { clearTimeout(timer); }
+}
+const safeScriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 
-/**
- * Resolve o direct link MP4 a partir do fileId do StreamTape usando scraping público sem cookies.
- */
+/** Shared, bounded resolution used by the iframe and media-token renewal. */
 export async function resolveStreamTapeToken(fileId: string, refresh = false): Promise<string | null> {
-  const cleanId = String(fileId || "").trim();
-  if (!cleanId) return null;
-
-  // Cache hit
-  const cached = streamtapeMemoryCache.get(cleanId);
-  if (!refresh && cached && cached.expiresAt > Date.now()) {
-    return cached.directUrl;
-  }
-
-  if (refresh) streamtapeMemoryCache.delete(cleanId);
-  const embedUrl = `https://streamtape.com/e/${cleanId}/`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
-
-  try {
-    const upstream = await fetch(embedUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-      },
-      signal: controller.signal,
-    });
-
-    if (!upstream.ok) return null;
-    const html = await upstream.text();
-
-    if (html.includes("Video not found") || html.includes("has been deleted")) {
-      return null;
-    }
-
-    // 1. Extração prioritária via script dinâmico ('botlink' ou 'robotlink')
-    // Nota crítica: StreamTape coloca divs ocultos com tokens FALSOS (honeypots como 'ideoolink')
-    // para enganar scrapers estáticos. A URL real é montada exclusivamente via script dinâmico.
-    let nextUrl: string | null = null;
-
-    const dynamicMatch = html.match(/document\.getElementById\(['"](?:botlink|robotlink)['"]\)\.innerHTML\s*=\s*(.+?);/);
-    if (dynamicMatch && dynamicMatch[1]) {
-      try {
-        const evaluated = new Function(`return ${dynamicMatch[1]};`)();
-        let target = String(evaluated).trim();
-        if (target.startsWith("//")) {
-          nextUrl = "https:" + target;
-        } else if (target.startsWith("http")) {
-          nextUrl = target;
-        } else {
-          nextUrl = "https://streamtape.com" + (target.startsWith("/") ? "" : "/") + target;
-        }
-        if (!nextUrl.includes("&stream=1")) {
-          nextUrl += "&stream=1";
-        }
-      } catch (e) {
-        console.warn(`[StreamTape Resolver] Falha ao avaliar script dinâmico para ${cleanId}:`, e);
-      }
-    }
-
-    // 2. Fallback secundário caso o padrão do script varie
-    if (!nextUrl) {
-      const subMatch = html.match(/document\.getElementById\(['"][^'"]+link['"]\)\.innerHTML\s*=\s*['"][^'"]+['"]\s*\+\s*\((['"][^'"]+['"]\)\.substring\([0-9]+\)(?:\.substring\([0-9]+\))?)/);
-      if (subMatch && subMatch[1]) {
-        try {
-          const evalStr = new Function(`return (${subMatch[1]})`)() as string;
-          const cleanQuery = evalStr.replace(/^[/?&]+/, "");
-          if (cleanQuery.includes("id=")) {
-            nextUrl = `https://streamtape.com/get_video?${cleanQuery}&stream=1`;
-          }
-        } catch {}
-      }
-    }
-
-    if (!nextUrl) {
-      console.warn(`[StreamTape Resolver] Não foi possível extrair o link de vídeo para fileId: ${cleanId}`);
-      return null;
-    }
-    const headRes = await fetch(nextUrl, {
-      method: "HEAD",
-      redirect: "manual",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": embedUrl
-      },
-      signal: controller.signal
-    });
-
-    const location = headRes.headers.get("location");
-    if (!location) {
-      console.warn(`[StreamTape Resolver] HEAD em get_video não retornou Location redirect (status: ${headRes.status})`);
-      return null;
-    }
-
-    streamtapeMemoryCache.set(cleanId, {
-      directUrl: location,
-      fileId: cleanId,
-      expiresAt: Date.now() + CACHE_TTL_MS
-    });
-    directUrlToFileId.set(location, cleanId);
-
-    return location;
-  } catch (err: any) {
-    clearTimeout(timeoutId);
-    if (err?.name !== "AbortError") {
-      console.error(`[StreamTape Resolver] Erro ao resolver fileId ${cleanId}:`, err?.message || err);
-    }
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return (await resolveStreamTapeDetails(fileId, refresh)).directUrl;
 }
 
 /**
@@ -176,32 +60,32 @@ export async function resolveStreamTapeToken(fileId: string, refresh = false): P
 streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Response) => {
   try {
     let fileId = String(req.query.fileId || "").trim();
-    const tmdbId = Number(req.query.tmdbId || req.query.id);
-    const season = req.query.s ? Number(req.query.s) : undefined;
-    const episode = req.query.e ? Number(req.query.e) : undefined;
-
-    if (!fileId && tmdbId) {
-      fileId = findStreamtapeInCatalog(tmdbId, season, episode) || "";
-    }
-
-    if (!fileId) {
-      return res.status(404).json({ success: false, error: "File ID do StreamTape não encontrado para este conteúdo." });
-    }
-
-    const directUrl = await resolveStreamTapeToken(fileId, req.query.refresh === "1");
-    if (!directUrl) {
-      return res.status(502).json({ success: false, error: "Vídeo do StreamTape indisponível ou expirado." });
+    const identity = readIdentity(req);
+    res.setHeader("Cache-Control", "no-store");
+    let directUrl: string | null = null, source = 'direct';
+    if (identity) {
+      const exclude = String(req.query.exclude || '').split(',').filter(Boolean).slice(0, 4);
+      if (exclude.some(value => !/^[a-zA-Z0-9_-]{1,100}$/.test(value))) return res.status(400).json({ success: false, error: 'Arquivo inválido' });
+      const selected = await selectIdentitySource(identity, exclude);
+      if (!selected) return res.status(502).json({ success: false, error: 'Nenhuma fonte StreamTape verificada para este conteúdo.', diagnostic: { stage: 'sources', code: 'no_verified_source' } });
+      fileId = selected.fileId; directUrl = selected.directUrl; source = selected.source;
+    } else {
+      if (!fileId) return res.status(404).json({ success: false, error: 'File ID do StreamTape não encontrado para este conteúdo.' });
+      const resolution = await resolveStreamTapeDetails(fileId, req.query.refresh === "1");
+      directUrl = resolution.directUrl;
+      if (!directUrl) return res.status(502).json({ success: false, error: 'Não foi possível resolver o vídeo do StreamTape.', diagnostic: resolution.failure });
     }
 
     res.setHeader("Cache-Control", "no-store");
     res.json({
       success: true,
+      source,
       fileId,
       directUrl,
       proxyUrl: `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message || "Erro interno no resolvedor" });
+    res.status(err?.message === 'invalid_identity' ? 400 : 500).json({ success: false, error: 'Não foi possível consultar este conteúdo.' });
   }
 });
 
@@ -212,8 +96,11 @@ streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Respon
 streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Response) => {
   const url = String(req.query.url || "").trim();
   const fileId = String(req.query.fileId || directUrlToFileId.get(url) || "").trim();
+  const release = sourcePool.begin(fileId);
+  res.once('close', release); res.once('finish', release);
   await proxyStreamtapeMedia(req, res, {
     url, fileId, refresh: id => resolveStreamTapeToken(id, true),
+    observe: (ok, latencyMs) => sourcePool.report(fileId, ok, latencyMs),
   });
 });
 
@@ -223,81 +110,17 @@ streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Respons
  */
 streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: Response) => {
   try {
-    let fileId = String(req.query.fileId || "").trim();
-    const id = req.query.id ? Number(req.query.id) : undefined;
-    const season = req.query.s ? Number(req.query.s) : undefined;
-    const episode = req.query.e ? Number(req.query.e) : undefined;
-    const name = req.query.name ? String(req.query.name) : undefined;
-    const initialTime = Math.max(0, parseFloat(String(req.query.t || "0")));
-
-    // 1. Para séries com id, season e episode:
-    // Sempre prioriza o fileId exato deste episódio no catálogo local para evitar que clientes
-    // ou WebViews reutilizem o fileId do episódio anterior por atraso de renderização.
-    if (id && season !== undefined && episode !== undefined) {
-      const catalogFid = findStreamtapeInCatalog(id, season, episode);
-      if (catalogFid) {
-        fileId = catalogFid;
-      }
-    }
-
-    // 2. Se não achou ainda no catálogo, busca ao vivo
-    if (!fileId && id) {
-      fileId = findStreamtapeInCatalog(id, season, episode) || "";
-
-      // 2. Se não estiver no catálogo estático, busca ao vivo (Encontrei.me primeiro, depois Vizer)
-      if (!fileId) {
-        try {
-          if (season !== undefined && episode !== undefined) {
-            const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-            fileId = (liveEnc as any)?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
-          } else {
-            const liveEnc = await resolveEncontreiMovie(id, name);
-            fileId = (liveEnc as any)?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
-          }
-        } catch (e) {
-          console.warn("[StreamTape Live Lookup Error]:", e);
-        }
-      }
-    }
-
-    if (!fileId) {
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body>
-          <div style="text-align:center;"><h2>StreamTape Indisponível</h2><p>Conteúdo não encontrado no catálogo do StreamTape.</p></div>
-          <script>
-            try {
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Conteúdo não encontrado no catálogo" }, "*");
-              }
-            } catch(e) {}
-          </script>
-        </body></html>
-      `);
-    }
-
-    let directUrl = await resolveStreamTapeToken(fileId);
-
-    // 3. Auto-recuperação: se o link do catálogo falhou (vídeo deletado/expirado), tenta buscar novo link ao vivo!
-    if (!directUrl && id) {
-      console.warn(`[StreamTape] fileId ${fileId} expirado ou removido. Buscando novo link ao vivo do Encontrei/Vizer...`);
-      try {
-        let freshId: string | null = null;
-        if (season !== undefined && episode !== undefined) {
-          const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-          freshId = (liveEnc as any)?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
-        } else {
-          const liveEnc = await resolveEncontreiMovie(id, name);
-          freshId = (liveEnc as any)?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
-        }
-        if (freshId && freshId !== fileId) {
-          fileId = freshId;
-          directUrl = await resolveStreamTapeToken(fileId);
-        }
-      } catch (e) {
-        console.warn("[StreamTape Auto-Recovery Error]:", e);
-      }
+    const identity = readIdentity(req);
+    let fileId = String(req.query.fileId || '').trim();
+    const initialTime = Math.max(0, Number(req.query.t) || 0);
+    let directUrl: string | null = null;
+    if (identity) {
+      // Do not trust a stale client fileId from the previous episode: candidates
+      // must come from the exact current movie/season/episode in both catalogues.
+      const selected = await selectIdentitySource(identity);
+      if (selected) { fileId = selected.fileId; directUrl = selected.directUrl; }
+    } else if (fileId) {
+      directUrl = await resolveStreamTapeToken(fileId);
     }
 
     if (!directUrl) {
@@ -305,11 +128,11 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         <!DOCTYPE html>
         <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
         <body>
-          <div style="text-align:center;"><h2>Vídeo Expirado</h2><p>O arquivo no StreamTape foi removido ou está temporariamente offline.</p></div>
+          <div style="text-align:center;"><h2>Vídeo Indisponível</h2><p>Não foi possível iniciar este vídeo no StreamTape.</p></div>
           <script>
             try {
               if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Vídeo expirado ou removido" }, "*");
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Não foi possível iniciar este vídeo", streamtapeExhausted: true }, "*");
               }
             } catch(e) {}
           </script>
@@ -394,10 +217,11 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
 
       // Retry even when the first media request fails before any playback.
       var recovery = (${createStreamtapeRecovery.toString()})(v, {
-        fileId: ${JSON.stringify(fileId)},
+        fileId: ${safeScriptJson(fileId)},
+        context: ${safeScriptJson(identity)},
         getTime: function() { return v.currentTime || initialSeek || 0; },
         onFatal: function(reason) {
-          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*"); } catch(e) {}
+          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, streamtapeExhausted: true }, "*"); } catch(e) {}
         }
       });
 

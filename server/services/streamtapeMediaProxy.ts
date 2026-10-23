@@ -15,6 +15,7 @@ export async function proxyStreamtapeMedia(req: Request, res: Response, options:
   url: string; fileId: string;
   refresh: (fileId: string) => Promise<string | null>;
   timeoutMs?: number;
+  observe?: (ok: boolean, latencyMs?: number) => void;
 }) {
   if (!allowedMediaUrl(options.url)) { res.status(400).end('URL de streaming inválida.'); return; }
   const timeoutMs = options.timeoutMs ?? 15000;
@@ -37,6 +38,7 @@ export async function proxyStreamtapeMedia(req: Request, res: Response, options:
       controller = new AbortController();
       clearTimeout(timer);
       timer = setTimeout(() => controller?.abort(), Math.min(timeoutMs, 6000));
+      const started = Date.now();
       let upstream: globalThis.Response | undefined;
       try {
         upstream = await fetch(url, { headers, signal: controller.signal });
@@ -47,6 +49,8 @@ export async function proxyStreamtapeMedia(req: Request, res: Response, options:
       }
       const rejectedMedia = upstream?.ok && /text\/html|application\/json/i.test(upstream.headers.get('content-type') || '');
       const retryable = !upstream || rejectedMedia || [403, 404, 410, 429, 500, 502, 503, 504].includes(upstream.status);
+      if (retryable) options.observe?.(false);
+      else if (upstream?.ok) options.observe?.(true, Date.now() - started);
       if (attempt === 0 && retryable && options.fileId) {
         await upstream?.body?.cancel().catch(() => {});
         // The resolver has its own bounded deadline; client disconnect cancels
@@ -69,7 +73,7 @@ export async function proxyStreamtapeMedia(req: Request, res: Response, options:
       source = Readable.fromWeb(upstream.body as any);
       source.on('data', armTimeout);
       source.once('end', () => clearTimeout(timer));
-      source.once('error', () => { clearTimeout(timer); controller?.abort(); res.destroy(); });
+      source.once('error', () => { options.observe?.(false); clearTimeout(timer); controller?.abort(); res.destroy(); });
       armTimeout();
       source.pipe(res);
       return;

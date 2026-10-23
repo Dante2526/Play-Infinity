@@ -8,6 +8,7 @@ interface HealthResult {
   latencyMs: number | null;
   statusCode: number;
   error?: string;
+  catalog?: { movies: number; episodes: number; series: number };
 }
 
 interface EncontreiStatus {
@@ -168,6 +169,13 @@ export function AdminHealthMonitor() {
               )}
             </div>
 
+            {item.catalog && (
+              <p className="mt-2 text-xs text-white/50">
+                Catálogo em memória: {item.catalog.movies} filmes, {item.catalog.series} séries e {item.catalog.episodes} episódios.
+                {item.status === "OFFLINE" && " Os dados já carregados continuam disponíveis."}
+              </p>
+            )}
+
             {item.error && !encontreiProblem && (
               <div className="mt-2 text-[10px] text-red-400/80 leading-tight">
                 {item.error}
@@ -214,7 +222,7 @@ export function AdminHealthMonitor() {
           <AlertTriangle className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
           <div className="text-sm text-orange-200/80">
             <p className="font-bold text-orange-400 mb-1">Atenção Necessária</p>
-            <p>Um ou mais provedores estão marcados como OFFLINE. Isso geralmente significa que o domínio mudou (ex: vizer.beauty para vizer.website), ou que o servidor está bloqueando as requisições (Cloudflare/CORS).</p>
+            <p>Não foi possível confirmar o acesso a um ou mais provedores. Isso pode ocorrer por timeout, bloqueio ou mudança de domínio. O aviso não significa que todos os vídeos ou os dados de catálogo já carregados deixaram de funcionar.</p>
             <p className="mt-2">Caso seja uma troca de domínio do Vizer ou Encontrei, você precisará atualizar a variável no arquivo <code className="bg-black/30 px-1.5 py-0.5 rounded text-orange-300">encontreiLookup.ts</code> ou <code className="bg-black/30 px-1.5 py-0.5 rounded text-orange-300">videoScrapers.ts</code>.</p>
           </div>
         </div>

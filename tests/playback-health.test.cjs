@@ -114,7 +114,9 @@ test('HTTP batch probes the requested episode, shares catalog lookup and hides s
     const response = await nativeFetch(base + '/api/playback-health?id=213375&type=tv&s=2&e=3&servers=srv_streamtape,srv_mixdrop', { headers: { Host: 'untrusted.invalid' } });
     const text = await response.text(); assert.doesNotMatch(text, /signed-secret|proxyUrl|videoUrl/);
     const data = JSON.parse(text); assert.equal(data.servers.srv_mixdrop.state, 'available'); assert.equal(data.servers.srv_streamtape.state, 'available');
-    assert.equal(calls.filter(url => url.pathname === '/api/encontrei-lookup').length, 1);
+    assert.equal(calls.filter(url => url.pathname === '/api/encontrei-lookup').length, 0);
+    const mixProbe = calls.find(url => url.pathname === '/api/md-stream');
+    assert.equal(mixProbe.searchParams.get('id'), '213375'); assert.equal(mixProbe.searchParams.get('s'), '2'); assert.equal(mixProbe.searchParams.get('e'), '3');
     assert.equal(response.headers.get('cache-control'), 'no-store');
   } finally { global.fetch = nativeFetch; }
 });
@@ -145,4 +147,15 @@ test('VIP, WatchPlayer and Nixplay probes use exact episode adapters and verify 
     assert.equal(data.servers.srv_watchplay.state, 'unavailable');
     for (const key of ['srv_vip', 'srv_nixplay']) assert.equal(data.servers[key].state, 'available');
   } finally { global.fetch = nativeFetch; }
+});
+
+test('a background health poll cannot skip StreamTape catalogue failover before the iframe exhausts it', () => {
+  const servers = [{ key: 'srv_streamtape' }, { key: 'srv_mixdrop' }];
+  for (const state of ['unknown', 'unavailable']) {
+    assert.equal(api.chooseHealthStartupServer(servers, { srv_streamtape: result(state), srv_mixdrop: result('available') }, 'srv_streamtape', false, new Set()), undefined);
+  }
+});
+
+test('background health waits for MixDrop to exhaust its own two catalogue copies', () => {
+  assert.equal(api.chooseHealthStartupServer([{ key: 'srv_mixdrop' }, { key: 'srv_vip' }], { srv_mixdrop: result('unknown'), srv_vip: result('available') }, 'srv_mixdrop', false, new Set()), undefined);
 });

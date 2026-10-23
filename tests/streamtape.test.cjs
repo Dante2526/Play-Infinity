@@ -14,7 +14,7 @@ before(async () => {
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'catalog-fixture', setup(build) {
       build.onResolve({ filter: /encontreiLookup$/ }, args => ({ path: args.path, namespace: 'fixture' }));
-      build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const resolveEncontreiEpisode = async()=>null; export const resolveVizerEpisode=resolveEncontreiEpisode; export const resolveEncontreiMovie=resolveEncontreiEpisode; export const resolveVizerMovie=resolveEncontreiEpisode;` }));
+      build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: `export const getStreamtapeSources = async()=>[]; export const resolveEncontreiEpisode = async()=>null; export const resolveVizerEpisode=resolveEncontreiEpisode; export const resolveEncontreiMovie=resolveEncontreiEpisode; export const resolveVizerMovie=resolveEncontreiEpisode;` }));
     } }],
   });
   const filename = path.join(root, 'tests/virtual-streamtape.cjs');
@@ -207,4 +207,18 @@ test('episode 3 errors cannot control episode 4 while its frame is absent or aft
 test('slow episode lookup cannot hold the player indefinitely', async () => {
   await api.waitForPlayerLookup(new Promise(() => {}), 15);
   await api.waitForPlayerLookup(Promise.resolve('episode4'), 100);
+});
+
+
+test('resolver HTTP errors expose a safe stage diagnostic without caching a provider refusal', async () => {
+  global.fetch = async () => new Response('private upstream HTML token=secret', { status: 403 });
+  try {
+    const response = await nativeFetch(base + '/api/streamtape-resolve?fileId=diagnostic-fixture');
+    assert.equal(response.status, 502);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    const body = await response.json();
+    assert.deepEqual(body.diagnostic, { stage: 'embed', code: 'upstream_http', status: 403 });
+    assert.equal(body.success, false);
+    assert.doesNotMatch(JSON.stringify(body), /secret|private upstream/);
+  } finally { global.fetch = nativeFetch; }
 });

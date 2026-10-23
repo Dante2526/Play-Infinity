@@ -128,3 +128,23 @@ Localizado em `server.ts`, este proxy contorna restrições de CORS e cabeçalho
 - [x] **Cache em memória de rotas funcionais por ID:** Acelera reprodução contínua de episódios.
 - [x] **Dois níveis de watchdog:** Buffering suave durante o filme e fallback transparente se a fonte morrer.
 - [x] **Respeito estrito à Política de Servidores Homologados:** Bloqueio ativo de qualquer fonte na lista negra.
+
+## StreamTape: escolha entre cópias dos catálogos (23/10/2026)
+
+O iframe e o health check passam a usar a identidade exata do filme ou do episódio para consultar os candidatos StreamTape do Encontrei e do Vizer. `server/services/streamtapeSources.ts` deduplica por fileId, prioriza áudio declarado Dublado/PT-BR e verifica um prefixo MP4 de até1024bytes antes de selecionar uma cópia. Não baixa o vídeo inteiro durante a sondagem. Se o snapshot contiver arquivos substituídos, tenta uma atualização dos dois catálogos antes de desistir.
+
+O critério considera tempo de resposta observado, falhas recentes e requisições de mídia ativas no proxy deste worker. Não representa a carga interna da CDN nem uma contagem global de espectadores: cada processo PM2 tem suas próprias métricas em memória, que reiniciam no deploy. As sondagens concorrentes do mesmo arquivo são compartilhadas, acertos duram30s e falhas5s. Há admissão limitada a6 sondagens e6 descobertas simultâneas por worker, sem fila ilimitada. Arquivos idênticos nos dois catálogos são uma única fonte.
+
+A recuperação do iframe renova o token uma vez por arquivo e, se necessário, solicita outra cópia excluindo os fileIds já tentados. Mantém posição, seek solicitado e intenção de pausa. Buffer seco persistente por8s também pode acionar outra cópia; pausas ou buffer recuperado não provocam troca. O ciclo é limitado e não alterna indefinidamente entre os mesmos arquivos. Só depois de esgotar as cópias disponíveis informa falha ao modal para usar os demais provedores homologados. O verificador em segundo plano não antecipa essa mudança de provedor.
+
+Limites: descoberta por catálogo4s, sondagem de arquivo8s, seleção total18s e recuperação no iframe18s. Watchdog externo de45s cobre seleção inicial e recuperação; falhas explícitas encerram antes. A disponibilidade é pontual: um prefixo MP4 válido não garante banda sustentada ou reprodução integral. O transporte StreamTape continua usando `/api/streamtape-stream` na VPS, com Range e renovação; portanto o comentário geral de tráfego VOD direto acima não descreve este proxy específico.
+
+## MixDrop: seleção e recuperação entre catálogos (23/10/2026)
+
+MixDrop e StreamTape compartilham o algoritmo em `server/services/mediaSourcePool.ts`, com instâncias e métricas separadas por provedor. A descoberta de catálogos também é comum, com chaves que distinguem provedor, filme/série, temporada e episódio. `/api/md-stream?id=...&s=...&e=...` verifica as cópias MixDrop de ambos catálogos, mede o prefixo MP4, escolhe uma fonte e atualiza os IDs ao vivo uma vez se o snapshot falhar. `format=json` informa fileId/source/proxyUrl além do videoUrl legado. URLs antigas contendo apenas o embed continuam aceitas.
+
+O iframe informa `WATCHPLAY_SOURCE` com o arquivo realmente escolhido. O modal usa esse ID, não o ID preferido antes da seleção, para excluir cópias falhas. O controlador `mixdropSourceRouting.ts` evita tentativas duplicadas e resultados de outro episódio, preserva IDs já tentados, pausa e seek solicitado durante a consulta. Só após esgotar fontes ou o prazo inicia outro provedor. IDs iguais não são uma segunda cópia. Escolha inicial, troca manual, temporada e episódio usam contexto numérico quando disponível; casts/URLs legadas sem esse contexto mantêm resolução direta do fileId.
+
+A recuperação de buffer do MixDrop continua aguardando reserva antes de retomar. Em contexto com alternativas, tenta recarregar após4s e permite fallback após10s com janela de6s para essa tentativa; reprodução legada conserva seus limites anteriores. A troca abre um novo vídeo/iframe no mesmo ponto e respeita pausa explícita. Nunca troca de arquivo dentro de uma resposta HTTP parcialmente entregue: a retomada por bytes do proxy continua exigindo offset, tamanho e validador do mesmo objeto.
+
+Contadores de conexões, cache e desempenho são locais de cada processo PM2. Não há consulta à carga interna do MixDrop, nem garantia de banda sustentada pela verificação de1024bytes. A seleção e o pedido de alternativa têm prazo18s, sondagens8s e watchdog externo45s. Dados reais de produção e a distribuição entre workers ainda precisam de validação após deploy autorizado.

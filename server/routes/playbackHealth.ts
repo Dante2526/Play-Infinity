@@ -25,7 +25,6 @@ router.get('/api/playback-health', async (req, res) => {
   const nixId = String(req.query.nixId || '').replace(/[^0-9]/g, '').slice(0, 12);
   const identity = [type, id, type === 'tv' ? season : 0, type === 'tv' ? episode : 0, name, nixId].join(':');
   const params = new URLSearchParams({ id, type, s: String(season), e: String(episode), name });
-  let catalog: Promise<any> | undefined;
   const json = async (url: string, signal: AbortSignal) => {
     const response = await fetch(url, { signal });
     const bytes = await readHealthPrefix(response, 64 * 1024);
@@ -39,14 +38,16 @@ router.get('/api/playback-health', async (req, res) => {
   };
   const entries = await Promise.all(requested.map(async key => [key, await check(identity + ':' + key, async signal => {
     if (key === 'srv_mixdrop' || key === 'srv_streamtape') {
-      // One lookup per batch, with its own shared deadline (not one provider's abort signal).
-      catalog ||= json(origin + '/api/encontrei-lookup?' + new URLSearchParams({ tmdb_id: id, type, season: String(season), episode: String(episode), name }), AbortSignal.timeout(4000));
-      const found = await catalog;
-      const fileId = found[key === 'srv_mixdrop' ? 'mixdrop' : 'streamtape'];
-      if (!fileId || !/^[a-zA-Z0-9_-]+$/.test(fileId)) return { state: 'unknown', reason: 'catalog_unconfirmed' };
-      const resolved = key === 'srv_mixdrop'
-        ? await json(origin + '/api/md-stream?' + new URLSearchParams({ url: `https://mxdrop.top/e/${fileId}`, format: 'json' }), signal)
-        : await json(origin + '/api/streamtape-resolve?' + new URLSearchParams({ fileId }), signal);
+      let resolved;
+      if (key === 'srv_streamtape') {
+        const identity = new URLSearchParams({ id, name });
+        if (type === 'tv') { identity.set('s', String(season)); identity.set('e', String(episode)); }
+        resolved = await json(origin + '/api/streamtape-resolve?' + identity, signal);
+      } else {
+        const identity = new URLSearchParams({ id, name, format: 'json' });
+        if (type === 'tv') { identity.set('s', String(season)); identity.set('e', String(episode)); }
+        resolved = await json(origin + '/api/md-stream?' + identity, signal);
+      }
       return probeHealthMedia(localMedia(resolved.proxyUrl || resolved.videoUrl, ['/api/md-proxy', '/api/streamtape-stream']), signal);
     }
     if (key === 'srv_nixplay') {

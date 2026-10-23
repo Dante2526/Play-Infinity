@@ -14,7 +14,9 @@ export function rankPlaybackServers<T extends { key: string }>(servers: T[], hea
 }
 
 export function chooseHealthStartupServer<T extends { key: string }>(servers: T[], health: ServerHealthMap, selected: string, playbackStarted: boolean, attempted: Set<string>): T | undefined {
-  if (playbackStarted || playbackHealthState(health, selected) === 'available') return undefined;
+  // Catalogue-backed players own bounded intra-provider source cycles.
+  // Exhaust Encontrei/Vizer before a background poll changes providers.
+  if (['srv_streamtape', 'srv_mixdrop'].includes(selected) || playbackStarted || playbackHealthState(health, selected) === 'available') return undefined;
   return rankPlaybackServers(servers, health).find(server => server.key !== selected && playbackHealthState(health, server.key) === 'available' && !attempted.has(server.key));
 }
 

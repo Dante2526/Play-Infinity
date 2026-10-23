@@ -8,6 +8,7 @@ type Options = {
   headerTimeoutMs?: number;
   idleTimeoutMs?: number;
   maxRetries?: number;
+  observe?: (ok: boolean, latencyMs?: number) => void;
 };
 
 export function isMixdropMediaUrl(value: string): boolean {
@@ -107,6 +108,7 @@ export async function proxyMixdropVideo(req: Request, res: Response, options: Op
           headers["If-Range"] = original.validator;
         } else if (requestedRange) headers.Range = requestedRange;
 
+        const responseStarted = Date.now();
         headerTimer = setTimeout(() => controller.abort(), options.headerTimeoutMs ?? 10000);
         let response: globalThis.Response | undefined;
         for (let redirects = 0; redirects <= 3; redirects++) {
@@ -119,7 +121,9 @@ export async function proxyMixdropVideo(req: Request, res: Response, options: Op
           url = new URL(location, url).href;
         }
         clearTimeout(headerTimer);
+        if (response?.ok) options.observe?.(true, Date.now() - responseStarted);
         if (!response) throw new Error("Missing CDN response");
+        if (!response.ok) options.observe?.(false);
         if ([403, 404, 410].includes(response.status) && options.renewUrl && !renewed && attempt < maxRetries) {
           renewed = true;
           void response.body?.cancel().catch(() => {});
@@ -212,6 +216,7 @@ export async function proxyMixdropVideo(req: Request, res: Response, options: Op
         }
       } catch {
         if (client.signal.aborted) return;
+        options.observe?.(false);
         const safeResume = bytesSent === 0 || !!original?.validator && original.end !== null;
         if (attempt === maxRetries || !safeResume) throw new Error("Video transfer failed");
       } finally {

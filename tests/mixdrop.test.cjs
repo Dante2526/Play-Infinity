@@ -47,6 +47,8 @@ before(async () => {
     `, resolveDir: root, loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', write: false, packages: 'external',
     plugins: [{ name: 'embed-fixture', setup(build) {
+      build.onResolve({ filter: /encontreiLookup$/ }, args => ({ path: args.path, namespace: 'catalogue-fixture' }));
+      build.onLoad({ filter: /.*/, namespace: 'catalogue-fixture' }, () => ({ contents: 'export const getMixdropSources=async()=>[];' }));
       build.onResolve({ filter: /utils\/helpers/ }, args => ({ path: args.path, namespace: 'fixture' }));
       build.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ loader: 'js', contents: `
         export const validateSafeUrl = value => ({valid:true,parsedUrl:new URL(value)});
@@ -295,7 +297,7 @@ function browser(source) {
     load() { loads++; video.currentTime = 0; video.readyState = 0; },
     setAttribute() {}, getVideoPlaybackQuality() { return { totalVideoFrames: 100, droppedVideoFrames: 0 }; },
   };
-  const window = { parent: { postMessage: value => messages.push(value) },
+  const window = { location: { href: 'http://fixture/api/md-stream' }, parent: { postMessage: value => messages.push(value) },
     addEventListener(name, fn) { const list = windowEvents.get(name) || []; list.push(fn); windowEvents.set(name, list); } };
   const context = vm.createContext({
     video, window, options: { sourceUrl: '/api/md-proxy?fileId=original', onFatal: reason => messages.push({ type: 'FATAL', reason }) },
@@ -455,4 +457,11 @@ test('toggle pause during iframe rebuffer is treated as user pause', async () =>
   b.command('TOGGLE_PLAY'); b.setBuffer(6); b.video.readyState = 4; b.tick(10);
   assert.equal(b.video.paused, true);
   assert.equal(b.plays, 0);
+});
+
+test('catalogue-backed recovery uses a shorter bounded retry window before trying another copy', () => {
+  const b = browser();
+  b.context.options.reloadAfterMs = 4000; b.context.options.stallTimeoutMs = 10000; b.context.options.retryWindowMs = 6000;
+  b.video.emit('waiting'); b.tick(4); assert.equal(b.loads, 1);
+  b.tick(6); assert.equal(b.messages.filter(message => message.type === 'FATAL').length, 1);
 });
