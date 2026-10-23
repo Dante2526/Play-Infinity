@@ -1387,3 +1387,20 @@ Screenshot da execução 39937768747 confirmou a causa: uma única instância pl
 Validação concluída: sete testes PM2 reais passaram, cobrindo recusa padrão de fork, candidato inválido preservando o processo antigo, falha de health do cluster novo com recuperação da instância fork e migração posterior bem-sucedida preservando segredo/configuração e PID do proxy de TV. Os outros 76 testes passaram (83 no total), assim como TypeScript, sintaxe JS/Bash, YAML do workflow, git diff --check e build completo isolado (/workspace/.onboarding/legacy-migration-validation.v3t1odrg).
 
 Ainda local, aguardando autorização específica para novo push e manutenção inicial com interrupção. Nenhuma migração aplicada à VPS. O mecanismo não atualiza Node: requisito de Node 22+ permanece; a VPS relatada usa Node 20. O bundle precisa passar na prova local da VPS antes de qualquer parada.
+
+
+## 23/10/2026 - Queda SSH durante instalação na migração autorizada
+
+O commit 5fcf629 foi enviado com autorização para a manutenção inicial. A execução 39940339933 passou em tipos, testes funcionais, testes PM2 e build; falhou no transporte SSH durante npm ci na VPS. Log final fornecido pelo usuário: client_loop: send disconnect: Broken pipe, exit 255. Os avisos EBADENGINE não comprovam a causa dessa queda. A aplicação pública respondeu HTTP 200/status ok sem release após a falha; a versão nova não foi confirmada. Não há acesso ao processo remoto para afirmar que ele parou ou reverteu.
+
+- Workflow agora envia ServerAliveInterval=15, ServerAliveCountMax=12 e TCPKeepAlive=yes em SSH/SCP, com argumentos em array Bash. Isso mitiga desconexões por inatividade; não garante continuidade diante de falhas reais de rede/VPS.
+- Saída SSH 255 informa resultado remoto desconhecido, orientando verificar PM2/health antes de repetir. Sem retry automático da manutenção e sem declarar rollback ao perder transporte.
+- Documentação operacional atualizada. Android preparado como versionCode 44/versionName 1.4.12 para eventual push que dispara AAB.
+- Validação: YAML e Bash válidos; simulação do comando remoto com saídas 0, 1 e 255 preservou os códigos e exibiu sucesso somente para 0, diagnóstico de transporte somente para 255. Opções efetivas conferidas com ssh -G usando configuração isolada (configuração SSH global deste ambiente tem permissões incompatíveis). git diff --check passou.
+
+Correção local, sem novo push ou reexecução do deploy. Node 20 da VPS ainda não foi atualizado; requisito Node 22+ permanece separado. Antes de enviar, solicitar autorização conforme AGENTS.md; antes de repetir manutenção, verificar a situação remota.
+
+
+## 23/10/2026 - Autorização de envio e confirmação tardia do deploy anterior
+
+Usuário autorizou enviar a correção e resolver o deploy. Antes do envio, o health público respondeu HTTP 200/status ok/release 5fcf629c869ce05079a655f5506192d198af3fa6-39940339933-1. Isso confirma que o processo remoto anterior continuou depois da desconexão e ativou a versão nova, apesar da falha de transporte registrada no GitHub. Não foi repetida a manutenção: o próximo commit de keepalive não usa prefixo de migração e exige cluster saudável no preflight normal. Main remota permanece em 5fcf629, sem divergência.

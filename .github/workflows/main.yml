@@ -71,9 +71,19 @@ jobs:
         run: |
           HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
           USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
-          SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i ~/.ssh/oracle_key"
+          # npm ci can remain silent for minutes. Keep the SSH transport active;
+          # ConnectTimeout only covers connection establishment.
+          SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=12 -o TCPKeepAlive=yes -i "$HOME/.ssh/oracle_key")
           
           RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          scp $SSH_OPTS /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
-          scp $SSH_OPTS scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
-          ssh $SSH_OPTS "${USER}@${HOST}" "sudo env PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"
+          scp "${SSH_OPTS[@]}" /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
+          scp "${SSH_OPTS[@]}" scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
+          if ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "sudo env PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"; then
+            echo "Deploy remoto concluído e verificado: ${RELEASE_ID}"
+          else
+            SSH_STATUS=$?
+            if [[ $SSH_STATUS == 255 ]]; then
+              echo '::error::Conexão SSH perdida. O resultado remoto é desconhecido; confira PM2 e o healthcheck antes de repetir. Não houve confirmação de deploy nem de rollback.'
+            fi
+            exit "$SSH_STATUS"
+          fi

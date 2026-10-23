@@ -47,6 +47,14 @@ layout de releases também são preservados na primeira migração.
 
 ## Limites e operação
 
+SSH e SCP enviam keepalive a cada 15 segundos e toleram até 12 respostas ausentes,
+para manter a conexão durante instalações sem saída no terminal. Isso não evita
+quedas reais da VPS ou da rede. `client_loop: send disconnect: Broken pipe` com
+saída 255 indica perda do transporte SSH, não um erro comprovado do npm. Nesse
+caso o processo remoto pode ter continuado; confira PM2 e a versão no healthcheck
+antes de repetir. O workflow não tenta novamente a manutenção automaticamente
+nem declara rollback quando perde a conexão.
+
 `APP_DRAIN_TIMEOUT_MS` controla a janela de conclusão das conexões, com padrão de
 duas horas. O `kill_timeout` do PM2 fica 30 segundos acima dessa janela. Uma conexão
 que ultrapasse o limite ainda pode ser encerrada. Aumentar muito o prazo exige
