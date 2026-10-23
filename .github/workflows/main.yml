@@ -7,30 +7,45 @@ on:
       - master
   workflow_dispatch:
 
+concurrency:
+  group: oracle-production
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 300
     name: Build e Deploy no Play Infinity (Oracle VPS)
 
     steps:
       - name: 📥 Clonar Repositório
         uses: actions/checkout@v4
 
-      - name: ⚙️ Configurar Node.js 20
+      - name: ⚙️ Configurar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: 📦 Instalar Dependências
         run: npm ci || npm install
+
+      - name: Validar tipos, pagamentos e reprodução
+        run: |
+          npm run lint
+          node --test tests/payments.test.cjs tests/mixdrop.test.cjs tests/streamtape.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs
+
+      - name: Validar troca de versão com conexão ativa
+        run: |
+          npm install --prefix "$RUNNER_TEMP/pm2-tests" --no-save --package-lock=false --no-audit --no-fund pm2@6.0.14
+          PM2_BIN="$RUNNER_TEMP/pm2-tests/node_modules/.bin/pm2" node --test tests/deploy.test.cjs
 
       - name: 🔨 Compilar Aplicação (Vite Build)
         run: npm run build
 
       - name: 📦 Compactar arquivos de Deploy
         run: |
-          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json data/encontrei-catalog.json watchdog.sh ecosystem.config.cjs
+          tar -czf /tmp/deploy-payload.tar.gz dist server.ts server package.json package-lock.json scripts data/encontrei-catalog.json ecosystem.config.cjs
 
       - name: 🔑 Configurar Chave SSH
         run: |
@@ -48,15 +63,7 @@ jobs:
           USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
           SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i ~/.ssh/oracle_key"
           
-          # Enviar pacote compactado
-          scp $SSH_OPTS /tmp/deploy-payload.tar.gz ${USER}@${HOST}:/home/ubuntu/app-deploy.tar.gz
-          
-          # Extrair e recarregar PM2 com Zero Downtime (Cluster Mode)
-          ssh $SSH_OPTS ${USER}@${HOST} << 'EOF'
-            tar -xzf /home/ubuntu/app-deploy.tar.gz -C /home/ubuntu/play-infinity/
-            cd /home/ubuntu/play-infinity
-            # Recarrega as instâncias em modo cluster sem derrubar requisições ativas
-            sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 start ecosystem.config.cjs || sudo pm2 restart play-infinity-app
-            sudo pm2 save
-            echo "✅ Deploy Zero-Downtime concluído com sucesso!"
-          EOF
+          RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          scp $SSH_OPTS /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
+          scp $SSH_OPTS scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
+          ssh $SSH_OPTS "${USER}@${HOST}" "sudo bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"

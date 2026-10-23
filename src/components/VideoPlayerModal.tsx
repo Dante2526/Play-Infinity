@@ -25,6 +25,7 @@ import { getSeasonDetails, getDetails, resolveCardIdentity, searchMulti, TMDBDet
 import { sagas } from "../data/sagas";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
+import { fetchPlaybackHealth, rankPlaybackServers, chooseHealthStartupServer, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
@@ -420,6 +421,10 @@ export function VideoPlayerModal({
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
   // Ref para confirmar que o vídeo realmente iniciou a reprodução (usado pelo watchdog e seek)
   const playbackConfirmedRef = useRef<boolean>(false);
+  const healthPlaybackStartedRef = useRef(false);
+  const serverSelectionEpochRef = useRef(0);
+  const healthRef = useRef<{ identity: string; servers: ServerHealthMap }>({ identity: '', servers: {} });
+  const [serverHealth, setServerHealth] = useState<{ identity: string; servers: ServerHealthMap }>({ identity: '', servers: {} });
   // Controle de visibilidade do iframe: oculta o iframe nativo (com botões feios/gigantes) até o vídeo começar a rodar
   const [iframeVisible, setIframeVisible] = useState<boolean>(false);
   // Controle de Picture-in-Picture nativo do Android
@@ -1281,7 +1286,7 @@ export function VideoPlayerModal({
             const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
             const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${imdbId || effectiveMovieId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
+            return `/api/streamtape-proxy-iframe?id=${effectiveMovieId || tmdbId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
           name: "StreamTape HD"
@@ -1293,14 +1298,14 @@ export function VideoPlayerModal({
           buildUrl: () => {
             // Prioridade 1: fileId do catálogo encontrei.me (HD, sem marca d'água)
             if (mixdropFileId) {
-              return buildMixdropStreamUrl(mixdropFileId) || "https://mxdrop.top/f/36nggdmqspmlg4";
+              return buildMixdropStreamUrl(mixdropFileId) || buildMixdropFallbackUrl();
             }
             // Prioridade 2: defaultUrl se já é uma URL do MixDrop
             if (defaultUrl && (defaultUrl.includes("mixdrop") || defaultUrl.includes("mxdrop"))) {
               return defaultUrl;
             }
             // Prioridade 3: fallback (pode ser versão cam)
-            return `https://mxdrop.top/f/36nggdmqspmlg4?cb=${Date.now()}`;
+            return buildMixdropFallbackUrl();
           },
           isMatch: (u: string) => u.includes("mixdrop") || u.includes("mxdrop"),
           name: "MixDrop"
@@ -1367,7 +1372,11 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title]);
+  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title, buildMixdropFallbackUrl]);
+  const healthContentId = String(effectiveMovieId || tmdbId || resolvedId || '');
+  const healthIdentity = `${isSeries ? 'tv' : 'movie'}:${healthContentId}:${isSeries ? `${season}:${episode}` : ''}`;
+  const healthIdentityRef = useRef(healthIdentity);
+  healthIdentityRef.current = healthIdentity;
   // Ref para leitura da lista de servidores sem forçar re-execução de effects
   const serversRef = useRef(servers);
   serversRef.current = servers;
@@ -1400,6 +1409,7 @@ export function VideoPlayerModal({
 
   // Handler para troca de servidor de forma transparente e silenciosa
   const handleServerSwitch = useCallback(async (serverKey: string) => {
+    const selectionEpoch = ++serverSelectionEpochRef.current;
     mixdropAttemptRef.current = 1; // Reseta tentativa intra-servidor
     hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
@@ -1409,6 +1419,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
     setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape");
+    healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     setError(null);
@@ -1426,6 +1437,7 @@ export function VideoPlayerModal({
         ? srv.buildUrl(resolvedId, season, episode)
         : srv.buildUrl(resolvedId);
     }
+    if (selectionEpoch !== serverSelectionEpochRef.current) return;
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -1469,7 +1481,8 @@ export function VideoPlayerModal({
     }
 
     // 2. Retry do mesmo servidor em caso de timeout de token (pausa longa)
-    if ((!retrySameServerRef.current && lastKnownTimeRef.current > 2 && hasPlayedRef.current) || forceRetrySameServerRef.current) {
+    const health = healthRef.current.identity === healthIdentityRef.current ? healthRef.current.servers : {};
+    if (playbackHealthState(health, selectedServerKey) !== "unavailable" && ((!retrySameServerRef.current && lastKnownTimeRef.current > 2 && hasPlayedRef.current) || forceRetrySameServerRef.current)) {
       console.warn(`[VideoPlayerModal] Possível expiração de token pós-pausa. Recarregando ${selectedServerKey} de forma transparente...`);
       retrySameServerRef.current = true;
       forceRetrySameServerRef.current = false;
@@ -1480,7 +1493,7 @@ export function VideoPlayerModal({
 
     fallbackAttemptsRef.current.add(selectedServerKey);
     // Identifica próximo servidor ainda não tentado
-    const nextServer = servers.find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
+    const nextServer = rankPlaybackServers<(typeof servers)[number]>(servers, health).find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
     if (nextServer) {
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
       hasSeekedInitialTimeRef.current = false;
@@ -1497,6 +1510,49 @@ export function VideoPlayerModal({
 
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
+
+  const healthServerKeys = servers.map(server => server.key).join(',');
+  const healthSwitchRef = useRef(handleServerSwitch);
+  healthSwitchRef.current = handleServerSwitch;
+  const selectedHealthServerRef = useRef(selectedServerKey);
+  selectedHealthServerRef.current = selectedServerKey;
+  useEffect(() => {
+    if (!isOpen || !healthServerKeys || !healthContentId || /^(blob:|capacitor:|file:)|localhost\/_capacitor_file_/.test(defaultUrl || '')) return;
+    let cancelled = false;
+    let polling = false;
+    let controller: AbortController | undefined;
+    const identity = healthIdentity;
+    const poll = async () => {
+      if (document.hidden || polling) return;
+      polling = true;
+      controller = new AbortController();
+      const deadline = setTimeout(() => controller?.abort(), 6000);
+      try {
+        const result = await fetchPlaybackHealth({ id: healthContentId, type: isSeries ? 'tv' : 'movie', season, episode,
+          servers: healthServerKeys.split(','), name: title.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim(), nixId: nixplaySeriesId ? String(nixplaySeriesId) : undefined }, controller.signal);
+        if (cancelled || healthIdentityRef.current !== identity) return;
+        healthRef.current = { identity, servers: result };
+        setServerHealth({ identity, servers: result });
+        // Background health must never interrupt established playback.
+        if (healthPlaybackStartedRef.current) return;
+        const selected = selectedHealthServerRef.current;
+        if (playbackHealthState(result, selected) === 'available') return;
+        const next = chooseHealthStartupServer(serversRef.current, result, selected, healthPlaybackStartedRef.current, fallbackAttemptsRef.current);
+        if (next) {
+          fallbackAttemptsRef.current.add(selected);
+          healthSwitchRef.current(next.key);
+        } else if (playbackHealthState(result, selected) === 'unavailable') {
+          silentFallbackRef.current();
+        }
+      } catch { /* Failure to check is not proof that content is missing. */ }
+      finally { clearTimeout(deadline); polling = false; }
+    };
+    const onVisible = () => { if (!document.hidden) void poll(); };
+    document.addEventListener("visibilitychange", onVisible);
+    void poll();
+    const interval = setInterval(() => void poll(), 45000);
+    return () => { cancelled = true; clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); controller?.abort(); };
+  }, [isOpen, healthIdentity, healthServerKeys, nixplaySeriesId]);
 
   const mixdropRecoveryRef = useRef(async () => { });
   mixdropRecoveryRef.current = async () => {
@@ -1519,7 +1575,8 @@ export function VideoPlayerModal({
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
-    const timeoutDuration = isWatchplay ? 18000 : (isMixdrop ? 25000 : 15000);
+    // Allow the StreamTape iframe to resolve a fresh token and retry once.
+    const timeoutDuration = selectedServerKey === "srv_streamtape" ? 30000 : (isWatchplay ? 18000 : (isMixdrop ? 25000 : 15000));
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -1541,6 +1598,7 @@ export function VideoPlayerModal({
       setError(null);
       setIsLoading(true);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
+      healthPlaybackStartedRef.current = false;
       playbackConfirmedRef.current = false; // Reset de reprodução real
       setIframeVisible(false); // Oculta iframe até rodar
       // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
@@ -1607,6 +1665,7 @@ export function VideoPlayerModal({
       }
 
       // Inicialização do servidor: prioriza MixDrop para links dedicados, e WatchPlayer como padrão
+      const initialSelectionEpoch = ++serverSelectionEpochRef.current;
       const setupInitialServer = async () => {
         // NOVO: se a URL inicial é blob: ou capacitor:// (playback offline),
         // usa ela direto — sem montar URL do mixdrop-stream.
@@ -1697,6 +1756,7 @@ export function VideoPlayerModal({
           }
         }
 
+        if (initialSelectionEpoch !== serverSelectionEpochRef.current) return;
         setSelectedServerKey(targetServerKey);
 
         setUrlInput(targetUrl);
@@ -1710,6 +1770,7 @@ export function VideoPlayerModal({
       fallbackAttemptsRef.current.clear();
       mixdropAttemptRef.current = 1;
     }
+    return () => { serverSelectionEpochRef.current++; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
@@ -1834,6 +1895,9 @@ export function VideoPlayerModal({
           pausedAtRef.current = null;
         }
 
+        if (incomingTime > lastKnownTimeRef.current && incomingTime - lastKnownTimeRef.current < 1.5 && isPaused === false && (data.readyState === undefined || data.readyState >= 2)) {
+          healthPlaybackStartedRef.current = true;
+        }
         // 4. Atualiza a memória de tempo (deve ser DEPOIS do diff)
         if (incomingTime > 0) {
           lastKnownTimeRef.current = incomingTime;
@@ -1913,12 +1977,14 @@ export function VideoPlayerModal({
               if (resolvedId) markEpisodeWatched(resolvedId, season, episode, true);
               try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch (e) { console.warn("Silenced error:", e); }
 
+              serverSelectionEpochRef.current++;
               transitionEpochRef.current = Date.now();
               setSeason(nextSeason);
               setEpisode(1);
               lastKnownTimeRef.current = 0;
               setIsIntroActive(false);
               setPlayerSkinReady(false);
+              healthPlaybackStartedRef.current = false;
               playbackConfirmedRef.current = false;
               setIframeVisible(false);
               fallbackAttemptsRef.current.clear();
@@ -2196,6 +2262,7 @@ export function VideoPlayerModal({
   // Handler to switch episode
   const handleEpisodeChange = async (newEpisode: number) => {
     if (newEpisode < 1) return;
+    const selectionEpoch = ++serverSelectionEpochRef.current;
     // Marca o episódio atual como assistido ao avançar
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
@@ -2210,6 +2277,7 @@ export function VideoPlayerModal({
     lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
+    healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
@@ -2218,7 +2286,8 @@ export function VideoPlayerModal({
     // Resolve o fileId do novo episódio para alimentar o cache de todos os servidores
     let fid: string | null = null;
     if (tmdbId) {
-      fid = await lookupMixdropFileId(season, newEpisode);
+      if (selectedServerKey === "srv_mixdrop") fid = await lookupMixdropFileId(season, newEpisode);
+      else void lookupMixdropFileId(season, newEpisode);
     }
 
     const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
@@ -2231,6 +2300,7 @@ export function VideoPlayerModal({
     } else {
       newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     }
+    if (selectionEpoch !== serverSelectionEpochRef.current) return;
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -2238,6 +2308,7 @@ export function VideoPlayerModal({
 
   // Handler to switch season
   const handleSeasonChange = async (newSeason: number) => {
+    const selectionEpoch = ++serverSelectionEpochRef.current;
     // Marca o episódio atual como assistido ao mudar de temporada
     if (isSeries && resolvedId) {
       markEpisodeWatched(resolvedId, season, episode, true);
@@ -2252,6 +2323,7 @@ export function VideoPlayerModal({
     lastKnownTimeRef.current = 0;
     setIsIntroActive(false);
     setPlayerSkinReady(false);
+    healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
@@ -2269,6 +2341,7 @@ export function VideoPlayerModal({
     } else {
       newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     }
+    if (selectionEpoch !== serverSelectionEpochRef.current) return;
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -3070,7 +3143,7 @@ export function VideoPlayerModal({
                 availableSeasons={availableSeasons}
                 activeServerKey={selectedServerKey}
                 onServerChange={handleServerSwitch}
-                serversList={servers}
+                serversList={servers.map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
                 onSeasonChange={handleSeasonChange}
                 episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
                 onClose={handleCloseModal}

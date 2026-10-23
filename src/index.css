@@ -110,6 +110,30 @@ input:-webkit-autofill:active {
   background: rgba(255, 255, 255, 0.45);
 }
 
+/* Barra arrastável para acessar toda a lista de Continue Assistindo. */
+.continue-watching-scrollbar {
+  scrollbar-width: auto;
+  scrollbar-color: #f97316 rgba(255, 255, 255, 0.1);
+}
+
+.continue-watching-scrollbar::-webkit-scrollbar {
+  height: 10px;
+}
+
+.continue-watching-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+.continue-watching-scrollbar::-webkit-scrollbar-thumb {
+  background: #f97316;
+  border-radius: 999px;
+}
+
+.continue-watching-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #fb923c;
+}
+
 /* Utilitário para ocultar scrollbars completamente */
 .scrollbar-hide::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar {

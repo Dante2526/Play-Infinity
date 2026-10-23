@@ -503,48 +503,26 @@ adminOpsRouter.post("/vps-action", async (req: Request, res: Response) => {
   let actionDescription = "";
 
   switch (action) {
+    // Legacy action names now target only the web app, never the video proxy.
     case "restart-all":
     case "reload-all":
-      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
-      actionDescription = "Recarregar todos os serviços na VPS com Zero-Downtime (sem queda de conexões)";
+    case "restart-app":
+    case "reload-app":
+      commandToRun = "test -f /home/ubuntu/play-infinity/deploy-tools/reload-app.sh && sudo -n bash -c '(sleep 1; bash /home/ubuntu/play-infinity/deploy-tools/reload-app.sh /home/ubuntu/play-infinity) >> /home/ubuntu/play-infinity/reload.log 2>&1 < /dev/null & echo \"Reload agendado. Consulte reload.log para confirmar o resultado.\"'";
+      actionDescription = "Agendar reload da aplicação web; proxy de vídeo preservado";
       break;
 
     case "restart-proxy":
-      commandToRun = "sudo fuser -k 8080/tcp || true; sudo pm2 restart video-proxy";
-      actionDescription = "Reiniciar serviço do Proxy de TV (e eliminar processos fantasmas)";
-      break;
-
-    case "restart-app":
-    case "reload-app":
-      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 reload play-infinity-app) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
-      actionDescription = "Recarregar aplicação web com Zero-Downtime (play-infinity-app)";
+      // Explicit maintenance action: never part of a normal app deploy/reload.
+      commandToRun = "sudo -u ubuntu pm2 restart video-proxy";
+      actionDescription = "Reiniciar proxy de TV (interrompe conexões de vídeo ativas)";
       break;
 
     case "git-pull-build":
-      commandToRun = `
-        set -e
-        echo "🚀 Localizando diretório do projeto..."
-        if [ -d "/home/ubuntu/Play-Infinity" ]; then
-          cd /home/ubuntu/Play-Infinity
-        elif [ -d "/home/ubuntu/play-infinity" ]; then
-          cd /home/ubuntu/play-infinity
-        else
-          cd /home/ubuntu
-        fi
-        
-        echo "📥 Executando git pull..."
-        git pull origin main || git pull origin master || true
-        
-        echo "📦 Instalando dependências e gerando build..."
-        npm run build || echo "Aviso no build"
-        
-        echo "🔄 Recarregando os serviços PM2 com Zero-Downtime..."
-        (sleep 1 && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 &
-        
-        echo "✅ Ação concluída com sucesso! Os serviços foram recarregados sem quedas."
-      `;
-      actionDescription = "Atualização manual via Git Pull e Build na VPS (Zero-Downtime)";
-      break;
+      return res.status(409).json({
+        success: false,
+        error: "Build na pasta ativa desabilitado. Use o botão de deploy via GitHub Actions para preparar uma versão separada."
+      });
 
     default:
       return res.status(400).json({

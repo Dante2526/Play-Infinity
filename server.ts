@@ -1,3 +1,4 @@
+import "./server/utils/loadEnvironment";
 import express from "express";
 import path from "path";
 import fs from "fs";
@@ -5,7 +6,6 @@ import os from "os";
 import v8 from "v8";
 import { Readable } from "stream";
 import * as cheerio from "cheerio";
-import dotenv from "dotenv";
 import rateLimit from "express-rate-limit";
 import helmet from "helmet";
 import crypto from "crypto";
@@ -18,11 +18,8 @@ import { getFirestore, doc, setDoc, getDoc } from "firebase/firestore";
 import { verifyFirebaseUserToken } from "./server/middlewares/requireAdminAuth";
 import { checkVidsrcSeason } from "./server/routes/vidsrcRoutes";
 import { checkVipSeason, checkVizerSeason } from "./server/routes/encontreiLookup";
+import { configureServerLifecycle } from "./server/utils/serverLifecycle";
 import { startCatalogWatcher } from "./server/services/catalogWatcher";
-if (fs.existsSync(".env.local")) {
-  dotenv.config({ path: ".env.local" });
-}
-dotenv.config();
 
 // In-memory store for episodes received via webhook/endpoint
 // Interface e armazenamento dos Mais Assistidos pelos usuários
@@ -39,11 +36,12 @@ import videoScrapersRouter from "./server/routes/videoScrapers";
 import catalogRouter from "./server/routes/catalog";
 import diagnosticsRouter from "./server/routes/diagnostics";
 import mixdropRouter from "./server/routes/mixdrop";
+import playbackHealthRouter from "./server/routes/playbackHealth";
 import castRouter from "./server/routes/cast";
 
 export const app = express();
 app.use(subtitlesRouter);
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 // Configuração Firebase (Backend JS SDK bypass para Firestore)
 export let db: any = null;
@@ -73,7 +71,7 @@ process.on("uncaughtException", (err) => {
 
   // Immediate healthcheck endpoint
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({ status: "ok", release: process.env.APP_RELEASE_ID || "development", timestamp: new Date().toISOString() });
   });
 
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
@@ -308,6 +306,13 @@ process.on("uncaughtException", (err) => {
   // Serve arquivos estáticos do frontend (precisa vir ANTES dos proxies para evitar interceptação do /assets)
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
     const distPath = path.join(process.cwd(), "dist");
+    // Union of hashed assets from retained releases: open tabs can still load
+    // lazy chunks after new workers start serving requests.
+    if (process.env.APP_ASSET_DIR) {
+      app.use('/assets', express.static(process.env.APP_ASSET_DIR, {
+        maxAge: '1y', immutable: true, index: false
+      }));
+    }
     if (fs.existsSync(distPath)) {
       app.use(express.static(distPath, {
         maxAge: "30d",
@@ -419,6 +424,7 @@ app.use(videoScrapersRouter);
 app.use(catalogRouter);
 app.use(diagnosticsRouter);
 app.use(mixdropRouter);
+app.use(playbackHealthRouter);
 app.use(castRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
@@ -542,7 +548,7 @@ app.use(castRouter);
   });
 
     if (!process.env.VERCEL) {
-      const server = app.listen(PORT, "0.0.0.0", () => {
+      const server = app.listen(PORT, process.env.APP_BIND_HOST || "0.0.0.0", () => {
         console.log(`\n  ➜  Local:   http://localhost:${PORT}`);
         try {
           const os = require("os");
@@ -557,38 +563,9 @@ app.use(castRouter);
         } catch (e) { /* ignore */ }
         console.log("");
       });
-      server.on("error", (err: any) => {
-        console.error("[Server Listen Error]:", err);
-      });
+      configureServerLifecycle(server);
       server.setTimeout(30000);
-
-      // Notifica o PM2 de que o servidor está pronto para conexões (Zero-Downtime)
-      if (typeof process.send === "function") {
-        process.send("ready");
-        console.log("[Server] Sinal 'ready' emitido para o PM2.");
-      }
-      
-      // Inicia a checagem automática de episódios para PUSH Notification
-      startCatalogWatcher();
-
-      // Graceful Shutdown para Zero-Downtime Deploys (drena requisições ativas sem cortar stream)
-      let isShuttingDown = false;
-      const gracefulShutdown = (signal: string) => {
-        if (isShuttingDown) return;
-        isShuttingDown = true;
-        console.log(`[Server] Recebido ${signal}. Drenando conexões ativas...`);
-        server.close(() => {
-          console.log("[Server] Todas as conexões ativas encerradas com sucesso.");
-          process.exit(0);
-        });
-        setTimeout(() => {
-          console.warn("[Server] Timeout de shutdown atingido (10s). Encerrando.");
-          process.exit(0);
-        }, 10000).unref();
-      };
-
-      process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-      process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+      if (process.env.APP_PROBE !== "1") startCatalogWatcher();
     }
   }
 

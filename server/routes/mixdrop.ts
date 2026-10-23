@@ -3,6 +3,9 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 import { isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl } from "../utils/helpers";
 
+import { proxyMixdropVideo, isMixdropMediaUrl } from "../services/mixdropProxy";
+import { createMixdropRecovery } from "../services/mixdropRecovery";
+
 const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string; title: string; expiresAt: number }>();
 
 async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.top"): Promise<{ videoUrl: string; posterUrl: string; title: string } | null> {
@@ -19,8 +22,6 @@ async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.t
       },
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
-
     if (!upstream.ok) return null;
 
     const html = await upstream.text();
@@ -33,6 +34,7 @@ async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.t
 
     let videoUrl = wurlMatch[1];
     if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+    if (!isMixdropMediaUrl(videoUrl)) return null;
 
     const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
     const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
@@ -48,9 +50,25 @@ async function resolveFreshMixdropToken(fileId: string, host: string = "mxdrop.t
 
     return result;
   } catch (err) {
-    clearTimeout(timeoutId);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
+}
+
+const tokenRefreshes = new Map<string, Promise<string | null>>();
+function refreshMixdropUrl(fileId: string, expiredUrl: string): Promise<string | null> {
+  const cached = mixdropMemoryCache.get(fileId);
+  if (cached && cached.expiresAt > Date.now() + 60000 && cached.videoUrl !== expiredUrl) {
+    return Promise.resolve(cached.videoUrl);
+  }
+  const pending = tokenRefreshes.get(fileId);
+  if (pending) return pending;
+  const refresh = resolveFreshMixdropToken(fileId)
+    .then(result => result?.videoUrl || null)
+    .finally(() => tokenRefreshes.delete(fileId));
+  tokenRefreshes.set(fileId, refresh);
+  return refresh;
 }
 
 const router = Router();
@@ -116,10 +134,9 @@ const router = Router();
         pageTitle = fresh.title;
       }
 
-      // Usa o PROXY — o token da CDN mxcontent.net é IP-locked (gerado pro IP do Render).
-      // Se passar URL direta pro navegador do usuário, a CDN retorna 403 (IP diferente).
-      // O proxy faz a request do MESMO IP que gerou o token (Render server), então funciona.
-      const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}`;
+      // Keep the same VPS egress for CDN tokens and preserve the original
+      // embed ID even when the MP4 object has a different filename.
+      const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}&fileId=${encodeURIComponent(fileId)}`;
 
       if (req.query.format === 'json') {
         const isHttps = req.headers['x-forwarded-proto'] === 'https' || req.protocol === 'https';
@@ -205,6 +222,13 @@ const router = Router();
               });
 
               window.artInstance = art;
+              var bufferRecovery = (${createMixdropRecovery.toString()})(art.video, {
+                sourceUrl: videoUrl,
+                onFatal: function(reason) {
+                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*");
+                }
+              });
+              window.addEventListener("pagehide", function() { bufferRecovery.destroy(); });
 
               function sendStatus() {
                 var v = art.video || document.querySelector("video");
@@ -221,7 +245,8 @@ const router = Router();
                     type: "WATCHPLAY_STATUS",
                     currentTime: cur,
                     duration: dur,
-                    paused: !!v.paused,
+                    paused: !!v.paused && !bufferRecovery.holding,
+                    buffering: bufferRecovery.holding,
                     muted: !!v.muted,
                     volume: typeof v.volume === "number" ? v.volume : 1,
                     buffered: bufferedEnd,
@@ -438,7 +463,7 @@ const router = Router();
 
                 function stall(reason) {
                   var v = vid();
-                  if (!v || v.paused || v.ended) return;
+                  if (!v || v.paused && !bufferRecovery.holding || v.ended || v.seeking) return;
                   var now = Date.now();
                   if (!stallStart) { stallStart = now; totalStalls++; }
                   push("stall", reason);
@@ -506,8 +531,7 @@ const router = Router();
                   v.addEventListener("loadedmetadata", function() { push("metadata", "dur=" + Math.round(v.duration || 0) + "s " + v.videoWidth + "x" + v.videoHeight); });
                   v.addEventListener("waiting", function() { stall("waiting (buffer esgotado)"); });
                   v.addEventListener("stalled", function() { stall("stalled (proxy/CDN parou de enviar dados)"); });
-                  v.addEventListener("playing", function() { recovered(); });
-                  v.addEventListener("canplay", function() { recovered(); });
+                  v.addEventListener("playing", function() { if (!bufferRecovery.holding) recovered(); });
                   v.addEventListener("play", function() { push("play"); });
                   v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
                   v.addEventListener("seeked", function() { push("seeked"); });
@@ -550,7 +574,8 @@ const router = Router();
                   var now = Date.now();
                   var cur = v.currentTime || 0;
                   var q = quality(v);
-                  if (v.paused || v.ended || v.seeking) {
+                  if (v.paused && !bufferRecovery.holding || v.ended || v.seeking) {
+                    if (stallStart) recovered();
                     lastT = cur;
                     lastWall = now;
                     frozenTicks = 0;
@@ -564,6 +589,12 @@ const router = Router();
                   lastWall = now;
 
                   var currentBuf = bufAhead(v);
+                  if (bufferRecovery.holding || dt < 0.05 && currentBuf < 0.5) {
+                    stall("waiting (buffer esgotado)");
+                    frozenTicks = 0;
+                    return;
+                  }
+                  if (stallStart && dt > 0.05) recovered();
                   if (wall >= 0.7 && dt < 0.05 && currentBuf >= 0.8) {
                     frozenTicks++;
                     if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
@@ -669,6 +700,13 @@ const router = Router();
                 if (!e.data) return;
                 var v = art.video || document.querySelector("video");
 
+                if (e.data.type === "TOGGLE_PLAY" && bufferRecovery.holding) {
+                  bufferRecovery.command("PAUSE");
+                  art.pause();
+                  sendStatus();
+                  return;
+                }
+                bufferRecovery.command(String(e.data.type || ""));
                 switch (e.data.type) {
                   case "PLAY":
                     if (_playBlocked) return; // Já tentou e falhou — não tenta de novo
@@ -709,8 +747,11 @@ const router = Router();
                   case "SEEK":
                   case "SEEK_ABSOLUTE":
                   case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
-                    if (typeof t === "number" && !isNaN(t)) {
+                    var t = e.data.type === "SEEK_RELATIVE" && typeof e.data.seconds === "number"
+                      ? (v.currentTime || 0) + e.data.seconds
+                      : (typeof e.data.time === "number" ? e.data.time : e.data.targetTime);
+                    if (typeof t === "number" && isFinite(t)) {
+                      t = Math.max(0, Math.min(t, isFinite(v.duration) ? v.duration : t));
                       if (art) art.currentTime = t;
                       else if (v) v.currentTime = t;
                       sendStatus();
@@ -761,101 +802,21 @@ const router = Router();
     }
   });
 
-  // Proxy de streaming direto do MixDrop com suporte a Range bytes (fallback resiliente)
+  // Streaming with bounded recovery and byte-exact CDN resume.
   router.get("/api/md-proxy", async (req, res) => {
-    try {
-      let videoUrl = String(req.query.url || "").trim();
-      if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
-        return res.status(400).send("URL de vídeo inválida.");
-      }
-
-      const headers: Record<string, string> = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "*/*",
-        "Accept-Encoding": "identity",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": "https://mxdrop.top/",
-        "Origin": "https://mxdrop.top",
-        "Connection": "keep-alive",
-      };
-
-      if (req.headers.range) {
-        headers["Range"] = req.headers.range;
-      }
-
-      let controller = new AbortController();
-      let timeoutId = setTimeout(() => controller.abort(), 15000);
-      req.on("close", () => controller.abort());
-
-      let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-      clearTimeout(timeoutId);
-
-      // Auto-Healer 403 Forbidden: se o token da CDN expirar, renova o token do fileId em tempo real
-      if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
-        const fileMatch = videoUrl.match(/\/v2\/([a-zA-Z0-9_-]+)\.mp4/) || videoUrl.match(/\/([a-zA-Z0-9_-]+)\.mp4/);
-        const fileId = fileMatch ? fileMatch[1] : "";
-        if (fileId) {
-          console.warn(`[MixDrop Proxy] Token CDN expirado (${upstream.status}) para fileId ${fileId}. Renovando token em tempo real...`);
-          mixdropMemoryCache.delete(fileId);
-          const fresh = await resolveFreshMixdropToken(fileId);
-          if (fresh && fresh.videoUrl) {
-            videoUrl = fresh.videoUrl;
-            controller = new AbortController();
-            timeoutId = setTimeout(() => controller.abort(), 15000);
-            upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-            clearTimeout(timeoutId);
-          }
-        }
-      }
-
-      res.status(upstream.status);
-
-      // Repassa Content-Length, Content-Range e Accept-Ranges para conformidade RFC 9110 (Range 206)
-      // Isso permite que navegadores e players calculem buffers preditivos e fechem requisições Range limpas.
-      for (const [key, value] of upstream.headers.entries()) {
-        const lk = key.toLowerCase();
-        if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
-          res.setHeader(key, value);
-        }
-      }
-      res.setHeader("Access-Control-Allow-Origin", "*");
-
-      if (!upstream.body) {
-        return res.end();
-      }
-
-      const { Readable } = await import("stream");
-      // @ts-ignore
-      const source = Readable.fromWeb(upstream.body);
-      // pipe() NÃO propaga 'error' da origem para o destino: sem este handler,
-      // um reset da CDN deixaria a resposta aberta e o navegador travado até o
-      // timeout dele.
-      let sourceFailed = false;
-      source.on("error", () => {
-        if (sourceFailed || res.writableEnded) return;
-        sourceFailed = true;
-        controller.abort();
-        // 206 prometeu Content-Length → não dá para finalizar limpo; 200 é
-        // chunked e pode ser encerrado com o terminador normal.
-        if (upstream.status === 206) res.destroy();
-        else res.end();
-      });
-      source.pipe(res);
-
-      res.on("close", () => controller.abort());
-      res.on("error", () => controller.abort());
-    } catch (err: any) {
-      if ((err as any)?.name === "AbortError") {
-        if (!res.headersSent) res.end();
-        return;
-      }
-      console.error("[MixDrop Proxy Error]:", err);
-      if (!res.headersSent) {
-        res.status(500).send("Erro no proxy do MixDrop");
-      } else {
-        res.destroy();
-      }
+    const videoUrl = String(req.query.url || "").trim();
+    const explicitId = String(req.query.fileId || "").trim();
+    if (explicitId && !/^[a-zA-Z0-9_-]+$/.test(explicitId)) {
+      return res.status(400).send("ID de arquivo inválido.");
     }
+    // Compatibility with already-open tabs created before fileId was carried.
+    let legacyId = "";
+    try { legacyId = new URL(videoUrl).pathname.match(/\/([a-zA-Z0-9_-]+)\.mp4$/)?.[1] || ""; } catch {}
+    const fileId = explicitId || legacyId;
+    await proxyMixdropVideo(req, res, {
+      videoUrl,
+      renewUrl: fileId ? () => refreshMixdropUrl(fileId, videoUrl) : undefined,
+    });
   });
 
   // TMDB Proxy (Oculta a chave de API do cliente e evita vazamento no DevTools)

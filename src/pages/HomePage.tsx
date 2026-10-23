@@ -1,3 +1,4 @@
+import { loadHomeReleases, readHomeReleases } from "../services/homeReleaseFeed";
 
 import { ContentRow } from '../components/ContentRow';
 import React, { useState, useEffect, useRef } from "react";
@@ -50,8 +51,6 @@ import {
   discoverMovies,
   discoverSeries,
   getGenreIdByName,
-  getMovieReleases,
-  getSeriesReleases,
   getAnimes,
   getDoramas,
   getKidsContent,
@@ -88,6 +87,20 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
 }
 
 const WebhookPanelModal = lazyWithRetry(() => import("../components/WebhookPanelModal"));
+function releaseCards(items: TMDBItem[], type: 'movie' | 'tv') {
+  return items.map(item => ({
+    id: item.id, tmdbId: item.id,
+    title: (item.title || item.name || '').toUpperCase(),
+    imageUrl: formatImageUrl(item.poster_path, 'w500'),
+    backdropUrl: formatImageUrl(item.backdrop_path, 'original'),
+    type: type === 'movie' ? 'movie' as const : 'series' as const,
+    quality: type === 'movie' && checkIsCam(item.title || item.name) ? 'CAM' as const : 'HD' as const,
+    rating: item.vote_average ? item.vote_average.toFixed(1) : undefined,
+    year: (item.release_date || item.first_air_date || '').substring(0, 4) || new Date().getFullYear().toString(),
+    playerUrl: type === 'movie' ? `https://v1.watchplay.shop/movie/${item.id}` : `https://v1.watchplay.shop/tvshow/${item.id}/1/1`,
+  }));
+}
+
 const ReleaseCalendarPage = lazyWithRetry(() => import("../components/ReleaseCalendarPage"));
 const LiveTvPage = lazyWithRetry(() => import("../components/LiveTvPage"));
 const NotificationModal = lazyWithRetry(() => import("../components/NotificationModal"));
@@ -228,9 +241,15 @@ export function HomePage({
     return () => clearInterval(timer);
   }, [heroItems.length]);
 
-  // Estados dinâmicos dos lançamentos automáticos (fallback inicial dos dados estáticos)
-  const [movieReleases, setMovieReleases] = useState<any[]>(releases);
-  const [seriesReleases, setSeriesReleases] = useState<any[]>(newest);
+  // Lançamentos: última lista válida em cache, com fallback inicial estático
+  const [movieReleases, setMovieReleases] = useState<any[]>(() => {
+    const cached = readHomeReleases('movie');
+    return cached.length ? releaseCards(cached, 'movie') : releases;
+  });
+  const [seriesReleases, setSeriesReleases] = useState<any[]>(() => {
+    const cached = readHomeReleases('tv');
+    return cached.length ? releaseCards(cached, 'tv') : newest;
+  });
   // Top 10 Mais Assistidos decidido dinamicamente pela audiência dos usuários
   const [mostWatchedItems, setMostWatchedItems] = useState<any[]>(mostWatched);
   // Seções especiais de Animes e Doramas
@@ -456,70 +475,22 @@ export function HomePage({
       }
     };
 
-    // Sincronização automática de lançamentos reais (filmes, séries, animes, doramas e kids) no TMDB
+    // Categorias especiais; lançamentos de filmes/séries são atualizados separadamente.
     const fetchReleases = async () => {
       try {
         const results = await Promise.all([
           getAnimes().catch(() => null),
           getDoramas().catch(() => null),
-          getMovieReleases().catch(() => null),
-          getSeriesReleases().catch(() => null),
           getKidsContent().catch(() => null),
           getKidsSeries().catch(() => null)
         ]);
 
         const animesRes = results[0];
         const doramasRes = results[1];
-        const moviesRes = results[2];
-        const seriesRes = results[3];
-        const kidsMoviesRes = results[4];
-        const kidsSeriesRes = results[5];
+        const kidsMoviesRes = results[2];
+        const kidsSeriesRes = results[3];
 
         if (isMounted) {
-          // Processamento dinâmico de Lançamentos (Filmes)
-          if (moviesRes?.results && moviesRes.results.length > 0) {
-            const tmdbMovies = moviesRes.results
-              .filter((m: TMDBItem) => m.poster_path && (m.title || m.name) && isMediaAvailable({ id: m.id, title: m.title || m.name }))
-              .map((m: TMDBItem) => ({
-                id: m.id,
-                tmdbId: m.id,
-                title: (m.title || m.name || "").toUpperCase(),
-                imageUrl: formatImageUrl(m.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-                type: 'movie' as const,
-                quality: checkIsCam(m.title || m.name) ? "CAM" : "HD",
-                rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
-                year: m.release_date ? m.release_date.substring(0, 4) : new Date().getFullYear().toString(),
-                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
-              }));
-            
-            if (tmdbMovies.length > 0) {
-              setMovieReleases(tmdbMovies);
-            }
-          }
-
-          // Processamento dinâmico de Séries Recentes
-          if (seriesRes?.results && seriesRes.results.length > 0) {
-            const tmdbSeries = seriesRes.results
-              .filter((s: TMDBItem) => s.poster_path && (s.name || s.title) && isMediaAvailable({ id: s.id, title: s.name || s.title }))
-              .map((s: TMDBItem) => ({
-                id: s.id,
-                tmdbId: s.id,
-                title: (s.name || s.title || "").toUpperCase(),
-                imageUrl: formatImageUrl(s.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-                type: 'series' as const,
-                quality: "HD" as const,
-                rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
-                year: s.first_air_date ? s.first_air_date.substring(0, 4) : new Date().getFullYear().toString(),
-                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
-              }));
-            
-            if (tmdbSeries.length > 0) {
-              setSeriesReleases(tmdbSeries);
-            }
-          }
-
           // Processamento dinâmico de Animes
           if (animesRes?.results && animesRes.results.length > 0) {
             const tmdbFiltered = animesRes.results
@@ -649,6 +620,37 @@ export function HomePage({
     fetchMostWatched();
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let running = false;
+    let lastAttempt = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      if (running || document.hidden || controller.signal.aborted) return;
+      running = true;
+      lastAttempt = Date.now();
+      clearTimeout(retry);
+      try {
+        const results = await Promise.allSettled([
+          loadHomeReleases('movie', controller.signal, items => setMovieReleases(releaseCards(items, 'movie'))),
+          loadHomeReleases('tv', controller.signal, items => setSeriesReleases(releaseCards(items, 'tv'))),
+        ]);
+        // A transient TMDB failure must not leave the static fallback all session.
+        if (!controller.signal.aborted && results.some(result => result.status === 'rejected')) retry = setTimeout(() => void refresh(), 60000);
+      } finally { running = false; }
+    };
+    const onVisible = () => { if (!document.hidden && Date.now() - lastAttempt >= 60000) void refresh(); };
+    void refresh();
+    const interval = setInterval(() => void refresh(), 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      controller.abort(); clearInterval(interval); clearTimeout(retry);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
     };
   }, []);
 
@@ -1001,7 +1003,10 @@ export function HomePage({
             </div>
             <div 
               style={{ touchAction: "pan-y pan-x pinch-zoom" }}
-              className="flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-5 pb-8 pl-5 pr-8 sm:pl-6 sm:pr-10 scroll-pl-5 scroll-pr-8 sm:scroll-pl-6 sm:scroll-pr-10 scrollbar-hide select-none cursor-grab active:cursor-grabbing"
+              className="continue-watching-scrollbar flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-5 pb-8 pl-5 pr-8 sm:pl-6 sm:pr-10 scroll-pl-5 scroll-pr-8 sm:scroll-pl-6 sm:scroll-pr-10 select-none"
+              tabIndex={0}
+              role="region"
+              aria-label="Continue Assistindo — role para ver mais títulos"
             >
               {continueWatchingList.map((item, idx) => (
                 <div 

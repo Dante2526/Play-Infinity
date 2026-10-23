@@ -1235,3 +1235,129 @@ Validação: 18 testes HTTP de regressão em `node --test tests/payments.test.cj
 Limitação: regras revisadas, mas sem execução no emulador Firestore; download oficial bloqueado pelo proxy (CONNECT 403 em storage.googleapis.com). Não foram efetuadas cobranças reais, push, publicação das regras nem deploy. Para produção, publicar as regras do Firestore e atualizar frontend/backend na VPS Oracle; a API Asaas precisa estar configurada para validar os webhooks. Assinaturas e descontos existentes não foram migrados.
 
 Envio para main autorizado pelo usuário nesta conversa. Como o push dispara o workflow Android, versionCode incrementado de 39 para 40 e versionName de 1.4.7 para 1.4.8 antes do envio. A conclusão do workflow e a publicação das regras Firestore devem ser verificadas separadamente.
+
+
+## 22/10/2026 - Deploy gradual com preservação de conexões e versões
+
+- Nova versão preparada em releases/<id>, com dependências próprias e prova HTTP do bundle em porta loopback antes de trocar current atomicamente. Dados, uploads e credenciais persistentes são preservados.
+- Duas instâncias PM2 mantidas em cluster; ready emitido apenas após listening. Drenagem configurável de duas horas por padrão; kill_timeout do PM2 30 segundos acima do limite. Processos antigos mantêm seu diretório de versão.
+- Assets com hashes de versões anteriores preservados e servidos por processos novos, inclusive na migração da pasta dist antiga. Não há remoção automática de releases/assets.
+- Deploys e reloads protegidos por trava; workflow serializado, Node 22 e limite de 300 minutos. Scripts verificam versão no HTTP e duas instâncias online depois do reload; cluster degradado/fork aborta antes da troca.
+- Removidos fallbacks automáticos de restart all/restart do app. Proxy de TV não faz parte do deploy. Build dentro da pasta ativa desabilitado; botão do painel passa a disparar GitHub Actions. Reinício explícito do proxy continua manutenção que interrompe conexões.
+- Configuração local carregada antes dos módulos que exigem segredos. Prova reutiliza chave de assinatura existente no PM2 em memória quando necessário, sem logar valores.
+- Documentação operacional em docs/deploy-vps.md, incluindo migração, limites e recuperação após falha.
+
+Validação: cinco testes com PM2 real (6.0.14) e daemon isolado passaram: primeira instalação; stream de 12 segundos atravessando rolling reload com requisições HTTP contínuas; candidato inválido preserva versão ativa; bind inválido não emite ready; cluster degradado aborta sem restart. Os 18 testes de pagamentos passaram. Bundle de produção validado por HTTP (health/versão, HTML, asset antigo/cache, catálogo) e encerramento gradual, com configuração de teste via arquivo local e via prova/PM2. npm run lint, build completo em cópia descartável, sintaxe Bash, YAML e git diff --check passaram.
+
+Limites: nenhuma alteração foi enviada ao GitHub ou aplicada à VPS nesta etapa. Na primeira ativação, os processos antigos ainda executam seus temporizadores antigos até serem substituídos. A janela padrão não garante continuidade para conexões superiores a duas horas, falhas externas, OOM ou reinício explícito do proxy. O Nginx real e reprodução com provedores reais ainda precisam ser verificados na VPS; regras locais servindo diretamente a antiga dist podem precisar de atualização.
+
+O workflow de deploy também executa a checagem de tipos, os 18 testes de pagamentos e os cinco testes com PM2 6.0.14 antes de compilar/enviar o pacote.
+
+
+## 22/10/2026 - Diagnóstico de reprodução MixDrop (sem envio)
+
+Usuário relata buffer seco durante reprodução tanto no aplicativo mobile quanto no PC/F12. Revisão do código e reprodução local com CDN/vídeo simulados, sem modificar players ou rotas nesta etapa.
+
+- Range/Content-Range: cenário local retornou 206 e bytes esperados corretamente. O fluxo MixDrop atual passa por /api/md-proxy na VPS, não é entrega direta da CDN ao navegador.
+- Falha reproduzida no watchdog de buffer seco: um único waiting emite duração zero; 12 segundos posteriores sem buffer não atualizam stall, pois o timer periódico só cobre frame freeze quando há pelo menos 0,8 segundo de buffer. A condição de recuperação/fallback após 7 segundos na skin fica sem atualização.
+- Renovação de token frágil: /api/md-proxy recebe a URL da CDN, mas não recebe o fileId original do embed. Ao simular nome do MP4 diferente do ID original, a renovação buscou o embed errado e terminou em 403.
+- Sem recuperação de transferência interrompida por posição de bytes; o timeout de 15 segundos é limpo após os cabeçalhos. Reset de uma resposta 200 sem Content-Length foi reproduzido como resposta truncada encerrada normalmente.
+- SEEK_RELATIVE enviado com seconds pela skin é ignorado no iframe MixDrop, que só lê time/targetTime; confirmado no script HTML executado em VM com vídeo simulado.
+- Catálogo estático: 6.694 filmes e 27.705 episódios têm ID MixDrop; quase todos também têm StreamTape/Doodstream. Presença de ID não prova disponibilidade nem desempenho atual.
+
+Diagnóstico reproduzível local em /workspace/.onboarding/review-mixdrop.cjs. Requisições diretas à VPS e mxdrop.top foram bloqueadas pelo proxy do ambiente (CONNECT 403). Não houve medição de CDN real, teste de reprodução real no Android/PC, alteração do MixDrop nem push/deploy. As alterações locais anteriores de deploy continuam preservadas.
+
+
+## 22/10/2026 - Validação remota de VisionQuest após liberação de rede
+
+Rede liberada para a VPS e MixDrop; testes somente de leitura, sem deploy. Usuário forneceu F12 indicando episódio 2, mas o log e o arquivo gjjgvzx9fj0qx8 correspondem a T1E3. Lookup na VPS confirmou T1E2=ellxv310h7j1xq e T1E3=gjjgvzx9fj0qx8 para VisionQuest (TMDB 213375). Isso confirma a divergência de referência, não comprova sozinho troca indevida de episódio pelo aplicativo.
+
+- Log: travamentos de 12,65s e 7,77s em torno de 619-621s com buffer de 0,03-0,04s. A telemetria de início de stall informa sempre duração zero, consistente com a falha local de atualização periódica já reproduzida.
+- T1E3: extração HTTP 200; três amostras de 1 MiB em offsets diferentes entregues com HTTP 206 (3,83 / 4,97 / 8,93 Mbps). MP4 de 491.304.593 bytes, 3119,104s, H.264 720p/24fps e AAC; bitrate médio total aproximadamente 1,26 Mbps.
+- Trecho próximo de 612s: 2 MiB recebidos com HTTP 206 em 2,83s (~5,93 Mbps). Bitrate do vídeo em 610-620s calculado pela tabela de amostras MP4: ~0,93 Mbps, além do áudio de ~0,13 Mbps. Não houve falha de Range nesses testes curtos.
+- O nome MP4 e o ID do embed são iguais neste arquivo. A falha condicional de renovação quando os IDs diferem não foi demonstrada nesse episódio. O log não mostra 403 do vídeo MixDrop nem prova token expirado.
+- TMDB de VisionQuest e metadados T1E2/T1E3 responderam 200; o 404 de /tv/1101412 no log usa outro ID. Avisos de notificação, lazy images, fullscreen e 403 do proxy de TV são eventos separados do stream MixDrop.
+
+Limites: medições pontuais pelo caminho VPS -> ambiente, não reprodução contínua no dispositivo do usuário nem medição isolada VPS -> CDN. Os resultados atuais não descartam oscilação intermitente ou problema no último trecho de rede. Não houve alteração no player/rotas MixDrop nem envio ao GitHub.
+
+
+## 22/10/2026 - Recuperação local de buffer MixDrop (sem envio ao GitHub)
+
+- `/api/md-stream` preserva o fileId original em `/api/md-proxy`; renovações concorrentes compartilham consulta e tokens novos já conhecidos podem ser reutilizados.
+- Novo serviço de proxy com timeout de cabeçalhos (10s) e inatividade do corpo (6s), até duas novas tentativas e retomada a partir do primeiro byte faltante. Retomada exige 206, intervalo/tamanho esperados e validador forte compatível em If-Range. Sem garantia de identidade ou com resposta 200 na retomada, encerra com erro em vez de concatenar vídeo incorreto.
+- Backpressure de cliente é separado de inatividade da CDN; desconexão/seek cancela o upstream. Erros não são encerrados como vídeos truncados bem-sucedidos. URL e redirects restritos a HTTPS na rede mxcontent.net; X-Accel-Buffering=no.
+- Novo controlador no iframe recompõe reserva de até 5s e verifica readyState, pois há stalls com tempo buffered positivo mas sem mídia decodificável. Adapta a reserva a final de vídeo e browsers mobile ociosos. Uma recarga da fonte é permitida aos 12s, restaurando posição; espera limitada antes do fallback existente. Pausa e seek explícitos são respeitados.
+- Telemetria atualiza a duração do stall a cada segundo; a skin não interrompe a recuperação própria do MixDrop com o fallback genérico antecipado e mostra carregamento durante rebuffer. SEEK_RELATIVE passa a interpretar seconds.
+- Testes de reprodução adicionados ao workflow antes do envio para VPS. Documentação: docs/mixdrop-recovery.md.
+
+Validação: 28 testes MixDrop + 18 testes de pagamentos passaram (46 no total). Cobrem Range/suffix, reset HTTP real, inatividade, renovação com ID original, single-flight, identidade do arquivo, HTTP 200 incorreto na retomada, cancelamento, backpressure, reserva, pause/seek e HTML real executado em VM. npx tsc --noEmit e build completo em cópia descartável passaram, preservando índices de catálogo versionados.
+
+Ensaio adicional em Chromium 154 com ArtPlayer 5.1.7 e MP4 sintético: desktop com retomada automática; viewport mobile com pausa respeitada; recarga da fonte mantendo posição. CDN local suspendeu dados até 14/20s, com retomada por byte comprovada. Posição de pausa ~5,64s, reprodução prosseguiu ~6,65s nos três cenários; sem erros fatais/JavaScript. O ensaio revelou e corrigiu a faixa com buffered~0,73s/readyState=2 que não acionava a recuperação. Runner local em /workspace/.onboarding/mixdrop-browser/run.cjs.
+
+Limites: mudanças ainda locais; nenhuma publicação, push ou alteração na VPS. Ensaios de navegador usaram vídeo/servidor sintéticos; não comprovam reprodução contínua com o código novo na CDN real ou no aplicativo Android físico. Se a entrega sustentada for inferior ao bitrate, ainda será necessário aguardar ou usar o fallback homologado existente.
+
+## 23/10/2026 - StreamTape: tentativa inicial antes do fallback (somente local)
+
+Relato: primeiro clique retorna erro genérico de vídeo e troca para MixDrop; segundo clique no StreamTape reproduz. Inspeção confirmou que a recuperação anterior só acontecia após posição >2s e consultava o resolvedor sem invalidar cache. O log sozinho não identifica a falha inicial específica da CDN.
+
+- Novo controlador self-contained no iframe tenta uma renovação real (`refresh=1`, cache HTTP desativado) também na posição zero. Preserva posição/seek e pausa explícita; limita renovação+recarga a 12s e comunica código de erro se persistir. Erro de decodificação não tenta renovar token.
+- Resolvedor permite ignorar/invalida cache anterior; timeout cobre leitura do HTML e HEAD. Resposta de resolução e proxy de mídia passam a no-store.
+- Watchdog inicial do modal concede 30s ao StreamTape para comportar resolução inicial e tentativa de recuperação. Fallback para provedores existentes continua após falha persistente.
+- Sete testes adicionados para primeira falha, renovação efetiva de cache, posição/seek, pausa, segunda falha, deadline e decodificação. Workflow passa a incluí-los.
+
+Validação concluída: 53 testes (pagamentos, MixDrop e StreamTape) passaram; npx tsc --noEmit e build completo em cópia descartável passaram. Chromium 154 com MP4 sintético e rota real: CDN simulada retornou 502 na primeira requisição; desktop e viewport mobile renovaram o token e reproduziram além de 1s, com duas requisições de mídia, zero WATCHPLAY_ERROR e zero erros JavaScript. Runner local: /workspace/.onboarding/streamtape-browser.cjs. Não houve validação contínua na CDN real ou Android físico, nem push/deploy; alterações anteriores preservadas.
+
+## 23/10/2026 - Health check por filme/episódio (somente local)
+
+Implementado a pedido do usuário para reduzir espera nos servidores sem conteúdo ou sem resposta:
+
+- Novo `/api/playback-health` consulta somente servidores existentes permitidos e selecionáveis (StreamTape, MixDrop, WatchPlayer, VIP e Nixplay), respeitando a blacklist. Identidade inclui tipo, ID, temporada e episódio; não aceita URLs arbitrárias de entrada nem usa Host para construir a origem interna.
+- Verifica amostra MP4/HLS real pelos resolvedores/proxies existentes. HTTP 200 com página HTML não comprova disponibilidade. Timeout, catálogo sem confirmação, 403/429/502 e formatos dependentes do navegador ficam desconhecidos. 404/410 explícito ou indisponibilidade explícita do player podem indicar indisponibilidade.
+- Deadline de 4,5s, máximo de seis sondagens simultâneas por worker, cache limitado a 2.000 entradas, positivo 60s e demais 15s. Single-flight compartilha sondagens entre espectadores. Amostra Range de 1 KiB cancelada após leitura; limites separados de corpo para JSON/HTML. Resultados não expõem tokens/URLs assinadas.
+- Modal consulta em paralelo à abertura e novamente a cada 45s quando visível, também ao retornar à tela. Antes de reprodução efetiva, pode migrar para fonte verificada sem aguardar watchdog inteiro. Após avanço real do relógio do vídeo, monitoramento não interrompe reprodução/pausa. Fallback por erro prioriza verificados, mantém desconhecidos elegíveis e evita indisponíveis recentes.
+- Identidade de resposta e cleanup impedem aplicação de resultado de episódio anterior. Seleção assíncrona antiga é invalidada após nova seleção/fechamento. Troca de episódio no StreamTape deixa de aguardar o lookup do MixDrop. Estados vencidos são tratados como desconhecidos, evitando bloqueio permanente após oscilação.
+- Seletor sinaliza indisponibilidade sem bloquear tentativa manual. Filmes no StreamTape passam ID TMDB numérico antes do lookup; removido fallback MixDrop com fileId fixo de outro conteúdo. Nenhum provedor bloqueado foi ativado.
+- Documentação em docs/playback-health.md; workflow inclui os novos testes.
+
+Validação concluída: 13 testes novos de cache/single-flight, deadline, admissão, conteúdo MP4/HLS, cancelamento, falsos HTTP 200, 403/429/404/410, política de início versus reprodução estabelecida, expiração, identidade de episódio, blacklist e adapters HTTP dos cinco servidores. Total de 66 testes de pagamentos/MixDrop/StreamTape/health passou. npx tsc --noEmit e build completo em cópia descartável passaram (/workspace/.onboarding/playback-health-validation.mw4gn4y8), sem alterar índices versionados do catálogo. git diff --check passou.
+
+Limites: testes de health usam mídia e upstreams simulados; não houve teste do novo fluxo contra CDN real ou aparelho Android físico. Sondagem comprova uma amostra naquele instante, não throughput sustentado nem todos os segmentos HLS. Provedores que exigem execução do navegador podem permanecer sem confirmação. Sem push/deploy ou alterações na VPS; trabalho anterior preservado.
+
+## 23/10/2026 - StreamTape no bloqueio administrativo por conteúdo (somente local)
+
+- Adicionado StreamTape HD (`srv_streamtape`) às opções do formulário em ServerBlocksAdmin e aos rótulos dos bloqueios existentes.
+- API de criação de bloqueios passa a aceitar a mesma chave; antes, somente alterar o seletor resultaria em rejeição do POST.
+- O player já filtra `blockedServerKeys` pela chave correspondente; nenhuma fonte nova foi adicionada nem regra de blacklist alterada.
+
+Validação concluída: npx tsc --noEmit e git diff --check passaram. Alterações locais, sem push/deploy ou gravação de bloqueios reais.
+
+## 23/10/2026 - Atualização dos lançamentos da home (somente local)
+
+Relato: Lançamentos Filmes e Lançamentos Séries ficaram sem atualização. Diagnóstico remoto somente de leitura: discover/movie e discover/tv na VPS retornaram HTTP 200 em 1,14s/1,44s, com 20 resultados cada e datas de outubro de 2026. Nenhum dos 20 IDs de filmes nem dos 20 IDs de séries estava no snapshot importado pelo frontend (9.107 IDs; arquivo generated_at=2026-10-20T18:18:16.135Z). Isso fazia as duas listas dinâmicas ficarem vazias após o filtro e manterem os cards estáticos antigos. A sincronização anterior rodava apenas na montagem da home e não tentava recuperar automaticamente os timeouts relatados no F12.
+
+- Novo serviço homeReleaseFeed consulta três páginas recentes de cada tipo, deduplica e mantém ordem de lançamento. IDs conhecidos continuam imediatos; títulos novos fora do snapshot podem entrar após confirmação de MixDrop/StreamTape no lookup atual, com nome do título e tipo/episódio corretos. Exclusões manuais continuam aplicadas. Metadados TMDB sozinhos não tornam título novo disponível.
+- Limite de oito candidatos novos por tipo/ciclo, dois lookups simultâneos por tipo, deadline de 4,5s e cache/single-flight por tipo/ID. Ciclos seguintes priorizam candidatos ainda não examinados para não ficar consultando sempre os mesmos arquivos ausentes.
+- Listas de filmes e séries atualizadas independentemente das categorias animes/doramas/kids, com publicação progressiva dos resultados conhecidos/confirmados. Última lista válida preservada em localStorage por até 24h; falhas e listas vazias não substituem a anterior por vazio. Fallback estático continua apenas enquanto não há dados válidos.
+- Home consulta ao abrir, a cada dez minutos enquanto visível e ao voltar para a aba/aplicativo (intervalo mínimo de um minuto). Falha de metadados é repetida após um minuto. Cleanup descarta resultados tardios após saída da home.
+- Timeout TMDB agora cobre também leitura do JSON e é limpo no finally. Workflow inclui os testes novos de lançamentos.
+
+Validação concluída: dez testes novos (título fora do snapshot, confirmação StreamTape, publicação antes de lookup lento, páginas parciais/deduplicação/exclusões, preservação da última lista, ausência real de fonte, limites/rotação, cleanup, separação filme/série, retomada após erro e cache expirado). Total de 76 testes de pagamentos/reprodução/health/lançamentos passou; npx tsc --noEmit, git diff --check e build completo em cópia descartável passaram (/workspace/.onboarding/home-releases-validation.sf8mn4w4). Índices de catálogo versionados preservados.
+
+Limites: as consultas TMDB existentes continuam restritas aos provedores de streaming BR e a séries por data de estreia original; não são feed de novas temporadas nem ingestão automática de arquivos. Confirmação de catálogo não substitui health de mídia durante abertura do player. Não houve validação da nova home publicada ou no Android físico; sem push/deploy, sem alterações na VPS. Alterações anteriores preservadas.
+
+## 23/10/2026 - Barra horizontal em Continue Assistindo (somente local)
+
+- Removido scrollbar-hide dessa seção e criada barra horizontal laranja com trilho visível e área arrastável. Mantidos overflow horizontal e navegação por toque; região também recebe foco de teclado e nome acessível. Removido cursor de arraste dos cards que não tinham handler de drag.
+- Validação concluída: npx tsc --noEmit e git diff --check passaram. Ensaio Chromium com classes reais da seção, CSS compilado e novas regras: scrollbar visível (15px de área) e arraste real por mouse moveu scrollLeft de 0 a 1813px em uma lista de dez cards. Runner: /workspace/.onboarding/check-continue-scroll.cjs. Sem push/deploy.
+
+## 23/10/2026 - Consulta do estado do Seriesflix em produção (sem alteração de configuração)
+
+- Seriesflix/Vidsrc (`srv_vidsrc`) continua na blacklist; o seletor do player filtra essa chave. Motivo histórico registrado no código: Cloudflare/Turnstile e respostas 403/522.
+- Verificação atual somente de leitura em /api/vidsrc-stream na VPS: VisionQuest T1E2 (TMDB 213375), Loki T1E1 (84958) e The Boys T1E1 (76479) retornaram HTTP 502 com {"error":"no stream_urls"}, em 2,79s/2,07s/1,59s. Não houve manifesto HLS nesses três testes. Isso confirma falha atual nessas amostras, sem afirmar causa Cloudflare hoje ou indisponibilidade de todo o catálogo.
+- Sem reativação, push, deploy ou teste em Android físico.
+
+## 23/10/2026 - Lote pendente autorizado para envio ao GitHub
+
+Usuário autorizou expressamente enviar à main as alterações feitas neste ambiente e ainda não commitadas. Lote inclui deploy por releases/drenagem, recuperação MixDrop e StreamTape, health por conteúdo, bloqueio StreamTape no admin, atualização dos lançamentos da home e barra horizontal de Continue Assistindo, com documentação e testes correspondentes. Seriesflix permanece bloqueado; o rascunho de rede da plataforma não é parte do repositório.
+
+Validação final antes do commit: npx tsc --noEmit, todos os 81 testes (incluindo os cinco testes PM2 de deploy), bash -n dos scripts de deploy/reload, git diff --check e build completo em cópia descartável passaram. Branch remota main consultada, sem commits novos em relação à base de0addd. Arquivos novos revisados sem padrões de chaves privadas/tokens. Android atualizado para versionCode 41 / versionName 1.4.9, pois o workflow de push gera AAB automaticamente. Build Android e deploy na VPS serão executados pelos workflows; não foram declarados concluídos nesta validação local.

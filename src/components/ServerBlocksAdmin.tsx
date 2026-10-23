@@ -53,6 +53,13 @@ interface ServerOption {
 
 const HOMOLOGATED_SERVERS: ServerOption[] = [
   {
+    key: "srv_streamtape",
+    label: "StreamTape HD",
+    badge: "MP4 direto",
+    badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+    description: "StreamTape com player integrado",
+  },
+  {
     key: "srv_watchplay",
     label: "WatchPlayer",
     badge: "Oficial",
@@ -90,6 +97,7 @@ const HOMOLOGATED_SERVERS: ServerOption[] = [
 ];
 
 const SERVER_LABELS: Record<string, string> = {
+  srv_streamtape: "StreamTape HD",
   srv_watchplay: "WatchPlayer",
   srv_vip: "VIP Player",
   srv_mixdrop: "MixDrop",

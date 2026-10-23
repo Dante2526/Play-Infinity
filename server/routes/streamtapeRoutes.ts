@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { Readable } from "stream";
+import { createStreamtapeRecovery } from "../services/streamtapeRecovery";
 import fs from "fs";
 import path from "path";
 import {
@@ -58,16 +59,17 @@ function findStreamtapeInCatalog(tmdbId: number, season?: number, episode?: numb
 /**
  * Resolve o direct link MP4 a partir do fileId do StreamTape usando scraping público sem cookies.
  */
-export async function resolveStreamTapeToken(fileId: string): Promise<string | null> {
+export async function resolveStreamTapeToken(fileId: string, refresh = false): Promise<string | null> {
   const cleanId = String(fileId || "").trim();
   if (!cleanId) return null;
 
   // Cache hit
   const cached = streamtapeMemoryCache.get(cleanId);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (!refresh && cached && cached.expiresAt > Date.now()) {
     return cached.directUrl;
   }
 
+  if (refresh) streamtapeMemoryCache.delete(cleanId);
   const embedUrl = `https://streamtape.com/e/${cleanId}/`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000);
@@ -81,7 +83,6 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
       },
       signal: controller.signal,
     });
-    clearTimeout(timeoutId);
 
     if (!upstream.ok) return null;
     const html = await upstream.text();
@@ -140,7 +141,7 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Referer": embedUrl
       },
-      signal: AbortSignal.timeout(15000)
+      signal: controller.signal
     });
 
     const location = headRes.headers.get("location");
@@ -163,6 +164,8 @@ export async function resolveStreamTapeToken(fileId: string): Promise<string | n
       console.error(`[StreamTape Resolver] Erro ao resolver fileId ${cleanId}:`, err?.message || err);
     }
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -185,11 +188,12 @@ streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Respon
       return res.status(404).json({ success: false, error: "File ID do StreamTape não encontrado para este conteúdo." });
     }
 
-    const directUrl = await resolveStreamTapeToken(fileId);
+    const directUrl = await resolveStreamTapeToken(fileId, req.query.refresh === "1");
     if (!directUrl) {
       return res.status(502).json({ success: false, error: "Vídeo do StreamTape indisponível ou expirado." });
     }
 
+    res.setHeader("Cache-Control", "no-store");
     res.json({
       success: true,
       fileId,
@@ -252,6 +256,7 @@ streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Respons
       }
     }
 
+    res.setHeader("Cache-Control", "no-store");
     res.status(upstream.status);
 
     // Repassa Content-Length, Content-Range e Accept-Ranges para conformidade RFC 9110 (Range 206)
@@ -464,46 +469,23 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
       });
 
-      // Auto-recovery de erro no vídeo: se falhar após o vídeo já ter iniciado, tenta recarregar fonte com o tempo salvo
-      var hasRecoveredOnce = false;
-      v.addEventListener("error", function() {
-        var cur = (v && v.currentTime > 2) ? v.currentTime : initialSeek;
-        if (!hasRecoveredOnce && cur > 2) {
-          hasRecoveredOnce = true;
-          console.warn("[StreamTape Iframe] Erro detectado no vídeo. Renovando token via auto-recovery na posição:", cur);
-          fetch("/api/streamtape-resolve?fileId=" + encodeURIComponent("${fileId}"))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (data && data.proxyUrl) {
-                v.src = data.proxyUrl + "&_cb=" + Date.now();
-                var onReloadSeek = function() {
-                  try {
-                    v.currentTime = cur;
-                    v.play().catch(function(){});
-                  } catch(e) {}
-                };
-                v.addEventListener("loadedmetadata", onReloadSeek, { once: true });
-                v.addEventListener("canplay", onReloadSeek, { once: true });
-                v.load();
-                return;
-              }
-              throw new Error("Sem proxyUrl");
-            })
-            .catch(function() {
-              try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de vídeo" }, "*"); } catch(e) {}
-            });
-          return;
+      // Retry even when the first media request fails before any playback.
+      var recovery = (${createStreamtapeRecovery.toString()})(v, {
+        fileId: ${JSON.stringify(fileId)},
+        getTime: function() { return v.currentTime || initialSeek || 0; },
+        onFatal: function(reason) {
+          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*"); } catch(e) {}
         }
-        try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de vídeo" }, "*"); } catch(e) {}
       });
 
       // Receptor de comandos da NetflixPlayerSkin
       window.addEventListener("message", function(event) {
         if (!event.data) return;
         var d = event.data;
-        if (d.type === "PAUSE" && v) v.pause();
-        if (d.type === "PLAY" && v) v.play().catch(function(){});
+        if (d.type === "PAUSE" && v) { recovery.setPaused(true); v.pause(); }
+        if (d.type === "PLAY" && v) { recovery.setPaused(false); v.play().catch(function(){}); }
         if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
+          recovery.seek(d.targetTime);
           if (v.readyState >= 1) {
             v.currentTime = d.targetTime;
           } else {
@@ -511,6 +493,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
           }
         }
         if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") {
+          recovery.seek(d.time);
           if (v.readyState >= 1) {
             v.currentTime = d.time;
           } else {

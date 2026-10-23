@@ -180,6 +180,7 @@ async function isAdminToken(req: Request): Promise<boolean> {
 
 /** Valida serverKey contra whitelist */
 const VALID_SERVER_KEYS = new Set([
+  "srv_streamtape",
   "srv_watchplay",
   "srv_mixdrop",
   "srv_vip",

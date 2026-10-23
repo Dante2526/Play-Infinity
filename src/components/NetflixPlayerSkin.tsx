@@ -42,6 +42,7 @@ export interface NetflixPlayerStatus {
   buffered: number;
   playbackRate: number;
   readyState: number;
+  buffering?: boolean;
 }
 
 interface NetflixPlayerSkinProps {
@@ -711,6 +712,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
             }
           } else if (reasonStr.includes("waiting") || buf < 0.1) {
+            // MixDrop owns a bounded rebuffer/reload sequence in its iframe.
+            // Keep the telemetry, but do not interrupt it with an earlier switch.
+            if (reasonStr.startsWith("MixDrop:")) return;
             // Buffer seco persistente: só comuta se o vídeo estiver REALMENTE sem buffer (buf < 0.5s)
             // e travado continuamente por mais de 7 segundos, OU 5+ engasgos severos com buffer seco.
             // Se houver buffer à frente (ex: buf >= 1.5s), NUNCA dispara erro fatal nem derruba o player.
@@ -803,6 +807,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             buffered: typeof data.buffered === "number" ? data.buffered : prev.buffered,
             playbackRate: typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate,
             readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
+            buffering: data.buffering === true,
           };
         });
 
@@ -1936,7 +1941,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           Espaçamento responsivo e confortável
           ======================================================== */}
       {/* Spinner Central de Seek quando controles estão ocultos */}
-      {!controlsVisible && isSeekingTransition && !isLocked && (
+      {!controlsVisible && (isSeekingTransition || playerStatus.buffering) && !isLocked && (
         <div className="absolute inset-0 flex items-center justify-center z-25 pointer-events-none transition-opacity duration-200">
           <div className="p-3.5 sm:p-4 rounded-full bg-black/60 backdrop-blur-md shadow-2xl border border-white/10">
             <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-[#E50914] animate-spin drop-shadow-md" />
@@ -1982,7 +1987,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             }`}
             title={playerStatus.paused ? "Reproduzir" : "Pausar"}
           >
-            {isSeekingTransition ? (
+            {isSeekingTransition || playerStatus.buffering ? (
               <Loader2 className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} text-[#E50914] animate-spin drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />
             ) : playerStatus.paused ? (
               <Play className={`${isMiniPlayer ? "w-10 h-10" : "w-11 h-11 sm:w-16 sm:h-16 md:w-20 md:h-20"} fill-white text-white translate-x-0.5 sm:translate-x-1 drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]`} />

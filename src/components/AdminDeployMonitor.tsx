@@ -1353,7 +1353,7 @@ export function AdminDeployMonitor() {
                   onClick={() => handleVpsAction("restart-all", "Zero-Downtime")}
                   disabled={actionLoading !== null}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 w-full sm:w-auto"
-                  title="Recarregar com Zero-Downtime: atualiza uma instância por vez sem 502"
+                  title="Recarregar a aplicação preservando conexões dentro da janela de drenagem"
                 >
                   <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
                   {actionLoading === "restart-all" ? "Recarregando..." : "Zero-Downtime"}
@@ -1369,12 +1369,12 @@ export function AdminDeployMonitor() {
                 </button>
 
                 <button
-                  onClick={() => handleVpsAction("git-pull-build", "Executar Git Pull & Build na VPS")}
-                  disabled={actionLoading !== null}
+                  onClick={handleTriggerDeploy}
+                  disabled={actionLoading !== null || triggerLoading}
                   className="flex items-center justify-center gap-2 px-4 py-2.5 bg-orange-500/10 hover:bg-orange-500/20 active:scale-95 text-orange-400 rounded-xl text-xs font-bold border border-orange-500/20 transition-all cursor-pointer disabled:opacity-50 w-full sm:w-auto"
                 >
-                  <Terminal className={`w-3.5 h-3.5 ${actionLoading === "git-pull-build" ? "animate-spin" : ""}`} />
-                  {actionLoading === "git-pull-build" ? "Executando..." : "Executar Git Pull & Build na VPS"}
+                  <Terminal className={`w-3.5 h-3.5 ${triggerLoading ? "animate-spin" : ""}`} />
+                  {triggerLoading ? "Agendando..." : "Deploy via GitHub Actions"}
                 </button>
               </div>
             </div>

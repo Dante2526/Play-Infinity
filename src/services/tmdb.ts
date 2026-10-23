@@ -216,9 +216,9 @@ async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
   }
 
   const requestPromise = (async (): Promise<TmdbFetchOutcome<T>> => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     try {
       let controller: AbortController | null = null;
-      let timeoutId: any = null;
       if (typeof AbortController !== 'undefined') {
         controller = new AbortController();
         timeoutId = setTimeout(() => {
@@ -233,7 +233,6 @@ async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
 
       const resolvedUrl = url.startsWith('/api') ? `${getTmdbApiBase()}${url}` : url;
       const res = await fetch(resolvedUrl, fetchOptions);
-      if (timeoutId) clearTimeout(timeoutId);
 
       if (!res.ok) {
         console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
@@ -261,6 +260,7 @@ async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
       }
       return { ok: false, status: 0, data: null };
     } finally {
+      clearTimeout(timeoutId);
       _clientTmdbInflight.delete(url);
     }
   })();
