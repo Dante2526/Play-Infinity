@@ -71,6 +71,7 @@ before(async () => {
     ...process.env, PM2_HOME: path.join(temporary, 'pm2'),
     PATH: `${path.dirname(pm2)}:${process.env.PATH}`,
     PLAY_INFINITY_PORT: String(port), PLAY_INFINITY_PROBE_PORT: String(probePort),
+    PLAY_INFINITY_PUBLIC_URL: `http://127.0.0.1:${port}`,
     APP_DRAIN_TIMEOUT_MS: '20000',
   };
   const compiled = await esbuild.build({
@@ -89,6 +90,9 @@ before(async () => {
             if (++count === 12) { clearInterval(timer); res.end('done\\n'); }
           }, 1000);
           res.on('close', () => clearInterval(timer));
+        } else if (req.url === '/' || req.url.startsWith('/?')) {
+          res.setHeader('Content-Type','text/html');
+          res.end(fs.readFileSync(path.join(process.cwd(),'dist/index.html')));
         } else if (req.url.startsWith('/assets/')) {
           const asset = path.join(process.env.APP_ASSET_DIR, path.basename(req.url));
           if (!fs.existsSync(asset)) { res.writeHead(404); res.end(); }
@@ -96,6 +100,7 @@ before(async () => {
         } else {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({status:'ok',release:process.env.APP_RELEASE_ID,
+            codeRelease:path.basename(path.resolve(__dirname,'..')),
             legacySecretPreserved:process.env.PROXY_SECRET==='migration-fixture-secret',
             legacySettingPreserved:process.env.LEGACY_ONLY==='fixture-only'}));
         }
@@ -128,6 +133,8 @@ test('first deployment validates the release and preserves live data/legacy asse
   assert.equal((await health()).release, 'v1');
   assert.equal(await fs.readFile(path.join(appRoot, 'data', 'catalog.json'), 'utf8'), 'existing-live-data');
   assert.equal(await fs.readFile(path.join(appRoot, 'shared-assets', 'legacy-hash.js'), 'utf8'), '// legacy');
+  const apps = JSON.parse((await run(pm2, ['jlist'])).stdout);
+  assert.ok(apps.every(p => p.pm2_env.pm_cwd === path.join(appRoot, 'releases/v1')));
 });
 
 test('rolling deploy preserves a 12-second stream and serves health/new requests throughout', async () => {
@@ -153,6 +160,9 @@ test('rolling deploy preserves a 12-second stream and serves health/new requests
   const asset = await fetch(`http://127.0.0.1:${port}/assets/v1-hash.js`);
   assert.equal(asset.status, 200);
   assert.equal(await asset.text(), '// v1');
+  const apps = JSON.parse((await run(pm2, ['jlist'])).stdout);
+  assert.ok(apps.every(p => p.pm2_env.pm_cwd === path.join(appRoot, 'releases/v2') && p.pm2_env.pm_exec_path === path.join(appRoot, 'releases/v2/dist/server.cjs')));
+  assert.equal((await health()).codeRelease, 'v2');
 });
 
 test('a broken candidate never changes current or restarts the running release', async () => {

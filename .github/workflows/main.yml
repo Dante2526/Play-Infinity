@@ -45,6 +45,7 @@ jobs:
         run: |
           npm run lint
           node --test tests/payments.test.cjs tests/mixdrop.test.cjs tests/streamtape.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs
+          node --test tests/deploy-deps.test.cjs tests/public-frontend.test.cjs
 
       - name: Validar troca de versão com conexão ativa
         run: |
@@ -106,7 +107,7 @@ jobs:
           fi
           scp "${SSH_OPTS[@]}" /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
           scp "${SSH_OPTS[@]}" scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
-          if ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "sudo env PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"; then
+          if ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "sudo env PLAY_INFINITY_PUBLIC_URL=https://play-infinity.stream PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"; then
             echo "Deploy remoto concluído e verificado: ${RELEASE_ID}"
           else
             SSH_STATUS=$?

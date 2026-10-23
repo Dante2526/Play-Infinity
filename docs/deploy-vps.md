@@ -2,7 +2,7 @@
 
 Antes do envio, o workflow executa os testes de pagamentos e a troca com PM2 real,
 além da checagem de tipos. O workflow `main.yml` prepara versões em `/home/ubuntu/play-infinity/releases/<id>`.
-Ele valida primeiro o cluster PM2 existente, instala dependências próprias, verifica o bundle de produção em uma porta
+Ele valida primeiro o cluster PM2 existente, instala ou reutiliza um conjunto compatível de dependências, verifica o bundle de produção em uma porta
 local separada e só então troca o symlink `current` atomicamente e executa o reload
 das duas instâncias PM2. O deploy e os reloads do painel compartilham uma trava.
 
@@ -67,8 +67,11 @@ reiniciar o proxy continua sendo manutenção com interrupção de conexões. Os
 de reload agendam a operação e gravam o resultado em
 `/home/ubuntu/play-infinity/reload.log`; o agendamento não significa conclusão.
 
-Após o reload, o script exige duas instâncias online da versão esperada e um
-healthcheck HTTP contendo o mesmo identificador. Não há alternativa automática
+Após o reload, o script exige duas instâncias online da versão esperada, com
+`pm_cwd` e `pm_exec_path` apontando para os arquivos novos. O healthcheck precisa
+concordar em `release` (ambiente) e `codeRelease` (diretório real do bundle).
+Quando o workflow informa `PLAY_INFINITY_PUBLIC_URL`, também exige o HTML público
+e os bytes dos assets referenciados correspondentes à release. Não há alternativa automática
 com `restart all`, `fuser -k` ou restart do app. Se uma falha ocorrer após a troca,
 o deploy retorna erro e mantém as versões anteriores para diagnóstico; não afirma
 rollback apenas por restaurar um symlink. O operador deve verificar `sudo pm2
@@ -171,3 +174,29 @@ diretório privado e é removido ao terminar; não publique seu conteúdo, pois 
 as credenciais normais do PM2. Recuperação sem healthcheck não é declarada sucesso.
 Os testes usam PM2/HTTP reais com systemd simulado; a integração com o serviço real
 e o reboot da VPS precisam de confirmação operacional. Não há reinício da VPS.
+
+## Dependências e identificação do código executado
+
+Conjuntos completos ficam em `dependency-sets/<hash>/node_modules`. A chave inclui
+package.json, lockfile, versão exata de Node/npm, ABI, plataforma, arquitetura e
+glibc. Uma combinação nova executa `npm ci` isoladamente e só publica o conjunto
+após sucesso, por rename atômico com marcador de conclusão. Releases compatíveis
+passam a apontar para esse conjunto e dispensam uma nova instalação. Um conjunto
+usado por workers antigos nunca recebe npm ci em cima dele. Hooks de instalação
+no projeto e links/workspaces desabilitam o compartilhamento, pois podem depender
+do caminho da release. Não há adoção automática de node_modules antigos sem esse
+registro de instalação: a primeira execução de cada chave ainda cria o cache.
+
+Instalações frias mostram progresso a cada20s, tempo total e saída dos scripts de
+instalação. Isso permite distinguir download/compilação de espera no reload.
+Não exclua conjuntos enquanto alguma release/processo os referencia; a retenção
+continua manual, assim como a dos assets.
+
+PM2 CLI reload não garante trocar os caminhos internos de execução ao receber
+um ecosystem com cwd/script diferentes. Foi reproduzido que ele atualizava apenas
+o identificador de ambiente, mantendo o bundle antigo. O helper reload-release.cjs
+executa rolling reload por ID com os campos internos de caminho explicitamente
+atualizados, preservando as variáveis existentes. O verificador rejeita divergência
+de diretório/script e de codeRelease, mesmo que APP_RELEASE_ID pareça correto.
+Um backend saudável sozinho também não comprova publicação do frontend: a checagem
+externa detecta HTML antigo, asset ausente e bytes de asset incorretos.

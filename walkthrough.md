@@ -1447,3 +1447,26 @@ Correções somente locais. Nenhum push/deploy novo, Node24 ainda pendente; prep
 ## 23/10/2026 - Envio autorizado de Node24 e correções StreamTape
 
 Usuário autorizou expressamente o envio do lote pendente. Main remota consultada:5224bed, sem divergência. Lote inclui manutenção Node24 explícita, correções da passagem de episódio e proxy StreamTape, validações e documentação, com Android45/1.4.13. Mensagem de commit terá prefixo [upgrade-node24] para habilitar a manutenção autorizada antes do deploy; não habilita migração fork. Resultado da execução e versão pública serão acompanhados após push; não se presume sucesso antes disso.
+
+
+## 23/10/2026 - Resultado do envio c75d26a e falha real de identificação do deploy
+
+Usuário autorizou enviar o lote Node24/StreamTape. Commit c75d26a30ee2bfb8fcb8281e2390998e3b1ff7a1 publicado; execução https://github.com/Dante2526/Play-Infinity/actions/runs/39947061218 terminou SUCCESS em15m18s, etapa remota11:36:17–11:49:59UTC. Log fornecido pelo usuário confirmou Node24.22.1 no daemon root e nos dois workers, com checksum e health aprovados antes do deploy. Os avisos EBADENGINE desapareceram; demora posterior confirmada no npm ci, independente de espectadores. O usuário informou que ninguém está assistindo.
+
+Atenção: o health retornou release=c75d26a...-39947061218-1 em três consultas, MAS o HTML público continuou index-y1WDCG-G.js/VideoPlayerModal-tedh0ThD.js, sem playerFrameUrl, Last-Modified10:38:26. Portanto sucesso do workflow e variável APP_RELEASE_ID não comprovaram ativação do código novo. Amostras HTTP206 de1024bytes de VisionQuest3 e4 continuaram funcionando, mas não validam a publicação das correções.
+
+A nova verificação de HTML reproduziu a falha em PM2 local: reload da configuração atualizava APP_RELEASE_ID mas mantinha pm_cwd/pm_exec_path da release anterior. Hipótese inicial de Nginx não foi confirmada e não motivou alteração de configuração/arquivos Nginx. Acrescentar esses campos ao ecosystem pela CLI também não bastou: PM2 filtra os campos. Corrigido via helper reload-release.cjs usando o PM2 instalado para executar reloadProcessId sequencial com caminhos internos explícitos, preservando ambiente e workers antigos em drenagem. Check pós-reload exige script/diretório corretos; health agora compara release e codeRelease, obtido do caminho do bundle. Verificação pública compara HTML e bytes dos assets. Não declarar correções de StreamTape ativas até essas verificações passarem na VPS.
+
+## 23/10/2026 - Redução das instalações repetidas preparada localmente
+
+Usuário voltou a relatar demora em todos os deploys. Preparado cache de conjuntos completos de dependências, separado por package.json/lockfile/Node/npm/ABI/plataforma/arquitetura/glibc. Instala em release isolada, publica conjunto completo atomicamente e só então compartilha por symlink. Mesma configuração dispensa npm ci; mudança de pacote/runtime gera conjunto distinto. Falha não publica cache e não altera conjuntos em uso. Projetos com hooks raiz ou links/workspaces não compartilham. Primeira instalação de cada configuração ainda é necessária; não foi reaproveitado retroativamente um node_modules sem registro confiável. Progresso a cada20s e scripts de instalação visíveis permitem diagnosticar o próximo cache frio. Android preparado46/1.4.14 para eventual novo push.
+
+Sem novo push ou alterações na VPS nesta preparação. Registro local; autorização de envio deve ser solicitada após validação completa conforme AGENTS.md.
+
+
+Validação final do lote local:7 testes PM2 passaram com arquivo/diretório reais, codeRelease, HTML público, conexão de12s preservada e recuperação de manutenção;4 testes Node20->24/rollback passaram com o health novo;8 testes de cache/publicação passaram (incluem rejeitar release de ambiente nova com código antigo). Os84 testes funcionais do lote anterior permanecem sem mudanças. Total103 testes validados. TypeScript, build completo em /workspace/.onboarding/deploy-code-validation.3suaod91, YAML/Bash/JS e git diff --check passaram. Nenhum processo de validação ficou rodando. A mudança que tentou publicar dist legado foi descartada ao reproduzir a causa no PM2; nenhum script publish-frontend permaneceu e nenhum arquivo Nginx foi alterado. Correções ainda não aplicadas à VPS, aguardando autorização de novo push.
+
+
+## 23/10/2026 - Envio autorizado da correção definitiva do reload e cache
+
+Usuário respondeu sim à autorização de novo push. Main remota continua em c75d26a, sem divergência. Preparado envio normal, sem prefixo de manutenção Node/fork: Node24 já está ativo. Lote corrige o caminho de execução no rolling reload, exige codeRelease real e frontend público, e adiciona conjuntos reutilizáveis de dependências. Primeira instalação dessa chave ainda formará o cache. Android46/1.4.14 incluído. O resultado público será verificado antes de declarar que as correções anteriores do player estão ativas.

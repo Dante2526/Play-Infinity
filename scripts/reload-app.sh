@@ -11,7 +11,7 @@ cd "$app_root"
 processes=$(pm2 jlist)
 if printf '%s' "$processes" | node "$tools_dir/check-app-processes.cjs" '' --allow-absent; then
   # Refuse fork mode or a degraded cluster: PM2 would fall back to a restart.
-  pm2 reload "$app_root/ecosystem.config.cjs" --only play-infinity-app --update-env
+  node "$tools_dir/reload-release.cjs" "$app_root"
 else
   check_status=$?
   if [[ $check_status == 3 ]]; then
@@ -22,8 +22,9 @@ else
     exit 1
   fi
 fi
-expected_release=$(basename "$(readlink -f "$app_root/current")")
-pm2 jlist | node "$tools_dir/check-app-processes.cjs" "$expected_release"
+expected_dir=$(readlink -f "$app_root/current")
+expected_release=$(basename "$expected_dir")
+pm2 jlist | node "$tools_dir/check-app-processes.cjs" "$expected_release" --release-dir "$expected_dir"
 node "$tools_dir/verify-release.cjs" "http://127.0.0.1:${PLAY_INFINITY_PORT:-3000}/api/health" "$expected_release"
 pm2 save
 echo "Reload verificado: $expected_release"

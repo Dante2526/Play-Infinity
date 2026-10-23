@@ -38,7 +38,7 @@ async function fixture({ brokenProbe = false, badRestart = false } = {}) {
     if (${brokenProbe} && process.env.APP_PROBE === '1') process.exit(1);
     const server=require('node:http').createServer((req,res)=>{
       res.setHeader('Content-Type','application/json');
-      res.end(JSON.stringify({status:'ok',release:process.env.APP_RELEASE_ID}));
+      res.end(JSON.stringify({status:'ok',release:process.env.APP_RELEASE_ID,codeRelease:'live'}));
     });
     server.listen(Number(process.env.PORT),'127.0.0.1',()=>{if(process.send)process.send('ready')});
     process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
@@ -91,7 +91,7 @@ async function upgrade(f, extra = {}) {
 }
 async function verifyHealthy(f) {
   const r = await fetch(`http://127.0.0.1:${f.listen}/api/health`, { signal: AbortSignal.timeout(3000) });
-  assert.deepEqual(await r.json(), { status: 'ok', release: 'live' });
+  assert.deepEqual(await r.json(), { status: 'ok', release: 'live', codeRelease: 'live' });
 }
 after(async () => {
   for (const f of fixtures) {

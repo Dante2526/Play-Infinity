@@ -62,9 +62,10 @@ test -s "$release/ecosystem.config.cjs"
 # pre-existing fork/degraded cluster. Never restart or delete processes here.
 check_existing_cluster
 
-# Every release owns its dependencies; never mutate modules used by old workers.
+# Install a new dependency set only when packages/runtime change. Published sets
+# are immutable; a running release's modules are never modified by npm ci.
 cd "$release"
-npm ci --omit=dev --no-audit --no-fund
+node scripts/install-release-deps.cjs "$app_root" "$release"
 
 # Persistent runtime files are shared. Keep all existing VPS data and secrets;
 # seed missing data only on initial migration, never overwrite live catalogues.
@@ -115,7 +116,7 @@ probe_pid=''
 # Reject an incompatible/degraded existing PM2 cluster before switching current.
 check_existing_cluster
 
-for tool in reload-app.sh check-app-processes.cjs verify-release.cjs; do
+for tool in reload-app.sh reload-release.cjs check-app-processes.cjs verify-release.cjs; do
   cp "scripts/$tool" "$app_root/deploy-tools/$tool.tmp"
   mv -f "$app_root/deploy-tools/$tool.tmp" "$app_root/deploy-tools/$tool"
 done
@@ -131,5 +132,8 @@ if (( legacy_migration == 1 )); then
   node scripts/migrate-legacy-app.cjs "$app_root" "$previous_release"
 else
   PLAY_INFINITY_LOCK_HELD=1 bash "$app_root/deploy-tools/reload-app.sh" "$app_root"
+fi
+if [[ -n ${PLAY_INFINITY_PUBLIC_URL:-} ]]; then
+  node scripts/verify-public-frontend.cjs "$release" "$PLAY_INFINITY_PUBLIC_URL"
 fi
 echo "Deploy verificado: $release_id. Versões anteriores e conexões em drenagem preservadas."

@@ -71,7 +71,10 @@ process.on("uncaughtException", (err) => {
 
   // Immediate healthcheck endpoint
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", release: process.env.APP_RELEASE_ID || "development", timestamp: new Date().toISOString() });
+    res.json({ status: "ok", release: process.env.APP_RELEASE_ID || "development",
+      codeRelease: process.env.NODE_ENV === 'production' && typeof __dirname !== 'undefined'
+        ? path.basename(path.resolve(__dirname, '..')) : 'development',
+      timestamp: new Date().toISOString() });
   });
 
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)

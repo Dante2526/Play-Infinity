@@ -14,6 +14,8 @@ process.stdin.on('end', () => {
   try {
     const apps = processes.filter(app => app.name === 'play-infinity-app');
     const expectedRelease = process.argv[2];
+    const pathIndex = process.argv.indexOf('--release-dir');
+    const releaseDir = pathIndex >= 0 ? process.argv[pathIndex + 1] : '';
     const allowAbsent = process.argv.includes('--allow-absent');
     if (apps.length === 0 && allowAbsent) process.exit(3);
     if (!expectedRelease && process.argv.includes('--allow-legacy-fork') &&
@@ -23,12 +25,14 @@ process.stdin.on('end', () => {
     }
     if (apps.length !== 2 || apps.some(app =>
       app.pm2_env?.exec_mode !== 'cluster_mode' || app.pm2_env?.status !== 'online' ||
-      (expectedRelease && app.pm2_env?.APP_RELEASE_ID !== expectedRelease))) {
+      (expectedRelease && app.pm2_env?.APP_RELEASE_ID !== expectedRelease) ||
+      (releaseDir && (app.pm2_env?.pm_cwd !== releaseDir || app.pm2_env?.pm_exec_path !== require('node:path').join(releaseDir, 'dist/server.cjs'))))) {
       const summary = apps.map(app => ({
         id: app.pm_id,
         mode: app.pm2_env?.exec_mode || 'desconhecido',
         status: app.pm2_env?.status || 'desconhecido',
         ...(expectedRelease ? { expectedRelease: app.pm2_env?.APP_RELEASE_ID === expectedRelease } : {}),
+        ...(releaseDir ? { expectedCodePath: app.pm2_env?.pm_cwd === releaseDir && app.pm2_env?.pm_exec_path === require('node:path').join(releaseDir, 'dist/server.cjs') } : {}),
       }));
       console.error(`PM2 da aplicação: ${JSON.stringify(summary)}`);
       throw new Error(`Encontradas ${apps.length} instâncias; são necessárias duas online em cluster${expectedRelease ? ' da versão solicitada' : ''}.`);
