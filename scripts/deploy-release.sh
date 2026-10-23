@@ -39,9 +39,20 @@ test -s "$release/dist/server.cjs"
 test -s "$release/dist/index.html"
 test -s "$release/ecosystem.config.cjs"
 
+# Validate the existing topology before the slow dependency install. This does
+# not depend on the candidate and must not waste minutes before reporting a
+# pre-existing fork/degraded cluster. Never restart or delete processes here.
+processes=$(pm2 jlist)
+if printf '%s' "$processes" | node "$release/scripts/check-app-processes.cjs" '' --allow-absent; then
+  :
+else
+  check_status=$?
+  [[ $check_status == 3 ]] || exit 1
+fi
+
 # Every release owns its dependencies; never mutate modules used by old workers.
 cd "$release"
-npm ci --omit=dev --no-audit --no-fund || npm install --omit=dev --package-lock=false --no-save --no-audit --no-fund
+npm ci --omit=dev --no-audit --no-fund
 
 # Persistent runtime files are shared. Keep all existing VPS data and secrets;
 # seed missing data only on initial migration, never overwrite live catalogues.

@@ -2,15 +2,31 @@
 let input = '';
 process.stdin.on('data', chunk => { input += chunk; });
 process.stdin.on('end', () => {
+  let processes;
   try {
-    const apps = JSON.parse(input).filter(app => app.name === 'play-infinity-app');
+    processes = JSON.parse(input);
+    if (!Array.isArray(processes)) throw new Error();
+  } catch {
+    // A parser error can quote raw PM2 input, including environment secrets.
+    console.error('Não foi possível ler a lista JSON de processos do PM2.');
+    process.exit(1);
+  }
+  try {
+    const apps = processes.filter(app => app.name === 'play-infinity-app');
     const expectedRelease = process.argv[2];
     const allowAbsent = process.argv.includes('--allow-absent');
     if (apps.length === 0 && allowAbsent) process.exit(3);
     if (apps.length !== 2 || apps.some(app =>
       app.pm2_env?.exec_mode !== 'cluster_mode' || app.pm2_env?.status !== 'online' ||
       (expectedRelease && app.pm2_env?.APP_RELEASE_ID !== expectedRelease))) {
-      throw new Error('Esperadas duas instâncias online em cluster da versão solicitada.');
+      const summary = apps.map(app => ({
+        id: app.pm_id,
+        mode: app.pm2_env?.exec_mode || 'desconhecido',
+        status: app.pm2_env?.status || 'desconhecido',
+        ...(expectedRelease ? { expectedRelease: app.pm2_env?.APP_RELEASE_ID === expectedRelease } : {}),
+      }));
+      console.error(`PM2 da aplicação: ${JSON.stringify(summary)}`);
+      throw new Error(`Encontradas ${apps.length} instâncias; são necessárias duas online em cluster${expectedRelease ? ' da versão solicitada' : ''}.`);
     }
   } catch (error) {
     console.error(error.message);

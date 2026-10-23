@@ -28,7 +28,7 @@ jobs:
           cache: 'npm'
 
       - name: 📦 Instalar Dependências
-        run: npm ci || npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Validar tipos, pagamentos e reprodução
         run: |

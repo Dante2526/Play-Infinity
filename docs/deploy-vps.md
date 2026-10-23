@@ -2,7 +2,7 @@
 
 Antes do envio, o workflow executa os testes de pagamentos e a troca com PM2 real,
 além da checagem de tipos. O workflow `main.yml` prepara versões em `/home/ubuntu/play-infinity/releases/<id>`.
-Ele instala dependências próprias, verifica o bundle de produção em uma porta
+Ele valida primeiro o cluster PM2 existente, instala dependências próprias, verifica o bundle de produção em uma porta
 local separada e só então troca o symlink `current` atomicamente e executa o reload
 das duas instâncias PM2. O deploy e os reloads do painel compartilham uma trava.
 
@@ -28,10 +28,12 @@ layout de releases também são preservados na primeira migração.
   processo entre usuários. O `video-proxy`, documentado no daemon de `ubuntu`, não
   faz parte do deploy. Se o cluster estiver degradado/em fork, o deploy falha antes
   da troca. A primeira instalação pode iniciar a aplicação quando ela não existe.
-- O workflow usa Node 22 para compilar. A VPS precisa de Node/npm, PM2, Bash,
+- O workflow usa Node 22 para compilar. A VPS também precisa de Node 22 ou superior
+  (exigido por firebase-admin e outras dependências), npm, PM2, Bash,
   `flock`, GNU tar e GNU coreutils. Dependências são instaladas na versão nova;
-  eventual falha preserva a aplicação em execução. O lockfile atual ainda exige
-  fallback de `npm ci` para `npm install`; essa pendência é independente do deploy.
+  eventual falha preserva a aplicação em execução. O lockfile versionado permite
+  instalação determinística via `npm ci`; mantenha o lockfile sincronizado com
+  package.json. Não há fallback para resolver versões diferentes na VPS.
 - A porta de prova padrão é `127.0.0.1:3100`; pode ser alterada por
   `PLAY_INFINITY_PROBE_PORT`. A porta da aplicação permanece 3000 por padrão.
 - A ativação é feita pelo próximo envio autorizado para `main`, ou pelo workflow
@@ -85,3 +87,13 @@ conservação dos dados/assets, stream de 12 segundos durante rolling reload,
 novas requisições durante a troca, candidato inválido, erro de bind antes de
 `ready` e recusa de reload em cluster degradado. Isso não substitui uma validação
 de reprodução na VPS com Nginx, CDN e os provedores externos reais.
+
+## Falha de pré-verificação PM2
+
+A verificação roda após extrair o pacote e antes de instalar dependências, e é
+repetida antes de ativar a versão. Em caso de erro, o log informa somente IDs,
+modo e estado dos processos da aplicação; não imprime variáveis de ambiente.
+Uma instância parada, modo fork ou quantidade diferente de duas exige diagnóstico
+da instalação existente. Não remova essa proteção nem execute restart/delete all
+como correção genérica. `sudo pm2 list` permite conferir a estrutura sem expor
+segredos; não cole a saída completa de `pm2 jlist`, que contém credenciais.

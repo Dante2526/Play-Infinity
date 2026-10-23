@@ -4,7 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
-const { spawn, fork } = require('node:child_process');
+const { spawn, fork, spawnSync } = require('node:child_process');
 const esbuild = require('esbuild');
 const root = path.resolve(__dirname, '..');
 const pm2 = process.env.PM2_BIN;
@@ -54,7 +54,10 @@ async function archive(id, broken = false) {
 }
 async function deploy(id, broken = false) {
   const tar = await archive(id, broken);
-  return run('bash', [path.join(root, 'scripts', 'deploy-release.sh'), tar, id, appRoot]);
+  // The workflow copies only this bootstrap into /tmp, not its sibling tools.
+  const bootstrap = path.join(temporary, 'remote-deploy.sh');
+  await fs.copyFile(path.join(root, 'scripts', 'deploy-release.sh'), bootstrap);
+  return run('bash', [bootstrap, tar, id, appRoot]);
 }
 
 before(async () => {
@@ -187,4 +190,25 @@ test('a degraded cluster aborts deployment instead of falling back to restart', 
   assert.notEqual(result.code, 0);
   assert.equal(path.basename(await fs.realpath(path.join(appRoot, 'current'))), 'v2');
   assert.equal((await health()).release, 'v2');
+  await assert.rejects(fs.stat(path.join(appRoot, 'releases', 'v3', 'probe.log')), { code: 'ENOENT' });
+});
+
+test('PM2 preflight reports count, modes and state without disclosing environment secrets', () => {
+  const processInfo = (id, mode = 'cluster_mode', status = 'online') => ({
+    name: 'play-infinity-app', pm_id: id,
+    pm2_env: { exec_mode: mode, status, PROXY_SECRET: 'fixture-secret-do-not-log', APP_RELEASE_ID: 'v1' },
+  });
+  const check = (apps, args = []) => spawnSync(process.execPath, [path.join(root, 'scripts', 'check-app-processes.cjs'), ...args], { input: JSON.stringify(apps), encoding: 'utf8' });
+  assert.equal(check([processInfo(1), processInfo(2)]).status, 0);
+  assert.equal(check([], ['', '--allow-absent']).status, 3);
+  for (const apps of [[processInfo(1)], [processInfo(1, 'fork_mode'), processInfo(2)], [processInfo(1), processInfo(2, 'cluster_mode', 'stopped')]]) {
+    const result = check(apps);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /PM2 da aplicação:/);
+    assert.doesNotMatch(result.stderr, /fixture-secret|PROXY_SECRET/);
+  }
+  const mismatch = check([processInfo(1), processInfo(2)], ['v2']);
+  assert.equal(mismatch.status, 1); assert.match(mismatch.stderr, /expectedRelease":false/);
+  const malformed = spawnSync(process.execPath, [path.join(root, 'scripts', 'check-app-processes.cjs')], { input: '{"PROXY_SECRET":"fixture-secret-do-not-log"', encoding: 'utf8' });
+  assert.equal(malformed.status, 1); assert.doesNotMatch(malformed.stderr, /fixture-secret|PROXY_SECRET/);
 });
