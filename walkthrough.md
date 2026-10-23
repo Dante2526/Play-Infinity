@@ -1219,3 +1219,19 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 - Teste deterministico validou resposta 200 e tag `<video>` com `WATCHPLAY_STATUS` em `/api/streamtape-proxy-iframe?id=105248&s=2&e=6`.
 - Compilacao do backend via esbuild (`dist/server.cjs`) executada com sucesso.
 - Sincronizacao dos assets do backend Android (`android/app/src/main/assets/public/server.cjs`).
+
+
+## 22/10/2026 - Correções de cobrança e processamento de webhooks Asaas
+
+- Firestore: usuários não podem alterar tarifas; cadastros públicos só aceitam os valores padrão de R$ 13,00. Descontos continuam sob controle administrativo.
+- Backend: valores arbitrários e datas de cadastro do cliente não concedem descontos. A tarifa legada explícita de R$ 9,90 foi preservada. O Paywall exibe a mesma regra e deixou de gravar tarifas no cadastro.
+- Plus: recorrência integral de R$ 17,00; quando há assinatura ativa vinculada no Asaas, o upgrade atualiza essa assinatura em vez de criar uma recorrência paralela. A propriedade da assinatura é verificada antes da alteração.
+- Webhooks: consulta obrigatória ao estado atual da cobrança no Asaas, inclusive para eventos assinados. Falhas de API/banco retornam erro para permitir nova entrega. Eventos negativos desatualizados não revogam acesso válido.
+- Pagamentos aplicados ficam registrados em usuarios/{uid}/asaasPayments/{paymentId}, com transação Firestore para evitar duplicações concorrentes e entre reinícios. CONFIRMED e RECEIVED concedem um único período.
+- Validade calculada a partir da data oficial do pagamento, limitada ao último dia do mês seguinte; reenvios não estendem o prazo. Pagamentos antigos não sobrescrevem uma assinatura mais recente. Estorno do pagamento atual revoga o acesso.
+
+Validação: 18 testes HTTP de regressão em `node --test tests/payments.test.cjs` passaram, com autenticação, Asaas e Firestore simulados. `npm run lint`, `git diff --check` e `npm run build` passaram. Build executado em cópia descartável fora do checkout para preservar índices de catálogo versionados. Avisos preexistentes de chunks/import.meta continuam não fatais.
+
+Limitação: regras revisadas, mas sem execução no emulador Firestore; download oficial bloqueado pelo proxy (CONNECT 403 em storage.googleapis.com). Não foram efetuadas cobranças reais, push, publicação das regras nem deploy. Para produção, publicar as regras do Firestore e atualizar frontend/backend na VPS Oracle; a API Asaas precisa estar configurada para validar os webhooks. Assinaturas e descontos existentes não foram migrados.
+
+Envio para main autorizado pelo usuário nesta conversa. Como o push dispara o workflow Android, versionCode incrementado de 39 para 40 e versionName de 1.4.7 para 1.4.8 antes do envio. A conclusão do workflow e a publicação das regras Firestore devem ser verificadas separadamente.

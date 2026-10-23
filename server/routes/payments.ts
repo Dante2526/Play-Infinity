@@ -54,6 +54,33 @@ router.post("/api/create-subscription", async (req, res) => {
     const baseUrl = getAsaasBaseUrl();
     const headers = getAsaasHeaders();
 
+    // 3. O SERVIDOR define o valor do plano e externalReference (IGNORA req.body.value e req.body.externalReference)
+    const requestedPlan = typeof req.body.plan === "string" ? req.body.plan.toLowerCase().trim() : "standard";
+    if (!["standard", "plus"].includes(requestedPlan)) {
+      return res.status(400).json({ success: false, error: "Plano inválido." });
+    }
+    const isPlusPlan = requestedPlan === "plus";
+    let finalPrice = isPlusPlan ? 17.00 : 13.00;
+    const externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
+
+    // A assinatura mensal sempre cobra o plano completo. Valores arbitrários e
+    // datas de cadastro fornecidas pelo cliente não concedem descontos.
+    let existingSubscriptionId = "";
+    try {
+      const db = getAdminDb();
+      if (!db) return res.status(503).json({ success: false, error: "Banco de dados indisponível." });
+      let userSnap = await db.collection("usuarios").doc(userId).get();
+      if (!userSnap.exists) userSnap = await db.collection("users").doc(userId).get();
+      const userData = userSnap.exists ? userSnap.data() : null;
+      existingSubscriptionId = typeof userData?.subscriptionId === "string" ? userData.subscriptionId : "";
+      const rawValue = userData?.valorMensalidade ?? userData?.valor ?? userData?.monthlyFee;
+      // Tarifa legada explícita, protegida pelas regras do Firestore.
+      if (!isPlusPlan && (rawValue === 9.90 || rawValue === "9,90" || rawValue === "9.90")) finalPrice = 9.90;
+    } catch (error) {
+      return res.status(503).json({ success: false, error: "Não foi possível consultar a assinatura atual." });
+    }
+    const description = `Play Infinity ${isPlusPlan ? "Plus" : "Premium"} (R$ ${finalPrice.toFixed(2).replace('.', ',')})`;
+
     // 2. Busca ou cria cliente no Asaas
     let customerId = "";
     const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { signal: AbortSignal.timeout(15000), headers });
@@ -74,78 +101,6 @@ router.post("/api/create-subscription", async (req, res) => {
     }
 
     if (!customerId) throw new Error("Falha ao resolver o cliente no Asaas.");
-
-    // 3. O SERVIDOR define o valor do plano e externalReference (IGNORA req.body.value e req.body.externalReference)
-    const requestedPlan = (req.body.plan || "standard").toLowerCase().trim();
-    const isPlusPlan = requestedPlan === "plus" || (req.body.description && String(req.body.description).toLowerCase().includes("plus"));
-
-    let finalPrice = 13.00;
-    let externalReference = userId;
-    let description = "Play Infinity Premium";
-
-    try {
-      const db = getAdminDb();
-      if (db && userId) {
-        let userSnap = await db.collection("usuarios").doc(userId).get();
-        if (!userSnap.exists) {
-          userSnap = await db.collection("users").doc(userId).get();
-        }
-
-        const uData = userSnap.exists ? userSnap.data() : null;
-
-        if (isPlusPlan) {
-          const plusFee = 17.00;
-          let currentFee = 0;
-
-          if (uData && uData.assinatura === "ATIVA") {
-            const rawVal = uData.valorMensalidade ?? uData.valor ?? uData.monthlyFee;
-            if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
-              currentFee = typeof rawVal === "number" ? rawVal : (String(rawVal).includes("13") ? 13.00 : 9.90);
-            } else {
-              currentFee = 9.90;
-            }
-          }
-
-          const diff = Math.max(0, plusFee - currentFee);
-          if (currentFee > 0 && diff > 0 && diff < plusFee) {
-            finalPrice = diff;
-          } else {
-            finalPrice = plusFee;
-          }
-
-          externalReference = `${userId}|PLUS`;
-          description = `Play Infinity Plus (R$ ${finalPrice.toFixed(2).replace('.', ',')})`;
-        } else {
-          if (uData) {
-            const rawVal = uData.valorMensalidade ?? uData.valor ?? uData.monthlyFee;
-            if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
-              finalPrice = (rawVal === 13 || String(rawVal).includes("13")) ? 13.00 : 9.90;
-            } else {
-              const createdDate = uData.criadoEm || uData.createdAt;
-              if (createdDate && new Date(createdDate) < new Date("2026-09-19T00:00:00-03:00")) {
-                finalPrice = 9.90;
-              } else {
-                finalPrice = 13.00;
-              }
-            }
-          } else {
-            finalPrice = 13.00;
-          }
-
-          externalReference = userId;
-          description = `Play Infinity Premium (R$ ${finalPrice.toFixed(2).replace('.', ',')})`;
-        }
-      } else {
-        finalPrice = isPlusPlan ? 17.00 : 13.00;
-        externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
-        description = isPlusPlan ? `Play Infinity Plus (R$ 17,00)` : `Play Infinity Premium (R$ 13,00)`;
-      }
-    } catch (dbErr) {
-      console.warn("[Asaas] Erro ao consultar regras de preço no Firestore, aplicando preço oficial padrão:", dbErr);
-      finalPrice = isPlusPlan ? 17.00 : 13.00;
-      externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
-      description = isPlusPlan ? `Play Infinity Plus (R$ 17,00)` : `Play Infinity Premium (R$ 13,00)`;
-    }
 
     // 4. Cria Assinatura no Asaas com os dados blindados
     const nextDueDate = new Date();
@@ -172,15 +127,35 @@ router.post("/api/create-subscription", async (req, res) => {
       delete subPayload.nextDueDate;
     }
 
-    const subRes = await fetch(`${baseUrl}/subscriptions`, { signal: AbortSignal.timeout(15000),
-      method: "POST",
-      headers,
-      body: JSON.stringify(subPayload)
+    // Upgrade de uma assinatura existente atualiza a recorrência, sem criar
+    // uma segunda cobrança mensal paralela à assinatura Premium.
+    let subscriptionUrl = `${baseUrl}/subscriptions`;
+    let subscriptionMethod = "POST";
+    if (isPlusPlan && existingSubscriptionId) {
+      const currentRes = await fetch(`${subscriptionUrl}/${encodeURIComponent(existingSubscriptionId)}`, {
+        signal: AbortSignal.timeout(15000), headers
+      });
+      if (!currentRes.ok) throw new Error("Não foi possível verificar a assinatura atual.");
+      const current = await currentRes.json();
+      if (![userId, `${userId}|PLUS`].includes(current.externalReference)) {
+        return res.status(400).json({ success: false, error: "Assinatura incompatível com o usuário." });
+      }
+      if (current.status === "ACTIVE" && !current.deleted) {
+        subscriptionUrl += `/${encodeURIComponent(existingSubscriptionId)}`;
+        subscriptionMethod = "PUT";
+        delete subPayload.nextDueDate;
+        delete subPayload.customer;
+        subPayload.updatePendingPayments = true;
+      }
+    }
+    const subRes = await fetch(subscriptionUrl, {
+      signal: AbortSignal.timeout(15000), method: subscriptionMethod,
+      headers, body: JSON.stringify(subPayload)
     });
-    
+
     const subData = await subRes.json();
-    if (subData.errors) {
-      throw new Error(subData.errors[0].description);
+    if (!subRes.ok || subData.errors) {
+      throw new Error(subData.errors?.[0]?.description || "Falha ao salvar assinatura no Asaas.");
     }
 
     // 3. Processamento adicional baseado no método
@@ -231,7 +206,7 @@ router.post("/api/webhook/asaas", async (req, res) => {
 
     const { event, payment } = req.body || {};
 
-    if (!event || !payment || typeof payment !== "object") {
+    if (typeof event !== "string" || !event || !payment || typeof payment !== "object") {
       return res.status(400).json({ success: false, error: "Payload do webhook incompleto ou inválido." });
     }
 
@@ -240,99 +215,108 @@ router.post("/api/webhook/asaas", async (req, res) => {
       return res.json({ received: true, ignored: "Sem externalReference" });
     }
 
-    // 2. Consulta de Verificação na API Oficial do Asaas (Zero-Trust)
-    const paymentId = payment.id;
-    const asaasApiKey = process.env.ASAAS_API_KEY;
-
-    if (asaasApiKey && paymentId) {
-      try {
-        const baseUrl = getAsaasBaseUrl();
-        const verifyRes = await fetch(`${baseUrl}/payments/${paymentId}`, { signal: AbortSignal.timeout(15000),
-          headers: getAsaasHeaders()
-        });
-
-        if (!verifyRes.ok) {
-          console.warn(`[Webhook Asaas] Cobrança ${paymentId} não encontrada na API do Asaas (HTTP ${verifyRes.status}). Rejeitando webhook.`);
-          return res.status(400).json({ success: false, error: "Cobrança não localizada ou inválida na API do Asaas." });
-        }
-
-        const realPayment = await verifyRes.json();
-
-        // Valida se a referência externa bate com a cobrança oficial
-        if (realPayment.externalReference !== payment.externalReference) {
-          console.warn(`[Webhook Asaas] Inconsistência de externalReference: webhook=${payment.externalReference}, API=${realPayment.externalReference}`);
-          return res.status(400).json({ success: false, error: "Inconsistência cadastral na cobrança." });
-        }
-
-        // Se o evento é de pagamento confirmado, confere se o status na API realmente é de recebido/confirmado
-        if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
-          const validReceivedStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
-          if (!validReceivedStatuses.includes(realPayment.status)) {
-            console.warn(`[Webhook Asaas] Evento ${event} incompatível com o status real ${realPayment.status} no Asaas.`);
-            return res.status(400).json({ success: false, error: "Status da cobrança não confirmado pela API." });
-          }
-        }
-      } catch (apiErr: any) {
-        console.error("[Webhook Asaas] Falha ao consultar API do Asaas:", apiErr);
-        if (!configuredToken) {
-          return res.status(500).json({ success: false, error: "Falha na verificação de autenticidade do pagamento." });
-        }
-      }
-    } else if (!configuredToken) {
-      // Se nem ASAAS_WEBHOOK_TOKEN nem ASAAS_API_KEY estão presentes, não há como garantir autenticidade
-      return res.status(401).json({ success: false, error: "Webhook rejeitado: ausência de credenciais de validação." });
+    // O estado atual da API é obrigatório, inclusive para eventos autenticados:
+    // um webhook legítimo pode chegar atrasado ou fora de ordem.
+    if (!process.env.ASAAS_API_KEY) {
+      return res.status(503).json({ success: false, error: "Verificação de pagamento indisponível." });
     }
-
-    // 3. Atualização Segura no Banco de Dados
+    if (typeof payment.id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(payment.id)) {
+      return res.status(400).json({ success: false, error: "ID de pagamento inválido." });
+    }
+    const handledStatuses: Record<string, string[]> = {
+      PAYMENT_RECEIVED: ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"],
+      PAYMENT_CONFIRMED: ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"],
+      PAYMENT_OVERDUE: ["OVERDUE"],
+      PAYMENT_REFUNDED: ["REFUNDED"],
+      PAYMENT_DELETED: ["DELETED"],
+    };
+    if (!Object.prototype.hasOwnProperty.call(handledStatuses, event)) {
+      return res.json({ received: true, ignored: "Evento não processado" });
+    }
+    let realPayment: any;
+    try {
+      const response = await fetch(`${getAsaasBaseUrl()}/payments/${encodeURIComponent(payment.id)}`, {
+        signal: AbortSignal.timeout(15000), headers: getAsaasHeaders()
+      });
+      if (!response.ok) {
+        return res.status(503).json({ success: false, error: "Não foi possível verificar a cobrança." });
+      }
+      realPayment = await response.json();
+    } catch (error) {
+      return res.status(503).json({ success: false, error: "Falha na verificação de pagamento." });
+    }
+    if (realPayment.id !== payment.id || realPayment.externalReference !== payment.externalReference) {
+      return res.status(400).json({ success: false, error: "Cobrança incompatível com o webhook." });
+    }
+    const currentStatus = realPayment.deleted ? "DELETED" : realPayment.status;
+    if (!handledStatuses[event].includes(currentStatus)) {
+      return res.json({ received: true, ignored: "Evento desatualizado" });
+    }
+    const reference = /^([a-zA-Z0-9_-]+)(\|PLUS)?$/.exec(realPayment.externalReference);
+    if (!reference) {
+      return res.status(400).json({ success: false, error: "Referência de usuário inválida." });
+    }
     const db = getAdminDb();
-    if (db) {
-      let userId = String(payment.externalReference).trim();
-      let isPlusUpgrade = false;
-
-      if (userId.includes("|PLUS")) {
-        userId = userId.split("|")[0];
-        isPlusUpgrade = true;
-      }
-
-      // Sanitização básica do UID do usuário
-      userId = userId.replace(/[^a-zA-Z0-9_-]/g, "");
-      if (!userId) {
-        return res.status(400).json({ success: false, error: "ID de usuário inválido." });
-      }
-
-      const userRef = db.collection("usuarios").doc(userId);
-
-      // Se pagou (Pix/Boleto) ou o cartão foi confirmado
-      if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
-        const now = new Date();
-        const nextMonth = new Date(now);
-        nextMonth.setMonth(now.getMonth() + 1);
-
-        const updateData: any = {
-          assinatura: "ATIVA",
-          subscriptionId: payment.subscription || "",
-          dataPagamento: now.toISOString(),
-          dataExpiracao: nextMonth.toISOString(),
-          ultimoAcesso: now.toISOString()
-        };
-
-        if (isPlusUpgrade) {
-          updateData.plano = "plus";
-          updateData.valorMensalidade = 20.00;
-        }
-
-        await userRef.set(updateData, { merge: true });
-        console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId} (Plus: ${isPlusUpgrade})`);
-      }
-      // Se a assinatura atrasou ou o pagamento foi estornado/recusado
-      else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
-        await userRef.set({
-          assinatura: "INATIVA",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-        console.log(`[Webhook Asaas] Assinatura INATIVADA para o user: ${userId}`);
-      }
+    if (!db) {
+      return res.status(503).json({ success: false, error: "Banco de dados indisponível." });
     }
+    const userRef = db.collection("usuarios").doc(reference[1]);
+    const paymentRef = userRef.collection("asaasPayments").doc(payment.id);
+    const isPaid = event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED";
+    const paidDate = new Date(realPayment.paymentDate || realPayment.confirmedDate || realPayment.clientPaymentDate || realPayment.dueDate);
+    if (isPaid && !Number.isFinite(paidDate.getTime())) {
+      return res.status(400).json({ success: false, error: "Data de pagamento inválida." });
+    }
+    // Transação garante aplicação única mesmo com entregas simultâneas ou após restart.
+    await db.runTransaction(async (transaction: any) => {
+      const [userSnap, processedSnap] = await Promise.all([
+        transaction.get(userRef), transaction.get(paymentRef)
+      ]);
+      const user = userSnap.data() || {};
+      const processed = processedSnap.data() || {};
+      if (isPaid) {
+        // CONFIRMED e RECEIVED da mesma cobrança concedem um único período.
+        if (processed.paidApplied || processed.revoked) return;
+        const previousDate = new Date(user.asaasPaymentDate || 0).getTime();
+        if (paidDate.getTime() >= previousDate) {
+          // Um mês calendário, limitado ao último dia do mês (31/jan -> 28/fev).
+          const expires = new Date(paidDate);
+          const day = expires.getUTCDate();
+          expires.setUTCDate(1);
+          expires.setUTCMonth(expires.getUTCMonth() + 1);
+          const lastDay = new Date(Date.UTC(expires.getUTCFullYear(), expires.getUTCMonth() + 1, 0)).getUTCDate();
+          expires.setUTCDate(Math.min(day, lastDay));
+          const existingExpiry = new Date(user.dataExpiracao || 0).getTime();
+          const isPlus = !!reference[2];
+          transaction.set(userRef, {
+            assinatura: "ATIVA",
+            subscriptionId: realPayment.subscription || "",
+            asaasPaymentId: payment.id,
+            asaasPaymentDate: paidDate.toISOString(),
+            dataPagamento: paidDate.toISOString(),
+            dataExpiracao: new Date(Math.max(expires.getTime(), Number.isFinite(existingExpiry) ? existingExpiry : 0)).toISOString(),
+            plano: isPlus ? "plus" : "standard",
+            ...(isPlus ? { valorMensalidade: 17.00, valor: "17,00" } : {}),
+            ultimoAcesso: new Date().toISOString()
+          }, { merge: true });
+        }
+        transaction.set(paymentRef, { paidApplied: true, status: currentStatus }, { merge: true });
+      } else {
+        // Uma cobrança antiga/outra assinatura não pode revogar o pagamento atual.
+        const sameSubscription = !!realPayment.subscription && realPayment.subscription === user.subscriptionId;
+        const expired = new Date(user.dataExpiracao || 0).getTime() <= Date.now();
+        const shouldRevoke = event === "PAYMENT_OVERDUE"
+          ? sameSubscription && expired
+          : user.asaasPaymentId === payment.id;
+        if (shouldRevoke) {
+          transaction.set(userRef, { assinatura: "INATIVA", updatedAt: new Date().toISOString() }, { merge: true });
+        }
+        // Impede que a confirmação atrasada de uma cobrança estornada a reative.
+        if (event !== "PAYMENT_OVERDUE") {
+          transaction.set(paymentRef, { revoked: true, status: currentStatus }, { merge: true });
+        }
+      }
+    });
 
     res.json({ received: true });
   } catch (err: any) {

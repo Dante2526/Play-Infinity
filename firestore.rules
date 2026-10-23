@@ -27,15 +27,18 @@ service cloud.firestore {
       let keysOk = request.resource.data.keys().hasOnly(allowedKeys);
       let assinaturaOk = !("assinatura" in request.resource.data) || request.resource.data.assinatura == "INATIVA";
       let tipoAcessoOk = !("tipoAcesso" in request.resource.data) || request.resource.data.tipoAcesso == "mensal";
-      return keysOk && assinaturaOk && tipoAcessoOk;
+      // O cadastro público só pode usar a tarifa padrão. Descontos são administrativos.
+      let priceOk = (!("valorMensalidade" in request.resource.data) || request.resource.data.valorMensalidade == 13)
+        && (!("valor" in request.resource.data) || request.resource.data.valor == "13,00");
+      return keysOk && assinaturaOk && tipoAcessoOk && priceOk;
     }
 
     function isSafeUpdate() {
       let allowedKeys = [
         "nome", "email", "photoURL", "senha", "senhaInicial",
         "historicoReproducao", "historicoRemovido", "episodiosAssistidos",
-        "favoritos", "createdAt", "updatedAt",
-        "assinatura", "subscription", "valorMensalidade", "valor", "ultimoAcesso", "lastActive"
+        "favoritos", "updatedAt",
+        "assinatura", "subscription", "ultimoAcesso", "lastActive"
       ];
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let hasOnlyAllowed = affectedKeys.hasOnly(allowedKeys);

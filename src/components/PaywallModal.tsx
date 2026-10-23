@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
 import { auth, db } from '../services/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { useSubscription, startTrial, TRIAL_DURATION_MS } from '../hooks/useSubscription';
 import { reportAppError } from './GlobalErrorModal';
 import { getFriendlyErrorMessage } from '../utils/errorTranslator';
@@ -66,26 +66,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         if (docSnap && docSnap.exists()) {
           const data = docSnap.data();
           const rawVal = data.valorMensalidade ?? data.valor ?? data.monthlyFee;
-          if (rawVal !== undefined && rawVal !== null && rawVal !== "") {
-            if (typeof rawVal === "number") {
-              setMonthlyFeeText(rawVal === 13 ? "13,00" : "9,90");
-            } else {
-              setMonthlyFeeText(String(rawVal).includes("13") ? "13,00" : "9,90");
-            }
-          } else {
-            // Cliente antigo sem valor explicitamente cadastrado:
-            const createdDate = data.criadoEm || data.createdAt;
-            const isLegacy = !createdDate || new Date(createdDate) < new Date("2026-09-19T00:00:00-03:00");
-            const assignedNum = isLegacy ? 9.90 : 13.00;
-            const assignedTxt = isLegacy ? "9,90" : "13,00";
-            setMonthlyFeeText(assignedTxt);
-
-            // Grava silenciosamente no Firestore para que fique registrado no cadastro dele
-            setDoc(doc(db, "usuarios", user.uid), {
-              valorMensalidade: assignedNum,
-              valor: assignedTxt
-            }, { merge: true }).catch(() => {});
-          }
+          const isLegacyFee = rawVal === 9.90 || rawVal === "9,90" || rawVal === "9.90";
+          setMonthlyFeeText(isLegacyFee ? "9,90" : "13,00");
         }
       }).catch((err) => {
         console.warn("[Paywall] Erro ao buscar valor do cliente:", err);
