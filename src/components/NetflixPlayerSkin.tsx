@@ -676,6 +676,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
       // Telemetria do NixPlay recebida no F12
       if (msgType === "NIXPLAY_TELEMETRY_EVENT") {
+        if (!iframeRef.current?.contentWindow || e.source !== iframeRef.current.contentWindow) return;
         if (e.data.event === "stall") {
           console.group(
             `%c[NixPlay Telemetria] ⚠️ ENGASGO/TRAVAMENTO DETECTADO (${e.data.reason})`,
@@ -709,7 +710,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               sendCommand({ type: "PLAY" });
             } else if (dur >= 8) {
               console.warn("%c[NetflixPlayerSkin] 🚨 Frame freeze irrecuperável (>8s). Disparando comutação de emergência...", "color:#ef4444;font-weight:bold;");
-              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable" }, "*");
+              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "frame_freeze_unrecoverable", playerFrameUrl: iframeRef.current?.src }, "*");
             }
           } else if (reasonStr.includes("waiting") || buf < 0.1) {
             // MixDrop owns a bounded rebuffer/reload sequence in its iframe.
@@ -724,7 +725,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
             if (isLongContinuousFreeze || isSevereRecurrentStall) {
               console.warn(`%c[NetflixPlayerSkin] 🚨 Servidor com buffer seco irrecuperável (${stalls} engasgos, travado: ${dur}s, buffer: ${buf}s). Comutando para servidor mais rápido...`, "color:#ef4444;font-weight:bold;");
-              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "buffer_depleted_frequent_stalls" }, "*");
+              window.postMessage({ type: "WATCHPLAY_ERROR", reason: "buffer_depleted_frequent_stalls", playerFrameUrl: iframeRef.current?.src }, "*");
             }
           }
         } else if (e.data.event === "recovered") {

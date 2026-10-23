@@ -11,6 +11,7 @@ app_root=$(cd "$app_root" && pwd -P)
 release="$app_root/releases/$release_id"
 exec 9>"$app_root/.deploy.lock"
 flock -x 9
+if [[ -L $app_root/node-runtime ]]; then export PATH="$(readlink -f "$app_root/node-runtime")/bin:$PATH"; fi
 [[ ! -e $release ]] || { echo 'Versão já existe; use um identificador novo.' >&2; exit 1; }
 mkdir "$release"
 probe_pid=''

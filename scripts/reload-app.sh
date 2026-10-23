@@ -6,6 +6,7 @@ if [[ ${PLAY_INFINITY_LOCK_HELD:-0} != 1 ]]; then
   exec 9>"$app_root/.deploy.lock"
   flock -x 9
 fi
+if [[ -L $app_root/node-runtime ]]; then export PATH="$(readlink -f "$app_root/node-runtime")/bin:$PATH"; fi
 cd "$app_root"
 processes=$(pm2 jlist)
 if printf '%s' "$processes" | node "$tools_dir/check-app-processes.cjs" '' --allow-absent; then

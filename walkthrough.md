@@ -1404,3 +1404,46 @@ Correção local, sem novo push ou reexecução do deploy. Node 20 da VPS ainda 
 ## 23/10/2026 - Autorização de envio e confirmação tardia do deploy anterior
 
 Usuário autorizou enviar a correção e resolver o deploy. Antes do envio, o health público respondeu HTTP 200/status ok/release 5fcf629c869ce05079a655f5506192d198af3fa6-39940339933-1. Isso confirma que o processo remoto anterior continuou depois da desconexão e ativou a versão nova, apesar da falha de transporte registrada no GitHub. Não foi repetida a manutenção: o próximo commit de keepalive não usa prefixo de migração e exige cluster saudável no preflight normal. Main remota permanece em 5fcf629, sem divergência.
+
+
+## 23/10/2026 - Correção SSH publicada e deploy confirmado
+
+Com autorização do usuário, commit 5224bed38ae9af123a68a637e6aab54ac27a5cd6 enviado à main. Execução https://github.com/Dante2526/Play-Infinity/actions/runs/39941765099 terminou SUCCESS em 11m46s; etapa da VPS terminou às 11:00:54 UTC. Tipos, testes funcionais, testes PM2 e build passaram. O log intermediário fornecido pelo usuário confirmou que a demora ainda era npm ci, antes da ativação; o novo deploy normal passou pela verificação de duas instâncias online cluster da versão esperada.
+
+Quatro consultas públicas consecutivas, com conexões separadas e sem cache solicitado, retornaram HTTP 200/status ok/release 5224bed38ae9af123a68a637e6aab54ac27a5cd6-39941765099-1. Correção de keepalive validada nesta execução sem a queda SSH anterior. Não há garantia contra futuras falhas reais de rede/VPS. Node da VPS não foi atualizado; o log ainda mostra Node20 com requisitos Node22+ das dependências, pendência operacional separada. Este registro final é local e não foi enviado em um novo push.
+
+
+## 23/10/2026 - Atualização Node 24 LTS preparada localmente
+
+Usuário concordou com atualizar o Node. Inspeção do PM2 confirmou que workers cluster usam o runtime do daemon; apenas configurar Node24 no runner ou interpreter não atualiza o daemon existente. Preparado modo explícito upgrade_node24 no workflow, também habilitável por prefixo autorizado [upgrade-node24], sem ativação automática em pushes comuns.
+
+- Artefato oficial Node24.22.1 x64/arm64, SHA-256 validado no runner e novamente na VPS. Instalação paralela em /opt/play-infinity/node; Node do sistema e daemon ubuntu/video-proxy preservados.
+- Pré-verificação exige pm2-root.service ativo com PID correspondente e exclusivamente duas instâncias saudáveis da aplicação. Prova do backend instalado, com suas dependências, sob Node24 em porta separada antes da parada.
+- Após prova, dump PM2 salvo; drop-in systemd persiste executável Node24 para reboot. Reinicia somente pm2-root.service. Verifica executável do daemon, Node dos workers, release e health. Falha restaura drop-in, seleção do runtime e dump anteriores e tenta recuperar serviço/health. Recuperação sem verificação não é declarada sucesso. Uma manutenção já aplicada e saudável não reinicia novamente.
+- Deploy/reload selecionam Node/npm pelo symlink node-runtime após adquirir a trava compartilhada. Workflow principal e .nvmrc adotam Node24. Android preparado como45/1.4.13 para eventual push que dispara AAB.
+- Quatro testes de manutenção com PM2 e HTTP reais, systemd simulado: sucesso e repetição idempotente; consentimento ausente/hash inválido/candidato inválido preservam daemon; falha de restart recupera serviço e aplicação; processo adicional no daemon bloqueia operação e permanece online. Versões oficiais Node20.20.2 e24.22.1 baixadas e verificadas por SHA-256; teste real de passagem20->24 e rollback24->20 passou, incluindo preservação de segredo e Node reportado pelos workers. Testes também passaram no runtime24 local.
+- Outros83 testes passaram (76 funcionais +7 PM2 de deploy), assim como TypeScript, YAML e sintaxe de todos os blocos Bash/scripts, e git diff --check. Total87 testes. Não houve alteração em código de players, catálogo ou provedores.
+
+Ainda local e sem manutenção/push novos. Aplicação atual na VPS permanece no runtime anterior até autorização de envio/execução. Requer nova autorização de push conforme AGENTS.md e ciência da breve interrupção ao trocar o daemon; não há promessa de manter conexões do app durante essa manutenção. Integração com systemd real e comportamento após reboot não foram testados na VPS.
+
+
+## 23/10/2026 - Reincidência StreamTape na passagem VisionQuest T1E3 para T1E4
+
+Usuário pediu revisar antes de enviar Node24. Log de produção mostra duas respostas500 em URLs do arquivo T1E3 Pv81X60kmYi0d1V, erro persistente código4 e retry pós-pausa, seguido de MixDrop T1E4. O log não prova que a URL do T1E4 estava errada; avisos de notificações/imagens/TMDB não explicam os500 do proxy.
+
+- Identificadas lacunas: transição de episódio/temporada não limpava hasPlayed/pausedAt/retry/forceRetry/seek inicial; o iframe anterior podia permanecer durante consultas assíncronas; validação de mensagens deixava passar origem confiável quando não havia iframe montado. Troca agora desmonta o frame, mostra loading, zera controles do vídeo anterior e mantém guard por epoch contra resultados atrasados. Próxima temporada automática reutiliza o mesmo fluxo.
+- StreamTape aguarda no máximo4s por lookup do episódio exato na abertura e troca, com refs atualizados antes do retorno do lookup. Passado o prazo, backend ainda recebe ID/temporada/episódio exatos. Não fica aguardando indefinidamente o catálogo.
+- Mensagens remotas exigem o frame atual, inclusive enquanto nenhum está montado. Eventos locais offline continuam aceitos; erros encaminhados pela NetflixPlayerSkin identificam a URL do frame e só são encaminhados a partir de telemetria do iframe atual, preservando watchdogs sem aceitar erro de outra sessão.
+- Proxy extraído para streamtapeMediaProxy: deixa de usar req.close como cancelamento de mídia em GET; usa req.aborted/res.close. Falhas de transporte, timeout de headers, CDN403/404/410/429/5xx e falso HTML/JSON200 ganham uma renovação/tentativa antes de enviar headers, com o mesmo Range. Headers limitados a6s por tentativa e corpo a15s de inatividade. Falha de conexão retorna502 em vez de500 genérico/200 vazio. Corpo interrompido encerra conexão, sem juntar bytes de tokens diferentes. Nginx recebe X-Accel-Buffering:no. URL inicial exige host de provedor permitido.
+- Oito regressões novas cobrem reset antes dos headers e Range/bytes exatos, GET normal sem cancelamento prematuro,503 e HTML200, timeout limitado com502, cancelamento real pelo cliente, host indevido, frame antigo na passagem3->4 e lookup sem resposta. Testes anteriores de recuperação e renovação de token mantidos.
+
+Validação concluída:84 testes funcionais passaram (15 de StreamTape), TypeScript obrigatório e build completo isolado passaram em /workspace/.onboarding/streamtape-transition-validation.35tsulv0. Somados aos7 testes de deploy e4 de Node da preparação anterior,95 testes do lote pendente passaram. git diff --check passou. Nenhum teste/processo ficou rodando.
+
+Consulta de produção somente de leitura, com amostras de1024bytes, em sequência3->4: episódio3 Pv81X60kmYi0d1V e episódio4 ywvXK627lzt19bQ retornaram206/video/mp4, com IDs distintos e corretos. Isso confirma disponibilidade nessas amostras; não reproduz sessão de navegador/Android nem comprova reprodução contínua. Não foi possível determinar a exceção interna dos500 históricos sem log da VPS.
+
+Correções somente locais. Nenhum push/deploy novo, Node24 ainda pendente; preparação anterior preservada. Não declarar que a falha histórica foi reproduzida em produção ou que o StreamTape nunca mais falhará.
+
+
+## 23/10/2026 - Envio autorizado de Node24 e correções StreamTape
+
+Usuário autorizou expressamente o envio do lote pendente. Main remota consultada:5224bed, sem divergência. Lote inclui manutenção Node24 explícita, correções da passagem de episódio e proxy StreamTape, validações e documentação, com Android45/1.4.13. Mensagem de commit terá prefixo [upgrade-node24] para habilitar a manutenção autorizada antes do deploy; não habilita migração fork. Resultado da execução e versão pública serão acompanhados após push; não se presume sucesso antes disso.

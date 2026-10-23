@@ -29,7 +29,7 @@ layout de releases também são preservados na primeira migração.
   faz parte do deploy. Se o cluster estiver degradado/em fork, o deploy falha antes
   da troca. A primeira instalação pode iniciar a aplicação quando ela não existe.
   A migração opcional de uma única instância fork está descrita abaixo.
-- O workflow usa Node 22 para compilar. A VPS também precisa de Node 22 ou superior
+- O workflow usa Node 24 LTS para compilar. A aplicação na VPS também adota Node 24
   (exigido por firebase-admin e outras dependências), npm, PM2, Bash,
   `flock`, GNU tar e GNU coreutils. Dependências são instaladas na versão nova;
   eventual falha preserva a aplicação em execução. O lockfile versionado permite
@@ -138,3 +138,36 @@ O mecanismo não altera a versão de Node da VPS. O requisito Node 22+ continua
 válido; Node 20 produz avisos de incompatibilidade das dependências. A migração
 só prossegue se a prova do bundle passar no runtime presente. Não execute essa
 manutenção sem uma janela autorizada para a primeira parada.
+
+## Atualizar o Node da aplicação para 24 LTS
+
+A opção manual `upgrade_node24`, ou um push autorizado com mensagem iniciada por
+`[upgrade-node24] `, executa uma manutenção antes do deploy. Ela pode interromper
+conexões do app: workers em cluster usam o runtime do daemon PM2; alterar apenas
+o Node do cliente PM2 ou o campo interpreter não muda esse runtime.
+
+O workflow baixa Node 24.22.1 do site oficial para a arquitetura x64/arm64 da VPS,
+valida o SHA-256 publicado e transfere o pacote. O script confere novamente o hash,
+instala em `/opt/play-infinity/node/v24.22.1` e testa o backend atualmente instalado,
+com suas dependências, em uma porta separada. Candidato inválido aborta antes da
+parada. A manutenção exige `pm2-root.service` ativo, correspondente ao daemon
+inspecionado, contendo exclusivamente as duas instâncias saudáveis da aplicação.
+
+Após a prova, salva o dump PM2 e configura um drop-in de systemd para iniciar o
+daemon root com o Node novo também após reboot. Reinicia somente esse serviço e
+confirma o executável do daemon, Node dos dois workers, release e healthcheck.
+O symlink `/home/ubuntu/play-infinity/node-runtime` passa a selecionar Node/npm 24
+para deploys e reloads futuros. Um runtime já ativo e saudável não é reiniciado
+novamente ao repetir a mesma manutenção. O deploy normal segue após essa etapa.
+
+O Node do sistema não é removido/substituído. Não há atualização ou reinício do
+daemon do usuário ubuntu nem do proxy de vídeo. `node -v` em uma sessão SSH comum
+pode continuar mostrando o Node do sistema: o runtime do aplicativo e dos deploys
+é explicitamente selecionado pelo symlink e pelo serviço root.
+
+Se a ativação falhar, restaura o drop-in, o symlink e o dump anteriores e tenta
+iniciar/verificar o serviço com o runtime antigo. Dump de recuperação fica em
+diretório privado e é removido ao terminar; não publique seu conteúdo, pois contém
+as credenciais normais do PM2. Recuperação sem healthcheck não é declarada sucesso.
+Os testes usam PM2/HTTP reais com systemd simulado; a integração com o serviço real
+e o reboot da VPS precisam de confirmação operacional. Não há reinício da VPS.

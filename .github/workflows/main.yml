@@ -7,6 +7,11 @@ on:
       - master
   workflow_dispatch:
     inputs:
+      upgrade_node24:
+        description: 'Manutenção: atualizar o Node do daemon da aplicação para 24 LTS (interrupção breve)'
+        required: false
+        default: false
+        type: boolean
       migrate_legacy_fork:
         description: 'Manutenção única: migrar uma instância fork para cluster (interrompe o app brevemente)'
         required: false
@@ -27,10 +32,10 @@ jobs:
       - name: 📥 Clonar Repositório
         uses: actions/checkout@v4
 
-      - name: ⚙️ Configurar Node.js 22
+      - name: ⚙️ Configurar Node.js 24 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: 'npm'
 
       - name: 📦 Instalar Dependências
@@ -45,6 +50,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/pm2-tests" --no-save --package-lock=false --no-audit --no-fund pm2@6.0.14
           PM2_BIN="$RUNNER_TEMP/pm2-tests/node_modules/.bin/pm2" node --test tests/deploy.test.cjs
+
+      - name: Validar manutenção do runtime Node
+        run: |
+          PM2_BIN="$RUNNER_TEMP/pm2-tests/node_modules/.bin/pm2" node --test tests/node-upgrade.test.cjs
 
       - name: 🔨 Compilar Aplicação (Vite Build)
         run: npm run build
@@ -68,6 +77,7 @@ jobs:
           # Explicit one-time maintenance, either manually selected or approved
           # as a commit bearing this prefix. Ordinary pushes never migrate fork.
           MIGRATE_LEGACY_FORK: ${{ (inputs.migrate_legacy_fork || startsWith(github.event.head_commit.message, '[migrate-legacy-fork] ')) && '1' || '0' }}
+          UPGRADE_NODE24: ${{ (inputs.upgrade_node24 || startsWith(github.event.head_commit.message, '[upgrade-node24] ')) && '1' || '0' }}
         run: |
           HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
           USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
@@ -76,6 +86,24 @@ jobs:
           SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=12 -o TCPKeepAlive=yes -i "$HOME/.ssh/oracle_key")
           
           RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [[ $UPGRADE_NODE24 == 1 ]]; then
+            ARCH=$(ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" uname -m)
+            case "$ARCH" in
+              x86_64) NODE_ARCH=x64 ;;
+              aarch64) NODE_ARCH=arm64 ;;
+              *) echo 'Arquitetura de VPS não suportada para Node 24.' >&2; exit 1 ;;
+            esac
+            NODE_VERSION=24.22.1
+            NODE_FILE="node-v${NODE_VERSION}-linux-${NODE_ARCH}.tar.xz"
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/${NODE_FILE}" -o "/tmp/${NODE_FILE}"
+            curl --fail --location --retry 3 "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" -o /tmp/node-shasums.txt
+            NODE_SHA=$(awk -v file="$NODE_FILE" '$2 == file {print $1}' /tmp/node-shasums.txt)
+            [[ $NODE_SHA =~ ^[a-f0-9]{64}$ ]]
+            printf '%s  %s\n' "$NODE_SHA" "/tmp/$NODE_FILE" | sha256sum -c -
+            scp "${SSH_OPTS[@]}" "/tmp/$NODE_FILE" "${USER}@${HOST}:/tmp/${NODE_FILE}"
+            scp "${SSH_OPTS[@]}" scripts/upgrade-node24.sh "${USER}@${HOST}:/tmp/play-infinity-node-${RELEASE_ID}.sh"
+            ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "sudo env PLAY_INFINITY_UPGRADE_NODE24=1 bash /tmp/play-infinity-node-${RELEASE_ID}.sh /tmp/${NODE_FILE} ${NODE_SHA} ${NODE_VERSION} /home/ubuntu/play-infinity"
+          fi
           scp "${SSH_OPTS[@]}" /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
           scp "${SSH_OPTS[@]}" scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
           if ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "sudo env PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"; then

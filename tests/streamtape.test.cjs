@@ -10,7 +10,7 @@ let api, server, base;
 before(async () => {
   const root = path.resolve(__dirname, '..');
   const result = await esbuild.build({
-    stdin: { contents: `export * from './server/routes/streamtapeRoutes'; export * from './server/services/streamtapeRecovery';`, resolveDir: root, loader: 'ts' },
+    stdin: { contents: `export * from './server/routes/streamtapeRoutes'; export * from './server/services/streamtapeRecovery'; export * from './server/services/streamtapeMediaProxy'; export * from './src/utils/playerFrameMessages';`, resolveDir: root, loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'catalog-fixture', setup(build) {
       build.onResolve({ filter: /encontreiLookup$/ }, args => ({ path: args.path, namespace: 'fixture' }));
@@ -22,7 +22,12 @@ before(async () => {
   compiled.filename = filename; compiled.paths = module.paths;
   compiled._compile(result.outputFiles[0].text, filename);
   api = compiled.exports;
-  const app = express(); app.use(api.streamtapeRouter);
+  const app = express();
+  app.get('/proxy-fixture', (req, res) => api.proxyStreamtapeMedia(req, res, {
+    url: String(req.query.url || 'https://video.tapecontent.net/old.mp4'), fileId: 'episode4',
+    timeoutMs: 60, refresh: async () => 'https://video.tapecontent.net/fresh.mp4',
+  }));
+  app.use(api.streamtapeRouter);
   server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -108,4 +113,98 @@ test('refresh endpoint bypasses an existing token and updates subsequent cached 
     const html = await (await nativeFetch(base + '/api/streamtape-proxy-iframe?fileId=fixture')).text();
     assert.match(html, /refresh=1/); assert.match(html, /recovery.setPaused\(true\)/);
   } finally { global.fetch = nativeFetch; }
+});
+
+test('proxy recovers a transport reset before headers with a fresh token and the same Range', async () => {
+  const requests = [];
+  global.fetch = async (url, options) => {
+    requests.push({ url: String(url), range: options.headers.Range });
+    if (requests.length === 1) throw new TypeError('fetch failed');
+    return new Response(Buffer.from([1, 2, 3, 4]), { status: 206, headers: {
+      'content-type': 'video/mp4', 'content-length': '4', 'content-range': 'bytes 100-103/1000', 'accept-ranges': 'bytes',
+    } });
+  };
+  try {
+    const r = await nativeFetch(base + '/proxy-fixture', { headers: { Range: 'bytes=100-103' } });
+    assert.equal(r.status, 206);
+    assert.equal(r.headers.get('content-range'), 'bytes 100-103/1000');
+    assert.equal(r.headers.get('x-accel-buffering'), 'no');
+    assert.deepEqual([...new Uint8Array(await r.arrayBuffer())], [1, 2, 3, 4]);
+    assert.deepEqual(requests.map(x => x.range), ['bytes=100-103', 'bytes=100-103']);
+    assert.match(requests[1].url, /fresh\.mp4$/);
+  } finally { global.fetch = nativeFetch; }
+});
+test('normal GET completion does not abort the active upstream media response', async () => {
+  let signal;
+  global.fetch = async (url, options) => {
+    signal = options.signal;
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(signal.aborted, false);
+    return new Response('video-bytes', { headers: { 'content-type': 'video/mp4' } });
+  };
+  try {
+    const r = await nativeFetch(base + '/proxy-fixture');
+    assert.equal(r.status, 200); assert.equal(await r.text(), 'video-bytes');
+  } finally { global.fetch = nativeFetch; }
+});
+test('proxy retries CDN 503 and false HTML success before exposing any media headers', async () => {
+  for (const status of [503, 200]) {
+    let count = 0;
+    global.fetch = async () => {
+      if (++count === 1) return new Response('<html>upstream error</html>', { status, headers: { 'content-type': 'text/html' } });
+      return new Response('mp4', { headers: { 'content-type': 'video/mp4' } });
+    };
+    try {
+      const r = await nativeFetch(base + '/proxy-fixture');
+      assert.equal(r.status, 200); assert.equal(await r.text(), 'mp4'); assert.equal(count, 2);
+    } finally { global.fetch = nativeFetch; }
+  }
+});
+test('header deadlines retry once and return 502 instead of empty successful video', async () => {
+  let count = 0;
+  global.fetch = (url, { signal }) => new Promise((resolve, reject) => {
+    count++;
+    signal.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')), { once: true });
+  });
+  try {
+    const r = await nativeFetch(base + '/proxy-fixture');
+    assert.equal(r.status, 502); await r.text(); assert.equal(count, 2);
+  } finally { global.fetch = nativeFetch; }
+});
+test('client cancellation stops the latest fetch without starting a renewal', async () => {
+  let aborted = false, started;
+  const ready = new Promise(r => { started = r; });
+  global.fetch = (url, { signal }) => new Promise((resolve, reject) => {
+    started();
+    signal.addEventListener('abort', () => { aborted = true; reject(new DOMException('Closed', 'AbortError')); }, { once: true });
+  });
+  try {
+    const controller = new AbortController();
+    const request = nativeFetch(base + '/proxy-fixture', { signal: controller.signal }).catch(() => {});
+    await ready; controller.abort(); await request;
+    await new Promise(r => setTimeout(r, 20));
+    assert.equal(aborted, true);
+  } finally { global.fetch = nativeFetch; }
+});
+test('media proxy rejects an unrelated host containing a provider name in the query', async () => {
+  let count = 0; global.fetch = async () => { count++; return new Response('bad'); };
+  try {
+    const r = await nativeFetch(base + '/proxy-fixture?url=' + encodeURIComponent('https://unrelated.invalid/?streamtape.com'));
+    assert.equal(r.status, 400); await r.text(); assert.equal(count, 0);
+  } finally { global.fetch = nativeFetch; }
+});
+test('episode 3 errors cannot control episode 4 while its frame is absent or after replacement', () => {
+  const ep3 = {}, ep4 = {}, appWindow = {};
+  assert.equal(api.isCurrentPlayerMessageSource(ep3, ep3, appWindow, false), true);
+  assert.equal(api.isCurrentPlayerMessageSource(ep3, null, appWindow, false), false);
+  assert.equal(api.isCurrentPlayerMessageSource(ep3, ep4, appWindow, false), false);
+  assert.equal(api.isCurrentPlayerMessageSource(ep4, ep4, appWindow, false), true);
+  assert.equal(api.isCurrentPlayerMessageSource(appWindow, null, appWindow, false), false);
+  assert.equal(api.isCurrentPlayerMessageSource(appWindow, null, appWindow, true), true);
+  assert.equal(api.isCurrentPlayerMessageSource(appWindow, ep4, appWindow, false, '/ep3', '/ep4'), false);
+  assert.equal(api.isCurrentPlayerMessageSource(appWindow, ep4, appWindow, false, '/ep4', '/ep4'), true);
+});
+test('slow episode lookup cannot hold the player indefinitely', async () => {
+  await api.waitForPlayerLookup(new Promise(() => {}), 15);
+  await api.waitForPlayerLookup(Promise.resolve('episode4'), 100);
 });

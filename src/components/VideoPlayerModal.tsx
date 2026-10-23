@@ -12,6 +12,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
+import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
   markEpisodeWatched,
@@ -326,6 +327,9 @@ export function VideoPlayerModal({
             );
           }
 
+          // Awaiting callers must see the exact episode IDs before React renders.
+          mixdropFileIdsRef.current = { ...mixdropFileIdsRef.current, [key]: result };
+          streamtapeFileIdsRef.current = { ...streamtapeFileIdsRef.current, [key]: stapeResult };
           setMixdropFileIds(prev => ({ ...prev, [key]: result }));
           setMixdropVizerFileIds(prev => ({ ...prev, [key]: vizerResult }));
           setMixdropEncontreiFileIds(prev => ({ ...prev, [key]: encontreiResult }));
@@ -1417,6 +1421,7 @@ export function VideoPlayerModal({
     if (!srv) return;
     transitionEpochRef.current = Date.now();
     setIsLoading(true);
+    setActiveIframeUrl(null); // Dispose previous frame before asynchronous lookup.
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
     setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape");
     healthPlaybackStartedRef.current = false;
@@ -1433,6 +1438,7 @@ export function VideoPlayerModal({
         ? buildMixdropStreamUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
+      if (serverKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(season, episode));
       newUrl = isSeries
         ? srv.buildUrl(resolvedId, season, episode)
         : srv.buildUrl(resolvedId);
@@ -1597,6 +1603,7 @@ export function VideoPlayerModal({
       setBlockedAdsCount(0);
       setError(null);
       setIsLoading(true);
+      setActiveIframeUrl(null);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       healthPlaybackStartedRef.current = false;
       playbackConfirmedRef.current = false; // Reset de reprodução real
@@ -1604,6 +1611,7 @@ export function VideoPlayerModal({
       // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
       mixdropAttemptRef.current = 1;
       retrySameServerRef.current = false;
+      forceRetrySameServerRef.current = false;
       hasPlayedRef.current = false;
       pausedAtRef.current = null;
       hasSeekedInitialTimeRef.current = false;
@@ -1703,6 +1711,7 @@ export function VideoPlayerModal({
         // Fallback imediato: MixDrop (priority 2).
         let targetServerKey = initialServerKey || prefServer || "srv_streamtape";
         let targetUrl: string;
+        if (targetServerKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(targetSeason, targetEpisode));
 
         if (!isSeries && isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetUrl = defaultUrl;
@@ -1802,7 +1811,8 @@ export function VideoPlayerModal({
   // Origens confiáveis para recepção de eventos do player
   const isTrustedPlayerEvent = (event: MessageEvent): boolean => {
     // 1. Só aceita mensagens vindas do iframe do player ou da própria janela da aplicação
-    if (iframeRef.current?.contentWindow && event.source !== iframeRef.current.contentWindow && event.source !== window) {
+    if (!isCurrentPlayerMessageSource(event.source, iframeRef.current?.contentWindow, window, isOfflineMediaRef.current,
+      event.data?.playerFrameUrl, iframeRef.current?.src)) {
       return false;
     }
     // 2. Valida origem da mensagem
@@ -1974,27 +1984,7 @@ export function VideoPlayerModal({
               const nextSeason = season + 1;
               console.log(`[Player Auto-Next] Temporada ${season} encerrada. Passando para Temp ${nextSeason} Ep 1...`);
 
-              if (resolvedId) markEpisodeWatched(resolvedId, season, episode, true);
-              try { iframeRef.current?.contentWindow?.postMessage({ type: "PAUSE" }, "*"); } catch (e) { console.warn("Silenced error:", e); }
-
-              serverSelectionEpochRef.current++;
-              transitionEpochRef.current = Date.now();
-              setSeason(nextSeason);
-              setEpisode(1);
-              lastKnownTimeRef.current = 0;
-              setIsIntroActive(false);
-              setPlayerSkinReady(false);
-              healthPlaybackStartedRef.current = false;
-              playbackConfirmedRef.current = false;
-              setIframeVisible(false);
-              fallbackAttemptsRef.current.clear();
-              mixdropAttemptRef.current = 1;
-
-              const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
-              const newUrl = activeServer.buildUrl(resolvedId, nextSeason, 1);
-              setUrlInput(newUrl);
-              setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
-              setExtractedSource(newUrl);
+              void handleSeasonChange(nextSeason);
             } else {
               console.log(`[Player Auto-Next] Fim da série alcançado.`);
             }
@@ -2274,7 +2264,15 @@ export function VideoPlayerModal({
 
     transitionEpochRef.current = Date.now();
     setEpisode(newEpisode);
+    setActiveIframeUrl(null);
+    setIsLoading(true);
+    setError(null);
     lastKnownTimeRef.current = 0;
+    hasPlayedRef.current = false;
+    pausedAtRef.current = null;
+    retrySameServerRef.current = false;
+    forceRetrySameServerRef.current = false;
+    hasSeekedInitialTimeRef.current = false;
     setIsIntroActive(false);
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     healthPlaybackStartedRef.current = false;
@@ -2287,6 +2285,7 @@ export function VideoPlayerModal({
     let fid: string | null = null;
     if (tmdbId) {
       if (selectedServerKey === "srv_mixdrop") fid = await lookupMixdropFileId(season, newEpisode);
+      else if (selectedServerKey === "srv_streamtape") await waitForPlayerLookup(lookupMixdropFileId(season, newEpisode));
       else void lookupMixdropFileId(season, newEpisode);
     }
 
@@ -2320,7 +2319,15 @@ export function VideoPlayerModal({
     transitionEpochRef.current = Date.now();
     setSeason(newSeason);
     setEpisode(1);
+    setActiveIframeUrl(null);
+    setIsLoading(true);
+    setError(null);
     lastKnownTimeRef.current = 0;
+    hasPlayedRef.current = false;
+    pausedAtRef.current = null;
+    retrySameServerRef.current = false;
+    forceRetrySameServerRef.current = false;
+    hasSeekedInitialTimeRef.current = false;
     setIsIntroActive(false);
     setPlayerSkinReady(false);
     healthPlaybackStartedRef.current = false;
@@ -2330,6 +2337,7 @@ export function VideoPlayerModal({
     mixdropAttemptRef.current = 1;
 
     const targetKey = selectedServerKey;
+    if (targetKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(newSeason, 1));
 
     const activeServer = servers.find(s => s.key === targetKey) || servers[0];
     let newUrl: string;
@@ -3002,7 +3010,7 @@ export function VideoPlayerModal({
             {/* NetflixPlayerSkin movido para o final (z-40) */}
 
             {/* Overlay Anti-Flash e Carregamento Contínuo: cobre a transição inteira até a mídia estar realmente pronta */}
-            {activeIframeUrl && (!playerSkinReady || isLoading) && (
+            {!error && (isLoading || (activeIframeUrl && !playerSkinReady)) && (
               <div
                 className="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center gap-3.5 pointer-events-none select-none"
                 style={{ transition: "opacity 0.3s ease" }}

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from "express";
-import { Readable } from "stream";
+import { proxyStreamtapeMedia } from "../services/streamtapeMediaProxy";
 import { createStreamtapeRecovery } from "../services/streamtapeRecovery";
 import fs from "fs";
 import path from "path";
@@ -210,88 +210,11 @@ streamtapeRouter.get("/api/streamtape-resolve", async (req: Request, res: Respon
  * Proxy resiliente de streaming para CDNs do StreamTape (suporte a Range HTTP 206 e Auto-Healer)
  */
 streamtapeRouter.get("/api/streamtape-stream", async (req: Request, res: Response) => {
-  try {
-    let videoUrl = String(req.query.url || "").trim();
-    const fileId = String(req.query.fileId || "").trim();
-    if (!videoUrl || (!videoUrl.includes("tapecontent.net") && !videoUrl.includes("streamtape"))) {
-      return res.status(400).send("URL de streaming inválida.");
-    }
-
-    const headers: Record<string, string> = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Accept-Encoding": "identity",
-      "Referer": "https://streamtape.com/",
-      "Origin": "https://streamtape.com",
-      "Connection": "keep-alive",
-    };
-
-    if (req.headers.range) {
-      headers["Range"] = req.headers.range as string;
-    }
-
-    let controller = new AbortController();
-    let timeoutId = setTimeout(() => controller.abort(), 15000);
-    req.on("close", () => controller.abort());
-
-    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-    clearTimeout(timeoutId);
-
-    // Auto-Healer 403 Forbidden / 404 / 410: se o token da CDN expirar (após pausa longa), renova em tempo real mantendo o Range
-    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
-      const targetFileId = fileId || directUrlToFileId.get(videoUrl) || "";
-      if (targetFileId) {
-        console.warn(`[StreamTape Proxy] Token CDN expirado (${upstream.status}) para fileId ${targetFileId}. Renovando token em tempo real...`);
-        streamtapeMemoryCache.delete(targetFileId);
-        try { await upstream.text(); } catch (_) {}
-
-        const freshDirectUrl = await resolveStreamTapeToken(targetFileId);
-        if (freshDirectUrl) {
-          videoUrl = freshDirectUrl;
-          controller = new AbortController();
-          timeoutId = setTimeout(() => controller.abort(), 15000);
-          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-          clearTimeout(timeoutId);
-        }
-      }
-    }
-
-    res.setHeader("Cache-Control", "no-store");
-    res.status(upstream.status);
-
-    // Repassa Content-Length, Content-Range e Accept-Ranges para conformidade RFC 9110 (Range 206)
-    for (const [key, value] of upstream.headers.entries()) {
-      const lk = key.toLowerCase();
-      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
-        res.setHeader(key, value);
-      }
-    }
-    res.setHeader("Access-Control-Allow-Origin", "*");
-
-    if (!upstream.body) return res.end();
-
-    const source = Readable.fromWeb(upstream.body as any);
-    let sourceFailed = false;
-    source.on("error", () => {
-      if (sourceFailed || res.writableEnded) return;
-      sourceFailed = true;
-      controller.abort();
-      if (upstream.status === 206) res.destroy();
-      else res.end();
-    });
-
-    source.pipe(res);
-    res.on("close", () => controller.abort());
-    res.on("error", () => controller.abort());
-  } catch (err: any) {
-    if (err?.name === "AbortError") {
-      if (!res.headersSent) res.end();
-      return;
-    }
-    console.error("[StreamTape Proxy Error]:", err?.message || err);
-    if (!res.headersSent) res.status(500).send("Erro no proxy de vídeo");
-    else res.destroy();
-  }
+  const url = String(req.query.url || "").trim();
+  const fileId = String(req.query.fileId || directUrlToFileId.get(url) || "").trim();
+  await proxyStreamtapeMedia(req, res, {
+    url, fileId, refresh: id => resolveStreamTapeToken(id, true),
+  });
 });
 
 /**
