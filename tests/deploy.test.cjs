@@ -32,13 +32,14 @@ async function health() {
   assert.equal(response.status, 200);
   return response.json();
 }
-async function archive(id, broken = false) {
+async function archive(id, broken = false, failMainHealth = false) {
   const source = path.join(temporary, `source-${id}`);
   await fs.mkdir(path.join(source, 'dist', 'assets'), { recursive: true });
   await fs.mkdir(path.join(source, 'data'));
   await fs.cp(path.join(root, 'scripts'), path.join(source, 'scripts'), { recursive: true });
   await fs.copyFile(path.join(root, 'ecosystem.config.cjs'), path.join(source, 'ecosystem.config.cjs'));
-  await fs.writeFile(path.join(source, 'dist', 'server.cjs'), broken ? 'process.exit(1)' : fixture);
+  await fs.writeFile(path.join(source, 'dist', 'server.cjs'), broken ? 'process.exit(1)' :
+    (failMainHealth ? `if (process.env.APP_PROBE !== '1') process.env.APP_RELEASE_ID = 'unexpected-version';\n` : '') + fixture);
   await fs.writeFile(path.join(source, 'dist', 'index.html'), `<div>${id}</div>`);
   await fs.writeFile(path.join(source, 'dist', 'assets', `${id}-hash.js`), `// ${id}`);
   await fs.writeFile(path.join(source, 'data', 'catalog.json'), `seed-${id}`);
@@ -52,12 +53,12 @@ async function archive(id, broken = false) {
   assert.equal(tar.code, 0, tar.stderr);
   return target;
 }
-async function deploy(id, broken = false) {
-  const tar = await archive(id, broken);
+async function deploy(id, broken = false, options = {}) {
+  const tar = await archive(id, broken, options.failMainHealth);
   // The workflow copies only this bootstrap into /tmp, not its sibling tools.
   const bootstrap = path.join(temporary, 'remote-deploy.sh');
   await fs.copyFile(path.join(root, 'scripts', 'deploy-release.sh'), bootstrap);
-  return run('bash', [bootstrap, tar, id, appRoot]);
+  return run('bash', [bootstrap, tar, id, appRoot], { env: options.env || env });
 }
 
 before(async () => {
@@ -94,7 +95,9 @@ before(async () => {
           else res.end(fs.readFileSync(asset));
         } else {
           res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({status:'ok',release:process.env.APP_RELEASE_ID}));
+          res.end(JSON.stringify({status:'ok',release:process.env.APP_RELEASE_ID,
+            legacySecretPreserved:process.env.PROXY_SECRET==='migration-fixture-secret',
+            legacySettingPreserved:process.env.LEGACY_ONLY==='fixture-only'}));
         }
       });
       configureServerLifecycle(server);
@@ -201,6 +204,8 @@ test('PM2 preflight reports count, modes and state without disclosing environmen
   const check = (apps, args = []) => spawnSync(process.execPath, [path.join(root, 'scripts', 'check-app-processes.cjs'), ...args], { input: JSON.stringify(apps), encoding: 'utf8' });
   assert.equal(check([processInfo(1), processInfo(2)]).status, 0);
   assert.equal(check([], ['', '--allow-absent']).status, 3);
+  assert.equal(check([processInfo(1, 'fork_mode')], ['', '--allow-legacy-fork']).status, 4);
+  assert.equal(check([processInfo(1, 'fork_mode', 'stopped')], ['', '--allow-legacy-fork']).status, 1);
   for (const apps of [[processInfo(1)], [processInfo(1, 'fork_mode'), processInfo(2)], [processInfo(1), processInfo(2, 'cluster_mode', 'stopped')]]) {
     const result = check(apps);
     assert.equal(result.status, 1);
@@ -211,4 +216,46 @@ test('PM2 preflight reports count, modes and state without disclosing environmen
   assert.equal(mismatch.status, 1); assert.match(mismatch.stderr, /expectedRelease":false/);
   const malformed = spawnSync(process.execPath, [path.join(root, 'scripts', 'check-app-processes.cjs')], { input: '{"PROXY_SECRET":"fixture-secret-do-not-log"', encoding: 'utf8' });
   assert.equal(malformed.status, 1); assert.doesNotMatch(malformed.stderr, /fixture-secret|PROXY_SECRET/);
+});
+
+test('legacy fork migration is explicit, preserves configuration/proxy, and recovers from failed activation', async () => {
+  await run(pm2, ['delete', 'play-infinity-app']);
+  await fs.unlink(path.join(appRoot, 'current'));
+  await fs.writeFile(path.join(appRoot, 'dist', 'server.cjs'), fixture);
+  const old = await run(pm2, ['start', path.join(appRoot, 'dist', 'server.cjs'), '--name', 'play-infinity-app', '--cwd', appRoot], {
+    env: { ...env, PORT: String(port), APP_RELEASE_ID: 'legacy-fork', PROXY_SECRET: 'migration-fixture-secret', LEGACY_ONLY: 'fixture-only' },
+  });
+  assert.equal(old.code, 0, old.stderr);
+  const sentinel = path.join(temporary, 'proxy-sentinel.cjs');
+  await fs.writeFile(sentinel, 'setInterval(() => {}, 1000);');
+  assert.equal((await run(pm2, ['start', sentinel, '--name', 'video-proxy'])).code, 0);
+  const original = JSON.parse((await run(pm2, ['jlist'])).stdout);
+  const oldPid = original.find(p => p.name === 'play-infinity-app').pid;
+  const proxyPid = original.find(p => p.name === 'video-proxy').pid;
+  const blocked = await deploy('fork-blocked');
+  assert.notEqual(blocked.code, 0);
+  assert.equal(JSON.parse((await run(pm2, ['jlist'])).stdout).find(p => p.name === 'play-infinity-app').pid, oldPid);
+  const migrationEnv = { ...env, PLAY_INFINITY_MIGRATE_LEGACY_FORK: '1' };
+  const invalid = await deploy('fork-invalid', true, { env: migrationEnv });
+  assert.notEqual(invalid.code, 0);
+  assert.equal(JSON.parse((await run(pm2, ['jlist'])).stdout).find(p => p.name === 'play-infinity-app').pid, oldPid);
+
+  const failed = await deploy('fork-bad-health', false, { env: migrationEnv, failMainHealth: true });
+  assert.notEqual(failed.code, 0, 'A failed new cluster must not report successful maintenance');
+  assert.match(failed.stderr, /instância legada restaurada/);
+  assert.equal((await health()).release, 'legacy-fork');
+  await assert.rejects(fs.stat(path.join(appRoot, 'current')), { code: 'ENOENT' });
+
+  const result = await deploy('fork-migrated', false, { env: migrationEnv });
+  assert.equal(result.code, 0, result.stdout + result.stderr);
+  assert.doesNotMatch(result.stdout + result.stderr, /migration-fixture-secret|fixture-only/);
+  const current = await health();
+  assert.equal(current.release, 'fork-migrated');
+  assert.equal(current.legacySecretPreserved, true);
+  assert.equal(current.legacySettingPreserved, true);
+  const listing = JSON.parse((await run(pm2, ['jlist'])).stdout);
+  const apps = listing.filter(p => p.name === 'play-infinity-app');
+  assert.equal(apps.length, 2);
+  assert.ok(apps.every(p => p.pm2_env.exec_mode === 'cluster_mode' && p.pm2_env.status === 'online'));
+  assert.equal(listing.find(p => p.name === 'video-proxy').pid, proxyPid);
 });

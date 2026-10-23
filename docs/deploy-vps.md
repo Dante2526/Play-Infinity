@@ -28,6 +28,7 @@ layout de releases também são preservados na primeira migração.
   processo entre usuários. O `video-proxy`, documentado no daemon de `ubuntu`, não
   faz parte do deploy. Se o cluster estiver degradado/em fork, o deploy falha antes
   da troca. A primeira instalação pode iniciar a aplicação quando ela não existe.
+  A migração opcional de uma única instância fork está descrita abaixo.
 - O workflow usa Node 22 para compilar. A VPS também precisa de Node 22 ou superior
   (exigido por firebase-admin e outras dependências), npm, PM2, Bash,
   `flock`, GNU tar e GNU coreutils. Dependências são instaladas na versão nova;
@@ -97,3 +98,35 @@ Uma instância parada, modo fork ou quantidade diferente de duas exige diagnóst
 da instalação existente. Não remova essa proteção nem execute restart/delete all
 como correção genérica. `sudo pm2 list` permite conferir a estrutura sem expor
 segredos; não cole a saída completa de `pm2 jlist`, que contém credenciais.
+
+## Migração única de uma instância fork
+
+Uma instalação legada com exatamente uma instância `play-infinity-app` online
+em `fork_mode` não pode fazer a primeira troca por rolling reload. É necessária
+uma manutenção com breve indisponibilidade; conexões existentes podem cair.
+Não confundir essa primeira migração com o deploy normal de um cluster saudável.
+
+A manutenção só é habilitada pela opção `migrate_legacy_fork` ao executar o workflow
+manualmente, ou por um commit autorizado cuja mensagem comece com
+`[migrate-legacy-fork] `. O prefixo torna a intenção explícita e permite executar a
+migração pelo push sem SSH manual. Pushs normais mantêm a proteção. Uma vez que
+existam duas instâncias saudáveis, até a reexecução desse commit usa reload normal.
+
+O pacote, dependências e bundle de produção são verificados na porta de prova
+antes da parada. Na ativação, a estrutura é consultada novamente e somente a
+instância fork da aplicação é removida. As variáveis da instância antiga são
+preservadas em memória e combinadas com a configuração da versão nova. O proxy
+de TV não é parado nem reiniciado.
+
+A migração exige duas instâncias online e um healthcheck da versão esperada antes
+de salvar o estado PM2. Se a ativação falhar, tenta remover somente as instâncias
+novas dessa versão, restaurar o symlink/configuração anterior e iniciar novamente
+a instância fork com o executável, diretório e variáveis anteriores. A recuperação
+também exige healthcheck; falha de recuperação é informada como necessidade de
+intervenção. Segredos não são escritos em arquivos temporários nem em logs; a
+persistência final continua sendo o dump padrão do PM2.
+
+O mecanismo não altera a versão de Node da VPS. O requisito Node 22+ continua
+válido; Node 20 produz avisos de incompatibilidade das dependências. A migração
+só prossegue se a prova do bundle passar no runtime presente. Não execute essa
+manutenção sem uma janela autorizada para a primeira parada.

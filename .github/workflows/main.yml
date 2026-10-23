@@ -6,6 +6,12 @@ on:
       - main
       - master
   workflow_dispatch:
+    inputs:
+      migrate_legacy_fork:
+        description: 'Manutenção única: migrar uma instância fork para cluster (interrompe o app brevemente)'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
   group: oracle-production
@@ -58,6 +64,10 @@ jobs:
           ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts || true
 
       - name: 🚀 Enviar Payload e Atualizar VPS
+        env:
+          # Explicit one-time maintenance, either manually selected or approved
+          # as a commit bearing this prefix. Ordinary pushes never migrate fork.
+          MIGRATE_LEGACY_FORK: ${{ (inputs.migrate_legacy_fork || startsWith(github.event.head_commit.message, '[migrate-legacy-fork] ')) && '1' || '0' }}
         run: |
           HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
           USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
@@ -66,4 +76,4 @@ jobs:
           RELEASE_ID="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           scp $SSH_OPTS /tmp/deploy-payload.tar.gz "${USER}@${HOST}:/tmp/play-infinity-${RELEASE_ID}.tar.gz"
           scp $SSH_OPTS scripts/deploy-release.sh "${USER}@${HOST}:/tmp/play-infinity-deploy-${RELEASE_ID}.sh"
-          ssh $SSH_OPTS "${USER}@${HOST}" "sudo bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"
+          ssh $SSH_OPTS "${USER}@${HOST}" "sudo env PLAY_INFINITY_MIGRATE_LEGACY_FORK=${MIGRATE_LEGACY_FORK} bash /tmp/play-infinity-deploy-${RELEASE_ID}.sh /tmp/play-infinity-${RELEASE_ID}.tar.gz ${RELEASE_ID} /home/ubuntu/play-infinity"

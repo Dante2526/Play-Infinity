@@ -16,6 +16,11 @@ process.stdin.on('end', () => {
     const expectedRelease = process.argv[2];
     const allowAbsent = process.argv.includes('--allow-absent');
     if (apps.length === 0 && allowAbsent) process.exit(3);
+    if (!expectedRelease && process.argv.includes('--allow-legacy-fork') &&
+        apps.length === 1 && apps[0].pm2_env?.exec_mode === 'fork_mode' && apps[0].pm2_env?.status === 'online') {
+      console.error('Instalação legada com uma instância fork: migração de manutenção solicitada.');
+      process.exit(4);
+    }
     if (apps.length !== 2 || apps.some(app =>
       app.pm2_env?.exec_mode !== 'cluster_mode' || app.pm2_env?.status !== 'online' ||
       (expectedRelease && app.pm2_env?.APP_RELEASE_ID !== expectedRelease))) {

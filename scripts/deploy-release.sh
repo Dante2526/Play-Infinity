@@ -15,7 +15,24 @@ flock -x 9
 mkdir "$release"
 probe_pid=''
 switched=0
-previous_release=$(readlink -f "$app_root/current" || true)
+previous_release=''
+if [[ -e $app_root/current || -L $app_root/current ]]; then previous_release=$(readlink -f "$app_root/current"); fi
+legacy_migration=0
+check_existing_cluster() {
+  local processes check_status
+  local migration_args=()
+  if [[ ${PLAY_INFINITY_MIGRATE_LEGACY_FORK:-0} == 1 ]]; then migration_args+=(--allow-legacy-fork); fi
+  processes=$(pm2 jlist)
+  legacy_migration=0
+  if printf '%s' "$processes" | node "$release/scripts/check-app-processes.cjs" '' --allow-absent "${migration_args[@]}"; then
+    return 0
+  else
+    check_status=$?
+    if [[ $check_status == 3 ]]; then return 0; fi
+    if [[ $check_status == 4 && ${PLAY_INFINITY_MIGRATE_LEGACY_FORK:-0} == 1 ]]; then legacy_migration=1; return 0; fi
+    return 1
+  fi
+}
 cleanup() {
   result=$?
   if [[ -n $probe_pid ]]; then
@@ -42,13 +59,7 @@ test -s "$release/ecosystem.config.cjs"
 # Validate the existing topology before the slow dependency install. This does
 # not depend on the candidate and must not waste minutes before reporting a
 # pre-existing fork/degraded cluster. Never restart or delete processes here.
-processes=$(pm2 jlist)
-if printf '%s' "$processes" | node "$release/scripts/check-app-processes.cjs" '' --allow-absent; then
-  :
-else
-  check_status=$?
-  [[ $check_status == 3 ]] || exit 1
-fi
+check_existing_cluster
 
 # Every release owns its dependencies; never mutate modules used by old workers.
 cd "$release"
@@ -101,22 +112,23 @@ wait "$probe_pid"
 probe_pid=''
 
 # Reject an incompatible/degraded existing PM2 cluster before switching current.
-processes=$(pm2 jlist)
-if printf '%s' "$processes" | node scripts/check-app-processes.cjs '' --allow-absent; then
-  :
-else
-  check_status=$?
-  [[ $check_status == 3 ]] || exit 1
-fi
+check_existing_cluster
 
 for tool in reload-app.sh check-app-processes.cjs verify-release.cjs; do
   cp "scripts/$tool" "$app_root/deploy-tools/$tool.tmp"
   mv -f "$app_root/deploy-tools/$tool.tmp" "$app_root/deploy-tools/$tool"
 done
+if (( legacy_migration == 1 )) && [[ -f $app_root/ecosystem.config.cjs ]]; then
+  cp -p "$app_root/ecosystem.config.cjs" "$release/previous-ecosystem.config.cjs"
+fi
 cp ecosystem.config.cjs "$app_root/ecosystem.config.cjs.tmp"
 mv -f "$app_root/ecosystem.config.cjs.tmp" "$app_root/ecosystem.config.cjs"
 ln -s "$release" "$app_root/.current-$release_id"
 mv -Tf "$app_root/.current-$release_id" "$app_root/current"
 switched=1
-PLAY_INFINITY_LOCK_HELD=1 bash "$app_root/deploy-tools/reload-app.sh" "$app_root"
+if (( legacy_migration == 1 )); then
+  node scripts/migrate-legacy-app.cjs "$app_root" "$previous_release"
+else
+  PLAY_INFINITY_LOCK_HELD=1 bash "$app_root/deploy-tools/reload-app.sh" "$app_root"
+fi
 echo "Deploy verificado: $release_id. Versões anteriores e conexões em drenagem preservadas."

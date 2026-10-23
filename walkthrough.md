@@ -1374,3 +1374,16 @@ Usuário forneceu log do GitHub: instalação na VPS demorou cinco minutos, em N
 - Android preparado como versionCode 42 / versionName 1.4.10 para eventual novo push, que dispara AAB. Documentação operacional atualizada.
 
 Correção preparada localmente; sem novo push, sem reconfiguração PM2/Node na VPS e sem afirmar que o deploy está corrigido por completo. Próxima execução autorizada exibirá o estado PM2 no próprio log do GitHub para permitir resolver a migração sem exigir que o usuário opere SSH.
+
+## 23/10/2026 - Migração inicial de fork para cluster preparada
+
+Screenshot da execução 39937768747 confirmou a causa: uma única instância play-infinity-app, id=0, fork_mode, online. A implantação foi recusada por incompatibilidade com o rolling reload; não se tratava de aguardar espectadores.
+
+- Criado modo de manutenção que aceita somente uma instância fork online, habilitado explicitamente por workflow_dispatch.migrate_legacy_fork ou por commit autorizado com prefixo [migrate-legacy-fork]. Pushs normais continuam exigindo cluster saudável; cluster degradado/parado permanece bloqueado.
+- O pacote e a prova de produção passam antes de parar a instância antiga. Na ativação, novo helper usa a API do PM2 instalado, preserva configurações/segredos do processo antigo em memória e substitui apenas a aplicação por duas instâncias cluster. Proxy de TV fica intacto. A flag de manutenção não é propagada como autorização permanente à aplicação.
+- Sucesso exige duas instâncias online com a versão esperada e healthcheck HTTP correspondente, seguido do dump normal do PM2. Em falha após a parada, tenta restaurar symlink/configuração e o executável/diretório/variáveis da instância fork, verificando também seu healthcheck. Falha de recuperação exige intervenção e não é declarada sucesso.
+- Corrigida a detecção de symlink current ausente na primeira migração, evitando guardar caminho de si próprio como versão anterior. Atualizadas instruções em docs/deploy-vps.md. Android preparado como 43 / 1.4.11 para eventual novo push.
+
+Validação concluída: sete testes PM2 reais passaram, cobrindo recusa padrão de fork, candidato inválido preservando o processo antigo, falha de health do cluster novo com recuperação da instância fork e migração posterior bem-sucedida preservando segredo/configuração e PID do proxy de TV. Os outros 76 testes passaram (83 no total), assim como TypeScript, sintaxe JS/Bash, YAML do workflow, git diff --check e build completo isolado (/workspace/.onboarding/legacy-migration-validation.v3t1odrg).
+
+Ainda local, aguardando autorização específica para novo push e manutenção inicial com interrupção. Nenhuma migração aplicada à VPS. O mecanismo não atualiza Node: requisito de Node 22+ permanece; a VPS relatada usa Node 20. O bundle precisa passar na prova local da VPS antes de qualquer parada.
