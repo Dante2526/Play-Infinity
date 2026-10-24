@@ -6,7 +6,7 @@ export function startupOrder(keys:string[],hints:Record<string,CatalogueHint>,pr
   const eligible=listed.length?listed:keys;
   const usable=eligible.some(k=>hints[k]?.audioPriority===0)?eligible.filter(k=>hints[k]?.audioPriority!==2):eligible;
   return [...usable].sort((a,b)=>{
-    const score=(k:string)=>(hints[k]?.audioPriority??1)*100+(k==='srv_byse'&&!hints[k]?.warm?10:0)+(k===preferred?0:1);
+    const score=(k:string)=>(hints[k]?.audioPriority??1)*100+(k===preferred?0:1);
     return score(a)-score(b);
   });
 }
@@ -19,8 +19,9 @@ export async function preparePlaybackStartup(input:StartupInput,signal:AbortSign
   try{const r=await fetcher(apiOrigin()+'/api/playback-candidates?'+params,{signal:meta.signal});const d=await r.json();if(r.ok&&d.identity===identity)hints=d.servers||{};}catch{}finally{clearTimeout(mt);signal.removeEventListener('abort',stop);}
   if(signal.aborted)throw new DOMException('Cancelled','AbortError');
   const candidates=startupOrder(input.keys,hints,input.preferred);
-  // Cold BYSE is eligible as a last resort, but never runs PoW in this probe.
-  const probeKeys=candidates.filter(k=>['srv_byse','srv_streamtape','srv_mixdrop','srv_watchplay','srv_vip','srv_nixplay'].includes(k)&&(k!=='srv_byse'||hints[k]?.warm)).slice(0,2);
+  const coldByseLead=candidates[0]==='srv_byse'&&Boolean(hints.srv_byse?.listed)&&!hints.srv_byse?.warm;
+  // Cold BYSE resolves directly inside its iframe (12s budget) without spawning a duplicate PoW in health probe.
+  const probeKeys=candidates.filter(k=>['srv_byse','srv_streamtape','srv_mixdrop','srv_watchplay','srv_vip','srv_nixplay'].includes(k)&&(k!=='srv_byse'||hints[k]?.warm)).slice(0,coldByseLead?1:2);
   const health:ServerHealthMap={};
   const ctrl=new AbortController();const abort=()=>ctrl.abort();signal.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,4500);
   const jobs=probeKeys.map(async key=>{
@@ -31,6 +32,9 @@ export async function preparePlaybackStartup(input:StartupInput,signal:AbortSign
   });
   const settled=Promise.allSettled(jobs).finally(()=>{clearTimeout(timer);signal.removeEventListener('abort',abort)});
   void settled;
+  if(coldByseLead){
+    return {selected:'srv_byse',candidates,hints,urls:{}};
+  }
   let selected:string|undefined;
   try{selected=await Promise.any(jobs);}catch{}
   if(signal.aborted)throw new DOMException('Cancelled','AbortError');
@@ -56,7 +60,8 @@ export function createStartupMediaClock() {
   }};
 }
 export function startupMediaLimit(key:string,hasAlternative:boolean,prepared:boolean) {
-  return key==='srv_byse'&&!hasAlternative&&!prepared?45000:8000;
+  if(key==='srv_byse'&&!prepared)return hasAlternative?12000:45000;
+  return 8000;
 }
 export function shouldReloadMixdropFrame(activeUrl:string|null|undefined,started:boolean) {
   if(!activeUrl||started)return false;

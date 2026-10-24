@@ -11,9 +11,9 @@ test('content exists on 3 and 4: skip 1 and 2, probe only listed and open fastes
  assert.equal(plan.selected,'srv_watchplay');assert.deepEqual(new Set(plan.candidates),new Set(['srv_mixdrop','srv_watchplay']));assert.equal(f.calls.length,3);assert.ok(f.calls.slice(1).every(x=>['srv_mixdrop','srv_watchplay'].includes(x.searchParams.get('servers'))));
  await new Promise(r=>setTimeout(r,40));assert.equal(results.at(-1).srv_mixdrop.state,'available');
 });
-test('cold BYSE does not spawn a PoW probe; warm BYSE stays preferred',async()=>{
+test('cold BYSE does not spawn a PoW probe; both cold and warm BYSE stay preferred #1',async()=>{
  const cold=fixture({srv_byse:hint(true,false),srv_streamtape:hint(true),srv_mixdrop:hint(true)},{});
- const p=await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},cold.fetch);assert.notEqual(p.selected,'srv_byse');assert.ok(!cold.calls.slice(1).some(x=>x.searchParams.get('servers')==='srv_byse'));
+ const p=await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},cold.fetch);assert.equal(p.selected,'srv_byse');assert.equal(p.candidates[0],'srv_byse');assert.ok(!cold.calls.slice(1).some(x=>x.searchParams.get('servers')==='srv_byse'));
  const warm=fixture({srv_byse:hint(true,true),srv_streamtape:hint(true)},{});assert.equal((await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},warm.fetch)).selected,'srv_byse');
 });
 test('empty stale catalogue remains eligible, failures are not proof of missing content',async()=>{
@@ -46,6 +46,6 @@ test('five seconds of discovery still leaves a full eight seconds after iframe a
 test('content-routed MixDrop is never reloaded by a late catalogue file ID',()=>{
  assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&t=4',false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&url=https%3A%2F%2Fmxdrop.top%2Fe%2Fmknjxedxixxo8l3',true),false);assert.equal(api.shouldReloadMixdropFrame(null,false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',false),true);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',true),false);
 });
-test('cold BYSE as final listed source can resolve before giving up, without slowing ready alternatives',()=>{
- assert.equal(api.startupMediaLimit('srv_byse',false,false),45000);assert.equal(api.startupMediaLimit('srv_byse',true,false),8000);assert.equal(api.startupMediaLimit('srv_byse',false,true),8000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),8000);
+test('cold BYSE gets 12s with alternatives and 45s as final listed source, without slowing ready alternatives',()=>{
+ assert.equal(api.startupMediaLimit('srv_byse',false,false),45000);assert.equal(api.startupMediaLimit('srv_byse',true,false),12000);assert.equal(api.startupMediaLimit('srv_byse',false,true),8000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),8000);
 });

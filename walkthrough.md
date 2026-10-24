@@ -1,3 +1,18 @@
+## 24/10/2026 - Priorização do BYSE como Titular #1 na Abertura com Janela de 12s para PoW
+
+**Contexto e Diagnóstico:**
+Na lógica inicial de seleção de servidores (`src/services/playbackStartup.ts`), quando o BYSE ainda não estava em cache quente (`warm: false`), ele recebia uma penalidade `+10` em `startupOrder` e era jogado para o último lugar, abrindo StreamTape ou MixDrop no 1º clique e impedindo que o cache do BYSE aquecesse.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/services/playbackStartup.ts`:**
+   - Removida a penalidade do BYSE frio em `startupOrder`, mantendo o **BYSE sempre em 1º lugar** quando listado na prioridade máxima de áudio (Dublado PT-BR).
+   - Em `preparePlaybackStartup`, quando o BYSE frio é o candidato titular (`coldByseLead`), o player seleciona `'srv_byse'` imediatamente (sem esperar probes de outros servidores antes de montar o iframe) e dispara a verificação do 2º servidor em background para fallback instantâneo se necessário.
+   - Em `startupMediaLimit`, ajustada a janela de resolução do BYSE frio de 8s para **12s (`12000ms`)** quando há servidor alternativo (e `45000ms` quando único).
+2. **`tests/playback-startup.test.cjs`:**
+   - Atualizados os testes automatizados validando a titularidade do BYSE frio/quente e o limite de 12s para resolução do PoW.
+
+---
+
 ## 24/10/2026 - Correção de Lentidão no Deploy Zero-Downtime (Destravamento de Workers e Assets Legados)
 
 **Contexto e Diagnóstico:**
