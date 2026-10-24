@@ -9,7 +9,7 @@ export function useSmartTV() {
     if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
     const ua = navigator.userAgent.toLowerCase();
     return (
-      /smarttv|tizen|webos|bravia|android tv|aftt|afts|aftm|aftb|vidaa|hisense|philips|panasonic|roku|crkey|googletv|appletv|boxee|kylo|netcast|viera|dtv/i.test(ua) ||
+      /smarttv|tizen|webos|bravia|android tv|aftt|afts|aftm|aftb|vidaa|hisense|philips|panasonic|roku|crkey|googletv|appletv|boxee|kylo|netcast|viera|dtv|tcl|browsehere/i.test(ua) ||
       navigator.platform.toLowerCase().includes('tv') ||
       (typeof screen !== 'undefined' && screen.width >= 1280 && screen.height >= 720 && !('ontouchstart' in window))
     );

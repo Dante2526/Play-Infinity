@@ -1018,7 +1018,20 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
     v.addEventListener("loadedmetadata", applySeek);
 
-    v.addEventListener("canplay", applySeek);
+    v.addEventListener("canplay", function() {
+      applySeek();
+      if (!desiredPaused && v.paused) {
+        var p = v.play();
+        if (p !== undefined) {
+          p.catch(function() {
+            v.muted = true;
+            v.play().then(function() {
+              try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+            }).catch(function() {});
+          });
+        }
+      }
+    });
 
     v.addEventListener("play", function() {
 
@@ -1146,7 +1159,22 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
         hls.loadSource(streamUrl);
 
-        hls.attachMedia(v);
+        hls.attachMedia(v);
+
+        hls.on(window.Hls.Events.MANIFEST_PARSED, function() {
+          applySeek();
+          if (!desiredPaused) {
+            var p = v.play();
+            if (p !== undefined) {
+              p.catch(function() {
+                v.muted = true;
+                v.play().then(function() {
+                  try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+                }).catch(function() {});
+              });
+            }
+          }
+        });
 
         hls.on(window.Hls.Events.ERROR, function(evt, data) {
 

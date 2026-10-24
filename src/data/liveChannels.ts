@@ -381,14 +381,19 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal focado no esporte olímpico e universitário brasileiro.',
     servers: [
       {
-        name: 'Servidor Oficial Direto',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
+        name: 'Servidor 1 (FHD)',
+        url: '/api/iptv/296484',
         isProxy: false
       },
       {
-        name: 'Servidor Proxy Play Infinity',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
-        isProxy: true
+        name: 'Servidor 2 (HD 720p)',
+        url: '/api/iptv/296485',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3 (PPV Backup)',
+        url: '/api/iptv/812',
+        isProxy: false
       }
     ]
   },

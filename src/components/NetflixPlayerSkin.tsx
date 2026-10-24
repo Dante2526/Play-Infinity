@@ -1304,11 +1304,39 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         return;
       }
 
-      switch (e.key.toLowerCase()) {
+      const keyLower = (e.key || "").toLowerCase();
+
+      switch (keyLower) {
         case " ":
         case "k":
+        case "mediaplaypause":
           e.preventDefault();
           handleTogglePlay();
+          break;
+        case "mediaplay":
+        case "play":
+          e.preventDefault();
+          if (playerStatus.paused) handleTogglePlay();
+          break;
+        case "mediapause":
+        case "pause":
+          e.preventDefault();
+          if (!playerStatus.paused) handleTogglePlay();
+          break;
+        case "enter":
+          // Tecla OK/Enter de controle remoto de TV: se não houver botão/input focado, aciona Play/Pause
+          if (!document.activeElement || document.activeElement.tagName !== "BUTTON") {
+            e.preventDefault();
+            handleTogglePlay();
+          }
+          break;
+        case "mediafastforward":
+          e.preventDefault();
+          handleSeekRelative(10);
+          break;
+        case "mediarewind":
+          e.preventDefault();
+          handleSeekRelative(-10);
           break;
         case "arrowleft":
           e.preventDefault();
@@ -1984,6 +2012,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               e.stopPropagation();
               handleTogglePlay();
             }}
+            data-tv-primary="true"
+            data-tv-focusable="true"
             className={`p-2 sm:p-4 text-white hover:scale-110 active:scale-95 transition-all cursor-pointer bg-transparent border-0 outline-none focus:outline-none focus:ring-0 shadow-none ${
               controlsVisible && !isLocked && !isEffectiveExternal ? "pointer-events-auto" : "pointer-events-none"
             }`}

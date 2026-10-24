@@ -1,4 +1,5 @@
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
+import { getLocalChannelSettings, mergeChannelsWithSettings } from './liveChannelService';
 import { resolveChannelLogo } from '../utils/channelLogos';
 
 const FAVORITES_KEY = 'play_infinity_live_favorites';
@@ -93,8 +94,12 @@ export function getAllChannels(): LiveChannel[] {
   const initialFiltered = INITIAL_LIVE_CHANNELS.filter(c => !customIds.has(c.id));
   const combined = [...validCustom, ...initialFiltered];
 
+  // Aplica bloqueios e servidores customizados configurados pelo admin no Firestore
+  const settings = getLocalChannelSettings();
+  const merged = mergeChannelsWithSettings(combined, settings, false);
+
   // Garante que todo canal tenha logo válido e sem links quebrados
-  return combined.map(channel => ({
+  return merged.map(channel => ({
     ...channel,
     logo: resolveChannelLogo(channel)
   }));

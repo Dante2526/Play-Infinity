@@ -1613,6 +1613,21 @@ export function VideoPlayerModal({
     return () => clearTimeout(timer);
   }, [activeIframeUrl, selectedServerKey, error, isAnimeMedia, handleSilentFallback]);
 
+  // Watchdog de segurança do Overlay de Carregamento e Iframe:
+  // Em Smart TVs (TCL, Samsung, LG) ou navegadores com política estrita de autoplay, o navegador
+  // bloqueia o início automático com som e mantém o vídeo pausado aguardando interação.
+  // Após 4.5 segundos com o iframe montado, garantimos que o overlay preto ("Carregando Vídeo...")
+  // saia e o iframe fique 100% visível, permitindo ao usuário iniciar via controle remoto.
+  useEffect(() => {
+    if (!activeIframeUrl || error) return;
+    const loadingSafetyTimer = setTimeout(() => {
+      setIsLoading(false);
+      setPlayerSkinReady(true);
+      setIframeVisible(true);
+    }, 4500);
+    return () => clearTimeout(loadingSafetyTimer);
+  }, [activeIframeUrl, error, selectedServerKey]);
+
   // Ao abrir o modal ou mudar mídia: prioriza o Player 1 (WatchPlayer) com skin Netflix
   useEffect(() => {
     if (isOpen) {
@@ -1640,7 +1655,7 @@ export function VideoPlayerModal({
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
       if (autoFullscreen) {
         setIsWidescreen(true);
-        const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
+        const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
         const elem = document.documentElement;
         const requestFS =
           elem.requestFullscreen ||
@@ -2604,7 +2619,7 @@ export function VideoPlayerModal({
       setIsWidescreen(true);
 
       // 1. Tenta tela cheia nativa do navegador IMEDIATAMENTE no clique síncrono com navigationUI: 'hide'
-      const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
+      const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
       const elem = document.documentElement;
       const requestFS =
         elem.requestFullscreen ||
@@ -2720,7 +2735,7 @@ export function VideoPlayerModal({
 
   if (!isOpen) return null;
 
-  const isSmartTV = typeof navigator !== 'undefined' && /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast/i.test(navigator.userAgent);
+  const isSmartTV = typeof navigator !== 'undefined' && /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
 
   return (
     <div
@@ -3129,14 +3144,17 @@ export function VideoPlayerModal({
                     const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse';
 
                     if (skinSupported) {
-                      // Mantém o isLoading = true (spinner girando na frente do player)
-                      // Libera apenas a skin por baixo
                       setTimeout(() => setPlayerSkinReady(true), 500);
+                      // Safety: se o player demorar para emitir confirmação de playback (ex: Smart TVs TCL),
+                      // libera o spinner em 4s e revela o iframe para permitir início manual
+                      setTimeout(() => {
+                        setIsLoading(false);
+                        setIframeVisible(true);
+                      }, 4000);
                     } else {
-                      // Para servidores sem integração de status (VidSrc, Consumet, External),
-                      // liberamos o spinner assim que o iframe carrega para não travar a tela.
                       setTimeout(() => setPlayerSkinReady(true), 500);
                       setIsLoading(false);
+                      setIframeVisible(true);
                     }
                   }}
                   onError={() => handleSilentFallback()}

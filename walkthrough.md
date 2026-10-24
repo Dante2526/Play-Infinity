@@ -1,3 +1,82 @@
+## 24/10/2026 - Correção de Reprodução e Loading Travado em Smart TVs (TCL / Android TV)
+
+**Contexto e Diagnóstico:**
+Um cliente reportou que ao abrir filmes no navegador de uma Smart TV TCL, o player permanecia eternamente na tela de carregamento ("Carregando Vídeo...") e não reproduzia.
+1. **Causa Raiz 1 (Loading Overlay Sem Timeout de Segurança):** O `VideoPlayerModal` mantinha `isLoading = true` e cobria 100% da tela com um overlay preto e spinner enquanto aguardava mensagens `postMessage` (`WATCHPLAY_STATUS`) com `currentTime > 0` ou `readyState >= 1`. Como navegadores de Smart TV (ex: BrowseHere, Android TV WebView) bloqueiam autoplay com som ou atrasam postMessages, o overlay nunca saía da tela.
+2. **Causa Raiz 2 (Iframe Invisível com Opacidade 0):** O iframe do vídeo ficava com `opacity: 0` até o vídeo começar a tocar sozinho (`currentTime > 0.1` ou `paused === false`). Com o vídeo pausado aguardando clique, o player permanecia invisível para sempre.
+3. **Causa Raiz 3 (Falta de MANIFEST_PARSED no BYSE):** No resolvedor do BYSE (`server/services/byse/core.ts`), `v.play()` era chamado de forma síncrona antes do manifesto HLS carregar, gerando rejeição imediata em navegadores de Smart TV.
+4. **Causa Raiz 4 (Controle Remoto da Smart TV):** As teclas `OK/Enter` e botões de mídia dos controles remotos de Smart TV não estavam mapeados para Play/Pause na skin.
+5. **Causa Raiz 5 (Detecção de Smart TV):** O regex de Smart TV não continha `TCL` nem o navegador padrão de TVs TCL (`BrowseHere`).
+
+**Modificações Realizadas (5 arquivos):**
+1. **`src/components/VideoPlayerModal.tsx`:**
+   - Adicionado **Watchdog de Segurança do Loading Overlay (4.5s)**: após 4.5 segundos, força `setIsLoading(false)`, `setPlayerSkinReady(true)` e `setIframeVisible(true)`, garantindo que o player e seus controles apareçam mesmo se o navegador da TV bloquear autoplay.
+   - Atualizado o evento `onLoad` do iframe com safety timer de 4.0s para dispensar o loading e revelar o player em qualquer Smart TV.
+   - Expandido o regex de Smart TV para incluir `TCL`, `BrowseHere`, `Android TV` e `GoogleTV`.
+2. **`server/services/byse/core.ts`:**
+   - Adicionado listener para `window.Hls.Events.MANIFEST_PARSED`: dispara `v.play()` assim que o stream HLS estiver carregado e pronto.
+   - Adicionado fallback automático para áudio mudo (`v.muted = true; v.play()`) se o navegador da TV bloquear autoplay com som, disparando `WATCHPLAY_AUTOPLAY_MUTED` para que a skin sugira 1 clique para ativar o som.
+   - Adicionado gatilho de playback no evento `canplay` caso a mídia necessite de buffer inicial.
+3. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Mapeadas as teclas do controle remoto da Smart TV no `handleKeyDown`: `Enter` (OK do controle), `MediaPlayPause`, `MediaPlay`, `MediaPause`, `MediaFastForward` (+10s) e `MediaRewind` (-10s).
+   - Adicionados atributos `data-tv-primary="true"` e `data-tv-focusable="true"` ao botão central de Play/Pause para receber foco instantâneo do controle remoto.
+4. **`src/hooks/useSmartTV.ts`:**
+   - Incluídos identificadores `tcl` e `browsehere` na detecção de Smart TV.
+5. **`tests/smarttv-player.test.cjs` (Novo):**
+   - 4 testes unitários automatizados validando a presença do watchdog de loading, eventos HLS no BYSE, suporte a teclas do controle remoto e detecção de TVs TCL.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes unitários: 100% de sucesso (76/76 testes aprovados).
+- Compilação de produção (`npm run build`): Vite transformou 2.200 módulos e gerou bundles de produção sem erros em 13s.
+
+---
+
+## 24/10/2026 - Módulo Administrativo de TV Ao Vivo: Monitoramento, Bloqueio/Ocultação e Substituição de Streams
+
+**Contexto e Motivação:**
+Após a recuperação manual do SporTV 3 e a auditoria completa dos 39 canais ao vivo, implementamos um gerenciador completo de TV Ao Vivo no Painel Administrativo (`/admin`):
+1. **Problema:** Quando um canal caía no provedor, o administrador não conseguia saber sem testar manualmente, nem ocultar o canal sem alterar o código, nem trocar o servidor sem novo deploy.
+2. **Solução:** Criado o módulo **"TV Ao Vivo"** no `/admin` com sincronização em nuvem via Firestore (`system_settings/live_channels`), permitindo ao administrador:
+   - Monitorar a saúde de todos os 39 canais com teste de sinal ao vivo.
+   - Ocultar/bloquear qualquer canal com 1 clique (fazendo-o sumir instantaneamente para todos os usuários no site e app nativo sem recarregar a página).
+   - Pesquisar na lista de 1.795 streams ao vivo do provedor Xtream e substituir ou adicionar servidores de backup com 1 clique.
+   - Reativado o canal **N Sports** com 3 novos servidores funcionais (`296484`, `296485`, `812`).
+
+**Modificações Realizadas (7 arquivos):**
+1. **`server/routes/iptv.ts`:**
+   - Adicionada rota `GET /api/admin/iptv-streams?q=...` com cache em memória (TTL: 10 min) para buscar canais na API do provedor Xtream Codes.
+   - Adicionada rota `GET /api/admin/probe-channel?url=...` para validação rápida de m3u8 em tempo real.
+2. **`src/services/liveChannelService.ts` (Novo):**
+   - Serviço de persistência no Firestore (`system_settings/live_channels`) com fallback no `localStorage` e escuta reativa `onSnapshot`.
+   - Funções de alternância de bloqueio (`toggleChannelBlock`) e salvamento de servidores customizados (`saveChannelCustomServers`).
+   - Algoritmo `mergeChannelsWithSettings` para filtrar canais ocultos e injetar servidores customizados.
+3. **`src/services/liveTvStorage.ts`:**
+   - `getAllChannels()` agora aplica `mergeChannelsWithSettings`, garantindo que canais ocultados pelo admin sumam do catálogo de todos os clientes.
+4. **`src/components/LiveTvPage.tsx`:**
+   - Adicionada assinatura em tempo real via `subscribeLiveChannelSettings`, atualizando a grade de TV instantaneamente quando o admin altera bloqueios.
+5. **`src/components/AdminLiveChannels.tsx` (Novo):**
+   - Interface completa Mobile-First com:
+     - 4 cards de métricas (Total Catálogo, Visíveis, Ocultados, Customizados).
+     - Barra de busca e filtros rápidos por categoria e status (Visíveis, Ocultados, Customizados).
+     - Botão "Testar Canais Visíveis" com indicador de progresso ao vivo.
+     - Botão "Ocultar do App" / "Reativar no App" em cada canal.
+     - Gaveta modal para pesquisar streams no provedor e gerenciar servidores (reordenar prioridades, testar e salvar).
+6. **`src/pages/AdminPage.tsx`:**
+   - Adicionada a aba **"TV Ao Vivo"** (ícone `Tv`) no grid de navegação superior do `/admin`.
+7. **`src/data/liveChannels.ts`:**
+   - N Sports reativado com 3 novos servidores funcionais.
+8. **`tests/live-channels.test.cjs` (Novo):**
+   - Testes unitários cobrindo o filtro de canais bloqueados e substituição de servidores.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 7/7 aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Vite transformou 2.200 módulos e esbuild gerou bundles sem erros em 23s.
+- Responsividade Mobile-First (360px a 430px) validada.
+
+---
+
 ## 24/10/2026 - Reativação do Canal SporTV 3 HD com 4 Servidores Redundantes
 
 **Contexto e Diagnóstico:**

@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
+import { subscribeLiveChannelSettings } from '../services/liveChannelService';
 import { ChannelLogo } from './ChannelLogo';
 import { 
   getAllChannels, 
@@ -131,6 +132,10 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
 
   useEffect(() => {
     refreshChannels();
+    const unsubscribe = subscribeLiveChannelSettings(() => {
+      refreshChannels();
+    });
+    return () => unsubscribe();
   }, []);
 
   const categories = [

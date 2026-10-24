@@ -61,6 +61,91 @@ router.get("/api/iptv/:channelId", async (req, res) => {
   }
 });
 
+// Cache em memória dos streams do provedor Xtream (TTL: 10 minutos)
+let cachedLiveStreams: { data: any[]; expires: number } | null = null;
+
+// GET /api/admin/iptv-streams -> Busca streams ao vivo no provedor para substituição
+router.get("/api/admin/iptv-streams", async (req, res) => {
+  try {
+    const q = String(req.query.q || "").trim().toLowerCase();
+
+    if (!cachedLiveStreams || cachedLiveStreams.expires < Date.now()) {
+      const user = process.env.XTREAM_USER || "351921603109";
+      const pass = process.env.XTREAM_PASS || "34939156";
+      const host = process.env.XTREAM_HOST || "http://up.kiwi";
+
+      const authUrl = `${host}/player_api.php?username=${user}&password=${pass}&action=get_live_streams`;
+      const response = await fetch(authUrl, { signal: AbortSignal.timeout(15000) });
+      const list = await response.json();
+
+      if (Array.isArray(list)) {
+        cachedLiveStreams = {
+          data: list.map((item: any) => ({
+            streamId: String(item.stream_id),
+            name: String(item.name || ""),
+            streamType: item.stream_type,
+            category: item.category_id,
+            streamIcon: item.stream_icon
+          })),
+          expires: Date.now() + 10 * 60 * 1000
+        };
+      }
+    }
+
+    const all = cachedLiveStreams?.data || [];
+    const filtered = q
+      ? all.filter(s => s.name.toLowerCase().includes(q)).slice(0, 50)
+      : all.slice(0, 50);
+
+    res.json({
+      success: true,
+      total: all.length,
+      count: filtered.length,
+      streams: filtered
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+// GET /api/admin/probe-channel -> Testa sinal HLS em tempo real
+router.get("/api/admin/probe-channel", async (req, res) => {
+  try {
+    const targetUrl = String(req.query.url || "").trim();
+    if (!targetUrl) {
+      return res.status(400).json({ success: false, error: "URL obrigatória" });
+    }
+
+    let urlToProbe = targetUrl;
+    if (targetUrl.startsWith("/api/iptv/")) {
+      const channelId = targetUrl.replace("/api/iptv/", "");
+      const base = await getFreshXtreamToken();
+      urlToProbe = `${base}/${channelId}.m3u8`;
+    }
+
+    const response = await fetch(urlToProbe, { signal: AbortSignal.timeout(6000) });
+    const isOk = response.status === 200;
+    let isHls = false;
+    if (isOk) {
+      const text = await response.text();
+      isHls = text.includes("#EXTM3U");
+    }
+
+    res.json({
+      success: true,
+      online: isOk && isHls,
+      statusCode: response.status
+    });
+  } catch (e: any) {
+    res.json({
+      success: true,
+      online: false,
+      statusCode: 0,
+      error: e.name === "TimeoutError" ? "Timeout" : e.message
+    });
+  }
+});
+
   router.post("/api/parse-m3u-playlist", async (req, res) => {
     try {
       let { url, content } = req.body || {};

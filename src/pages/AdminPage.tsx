@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
+import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
@@ -13,6 +13,7 @@ import { ServerBlocksAdmin } from "../components/ServerBlocksAdmin";
 import { AdminHealthMonitor } from "../components/AdminHealthMonitor";
 import { AdminBugReports } from "../components/AdminBugReports";
 import { AdminPushNotifications } from "../components/AdminPushNotifications";
+import { AdminLiveChannels } from "../components/AdminLiveChannels";
 import { EncontreiCookieAlert, EncontreiCookieBadge } from "../components/EncontreiCookieAlert";
 
 export interface ClientUser {
@@ -48,7 +49,7 @@ interface AdminPageProps {
 export function AdminPage({ onBack }: AdminPageProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(!!sessionStorage.getItem("adminSessionToken"));
-  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health" | "bugs" | "push">("users");
+  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health" | "bugs" | "push" | "channels">("users");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -966,7 +967,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         {adminSection !== "health" && <EncontreiCookieAlert />}
 
         {/* Navegação entre Abas do Painel */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-8 border-b border-white/10 pb-4 w-full">
           <button
             type="button"
             onClick={() => setAdminSection("users")}
@@ -1046,6 +1047,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </button>
           <button
             type="button"
+            onClick={() => setAdminSection("channels")}
+            className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer relative w-full ${
+              adminSection === "channels"
+                ? "bg-orange-600 text-white shadow-lg shadow-orange-600/30"
+                : "bg-white/5 hover:bg-white/10 text-white/60 hover:text-white"
+            }`}
+          >
+            <Tv className="w-4 h-4 text-orange-400 shrink-0" />
+            <span className="truncate">
+              TV Ao Vivo
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setAdminSection("push")}
             className={`flex items-center justify-center gap-1.5 sm:gap-2.5 px-2 sm:px-5 py-2.5 sm:py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all cursor-pointer relative w-full ${
               adminSection === "push"
@@ -1060,7 +1076,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
           </button>
         </div>
 
-        {adminSection === "health" ? (
+        {adminSection === "channels" ? (
+          <AdminLiveChannels />
+        ) : adminSection === "health" ? (
           <AdminHealthMonitor />
         ) : adminSection === "deploy" ? (
           <AdminDeployMonitor />
