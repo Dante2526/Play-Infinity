@@ -30,3 +30,7 @@ export function isExternalIframePlayer(activeIframeUrl: string, urlInput = ""): 
 
     return !isIntegrated;
 }
+
+export function preferredPlaybackServer(keys: string[], explicit?: string | null, saved?: string | null): string {
+  return [explicit,saved,'srv_byse',...keys].find(key=>!!key&&keys.includes(key)) || 'srv_byse';
+}

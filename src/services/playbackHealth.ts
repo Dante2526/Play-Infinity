@@ -1,4 +1,4 @@
-export type ServerHealth = { state: 'available' | 'unavailable' | 'unknown'; checkedAt: number; reason: string };
+export type ServerHealth = { state: 'available' | 'unavailable' | 'unknown'; checkedAt: number; reason: string; iframeUrl?:string };
 export type ServerHealthMap = Record<string, ServerHealth>;
 
 export function playbackHealthState(health: ServerHealthMap, key: string): ServerHealth['state'] {

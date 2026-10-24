@@ -159,3 +159,15 @@ test('a background health poll cannot skip StreamTape catalogue failover before 
 test('background health waits for MixDrop to exhaust its own two catalogue copies', () => {
   assert.equal(api.chooseHealthStartupServer([{ key: 'srv_mixdrop' }, { key: 'srv_vip' }], { srv_mixdrop: result('unknown'), srv_vip: result('available') }, 'srv_mixdrop', false, new Set()), undefined);
 });
+
+test('startup candidates expose exact identity and hints without returning file URLs',async()=>{
+ const r=await nativeFetch(base+'/api/playback-candidates?id=84958&type=tv&s=1&e=1');assert.equal(r.status,200);const d=await r.json();assert.equal(d.identity,'tv:84958:1:1');assert.ok(['srv_byse','srv_mixdrop','srv_streamtape'].every(k=>typeof d.servers[k].listed==='boolean'));assert.doesNotMatch(JSON.stringify(d),/ticket=|\.m3u8|fileIds/);
+ assert.equal((await nativeFetch(base+'/api/playback-candidates?id=84958&type=tv&s=0&e=1')).status,400);
+});
+test('cold BYSE startup health never calls its resolver or starts PoW',async()=>{
+ let calls=0;global.fetch=async()=>{calls++;throw Error('Must not resolve')};const r=await nativeFetch(base+'/api/playback-health?id=84958&type=tv&s=1&e=1&servers=srv_byse&startup=1');const d=await r.json();assert.equal(d.servers.srv_byse.state,'unknown');assert.equal(calls,0);
+});
+test('startup health caps requested providers at two',async()=>{
+ const calls=[];global.fetch=async raw=>{calls.push(String(raw));if(String(raw).includes('md-stream'))return Response.json({proxyUrl:'/api/md-proxy?url=fixture'});if(String(raw).includes('streamtape-resolve'))return Response.json({proxyUrl:'/api/streamtape-stream?url=fixture'});return new Response(mp4)};
+ const r=await nativeFetch(base+'/api/playback-health?id=999341&type=movie&servers=srv_mixdrop,srv_streamtape,srv_vip&startup=1');const d=await r.json();assert.deepEqual(Object.keys(d.servers),['srv_mixdrop','srv_streamtape']);assert.ok(!calls.some(x=>x.includes('myembed-stream')));
+});

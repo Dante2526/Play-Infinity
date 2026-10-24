@@ -1,3 +1,4 @@
+import { PageLoading, PlayerLoading, DialogLoading, lazyWithRetry } from "./components/LoadingStates";
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./utils/mediaUtils";
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
@@ -77,64 +78,11 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "@capacitor/status-bar";
 import { registerFcmToken, setupFcmTokenRefreshListener } from "./services/pushNotifications";
 
-function lazyWithRetry<T extends React.ComponentType<any>>(
-  componentImport: () => Promise<any>
-) {
-  return React.lazy(async () => {
-    try {
-      const module = await componentImport();
-      return { default: module.default || Object.values(module)[0] };
-    } catch (error: any) {
-      console.warn("[LazyRetry] Dynamic import failed, reloading page...", error);
-
-      // Verifica se é o erro de "Failed to fetch dynamically imported module"
-      // (acontece quando deploy novo muda hash dos assets mas o index.html antigo tá cacheado)
-      const isStaleModuleError =
-        error?.message?.includes("Failed to fetch dynamically imported module") ||
-        error?.message?.includes("Importing a module script failed") ||
-        error?.name === "TypeError";
-
-      // Flag pra evitar reload infinito
-      const reloadFlag = safeSessionStorage.getItem("lazy-reload");
-      if (!reloadFlag) {
-        safeSessionStorage.setItem("lazy-reload", "true");
-        // NOVO: força reload com cache-buster pra pegar index.html novo
-        // (sem isso, alguns browsers mobile reusam o index.html cacheado)
-        const url = new URL(window.location.href);
-        url.searchParams.set("nocache", String(Date.now()));
-        // Mantém hash e pathname, só adiciona ?nocache
-        const newHref = url.pathname + url.search + url.hash;
-        window.location.replace(newHref);
-        // Aguarda um tick antes de throw pro React não processar o erro
-        await new Promise(r => setTimeout(r, 100));
-      } else if (isStaleModuleError) {
-        // Já tentou reload mas ainda falhou — provavelmente o cache do service worker
-        // tá mandando o index.html antigo. Força limpeza via cache:reload
-        try {
-          if ('caches' in window) {
-            const keys = await caches.keys();
-            await Promise.all(keys.map(k => caches.delete(k)));
-            console.log("[LazyRetry] Caches do service worker limpos");
-          }
-          // Limpa flag pra próxima tentativa
-          safeSessionStorage.removeItem("lazy-reload");
-          // Recarrega de novo (agora sem cache)
-          const url = new URL(window.location.href);
-          url.searchParams.set("nocache", String(Date.now() + 1));
-          window.location.replace(url.pathname + url.search + url.hash);
-          await new Promise(r => setTimeout(r, 100));
-        } catch (e) {}
-      }
-      throw error;
-    }
-  });
-}
-
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
 const LiveTvPage = lazyWithRetry(() => import("./components/LiveTvPage"));
 const SagasPage = lazyWithRetry(() => import("./components/SagasPage"));
-const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal"));
+const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal"), {player:true});
 const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import { VirtualRemote } from "./components/VirtualRemote";
 import { BugFeedbackListener } from "./components/BugFeedbackListener";
@@ -187,7 +135,7 @@ const DownloadsPage = lazyWithRetry(() => import('./pages/DownloadsPage').then(m
 const GlobalCatalogPage = lazyWithRetry(() => import('./pages/GlobalCatalogPage').then(m => ({ default: m.GlobalCatalogPage })));
 const ProviderPage = lazyWithRetry(() => import('./pages/ProviderPage').then(m => ({ default: m.ProviderPage })));
 const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage').then(m => ({ default: m.default })));
-const VideoPlayerModal = lazyWithRetry(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })));
+const VideoPlayerModal = lazyWithRetry(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })), {player:true});
 import { NavItem } from './components/NavItem';
 import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
 import { WhatsNewModal } from './components/WhatsNewModal';
@@ -970,7 +918,7 @@ export default function App() {
       </div>
       )}
 
-      <React.Suspense fallback={<div className="flex-1 flex items-center justify-center min-h-[60vh] text-neutral-400"><Loader2 className="w-8 h-8 text-orange-500 animate-spin" /></div>}>
+      <React.Suspense fallback={<PageLoading view={viewState.type} />}>
         {viewState.type === 'details' && viewState.id ? (
         <DetailsPage 
           key={`details-${viewState.id}`}
@@ -1148,9 +1096,9 @@ export default function App() {
       )}
 
       {/* Modals Carregados Sob Demanda (Code Splitting) */}
-      <React.Suspense fallback={null}>
+      <>
         {playerModal.isOpen && (
-          <VideoPlayerModal
+          <React.Suspense fallback={<PlayerLoading title={playerModal.title} onClose={() => setPlayerModal(prev => ({...prev,isOpen:false}))} />}><VideoPlayerModal
             isOpen={playerModal.isOpen}
             onClose={() => setPlayerModal(prev => ({ ...prev, isOpen: false }))}
             title={playerModal.title}
@@ -1170,14 +1118,14 @@ export default function App() {
             posterUrl={playerModal.posterUrl}
             initialServerKey={playerModal.serverKey}
             onPlayMovie={openPlayer}
-          />
+          /></React.Suspense>
         )}
 
         {/* Player de TV ao vivo: montado na raiz do app (fora do switch de páginas) para que o
             canal continue tocando -- inclusive minimizado no mini player -- ao navegar entre páginas,
             do mesmo jeito que já acontece com o VideoPlayerModal de filmes/séries acima. */}
         {activeLiveChannel && (
-          <LivePlayerModal
+          <React.Suspense fallback={<PlayerLoading onClose={closeLiveChannel} />}><LivePlayerModal
             channel={activeLiveChannel}
             allChannels={liveChannelsList}
             onClose={closeLiveChannel}
@@ -1188,18 +1136,18 @@ export default function App() {
               setPendingLiveEditChannelId(ch.id);
               navigateTo({ type: 'live-tv' });
             }}
-          />
+          /></React.Suspense>
         )}
 
         {webhookModalOpen && (
-          <WebhookPanelModal
+          <React.Suspense fallback={<DialogLoading onClose={() => setWebhookModalOpen(false)} />}><WebhookPanelModal
             isOpen={webhookModalOpen}
             onClose={() => setWebhookModalOpen(false)}
             onPlayItem={(title, url) => openPlayer(title, url)}
-          />
+          /></React.Suspense>
         )}
 
-        <AnimatePresence mode="wait">
+        <React.Suspense fallback={<DialogLoading onClose={() => setNotificationModalOpen(false)} />}><AnimatePresence mode="wait">
           {notificationModalOpen && (
             <NotificationModal
               key="notification-modal"
@@ -1216,10 +1164,10 @@ export default function App() {
               }}
             />
           )}
-        </AnimatePresence>
+        </AnimatePresence></React.Suspense>
         
         <BugFeedbackListener />
-      </React.Suspense>
+      </>
 
       {/* CSS Utility for hiding scrollbar while keeping functionality */}
       <style>{`

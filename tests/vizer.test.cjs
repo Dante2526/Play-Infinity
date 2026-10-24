@@ -9,7 +9,7 @@ const listing = '<html><title>Vizer</title><a href="/series/online/example-dubla
 async function compile(route = false) {
   const root = path.resolve(__dirname, '..');
   const output = await esbuild.build({
-    stdin: { contents: `export * from './server/services/vizerDomains';${route ? "export {default as router} from './server/routes/encontreiLookup'; export {getVizerCatalogStatus,getStreamtapeSources,getMixdropSources,getByseSources} from './server/routes/encontreiLookup';" : ''}`, resolveDir: root, loader: 'ts' },
+    stdin: { contents: `export * from './server/services/vizerDomains';${route ? "export {default as router} from './server/routes/encontreiLookup'; export {getVizerCatalogStatus,getStreamtapeSources,getMixdropSources,getByseSources,getPlaybackCataloguePresence} from './server/routes/encontreiLookup';" : ''}`, resolveDir: root, loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'no-external-catalogue', setup(build) {
       build.onResolve({ filter: /^fs$|vidsrcRoutes$/ }, args => ({ path: args.path, namespace: 'fixture' }));
@@ -128,4 +128,19 @@ test('MixDrop selection reads both movie catalogues separately from StreamTape a
 test('BYSE catalogue discovery selects exact episodes from both sources without requiring another hoster',async()=>{
  global.__vizerCatalogueFixture={encontrei:{episodes:[{tmdb_id:999007,season:1,episode:4,audio:'Dublado',servers:{byse:'byse-enc-ep4'}}]},vizer:{episodes:[{tmdb_id:999007,season:1,episode:3,servers:{byse:'wrong-ep3'}},{tmdb_id:999007,season:1,episode:4,audio:'Legendado',servers:{byse:'byse-vizer-ep4'}}]}};
  api=await compile(true);const sources=await api.getByseSources(999007,1,4,'Example');assert.deepEqual(sources.map(x=>x.fileId),['byse-enc-ep4','byse-vizer-ep4']);assert.equal(sources[0].audio,'Dublado');
+});
+
+test('startup catalogue hints distinguish exact episodes without treating absent entries as proof',async()=>{
+ global.__vizerCatalogueFixture={encontrei:{episodes:[{tmdb_id:999009,season:1,episode:4,servers:{mixdrop:'md4'}}]},vizer:{episodes:[{tmdb_id:999009,season:1,episode:3,servers:{byse:'wrong3'}},{tmdb_id:999009,season:1,episode:4,servers:{streamtape:'st4'}}]}};
+ api=await compile(true);const p=api.getPlaybackCataloguePresence(999009,1,4);assert.equal(p.srv_byse.listed,false);assert.equal(p.srv_mixdrop.listed,true);assert.equal(p.srv_streamtape.listed,true);assert.equal(api.getPlaybackCataloguePresence(999009,1,99).srv_mixdrop.listed,false);
+});
+
+test('one live playerData response refreshes all startup hints and preserves audio per provider',async()=>{
+ const cookie=process.env.ENCONTREI_COOKIE;process.env.ENCONTREI_COOKIE='fixture-only';
+ try{
+  global.__vizerCatalogueFixture={encontrei:{movies:[{tmdb_id:999431,video_id:123,audio:'Dublado',servers:{}}]},vizer:{movies:[],episodes:[]}};
+  api=await compile(true);global.fetch=async()=>Response.json({servers_dub:'mixdrop=mdNew&streamtape=stNew',servers_leg:'byse=byseNew'});
+  await api.getByseSources(999431,undefined,undefined,'Example',true);const hints=api.getPlaybackCataloguePresence(999431);
+  assert.equal(hints.srv_mixdrop.listed,true);assert.equal(hints.srv_streamtape.listed,true);assert.equal(hints.srv_byse.listed,true);assert.equal(hints.srv_mixdrop.audioPriority,0);assert.equal(hints.srv_byse.audioPriority,2);
+ }finally{if(cookie===undefined)delete process.env.ENCONTREI_COOKIE;else process.env.ENCONTREI_COOKIE=cookie;}
 });

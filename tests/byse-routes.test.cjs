@@ -1,13 +1,13 @@
 const {test,before,after}=require('node:test');const assert=require('node:assert/strict');
 const path=require('node:path'),Module=require('node:module'),crypto=require('node:crypto');const esbuild=require('esbuild'),express=require('express');
-let api,server,base,mode='ok',calls=[];const nativeFetch=global.fetch;
+let resolveCalls=0;let ticketStore;let api,server,base,mode='ok',calls=[];const nativeFetch=global.fetch;
 before(async()=>{
  const root=path.resolve(__dirname,'..');const out=await esbuild.build({stdin:{contents:"export * from './server/routes/byseRoutes';export * from './server/services/byse/tickets';export {isServerBlacklisted} from './src/data/serverBlacklist';",loader:'ts',resolveDir:root},bundle:true,platform:'node',packages:'external',format:'cjs',write:false,plugins:[{name:'fixture',setup(b){b.onResolve({filter:/encontreiLookup$/},a=>({path:a.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const getByseSources=async()=>[];'}))}}]});
  const m=new Module(path.join(root,'tests/virtual-byse-routes.cjs'),module);m.filename=path.join(root,'tests/virtual-byse-routes.cjs');m.paths=module.paths;m._compile(out.outputFiles[0].text,m.filename);api=m.exports;
- const tickets=api.createByseTickets(crypto.randomBytes(32));const app=express();app.use(api.createByseRouter({
+ const tickets=api.createByseTickets(crypto.randomBytes(32));ticketStore=tickets;const app=express();app.use(api.createByseRouter({
   tickets:()=>tickets,
   sources:async(id,s,e)=>{calls.push({id,s,e});return [{fileId:'missing',source:'encontrei',audio:'Dublado'},{fileId:'working',source:'vizer',audio:'Dublado'}]},
-  resolve:async fileId=>{if(fileId==='missing')throw Error('removed');return{fileId,m3u8:'https://r66nv9ed.com/master.m3u8?token=secret',resolvedAt:Date.now(),expiresAt:Date.now()+1200000}},
+  resolve:async fileId=>{resolveCalls++;if(fileId==='missing')throw Error('removed');return{fileId,m3u8:'https://r66nv9ed.com/master.m3u8?token=secret',resolvedAt:Date.now(),expiresAt:Date.now()+1200000}},
   fetch:async(url,options)=>{
    calls.push({url,range:options.headers.Range});
    if(mode==='redirect')return new Response(null,{status:302,headers:{location:'https://unrelated.invalid/private'}});
@@ -64,4 +64,10 @@ test('one-hour pause renews once, restores saved position and respects pause dur
   await new Promise(r=>setImmediate(r));emit('loadedmetadata');
   assert.equal(v.currentTime,612);assert.equal(v.paused,pauseDuringRenewal);status();
  }
+});
+
+test('prepared source reuses authenticated ticket without starting resolver and binds episode identity',async()=>{
+ const ticket=ticketStore.seal('https://r66nv9ed.com/master.m3u8','working','tv:84958:1:4');
+ const before=resolveCalls;const ok=await nativeFetch(base+'/api/byse-proxy-iframe?id=84958&s=1&e=4&prepared='+ticket);assert.equal(resolveCalls,before);assert.equal(ok.status,200);assert.match(await ok.text(),/WATCHPLAY_STATUS/);
+ const wrong=await nativeFetch(base+'/api/byse-proxy-iframe?id=84958&s=1&e=3&prepared='+ticket);assert.equal(wrong.status,502);
 });

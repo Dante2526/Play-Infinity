@@ -6,7 +6,7 @@ import { solveBysePowAsync } from "./pow";
  *   1. GET  bysebuho.com/api/videos/{fileId}/embed/details  → embed_frame_url (n1mwq.org)
  *   2. POST n1mwq.org/api/videos/access/challenge            → challenge_id + nonce
  *   3. POST n1mwq.org/api/videos/access/attest               → token + device_id
- *      (ECDSA P-256 sobre o nonce UTF-8, assinatura r||s raw em base64url)
+ *      (ECDSA P-256 sobre o nonce UTF-8, assinatura DER em base64url; upstream também aceita r||s raw)
  *   4. POST n1mwq.org/api/videos/{code}/embed/captcha        → pow_nonce + difficulty (16)
  *   5. PoW: hash custom (porta fiel de pow-DEJGtdh2.js)
  *   6. POST .../embed/captcha/verify                          → clearance (X-Captcha-Token)
@@ -333,6 +333,12 @@ async function resolveByseStreamUncached(fileId: string): Promise<ByseResolved> 
   }
   return { fileId, m3u8: String(m3u8), resolvedAt: Date.now(), expiresAt: Date.now() + BYSE_CACHE_TTL };
 }
+
+// A startup probe must not create a new PoW job just to inspect availability.
+export function getWarmByseStream(fileId: string) {
+  const value=byseResolveCache.get(fileId);return value&&value.expiresAt>Date.now()+15000?value:null;
+}
+export function hasWarmByseStream(fileId:string){return !!getWarmByseStream(fileId);}
 
 export async function resolveByseStream(fileId: string, refresh = false): Promise<ByseResolved> {
   const cleanId = String(fileId || "").trim();

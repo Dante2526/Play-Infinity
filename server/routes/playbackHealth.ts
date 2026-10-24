@@ -1,12 +1,40 @@
+import { getByseTickets } from '../services/byse/tickets';
+import { getPlaybackCataloguePresence, getByseSources } from './encontreiLookup';
+import { hasWarmByseStream, getWarmByseStream } from '../services/byse/core';
 import { Router } from 'express';
 import { isServerBlacklisted } from '../../src/data/serverBlacklist';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
-const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay']);
+const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse']);
 const check = createPlaybackHealthCache();
 const router = Router();
 
-router.get('/api/playback-health', async (req, res) => {
+let activeDiscovery=0;
+const discovery=new Map<string,{expires:number,promise:Promise<any>}>();
+router.get('/api/playback-candidates',async(req,res)=>{
+  const id=Number(req.query.id),type=String(req.query.type),s=Number(req.query.s),e=Number(req.query.e);
+  if(!Number.isInteger(id)||id<1||!['movie','tv'].includes(type)||(type==='tv'&&(!Number.isInteger(s)||s<1||s>999||!Number.isInteger(e)||e<1||e>9999)))return res.status(400).json({error:'Invalid content'});
+  let hints=getPlaybackCataloguePresence(id,type==='tv'?s:undefined,type==='tv'?e:undefined);
+  const name=String(req.query.name||'').slice(0,160),key=`${type}:${id}:${s}:${e}`;
+  if(name&&(req.query.refresh==='1'||!Object.values(hints).some(v=>v.listed))){
+    const cached=discovery.get(key);let task=cached&&cached.expires>Date.now()?cached.promise:undefined;
+    if(!task&&discovery.size<500&&activeDiscovery<4){
+      activeDiscovery++;
+      task=getByseSources(id,type==='tv'?s:undefined,type==='tv'?e:undefined,name,true).catch(()=>[]).finally(()=>{activeDiscovery--});
+      discovery.set(key,{expires:Date.now()+30000,promise:task});
+    }
+    let timer:ReturnType<typeof setTimeout>|undefined;
+    try{const sources=await Promise.race([task||Promise.resolve([]),new Promise<any[]>(r=>{timer=setTimeout(()=>r([]),800)})]);
+      hints=getPlaybackCataloguePresence(id,type==='tv'?s:undefined,type==='tv'?e:undefined);
+      if(sources.length)hints.srv_byse={audioPriority:sources.some((v:any)=>/dublad|pt[-_ ]?br|nacional/i.test(v.audio||''))?0:1,listed:true,fileIds:sources.map((v:any)=>v.fileId)};
+    }finally{clearTimeout(timer);}
+    for(const [k,v] of discovery)if(v.expires<Date.now())discovery.delete(k);
+  }
+  res.setHeader('Cache-Control','no-store');
+  res.json({identity:`${type}:${id}:${type==='tv'?`${s}:${e}`:''}`,servers:Object.fromEntries(Object.entries(hints).map(([key,value])=>[key,{listed:value.listed,audioPriority:value.audioPriority,warm:key!=='srv_byse'||value.fileIds.some(hasWarmByseStream)}]))});
+});
+
+router.get('/api/playback-health' , async (req, res) => {
   const id = String(req.query.id || '');
   const type = String(req.query.type || '');
   const season = Number(req.query.s || 1), episode = Number(req.query.e || 1);
@@ -36,7 +64,19 @@ router.get('/api/playback-health', async (req, res) => {
     if (!allowedPaths.includes(parsed.pathname) || isServerBlacklisted(raw)) throw new Error('Unexpected media path');
     return origin + parsed.pathname + parsed.search;
   };
-  const entries = await Promise.all(requested.map(async key => [key, await check(identity + ':' + key, async signal => {
+  const selected = req.query.startup === '1' ? requested.slice(0,2) : requested.filter(key=>key!=='srv_byse');
+  const entries = await Promise.all(selected.map(async key => [key, await check(identity + ':' + key, async signal => {
+    if(key==='srv_byse') {
+      const hints=getPlaybackCataloguePresence(Number(id),type==='tv'?season:undefined,type==='tv'?episode:undefined);
+      if(!hints.srv_byse.fileIds.some(hasWarmByseStream))return {state:'unknown',reason:'cold_resolution'};
+      const cached=hints.srv_byse.fileIds.map(getWarmByseStream).find(Boolean);
+      if(!cached)return {state:'unknown',reason:'cold_resolution'};
+      const context=`${type}:${id}:${type==='tv'?`${season}:${episode}`:''}`;
+      const prepared=getByseTickets().seal(cached.m3u8,cached.fileId,context);
+      const result=await probeHealthMedia(origin+'/api/byse-stream?ticket='+encodeURIComponent(prepared),signal);
+      const iframeParams=new URLSearchParams({id,name,prepared});if(type==='tv'){iframeParams.set('s',String(season));iframeParams.set('e',String(episode));}
+      return {...result,...(result.state==='available'?{iframeUrl:'/api/byse-proxy-iframe?'+iframeParams}: {})};
+    }
     if (key === 'srv_mixdrop' || key === 'srv_streamtape') {
       let resolved;
       if (key === 'srv_streamtape') {

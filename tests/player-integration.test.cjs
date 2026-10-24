@@ -14,3 +14,11 @@ test('existing integrated players keep controls and external players retain pass
  assert.equal(isExternalIframePlayer('https://example.org/embed/1'),true);
  assert.equal(isExternalIframePlayer('/api/byse-proxy-iframe?id=1','https://upns.xyz/embed/1'),true);
 });
+
+test('BYSE is primary while explicit choices, saved preferences and admin exclusions are respected',()=>{
+ const choose=m.exports.preferredPlaybackServer;
+ assert.equal(choose(['srv_streamtape','srv_byse','srv_mixdrop']),'srv_byse');
+ assert.equal(choose(['srv_byse','srv_mixdrop'],null,'srv_mixdrop'),'srv_mixdrop');
+ assert.equal(choose(['srv_byse','srv_mixdrop'],'srv_byse','srv_mixdrop'),'srv_byse');
+ assert.equal(choose(['srv_streamtape','srv_mixdrop'],'blocked'),'srv_streamtape');
+});

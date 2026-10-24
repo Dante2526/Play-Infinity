@@ -1,3 +1,4 @@
+import { preparePlaybackStartup, startupAttemptTimeout, nextStartupKey } from "../services/playbackStartup";
 export const __NIXPLAY_TOTAL_EPISODES_VERSION__ = "2.1.0";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Hls from "hls.js";
@@ -12,7 +13,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
-import { isExternalIframePlayer } from "../utils/playerIntegration";
+import { isExternalIframePlayer, preferredPlaybackServer } from "../utils/playerIntegration";
 import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
@@ -28,7 +29,7 @@ import { sagas } from "../data/sagas";
 import { createMixdropSourceRouting } from "../services/mixdropSourceRouting";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
-import { fetchPlaybackHealth, rankPlaybackServers, chooseHealthStartupServer, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
+import { rankPlaybackServers, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
@@ -382,7 +383,10 @@ export function VideoPlayerModal({
   // definitiva do catálogo local; false => sondagem de rede, não ocultar eps do TMDB)
   const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = useState<EpisodeAvailabilityInfo | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
-  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_streamtape");
+  const startupExpandedRef=useRef(false);
+  const startupControllerRef=useRef<AbortController|null>(null);
+  const startupPlanRef=useRef<{identity:string;candidates:string[];deadline:number;urls:Record<string,string>}|null>(null);
+  const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_byse");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
   const toNativeBridgeUrl = (mp4Url: string) =>
@@ -1365,7 +1369,7 @@ export function VideoPlayerModal({
     }
 
 
-    list.splice(Math.min(2,list.length),0,{
+    list.unshift({
       key: 'srv_byse', label: 'BYSE HD', name: 'BYSE', badge: 'HLS • Player integrado',
       buildUrl: (id: string, s?: number, e?: number) => {
         const identity = new URLSearchParams({id:String(effectiveMovieId || tmdbId || id),name:title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim()||''});
@@ -1399,6 +1403,26 @@ export function VideoPlayerModal({
   const serversRef = useRef(servers);
   serversRef.current = servers;
 
+  const prepareStartup = async (targetSeason:number,targetEpisode:number,epoch:number,preferred?:string,keys?:string[],refresh=false):Promise<string|null|undefined> => {
+    startupControllerRef.current?.abort();const controller=new AbortController();startupControllerRef.current=controller;
+    const id=String(effectiveMovieId||tmdbId||resolvedId),type=isSeries?'tv':'movie';
+    const identity=`${type}:${id}:${type==='tv'?`${targetSeason}:${targetEpisode}`:''}`;
+    const deadline=Date.now()+8000;
+    const result=await preparePlaybackStartup({id,type,season:targetSeason,episode:targetEpisode,keys:keys||serversRef.current.map(s=>s.key),preferred,name:title,nixId:nixplaySeriesId?String(nixplaySeriesId):undefined,refresh},controller.signal,health=>{
+      if(epoch!==serverSelectionEpochRef.current||controller.signal.aborted)return;
+      healthRef.current={identity,servers:health};setServerHealth({identity,servers:health});
+      const plan=startupPlanRef.current;
+      if(plan?.identity===identity){const url=health.srv_byse?.iframeUrl;if(url?.startsWith('/api/byse-proxy-iframe?'))plan.urls.srv_byse=url;}
+    });
+    if(epoch!==serverSelectionEpochRef.current||controller.signal.aborted)return null;
+    if(!result.selected){
+      const remaining=(keys||serversRef.current.map(s=>s.key)).filter(key=>!result.candidates.includes(key));
+      if(!refresh&&remaining.length){startupExpandedRef.current=true;return prepareStartup(targetSeason,targetEpisode,epoch,undefined,remaining,true);}
+      setActiveIframeUrl(null);setIsLoading(false);setError('Nenhuma fonte respondeu disponível para este conteúdo. Tente novamente.');return null;
+    }
+    startupPlanRef.current={identity,candidates:result.candidates.slice(0,2),deadline,urls:result.urls};return result.selected;
+  };
+
   // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
   // se o MixDrop já estiver selecionado, recarrega o iframe com o fileId correto.
   // DEPS MÍNIMAS: só [mixdropFileId] — outras vars causam re-render em cascata e spam de console.
@@ -1426,8 +1450,11 @@ export function VideoPlayerModal({
   }, [mixdropFileId, season, episode]); // fileId + EP atual — closure sempre fresco
 
   // Handler para troca de servidor de forma transparente e silenciosa
-  const handleServerSwitch = useCallback(async (serverKey: string) => {
+  const handleServerSwitch = useCallback(async (serverKey: string, automatic=false) => {
     const selectionEpoch = ++serverSelectionEpochRef.current;
+    startupControllerRef.current?.abort();
+    if(!automatic)startupPlanRef.current=null;
+    if(startupPlanRef.current)startupPlanRef.current.deadline=Date.now()+8000;
     if (serverKey === 'srv_mixdrop') mixdropRoutingRef.current.reset(mixdropRoutingIdentity);
     hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
@@ -1458,6 +1485,7 @@ export function VideoPlayerModal({
         : srv.buildUrl(resolvedId);
     }
     if (selectionEpoch !== serverSelectionEpochRef.current) return;
+    if(automatic&&startupPlanRef.current?.urls[serverKey])newUrl=startupPlanRef.current.urls[serverKey]+'&t='+lastKnownTimeRef.current;
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -1474,6 +1502,27 @@ export function VideoPlayerModal({
   const pausedAtRef = useRef<number | null>(null);
 
   const handleSilentFallback = useCallback(async () => {
+    const plan=startupPlanRef.current;
+    if(plan&&plan.identity===healthIdentityRef.current&&!healthPlaybackStartedRef.current) {
+      if(fallbackAttemptsRef.current.has(selectedServerKey))return;
+      fallbackAttemptsRef.current.add(selectedServerKey);
+      const health=healthRef.current.identity===plan.identity?healthRef.current.servers:{};
+      const nextKey=nextStartupKey(plan.candidates.filter(key=>servers.some(s=>s.key===key)),fallbackAttemptsRef.current,health);
+      const next=servers.find(s=>s.key===nextKey);
+      if(next){void handleServerSwitch(next.key,true);return;}
+      if(!startupExpandedRef.current){
+        startupExpandedRef.current=true;
+        const remaining=servers.filter(s=>!fallbackAttemptsRef.current.has(s.key)).map(s=>s.key);
+        const epoch=serverSelectionEpochRef.current;
+        try{
+          const recovered=remaining.length?await prepareStartup(season,episode,epoch,undefined,remaining,true):null;
+          if(epoch!==serverSelectionEpochRef.current)return;
+          if(recovered){void handleServerSwitch(recovered,true);return;}
+        }catch{if(epoch!==serverSelectionEpochRef.current)return;}
+      }
+      setActiveIframeUrl(null);setIsLoading(false);setError('Não foi possível iniciar nas fontes disponíveis. Tente novamente.');return;
+    }
+
     // The iframe reports its actual selected file; do not infer it from the
     // catalogue's old preference after adaptive routing selected another copy.
     if (selectedServerKey === 'srv_mixdrop' && !forceRetrySameServerRef.current && (effectiveMovieId || tmdbId)) {
@@ -1524,49 +1573,8 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
-  const healthServerKeys = servers.map(server => server.key).join(',');
-  const healthSwitchRef = useRef(handleServerSwitch);
-  healthSwitchRef.current = handleServerSwitch;
-  const selectedHealthServerRef = useRef(selectedServerKey);
-  selectedHealthServerRef.current = selectedServerKey;
-  useEffect(() => {
-    if (!isOpen || !healthServerKeys || !healthContentId || /^(blob:|capacitor:|file:)|localhost\/_capacitor_file_/.test(defaultUrl || '')) return;
-    let cancelled = false;
-    let polling = false;
-    let controller: AbortController | undefined;
-    const identity = healthIdentity;
-    const poll = async () => {
-      if (document.hidden || polling) return;
-      polling = true;
-      controller = new AbortController();
-      const deadline = setTimeout(() => controller?.abort(), 6000);
-      try {
-        const result = await fetchPlaybackHealth({ id: healthContentId, type: isSeries ? 'tv' : 'movie', season, episode,
-          servers: healthServerKeys.split(','), name: title.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim(), nixId: nixplaySeriesId ? String(nixplaySeriesId) : undefined }, controller.signal);
-        if (cancelled || healthIdentityRef.current !== identity) return;
-        healthRef.current = { identity, servers: result };
-        setServerHealth({ identity, servers: result });
-        // Background health must never interrupt established playback.
-        if (healthPlaybackStartedRef.current) return;
-        const selected = selectedHealthServerRef.current;
-        if (playbackHealthState(result, selected) === 'available') return;
-        const next = chooseHealthStartupServer(serversRef.current, result, selected, healthPlaybackStartedRef.current, fallbackAttemptsRef.current);
-        if (next) {
-          fallbackAttemptsRef.current.add(selected);
-          healthSwitchRef.current(next.key);
-        } else if (playbackHealthState(result, selected) === 'unavailable') {
-          silentFallbackRef.current();
-        }
-      } catch { /* Failure to check is not proof that content is missing. */ }
-      finally { clearTimeout(deadline); polling = false; }
-    };
-    const onVisible = () => { if (!document.hidden) void poll(); };
-    document.addEventListener("visibilitychange", onVisible);
-    void poll();
-    const interval = setInterval(() => void poll(), 45000);
-    return () => { cancelled = true; clearInterval(interval); document.removeEventListener("visibilitychange", onVisible); controller?.abort(); };
-  }, [isOpen, healthIdentity, healthServerKeys, nixplaySeriesId]);
-
+  // Availability is checked on open/episode change, never by a heavy polling loop
+  // while another player is already healthy.
   const mixdropRecoveryRef = useRef(async () => { });
   mixdropRecoveryRef.current = async () => {
     console.warn("[VideoPlayerModal] MixDrop deletado detectado. Puxando novo link ao vivo do scraper...");
@@ -1589,9 +1597,12 @@ export function VideoPlayerModal({
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
     // Allow bounded source selection, token renewal and one alternate file.
-    const timeoutDuration = selectedServerKey === "srv_byse" ? 95000 : selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
+    const providerTimeout = selectedServerKey === "srv_byse" ? 95000 : selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
+    const plan=startupPlanRef.current;
+    const timeoutDuration=plan&&plan.identity===healthIdentityRef.current&&!healthPlaybackStartedRef.current
+      ? startupAttemptTimeout(plan.deadline,providerTimeout):providerTimeout;
     const timer = setTimeout(() => {
-      if (!playbackConfirmedRef.current && !error) {
+      if (!(plan?healthPlaybackStartedRef.current:playbackConfirmedRef.current) && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
         handleSilentFallback();
       }
@@ -1713,17 +1724,18 @@ export function VideoPlayerModal({
           } catch (e) { }
         }
 
-        // Default: StreamTape (priority 1 — MP4 direto de alta velocidade).
-        // Fallback imediato: MixDrop (priority 2).
-        let targetServerKey = initialServerKey || prefServer || "srv_streamtape";
+        // BYSE is the default; an explicit or saved choice still takes priority.
+        let targetServerKey = preferredPlaybackServer(serversRef.current.map(s=>s.key),initialServerKey,prefServer);
+        try {const chosen=await prepareStartup(targetSeason,targetEpisode,initialSelectionEpoch,targetServerKey);if(!chosen)return;targetServerKey=chosen;}catch{if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;}
+        if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;
         let targetUrl: string;
-        if (targetServerKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(targetSeason, targetEpisode));
+        if (!startupPlanRef.current && targetServerKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(targetSeason, targetEpisode));
 
         if (!isSeries && isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
-          targetUrl = defaultUrl;
+          targetServerKey = "srv_mixdrop"; targetUrl = defaultUrl;
         } else {
           let resolvedTargetUrl = "";
-          if (targetServerKey === "srv_mixdrop") {
+          if (targetServerKey === "srv_mixdrop" && !startupPlanRef.current) {
             const fid = await lookupMixdropFileId(targetSeason, targetEpisode);
             if (fid) {
               resolvedTargetUrl = buildBalancedMixdropUrl(fid, targetSeason, targetEpisode) || "";
@@ -1771,6 +1783,7 @@ export function VideoPlayerModal({
           }
         }
 
+        if(startupPlanRef.current?.urls[targetServerKey])targetUrl=startupPlanRef.current.urls[targetServerKey]+'&t='+lastKnownTimeRef.current;
         if (targetServerKey === 'srv_mixdrop' && (effectiveMovieId || tmdbId)) targetUrl = buildBalancedMixdropUrl(undefined, targetSeason, targetEpisode) || targetUrl;
         if (initialSelectionEpoch !== serverSelectionEpochRef.current) return;
         setSelectedServerKey(targetServerKey);
@@ -1784,8 +1797,9 @@ export function VideoPlayerModal({
       setActiveIframeUrl(null);
       setError(null);
       fallbackAttemptsRef.current.clear();
+    startupExpandedRef.current=false;
     }
-    return () => { serverSelectionEpochRef.current++; };
+    return () => { serverSelectionEpochRef.current++; startupControllerRef.current?.abort(); startupPlanRef.current=null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, defaultUrl, isSeries, resolvedId, initialSeason, initialEpisode, imdbId]);
 
@@ -1939,7 +1953,7 @@ export function VideoPlayerModal({
             setIsLoading(false);
             retrySameServerRef.current = false;
             const wasFallback = fallbackAttemptsRef.current.size > 0;
-            fallbackAttemptsRef.current.clear();
+            if(!startupPlanRef.current||healthPlaybackStartedRef.current)fallbackAttemptsRef.current.clear();
 
             if (isSeries && tmdbId && !wasFallback) {
               try {
@@ -2201,6 +2215,7 @@ export function VideoPlayerModal({
       if (error) {
         console.log("[VideoPlayerModal] Conexão restaurada. Tentando reconectar servidor automaticamente...");
         fallbackAttemptsRef.current.clear();
+    startupExpandedRef.current=false;
         setError(null);
         setIsLoading(true);
         const srv = servers[0];
@@ -2298,18 +2313,22 @@ export function VideoPlayerModal({
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
+    startupExpandedRef.current=false;
 
+    let targetKey=selectedServerKey;
+    try{const chosen=await prepareStartup(season,newEpisode,selectionEpoch,selectedServerKey);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
+    if(selectionEpoch!==serverSelectionEpochRef.current)return;setSelectedServerKey(targetKey);
     // Resolve o fileId do novo episódio para alimentar o cache de todos os servidores
     let fid: string | null = null;
-    if (tmdbId) {
-      if (selectedServerKey === "srv_mixdrop") fid = await lookupMixdropFileId(season, newEpisode);
-      else if (selectedServerKey === "srv_streamtape") await waitForPlayerLookup(lookupMixdropFileId(season, newEpisode));
+    if (tmdbId && !startupPlanRef.current) {
+      if (targetKey === "srv_mixdrop") fid = await lookupMixdropFileId(season, newEpisode);
+      else if (targetKey === "srv_streamtape") await waitForPlayerLookup(lookupMixdropFileId(season, newEpisode));
       else void lookupMixdropFileId(season, newEpisode);
     }
 
-    const activeServer = servers.find(s => s.key === selectedServerKey) || servers[0];
+    const activeServer = servers.find(s => s.key === targetKey) || servers[0];
     let newUrl: string;
-    if (selectedServerKey === "srv_mixdrop" && tmdbId) {
+    if (targetKey === "srv_mixdrop" && tmdbId) {
       const targetFid = fid || mixdropFileIdsRef.current[`tv:${tmdbId}:${season}:${newEpisode}`];
       newUrl = targetFid
         ? buildBalancedMixdropUrl(targetFid, season, newEpisode) || buildMixdropFallbackUrl()
@@ -2318,6 +2337,7 @@ export function VideoPlayerModal({
       newUrl = activeServer.buildUrl(resolvedId, season, newEpisode);
     }
     if (selectionEpoch !== serverSelectionEpochRef.current) return;
+    if(startupPlanRef.current?.urls[targetKey])newUrl=startupPlanRef.current.urls[targetKey];
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -2352,13 +2372,16 @@ export function VideoPlayerModal({
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
+    startupExpandedRef.current=false;
 
-    const targetKey = selectedServerKey;
-    if (targetKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(newSeason, 1));
+    let targetKey=selectedServerKey;
+    try{const chosen=await prepareStartup(newSeason,1,selectionEpoch,selectedServerKey);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
+    if(selectionEpoch!==serverSelectionEpochRef.current)return;setSelectedServerKey(targetKey);
+    if (!startupPlanRef.current && targetKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(newSeason, 1));
 
     const activeServer = servers.find(s => s.key === targetKey) || servers[0];
     let newUrl: string;
-    if (targetKey === "srv_mixdrop" && tmdbId) {
+    if (targetKey === "srv_mixdrop" && tmdbId && !startupPlanRef.current) {
       const fid = await lookupMixdropFileId(newSeason, 1);
       newUrl = fid
         ? buildBalancedMixdropUrl(fid, newSeason, 1) || buildMixdropFallbackUrl()
@@ -2367,6 +2390,7 @@ export function VideoPlayerModal({
       newUrl = activeServer.buildUrl(resolvedId, newSeason, 1);
     }
     if (selectionEpoch !== serverSelectionEpochRef.current) return;
+    if(startupPlanRef.current?.urls[targetKey])newUrl=startupPlanRef.current.urls[targetKey];
     setUrlInput(newUrl);
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
@@ -3126,6 +3150,7 @@ export function VideoPlayerModal({
                   <button
                     onClick={() => {
                       fallbackAttemptsRef.current.clear();
+    startupExpandedRef.current=false;
                       setError(null);
                       setIsLoading(true);
                       const srv = servers[0];

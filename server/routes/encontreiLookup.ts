@@ -2064,7 +2064,7 @@ export async function getByseSources(id: number, season?: number, episode?: numb
   loadCatalogs();
   const tv = season !== undefined && episode !== undefined;
   const key = `${id}:${season}:${episode}`;
-  return (await Promise.all(['encontrei', 'vizer'].map(async source => {
+  return (await Promise.all((['encontrei', 'vizer'] as const).map(async source => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const work = async () => {
       const entry = source === 'encontrei' ? (tv ? _encontreiEpisodeIndex.get(key) : _encontreiMovieIndex.get(id)) : (tv ? _vizerEpisodeIndex.get(key) : _vizerMovieIndex.get(id));
@@ -2094,6 +2094,21 @@ export async function getByseSources(id: number, season?: number, episode?: numb
         const video = _tmdbToVizerMovieIdMap.get(id); if (!video) return null;
         raw = await vizerFetchJson(`do=playerData&id=${video}`, 4000);
       }
+      // One playerData discovery supplies hints for all three hosters. Do not
+      // perform three independent live scrapes for the same content.
+      const liveServers:Record<string,string>={},serverAudio:Record<string,string>={};
+      for(const [field,audio] of [['servers_dub','Dublado'],['servers_leg','Legendado']]){
+        const value=String(raw?.[field]||'').replace(/&amp;/g,'&');
+        for(const provider of ['byse','mixdrop','streamtape']){
+          const fileId=value.match(new RegExp('(?:^|&)'+provider+'=([a-zA-Z0-9_-]+)','i'))?.[1];
+          if(fileId&&!liveServers[provider]){liveServers[provider]=fileId;serverAudio[provider]=audio;}
+        }
+      }
+      if(Object.keys(liveServers).length){
+        const index=source==='encontrei'?(tv?_encontreiEpisodeIndex:_encontreiMovieIndex):(tv?_vizerEpisodeIndex:_vizerMovieIndex);
+        const target=index as Map<any,any>,identity=tv?key:id,previous=target.get(identity)||{};
+        target.set(identity,{...previous,tmdb_id:id,season,episode,servers:{...previous.servers,...liveServers},server_audio:{...previous.server_audio,...serverAudio}});
+      }
       for (const [field, audio] of [['servers_dub', 'Dublado'], ['servers_leg', 'Legendado']]) {
         const fileId = String(raw?.[field] || '').replace(/&amp;/g, '&').match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1];
         if (fileId) return { fileId, audio, source };
@@ -2103,4 +2118,12 @@ export async function getByseSources(id: number, season?: number, episode?: numb
     try { return await Promise.race([work(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 8000); })]); }
     catch { return null; } finally { clearTimeout(timer); }
   }))).filter((x): x is NonNullable<typeof x> => !!x).sort((a,b) => Number(a.audio !== 'Dublado') - Number(b.audio !== 'Dublado'));
+}
+
+// Snapshot hints only: absent entries are NOT proof that a provider lacks content.
+export function getPlaybackCataloguePresence(id: number, season?: number, episode?: number) {
+  loadCatalogs();
+  const tv=season!==undefined&&episode!==undefined,key=`${id}:${season}:${episode}`;
+  const entries=[tv?_encontreiEpisodeIndex.get(key):_encontreiMovieIndex.get(id),tv?_vizerEpisodeIndex.get(key):_vizerMovieIndex.get(id)].filter(Boolean);
+  return Object.fromEntries(['byse','streamtape','mixdrop'].map(provider=>['srv_'+provider,{audioPriority:Math.min(2,...entries.filter(e=>!!e.servers?.[provider]).map(e=>/dublad|nacional|portugu|pt[-_ ]?br/i.test(e.server_audio?.[provider]||e.audio||'')?0:(e.server_audio?.[provider]||e.audio)?2:1)),listed:entries.some(e=>!!e.servers?.[provider]),fileIds:[...new Set(entries.map(e=>String(e.servers?.[provider]||'')).filter(Boolean))]}]));
 }
