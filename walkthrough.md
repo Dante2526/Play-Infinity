@@ -1,3 +1,20 @@
+## 24/10/2026 - Correção de Lentidão no Deploy Zero-Downtime (Destravamento de Workers e Assets Legados)
+
+**Contexto e Diagnóstico:**
+Ao investigar por que novas atualizações estavam levando até 17 minutos para entrar no ar na VPS Oracle, identificamos dois gargalos críticos no pipeline de deploy Zero-Downtime criado pelo Codex:
+1. **Bloqueio Sequencial de até 2 Horas no `reload-release.cjs`:** O script configurava `APP_DRAIN_TIMEOUT_MS = 2 horas` e usava `await` no callback final do `reloadProcessId` da instância `0` antes de recarregar a instância `1`. Como o PM2 só dispara o callback quando o processo antigo morre completamente, qualquer stream pausado ou em `rwnd_limited` no Worker 0 antigo impedia o Worker 1 de ser atualizado, deixando 50% do site na versão velha por longos períodos.
+2. **Recópia Individual de 1.221 Assets Legados (`deploy-release.sh`):** Em todo deploy, um loop em Bash copiava os 1.221 arquivos antigos de `/home/ubuntu/play-infinity/dist/assets` um por um (`dirname` + `mkdir` + `cp` + `mv`), gastando quase 2 minutos extras antes mesmo de iniciar o reload.
+
+**Modificações Realizadas (4 arquivos):**
+1. **`scripts/reload-release.cjs`:**
+   - Implementado monitoramento ativo (`waitForNewWorkerOnline`) em conjunto com `Promise.race` e retry para `Reload already in progress`. Assim que o novo worker da instância atinge `status === 'online'` (após emitir `ready`) com o novo `pid` e diretório de release, o script avança imediatamente para atualizar a próxima instância (~2s por worker), enquanto os processos antigos terminam de drenar em background sem derrubar conexões.
+2. **`scripts/deploy-release.sh`:**
+   - Adicionada verificação `if [[ $assets == "$app_root/dist/assets" && -f $target ]]; then continue; fi` para pular arquivos legados já semeados em `shared-assets`, reduzindo essa etapa de 1m54s para < 0.1s.
+3. **`server/utils/serverLifecycle.ts` & `ecosystem.config.cjs`:**
+   - Ajustado `DEFAULT_DRAIN_TIMEOUT_MS` padrão de 2 horas para `20000ms` (20 segundos), preservando 100% dos segmentos HLS, chamadas de API e streams ativos sem reter slots `_old_` do PM2 por horas em conexões ociosas.
+
+---
+
 ## 24/10/2026 - Otimização de Performance do Servidor BYSE (PoW Concorrente, Cache Compartilhado e Pool Estendido)
 
 **Contexto e Diagnóstico:**

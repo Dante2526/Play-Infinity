@@ -86,6 +86,9 @@ for assets in "$app_root/dist/assets" "$release/dist/assets"; do
     while IFS= read -r -d '' asset; do
       relative=${asset#"$assets/"}
       target="$app_root/shared-assets/$relative"
+      if [[ $assets == "$app_root/dist/assets" && -f $target ]]; then
+        continue
+      fi
       mkdir -p "$(dirname "$target")"
       cp "$asset" "$target.$release_id.tmp"
       mv -f "$target.$release_id.tmp" "$target"

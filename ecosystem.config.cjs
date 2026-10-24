@@ -6,7 +6,7 @@ const releaseDir = fs.realpathSync(process.env.PLAY_INFINITY_RELEASE_DIR ||
   (fs.existsSync(current) ? current : __dirname));
 const configuredDrain = Number(process.env.APP_DRAIN_TIMEOUT_MS);
 const drainTimeout = Number.isSafeInteger(configuredDrain) && configuredDrain > 0
-  ? configuredDrain : 2 * 60 * 60 * 1000;
+  ? configuredDrain : 20 * 1000;
 
 module.exports = {
   apps: [

@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792851726.7576034,
-    "ast_hash": "e84c2191734160519b9d285c58816ed1",
+    "mtime": 1792853375.7539425,
+    "ast_hash": "ef417b88a5b77bfc56f77aff9e583bd2",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1155,8 +1155,8 @@
     "semantic_hash": ""
   },
   "scripts/deploy-release.sh": {
-    "mtime": 1792847790.949549,
-    "ast_hash": "1468e25ba83575548871639777e19c45",
+    "mtime": 1792853313.899245,
+    "ast_hash": "f75f719ab2f5041434330d76b624ff01",
     "semantic_hash": ""
   },
   "scripts/reload-app.sh": {
@@ -1250,8 +1250,8 @@
     "semantic_hash": ""
   },
   "server/utils/serverLifecycle.ts": {
-    "mtime": 1792847791.0020037,
-    "ast_hash": "76feeda2694ac1ebd3a43b2b124aa904",
+    "mtime": 1792853313.9002066,
+    "ast_hash": "1fafbfc5af2fa809bb3bea6b881a90d9",
     "semantic_hash": ""
   },
   "src/components/LoadingStates.tsx": {

@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 
-export const DEFAULT_DRAIN_TIMEOUT_MS = 2 * 60 * 60 * 1000;
+export const DEFAULT_DRAIN_TIMEOUT_MS = 20 * 1000;
 
 // Keep PM2's deadline longer than this deadline (see ecosystem.config.cjs).
 export function configureServerLifecycle(server: Server) {
