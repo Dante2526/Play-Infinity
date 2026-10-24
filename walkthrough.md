@@ -1,3 +1,29 @@
+## 24/10/2026 - Otimização de Performance do Servidor BYSE (PoW Concorrente, Cache Compartilhado e Pool Estendido)
+
+**Contexto e Diagnóstico:**
+Durante a auditoria de desempenho do novo servidor homologado BYSE em produção (`https://play-infinity.stream`), identificou-se que a resolução inicial de episódios sofria lentidão de 25s a 30s (com risco de 502 Bad Gateway) em cold starts.
+1. **Fila Serial de PoW (`server/services/byse/pow.ts`):** O worker de Proof-of-Work utilizava `let active = false` permitindo apenas 1 worker por vez. Quando fontes Encontrei e Vizer eram sondadas em paralelo, uma aguardava a outra terminar, dobrando o tempo de resolução.
+2. **Cache Local Isolado no PM2 Cluster (`server/services/byse/core.ts`):** O cache de resoluções residia apenas na memória de cada processo. No PM2 Cluster (2 instâncias), um worker não aproveitava a resolução do outro.
+3. **TTL Curto do Pool de Provedores (`server/services/byse/sources.ts` e `server/routes/byseRoutes.ts`):** O pool expirava em 30 segundos, forçando re-sondagens desnecessárias da CDN.
+
+**Modificações Realizadas (5 arquivos):**
+1. **`server/services/byse/pow.ts`:**
+   - Paralelização de resolução de PoW (`MAX_ACTIVE_WORKERS = 2` e `MAX_QUEUE_LENGTH = 8`), permitindo resolver desafios simultâneos com isolamento de threads e limites de memória de 32MB.
+2. **`server/services/byse/core.ts`:**
+   - Implementado cache compartilhado atômico em disco (`data/byse-resolve-cache.json`) com sincronização entre processos do cluster PM2, gravação atômica (`.tmp` -> `renameSync`) e guard `isTestEnv` para manter o isolamento de testes unitários.
+3. **`server/services/byse/sources.ts`:**
+   - Aumentado o TTL padrão do pool de fontes BYSE de 30s para 10 minutos (600.000ms), reduzindo o overhead de sondagem de rede.
+4. **`server/routes/byseRoutes.ts`:**
+   - Estendido o TTL das entradas do pool para 10 minutos na inicialização do serviço.
+5. **`tests/byse-shared-cache.test.cjs`:**
+   - Criado teste automatizado validando a sincronização entre dois workers simulados compartilhando o mesmo arquivo de cache sem colisão.
+
+**Validação Realizada:**
+- Testes automatizados executados: 53/53 testes passando (100% de sucesso).
+- Compilação de produção (`npm run build`): Vite e esbuild compilados com sucesso em 9.52s.
+
+---
+
 ## 24/10/2026 - Sincronização Remota do GitHub e Correção do React Error #31 em DetailsPage
 
 **Contexto e Motivação:**

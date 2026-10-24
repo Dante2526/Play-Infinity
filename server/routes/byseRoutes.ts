@@ -30,7 +30,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       if(query.refresh==='1')pool.refresh(String(query.fileId||''));
       let selected=await pool.select(sources,exclude);
       if(!selected&&exclude.length&&query.refresh==='1')selected=await pool.select(sources,[]);
-      if(selected)return {...selected,m3u8:selected.directUrl,expiresAt:Date.now()+30000};
+      if(selected)return {...selected,m3u8:selected.directUrl,expiresAt:Date.now()+600000};
       for(const source of sources)tried.add(source.fileId);
       if(id&&pass===0)sources=(await deps.sources(id,season,episode,name,true)).filter(source=>!tried.has(source.fileId));
     }

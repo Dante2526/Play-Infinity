@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792847790.932706,
-    "ast_hash": "e007b775dd0da60e55bee76298d0ccf7",
+    "mtime": 1792849406.4083004,
+    "ast_hash": "0653d9e56f9fa6b4f5cde87bf13ba642",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -110,7 +110,7 @@
     "semantic_hash": "331ef318616a37831a3cef798301577a"
   },
   "package.json": {
-    "mtime": 1792848754.6563857,
+    "mtime": 1792849599.4270034,
     "ast_hash": "f185b43855231c284e26f5b6b21bb24a",
     "semantic_hash": ""
   },
@@ -320,7 +320,7 @@
     "semantic_hash": "426b11b674b5e7e1494615bca2925893"
   },
   "src/components/AdminDeployMonitor.tsx": {
-    "mtime": 1792847972.2463691,
+    "mtime": 1792849406.524709,
     "ast_hash": "56ac8ee06c072b7e43b0ed8d120b346a",
     "semantic_hash": ""
   },
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792847791.019599,
-    "ast_hash": "f1d70d4cde343334e0f4cf6efe66fb04",
+    "mtime": 1792849406.4391322,
+    "ast_hash": "18c569becbb5c5b6d6e535f3b4236d29",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -510,8 +510,8 @@
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
-    "mtime": 1792848147.4383519,
-    "ast_hash": "0a747f49dd78a54c99cc9dcab860e796",
+    "mtime": 1792849406.5257144,
+    "ast_hash": "3f1aa44064e9a3d774375e6d51343fd4",
     "semantic_hash": ""
   },
   "src/pages/DownloadsPage.tsx": {
@@ -655,7 +655,7 @@
     "semantic_hash": "200c6c8d0a9c144369f6c110efdf0fd4"
   },
   "src/utils/mediaUtils.ts": {
-    "mtime": 1792847814.5718856,
+    "mtime": 1792849406.5277317,
     "ast_hash": "7120877417977061a272f529b6683126",
     "semantic_hash": ""
   },
@@ -765,8 +765,8 @@
     "semantic_hash": "b6b0196cc4d216252c70f9988588f264"
   },
   "VOD_ARCHITECTURE.md": {
-    "mtime": 1792847790.928171,
-    "ast_hash": "0b2148fa71685db40798ba687ce8b582",
+    "mtime": 1792849406.4073918,
+    "ast_hash": "3e4f5e84806d0b2ee457ea624dec87f1",
     "semantic_hash": ""
   },
   "docs/specs/2026-10-01-push-notifications-design.md": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792847791.0685718,
-    "ast_hash": "361264e648f4b77332a78a35a21392fc",
+    "mtime": 1792851726.7576034,
+    "ast_hash": "e84c2191734160519b9d285c58816ed1",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,12 +1135,12 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792848756.3506658,
+    "mtime": 1792851713.5411956,
     "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792848756.3522873,
+    "mtime": 1792851713.5431957,
     "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
     "semantic_hash": ""
   },
@@ -1170,8 +1170,8 @@
     "semantic_hash": ""
   },
   "server/routes/byseRoutes.ts": {
-    "mtime": 1792847790.9688778,
-    "ast_hash": "ed4e2509509e3a7917543ab30a6d84df",
+    "mtime": 1792851582.2415013,
+    "ast_hash": "02c96aae32be06fd7eaf97b88216a4e9",
     "semantic_hash": ""
   },
   "server/routes/playbackHealth.ts": {
@@ -1180,18 +1180,18 @@
     "semantic_hash": ""
   },
   "server/services/byse/core.ts": {
-    "mtime": 1792847790.9849725,
-    "ast_hash": "da839ebcc7d4619fda8de012c560f6b9",
+    "mtime": 1792851515.4927108,
+    "ast_hash": "3e3e6445d1a03dfc8171ab206eced819",
     "semantic_hash": ""
   },
   "server/services/byse/pow.ts": {
-    "mtime": 1792847790.9859674,
-    "ast_hash": "9e5ee8af5882dc27b267abd02bfc1b62",
+    "mtime": 1792851384.226733,
+    "ast_hash": "8a49caf12dac8e0c185dc453615c3940",
     "semantic_hash": ""
   },
   "server/services/byse/sources.ts": {
-    "mtime": 1792847790.9869716,
-    "ast_hash": "a48952956d81a2fc3cddae5077a8bb79",
+    "mtime": 1792851582.2405016,
+    "ast_hash": "11ae21fd368a6ad38e5f1f65edbf0d58",
     "semantic_hash": ""
   },
   "server/services/byse/tickets.ts": {
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "src/services/playbackStartup.ts": {
-    "mtime": 1792847791.035277,
-    "ast_hash": "62e1d0ac2b86d8a510550e795d0e1632",
+    "mtime": 1792849406.441424,
+    "ast_hash": "da3397f456db1082f9eabba9743cac2d",
     "semantic_hash": ""
   },
   "src/utils/playerFrameMessages.ts": {
