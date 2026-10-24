@@ -304,7 +304,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_streamtape" ? "streamtape" : activeServerKey === "srv_doodstream" ? "doodstream" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_byse" ? "byse" : activeServerKey === "srv_streamtape" ? "streamtape" : activeServerKey === "srv_doodstream" ? "doodstream" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
     const [selectedSubtitle, setSelectedSubtitle] = useState<string>(isAnime ? "on" : "off");
 
   // Estado dos cues VTT e cue ativa
@@ -361,6 +361,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return [
       { key: "srv_streamtape", label: "StreamTape HD" },
       { key: "srv_mixdrop", label: "MixDrop HD" },
+      { key: "srv_byse", label: "BYSE HD" },
       { key: "srv_watchplay", label: "WatchPlayer" },
       { key: "srv_vip", label: "VIP Player" },
       { key: "srv_vidsrc", label: "Seriesflix HD" },

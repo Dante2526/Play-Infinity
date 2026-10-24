@@ -17,3 +17,6 @@ scratch*
 *.id_rsa
 
 secrets/
+
+# Stable encrypted BYSE proxy tickets (shared across workers/releases)
+data/byse-proxy.key

@@ -13,7 +13,8 @@
  * ao player nativo PT-BR.
  * 
  * REGRA MANDATÓRIA:
- * 1. Os DOIS ÚNICOS reprodutores homologados para Filmes e Séries são:
+ * 1. Consulte AGENTS.md e os seletores para os reprodutores homologados.
+ *    BYSE próprio same-origin foi autorizado pelo dono em 23/10/2026.
  *    - WATCHPLAYER (Oficial Principal)
  *    - VIP PLAYER (Secundário / Sanitizado via /api/myembed-stream)
  * 2. NUNCA reintroduza, desfaça o bloqueio ou adicione fallbacks para qualquer
@@ -42,18 +43,6 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
       "superflix"
     ],
     reason: "Redirecionamentos forçados, popups invasivos e instabilidade de streaming",
-    blockedAt: "2026-09"
-  },
-  {
-    id: "byse",
-    name: "BYSE / Streamberry",
-    keys: ["srv_byse", "byse", "streamberry"],
-    patterns: [
-      /streamberry\.com\.br/i,
-      /byse/i,
-      "/api/byse-stream"
-    ],
-    reason: "Tentativas de redirecionamento do parent window (top.location) e falhas frequentes",
     blockedAt: "2026-09"
   },
   {

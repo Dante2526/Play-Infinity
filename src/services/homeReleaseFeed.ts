@@ -42,7 +42,7 @@ async function confirmNewRelease(item: TMDBItem, type: ReleaseType): Promise<boo
       if (!response.ok) return false;
       const data = await response.json();
       if (data.error) return false;
-      const available = !!(data.mixdrop || data.mixdrop_encontrei || data.mixdrop_vizer || data.streamtape);
+      const available = !!(data.mixdrop || data.mixdrop_encontrei || data.mixdrop_vizer || data.streamtape || data.byse);
       if (availability.size >= 500) availability.delete(availability.keys().next().value!);
       availability.set(key, { available, expires: Date.now() + (available ? 10 * 60 * 1000 : 60000) });
       return available;

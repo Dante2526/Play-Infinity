@@ -1390,6 +1390,17 @@ export function VideoPlayerModal({
     }
 
 
+    list.splice(Math.min(2,list.length),0,{
+      key: 'srv_byse', label: 'BYSE HD', name: 'BYSE', badge: 'HLS • Player integrado',
+      buildUrl: (id: string, s?: number, e?: number) => {
+        const identity = new URLSearchParams({id:String(effectiveMovieId || tmdbId || id),name:title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim()||''});
+        if(isSeries){identity.set('s',String(s??season));identity.set('e',String(e??episode));}
+        if((s===undefined||s===season)&&(e===undefined||e===episode)&&lastKnownTimeRef.current>0)identity.set('t',String(lastKnownTimeRef.current));
+        return '/api/byse-proxy-iframe?'+identity;
+      },
+      isMatch: (url: string) => url.includes('/api/byse-'),
+    });
+
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
     }
@@ -1451,7 +1462,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     setActiveIframeUrl(null); // Dispose previous frame before asynchronous lookup.
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape");
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse");
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     setIframeVisible(false);
@@ -1603,7 +1614,7 @@ export function VideoPlayerModal({
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
     // Allow bounded source selection, token renewal and one alternate file.
-    const timeoutDuration = selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
+    const timeoutDuration = selectedServerKey === "srv_byse" ? 95000 : selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
     const timer = setTimeout(() => {
       if (!playbackConfirmedRef.current && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);
@@ -2039,7 +2050,7 @@ export function VideoPlayerModal({
           return;
         }
 
-        if (selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) {
+        if ((selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) || (selectedServerKey === 'srv_byse' && event.data.byseExhausted === true)) {
           // The iframe already exhausted distinct catalogue files. Do not start
           // that same cycle again before moving to another approved provider.
           retrySameServerRef.current = true;
@@ -2410,6 +2421,7 @@ export function VideoPlayerModal({
       cleanUrl.startsWith("/api/vip-proxy-iframe") ||
       cleanUrl.startsWith("/api/md-stream") ||
       cleanUrl.startsWith("/api/streamtape-proxy-iframe") ||
+      cleanUrl.startsWith("/api/byse-proxy-iframe") ||
       cleanUrl.startsWith("/api/vidsrc-player") ||
       cleanUrl.startsWith("/api/vidsrc-stream") ||
       cleanUrl.includes("watchplay.shop") ||
@@ -3112,7 +3124,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse';
 
                     if (skinSupported) {
                       // Mantém o isLoading = true (spinner girando na frente do player)

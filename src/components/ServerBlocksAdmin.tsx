@@ -52,6 +52,7 @@ interface ServerOption {
 }
 
 const HOMOLOGATED_SERVERS: ServerOption[] = [
+  {key:'srv_byse',label:'BYSE HD',badge:'HLS integrado',badgeColor:'bg-purple-500/20 text-purple-300',description:'BYSE com skin Netflix e proxy próprio'},
   {
     key: "srv_streamtape",
     label: "StreamTape HD",
@@ -98,6 +99,7 @@ const HOMOLOGATED_SERVERS: ServerOption[] = [
 
 const SERVER_LABELS: Record<string, string> = {
   srv_streamtape: "StreamTape HD",
+  srv_byse: "BYSE HD",
   srv_watchplay: "WatchPlayer",
   srv_vip: "VIP Player",
   srv_mixdrop: "MixDrop",

@@ -4300,13 +4300,6 @@ const router = Router();
     });
   });
 
-  // API: Resolver do BYSE Player (Permanentemente desativado - na blacklist)
-  router.get("/api/byse-stream", (_req, res) => {
-    return res.status(403).json({ 
-      error: "Servidor BYSE/Streamberry está bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer." 
-    });
-  });
-
   // Endpoints para Teste de Velocidade Local (Resolve problemas de CORS/Bloqueio em WebViews)
 
 

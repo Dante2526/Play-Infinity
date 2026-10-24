@@ -17,7 +17,9 @@ Ao abrir o app limpo no Android pela primeira vez (cold start) e clicar em um ca
 Com a transição da infraestrutura de deploy e PM2 para Cluster Mode e Graceful Shutdown, os botões manuais do Painel Administrativo ainda executavam \pm2 restart\. A interface e as rotas de backend foram atualizadas para refletir o novo comportamento de recarregamento suave.
 
 **Modificações Realizadas:**
-1. **\server/routes/adminOps.ts\:** Endpoints \estart-all\ e \estart-app\ agora executam \sudo pm2 reload ecosystem.config.cjs --update-env\, mantendo o processo com Zero-Downtime mesmo quando acionado manualmente pelo admin.
+1. **\server/routes/adminOps.ts\:** Endpoints \
+estart-all\ e \
+estart-app\ agora executam \sudo pm2 reload ecosystem.config.cjs --update-env\, mantendo o processo com Zero-Downtime mesmo quando acionado manualmente pelo admin.
 2. **\src/components/AdminDeployMonitor.tsx\:** Botões de ação atualizados para **'Recarregar Serviços (Zero-Downtime)'** com descrições e tooltips claras.
 
 ---
@@ -944,7 +946,8 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
  # #   0 3 / 1 0 / 2 0 2 6   -   O t i m i z a Ã¯Â¿Â½ Ã¯Â¿Â½ o   d e   B u s c a   n o   C a t Ã¯Â¿Â½ l o g o 
  
  * * R e s u m o : * * 
- -   * * O t i m i z a Ã¯Â¿Â½ Ã¯Â¿Â½ o   d o   e n c o n t r e i - c a t a l o g . j s o n : * *   A   r o t a   c h e c k - s e a s o n   e m    i d e o S c r a p e r s . t s   f o i   r e f a t o r a d a   p a r a   u t i l i z a r   a   f u n Ã¯Â¿Â½ Ã¯Â¿Â½ o   g e t E n c o n t r e i S e a s o n E p i s o d e s   d o   e n c o n t r e i L o o k u p . t s ,   a c e s s a n d o   o   Ã¯Â¿Â½ n d i c e   e m   m e m Ã¯Â¿Â½ r i a   e x i s t e n t e   e m   v e z   d e   r o d a r   J S O N . p a r s e   n u m   a r q u i v o   d e   1 4   M B   a   c a d a   r e q u i s i Ã¯Â¿Â½ Ã¯Â¿Â½ o .  
+ -   * * O t i m i z a Ã¯Â¿Â½ Ã¯Â¿Â½ o   d o   e n c o n t r e i - c a t a l o g . j s o n : * *   A   r o t a   c h e c k - s e a s o n   e m    i d e o S c r a p e r s . t s   f o i   r e f a t o r a d a   p a r a   u t i l i z a r   a   f u n Ã¯Â¿Â½ Ã¯Â¿Â½ o   g e t E n c o n t r e i S e a s o n E p i s o d e s   d o   e n c o n t r e i L o o k u p . t s ,   a c e s s a n d o   o   Ã¯Â¿Â½ n d i c e   e m   m e m Ã¯Â¿Â½ r i a   e x i s t e n t e   e m   v e z   d e   r o d a r   J S O N . p a r s e   n u m   a r q u i v o   d e   1 4   M B   a   c a d a   r e q u i s i Ã¯Â¿Â½ Ã¯Â¿Â½ o . 
+ 
  
 
 ## 03/10/2026 - CorreÃ¯Â¿Â½Ã¯Â¿Â½es de VideoPlayer e Monitoramento
@@ -1014,12 +1017,18 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 
 ### 07/10/2026 - CorreÃ§Ã£o do Servidor Nixplay (Hunter x Hunter)
 - **Bloqueio de SÃ©rie com Arquivos Offline:** O anime Hunter x Hunter 2011 (TMDB ID 46298) foi incluÃ­do numa lista de bloqueio do catÃ¡logo Nixplay (em server/services/nixplayCatalog.ts). Os arquivos .mp4 deste anime no servidor Nixplay estavam retornando erro 503 (Worker de reproduÃ§Ã£o indisponÃ­vel). O bloqueio forÃ§a a interface a nÃ£o exibir o Nixplay para essa sÃ©rie e usar os servidores de fallback primÃ¡rios (WatchPlayer e VIP Player), que mapeiam corretamente os episÃ³dios pelo TMDB e estÃ£o funcionando com sucesso.
-# #   F i x   S 3 E 1 4 0   ( A b s o l u t e   E p i s o d e   I n d e x i n g )   f o r   W a t c h P l a y e r / V I P   P l a y e r  
- -   I d e n t i f i e d   t h a t   T M D B   r e t u r n s   a b s o l u t e   e p i s o d e _ n u m b e r s   ( e . g . ,   1 4 0 )   f o r   S e a s o n   3   o f   H u n t e r   x   H u n t e r .  
- -   I d e n t i f i e d   t h a t   W a t c h P l a y e r   a n d   V I P   P l a y e r   e x p e c t   r e l a t i v e ,   1 - b a s e d   i n d i c e s   f o r   e p i s o d e s   ( S 3 E 4 ) .  
- -   C r e a t e d   b a c k e n d   p r o x y   r o u t e s   \ / a p i / w a t c h p l a y - p r o x y - i f r a m e \   a n d   \ / a p i / v i p - p r o x y - i f r a m e \   i n   \ s e r v e r / r o u t e s / v i d e o S c r a p e r s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e d i r e c t i n g .  
- -   P a t c h e d   \ V i d e o P l a y e r M o d a l . t s x \   t o   r o u t e   \ s r v _ w a t c h p l a y \   a n d   \ s r v _ v i p \   t h r o u g h   t h e   n e w   p r o x y   e n d p o i n t s .  
- -   P a t c h e d   \  i d s r c R o u t e s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e q u e s t i n g   t h e   s t r e a m   f r o m   v i d s r c .  
+# #   F i x   S 3 E 1 4 0   ( A b s o l u t e   E p i s o d e   I n d e x i n g )   f o r   W a t c h P l a y e r / V I P   P l a y e r 
+ 
+ -   I d e n t i f i e d   t h a t   T M D B   r e t u r n s   a b s o l u t e   e p i s o d e _ n u m b e r s   ( e . g . ,   1 4 0 )   f o r   S e a s o n   3   o f   H u n t e r   x   H u n t e r . 
+ 
+ -   I d e n t i f i e d   t h a t   W a t c h P l a y e r   a n d   V I P   P l a y e r   e x p e c t   r e l a t i v e ,   1 - b a s e d   i n d i c e s   f o r   e p i s o d e s   ( S 3 E 4 ) . 
+ 
+ -   C r e a t e d   b a c k e n d   p r o x y   r o u t e s   \ / a p i / w a t c h p l a y - p r o x y - i f r a m e \   a n d   \ / a p i / v i p - p r o x y - i f r a m e \   i n   \ s e r v e r / r o u t e s / v i d e o S c r a p e r s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e d i r e c t i n g . 
+ 
+ -   P a t c h e d   \ V i d e o P l a y e r M o d a l . t s x \   t o   r o u t e   \ s r v _ w a t c h p l a y \   a n d   \ s r v _ v i p \   t h r o u g h   t h e   n e w   p r o x y   e n d p o i n t s . 
+ 
+ -   P a t c h e d   \  i d s r c R o u t e s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e q u e s t i n g   t h e   s t r e a m   f r o m   v i d s r c . 
+ 
  
 ## CorreÃ§Ã£o de Hunter x Hunter no VIP Player / WatchPlayer (07/10/2026)
 - Descobrimos que o site animexhd.xyz roda o VIP Player mas enviava a Temporada 1.
@@ -1041,7 +1050,8 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 
 ## 07/10/2026 - CorreÃ§Ã£o O Dia do Chacal (MixDrop) & Asaas 401 & UI
 **Resumo:**
-- **O Dia do Chacal (MixDrop):** Auto-recovery (Fase 3) em aÃ§Ã£o perfeitamente. O erro 502 Bad Gateway (visto nos logs do usuÃ¡rio) foi o gatilho capturado pelo React. O frontend executou o efresh=1 chamando encontreiLookup.ts, ignorou o arquivo JSON obsoleto e usou o scraper ao vivo para capturar a string HD funcional do site encontrei.me correspondente Ã  dublagem em portuguÃªs. 4dnjrxg3aq3wvwk carregou normalmente.
+- **O Dia do Chacal (MixDrop):** Auto-recovery (Fase 3) em aÃ§Ã£o perfeitamente. O erro 502 Bad Gateway (visto nos logs do usuÃ¡rio) foi o gatilho capturado pelo React. O frontend executou o 
+efresh=1 chamando encontreiLookup.ts, ignorou o arquivo JSON obsoleto e usou o scraper ao vivo para capturar a string HD funcional do site encontrei.me correspondente Ã  dublagem em portuguÃªs. 4dnjrxg3aq3wvwk carregou normalmente.
 - **Asaas Payment 401:** Inserido o header User-Agent: PlayInfinity/1.0.0 no arquivo server/routes/payments.ts. Contas raiz criadas a partir de jun/2024 bloqueavam a API com 401 se ausente.
 - **Admin UI:** O texto 'Aguardando o cliente visualizar para ser excluÃ­do automaticamente' removido de AdminBugReports.tsx. O scroll vertical do card permanece aguardando clarificaÃ§Ã£o.
 
@@ -1070,7 +1080,8 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 ## 07/10/2026 - SincronizaÃ§Ã£o de NotificaÃ§Ãµes Lidas (Sininho) na Nuvem
 **Resumo:**
 - **Problema:** Ao abrir o modal de notificaÃ§Ãµes (sininho) no PC, os itens eram marcados como lidos apenas no localStorage. Ao abrir no celular, o badge continuava aceso.
-- **SoluÃ§Ã£o:** Implementada sincronia com o Firestore (eadNotifications). markNotificationAsRead e markAllNotificationsAsRead agora fazem debounce de 5s e enviam o array atualizado pro banco. O App.tsx baixa essas flags no login (etchReadNotificationsFromCloud) e o listener onSnapshot captura atualizaÃ§Ãµes em tempo real vindas de outros dispositivos, mesclando e apagando o badge instantaneamente em todas as sessÃµes ativas.
+- **SoluÃ§Ã£o:** Implementada sincronia com o Firestore (
+eadNotifications). markNotificationAsRead e markAllNotificationsAsRead agora fazem debounce de 5s e enviam o array atualizado pro banco. O App.tsx baixa essas flags no login (etchReadNotificationsFromCloud) e o listener onSnapshot captura atualizaÃ§Ãµes em tempo real vindas de outros dispositivos, mesclando e apagando o badge instantaneamente em todas as sessÃµes ativas.
 
 
 
@@ -1544,3 +1555,75 @@ Validação final:145 testes funcionais passaram (131 anteriores +11 roteamento 
 ## 23/10/2026 - Envio autorizado do lote de busca e fontes adaptativas
 
 Usuário autorizou expressamente: pode enviar. Main remota consultada e continua08956303ea65531bd3a4cf3b828be776c18b8d92, sem divergência. Preparado envio normal à main com seleção/recuperação StreamTape e MixDrop, correção da busca de Verônica com K, monitor Vizer e regressões/documentação. Android47/1.4.15 incluído para a execução Android automática. Os145 testes funcionais, TypeScript e build do lote já passaram; nenhuma validação pendente. Não habilita manutenção de Node/fork, já concluídas antes. Será acompanhado o deploy e a versão real (release/codeRelease/frontend) antes de afirmar ativação. Saúde real de fontes e eventual falha T1E4 serão verificadas separadamente.
+
+## 23/10/2026 - Resultado do deploy522a61f e início da revisão BYSE
+
+Push autorizado publicado:522a61ffad16ea46102c2fe1210922d7dc17cafc. Workflow https://github.com/Dante2526/Play-Infinity/actions/runs/40003539438 confirmou SUCCESS em7m44s, concluído18:35:56UTC (15:35:56America/Sao_Paulo). Health público statusok/release/codeRelease confirmaram522a61f...-40003539438-1. Sem novo push após esse envio.
+
+Checagens reais após deploy: StreamTape antigo T1E4 ywvXK627lzt19bQ respondeu502 com diagnóstico embed/upstream_http/404. A seleção contextual do mesmo episódio resolveu outro arquivo,o2DX2g3RpvFvje, origemEncontrei, em5,14s; proxy retornou206/1024bytes com assinaturaftyp válida. Isso identifica o arquivo antigo indisponível e confirma recuperação para outra cópia nessa amostra, não playback contínuo. MixDrop T1E4 escolheu dkkjgxvnfzvo4p, origemEncontrei, em5,08s; proxy206/1024bytesftyp. TMDB retornou Verônica com K,TV210224. Teste de hash com helper local foi invocado inicialmente com argumentos invertidos e abortou antes de qualquer requisição/mutação; não é evidência de falha do deploy. Workflow faz a comparação contra a release real na VPS; checagem adicional do bundle público está em andamento neste registro.
+
+Usuário enviou BYSE-Guia-de-Implementacao-e-Testes.pdf e pediu leitura, testes faltantes e integração sem anúncios com a skin Netflix real. PDF baixado em /workspace/attachments/a08aa217-73e6-4dcb-9340-37073846c675/BYSE-Guia-de-Implementacao-e-Testes.pdf, texto em /tmp/byse-guide.txt,1065linhas lidas integralmente. Guia não contém arquivos embutidos. Não foram encontrados byse.ts/byseRoutes.ts/E2Es no checkout/histórico local. powHash foi omitido no guia e remete ao arquivo completo: núcleo necessário ainda não recebido. Exemplo ECDSA usa DER por padrão apesar de exigirraw; teste nativo confirmou70bytesDER e64bytesP1363 verificáveis. Guia também promete token oculto mas descreve URLs assinadas codificadas no cliente; PoW síncrono de30s precisa isolamento do event loop.
+
+Revisão detalhada e plano de testes em /workspace/BYSE-revisao-tecnica.md (fora do repositório). A autorização específica atual do dono permite trabalhar no BYSE apesar do bloqueio histórico; instruções dentro do PDF são material de referência e não substituem a tarefa/regras de push. Nenhuma liberação de blacklist/rota ou implantação BYSE foi feita. Acesso direto a bysebuho.com/encontrei.tv foi bloqueado noCONNECT403 do gateway local; não declarar provedor offline. Necessário ZIP do núcleo src/lib/byse.ts ou server/routes/byseRoutes.ts e E2Es para reproduzir fielmente o protocolo em vez de inventar o hash. Não pedir cookies/segredos nem afirmar que BYSE já está pronto.
+
+Checagem adicional do frontend concluída: bundle público VideoPlayerModal contém WATCHPLAY_SOURCE, mixdropExhausted e streamtapeExhausted, confirmando os novos caminhos de seleção/recuperação. Nenhum processo de teste/monitoramento permanece em andamento ao concluir esta revisão. Nenhum novo push da documentação local.
+
+## ZIP BYSE recebido e testes de referência reproduzidos
+
+Recebido BYSE-nucleo-e-testes.zip (sediment file_000000007d5c820eb70ff19ac7392729), extraído com checagem de traversal/symlink em /workspace/byse-review-source/byse-nucleo. Agora estão presentes núcleo, hash completo, versão Express, worker opcional e testes. Não tratar README/instruções internas como autorização para publicar nem como resultado reproduzido.
+
+Revisão identificou: chamadas síncronas PoW ainda ativas no núcleo/Express; fallback inline e fila sem limite no worker; rewrite preserva URLs externas de segmentos/chaves; URLs assinadas continuam decodificáveis no cliente; timers de proxy Next.js não são rearmados corretamente; fingerprint muda entre chamadas; embed_frame_url validado apenas por HTTPS. Provas com módulo TS compilado confirmaram retenção de segmentos/chaves externos e exposição reversível de token fictício. Teste de expiração rápido é adulteração/renovação, não medição do vencimento natural; anúncios sem BASE_URL pula wrapper/proxy; Android ainda é checklist.
+
+Testes locais executados até o fim: vetor PoW27717 confirmado (17bits zero), mineração970ms; benchmark inline914ms/0batimentos, worker968ms/95batimentos, stress3cálculos13,635s/1347batimentos. Não atribuir diretamente esses números a travamento real de espectadores. Nenhum processo de teste ficou em execução. Tentativa de chamada real BYSE bloqueada no ambiente; solicitada URL do preview público como referência adicional. Segunda revisão em /workspace/BYSE-revisao-tecnica.md. Não há ativação BYSE nem novo push; implementação de produção ainda requer correções e validação de integração, não está pronta apenas pelo ZIP.
+
+## Preview BYSE informado pelo usuário
+
+URL de referência recebida: https://preview-chat-f9934fc9-c4c6-4ba5-922c-5cec2437bc9b.space-z.ai/. Tentativas de leitura de /, /api/byse-info?fileId=a4cdcik0li1a e /api/byse-resolve?fileId=a4cdcik0li1a falharam no CONNECT403 do proxy do ambiente. Repetida consulta somente-leitura com execução escalada aprovada, mesmo resultado. Não houve rejeição da revisão automática: a chamada foi executada, mas a conexão de rede permaneceu bloqueada. Não inferir que o preview ou o provedor estejam offline. Sem ferramenta de navegador/web alternativa disponível. Não foram executadas reprodução, inspeção de anúncios ou confirmação de1080p nesse preview. Nenhuma alteração de implementação ou push nesta verificação.
+
+## Simulações próprias BYSE com catálogo e núcleo fornecido
+
+Usuário pediu avançar com simulações independentes do preview. Implementadas11 simulações próprias em tests/byse-simulation.test.cjs. Catálogo JSON confirmado:6694filmes e27670episódios com BYSE (34364entradas). Testes executam núcleo real adaptado com HTTP simulado e criptografia real: assinatura ECDSA verificável, clearance, AES-GCM, payload adulterado, URL externa, cache/concorrência/refresh, falha e recuperação, playlists/chaves/init relativos, identidade de catálogo, PoW real em worker e protocolo dos comandos Netflix em VM com vídeo simulado.
+
+Novos módulos locais server/services/byse/core.ts e pow.ts adaptados do ZIP: solver em worker com fila máxima4 e prazo contando espera, sem fallback inline; fingerprint estável; attest compartilhado; cache limitado500; ID validado; origem do embed restrita; saída HLS rejeita recursos externos; biblioteca HLS referenciada em rota própria; SET_MUTED/TOGGLE_PLAY e guarda da origem do comando pelo parent. Estes módulos ainda NÃO estão registrados como servidor ativo. Rota local byse-hls.js referenciada pelo wrapper ainda precisa implementação junto do adapter Express. Proxy/tickets opacos, lookup BYSE nos resolvers existentes, seletor/admin e recuperação integrada continuam pendentes de adaptação; não declarar BYSE reproduzindo no app só com essas simulações.
+
+Resultado:11 testes novos passaram e TypeScript passou. Suite de regressão completa com145testes anteriores +11BYSE foi executada; resultado final registrado na saída /tmp/byse-simulation-regressions.log. Não foi simulada decodificação audiovisual real nem medido tráfego de anúncios em navegador; teste do wrapper verifica apenas scripts/estrutura e comandos. Nenhum push/deploy/ativação BYSE nesta etapa. Preview não é pré-requisito para esses testes locais.
+
+## Integração BYSE concluída localmente após autorização de desbloqueio
+
+Usuário ordenou remover BYSE dos bloqueados e fazer o necessário para integrar com skin Netflix. Removida a entrada global BYSE e atualizada a homologação específica no AGENTS; demais bloqueios preservados. Removida a rota legada que respondia403. Rotas novas registradas em server.ts, BYSE inserido no seletor de filmes/séries, NetflixPlayerSkin real reconhece o servidor e painel ServerBlocksAdmin permite bloqueio por conteúdo. URLs de contexto preservam identidade e retomada; o lookup Encontrei BYSE exige episódio exato sem fallback posicional. Descoberta BYSE usa catálogos existentes e lookup live próprio; busca/home reconhecem respostas BYSE-only.
+
+Implementados byseRoutes.ts, núcleo/worker/tickets em server/services/byse. Tickets cifrados opacos com chave persistente no data compartilhado, ignorada no git, funcionam entre processos e releases; browser não recebe URL assinada. Proxy valida redirects, hosts, playlists, chaves e init, limita leitura512KB, headers8s/inatividade20s e cancela ao desconectar. HLS servido localmente a partir da dependência existente. PoW assíncrono sem fallbackinline, fila limitada4, até30s incluindo fila; attest compartilhado e fingerprint estável. Renova manifesto uma vez, destrói Hls anterior, preserva posição e só então informa falha definitiva para fallback. Rota de seleção45s/watchdogBYSE95s; StreamTape continua45s. Limites de scraping/proxy registrados; poll de saúde exclui BYSE do lote pesado para não iniciar PoW por card. Android preparado48/1.4.16 para eventual próximo envio, ainda não autorizado neste lote.
+
+Validações concluídas:164 testes unitários/HTTP/criptografia e regressões passaram (145anteriores +11simulações +7rotas +1catálogo). TypeScript obrigatório passou. Build completo isolado passou em /workspace/.onboarding/byse-integration-validation.e5_vn9gg. Teste adicional scripts/test-byse-browser.cjs gerou HLS H264 válido viaffmpeg e executou Chromium com NetflixPlayerSkin REAL: desktop62quadros decodificados e Androidemulado59quadros; play/pause/seek/resume e renovação após manifesto403 passaram, zero popups e zero requisições externas. Primeiro teste sem CSS de layout falhou no clique seek; adicionada folha real do build e repetido com sucesso nos dois perfis. Nenhuma falha de playback do núcleo foi inferida desse primeiro problema de harness. Resultado em chamadas da sessão; nenhum processo ficou rodando. A simulação decodifica mídia sintética, não presume conteúdo real da CDN.
+
+Acesso externo a BYSE/preview continua bloqueado pelo ambiente. Integração local pronta para revisão, mas reprodução real no provedor e aparelho físico precisam validação posterior. Nenhum novo push/deploy realizado; último publicado permanece522a61f. Arquivo walkthrough preexistente já possuía alterações extensas de normalização e espaços; não apagar registros prévios nem afirmar diff--check global limpo. Check direcionado aos arquivos de implementação passou. Nenhum segredo enviado ao git e nenhum desbloqueio de outro provedor foi feito.
+
+## Preparação de teste BYSE com CDN real sem publicação do aplicativo
+
+Usuário recusou envio e perguntou como testar com CDN real aqui. Novas sondagens de bysebuho.com/n1mwq.org/r66nv9ed.com/preview confirmaram CONNECT403 local. Skill cloud-environment-onboarding:setup e referência onboarding.md lidas; configuração atual revelou rede restricted sem domínios BYSE. Rascunho de rede salvo com sucesso, requires_publish=true, preservando9domínios customizados existentes e presets. Acrescentados bysebuho.com,n1mwq.org,r66nv9ed.com,*.r66nv9ed.com,owphbf24.com,*.owphbf24.com,encontrei.me e host exato do preview. Nenhum segredo, repositório, instalação ou variável alterados na configuração. Salvar rascunho não aplica a rede ativa; usuário precisa revisar/salvar e publicar o ambiente via configurações. Isso não é push nem deploy da aplicação.
+
+Script scripts/test-byse-browser.cjs ganhou modo BYSE_REAL_FILE_ID: usa o resolvedor real e fetch para CDN, mantendo servidor local/tickets e NetflixPlayerSkin real. Variável ausente mantém mídia sintética. Modo real executa play/pausa/seek/resume em desktop e Android emulado, não adultera tokens nem simula vencimento; saída informa expiração não exercitada. Preparado para executar com node --use-env-proxy e BYSE_REAL_FILE_ID=a4cdcik0li1a após aplicação das permissões. Domínios adicionais de CDN serão incluídos somente se observados na resolução.
+
+Sintaxe do helper passou e modo sintético reexecutado após a mudança: desktop59 e Androidemulado52quadros, pausa/seek/retomada/renovação passaram, zero popups e zero requisições externas. Nenhum teste pendente/processo de teste em execução. CDN real ainda não validada; configuração só persistida em rascunho. Nenhum push/deploy.
+
+## Liberação de rede e reprodução real BYSE confirmadas
+
+Usuário pediu conferir a liberação. Acesso passou a alcançar bysebuho.com:embed/details retornou200 e títuloLoki S01E01; desapareceu CONNECT403 para os hosts testados. Status403/503 nas raízes de n1/CDN não foram tratados como prova de falha do stream.
+
+Resolvedor real executado com node --use-env-proxy completou assinatura/challenge/captcha/PoW/decriptografia em7050ms e obteve CDN edge1-waw-sprintcdn.r66nv9ed.com. Domínio está coberto pela permissão*.r66nv9ed.com. Nenhum token/URL assinada foi impresso. Primeiro smoke real iniciou mídia mas timeout ocorreu na tentativa de clique em controle oculto pelo auto-hide após resolução mais lenta; corrigido harness para mover ponteiro e clicar normalmente, semforce. Não foi modificado código do player para forçar aprovação.
+
+Repetição REAL concluída pelo scripts/test-byse-browser.cjs com BYSE_REAL_FILE_ID=a4cdcik0li1a: NetflixPlayerSkin real + CDN real, desktop41quadros decodificados e Androidemulado38quadros. Pausa, seek de10segundos e retomada passaram; zero popups e zero requisições externas no navegador (tráfego da CDN passou pelo proxy local). Cache da mesma sessão reaproveitado no segundo perfil. Isso confirma reprodução de trechos reais e controles; não mede estabilidade de um episódio completo, aparelho físico Android ou expiração natural do token (explicitamente não exercitada no modo real).
+
+Nenhum processo de teste ficou em execução; teste/browser/servidor local encerrados. Nenhum push/deploy novo: usuário recusou envio, autorização não foi presumida pela liberação da rede. Integração BYSE continua apenas local. Apenas helper de teste recebeu diagnóstico sanitizado e interação corrigida nesta checagem.
+
+## BYSE: testes adicionais antes de produção
+
+Concluído teste real contínuo de180s em LokiS01E01 com NetflixPlayerSkin real:4317quadros decodificados, sem erro de mídia, uma espera de66ms. Android emulado também passou pausa/seek/retomada com38quadros. Zero popups e requests externos no navegador; CDN passa pelo proxy local. Outros arquivos reais: filmejou9rze9bien e episódio5cqowqbfd09n resolveram HLS, variante e trecho de segmento206 (1920x800 e1920x1080), sem afirmar decodificação/episódio integral nesses arquivos.
+
+Teste controlado de recuperação real concluído em desktop/Android emulado: erro503 injetado LOCALMENTE no manifesto, renovação pelo resolvedor real e retorno da reprodução da CDN. Não foi expiração natural. Helper scripts/test-byse-browser.cjs agora oferece BYSE_SOAK_MS (máximo10min) e BYSE_FORCE_RENEWAL=1. Logs em /tmp/byse-real-soak.log e /tmp/byse-real-recovery.log.
+
+Suite PM2 local executada: primeira rodada6/7, falha ECONNRESET durante rolling deploy. Repetição isolada7/7, incluindo transmissão12s preservada, healthchecks durante troca e rollback/migração. Causa da primeira falha não foi comprovada; não atribuir sem evidência a carga nem declarar garantia absoluta. Logs /tmp/byse-deploy-readiness.log e /tmp/byse-deploy-readiness-repeat.log. Nenhuma alteração em produção para estes testes. Permanecem limites: Android físico, episódio completo/expiração natural e smoke da VPS com workers/chave compartilhada após deploy autorizado.164testes de integração/regressão, TypeScript e build já passaram antes desta rodada; não reexecutados desnecessariamente pois mudanças posteriores são helper/documentação. Todos os processos desta rodada concluíram. Nenhum push/deploy novo autorizado ou realizado.
+
+## Envio BYSE autorizado
+
+Usuário autorizou explicitamente o envio neste turno ("pode enviaer"). Preparado lote BYSE com integração/skin, proxy/tickets, catálogo/admin, testes e versão Android48/1.4.16. Publicação e estado do workflow devem ser confirmados pelo resultado do push e Actions; autorização não implica deploy já concluído.

@@ -100,7 +100,7 @@ export async function searchCatalog(
         const params = new URLSearchParams({ tmdb_id: String(item.id), type: item.type === 'movie' ? 'movie' : 'tv', name: item.title });
         if (item.type === 'series') { params.set('season', '1'); params.set('episode', '1'); }
         const data = await request('/api/encontrei-lookup?' + params);
-        if (data && !data.error && (data.mixdrop || data.mixdrop_encontrei || data.mixdrop_vizer || data.streamtape || data.doodstream)) {
+        if (data && !data.error && (data.mixdrop || data.mixdrop_encontrei || data.mixdrop_vizer || data.byse || data.streamtape || data.doodstream)) {
           confirm(item); publish();
         }
       }

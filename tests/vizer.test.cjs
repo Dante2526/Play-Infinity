@@ -9,7 +9,7 @@ const listing = '<html><title>Vizer</title><a href="/series/online/example-dubla
 async function compile(route = false) {
   const root = path.resolve(__dirname, '..');
   const output = await esbuild.build({
-    stdin: { contents: `export * from './server/services/vizerDomains';${route ? "export {default as router} from './server/routes/encontreiLookup'; export {getVizerCatalogStatus,getStreamtapeSources,getMixdropSources} from './server/routes/encontreiLookup';" : ''}`, resolveDir: root, loader: 'ts' },
+    stdin: { contents: `export * from './server/services/vizerDomains';${route ? "export {default as router} from './server/routes/encontreiLookup'; export {getVizerCatalogStatus,getStreamtapeSources,getMixdropSources,getByseSources} from './server/routes/encontreiLookup';" : ''}`, resolveDir: root, loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
     plugins: [{ name: 'no-external-catalogue', setup(build) {
       build.onResolve({ filter: /^fs$|vidsrcRoutes$/ }, args => ({ path: args.path, namespace: 'fixture' }));
@@ -123,4 +123,9 @@ test('MixDrop selection reads both movie catalogues separately from StreamTape a
   api = await compile(true);
   const results = await api.getMixdropSources(999005);
   assert.deepEqual(results.map(source => source.fileId), ['md-enc', 'md-vizer']);
+});
+
+test('BYSE catalogue discovery selects exact episodes from both sources without requiring another hoster',async()=>{
+ global.__vizerCatalogueFixture={encontrei:{episodes:[{tmdb_id:999007,season:1,episode:4,audio:'Dublado',servers:{byse:'byse-enc-ep4'}}]},vizer:{episodes:[{tmdb_id:999007,season:1,episode:3,servers:{byse:'wrong-ep3'}},{tmdb_id:999007,season:1,episode:4,audio:'Legendado',servers:{byse:'byse-vizer-ep4'}}]}};
+ api=await compile(true);const sources=await api.getByseSources(999007,1,4,'Example');assert.deepEqual(sources.map(x=>x.fileId),['byse-enc-ep4','byse-vizer-ep4']);assert.equal(sources[0].audio,'Dublado');
 });

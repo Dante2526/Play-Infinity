@@ -44,7 +44,7 @@ jobs:
       - name: Validar tipos, pagamentos e reprodução
         run: |
           npm run lint
-          node --test tests/payments.test.cjs tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs tests/streamtape.test.cjs tests/streamtape-resolver.test.cjs tests/streamtape-sources.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs tests/catalog-search.test.cjs tests/vizer.test.cjs
+          node --test tests/byse-simulation.test.cjs tests/byse-routes.test.cjs tests/payments.test.cjs tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs tests/streamtape.test.cjs tests/streamtape-resolver.test.cjs tests/streamtape-sources.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs tests/catalog-search.test.cjs tests/vizer.test.cjs
           node --test tests/deploy-deps.test.cjs tests/public-frontend.test.cjs
 
       - name: Validar troca de versão com conexão ativa

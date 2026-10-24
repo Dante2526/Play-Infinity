@@ -16,7 +16,7 @@ export function rankPlaybackServers<T extends { key: string }>(servers: T[], hea
 export function chooseHealthStartupServer<T extends { key: string }>(servers: T[], health: ServerHealthMap, selected: string, playbackStarted: boolean, attempted: Set<string>): T | undefined {
   // Catalogue-backed players own bounded intra-provider source cycles.
   // Exhaust Encontrei/Vizer before a background poll changes providers.
-  if (['srv_streamtape', 'srv_mixdrop'].includes(selected) || playbackStarted || playbackHealthState(health, selected) === 'available') return undefined;
+  if (['srv_streamtape', 'srv_mixdrop', 'srv_byse'].includes(selected) || playbackStarted || playbackHealthState(health, selected) === 'available') return undefined;
   return rankPlaybackServers(servers, health).find(server => server.key !== selected && playbackHealthState(health, server.key) === 'available' && !attempted.has(server.key));
 }
 
@@ -25,7 +25,7 @@ export async function fetchPlaybackHealth(input: {
 }, signal: AbortSignal): Promise<ServerHealthMap> {
   const native = typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:');
   const origin = native ? ((import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream') : '';
-  const query = new URLSearchParams({ id: input.id, type: input.type, s: String(input.season), e: String(input.episode), servers: input.servers.join(','), name: input.name || '', nixId: input.nixId || '' });
+  const query = new URLSearchParams({ id: input.id, type: input.type, s: String(input.season), e: String(input.episode), servers: input.servers.filter(key=>key!=='srv_byse').join(','), name: input.name || '', nixId: input.nixId || '' });
   const response = await fetch(origin + '/api/playback-health?' + query, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('Health check unavailable');
   const data = await response.json();

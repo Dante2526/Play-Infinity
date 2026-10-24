@@ -340,6 +340,8 @@ process.on("uncaughtException", (err) => {
   const scrapingPrefixes = [
     "/watchplayer-stream",
     "/myembed-stream",
+    "/byse-resolve",
+    "/byse-proxy-iframe",
     "/md-stream", // ex-/mixdrop-stream (renomeado p/ driblar adblockers) — precisa continuar com limite restrito
     
     
@@ -363,6 +365,8 @@ process.on("uncaughtException", (err) => {
       req.path.startsWith("/live-stream-proxy") ||
       req.path.startsWith("/anime/hls-proxy") ||
       req.path.startsWith("/md-proxy") ||
+      req.path.startsWith("/byse-stream") ||
+      req.path.startsWith("/byse-hls.js") ||
       req.path.startsWith("/vidsrc-proxy") ||
       req.path.startsWith("/streamtape-stream") ||
       req.path.startsWith("/streamtape-proxy-iframe") ||
@@ -400,6 +404,7 @@ import bolodechocolateRouter from "./server/routes/bolodechocolate";
 import nixplayRouter from "./server/routes/nixplayRoutes";
 import vidsrcRouter from "./server/routes/vidsrcRoutes";
 import serverBlocksRouter from "./server/routes/serverBlocks";
+import byseRouter from "./server/routes/byseRoutes";
 import streamtapeRouter from "./server/routes/streamtapeRoutes";
 import { doodstreamRouter } from "./server/routes/doodstreamRoutes";
 
@@ -412,6 +417,7 @@ app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
 app.use(nixplayRouter);
 app.use(vidsrcRouter);
+app.use(byseRouter);
 app.use(streamtapeRouter);
 app.use(doodstreamRouter);
 

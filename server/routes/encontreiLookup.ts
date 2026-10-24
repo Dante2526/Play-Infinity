@@ -741,6 +741,7 @@ async function encontreiEpisodeId(
   serieId: number,
   season: number,
   episode: number,
+  strict = false,
 ): Promise<number | null> {
   if (Date.now() < _encCookieDownUntil) return null;
   const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
@@ -771,7 +772,7 @@ async function encontreiEpisodeId(
     if (!eps.length) return null;
 
     // Mesma lógica do resolveVizerEpisode: match por e.number, fallback posicional
-    const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+    const target = eps.find((e: any) => parseInt(e.number, 10) === episode) || (strict ? undefined : eps[episode - 1]);
     if (!target) return null;
 
     // Extrai o episode_id de target.url com /-(\d+)\/?$/
@@ -1855,6 +1856,10 @@ router.get("/api/encontrei-lookup", async (req, res) => {
     }
     
     if (!result) {
+      const byse = (await getByseSources(tmdbId, type === 'tv' || type === 'series' ? season : undefined, type === 'tv' || type === 'series' ? episode : undefined, lookupName))[0];
+      if(byse) result={byse:byse.fileId,audio:byse.audio,source:byse.source};
+    }
+    if (!result) {
       return res.status(200).json({ error: "Não encontrado nos catálogos (vizer + encontrei) nem nos resolvers live", tmdb_id: tmdbId });
     }
     
@@ -2053,3 +2058,49 @@ async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: 
 
 export const getStreamtapeSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('streamtape', id, season, episode, name, refresh);
 export const getMixdropSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('mixdrop', id, season, episode, name, refresh);
+
+/** BYSE discovery keeps audio and exact episode identity independent of MixDrop. */
+export async function getByseSources(id: number, season?: number, episode?: number, name?: string, refresh = false) {
+  loadCatalogs();
+  const tv = season !== undefined && episode !== undefined;
+  const key = `${id}:${season}:${episode}`;
+  return (await Promise.all(['encontrei', 'vizer'].map(async source => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const work = async () => {
+      const entry = source === 'encontrei' ? (tv ? _encontreiEpisodeIndex.get(key) : _encontreiMovieIndex.get(id)) : (tv ? _vizerEpisodeIndex.get(key) : _vizerMovieIndex.get(id));
+      if (!refresh && entry?.servers?.byse) return { fileId: String(entry.servers.byse), audio: entry.audio || 'Dublado', source };
+      let raw: any;
+      if (source === 'encontrei') {
+        if (tv) {
+          if (!_tmdbToSerieIdMap.has(id)) await ensureEncontreiFreshContent('series', name);
+          const series = _tmdbToSerieIdMap.get(id); if (!series) return null;
+          const video = await encontreiEpisodeId(series, season!, episode!, true); if (!video) return null;
+          raw = await encontreiPlayerData(video);
+        } else {
+          if (!entry) await ensureEncontreiFreshContent('movies', name);
+          const movie = _encontreiMovieIndex.get(id); if (!movie?.video_id) return null;
+          raw = await encontreiPlayerData(movie.video_id);
+        }
+      } else if (tv) {
+        if (!_tmdbToSerieIdMap.has(id)) await ensureVizerFreshContent('series', name);
+        const series = _tmdbToSerieIdMap.get(id); if (!series) return null;
+        const list = await vizerFetchJson(`do=episodesList&id=${series}&season=${season}&audio=Dublado`, 4000);
+        const ep = list?.episodes?.find((x: any) => Number(x.number) === episode);
+        const video = String(ep?.url || '').match(/-(\d+)\/?$/)?.[1]; if (!video) return null;
+        raw = await vizerFetchJson(`do=playerData&id=${video}`, 4000);
+      } else {
+        loadVizerMovieIds();
+        if (!_tmdbToVizerMovieIdMap.has(id)) await ensureVizerFreshContent('movies', name);
+        const video = _tmdbToVizerMovieIdMap.get(id); if (!video) return null;
+        raw = await vizerFetchJson(`do=playerData&id=${video}`, 4000);
+      }
+      for (const [field, audio] of [['servers_dub', 'Dublado'], ['servers_leg', 'Legendado']]) {
+        const fileId = String(raw?.[field] || '').replace(/&amp;/g, '&').match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1];
+        if (fileId) return { fileId, audio, source };
+      }
+      return null;
+    };
+    try { return await Promise.race([work(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 8000); })]); }
+    catch { return null; } finally { clearTimeout(timer); }
+  }))).filter((x): x is NonNullable<typeof x> => !!x).sort((a,b) => Number(a.audio !== 'Dublado') - Number(b.audio !== 'Dublado'));
+}

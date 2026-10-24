@@ -10,13 +10,13 @@
 1. **Reprodutores Homologados:**
    Qualquer reprodutor de vídeo que **NÃO** constar na lista negra abaixo pode ser utilizado, adicionado ou testado, desde que homologado pelo dono do projeto.
    Atualmente homologados:
+   - **BYSE:** integração própria same-origin autorizada explicitamente pelo dono em 23/10/2026; sem iframe externo do provedor.
    - **WatchPlayer Oficial:** `https://v1.watchplay.shop/...`
    - **VIP Player Dublado PT-BR:** `/api/myembed-stream?id=...`
 
 2. **Proibição Absoluta de Servidores Alternativos (Lista Negra)**
    - **É ESTRITAMENTE PROIBIDO** reintroduzir ou sugerir servidores alternativos como:
      - `Superflix` / `sfapi`
-     - `BYSE` / `Streamberry`
      - `EmbedPlay`
      - `Videasy`
      - `VidLink`
