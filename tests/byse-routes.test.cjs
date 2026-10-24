@@ -44,3 +44,24 @@ test('redirects to unrelated hosts and false HTML playlists are never passed to 
 test('proxy ticket works across worker instances sharing a key and rejects a different key',()=>{
  const key=crypto.randomBytes(32),a=api.createByseTickets(key),b=api.createByseTickets(key),c=api.createByseTickets(crypto.randomBytes(32));const ticket=a.seal('https://r66nv9ed.com/x.ts');assert.equal(b.open(ticket),'https://r66nv9ed.com/x.ts');assert.throws(()=>c.open(ticket));
 });
+
+test('one-hour pause renews once, restores saved position and respects pause during renewal',async()=>{
+ const vm=require('node:vm');
+ for(const pauseDuringRenewal of [false,true]){
+  const html=await(await nativeFetch(base+'/api/byse-proxy-iframe?fileId=working&t=100')).text();
+  const script=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];
+  let now=1000,release,requests=0,status;const listeners={},winListeners={};const parent={postMessage(){}};
+  const emit=k=>{const events=listeners[k]||[];listeners[k]=events.filter(e=>!e.once);for(const e of events)e.fn()};
+  const v={currentTime:100,readyState:1,duration:900,paused:true,buffered:{length:0},addEventListener(k,fn,o){(listeners[k]||=[]).push({fn,once:o?.once})},canPlayType:()=>true,play(){this.paused=false;emit('play');return Promise.resolve()},pause(){this.paused=true;emit('pause')}};
+  const window={parent,addEventListener:(k,f)=>winListeners[k]=f};
+  vm.runInNewContext(script,{window,document:{getElementById:()=>v},Date:{now:()=>now},setInterval:f=>status=f,setTimeout:()=>1,clearTimeout(){},AbortController,fetch:()=>{requests++;return new Promise(r=>release=r)}});
+  emit('loadedmetadata');v.currentTime=612;
+  const command=type=>winListeners.message({source:parent,data:{type}});
+  command('PAUSE');now+=3600000;command('PLAY');command('PLAY');assert.equal(requests,1);
+  // Simulate the element losing its clock while expired media is replaced.
+  v.currentTime=0;if(pauseDuringRenewal)command('PAUSE');
+  release({ok:true,json:async()=>({proxyUrl:'/api/byse-stream?ticket=new'})});
+  await new Promise(r=>setImmediate(r));emit('loadedmetadata');
+  assert.equal(v.currentTime,612);assert.equal(v.paused,pauseDuringRenewal);status();
+ }
+});

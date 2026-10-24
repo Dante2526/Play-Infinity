@@ -42,14 +42,22 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       const renewal = '/api/byse-resolve?' + identity;
       // One bounded renewal on manifest failure. The next error reaches the modal.
       html = html.replace('var fatalReported = false;', `var fatalReported = false; var renewalAttempted = false;`);
-      html = html.replace('function reportFatal(reason) {', `function reportFatal(reason) {
+      html = html.replace('function reportFatal(reason, resume) {', `function reportFatal(reason, resume) {
+        if (renewing) return;
+        if (resume) renewalAttempted = false;
         if (!renewalAttempted) {
-          renewalAttempted = true; var position=v.currentTime||initialSeek||0; var paused=v.paused;
+          renewalAttempted = true;
+          var position=resume ? pausedPosition : (v.currentTime||pausedPosition||initialSeek||0);
+          desiredPaused = resume ? false : v.paused; renewing=true;
           var ctl=new AbortController();var deadline=setTimeout(function(){ctl.abort()},45000);
           fetch(${JSON.stringify(renewal)}+'&refresh=1',{signal:ctl.signal,cache:'no-store'}).then(function(r){if(!r.ok)throw Error('resolve');return r.json()}).then(function(data){
             if(!data.proxyUrl)throw Error('source'); streamUrl=data.proxyUrl;
-            v.addEventListener('loadedmetadata',function(){v.currentTime=position;if(!paused)v.play().catch(function(){})},{once:true});startHls();
-          }).catch(function(){reportFatal(reason)}).finally(function(){clearTimeout(deadline)}); return;
+            initialSeek=position;appliedInitial=false;
+            v.addEventListener('loadedmetadata',function(){
+              v.currentTime=position;renewing=false;pausedAt=null;
+              if(!desiredPaused)v.play().catch(function(){});else v.pause();
+            },{once:true});startHls();
+          }).catch(function(){renewing=false;reportFatal(reason)}).finally(function(){clearTimeout(deadline)}); return;
         }`);
       html=html.replace(/type: "WATCHPLAY_ERROR",/g, 'type: "WATCHPLAY_ERROR", byseExhausted: true,');
       res.type('html').send(html);

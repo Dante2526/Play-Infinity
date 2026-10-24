@@ -396,6 +396,16 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
     var initialSeek = ${Number(initialTime) || 0};
     var fatalReported = false;
     var appliedInitial = false;
+    var pausedAt = null, pausedPosition = initialSeek, renewing = false, desiredPaused = false;
+    function requestPlay() {
+      desiredPaused = false;
+      if (renewing) return;
+      if (pausedAt !== null && Date.now() - pausedAt > 180000) {
+        initialSeek = pausedPosition; pausedAt = null;
+        reportFatal("Byse: renovando após pausa longa", true); return;
+      }
+      pausedAt = null; v.play().catch(function() {});
+    }
 
     function applySeek() {
       if (!appliedInitial && v && v.readyState >= 1 && initialSeek > 0) {
@@ -405,7 +415,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
     }
 
     function sendStatus() {
-      if (!v) return;
+      if (!v || renewing) return;
       var dur = v.duration || 0;
       var cur = v.currentTime || 0;
       var bufferedEnd = 0;
@@ -435,8 +445,10 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
       try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PLAYING" }, "*"); } catch (e) {}
     });
     v.addEventListener("pause", function() {
+      if (!renewing) { if (pausedAt === null) pausedAt = Date.now(); pausedPosition = v.currentTime || initialSeek || 0; desiredPaused = true; }
       try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PAUSED" }, "*"); } catch (e) {}
     });
+    v.addEventListener("seeked", function() { if (!renewing && v.paused) pausedPosition = v.currentTime; });
     v.addEventListener("ended", function() {
       try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch (e) {}
     });
@@ -447,8 +459,8 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
     window.addEventListener("message", function(event) {
       if (event.source !== window.parent || !event.data) return;
       var d = event.data;
-      if (d.type === "PAUSE" && v) v.pause();
-      if (d.type === "PLAY" && v) v.play().catch(function() {});
+      if (d.type === "PAUSE" && v) { desiredPaused = true; v.pause(); }
+      if (d.type === "PLAY" && v) requestPlay();
       if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
         if (v.readyState >= 1) v.currentTime = d.targetTime; else initialSeek = d.targetTime;
       }
@@ -461,14 +473,14 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
         v.currentTime = Math.max(0, Math.min(v.currentTime + secIntro, (v.duration || 99999) - 5));
       }
       if (d.type === "SET_MUTED") v.muted = !!d.muted;
-      if (d.type === "TOGGLE_PLAY") { if (v.paused) v.play().catch(function(){}); else v.pause(); }
+      if (d.type === "TOGGLE_PLAY") { if (desiredPaused) requestPlay(); else { desiredPaused=true; v.pause(); } }
       if (d.type === "MUTE" && v) v.muted = true;
       if (d.type === "UNMUTE" && v) v.muted = false;
       if (d.type === "SET_VOLUME" && v && typeof d.volume === "number") v.volume = d.volume;
       if (d.type === "SET_PLAYBACK_RATE" && v && typeof d.rate === "number") v.playbackRate = d.rate;
     });
 
-    function reportFatal(reason) {
+    function reportFatal(reason, resume) {
       if (fatalReported) return;
       fatalReported = true;
       try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*"); } catch (e) {}

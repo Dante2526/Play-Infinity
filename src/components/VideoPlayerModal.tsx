@@ -12,6 +12,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
+import { isExternalIframePlayer } from "../utils/playerIntegration";
 import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
@@ -387,36 +388,10 @@ export function VideoPlayerModal({
   const toNativeBridgeUrl = (mp4Url: string) =>
     `/api/native-player?url=${encodeURIComponent(mp4Url)}`;
 
-  const isExternalPlayer = useMemo(() => {
-    const activeLower = (activeIframeUrl || "").toLowerCase();
-    const inputLower = (urlInput || "").toLowerCase();
-    if (
-      activeLower.includes("upns.xyz") || activeLower.includes("embedplayapiupn") || activeLower.includes("upns") ||
-      inputLower.includes("upns.xyz") || inputLower.includes("embedplayapiupn") || inputLower.includes("upns")
-    ) {
-      return true;
-    }
-    const isIntegrated =
-      activeLower.includes("watchplay") ||
-      activeLower.includes("myembed") ||
-      activeLower.includes("playerflix") ||
-      activeLower.includes("mixdrop") ||
-      activeLower.includes("mxdrop") ||
-      activeLower.includes("/api/native-player") ||
-      activeLower.includes("/api/md-stream") ||
-      activeLower.includes("/api/watchplayer-stream") ||
-      activeLower.includes("/api/myembed-stream") ||
-      activeLower.includes("/api/anime-stream") ||
-      activeLower.includes("/api/vixsrc-stream") ||
-      activeLower.includes("/api/live-stream-proxy") ||
-      activeLower.includes("/api/vidsrc-stream") ||
-      activeLower.includes("/api/vidsrc-proxy") ||
-      activeLower.includes("/api/vidsrc-player") ||
-      activeLower.includes("/api/streamtape-proxy-iframe") ||
-      activeLower.includes("/api/streamtape-stream");
-
-    return !isIntegrated;
-  }, [activeIframeUrl, urlInput, selectedServerKey]);
+  const isExternalPlayer = useMemo(
+    () => isExternalIframePlayer(activeIframeUrl, urlInput),
+    [activeIframeUrl, urlInput],
+  );
   const [blockedAdsCount, setBlockedAdsCount] = useState<number>(0);
   const [antiAdShield, setAntiAdShield] = useState<boolean>(true);
   const [autoNextNotice, setAutoNextNotice] = useState<{ nextEp: number } | null>(null);
@@ -1501,7 +1476,7 @@ export function VideoPlayerModal({
   const handleSilentFallback = useCallback(async () => {
     // The iframe reports its actual selected file; do not infer it from the
     // catalogue's old preference after adaptive routing selected another copy.
-    if (selectedServerKey === 'srv_mixdrop' && (effectiveMovieId || tmdbId)) {
+    if (selectedServerKey === 'srv_mixdrop' && !forceRetrySameServerRef.current && (effectiveMovieId || tmdbId)) {
       const selectionEpoch = serverSelectionEpochRef.current;
       const next = await mixdropRoutingRef.current.next({ id: (effectiveMovieId || tmdbId)!,
         season: isSeries ? season : undefined, episode: isSeries ? episode : undefined,
@@ -1929,7 +1904,7 @@ export function VideoPlayerModal({
           if (!pausedAtRef.current) pausedAtRef.current = Date.now();
         } else if (isPaused === false) {
           hasPlayedRef.current = true;
-          if (!isOfflineMediaRef.current && pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
+          if (selectedServerKey !== "srv_byse" && !isOfflineMediaRef.current && pausedAtRef.current && Date.now() - pausedAtRef.current > 3 * 60 * 1000) {
             console.warn("[VideoPlayerModal] Pausa longa detectada (> 3 min). Forçando reload proativo...");
             pausedAtRef.current = null;
             retrySameServerRef.current = false;
