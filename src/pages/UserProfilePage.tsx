@@ -133,6 +133,8 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 
 import { OnPlayHandler } from "../types";
+import { buildReferralLink, generateReferralCode } from "../services/referralService";
+import { Gift, Share2, Copy as CopyIcon } from "lucide-react";
 import { auth, db } from "../services/firebase";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile } from "firebase/auth";
@@ -162,6 +164,9 @@ export function UserProfilePage({
   onPlay?: OnPlayHandler
 }) {
   const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+  const [userReferralCode, setUserReferralCode] = useState<string>("");
+  const [referredFriendsCount, setReferredFriendsCount] = useState<number>(0);
+  const [isCopiedRef, setIsCopiedRef] = useState<boolean>(false);
   const [userName, setUserName] = useState<string>(() => {
     return auth.currentUser?.displayName || (auth.currentUser?.email ? auth.currentUser.email.split('@')[0] : "Naylan Moreira");
   });
@@ -304,6 +309,19 @@ export function UserProfilePage({
         }
         if (snap.exists()) {
           const data = snap.data();
+
+          // Sincroniza código de indicação
+          const myRef = data.referralCode || generateReferralCode(data.nome || data.displayName, user.email, user.uid);
+          setUserReferralCode(myRef);
+          if (!data.referralCode) {
+            try { updateDoc(doc(db, "usuarios", user.uid), { referralCode: myRef }).catch(() => {}); } catch(e){}
+          }
+
+          // Busca total de amigos na rede deste usuário
+          try {
+            const refQ = query(collection(db, "usuarios"), where("rootReferrer", "==", user.uid));
+            getDocs(refQ).then(refSnap => setReferredFriendsCount(refSnap.size)).catch(() => {});
+          } catch (e) {}
 
           // Sincroniza nome
           const name = data.nome || data.name || data.displayName || data.nomeExibicao;
@@ -466,6 +484,76 @@ export function UserProfilePage({
             </div>
           </div>
         </div>
+
+        {/* CARD INDIQUE UM AMIGO */}
+        {userReferralCode && (
+          <div className="bg-gradient-to-br from-orange-600/15 via-[#161616] to-[#111111] border border-orange-500/25 rounded-3xl p-6 md:p-8 mb-8 shadow-xl relative overflow-hidden">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <div className="p-2 bg-orange-500/20 text-orange-400 rounded-xl">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-xl md:text-2xl font-black text-white">
+                    Indique um Amigo & Acompanhe sua Rede
+                  </h3>
+                  {referredFriendsCount > 0 && (
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      {referredFriendsCount} {referredFriendsCount === 1 ? 'amigo indicado' : 'amigos indicados'}
+                    </span>
+                  )}
+                </div>
+                <p className="text-neutral-400 text-sm leading-relaxed max-w-2xl">
+                  Compartilhe seu link exclusivo. Quando seu amigo acessar, poderá criar uma conta, testar 30 minutos grátis e você verá sua rede crescendo!
+                </p>
+
+                {/* Caixa do Link */}
+                <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-xl">
+                  <div className="bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white/80 font-mono flex-1 truncate select-all">
+                    {buildReferralLink(userReferralCode)}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const link = buildReferralLink(userReferralCode);
+                        navigator.clipboard.writeText(link);
+                        setIsCopiedRef(true);
+                        setTimeout(() => setIsCopiedRef(false), 2500);
+                      }}
+                      className="px-4 py-2.5 bg-orange-500 hover:bg-orange-600 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-orange-500/20 min-h-[44px]"
+                    >
+                      {isCopiedRef ? (
+                        <>
+                          <Check className="w-4 h-4 text-white" />
+                          <span>Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <CopyIcon className="w-4 h-4" />
+                          <span>Copiar Link</span>
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const link = buildReferralLink(userReferralCode);
+                        const msg = encodeURIComponent(`🍿 Assista a filmes, séries, doramas e animes em alta definição no Play Infinity!\n\nAcesse pelo meu link e teste grátis por 30 minutos:\n${link}`);
+                        window.open(`https://api.whatsapp.com/send?text=${msg}`, '_blank');
+                      }}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-600/20 min-h-[44px]"
+                      title="Compartilhar no WhatsApp"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      <span>WhatsApp</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* PRÉVIA DOS FAVORITOS NO PERFIL */}
         <div className="mb-10">

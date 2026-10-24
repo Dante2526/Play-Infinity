@@ -42,6 +42,8 @@ userOpsRouter.post("/api/start-trial", async (req, res) => {
       testeExpiracao: untilIso,
       trialUntil: untilIso,
       trialUsado: true,
+      trialActivatedAt: new Date().toISOString(),
+      referralStatus: "trial",
     }, { merge: true });
 
     return res.json({ success: true, trialUntil: untilIso });

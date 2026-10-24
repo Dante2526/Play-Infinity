@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon } from "lucide-react";
+import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -28,6 +29,16 @@ export interface ClientUser {
   notes?: string;
   fixedDiscount?: number;
   oneTimeDiscount?: number;
+  // Campos de Rastreamento de Indicação em Cadeia
+  referralCode?: string;
+  referredBy?: string;
+  referredByName?: string;
+  rootReferrer?: string;
+  rootReferrerName?: string;
+  referralLevel?: number;
+  referralChain?: string[];
+  referralStatus?: string;
+  trialUntil?: string;
 }
 
 interface AdminPageProps {
@@ -91,6 +102,52 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [usersList, setUsersList] = useState<ClientUser[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [selectedNetworkRoot, setSelectedNetworkRoot] = useState<string>("all");
+
+  // Mapeia o tamanho das redes de amigos e ancestrais
+  const referralCounts = React.useMemo(() => {
+    const counts = new Map<string, { direct: number; network: number; active: number; trial: number }>();
+    usersList.forEach(u => {
+      if (u.referredBy) {
+        const c = counts.get(u.referredBy) || { direct: 0, network: 0, active: 0, trial: 0 };
+        c.direct += 1;
+        counts.set(u.referredBy, c);
+      }
+      if (Array.isArray(u.referralChain)) {
+        u.referralChain.forEach(ancestorId => {
+          const c = counts.get(ancestorId) || { direct: 0, network: 0, active: 0, trial: 0 };
+          c.network += 1;
+          if (u.subscription === "ACTIVE") c.active += 1;
+          if (u.referralStatus === "trial" || u.accessType === "30min") c.trial += 1;
+          counts.set(ancestorId, c);
+        });
+      }
+    });
+    return counts;
+  }, [usersList]);
+
+  // Lista agregada das redes com amigos originais (raízes)
+  const referralNetworks = React.useMemo(() => {
+    const map = new Map<string, { rootId: string; rootName: string; total: number; active: number; trial: number }>();
+    usersList.forEach(u => {
+      if (u.rootReferrer) {
+        const rootId = u.rootReferrer;
+        const rootName = u.rootReferrerName || "Amigo";
+        const current = map.get(rootId) || { rootId, rootName, total: 0, active: 0, trial: 0 };
+        current.total += 1;
+        if (u.subscription === "ACTIVE") current.active += 1;
+        if (u.referralStatus === "trial" || u.accessType === "30min") current.trial += 1;
+        map.set(rootId, current);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [usersList]);
+
+  const handleCopyClientReferralLink = (client: ClientUser) => {
+    const code = client.referralCode || generateReferralCode(client.name, client.email, client.id);
+    const link = buildReferralLink(code);
+    copyToClipboard(link, `ref-${client.id}`);
+  };
 
   // User Creation State
   const [newName, setNewName] = useState("");
@@ -266,7 +323,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
           lastActive: data.ultimoAcesso || data.lastActive,
           notes: data.notes || "",
           fixedDiscount: Number(data.fixedDiscount) || 0,
-          oneTimeDiscount: Number(data.oneTimeDiscount) || 0
+          oneTimeDiscount: Number(data.oneTimeDiscount) || 0,
+          referralCode: data.referralCode,
+          referredBy: data.referredBy,
+          referredByName: data.referredByName,
+          rootReferrer: data.rootReferrer,
+          rootReferrerName: data.rootReferrerName,
+          referralLevel: typeof data.referralLevel === "number" ? data.referralLevel : 0,
+          referralChain: Array.isArray(data.referralChain) ? data.referralChain : [],
+          referralStatus: data.referralStatus || (data.trialUntil ? "trial" : (activeStatus ? "active" : "registered")),
+          trialUntil: data.trialUntil || data.testeExpiracao || data.testarAte
         });
       });
 
@@ -1099,6 +1165,57 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           </div>
 
+          {/* Filtro por Redes de Amigos / Indicações */}
+          {referralNetworks.length > 0 && (
+            <div className="mb-6 p-4 bg-orange-950/20 border border-orange-500/20 rounded-2xl flex flex-col gap-2.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <GitFork className="w-3.5 h-3.5 rotate-180" />
+                  Redes de Amigos & Indicações ({referralNetworks.length} redes)
+                </span>
+                {selectedNetworkRoot !== "all" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedNetworkRoot("all")}
+                    className="text-[11px] text-white/50 hover:text-white underline cursor-pointer"
+                  >
+                    Limpar filtro de rede
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setSelectedNetworkRoot("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                    selectedNetworkRoot === "all"
+                      ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
+                      : "bg-white/5 hover:bg-white/10 text-white/70"
+                  }`}
+                >
+                  Todos ({usersList.length})
+                </button>
+                {referralNetworks.map((net) => (
+                  <button
+                    key={net.rootId}
+                    type="button"
+                    onClick={() => setSelectedNetworkRoot(selectedNetworkRoot === net.rootId ? "all" : net.rootId)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 cursor-pointer ${
+                      selectedNetworkRoot === net.rootId
+                        ? "bg-orange-500 text-white shadow-md shadow-orange-500/30"
+                        : "bg-white/5 hover:bg-white/10 text-white/80 border border-white/5"
+                    }`}
+                  >
+                    <span>Rede de {net.rootName}</span>
+                    <span className="px-1.5 py-0.2 bg-black/40 rounded-md text-[10px] font-black">
+                      {net.total}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {loadingUsers ? (
             <div className="grid grid-cols-1 gap-3">
               {[1, 2, 3, 4].map((i) => (
@@ -1122,11 +1239,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           ) : usersList.filter(u => {
             const q = searchTerm.toLowerCase();
-            return (
+            const matchesSearch = (
               (u.name && u.name.toLowerCase().includes(q)) ||
               (u.email && u.email.toLowerCase().includes(q)) ||
-              (u.accessType && u.accessType.toLowerCase().includes(q))
+              (u.accessType && u.accessType.toLowerCase().includes(q)) ||
+              (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
+              (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
+              (u.referralCode && u.referralCode.toLowerCase().includes(q))
             );
+            if (selectedNetworkRoot !== "all") {
+              const matchesNetwork = u.rootReferrer === selectedNetworkRoot || u.id === selectedNetworkRoot;
+              return matchesSearch && matchesNetwork;
+            }
+            return matchesSearch;
           }).length === 0 ? (
             <div className="text-center py-12 border border-dashed border-white/10 rounded-[22px] bg-white/[0.02]">
               <Users className="w-10 h-10 text-white/20 mx-auto mb-3" />
@@ -1139,11 +1264,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
               {usersList
                 .filter(u => {
                   const q = searchTerm.toLowerCase();
-                  return (
+                  const matchesSearch = (
                     (u.name && u.name.toLowerCase().includes(q)) ||
                     (u.email && u.email.toLowerCase().includes(q)) ||
-                    (u.accessType && u.accessType.toLowerCase().includes(q))
+                    (u.accessType && u.accessType.toLowerCase().includes(q)) ||
+                    (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
+                    (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
+                    (u.referralCode && u.referralCode.toLowerCase().includes(q))
                   );
+                  if (selectedNetworkRoot !== "all") {
+                    const matchesNetwork = u.rootReferrer === selectedNetworkRoot || u.id === selectedNetworkRoot;
+                    return matchesSearch && matchesNetwork;
+                  }
+                  return matchesSearch;
                 })
                 .map((client) => {
                   const initial = (client.name || client.email || 'U').charAt(0).toUpperCase();
@@ -1270,6 +1403,40 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               )}
                             </button>
                           </div>
+
+                          {/* Linhagem de Indicação / Rede */}
+                          {client.referredBy && (
+                            <div className="flex items-center gap-1.5 flex-wrap text-[11px] mt-2 bg-white/[0.04] border border-white/5 rounded-xl px-2.5 py-1 w-fit max-w-full">
+                              <span className="text-orange-400 font-bold flex items-center gap-1 shrink-0">
+                                <GitFork className="w-3 h-3 rotate-180" />
+                                <span>Indicado por:</span>
+                                <span className="text-white font-medium">{client.referredByName || "Amigo"}</span>
+                              </span>
+                              {client.rootReferrer && client.rootReferrer !== client.referredBy && (
+                                <span className="text-white/40 flex items-center gap-1 shrink-0">
+                                  <span>•</span>
+                                  <span>Rede de:</span>
+                                  <span className="text-orange-300 font-medium">{client.rootReferrerName || "Amigo Raiz"}</span>
+                                  {typeof client.referralLevel === "number" && client.referralLevel > 1 && (
+                                    <span className="px-1.5 py-0.2 bg-orange-500/20 text-orange-400 rounded-md text-[10px] font-bold">
+                                      Nível {client.referralLevel}
+                                    </span>
+                                  )}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Tag de Promotor / Indicador (se tiver amigos na rede) */}
+                          {Boolean(referralCounts.get(client.id)?.network) && (
+                            <div className="flex items-center gap-1.5 text-[11px] mt-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-2.5 py-1 text-emerald-400 font-bold w-fit">
+                              <Users className="w-3 h-3" />
+                              <span>{referralCounts.get(client.id)!.network} amigos na rede</span>
+                              <span className="text-emerald-400/60 font-normal">
+                                ({referralCounts.get(client.id)!.active} ativos{referralCounts.get(client.id)!.trial > 0 ? `, ${referralCounts.get(client.id)!.trial} teste` : ''})
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -1371,6 +1538,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                         {/* Botões de Ação */}
                         <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+                          {/* Botão de Copiar Link de Indicação */}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyClientReferralLink(client)}
+                            title="Copiar link de indicação deste cliente"
+                            className="px-3 py-2 bg-orange-600/15 hover:bg-orange-600/25 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/30 shrink-0"
+                          >
+                            {copiedKey === `ref-${client.id}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-green-400" />
+                                <span className="text-green-400">Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <LinkIcon className="w-3.5 h-3.5" />
+                                <span>Link</span>
+                              </>
+                            )}
+                          </button>
+
                           {/* Botão de Editar Credenciais */}
                           <button
                             type="button"

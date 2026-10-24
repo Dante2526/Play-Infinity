@@ -6,6 +6,13 @@ import { auth, db } from "../services/firebase";
 import { reportAppError } from "./GlobalErrorModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "./TurnstileWidget";
+import {
+  getStoredReferralCode,
+  resolveReferrerData,
+  computeReferralLineage,
+  generateReferralCode,
+  clearStoredReferralCode
+} from "../services/referralService";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -105,6 +112,30 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             console.warn("[Auth] Não foi possível salvar displayName nativo:", profileErr);
           }
 
+          // Resolução de linhagem e indicação em cadeia (Rede de Amigos)
+          const refCode = getStoredReferralCode();
+          let lineage = {
+            referredBy: null as string | null,
+            referredByName: null as string | null,
+            rootReferrer: null as string | null,
+            rootReferrerName: null as string | null,
+            referralLevel: 0,
+            referralChain: [] as string[]
+          };
+
+          if (refCode) {
+            try {
+              const referrer = await resolveReferrerData(refCode);
+              if (referrer && referrer.id !== userCred.user.uid) {
+                lineage = computeReferralLineage(referrer);
+              }
+            } catch (refErr) {
+              console.warn("[Auth] Erro ao calcular linhagem de indicação:", refErr);
+            }
+          }
+
+          const myReferralCode = generateReferralCode(name, email, userCred.user.uid);
+
           await setDoc(doc(db, "usuarios", userCred.user.uid), {
             nome: name.trim(),
             email: email.trim(),
@@ -113,8 +144,18 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             tipoAcesso: "mensal",
             valorMensalidade: 13.00,
             valor: "13,00",
-            criadoEm: new Date().toISOString()
+            criadoEm: new Date().toISOString(),
+            referralCode: myReferralCode,
+            referredBy: lineage.referredBy,
+            referredByName: lineage.referredByName,
+            rootReferrer: lineage.rootReferrer,
+            rootReferrerName: lineage.rootReferrerName,
+            referralLevel: lineage.referralLevel,
+            referralChain: lineage.referralChain,
+            referralStatus: "registered"
           }, { merge: true });
+
+          clearStoredReferralCode();
         }
       }
 
