@@ -1,3 +1,23 @@
+## 24/10/2026 - Sincronização Remota do GitHub e Correção do React Error #31 em DetailsPage
+
+**Contexto e Motivação:**
+1. **Sincronização com o GitHub:** O repositório local foi atualizado com 11 novos commits do branch remoto `origin/main` (incluindo integrações BYSE, Node 24, recovery do Mixdrop/Streamtape e melhorias no deploy).
+2. **Remoção de Botões Duplicados de Zero-Downtime:** Conforme solicitado, removemos os botões excedentes de "Zero-Downtime" do monitor de infraestrutura e do rodapé do `AdminDeployMonitor.tsx`, preservando apenas o botão no card de CI/CD.
+3. **Resolução Definitiva do React Render Error #31:** Em produção (`https://play-infinity.stream/`), a página de detalhes quebrava com `Minified React error #31: Objects are not valid as a React child (found: object with keys {id, name})` devido à renderização direta de objetos `{ id, name }` dentro de `<span>` ao processar gêneros vindos do TMDB.
+
+**Modificações Realizadas:**
+1. **`src/utils/mediaUtils.ts`:**
+   - Adicionadas funções auxiliares `getGenreName(g: any): string` e `normalizeGenres(genres: any): string[]` que sanitizam arrays e garantem apenas strings válidas.
+2. **`src/pages/DetailsPage.tsx`:**
+   - Normalização aplicada em `details.genres`, `currentGenres`, `catGenres` e chave única `${g}-${idx}` nos `<span>` dos gêneros.
+3. **`src/components/AdminDeployMonitor.tsx`:**
+   - Botões duplicados de Zero-Downtime removidos.
+4. **Build e Testes:**
+   - `npm run build` executado com sucesso (Vite + esbuild).
+   - Grafo de conhecimento (`graphify update .`) devidamente sincronizado.
+
+---
+
 ﻿## 20/10/2026 - Correção de Cold Start ao Clicar em Continuar Assistindo no Android
 
 **Contexto e Motivação:**
@@ -943,12 +963,12 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 - **Monitor do RobÃƒÂ´ Ampere:** Adicionada uma nova seÃƒÂ§ÃƒÂ£o "RobÃƒÂ´ de CriaÃƒÂ§ÃƒÂ£o VPS (Ampere)" no componente `AdminDeployMonitor.tsx` do painel de administrador, renderizando um terminal ao vivo que acompanha as tentativas de criaÃƒÂ§ÃƒÂ£o da instÃƒÂ¢ncia na Oracle Cloud.
 - **PrecificaÃƒÂ§ÃƒÂ£o:** O valor da assinatura do **Plano Plus** foi reduzido de R$ 20,00 para R$ 17,00 no `DownloadPlusModal.tsx`.
 
- # #   0 3 / 1 0 / 2 0 2 6   -   O t i m i z a Ã¯Â¿Â½ Ã¯Â¿Â½ o   d e   B u s c a   n o   C a t Ã¯Â¿Â½ l o g o 
- 
- * * R e s u m o : * * 
- -   * * O t i m i z a Ã¯Â¿Â½ Ã¯Â¿Â½ o   d o   e n c o n t r e i - c a t a l o g . j s o n : * *   A   r o t a   c h e c k - s e a s o n   e m    i d e o S c r a p e r s . t s   f o i   r e f a t o r a d a   p a r a   u t i l i z a r   a   f u n Ã¯Â¿Â½ Ã¯Â¿Â½ o   g e t E n c o n t r e i S e a s o n E p i s o d e s   d o   e n c o n t r e i L o o k u p . t s ,   a c e s s a n d o   o   Ã¯Â¿Â½ n d i c e   e m   m e m Ã¯Â¿Â½ r i a   e x i s t e n t e   e m   v e z   d e   r o d a r   J S O N . p a r s e   n u m   a r q u i v o   d e   1 4   M B   a   c a d a   r e q u i s i Ã¯Â¿Â½ Ã¯Â¿Â½ o . 
- 
- 
+## 03/10/2026 - OtimizaÃ¯Â¿Â½Ã¯Â¿Â½o de Busca no CatÃ¯Â¿Â½logo
+
+**Resumo:**
+- **OtimizaÃ¯Â¿Â½Ã¯Â¿Â½o do encontrei-catalog.json:** A rota check-season em ideoScrapers.ts foi refatorada para utilizar a funÃ¯Â¿Â½Ã¯Â¿Â½o getEncontreiSeasonEpisodes do encontreiLookup.ts, acessando o Ã¯Â¿Â½ndice em memÃ¯Â¿Â½ria existente em vez de rodar JSON.parse num arquivo de 14 MB a cada requisiÃ¯Â¿Â½Ã¯Â¿Â½o.
+
+
 
 ## 03/10/2026 - CorreÃ¯Â¿Â½Ã¯Â¿Â½es de VideoPlayer e Monitoramento
 
@@ -1017,19 +1037,19 @@ Ou seja: **nÃ£o Ã© movieÃ—series â€” Ã© conteÃºdo-especÃ­fico.
 
 ### 07/10/2026 - CorreÃ§Ã£o do Servidor Nixplay (Hunter x Hunter)
 - **Bloqueio de SÃ©rie com Arquivos Offline:** O anime Hunter x Hunter 2011 (TMDB ID 46298) foi incluÃ­do numa lista de bloqueio do catÃ¡logo Nixplay (em server/services/nixplayCatalog.ts). Os arquivos .mp4 deste anime no servidor Nixplay estavam retornando erro 503 (Worker de reproduÃ§Ã£o indisponÃ­vel). O bloqueio forÃ§a a interface a nÃ£o exibir o Nixplay para essa sÃ©rie e usar os servidores de fallback primÃ¡rios (WatchPlayer e VIP Player), que mapeiam corretamente os episÃ³dios pelo TMDB e estÃ£o funcionando com sucesso.
-# #   F i x   S 3 E 1 4 0   ( A b s o l u t e   E p i s o d e   I n d e x i n g )   f o r   W a t c h P l a y e r / V I P   P l a y e r 
- 
- -   I d e n t i f i e d   t h a t   T M D B   r e t u r n s   a b s o l u t e   e p i s o d e _ n u m b e r s   ( e . g . ,   1 4 0 )   f o r   S e a s o n   3   o f   H u n t e r   x   H u n t e r . 
- 
- -   I d e n t i f i e d   t h a t   W a t c h P l a y e r   a n d   V I P   P l a y e r   e x p e c t   r e l a t i v e ,   1 - b a s e d   i n d i c e s   f o r   e p i s o d e s   ( S 3 E 4 ) . 
- 
- -   C r e a t e d   b a c k e n d   p r o x y   r o u t e s   \ / a p i / w a t c h p l a y - p r o x y - i f r a m e \   a n d   \ / a p i / v i p - p r o x y - i f r a m e \   i n   \ s e r v e r / r o u t e s / v i d e o S c r a p e r s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e d i r e c t i n g . 
- 
- -   P a t c h e d   \ V i d e o P l a y e r M o d a l . t s x \   t o   r o u t e   \ s r v _ w a t c h p l a y \   a n d   \ s r v _ v i p \   t h r o u g h   t h e   n e w   p r o x y   e n d p o i n t s . 
- 
- -   P a t c h e d   \  i d s r c R o u t e s . t s \   t o   i n t e r c e p t   a b s o l u t e   e p i s o d e   r e q u e s t s   ( e   >   5 0 )   a n d   c o n v e r t   t h e m   t o   r e l a t i v e   1 - b a s e d   i n d i c e s   v i a   T M D B   l o o k u p   b e f o r e   r e q u e s t i n g   t h e   s t r e a m   f r o m   v i d s r c . 
- 
- 
+## Fix S3E140 (Absolute Episode Indexing) for WatchPlayer/VIP Player
+
+- Identified that TMDB returns absolute episode_numbers (e.g., 140) for Season 3 of Hunter x Hunter.
+
+- Identified that WatchPlayer and VIP Player expect relative, 1-based indices for episodes (S3E4).
+
+- Created backend proxy routes \/api/watchplay-proxy-iframe\ and \/api/vip-proxy-iframe\ in \server/routes/videoScrapers.ts\ to intercept absolute episode requests (e > 50) and convert them to relative 1-based indices via TMDB lookup before redirecting.
+
+- Patched \VideoPlayerModal.tsx\ to route \srv_watchplay\ and \srv_vip\ through the new proxy endpoints.
+
+- Patched \idsrcRoutes.ts\ to intercept absolute episode requests (e > 50) and convert them to relative 1-based indices via TMDB lookup before requesting the stream from vidsrc.
+
+
 ## CorreÃ§Ã£o de Hunter x Hunter no VIP Player / WatchPlayer (07/10/2026)
 - Descobrimos que o site animexhd.xyz roda o VIP Player mas enviava a Temporada 1.
 - O PlayerFlix (fonte do VIP Player) aloca **todos** os episÃ³dios de animes contÃ­nuos na Temporada 1.
