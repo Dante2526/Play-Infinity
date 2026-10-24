@@ -56,6 +56,18 @@ input:-webkit-autofill:active {
     caret-color: white;
 }
 
+/* Oculta spin-buttons de inputs numéricos universalmente (Chrome, Safari, Edge, Firefox) */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+
 /* Scrollbar ultrafina e premium estilo streaming escuro (elimina barra cinza clássica do Windows) */
 ::-webkit-scrollbar {
   width: 5px;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon } from "lucide-react";
+import { Users, CreditCard, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
@@ -184,6 +184,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editNotes, setEditNotes] = useState("");
   const [editFixedDiscount, setEditFixedDiscount] = useState<number>(0);
   const [editOneTimeDiscount, setEditOneTimeDiscount] = useState<number>(0);
+  const [editFixedDiscountStr, setEditFixedDiscountStr] = useState<string>("0,00");
+  const [editOneTimeDiscountStr, setEditOneTimeDiscountStr] = useState<string>("0,00");
+
+  // Helper para parsing flexivel de moeda (aceita 20, 20,5, 20.5, 100, etc)
+  const parseCurrencyInput = (val: string): number => {
+    if (!val) return 0;
+    const clean = val.replace(/[^\d.,]/g, '').trim();
+    if (!clean) return 0;
+    if (clean.includes(',')) {
+      const normalized = clean.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(normalized);
+      return isNaN(n) || n < 0 ? 0 : n;
+    }
+    const n = parseFloat(clean);
+    return isNaN(n) || n < 0 ? 0 : n;
+  };
+
+  const formatCurrencyDisplay = (num: number): string => {
+    return num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
 
   // Estado do Modal de Usuários Assistindo Agora
   const [showActiveViewersModal, setShowActiveViewersModal] = useState(false);
@@ -600,8 +620,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setEditMonthlyPrice(user.monthlyFee?.includes("9,90") || user.monthlyFee?.includes("9.90") ? "9.90" : "13.00");
     setEditExpirationDate(formatIsoToLocalInput(user.expirationDate));
     setEditNotes(user.notes || "");
-    setEditFixedDiscount(user.fixedDiscount || 0);
-    setEditOneTimeDiscount(user.oneTimeDiscount || 0);
+    const fixed = user.fixedDiscount || 0;
+    setEditFixedDiscount(fixed);
+    setEditFixedDiscountStr(fixed > 0 ? formatCurrencyDisplay(fixed) : "0,00");
+
+    const oneTime = user.oneTimeDiscount || 0;
+    setEditOneTimeDiscount(oneTime);
+    setEditOneTimeDiscountStr(oneTime > 0 ? formatCurrencyDisplay(oneTime) : "0,00");
     setEditError("");
     setEditSuccess("");
   };
@@ -1375,6 +1400,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               </span>
                             )}
 
+                            {/* Badges de Descontos Configurados */}
+                            {Boolean(client.fixedDiscount && client.fixedDiscount > 0) && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0" title="Desconto fixo mensal aplicado">
+                                Desc. Fixo: R$ {client.fixedDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                            {Boolean(client.oneTimeDiscount && client.oneTimeDiscount > 0) && (
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0" title="Desconto único aplicado">
+                                Desc. Único: R$ {client.oneTimeDiscount.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+
                             {/* Badge Status */}
                             <span className={`px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold shrink-0 ${
                               isActive
@@ -1937,7 +1974,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
 
             <form onSubmit={handleSaveEdit} className="flex flex-col flex-1 min-h-0">
-              <div className="overflow-y-auto overflow-x-hidden pr-1 -mr-1 custom-scrollbar pb-1 flex-1 space-y-3 pt-1">
+              <div className="overflow-y-auto custom-scrollbar p-1 flex-1 space-y-3">
               {editSuccess && (
                 <div className="mb-2.5 py-1.5 px-3 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-xs font-medium shrink-0">
                   ✅ {editSuccess}
@@ -2183,65 +2220,122 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 />
               </div>
 
-              {/* Opção de Preço Mensal */}
+              {/* Cartão Unificado: Mensalidade & Descontos com Espaços Distintos */}
               {editAccessType === "mensal" && (
-                <>
-                <div className="flex items-center justify-between gap-2 bg-black/20 p-2 rounded-lg border border-white/5">
-                  <label className="text-white/60 text-[10px] font-bold uppercase tracking-wider">Valor Mensal:</label>
-                  <div className="flex gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditMonthlyPrice("13.00")}
-                      className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all ${
-                        editMonthlyPrice === "13.00"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "bg-white/5 text-white/60 hover:text-white"
-                      }`}
-                    >
-                      R$ 13,00 (Padrão)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setEditMonthlyPrice("9.90")}
-                      className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all ${
-                        editMonthlyPrice === "9.90"
-                          ? "bg-orange-500 text-white shadow-sm"
-                          : "bg-white/5 text-white/60 hover:text-white"
-                      }`}
-                    >
-                      R$ 9,90
-                    </button>
+                <div className="p-2.5 sm:p-3 rounded-xl bg-black/40 border border-white/10 space-y-3">
+                  {/* Espaço 1: Valor da Mensalidade */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="text-white/80 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                        Valor da Mensalidade
+                      </label>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setEditMonthlyPrice("13.00")}
+                          className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                            editMonthlyPrice === "13.00"
+                              ? "bg-orange-500 text-white shadow-sm"
+                              : "bg-white/5 text-white/60 hover:text-white"
+                          }`}
+                        >
+                          R$ 13,00 (Padrão)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditMonthlyPrice("9.90")}
+                          className={`py-1 px-2.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+                            editMonthlyPrice === "9.90"
+                              ? "bg-orange-500 text-white shadow-sm"
+                              : "bg-white/5 text-white/60 hover:text-white"
+                          }`}
+                        >
+                          R$ 9,90
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Espaço 2: Descontos na Assinatura (Espaço Próprio com Divisor Sutil) */}
+                  <div className="pt-2.5 border-t border-white/5 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <label className="text-white/80 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                        <Percent className="w-3.5 h-3.5 text-orange-400" />
+                        Descontos na Assinatura
+                      </label>
+                      <span className="text-[10px] text-white/40 font-medium">Opcional</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">
+                          Desconto Fixo
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold pointer-events-none select-none">
+                            R$
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editFixedDiscountStr}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/[^\d.,]/g, '');
+                              setEditFixedDiscountStr(raw);
+                              setEditFixedDiscount(parseCurrencyInput(raw));
+                            }}
+                            onBlur={() => {
+                              const parsed = parseCurrencyInput(editFixedDiscountStr);
+                              setEditFixedDiscount(parsed);
+                              setEditFixedDiscountStr(formatCurrencyDisplay(parsed));
+                            }}
+                            onFocus={(e) => {
+                              if (editFixedDiscountStr === "0,00" || editFixedDiscountStr === "0") {
+                                e.target.select();
+                              }
+                            }}
+                            className="w-full bg-white/5 border border-white/10 py-1.5 pl-8 pr-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-xs font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+                            placeholder="0,00"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">
+                          Desconto Único
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/40 text-xs font-bold pointer-events-none select-none">
+                            R$
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editOneTimeDiscountStr}
+                            onChange={(e) => {
+                              const raw = e.target.value.replace(/[^\d.,]/g, '');
+                              setEditOneTimeDiscountStr(raw);
+                              setEditOneTimeDiscount(parseCurrencyInput(raw));
+                            }}
+                            onBlur={() => {
+                              const parsed = parseCurrencyInput(editOneTimeDiscountStr);
+                              setEditOneTimeDiscount(parsed);
+                              setEditOneTimeDiscountStr(formatCurrencyDisplay(parsed));
+                            }}
+                            onFocus={(e) => {
+                              if (editOneTimeDiscountStr === "0,00" || editOneTimeDiscountStr === "0") {
+                                e.target.select();
+                              }
+                            }}
+                            className="w-full bg-white/5 border border-white/10 py-1.5 pl-8 pr-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 focus:border-orange-500 text-xs font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none transition-all"
+                            placeholder="0,00"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                
-                {/* Descontos */}
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div>
-                    <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Desconto Fixo (R$)</label>
-                    <input
-                      type="number"
-                      value={editFixedDiscount}
-                      onChange={(e) => setEditFixedDiscount(Number(e.target.value))}
-                      className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-white/60 text-[10px] font-bold uppercase tracking-wider mb-1">Desconto Único (R$)</label>
-                    <input
-                      type="number"
-                      value={editOneTimeDiscount}
-                      onChange={(e) => setEditOneTimeDiscount(Number(e.target.value))}
-                      className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-medium"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                    />
-                  </div>
-                </div>
-                </>
               )}
 
                 </div>
