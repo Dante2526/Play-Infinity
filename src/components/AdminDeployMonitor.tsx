@@ -556,15 +556,6 @@ export function AdminDeployMonitor() {
             Atualizar
           </button>
 
-          <button
-            onClick={() => handleVpsAction("restart-all", "Zero-Downtime")}
-            disabled={actionLoading !== null}
-            className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 hover:bg-orange-500/20 active:scale-95 text-orange-400 rounded-xl text-xs font-semibold border border-orange-500/20 transition-all cursor-pointer disabled:opacity-50"
-            title="Recarregar aplicação em modo cluster sem derrubar quem está assistindo"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
-            Zero-Downtime
-          </button>
         </div>
       </div>
 
@@ -1349,16 +1340,6 @@ export function AdminDeployMonitor() {
               </span>
 
               <div className="flex flex-wrap gap-3">
-                <button
-                  onClick={() => handleVpsAction("restart-all", "Zero-Downtime")}
-                  disabled={actionLoading !== null}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-xl text-xs font-bold transition-all cursor-pointer disabled:opacity-50 w-full sm:w-auto"
-                  title="Recarregar a aplicação preservando conexões dentro da janela de drenagem"
-                >
-                  <RotateCw className={`w-3.5 h-3.5 ${actionLoading === "restart-all" ? "animate-spin text-orange-400" : ""}`} />
-                  {actionLoading === "restart-all" ? "Recarregando..." : "Zero-Downtime"}
-                </button>
-
                 <button
                   onClick={() => handleVpsAction("restart-proxy", "Reiniciar Proxy de TV (video-proxy)")}
                   disabled={actionLoading !== null}

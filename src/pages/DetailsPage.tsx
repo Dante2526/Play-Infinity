@@ -48,7 +48,7 @@ import {
   DownloadAvailability 
 } from "../services/downloadService";
 
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable, normalizeGenres } from "../utils/mediaUtils";
 import { 
   resolveCardIdentity,
   getSeasonDetails, 
@@ -365,7 +365,7 @@ export function DetailsPage({
             posterUrl: details.poster_path ? formatImageUrl(details.poster_path, 'w500') : prev.posterUrl,
             year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
             rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
-            genres: details.genres ? details.genres.map(g => g.name) : prev.genres,
+            genres: details.genres ? normalizeGenres(details.genres) : prev.genres,
             imdbId: details.imdb_id || prev.imdbId,
             isAnime: Boolean(
               prev.isAnime || 
@@ -565,11 +565,11 @@ export function DetailsPage({
     setComments(updated);
   };
 
-  const currentGenres: string[] = Array.isArray(item.genres) && item.genres.length > 0
-    ? item.genres
-    : Array.isArray(tmdbDetails?.genres)
-      ? tmdbDetails.genres.map(g => g.name)
-      : [];
+  const currentGenres: string[] = normalizeGenres(
+    Array.isArray(item.genres) && item.genres.length > 0
+      ? item.genres
+      : tmdbDetails?.genres
+  );
 
   const similarItems = React.useMemo(() => {
     const list: CatalogItem[] = [];
@@ -586,7 +586,7 @@ export function DetailsPage({
     // 2. Mídias do catálogo local com mesmo gênero e tipo
     for (const cat of allCatalogs) {
       if (!seenIds.has(cat.id) && isMediaAvailable(cat)) {
-        const catGenres = Array.isArray(cat.genres) ? cat.genres : [];
+        const catGenres = normalizeGenres(cat.genres);
         if (currentGenres.length > 0 && catGenres.some(g => currentGenres.includes(g))) {
           seenIds.add(cat.id);
           list.push(cat);
@@ -922,8 +922,8 @@ export function DetailsPage({
               </p>
               
               <div className="flex flex-wrap gap-2 pt-2">
-                {currentGenres.map(g => (
-                  <span key={g} className="px-3 py-1 bg-[#1c1c1c] border border-neutral-800 rounded-lg text-xs font-medium text-neutral-300">
+                {currentGenres.map((g, idx) => (
+                  <span key={`${g}-${idx}`} className="px-3 py-1 bg-[#1c1c1c] border border-neutral-800 rounded-lg text-xs font-medium text-neutral-300">
                     {g}
                   </span>
                 ))}

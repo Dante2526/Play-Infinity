@@ -33,6 +33,20 @@ const availableTmdbIds: Set<number> = new Set(
     : []
 );
 
+/** Extrai o nome de um gênero de forma segura (lidando com string ou objeto {id, name}) */
+export function getGenreName(g: any): string {
+  if (!g) return "";
+  if (typeof g === "string") return g;
+  if (typeof g === "object" && typeof g.name === "string") return g.name;
+  return "";
+}
+
+/** Normaliza lista de gêneros para array de strings limpas */
+export function normalizeGenres(genres: any): string[] {
+  if (!Array.isArray(genres)) return [];
+  return genres.map(getGenreName).filter(Boolean);
+}
+
 /** Verifica se um item possui qualidade CAM (gravação de cinema) */
 export function checkIsCam(title?: string, quality?: string): boolean {
   if (quality === 'CAM' || quality === 'TS') return true;
