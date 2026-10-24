@@ -1,3 +1,19 @@
+## 24/10/2026 - Embutimento de Símbolos Nativos (NDK debugSymbolLevel) e Versão 53 (1.4.21)
+
+**Contexto e Motivação:**
+Após a aprovação das correções de Edge-to-Edge e R8 no código 52, a Google Play Console sugeriu a inclusão dos símbolos de depuração nativos (`.so`) para depuração aprofundada de ANRs e crashes.
+
+**Modificações Realizadas (1 arquivo):**
+1. **`android/app/build.gradle`:**
+   - Adicionada a instrução `ndk { debugSymbolLevel 'SYMBOL_TABLE' }` no bloco `buildTypes.release`, fazendo o Android Gradle Plugin gerar e embutir os símbolos de depuração nativos diretamente no arquivo `.aab`.
+   - Incrementado `versionCode` para **`53`** e `versionName` para **`"1.4.21"`**.
+
+**Validação:**
+- Sincronização Capacitor (`npx cap copy android`) executada com sucesso.
+- Sintaxe Gradle validada.
+
+---
+
 ## 24/10/2026 - Correção das 3 Recomendações da Google Play Console (Android 15/16, Edge-to-Edge e R8)
 
 **Contexto e Diagnóstico:**
