@@ -108,8 +108,34 @@ export function AdminBugReports() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center py-20 text-white">
-        Carregando relatórios...
+      <div className="space-y-6">
+        <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-7 h-7 rounded-lg bg-red-500/20 animate-pulse" />
+            <div className="h-7 w-48 bg-white/10 rounded-md animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {[1, 2].map((i) => (
+              <div
+                key={i}
+                className="bg-[#141414] border border-white/10 rounded-2xl p-5 flex flex-col justify-between space-y-4 animate-pulse"
+              >
+                <div className="space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="h-5 w-40 bg-white/10 rounded-md" />
+                    <div className="h-5 w-16 bg-white/10 rounded-md" />
+                  </div>
+                  <div className="h-4 w-full bg-white/5 rounded-md" />
+                  <div className="h-4 w-2/3 bg-white/5 rounded-md" />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <div className="h-9 w-28 bg-white/10 rounded-xl" />
+                  <div className="h-9 w-24 bg-white/5 rounded-xl" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

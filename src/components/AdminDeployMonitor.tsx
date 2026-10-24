@@ -129,8 +129,8 @@ function parseCommitMessage(rawMessage: string) {
   if (!rawMessage) return { title: "Sem descrição", body: "" };
   const clean = rawMessage.trim().replace(/^"|"$/g, "");
 
-  // 1. Tenta quebrar na primeira quebra de linha (\r ou \n)
-  const newlineMatch = clean.match(/^([^\r\n]+)(?:[\r\n]+([\s\S]*))?$/);
+  // 1. Tenta quebrar na primeira quebra de linha (\r ou \r\n)
+  const newlineMatch = clean.match(/^([^\r\r\n]+)(?:[\r\r\n]+([\s\S]*))?$/);
   if (newlineMatch && newlineMatch[2]?.trim()) {
     return {
       title: newlineMatch[1].trim(),
@@ -621,7 +621,25 @@ export function AdminDeployMonitor() {
         )}
 
         {/* Card Destaque: Último Deploy */}
-        {latestRun ? (
+        {githubLoading && !githubData ? (
+          <div className="p-6 rounded-[24px] border border-white/5 bg-[#141414] animate-pulse space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white/10 shrink-0" />
+                <div className="space-y-2">
+                  <div className="h-4 w-36 bg-white/10 rounded-md" />
+                  <div className="h-3 w-48 bg-white/5 rounded-md" />
+                </div>
+              </div>
+              <div className="h-6 w-24 bg-white/10 rounded-full" />
+            </div>
+            <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-2.5">
+              <div className="h-3 w-28 bg-white/5 rounded" />
+              <div className="h-5 w-3/4 max-w-md bg-white/10 rounded-md" />
+              <div className="h-3 w-40 bg-white/5 rounded" />
+            </div>
+          </div>
+        ) : latestRun ? (
           <div className="space-y-6">
             <div className={`p-6 rounded-[24px] border transition-all ${
               latestRun.status === "in_progress" || latestRun.status === "queued"
@@ -1124,74 +1142,121 @@ export function AdminDeployMonitor() {
         {/* Grid de Status dos Serviços */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           {/* Status Proxy de TV */}
-          <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className={`p-3 rounded-2xl ${
-                vpsData?.proxyStatus.online ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
-              }`}>
-                {vpsData?.proxyStatus.online ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+          {vpsLoading && !vpsData ? (
+            <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-white/10 shrink-0" />
+                <div className="space-y-2">
+                  <div className="h-3 w-32 bg-white/10 rounded" />
+                  <div className="h-4 w-44 bg-white/10 rounded" />
+                  <div className="h-2.5 w-28 bg-white/5 rounded" />
+                </div>
               </div>
-              <div>
-                <span className="text-xs text-white/50 block font-semibold uppercase tracking-wider">
-                  Proxy de TV ao Vivo (HLS)
-                </span>
-                <span className="text-base font-bold text-white flex items-center gap-2 mt-0.5">
-                  {vpsData?.proxyStatus.online ? (
-                    <span className="text-emerald-400 flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
-                      🟢 Online & Operacional
-                    </span>
-                  ) : (
-                    <span className="text-red-400">🔴 Offline / Inacessível</span>
-                  )}
-                </span>
-                <span className="text-[11px] text-white/40 font-mono block mt-1">
-                  https://play-infinity.stream
-                </span>
+              <div className="space-y-1.5 text-right">
+                <div className="h-2.5 w-12 bg-white/5 rounded ml-auto" />
+                <div className="h-4 w-14 bg-white/10 rounded ml-auto" />
               </div>
             </div>
+          ) : (
+            <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className={`p-3 rounded-2xl ${
+                  vpsData?.proxyStatus.online ? "bg-emerald-500/20 text-emerald-400" : "bg-red-500/20 text-red-400"
+                }`}>
+                  {vpsData?.proxyStatus.online ? <Wifi className="w-5 h-5" /> : <WifiOff className="w-5 h-5" />}
+                </div>
+                <div>
+                  <span className="text-xs text-white/50 block font-semibold uppercase tracking-wider">
+                    Proxy de TV ao Vivo (HLS)
+                  </span>
+                  <span className="text-base font-bold text-white flex items-center gap-2 mt-0.5">
+                    {vpsData?.proxyStatus.online ? (
+                      <span className="text-emerald-400 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                        🟢 Online & Operacional
+                      </span>
+                    ) : (
+                      <span className="text-red-400">🔴 Offline / Inacessível</span>
+                    )}
+                  </span>
+                  <span className="text-[11px] text-white/40 font-mono block mt-1">
+                    https://play-infinity.stream
+                  </span>
+                </div>
+              </div>
 
-            <div className="text-right">
-              <span className="text-xs text-white/40 block">Latência</span>
-              <span className="text-sm font-bold text-white font-mono">
-                {vpsData?.proxyStatus.latencyMs ? `${vpsData.proxyStatus.latencyMs}ms` : "--"}
-              </span>
+              <div className="text-right">
+                <span className="text-xs text-white/40 block">Latência</span>
+                <span className="text-sm font-bold text-white font-mono">
+                  {vpsData?.proxyStatus.latencyMs ? `${vpsData.proxyStatus.latencyMs}ms` : "--"}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Status Servidor Web */}
-          <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between">
-            <div className="flex items-center gap-3.5">
-              <div className="p-3 bg-blue-500/20 text-blue-400 rounded-2xl">
-                <Radio className="w-5 h-5" />
+          {vpsLoading && !vpsData ? (
+            <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-white/10 shrink-0" />
+                <div className="space-y-2">
+                  <div className="h-3 w-32 bg-white/10 rounded" />
+                  <div className="h-4 w-44 bg-white/10 rounded" />
+                  <div className="h-2.5 w-28 bg-white/5 rounded" />
+                </div>
               </div>
-              <div>
-                <span className="text-xs text-white/50 block font-semibold uppercase tracking-wider">
-                  Servidor Web & API
-                </span>
-                <span className="text-base font-bold text-white flex items-center gap-1.5 mt-0.5">
-                  <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
-                  🟢 Online & Respondendo
-                </span>
-                <span className="text-[11px] text-white/40 font-mono block mt-1">
-                  Node.js {vpsData?.webServerStatus.nodeVersion || "v20"} • {vpsData?.webServerStatus.platform || "linux"}
-                </span>
+              <div className="space-y-1.5 text-right">
+                <div className="h-2.5 w-14 bg-white/5 rounded ml-auto" />
+                <div className="h-4 w-16 bg-white/10 rounded ml-auto" />
               </div>
             </div>
+          ) : (
+            <div className="p-5 bg-white/[0.02] border border-white/10 rounded-2xl flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <div className="p-3 bg-blue-500/20 text-blue-400 rounded-2xl">
+                  <Radio className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-xs text-white/50 block font-semibold uppercase tracking-wider">
+                    Servidor Web & API
+                  </span>
+                  <span className="text-base font-bold text-white flex items-center gap-1.5 mt-0.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                    🟢 Online & Respondendo
+                  </span>
+                  <span className="text-[11px] text-white/40 font-mono block mt-1">
+                    Node.js {vpsData?.webServerStatus.nodeVersion || "v20"} • {vpsData?.webServerStatus.platform || "linux"}
+                  </span>
+                </div>
+              </div>
 
-            <div className="text-right">
-              <span className="text-xs text-white/40 block">Uptime App</span>
-              <span className="text-sm font-bold text-white font-mono">
-                {vpsData?.webServerStatus.uptimeSeconds
-                  ? `${Math.floor(vpsData.webServerStatus.uptimeSeconds / 3600)}h ${Math.floor((vpsData.webServerStatus.uptimeSeconds % 3600) / 60)}m`
-                  : "--"}
-              </span>
+              <div className="text-right">
+                <span className="text-xs text-white/40 block">Uptime App</span>
+                <span className="text-sm font-bold text-white font-mono">
+                  {vpsData?.webServerStatus.uptimeSeconds
+                    ? `${Math.floor(vpsData.webServerStatus.uptimeSeconds / 3600)}h ${Math.floor((vpsData.webServerStatus.uptimeSeconds % 3600) / 60)}m`
+                    : "--"}
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Métricas de Hardware da VPS (RAM e CPU) */}
-        {vpsData?.vpsHardware.hasSsh ? (
+        {vpsLoading && !vpsData ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 animate-pulse">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="p-5 bg-black/30 border border-white/10 rounded-2xl space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="h-4 w-28 bg-white/10 rounded" />
+                  <div className="h-4 w-12 bg-white/10 rounded" />
+                </div>
+                <div className="w-full bg-white/5 h-2.5 rounded-full" />
+                <div className="h-3 w-36 bg-white/5 rounded" />
+              </div>
+            ))}
+          </div>
+        ) : vpsData?.vpsHardware.hasSsh ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* RAM Card */}

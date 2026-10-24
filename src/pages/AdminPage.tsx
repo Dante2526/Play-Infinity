@@ -87,6 +87,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   });
 
   // Client List State
+  const [loadingUsers, setLoadingUsers] = useState(true);
   const [usersList, setUsersList] = useState<ClientUser[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -280,6 +281,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setStats({ total, active, inactive, watchingNow });
     } catch (err) {
       console.error("Erro ao carregar estatísticas", err);
+    } finally {
+      setLoadingUsers(false);
     }
   };
 
@@ -989,7 +992,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
               <span className="font-semibold">Contas Criadas</span>
             </div>
-            <div className="text-4xl font-black text-white">{stats.total}</div>
+            {loadingUsers ? (
+              <div className="h-10 w-24 bg-white/10 rounded-xl animate-pulse my-0.5" />
+            ) : (
+              <div className="text-4xl font-black text-white">{stats.total}</div>
+            )}
             <p className="text-white/40 text-sm mt-2 font-medium">Total de registros no banco</p>
           </div>
 
@@ -1001,7 +1008,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
               <span className="font-semibold">Assinaturas Ativas</span>
             </div>
-            <div className="text-4xl font-black text-green-400">{stats.active}</div>
+            {loadingUsers ? (
+              <div className="h-10 w-24 bg-green-500/20 rounded-xl animate-pulse my-0.5" />
+            ) : (
+              <div className="text-4xl font-black text-green-400">{stats.active}</div>
+            )}
             <p className="text-white/40 text-sm mt-2 font-medium">Pagamentos em dia</p>
           </div>
 
@@ -1013,7 +1024,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
               <span className="font-semibold">Inativas / Atrasadas</span>
             </div>
-            <div className="text-4xl font-black text-red-400">{stats.inactive}</div>
+            {loadingUsers ? (
+              <div className="h-10 w-24 bg-red-500/20 rounded-xl animate-pulse my-0.5" />
+            ) : (
+              <div className="text-4xl font-black text-red-400">{stats.inactive}</div>
+            )}
             <p className="text-white/40 text-sm mt-2 font-medium">Requer atenção ou cobrança</p>
           </div>
 
@@ -1037,7 +1052,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 <Eye className="w-4 h-4 text-orange-400" />
               </div>
             </div>
-            <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
+            {loadingUsers ? (
+              <div className="h-12 w-28 bg-orange-500/20 rounded-xl animate-pulse my-0.5" />
+            ) : (
+              <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
+            )}
             <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-2">
               <span className="relative flex h-2 w-2 ml-1">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -1080,7 +1099,28 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           </div>
 
-          {usersList.filter(u => {
+          {loadingUsers ? (
+            <div className="grid grid-cols-1 gap-3">
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="bg-black/50 border border-white/10 rounded-[22px] p-4 sm:p-5 flex flex-col xl:flex-row xl:items-center justify-between gap-4 animate-pulse"
+                >
+                  <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white/10 shrink-0" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-36 sm:w-48 bg-white/10 rounded-md" />
+                      <div className="h-3 w-48 sm:w-64 bg-white/5 rounded-md" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 self-end xl:self-auto">
+                    <div className="h-7 w-20 bg-white/10 rounded-full" />
+                    <div className="h-7 w-24 bg-white/10 rounded-lg" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : usersList.filter(u => {
             const q = searchTerm.toLowerCase();
             return (
               (u.name && u.name.toLowerCase().includes(q)) ||

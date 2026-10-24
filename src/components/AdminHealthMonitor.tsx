@@ -111,7 +111,25 @@ export function AdminHealthMonitor() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {results.map((item, idx) => {
+        {loading && results.length === 0 ? (
+          Array.from({ length: 6 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="p-4 rounded-xl border border-white/5 bg-white/[0.02] flex flex-col gap-3 animate-pulse"
+            >
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-28 bg-white/10 rounded-md" />
+                <div className="h-5 w-16 bg-white/10 rounded-full" />
+              </div>
+              <div className="h-3 w-40 bg-white/5 rounded" />
+              <div className="pt-2 border-t border-white/5 flex items-center justify-between">
+                <div className="h-3 w-16 bg-white/5 rounded" />
+                <div className="h-3 w-12 bg-white/5 rounded" />
+              </div>
+            </div>
+          ))
+        ) : (
+          results.map((item, idx) => {
           // NOVO: detecta se é o card do encontrei pra turbinar com status do cookie
           const isEncontreiCard = item.name.toLowerCase().includes("encontrei");
           const encontreiCookieOk = encontreiStatus?.cookieConfigured && !encontreiStatus?.breakerActive;
@@ -214,7 +232,7 @@ export function AdminHealthMonitor() {
             )}
           </div>
           );
-        })}
+        }))}
       </div>
       
       {results.length > 0 && results.some(r => r.status === "OFFLINE") && (

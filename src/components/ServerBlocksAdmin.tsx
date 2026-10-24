@@ -777,8 +777,25 @@ export function ServerBlocksAdmin() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="border border-white/10 rounded-2xl overflow-hidden bg-black/20 animate-pulse"
+              >
+                <div className="bg-white/5 px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 bg-white/10 rounded-lg shrink-0" />
+                    <div className="h-4 w-36 sm:w-48 bg-white/10 rounded-md" />
+                  </div>
+                  <div className="h-4 w-16 bg-white/5 rounded-md" />
+                </div>
+                <div className="p-3 divide-y divide-white/5 space-y-2">
+                  <div className="h-4 w-3/4 bg-white/5 rounded-md mt-1" />
+                  <div className="h-4 w-1/2 bg-white/5 rounded-md pt-2" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : blocks.length === 0 ? (
           <div className="text-center py-12 text-white/40 text-sm">
