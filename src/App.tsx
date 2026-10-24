@@ -75,7 +75,7 @@ import { isAiStudioOrDevEnvironment } from "./utils/envUtils";
 import { safeSessionStorage, safeLocalStorage, clearLocalUserData } from "./utils/safeStorage";
 import { useSmartTV } from "./hooks/useSmartTV";
 import { Capacitor } from "@capacitor/core";
-import { StatusBar } from "@capacitor/status-bar";
+import { StatusBar } from "./utils/statusBar";
 import { registerFcmToken, setupFcmTokenRefreshListener } from "./services/pushNotifications";
 
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));

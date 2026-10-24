@@ -9,8 +9,11 @@ import android.content.res.Configuration;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
+import androidx.activity.EdgeToEdge;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import android.content.pm.PackageManager;
 import android.Manifest;
 
@@ -20,9 +23,27 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Habilita Edge-to-Edge nativo para todas as versões do Android suportadas
+        EdgeToEdge.enable(this);
+
         registerPlugin(RokuDiscoveryPlugin.class);
         registerPlugin(PiPPlugin.class);
+        registerPlugin(StatusBarPlugin.class);
         super.onCreate(savedInstanceState);
+
+        // Ajusta insets no container de conteúdo para evitar sobreposição da UI
+        // em modo normal, zerando insets durante PiP e reprodução em tela cheia
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (view, windowInsets) -> {
+            if (isInPictureInPictureMode() || StatusBarPlugin.isBarsHidden()) {
+                view.setPadding(0, 0, 0, 0);
+            } else {
+                androidx.core.graphics.Insets insets = windowInsets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                );
+                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+            }
+            return WindowInsetsCompat.CONSUMED;
+        });
 
         // Garante permissão de gravação de áudio para busca por voz no app
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {

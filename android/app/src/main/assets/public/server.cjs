@@ -249,15 +249,54 @@ __export(server_exports, {
   db: () => db
 });
 module.exports = __toCommonJS(server_exports);
-var import_express18 = __toESM(require("express"), 1);
-var import_path11 = __toESM(require("path"), 1);
-var import_fs11 = __toESM(require("fs"), 1);
+
+// server/utils/loadEnvironment.ts
+var import_node_fs = __toESM(require("node:fs"), 1);
+var import_node_dns = __toESM(require("node:dns"), 1);
 var import_dotenv = __toESM(require("dotenv"), 1);
+if (typeof import_node_dns.default.setDefaultResultOrder === "function") {
+  import_node_dns.default.setDefaultResultOrder("ipv4first");
+}
+if (import_node_fs.default.existsSync(".env.local")) import_dotenv.default.config({ path: ".env.local" });
+import_dotenv.default.config();
+
+// server.ts
+var import_express20 = __toESM(require("express"), 1);
+var import_path10 = __toESM(require("path"), 1);
+var import_fs10 = __toESM(require("fs"), 1);
 var import_express_rate_limit3 = __toESM(require("express-rate-limit"), 1);
 var import_helmet = __toESM(require("helmet"), 1);
 var import_crypto3 = __toESM(require("crypto"), 1);
 var import_app = require("firebase/app");
 var import_firestore = require("firebase/firestore");
+
+// server/utils/serverLifecycle.ts
+var DEFAULT_DRAIN_TIMEOUT_MS = 20 * 1e3;
+function configureServerLifecycle(server) {
+  const configured = Number(process.env.APP_DRAIN_TIMEOUT_MS);
+  const drainTimeout = Number.isSafeInteger(configured) && configured > 0 ? configured : DEFAULT_DRAIN_TIMEOUT_MS;
+  let shuttingDown = false;
+  server.once("listening", () => {
+    if (typeof process.send === "function") process.send("ready");
+  });
+  server.on("error", (error) => {
+    console.error("[Server Listen Error]", error);
+    process.exit(1);
+  });
+  function shutdown(signal) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    console.log(`[Server] ${signal}: aguardando conex\xF5es ativas por at\xE9 ${drainTimeout}ms.`);
+    server.close(() => process.exit(0));
+    server.closeIdleConnections();
+    setTimeout(() => {
+      console.warn("[Server] Limite de drenagem atingido; encerrando conex\xF5es restantes.");
+      process.exit(1);
+    }, drainTimeout).unref();
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
 
 // server/services/catalogWatcher.ts
 var import_fs2 = __toESM(require("fs"), 1);
@@ -973,6 +1012,27 @@ router.post("/api/create-subscription", async (req3, res) => {
     if (!email) return res.status(400).json({ error: "E-mail obrigat\xF3rio para emiss\xE3o da cobran\xE7a." });
     const baseUrl = getAsaasBaseUrl();
     const headers = getAsaasHeaders();
+    const requestedPlan = typeof req3.body.plan === "string" ? req3.body.plan.toLowerCase().trim() : "standard";
+    if (!["standard", "plus"].includes(requestedPlan)) {
+      return res.status(400).json({ success: false, error: "Plano inv\xE1lido." });
+    }
+    const isPlusPlan = requestedPlan === "plus";
+    let finalPrice = isPlusPlan ? 17 : 13;
+    const externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
+    let existingSubscriptionId = "";
+    try {
+      const db2 = getAdminDb();
+      if (!db2) return res.status(503).json({ success: false, error: "Banco de dados indispon\xEDvel." });
+      let userSnap = await db2.collection("usuarios").doc(userId).get();
+      if (!userSnap.exists) userSnap = await db2.collection("users").doc(userId).get();
+      const userData = userSnap.exists ? userSnap.data() : null;
+      existingSubscriptionId = typeof userData?.subscriptionId === "string" ? userData.subscriptionId : "";
+      const rawValue = userData?.valorMensalidade ?? userData?.valor ?? userData?.monthlyFee;
+      if (!isPlusPlan && (rawValue === 9.9 || rawValue === "9,90" || rawValue === "9.90")) finalPrice = 9.9;
+    } catch (error) {
+      return res.status(503).json({ success: false, error: "N\xE3o foi poss\xEDvel consultar a assinatura atual." });
+    }
+    const description = `Play Infinity ${isPlusPlan ? "Plus" : "Premium"} (R$ ${finalPrice.toFixed(2).replace(".", ",")})`;
     let customerId = "";
     const cusRes = await fetch(`${baseUrl}/customers?email=${encodeURIComponent(email)}`, { signal: AbortSignal.timeout(15e3), headers });
     if (cusRes.status === 401) throw new Error("Chave da API do Asaas inv\xE1lida ou expirada. Verifique o arquivo .env");
@@ -991,68 +1051,6 @@ router.post("/api/create-subscription", async (req3, res) => {
       customerId = newCusData.id;
     }
     if (!customerId) throw new Error("Falha ao resolver o cliente no Asaas.");
-    const requestedPlan = (req3.body.plan || "standard").toLowerCase().trim();
-    const isPlusPlan = requestedPlan === "plus" || req3.body.description && String(req3.body.description).toLowerCase().includes("plus");
-    let finalPrice = 13;
-    let externalReference = userId;
-    let description = "Play Infinity Premium";
-    try {
-      const db2 = getAdminDb();
-      if (db2 && userId) {
-        let userSnap = await db2.collection("usuarios").doc(userId).get();
-        if (!userSnap.exists) {
-          userSnap = await db2.collection("users").doc(userId).get();
-        }
-        const uData = userSnap.exists ? userSnap.data() : null;
-        if (isPlusPlan) {
-          const plusFee = 17;
-          let currentFee = 0;
-          if (uData && uData.assinatura === "ATIVA") {
-            const rawVal = uData.valorMensalidade ?? uData.valor ?? uData.monthlyFee;
-            if (rawVal !== void 0 && rawVal !== null && rawVal !== "") {
-              currentFee = typeof rawVal === "number" ? rawVal : String(rawVal).includes("13") ? 13 : 9.9;
-            } else {
-              currentFee = 9.9;
-            }
-          }
-          const diff = Math.max(0, plusFee - currentFee);
-          if (currentFee > 0 && diff > 0 && diff < plusFee) {
-            finalPrice = diff;
-          } else {
-            finalPrice = plusFee;
-          }
-          externalReference = `${userId}|PLUS`;
-          description = `Play Infinity Plus (R$ ${finalPrice.toFixed(2).replace(".", ",")})`;
-        } else {
-          if (uData) {
-            const rawVal = uData.valorMensalidade ?? uData.valor ?? uData.monthlyFee;
-            if (rawVal !== void 0 && rawVal !== null && rawVal !== "") {
-              finalPrice = rawVal === 13 || String(rawVal).includes("13") ? 13 : 9.9;
-            } else {
-              const createdDate = uData.criadoEm || uData.createdAt;
-              if (createdDate && new Date(createdDate) < /* @__PURE__ */ new Date("2026-09-19T00:00:00-03:00")) {
-                finalPrice = 9.9;
-              } else {
-                finalPrice = 13;
-              }
-            }
-          } else {
-            finalPrice = 13;
-          }
-          externalReference = userId;
-          description = `Play Infinity Premium (R$ ${finalPrice.toFixed(2).replace(".", ",")})`;
-        }
-      } else {
-        finalPrice = isPlusPlan ? 17 : 13;
-        externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
-        description = isPlusPlan ? `Play Infinity Plus (R$ 17,00)` : `Play Infinity Premium (R$ 13,00)`;
-      }
-    } catch (dbErr) {
-      console.warn("[Asaas] Erro ao consultar regras de pre\xE7o no Firestore, aplicando pre\xE7o oficial padr\xE3o:", dbErr);
-      finalPrice = isPlusPlan ? 17 : 13;
-      externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
-      description = isPlusPlan ? `Play Infinity Plus (R$ 17,00)` : `Play Infinity Premium (R$ 13,00)`;
-    }
     const nextDueDate = /* @__PURE__ */ new Date();
     nextDueDate.setDate(nextDueDate.getDate() + 1);
     const subPayload = {
@@ -1074,15 +1072,35 @@ router.post("/api/create-subscription", async (req3, res) => {
       subPayload.creditCardHolderInfo = creditCardHolderInfo;
       delete subPayload.nextDueDate;
     }
-    const subRes = await fetch(`${baseUrl}/subscriptions`, {
+    let subscriptionUrl = `${baseUrl}/subscriptions`;
+    let subscriptionMethod = "POST";
+    if (isPlusPlan && existingSubscriptionId) {
+      const currentRes = await fetch(`${subscriptionUrl}/${encodeURIComponent(existingSubscriptionId)}`, {
+        signal: AbortSignal.timeout(15e3),
+        headers
+      });
+      if (!currentRes.ok) throw new Error("N\xE3o foi poss\xEDvel verificar a assinatura atual.");
+      const current = await currentRes.json();
+      if (![userId, `${userId}|PLUS`].includes(current.externalReference)) {
+        return res.status(400).json({ success: false, error: "Assinatura incompat\xEDvel com o usu\xE1rio." });
+      }
+      if (current.status === "ACTIVE" && !current.deleted) {
+        subscriptionUrl += `/${encodeURIComponent(existingSubscriptionId)}`;
+        subscriptionMethod = "PUT";
+        delete subPayload.nextDueDate;
+        delete subPayload.customer;
+        subPayload.updatePendingPayments = true;
+      }
+    }
+    const subRes = await fetch(subscriptionUrl, {
       signal: AbortSignal.timeout(15e3),
-      method: "POST",
+      method: subscriptionMethod,
       headers,
       body: JSON.stringify(subPayload)
     });
     const subData = await subRes.json();
-    if (subData.errors) {
-      throw new Error(subData.errors[0].description);
+    if (!subRes.ok || subData.errors) {
+      throw new Error(subData.errors?.[0]?.description || "Falha ao salvar assinatura no Asaas.");
     }
     let invoiceUrl;
     let pixQrCode;
@@ -1119,84 +1137,107 @@ router.post("/api/webhook/asaas", async (req3, res) => {
       console.warn("[Webhook Asaas] ALERTA DE SEGURAN\xC7A: ASAAS_WEBHOOK_TOKEN n\xE3o configurado no .env! Exigindo verifica\xE7\xE3o estrita via API do Asaas.");
     }
     const { event, payment } = req3.body || {};
-    if (!event || !payment || typeof payment !== "object") {
+    if (typeof event !== "string" || !event || !payment || typeof payment !== "object") {
       return res.status(400).json({ success: false, error: "Payload do webhook incompleto ou inv\xE1lido." });
     }
     if (!payment.externalReference) {
       return res.json({ received: true, ignored: "Sem externalReference" });
     }
-    const paymentId = payment.id;
-    const asaasApiKey = process.env.ASAAS_API_KEY;
-    if (asaasApiKey && paymentId) {
-      try {
-        const baseUrl = getAsaasBaseUrl();
-        const verifyRes = await fetch(`${baseUrl}/payments/${paymentId}`, {
-          signal: AbortSignal.timeout(15e3),
-          headers: getAsaasHeaders()
-        });
-        if (!verifyRes.ok) {
-          console.warn(`[Webhook Asaas] Cobran\xE7a ${paymentId} n\xE3o encontrada na API do Asaas (HTTP ${verifyRes.status}). Rejeitando webhook.`);
-          return res.status(400).json({ success: false, error: "Cobran\xE7a n\xE3o localizada ou inv\xE1lida na API do Asaas." });
-        }
-        const realPayment = await verifyRes.json();
-        if (realPayment.externalReference !== payment.externalReference) {
-          console.warn(`[Webhook Asaas] Inconsist\xEAncia de externalReference: webhook=${payment.externalReference}, API=${realPayment.externalReference}`);
-          return res.status(400).json({ success: false, error: "Inconsist\xEAncia cadastral na cobran\xE7a." });
-        }
-        if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
-          const validReceivedStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
-          if (!validReceivedStatuses.includes(realPayment.status)) {
-            console.warn(`[Webhook Asaas] Evento ${event} incompat\xEDvel com o status real ${realPayment.status} no Asaas.`);
-            return res.status(400).json({ success: false, error: "Status da cobran\xE7a n\xE3o confirmado pela API." });
-          }
-        }
-      } catch (apiErr) {
-        console.error("[Webhook Asaas] Falha ao consultar API do Asaas:", apiErr);
-        if (!configuredToken) {
-          return res.status(500).json({ success: false, error: "Falha na verifica\xE7\xE3o de autenticidade do pagamento." });
-        }
+    if (!process.env.ASAAS_API_KEY) {
+      return res.status(503).json({ success: false, error: "Verifica\xE7\xE3o de pagamento indispon\xEDvel." });
+    }
+    if (typeof payment.id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(payment.id)) {
+      return res.status(400).json({ success: false, error: "ID de pagamento inv\xE1lido." });
+    }
+    const handledStatuses = {
+      PAYMENT_RECEIVED: ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"],
+      PAYMENT_CONFIRMED: ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"],
+      PAYMENT_OVERDUE: ["OVERDUE"],
+      PAYMENT_REFUNDED: ["REFUNDED"],
+      PAYMENT_DELETED: ["DELETED"]
+    };
+    if (!Object.prototype.hasOwnProperty.call(handledStatuses, event)) {
+      return res.json({ received: true, ignored: "Evento n\xE3o processado" });
+    }
+    let realPayment;
+    try {
+      const response = await fetch(`${getAsaasBaseUrl()}/payments/${encodeURIComponent(payment.id)}`, {
+        signal: AbortSignal.timeout(15e3),
+        headers: getAsaasHeaders()
+      });
+      if (!response.ok) {
+        return res.status(503).json({ success: false, error: "N\xE3o foi poss\xEDvel verificar a cobran\xE7a." });
       }
-    } else if (!configuredToken) {
-      return res.status(401).json({ success: false, error: "Webhook rejeitado: aus\xEAncia de credenciais de valida\xE7\xE3o." });
+      realPayment = await response.json();
+    } catch (error) {
+      return res.status(503).json({ success: false, error: "Falha na verifica\xE7\xE3o de pagamento." });
+    }
+    if (realPayment.id !== payment.id || realPayment.externalReference !== payment.externalReference) {
+      return res.status(400).json({ success: false, error: "Cobran\xE7a incompat\xEDvel com o webhook." });
+    }
+    const currentStatus = realPayment.deleted ? "DELETED" : realPayment.status;
+    if (!handledStatuses[event].includes(currentStatus)) {
+      return res.json({ received: true, ignored: "Evento desatualizado" });
+    }
+    const reference = /^([a-zA-Z0-9_-]+)(\|PLUS)?$/.exec(realPayment.externalReference);
+    if (!reference) {
+      return res.status(400).json({ success: false, error: "Refer\xEAncia de usu\xE1rio inv\xE1lida." });
     }
     const db2 = getAdminDb();
-    if (db2) {
-      let userId = String(payment.externalReference).trim();
-      let isPlusUpgrade = false;
-      if (userId.includes("|PLUS")) {
-        userId = userId.split("|")[0];
-        isPlusUpgrade = true;
-      }
-      userId = userId.replace(/[^a-zA-Z0-9_-]/g, "");
-      if (!userId) {
-        return res.status(400).json({ success: false, error: "ID de usu\xE1rio inv\xE1lido." });
-      }
-      const userRef = db2.collection("usuarios").doc(userId);
-      if (event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED") {
-        const now = /* @__PURE__ */ new Date();
-        const nextMonth = new Date(now);
-        nextMonth.setMonth(now.getMonth() + 1);
-        const updateData = {
-          assinatura: "ATIVA",
-          subscriptionId: payment.subscription || "",
-          dataPagamento: now.toISOString(),
-          dataExpiracao: nextMonth.toISOString(),
-          ultimoAcesso: now.toISOString()
-        };
-        if (isPlusUpgrade) {
-          updateData.plano = "plus";
-          updateData.valorMensalidade = 20;
-        }
-        await userRef.set(updateData, { merge: true });
-        console.log(`[Webhook Asaas] Assinatura ATIVADA para o user: ${userId} (Plus: ${isPlusUpgrade})`);
-      } else if (event === "PAYMENT_OVERDUE" || event === "PAYMENT_REFUNDED" || event === "PAYMENT_DELETED") {
-        await userRef.set({
-          assinatura: "INATIVA",
-          updatedAt: (/* @__PURE__ */ new Date()).toISOString()
-        }, { merge: true });
-        console.log(`[Webhook Asaas] Assinatura INATIVADA para o user: ${userId}`);
-      }
+    if (!db2) {
+      return res.status(503).json({ success: false, error: "Banco de dados indispon\xEDvel." });
     }
+    const userRef = db2.collection("usuarios").doc(reference[1]);
+    const paymentRef = userRef.collection("asaasPayments").doc(payment.id);
+    const isPaid = event === "PAYMENT_RECEIVED" || event === "PAYMENT_CONFIRMED";
+    const paidDate = new Date(realPayment.paymentDate || realPayment.confirmedDate || realPayment.clientPaymentDate || realPayment.dueDate);
+    if (isPaid && !Number.isFinite(paidDate.getTime())) {
+      return res.status(400).json({ success: false, error: "Data de pagamento inv\xE1lida." });
+    }
+    await db2.runTransaction(async (transaction) => {
+      const [userSnap, processedSnap] = await Promise.all([
+        transaction.get(userRef),
+        transaction.get(paymentRef)
+      ]);
+      const user = userSnap.data() || {};
+      const processed = processedSnap.data() || {};
+      if (isPaid) {
+        if (processed.paidApplied || processed.revoked) return;
+        const previousDate = new Date(user.asaasPaymentDate || 0).getTime();
+        if (paidDate.getTime() >= previousDate) {
+          const expires = new Date(paidDate);
+          const day = expires.getUTCDate();
+          expires.setUTCDate(1);
+          expires.setUTCMonth(expires.getUTCMonth() + 1);
+          const lastDay = new Date(Date.UTC(expires.getUTCFullYear(), expires.getUTCMonth() + 1, 0)).getUTCDate();
+          expires.setUTCDate(Math.min(day, lastDay));
+          const existingExpiry = new Date(user.dataExpiracao || 0).getTime();
+          const isPlus = !!reference[2];
+          transaction.set(userRef, {
+            assinatura: "ATIVA",
+            subscriptionId: realPayment.subscription || "",
+            asaasPaymentId: payment.id,
+            asaasPaymentDate: paidDate.toISOString(),
+            dataPagamento: paidDate.toISOString(),
+            dataExpiracao: new Date(Math.max(expires.getTime(), Number.isFinite(existingExpiry) ? existingExpiry : 0)).toISOString(),
+            plano: isPlus ? "plus" : "standard",
+            ...isPlus ? { valorMensalidade: 17, valor: "17,00" } : {},
+            ultimoAcesso: (/* @__PURE__ */ new Date()).toISOString()
+          }, { merge: true });
+        }
+        transaction.set(paymentRef, { paidApplied: true, status: currentStatus }, { merge: true });
+      } else {
+        const sameSubscription = !!realPayment.subscription && realPayment.subscription === user.subscriptionId;
+        const expired = new Date(user.dataExpiracao || 0).getTime() <= Date.now();
+        const shouldRevoke = event === "PAYMENT_OVERDUE" ? sameSubscription && expired : user.asaasPaymentId === payment.id;
+        if (shouldRevoke) {
+          transaction.set(userRef, { assinatura: "INATIVA", updatedAt: (/* @__PURE__ */ new Date()).toISOString() }, { merge: true });
+        }
+        if (event !== "PAYMENT_OVERDUE") {
+          transaction.set(paymentRef, { revoked: true, status: currentStatus }, { merge: true });
+        }
+      }
+    });
     res.json({ received: true });
   } catch (err) {
     console.error("[Webhook Asaas] Erro:", err);
@@ -1225,18 +1266,6 @@ var SERVER_BLACKLIST = [
       "superflix"
     ],
     reason: "Redirecionamentos for\xE7ados, popups invasivos e instabilidade de streaming",
-    blockedAt: "2026-09"
-  },
-  {
-    id: "byse",
-    name: "BYSE / Streamberry",
-    keys: ["srv_byse", "byse", "streamberry"],
-    patterns: [
-      /streamberry\.com\.br/i,
-      /byse/i,
-      "/api/byse-stream"
-    ],
-    reason: "Tentativas de redirecionamento do parent window (top.location) e falhas frequentes",
     blockedAt: "2026-09"
   },
   {
@@ -2185,8 +2214,8 @@ router3.get("/api/vidsrc-proxy", async (req3, res) => {
     if (!upstream.body) {
       return res.end();
     }
-    const { Readable: Readable4 } = await import("stream");
-    const source = Readable4.fromWeb(upstream.body);
+    const { Readable: Readable5 } = await import("stream");
+    const source = Readable5.fromWeb(upstream.body);
     let sourceFailed = false;
     source.on("error", () => {
       if (sourceFailed || res.writableEnded) return;
@@ -2458,6 +2487,102 @@ var vidsrcRoutes_default = router3;
 var import_express5 = require("express");
 var import_fs4 = __toESM(require("fs"), 1);
 var import_path4 = __toESM(require("path"), 1);
+
+// server/services/vizerDomains.ts
+var VIZER_DOMAINS = ["https://www.vizer.press", "https://www.vizer.uno", "https://www.vizer.reisen", "https://www.vizer.website"];
+var workingDomain = null;
+var getVizerDomainOrder = () => workingDomain ? [workingDomain, ...VIZER_DOMAINS.filter((base) => base !== workingDomain)] : [...VIZER_DOMAINS];
+function rememberVizerDomain(raw) {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" && !url.username && !url.password && VIZER_DOMAINS.includes(url.origin)) workingDomain = url.origin;
+  } catch {
+  }
+}
+async function checkVizerHealth(options = {}) {
+  const started = Date.now();
+  const deadline = AbortSignal.timeout(options.timeoutMs ?? 1e4);
+  let lastStatus = 0;
+  let lastError = "N\xE3o foi poss\xEDvel conectar aos dom\xEDnios configurados do Vizer.";
+  const first = getVizerDomainOrder()[0];
+  for (const base of getVizerDomainOrder()) {
+    if (deadline.aborted) break;
+    const signal = AbortSignal.any([deadline, AbortSignal.timeout(options.phaseTimeoutMs ?? 3e3)]);
+    let url = base + "/series/online/";
+    try {
+      for (let hop = 0; hop < 4; hop++) {
+        const response = await fetch(url, {
+          redirect: "manual",
+          signal,
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36", Accept: "text/html" }
+        });
+        lastStatus = response.status;
+        const redirect = response.headers.get("location");
+        if (response.status >= 300 && response.status < 400 && redirect) {
+          await response.body?.cancel().catch(() => {
+          });
+          const target = new URL(redirect, url);
+          if (target.protocol !== "https:" || target.username || target.password || !VIZER_DOMAINS.includes(target.origin)) {
+            lastError = "Vizer redirecionou para um dom\xEDnio n\xE3o configurado.";
+            break;
+          }
+          url = target.href;
+          continue;
+        }
+        if (!response.ok) {
+          await response.body?.cancel().catch(() => {
+          });
+          lastError = `A listagem do Vizer respondeu HTTP ${response.status}.`;
+          break;
+        }
+        const reader = response.body?.getReader();
+        const chunks = [];
+        let size = 0;
+        try {
+          while (reader && size < 256 * 1024) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = value.subarray(0, 256 * 1024 - size);
+            chunks.push(chunk);
+            size += chunk.length;
+          }
+        } finally {
+          await reader?.cancel().catch(() => {
+          });
+        }
+        const html = Buffer.concat(chunks).toString("utf8");
+        const catalogue = /\/series\/online\/[a-z0-9-]+-\d+\/|\/filmes\/online\/[a-z0-9-]+-\d+\//i.test(html);
+        const blocked = /<title[^>]*>[^<]*(?:just a moment|access denied|attention required|sign in|log in)/i.test(html);
+        if (!catalogue || blocked) {
+          lastError = "O dom\xEDnio respondeu, mas n\xE3o foi poss\xEDvel validar a listagem do cat\xE1logo.";
+          break;
+        }
+        const active = new URL(url).origin;
+        rememberVizerDomain(active);
+        return {
+          name: "Cat\xE1logo Vizer",
+          url: active,
+          status: "ONLINE",
+          latencyMs: Date.now() - started,
+          statusCode: response.status,
+          ...active !== first ? { redirectedFrom: first } : {}
+        };
+      }
+    } catch {
+      lastError = "Falha ou timeout ao consultar a listagem do Vizer; disponibilidade n\xE3o confirmada.";
+    }
+  }
+  return {
+    name: "Cat\xE1logo Vizer",
+    url: first,
+    status: "OFFLINE",
+    latencyMs: Date.now() - started,
+    statusCode: lastStatus,
+    error: lastError
+  };
+}
+
+// server/routes/encontreiLookup.ts
 var router4 = (0, import_express5.Router)();
 var vipSeasonCache = /* @__PURE__ */ new Map();
 var vipMovieCache = /* @__PURE__ */ new Map();
@@ -2618,17 +2743,8 @@ function loadVizerMovieIds() {
     }
   }
 }
-var VIZER_DOMAINS = [
-  "https://www.vizer.uno",
-  // domínio atual (2026-10)
-  "https://www.vizer.reisen",
-  // domínio anterior, responde com redirect para vizer.uno
-  "https://www.vizer.website"
-  // domínio legado
-];
-var _vizerWorkingDomain = null;
 async function vizerFetchJson(doQuery, timeoutMs, refererPath) {
-  const order = _vizerWorkingDomain ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)] : [...VIZER_DOMAINS];
+  const order = getVizerDomainOrder();
   for (const base of order) {
     try {
       const controller = new AbortController();
@@ -2663,7 +2779,7 @@ async function vizerFetchJson(doQuery, timeoutMs, refererPath) {
           if (r2.ok) {
             const data2 = await r2.json().catch(() => null);
             if (data2 && (data2.episodes || data2.servers_dub)) {
-              _vizerWorkingDomain = redirBase;
+              rememberVizerDomain(redirBase);
               return data2;
             }
           }
@@ -2671,7 +2787,7 @@ async function vizerFetchJson(doQuery, timeoutMs, refererPath) {
         }
         continue;
       }
-      _vizerWorkingDomain = base;
+      rememberVizerDomain(res.url || base);
       return data;
     } catch {
       continue;
@@ -2826,7 +2942,7 @@ function vizerKnownSetsLoad() {
   }
 }
 async function vizerFetchHtml(pagePath, timeoutMs = 8e3) {
-  const order = _vizerWorkingDomain ? [_vizerWorkingDomain, ...VIZER_DOMAINS.filter((d) => d !== _vizerWorkingDomain)] : [...VIZER_DOMAINS];
+  const order = getVizerDomainOrder();
   for (const base of order) {
     try {
       const res = await fetch(`${base}${pagePath}`, {
@@ -2840,7 +2956,7 @@ async function vizerFetchHtml(pagePath, timeoutMs = 8e3) {
       if (!res.ok) continue;
       const html = await res.text().catch(() => null);
       if (!html || html.length < 500) continue;
-      _vizerWorkingDomain = base;
+      rememberVizerDomain(res.url || base);
       return html;
     } catch {
       continue;
@@ -2980,7 +3096,7 @@ function getEncontreiResolverStatus() {
     cookieSource: cookieConfigured ? "ENCONTREI_COOKIE env" : "not_set"
   };
 }
-async function encontreiEpisodeId(serieId, season, episode) {
+async function encontreiEpisodeId(serieId, season, episode, strict = false) {
   if (Date.now() < _encCookieDownUntil) return null;
   const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
   if (!cookie) return null;
@@ -3003,7 +3119,7 @@ async function encontreiEpisodeId(serieId, season, episode) {
     const json = await res.json();
     const eps = Array.isArray(json?.episodes) ? json.episodes : Array.isArray(json) ? json : Array.isArray(json?.[season]) ? json[season] : [];
     if (!eps.length) return null;
-    const target = eps.find((e) => parseInt(e.number, 10) === episode) || eps[episode - 1];
+    const target = eps.find((e) => parseInt(e.number, 10) === episode) || (strict ? void 0 : eps[episode - 1]);
     if (!target) return null;
     const m = String(target.url || "").match(/-(\d+)\/?$/);
     if (m) return parseInt(m[1], 10);
@@ -3066,12 +3182,12 @@ function encKnownSetsLoad() {
   } catch {
   }
 }
-async function encontreiGetHtml(path12) {
+async function encontreiGetHtml(path13) {
   const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
   if (!cookie) return null;
   if (Date.now() < _encCookieDownUntil) return null;
   try {
-    const res = await fetchWithTimeout(`${ENC_BASE}${path12}`, {
+    const res = await fetchWithTimeout(`${ENC_BASE}${path13}`, {
       headers: {
         "User-Agent": ENC_UA,
         "Cookie": cookie,
@@ -3830,6 +3946,10 @@ router4.get("/api/encontrei-lookup", async (req3, res) => {
       }
     }
     if (!result) {
+      const byse = (await getByseSources(tmdbId, type === "tv" || type === "series" ? season : void 0, type === "tv" || type === "series" ? episode : void 0, lookupName))[0];
+      if (byse) result = { byse: byse.fileId, audio: byse.audio, source: byse.source };
+    }
+    if (!result) {
       return res.status(200).json({ error: "N\xE3o encontrado nos cat\xE1logos (vizer + encontrei) nem nos resolvers live", tmdb_id: tmdbId });
     }
     res.setHeader("Cache-Control", "public, max-age=3600");
@@ -3946,6 +4066,143 @@ router4.get("/api/downloads-catalog", (req3, res) => {
   }
 });
 var encontreiLookup_default = router4;
+function getVizerCatalogStatus() {
+  loadCatalogs();
+  return { movies: _vizerMovieIndex.size, episodes: _vizerEpisodeIndex.size, series: _vizerSeriesSeasonsIndex.size };
+}
+var catalogueMediaSourcePending = /* @__PURE__ */ new Map();
+var catalogueMediaSourceCache = /* @__PURE__ */ new Map();
+async function getCatalogueMediaSources(provider, id, season, episode, name, refresh = false) {
+  loadCatalogs();
+  const key = `${provider}:${season === void 0 ? "movie" : "tv"}:${id}:${season || 0}:${episode || 0}:${name || ""}`;
+  const cached = catalogueMediaSourceCache.get(key);
+  if (!refresh && cached && cached.expires > Date.now()) return cached.sources;
+  if (catalogueMediaSourcePending.has(key)) return catalogueMediaSourcePending.get(key);
+  if (catalogueMediaSourcePending.size >= 6) return [];
+  const pending = (async () => {
+    const tv = season !== void 0 && episode !== void 0;
+    const epKey = `${id}:${season}:${episode}`;
+    const lookups = [
+      {
+        source: "encontrei",
+        entry: tv ? _encontreiEpisodeIndex.get(epKey) : _encontreiMovieIndex.get(id),
+        live: () => tv ? resolveEncontreiEpisode(id, season, episode, name) : resolveEncontreiMovie(id, name)
+      },
+      {
+        source: "vizer",
+        entry: tv ? _vizerEpisodeIndex.get(epKey) : _vizerMovieIndex.get(id),
+        live: () => tv ? resolveVizerEpisode(id, season, episode, name) : resolveVizerMovie(id, name)
+      }
+    ];
+    const results = await Promise.all(lookups.map(async (lookup) => {
+      let timer;
+      try {
+        const entry = refresh ? null : lookup.entry;
+        const live = entry?.servers?.[provider] ? null : await Promise.race([
+          lookup.live(),
+          new Promise((resolve) => {
+            timer = setTimeout(() => resolve(null), 4e3);
+          })
+        ]);
+        const fileId = entry?.servers?.[provider] || live?.[provider];
+        return /^[a-zA-Z0-9_-]{1,100}$/.test(fileId || "") ? { fileId: String(fileId), source: lookup.source, audio: entry?.audio || live?.audio || "Dublado" } : null;
+      } catch {
+        return null;
+      } finally {
+        clearTimeout(timer);
+      }
+    }));
+    const sources = results.filter((value) => !!value);
+    if (sources.length) {
+      if (catalogueMediaSourceCache.size >= 500) catalogueMediaSourceCache.delete(catalogueMediaSourceCache.keys().next().value);
+      catalogueMediaSourceCache.set(key, { expires: Date.now() + 3e4, sources });
+    }
+    return sources;
+  })().finally(() => catalogueMediaSourcePending.delete(key));
+  catalogueMediaSourcePending.set(key, pending);
+  return pending;
+}
+var getStreamtapeSources = (id, season, episode, name, refresh = false) => getCatalogueMediaSources("streamtape", id, season, episode, name, refresh);
+var getMixdropSources = (id, season, episode, name, refresh = false) => getCatalogueMediaSources("mixdrop", id, season, episode, name, refresh);
+async function getByseSources(id, season, episode, name, refresh = false) {
+  loadCatalogs();
+  const tv = season !== void 0 && episode !== void 0;
+  const key = `${id}:${season}:${episode}`;
+  return (await Promise.all(["encontrei", "vizer"].map(async (source) => {
+    let timer;
+    const work = async () => {
+      const entry = source === "encontrei" ? tv ? _encontreiEpisodeIndex.get(key) : _encontreiMovieIndex.get(id) : tv ? _vizerEpisodeIndex.get(key) : _vizerMovieIndex.get(id);
+      if (!refresh && entry?.servers?.byse) return { fileId: String(entry.servers.byse), audio: entry.audio || "Dublado", source };
+      let raw;
+      if (source === "encontrei") {
+        if (tv) {
+          if (!_tmdbToSerieIdMap.has(id)) await ensureEncontreiFreshContent("series", name);
+          const series = _tmdbToSerieIdMap.get(id);
+          if (!series) return null;
+          const video = await encontreiEpisodeId(series, season, episode, true);
+          if (!video) return null;
+          raw = await encontreiPlayerData(video);
+        } else {
+          if (!entry) await ensureEncontreiFreshContent("movies", name);
+          const movie = _encontreiMovieIndex.get(id);
+          if (!movie?.video_id) return null;
+          raw = await encontreiPlayerData(movie.video_id);
+        }
+      } else if (tv) {
+        if (!_tmdbToSerieIdMap.has(id)) await ensureVizerFreshContent("series", name);
+        const series = _tmdbToSerieIdMap.get(id);
+        if (!series) return null;
+        const list = await vizerFetchJson(`do=episodesList&id=${series}&season=${season}&audio=Dublado`, 4e3);
+        const ep = list?.episodes?.find((x) => Number(x.number) === episode);
+        const video = String(ep?.url || "").match(/-(\d+)\/?$/)?.[1];
+        if (!video) return null;
+        raw = await vizerFetchJson(`do=playerData&id=${video}`, 4e3);
+      } else {
+        loadVizerMovieIds();
+        if (!_tmdbToVizerMovieIdMap.has(id)) await ensureVizerFreshContent("movies", name);
+        const video = _tmdbToVizerMovieIdMap.get(id);
+        if (!video) return null;
+        raw = await vizerFetchJson(`do=playerData&id=${video}`, 4e3);
+      }
+      const liveServers = {}, serverAudio = {};
+      for (const [field, audio] of [["servers_dub", "Dublado"], ["servers_leg", "Legendado"]]) {
+        const value = String(raw?.[field] || "").replace(/&amp;/g, "&");
+        for (const provider of ["byse", "mixdrop", "streamtape"]) {
+          const fileId = value.match(new RegExp("(?:^|&)" + provider + "=([a-zA-Z0-9_-]+)", "i"))?.[1];
+          if (fileId && !liveServers[provider]) {
+            liveServers[provider] = fileId;
+            serverAudio[provider] = audio;
+          }
+        }
+      }
+      if (Object.keys(liveServers).length) {
+        const index = source === "encontrei" ? tv ? _encontreiEpisodeIndex : _encontreiMovieIndex : tv ? _vizerEpisodeIndex : _vizerMovieIndex;
+        const target = index, identity = tv ? key : id, previous = target.get(identity) || {};
+        target.set(identity, { ...previous, tmdb_id: id, season, episode, servers: { ...previous.servers, ...liveServers }, server_audio: { ...previous.server_audio, ...serverAudio } });
+      }
+      for (const [field, audio] of [["servers_dub", "Dublado"], ["servers_leg", "Legendado"]]) {
+        const fileId = String(raw?.[field] || "").replace(/&amp;/g, "&").match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1];
+        if (fileId) return { fileId, audio, source };
+      }
+      return null;
+    };
+    try {
+      return await Promise.race([work(), new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), 8e3);
+      })]);
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }))).filter((x) => !!x).sort((a, b) => Number(a.audio !== "Dublado") - Number(b.audio !== "Dublado"));
+}
+function getPlaybackCataloguePresence(id, season, episode) {
+  loadCatalogs();
+  const tv = season !== void 0 && episode !== void 0, key = `${id}:${season}:${episode}`;
+  const entries = [tv ? _encontreiEpisodeIndex.get(key) : _encontreiMovieIndex.get(id), tv ? _vizerEpisodeIndex.get(key) : _vizerMovieIndex.get(id)].filter(Boolean);
+  return Object.fromEntries(["byse", "streamtape", "mixdrop"].map((provider) => ["srv_" + provider, { audioPriority: Math.min(2, ...entries.filter((e) => !!e.servers?.[provider]).map((e) => /dublad|nacional|portugu|pt[-_ ]?br/i.test(e.server_audio?.[provider] || e.audio || "") ? 0 : e.server_audio?.[provider] || e.audio ? 2 : 1)), listed: entries.some((e) => !!e.servers?.[provider]), fileIds: [...new Set(entries.map((e) => String(e.servers?.[provider] || "")).filter(Boolean))] }]));
+}
 
 // server/services/nixplayCatalog.ts
 var import_fs5 = __toESM(require("fs"), 1);
@@ -8027,11 +8284,6 @@ router5.get("/api/embedplay-direct", (_req, res) => {
     error: "Servidor EmbedPlay est\xE1 bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer."
   });
 });
-router5.get("/api/byse-stream", (_req, res) => {
-  return res.status(403).json({
-    error: "Servidor BYSE/Streamberry est\xE1 bloqueado na blacklist permanente. Use exclusivamente o WatchPlayer."
-  });
-});
 router5.get("/api/watchplay-proxy-iframe", async (req3, res) => {
   let { id, s, e } = req3.query;
   let season = parseInt(s) || 1;
@@ -8519,6 +8771,602 @@ var catalog_default = router6;
 
 // server/routes/mixdrop.ts
 var import_express8 = require("express");
+
+// server/services/mixdropProxy.ts
+var import_node_events = require("node:events");
+function isMixdropMediaUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && (!url.port || url.port === "443") && (url.hostname === "mxcontent.net" || url.hostname.endsWith(".mxcontent.net"));
+  } catch {
+    return false;
+  }
+}
+function metadata(response) {
+  const contentRange = response.headers.get("content-range");
+  const range = contentRange?.match(/^bytes (\d+)-(\d+)\/(\d+)$/);
+  const lengthHeader = response.headers.get("content-length");
+  const length = lengthHeader === null ? null : Number(lengthHeader);
+  const start = response.status === 206 && range ? Number(range[1]) : 0;
+  const end = response.status === 206 && range ? Number(range[2]) : length === null ? null : length - 1;
+  const total = response.status === 206 && range ? Number(range[3]) : length;
+  if (length !== null && (!Number.isSafeInteger(length) || length < 0) || response.status === 206 && (!range || !Number.isSafeInteger(total) || start < 0 || end < start || end >= total || length !== null && length !== end - start + 1)) {
+    throw new Error("Invalid CDN range response");
+  }
+  const encoding = response.headers.get("content-encoding");
+  if (encoding && encoding !== "identity") throw new Error("Unexpected encoded video response");
+  const contentType = response.headers.get("content-type") || "video/mp4";
+  if (!/^(video\/|application\/octet-stream|binary\/octet-stream)/i.test(contentType)) {
+    throw new Error("CDN did not return video");
+  }
+  const etag = response.headers.get("etag");
+  const modified = response.headers.get("last-modified");
+  const responseDate = Date.parse(response.headers.get("date") || "");
+  const strongModified = modified && Number.isFinite(responseDate) && Number.isFinite(Date.parse(modified)) && responseDate - Date.parse(modified) >= 6e4;
+  const validatorHeader = etag && !etag.startsWith("W/") ? "etag" : strongModified ? "last-modified" : null;
+  const validator = validatorHeader ? response.headers.get(validatorHeader) : null;
+  return { start, end, total, length, contentType, validator, validatorHeader };
+}
+async function proxyMixdropVideo(req3, res, options) {
+  if (!isMixdropMediaUrl(options.videoUrl)) {
+    res.status(400).send("URL de v\xEDdeo inv\xE1lida.");
+    return;
+  }
+  const requestedRange = req3.headers.range;
+  if (requestedRange && !/^bytes=(?:\d+-\d*|-\d+)$/.test(requestedRange)) {
+    res.status(416).end();
+    return;
+  }
+  if (requestedRange) {
+    const [first, last] = requestedRange.slice(6).split("-");
+    if ([first, last].some((value) => value && !Number.isSafeInteger(Number(value))) || first && last && Number(last) < Number(first) || !first && Number(last) === 0) {
+      res.status(416).end();
+      return;
+    }
+  }
+  const fetchVideo = options.fetchImpl || fetch;
+  const maxRetries = options.maxRetries ?? 2;
+  let url = options.videoUrl;
+  let bytesSent = 0;
+  let original;
+  let currentController;
+  const client = new AbortController();
+  const disconnect = () => {
+    client.abort();
+    currentController?.abort();
+  };
+  res.on("close", disconnect);
+  res.on("error", disconnect);
+  req3.on("aborted", disconnect);
+  let renewed = false;
+  try {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (client.signal.aborted) return;
+      const controller = new AbortController();
+      currentController = controller;
+      let reader;
+      let headerTimer;
+      try {
+        const headers = {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          Accept: "*/*",
+          "Accept-Encoding": "identity",
+          Referer: "https://mxdrop.top/",
+          Origin: "https://mxdrop.top"
+        };
+        if (bytesSent > 0) {
+          if (!original?.validator || original.end === null) throw new Error("Cannot safely resume video");
+          headers.Range = `bytes=${original.start + bytesSent}-${original.end}`;
+          headers["If-Range"] = original.validator;
+        } else if (requestedRange) headers.Range = requestedRange;
+        const responseStarted = Date.now();
+        headerTimer = setTimeout(() => controller.abort(), options.headerTimeoutMs ?? 1e4);
+        let response;
+        for (let redirects = 0; redirects <= 3; redirects++) {
+          if (!isMixdropMediaUrl(url)) throw new Error("Invalid CDN redirect");
+          response = await fetchVideo(url, { signal: controller.signal, headers, redirect: "manual" });
+          if (![301, 302, 303, 307, 308].includes(response.status)) break;
+          const location = response.headers.get("location");
+          void response.body?.cancel().catch(() => {
+          });
+          if (!location || redirects === 3) throw new Error("Invalid CDN redirect");
+          url = new URL(location, url).href;
+        }
+        clearTimeout(headerTimer);
+        if (response?.ok) options.observe?.(true, Date.now() - responseStarted);
+        if (!response) throw new Error("Missing CDN response");
+        if (!response.ok) options.observe?.(false);
+        if ([403, 404, 410].includes(response.status) && options.renewUrl && !renewed && attempt < maxRetries) {
+          renewed = true;
+          void response.body?.cancel().catch(() => {
+          });
+          const fresh = await options.renewUrl();
+          if (client.signal.aborted) return;
+          if (!fresh || !isMixdropMediaUrl(fresh)) throw new Error("Failed to renew video token");
+          url = fresh;
+          continue;
+        }
+        if (![200, 206].includes(response.status)) {
+          void response.body?.cancel().catch(() => {
+          });
+          if (response.status >= 500) throw new Error("CDN unavailable");
+          if (res.headersSent) throw new Error("CDN rejected resumed request");
+          res.status(response.status);
+          if (response.status === 416 && /^bytes \*\/\d+$/.test(response.headers.get("content-range") || "")) {
+            res.setHeader("Content-Range", response.headers.get("content-range"));
+          }
+          res.end();
+          return;
+        }
+        const info = metadata(response);
+        if (bytesSent > 0) {
+          if (response.status !== 206 || info.start !== original.start + bytesSent || info.end !== original.end || info.total !== original.total || info.contentType !== original.contentType || response.headers.get(original.validatorHeader) !== original.validator) {
+            throw new Error("Unsafe CDN resume response");
+          }
+        } else {
+          const explicitStart = requestedRange?.match(/^bytes=(\d+)-/);
+          if (response.status === 206 && explicitStart && info.start !== Number(explicitStart[1])) {
+            throw new Error("CDN returned the wrong byte offset");
+          }
+          const explicitEnd = requestedRange?.match(/^bytes=\d+-(\d+)$/);
+          const suffix = requestedRange?.match(/^bytes=-(\d+)$/);
+          if (response.status === 206 && (explicitEnd && info.end > Number(explicitEnd[1]) || suffix && (info.end !== info.total - 1 || info.start !== Math.max(0, info.total - Number(suffix[1]))))) {
+            throw new Error("CDN returned an unexpected byte range");
+          }
+          original = info;
+          res.status(response.status);
+          for (const name of ["content-length", "content-range", "accept-ranges", "etag", "last-modified"]) {
+            res.removeHeader(name);
+            const value = response.headers.get(name);
+            if (value !== null) res.setHeader(name, value);
+          }
+          res.setHeader("Content-Type", info.contentType);
+          res.setHeader("Access-Control-Allow-Origin", "*");
+          res.setHeader("Cache-Control", "no-store");
+          res.setHeader("X-Accel-Buffering", "no");
+        }
+        if (!response.body) throw new Error("Empty CDN response");
+        reader = response.body.getReader();
+        const expectedBytes = original.end === null ? null : original.end - original.start + 1;
+        while (!client.signal.aborted) {
+          let idleTimer;
+          let chunk;
+          try {
+            chunk = await Promise.race([
+              reader.read(),
+              new Promise((_, reject) => {
+                idleTimer = setTimeout(() => {
+                  reject(new Error("CDN stopped sending bytes"));
+                  controller.abort();
+                }, options.idleTimeoutMs ?? 6e3);
+              })
+            ]);
+          } finally {
+            clearTimeout(idleTimer);
+          }
+          if (chunk.done) {
+            if (expectedBytes !== null && bytesSent !== expectedBytes) throw new Error("Truncated CDN video");
+            res.end();
+            return;
+          }
+          if (!chunk.value.byteLength) continue;
+          if (expectedBytes !== null && bytesSent + chunk.value.byteLength > expectedBytes) {
+            throw new Error("CDN exceeded requested range");
+          }
+          const writable = res.write(chunk.value);
+          bytesSent += chunk.value.byteLength;
+          if (!writable) await (0, import_node_events.once)(res, "drain", { signal: client.signal });
+          if (expectedBytes !== null && bytesSent === expectedBytes) {
+            res.end();
+            return;
+          }
+        }
+      } catch {
+        if (client.signal.aborted) return;
+        options.observe?.(false);
+        const safeResume = bytesSent === 0 || !!original?.validator && original.end !== null;
+        if (attempt === maxRetries || !safeResume) throw new Error("Video transfer failed");
+      } finally {
+        clearTimeout(headerTimer);
+        controller.abort();
+        void reader?.cancel().catch(() => {
+        });
+      }
+    }
+    throw new Error("Video retries exhausted");
+  } catch {
+    if (!client.signal.aborted) {
+      if (res.headersSent) res.destroy();
+      else {
+        for (const name of ["content-length", "content-range", "etag", "last-modified"]) res.removeHeader(name);
+        res.status(502).type("text").send("N\xE3o foi poss\xEDvel recuperar o v\xEDdeo do MixDrop.");
+      }
+    }
+  } finally {
+    res.off("close", disconnect);
+    res.off("error", disconnect);
+    req3.off("aborted", disconnect);
+    currentController?.abort();
+  }
+}
+
+// server/services/mixdropRecovery.ts
+function createMixdropRecovery(video, options) {
+  let holding = false;
+  let hasPlayed = false;
+  let wantsPlay = !video.paused;
+  let internalPause = false;
+  let stalledAt = 0;
+  let reloads = 0;
+  let reloadedAt = 0;
+  let fatalSent = false;
+  let stableSeconds = 0;
+  let lastTime = video.currentTime || 0;
+  let restore = null;
+  const listeners = [];
+  function bufferedAhead() {
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (video.currentTime >= video.buffered.start(i) && video.currentTime <= video.buffered.end(i)) {
+        return Math.max(0, video.buffered.end(i) - video.currentTime);
+      }
+    }
+    return 0;
+  }
+  function target() {
+    const remaining = Number.isFinite(video.duration) ? video.duration - video.currentTime : 5;
+    return Math.min(5, Math.max(0.1, remaining - 0.05));
+  }
+  function pauseInternally() {
+    internalPause = true;
+    try {
+      video.pause();
+    } finally {
+      internalPause = false;
+    }
+  }
+  function cancelRestore() {
+    if (restore) video.removeEventListener("loadedmetadata", restore);
+    restore = null;
+  }
+  function fail(reason) {
+    if (fatalSent) return;
+    fatalSent = true;
+    holding = false;
+    wantsPlay = false;
+    stalledAt = 0;
+    cancelRestore();
+    pauseInternally();
+    options.onFatal(reason);
+  }
+  function hold() {
+    if (!wantsPlay || video.ended || video.seeking || fatalSent) return;
+    holding = true;
+    if (!stalledAt) stalledAt = Date.now();
+    pauseInternally();
+  }
+  function reloadSource() {
+    if (reloads >= 1 || fatalSent || !wantsPlay) return;
+    reloads++;
+    reloadedAt = Date.now();
+    const position = video.currentTime;
+    cancelRestore();
+    restore = () => {
+      restore = null;
+      try {
+        video.currentTime = Math.max(0, Math.min(position, video.duration || position));
+      } catch {
+        fail("mixdrop_restore_failed");
+      }
+    };
+    video.addEventListener("loadedmetadata", restore, { once: true });
+    const separator = options.sourceUrl.includes("?") ? "&" : "?";
+    video.src = options.sourceUrl + separator + "retry=" + Date.now();
+    video.load();
+  }
+  function waiting() {
+    if (!wantsPlay || video.paused && !holding || video.seeking || video.ended) return;
+    if ((hasPlayed || video.currentTime > 0) && (bufferedAhead() < 0.5 || video.readyState < 3)) hold();
+  }
+  function playing() {
+    hasPlayed = true;
+    wantsPlay = true;
+    if (holding && bufferedAhead() < target()) {
+      pauseInternally();
+      return;
+    }
+    holding = false;
+    stalledAt = 0;
+    fatalSent = false;
+  }
+  function paused() {
+    if (internalPause || holding || video.error) return;
+    wantsPlay = false;
+    stalledAt = 0;
+  }
+  function listen(name, callback) {
+    const listener = callback;
+    video.addEventListener(name, listener);
+    listeners.push([name, listener]);
+  }
+  listen("play", () => {
+    wantsPlay = true;
+  });
+  listen("playing", playing);
+  listen("waiting", waiting);
+  listen("stalled", waiting);
+  listen("pause", paused);
+  listen("error", () => {
+    if (!wantsPlay || fatalSent) return;
+    if (reloads >= 1) {
+      fail("mixdrop_media_error");
+      return;
+    }
+    holding = true;
+    if (!stalledAt) stalledAt = Date.now();
+    reloadSource();
+  });
+  const timer = setInterval(() => {
+    if (video.ended) {
+      holding = false;
+      wantsPlay = false;
+      stalledAt = 0;
+      cancelRestore();
+      return;
+    }
+    const current = video.currentTime || 0;
+    if (!holding && hasPlayed && wantsPlay && !video.paused && !video.seeking) {
+      stableSeconds = current > lastTime + 0.1 ? stableSeconds + 1 : 0;
+      if (stableSeconds >= 30) reloads = 0;
+      if (current <= lastTime + 0.01 && (bufferedAhead() < 0.5 || video.readyState < 3)) hold();
+    }
+    lastTime = current;
+    if (!holding || !wantsPlay || fatalSent) return;
+    const duration = Date.now() - stalledAt;
+    if (duration >= (options.stallTimeoutMs ?? 2e4) && (!reloadedAt || Date.now() - reloadedAt >= (options.retryWindowMs ?? 2e4))) {
+      fail("mixdrop_buffer_unrecoverable");
+      return;
+    }
+    if (video.seeking) return;
+    stableSeconds = 0;
+    const enoughBuffer = bufferedAhead() >= target() || video.networkState === 1 && video.readyState === 4 && bufferedAhead() >= 2;
+    if (!restore && enoughBuffer && video.readyState >= 3) {
+      holding = false;
+      stalledAt = 0;
+      video.play().catch(() => fail("mixdrop_resume_blocked"));
+      return;
+    }
+    if (duration >= (options.reloadAfterMs ?? 12e3)) reloadSource();
+  }, 1e3);
+  return {
+    get holding() {
+      return holding;
+    },
+    command(type) {
+      if (type === "PAUSE" || type === "TOGGLE_PLAY" && (wantsPlay || holding)) {
+        wantsPlay = false;
+        holding = false;
+        stalledAt = 0;
+        return;
+      }
+      if (["SEEK", "SEEK_ABSOLUTE", "SEEK_RELATIVE", "seek", "SKIP_INTRO"].includes(type)) {
+        cancelRestore();
+        const wasHolding = holding;
+        holding = false;
+        stalledAt = 0;
+        if (wasHolding && wantsPlay) video.play().catch(() => {
+        });
+      } else if (type === "PLAY" || type === "TOGGLE_PLAY") {
+        wantsPlay = true;
+        holding = false;
+        stalledAt = 0;
+        fatalSent = false;
+      }
+    },
+    destroy() {
+      clearInterval(timer);
+      cancelRestore();
+      for (const [name, listener] of listeners) video.removeEventListener(name, listener);
+    }
+  };
+}
+
+// server/services/mediaSourcePool.ts
+var audioPriority = (audio) => /dublad|nacional|portugu|pt[-_ ]?br/i.test(audio) ? 0 : audio ? 2 : 1;
+function createMediaSourcePool(options) {
+  const now = options.now || Date.now;
+  const stats = /* @__PURE__ */ new Map();
+  const cache = /* @__PURE__ */ new Map();
+  const pending = /* @__PURE__ */ new Map();
+  let probing = 0, sequence = 0;
+  function entry(id) {
+    let value = stats.get(id);
+    if (!value) {
+      if (stats.size >= 1e3) {
+        const evict = [...stats].find(([, value2]) => value2.active === 0)?.[0];
+        if (evict) {
+          stats.delete(evict);
+          cache.delete(evict);
+        }
+      }
+      value = { active: 0, failures: 0, cooldown: 0, latencyMs: 1e3, touched: now() };
+      if (stats.size < 1e3) stats.set(id, value);
+    }
+    value.touched = now();
+    return value;
+  }
+  function report(id, ok, latencyMs) {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return;
+    const value = entry(id);
+    if (ok) {
+      value.failures = Math.max(0, value.failures - 1);
+      value.cooldown = 0;
+      if (latencyMs !== void 0) value.latencyMs = value.latencyMs * 0.6 + Math.max(1, latencyMs) * 0.4;
+    } else {
+      value.failures = Math.min(5, value.failures + 1);
+      value.cooldown = now() + 15e3;
+      cache.delete(id);
+    }
+  }
+  const probe = options.probe;
+  async function measure(id) {
+    const cached = cache.get(id);
+    if (cached && now() - cached.checkedAt < (cached.valid ? options.ttlMs ?? 3e4 : 5e3)) return cached;
+    if (pending.has(id)) return pending.get(id);
+    if (probing >= 6) return { valid: false, directUrl: null, latencyMs: 0, checkedAt: now() };
+    probing++;
+    const started = now(), controller = new AbortController();
+    let timer;
+    const work = (async () => {
+      let directUrl = await options.resolve(id);
+      if (!directUrl || controller.signal.aborted) return { valid: false, directUrl: null, latencyMs: now() - started, checkedAt: now() };
+      let valid = await probe(directUrl, controller.signal);
+      if (!valid && !controller.signal.aborted) {
+        directUrl = await options.resolve(id, true);
+        if (directUrl && !controller.signal.aborted) valid = await probe(directUrl, controller.signal);
+      }
+      return { valid, directUrl: valid ? directUrl : null, latencyMs: now() - started, checkedAt: now() };
+    })();
+    const request = Promise.race([work, new Promise((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve({ valid: false, directUrl: null, latencyMs: now() - started, checkedAt: now() });
+      }, options.timeoutMs ?? 8e3);
+    })]).catch(() => ({ valid: false, directUrl: null, latencyMs: now() - started, checkedAt: now() })).then((result) => {
+      report(id, result.valid, result.latencyMs);
+      if (cache.size >= 1e3) cache.delete(cache.keys().next().value);
+      cache.set(id, result);
+      return result;
+    }).finally(() => {
+      clearTimeout(timer);
+      controller.abort();
+      pending.delete(id);
+      probing--;
+    });
+    pending.set(id, request);
+    return request;
+  }
+  return {
+    report,
+    begin(id) {
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return () => {
+      };
+      const value = entry(id);
+      value.active++;
+      let done = false;
+      return () => {
+        if (!done) {
+          done = true;
+          value.active = Math.max(0, value.active - 1);
+        }
+      };
+    },
+    async select(sources, exclude = []) {
+      const unique = /* @__PURE__ */ new Map();
+      for (const source of sources) {
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(source.fileId) || exclude.includes(source.fileId)) continue;
+        const previous = unique.get(source.fileId);
+        if (!previous || audioPriority(source.audio) < audioPriority(previous.audio)) unique.set(source.fileId, source);
+      }
+      for (const priority of [0, 1, 2]) {
+        const candidates = [...unique.values()].filter((source) => audioPriority(source.audio) === priority);
+        if (!candidates.length) continue;
+        const results = await Promise.all(candidates.map(async (source) => ({ source, measurement: await measure(source.fileId) })));
+        const working = results.filter((result) => result.measurement.valid && result.measurement.directUrl);
+        if (!working.length) continue;
+        const score = (id) => {
+          const value = entry(id);
+          return value.latencyMs + value.active * 1500 + value.failures * 2e3 + (value.cooldown > now() ? 1e4 : 0);
+        };
+        const offset = sequence++ % working.length;
+        const rotated = [...working.slice(offset), ...working.slice(0, offset)];
+        rotated.sort((a, b) => score(a.source.fileId) - score(b.source.fileId));
+        const selected = rotated[0];
+        return { ...selected.source, directUrl: selected.measurement.directUrl };
+      }
+      return null;
+    }
+  };
+}
+
+// server/services/playbackHealth.ts
+function createPlaybackHealthCache(options = {}) {
+  const cache = /* @__PURE__ */ new Map();
+  const inflight = /* @__PURE__ */ new Map();
+  let active = 0;
+  return async (key, probe) => {
+    const cached = cache.get(key);
+    if (cached && cached.expires > Date.now()) return cached.result;
+    if (inflight.has(key)) return inflight.get(key);
+    if (active >= (options.concurrency ?? 6)) {
+      return { state: "unknown", checkedAt: Date.now(), reason: "busy" };
+    }
+    active++;
+    const controller = new AbortController();
+    let timer;
+    const deadline = new Promise((resolve) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        resolve({ state: "unknown", reason: "timeout" });
+      }, options.timeoutMs ?? 4500);
+    });
+    const pending = Promise.race([
+      Promise.resolve().then(() => probe(controller.signal)).catch(() => ({ state: "unknown", reason: "network" })),
+      deadline
+    ]).then((result) => {
+      const value = { ...result, checkedAt: Date.now() };
+      if (cache.size >= (options.maxEntries ?? 2e3)) cache.delete(cache.keys().next().value);
+      cache.set(key, { result: value, expires: Date.now() + (result.state === "available" ? 6e4 : 15e3) });
+      return value;
+    }).finally(() => {
+      clearTimeout(timer);
+      controller.abort();
+      active--;
+      inflight.delete(key);
+    });
+    inflight.set(key, pending);
+    return pending;
+  };
+}
+async function readHealthPrefix(response, limit) {
+  if (!response.body) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks = [];
+  let size = 0;
+  try {
+    while (size < limit) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const piece = value.subarray(0, limit - size);
+      chunks.push(piece);
+      size += piece.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => {
+    });
+  }
+  const result = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+async function probeHealthMedia(url, signal, fetchImpl = fetch) {
+  const response = await fetchImpl(url, { signal, headers: { Range: "bytes=0-1023" } });
+  const prefix = await readHealthPrefix(response, 1024);
+  if (response.status === 404 || response.status === 410) return { state: "unavailable", reason: "not_found" };
+  if (!response.ok) return { state: "unknown", reason: "upstream_" + response.status };
+  const text = new TextDecoder().decode(prefix).trimStart();
+  const type = response.headers.get("content-type") || "";
+  const mp4 = prefix.length >= 12 && new TextDecoder().decode(prefix.subarray(4, 8)) === "ftyp";
+  const hls = text.startsWith("#EXTM3U") && /#EXT(?:INF|-X-STREAM-INF):/.test(text);
+  const transportStream = prefix.length >= 189 && prefix[0] === 71 && prefix[188] === 71;
+  if (mp4 || hls || type.includes("video/mp2t") && transportStream) return { state: "available", reason: "media_verified" };
+  return { state: "unknown", reason: "unverified_body" };
+}
+
+// server/routes/mixdrop.ts
 var mixdropMemoryCache = /* @__PURE__ */ new Map();
 async function resolveFreshMixdropToken(fileId, host = "mxdrop.top") {
   const embedUrl = `https://${host}/e/${fileId}`;
@@ -8533,7 +9381,6 @@ async function resolveFreshMixdropToken(fileId, host = "mxdrop.top") {
       },
       signal: controller.signal
     });
-    clearTimeout(timeoutId);
     if (!upstream.ok) return null;
     const html = await upstream.text();
     const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
@@ -8543,12 +9390,14 @@ async function resolveFreshMixdropToken(fileId, host = "mxdrop.top") {
     if (!wurlMatch || !wurlMatch[1]) return null;
     let videoUrl = wurlMatch[1];
     if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
+    if (!isMixdropMediaUrl(videoUrl)) return null;
     const posterMatch = unpacked.match(/MDCore\.poster\s*=\s*['"]([^'"]+)['"]/);
     const titleMatch = html.match(/<title>MixDrop - Watch ([^<]+)<\/title>/i);
     let posterUrl = posterMatch && posterMatch[1] ? posterMatch[1] : "";
     if (posterUrl.startsWith("//")) posterUrl = "https:" + posterUrl;
     let pageTitle = titleMatch && titleMatch[1] ? titleMatch[1].trim() : "Play Infinity \u2022 MixDrop Stream";
     const result = { videoUrl, posterUrl, title: pageTitle };
+    if (mixdropMemoryCache.size >= 1e3) mixdropMemoryCache.delete(mixdropMemoryCache.keys().next().value);
     mixdropMemoryCache.set(fileId, {
       ...result,
       expiresAt: Date.now() + 10 * 60 * 1e3
@@ -8556,14 +9405,73 @@ async function resolveFreshMixdropToken(fileId, host = "mxdrop.top") {
     });
     return result;
   } catch (err) {
-    clearTimeout(timeoutId);
     return null;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
+var tokenRefreshes = /* @__PURE__ */ new Map();
+function refreshMixdropUrl(fileId, expiredUrl) {
+  const cached = mixdropMemoryCache.get(fileId);
+  if (cached && cached.expiresAt > Date.now() + 6e4 && cached.videoUrl !== expiredUrl) {
+    return Promise.resolve(cached.videoUrl);
+  }
+  const pending = tokenRefreshes.get(fileId);
+  if (pending) return pending;
+  const refresh = resolveFreshMixdropToken(fileId).then((result) => result?.videoUrl || null).finally(() => tokenRefreshes.delete(fileId));
+  tokenRefreshes.set(fileId, refresh);
+  return refresh;
+}
+var mixdropResolutions = /* @__PURE__ */ new Map();
+function resolveMixdropToken(fileId, refresh = false) {
+  const pending = mixdropResolutions.get(fileId);
+  if (pending) return pending;
+  const cached = mixdropMemoryCache.get(fileId);
+  if (!refresh && cached && cached.expiresAt > Date.now() + 6e4) return Promise.resolve(cached);
+  const request = resolveFreshMixdropToken(fileId).finally(() => mixdropResolutions.delete(fileId));
+  mixdropResolutions.set(fileId, request);
+  return request;
+}
+var mixdropPool = createMediaSourcePool({
+  resolve: async (fileId, refresh) => (await resolveMixdropToken(fileId, refresh))?.videoUrl || null,
+  probe: async (url, signal) => {
+    if (!isMixdropMediaUrl(url)) return false;
+    const response = await fetch(url, { signal, headers: { Range: "bytes=0-1023", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", Referer: "https://mxdrop.top/", Origin: "https://mxdrop.top" } });
+    const bytes = await readHealthPrefix(response, 1024);
+    return response.ok && bytes.length >= 12 && new TextDecoder().decode(bytes.subarray(4, 8)) === "ftyp";
+  }
+});
+var scriptJson = (value) => JSON.stringify(value).replace(/</g, String.fromCharCode(92) + "u003c");
 var router7 = (0, import_express8.Router)();
 router7.get("/api/md-stream", async (req3, res) => {
   try {
-    const rawUrl = String(req3.query.url || "").trim();
+    let rawUrl = String(req3.query.url || "").trim();
+    const id = req3.query.id ? Number(req3.query.id) : void 0;
+    const season = req3.query.s ? Number(req3.query.s) : void 0, episode = req3.query.e ? Number(req3.query.e) : void 0;
+    const context = id ? { id, season, episode, name: String(req3.query.name || "").slice(0, 160) } : null;
+    let selected = null;
+    if (req3.query.id) {
+      if (!id || !Number.isInteger(id) || id < 1 || id > 9999999999 || season === void 0 !== (episode === void 0) || season !== void 0 && (!Number.isInteger(season) || season < 1 || season > 999) || episode !== void 0 && (!Number.isInteger(episode) || episode < 1 || episode > 9999)) return res.status(400).json({ error: "Conte\xFAdo inv\xE1lido" });
+      const exclude = String(req3.query.exclude || "").split(",").filter(Boolean).slice(0, 4);
+      if (exclude.some((value) => !/^[a-zA-Z0-9_-]{1,100}$/.test(value))) return res.status(400).json({ error: "Arquivo inv\xE1lido" });
+      let timer;
+      const work = (async () => {
+        const first = await mixdropPool.select(await getMixdropSources(id, season, episode, context.name), exclude);
+        return first || mixdropPool.select(await getMixdropSources(id, season, episode, context.name, true), exclude);
+      })();
+      try {
+        selected = await Promise.race([work, new Promise((resolve) => {
+          timer = setTimeout(() => resolve(null), 18e3);
+        })]);
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!selected) {
+        if (req3.query.format === "json") return res.status(502).json({ success: false, error: "Nenhuma fonte MixDrop verificada para este conte\xFAdo." });
+        return res.status(502).send('<html><body><script>window.parent.postMessage({type:"WATCHPLAY_ERROR",reason:"MixDrop: fontes indispon\xEDveis",mixdropExhausted:true},"*")</script></body></html>');
+      }
+      rawUrl = "https://mxdrop.top/e/" + selected.fileId;
+    }
     if (!rawUrl) {
       return res.status(400).send("Par\xE2metro 'url' \xE9 obrigat\xF3rio.");
     }
@@ -8602,7 +9510,7 @@ router7.get("/api/md-stream", async (req3, res) => {
     let videoUrl = "";
     let posterUrl = "";
     let pageTitle = "Play Infinity \u2022 MixDrop Stream";
-    if (cached && cached.expiresAt > Date.now() + 6e4) {
+    if (req3.query.refresh !== "1" && cached && cached.expiresAt > Date.now() + 6e4) {
       videoUrl = cached.videoUrl;
       posterUrl = cached.posterUrl;
       pageTitle = cached.title || pageTitle;
@@ -8615,12 +9523,13 @@ router7.get("/api/md-stream", async (req3, res) => {
       posterUrl = fresh.posterUrl;
       pageTitle = fresh.title;
     }
-    const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}`;
+    if (selected) videoUrl = selected.directUrl;
+    const streamUrl = `/api/md-proxy?url=${encodeURIComponent(videoUrl)}&fileId=${encodeURIComponent(fileId)}`;
     if (req3.query.format === "json") {
       const isHttps = req3.headers["x-forwarded-proto"] === "https" || req3.protocol === "https";
       const originHost = req3.headers.host;
       const fullProxyUrl = `${isHttps ? "https" : "http"}://${originHost}${streamUrl}`;
-      return res.json({ videoUrl: fullProxyUrl });
+      return res.json({ success: true, videoUrl: fullProxyUrl, proxyUrl: streamUrl, fileId, source: selected?.source || "direct" });
     }
     return res.send(`
         <!DOCTYPE html>
@@ -8678,6 +9587,7 @@ router7.get("/api/md-stream", async (req3, res) => {
           <div id="artplayer-container"></div>
           <script>
             (function() {
+              window.parent.postMessage({ type: 'WATCHPLAY_SOURCE', provider: 'mixdrop', fileId: ${scriptJson(fileId)}, source: ${scriptJson(selected?.source || "direct")}, playerFrameUrl: window.location.href }, '*');
               var videoUrl = ${JSON.stringify(streamUrl)};
               var posterUrl = ${JSON.stringify(posterUrl)};
 
@@ -8686,7 +9596,7 @@ router7.get("/api/md-stream", async (req3, res) => {
                 url: videoUrl,
                 type: "mp4",
                 poster: posterUrl || "",
-                autoplay: true,
+                autoplay: ${req3.query.paused !== "1"},
                 muted: false,
                 playsInline: true,
                 controls: [],
@@ -8699,6 +9609,14 @@ router7.get("/api/md-stream", async (req3, res) => {
               });
 
               window.artInstance = art;
+              var bufferRecovery = (${createMixdropRecovery.toString()})(art.video, {
+                sourceUrl: videoUrl,
+                reloadAfterMs: ${context ? 4e3 : 12e3}, stallTimeoutMs: ${context ? 1e4 : 2e4}, retryWindowMs: ${context ? 6e3 : 2e4},
+                onFatal: function(reason) {
+                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, mixdropFileId: ${scriptJson(fileId)} }, "*");
+                }
+              });
+              window.addEventListener("pagehide", function() { bufferRecovery.destroy(); });
 
               function sendStatus() {
                 var v = art.video || document.querySelector("video");
@@ -8715,7 +9633,8 @@ router7.get("/api/md-stream", async (req3, res) => {
                     type: "WATCHPLAY_STATUS",
                     currentTime: cur,
                     duration: dur,
-                    paused: !!v.paused,
+                    paused: !!v.paused && !bufferRecovery.holding,
+                    buffering: bufferRecovery.holding,
                     muted: !!v.muted,
                     volume: typeof v.volume === "number" ? v.volume : 1,
                     buffered: bufferedEnd,
@@ -8830,12 +9749,15 @@ router7.get("/api/md-stream", async (req3, res) => {
               })();
 
               art.on("ready", function() {
+                var resumeAt = ${Math.max(0, Number(req3.query.t) || 0)};
+                if (resumeAt > 0) { try { art.currentTime = resumeAt; } catch(e) {} }
                 notifyReady();
                 var v = art.video || document.querySelector("video");
                 if (v) {
                   v.setAttribute("referrerpolicy", "no-referrer");
                   v.setAttribute("playsinline", "true");
                 }
+                if (${req3.query.paused === "1"}) { art.pause(); return; }
                 // Autoplay com fallback: tenta com som, se navegador bloquear, tenta mudo
                 art.play().catch(function() {
                   console.log("[MixDrop] Autoplay com som bloqueado pelo navegador, tentando mudo...");
@@ -8932,7 +9854,7 @@ router7.get("/api/md-stream", async (req3, res) => {
 
                 function stall(reason) {
                   var v = vid();
-                  if (!v || v.paused || v.ended) return;
+                  if (!v || v.paused && !bufferRecovery.holding || v.ended || v.seeking) return;
                   var now = Date.now();
                   if (!stallStart) { stallStart = now; totalStalls++; }
                   push("stall", reason);
@@ -9000,8 +9922,7 @@ router7.get("/api/md-stream", async (req3, res) => {
                   v.addEventListener("loadedmetadata", function() { push("metadata", "dur=" + Math.round(v.duration || 0) + "s " + v.videoWidth + "x" + v.videoHeight); });
                   v.addEventListener("waiting", function() { stall("waiting (buffer esgotado)"); });
                   v.addEventListener("stalled", function() { stall("stalled (proxy/CDN parou de enviar dados)"); });
-                  v.addEventListener("playing", function() { recovered(); });
-                  v.addEventListener("canplay", function() { recovered(); });
+                  v.addEventListener("playing", function() { if (!bufferRecovery.holding) recovered(); });
                   v.addEventListener("play", function() { push("play"); });
                   v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
                   v.addEventListener("seeked", function() { push("seeked"); });
@@ -9044,7 +9965,8 @@ router7.get("/api/md-stream", async (req3, res) => {
                   var now = Date.now();
                   var cur = v.currentTime || 0;
                   var q = quality(v);
-                  if (v.paused || v.ended || v.seeking) {
+                  if (v.paused && !bufferRecovery.holding || v.ended || v.seeking) {
+                    if (stallStart) recovered();
                     lastT = cur;
                     lastWall = now;
                     frozenTicks = 0;
@@ -9058,6 +9980,12 @@ router7.get("/api/md-stream", async (req3, res) => {
                   lastWall = now;
 
                   var currentBuf = bufAhead(v);
+                  if (bufferRecovery.holding || dt < 0.05 && currentBuf < 0.5) {
+                    stall("waiting (buffer esgotado)");
+                    frozenTicks = 0;
+                    return;
+                  }
+                  if (stallStart && dt > 0.05) recovered();
                   if (wall >= 0.7 && dt < 0.05 && currentBuf >= 0.8) {
                     frozenTicks++;
                     if (frozenTicks >= 2) stall("frame_freeze (tempo do video parado, sem evento waiting)");
@@ -9163,6 +10091,13 @@ router7.get("/api/md-stream", async (req3, res) => {
                 if (!e.data) return;
                 var v = art.video || document.querySelector("video");
 
+                if (e.data.type === "TOGGLE_PLAY" && bufferRecovery.holding) {
+                  bufferRecovery.command("PAUSE");
+                  art.pause();
+                  sendStatus();
+                  return;
+                }
+                bufferRecovery.command(String(e.data.type || ""));
                 switch (e.data.type) {
                   case "PLAY":
                     if (_playBlocked) return; // J\xE1 tentou e falhou \u2014 n\xE3o tenta de novo
@@ -9203,8 +10138,11 @@ router7.get("/api/md-stream", async (req3, res) => {
                   case "SEEK":
                   case "SEEK_ABSOLUTE":
                   case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
-                    if (typeof t === "number" && !isNaN(t)) {
+                    var t = e.data.type === "SEEK_RELATIVE" && typeof e.data.seconds === "number"
+                      ? (v.currentTime || 0) + e.data.seconds
+                      : (typeof e.data.time === "number" ? e.data.time : e.data.targetTime);
+                    if (typeof t === "number" && isFinite(t)) {
+                      t = Math.max(0, Math.min(t, isFinite(v.duration) ? v.duration : t));
                       if (art) art.currentTime = t;
                       else if (v) v.currentTime = t;
                       sendStatus();
@@ -9255,80 +10193,25 @@ router7.get("/api/md-stream", async (req3, res) => {
   }
 });
 router7.get("/api/md-proxy", async (req3, res) => {
-  try {
-    let videoUrl = String(req3.query.url || "").trim();
-    if (!videoUrl || !videoUrl.includes("mxcontent.net")) {
-      return res.status(400).send("URL de v\xEDdeo inv\xE1lida.");
-    }
-    const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Accept-Encoding": "identity",
-      "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Referer": "https://mxdrop.top/",
-      "Origin": "https://mxdrop.top",
-      "Connection": "keep-alive"
-    };
-    if (req3.headers.range) {
-      headers["Range"] = req3.headers.range;
-    }
-    let controller = new AbortController();
-    let timeoutId = setTimeout(() => controller.abort(), 15e3);
-    req3.on("close", () => controller.abort());
-    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-    clearTimeout(timeoutId);
-    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
-      const fileMatch = videoUrl.match(/\/v2\/([a-zA-Z0-9_-]+)\.mp4/) || videoUrl.match(/\/([a-zA-Z0-9_-]+)\.mp4/);
-      const fileId = fileMatch ? fileMatch[1] : "";
-      if (fileId) {
-        console.warn(`[MixDrop Proxy] Token CDN expirado (${upstream.status}) para fileId ${fileId}. Renovando token em tempo real...`);
-        mixdropMemoryCache.delete(fileId);
-        const fresh = await resolveFreshMixdropToken(fileId);
-        if (fresh && fresh.videoUrl) {
-          videoUrl = fresh.videoUrl;
-          controller = new AbortController();
-          timeoutId = setTimeout(() => controller.abort(), 15e3);
-          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-          clearTimeout(timeoutId);
-        }
-      }
-    }
-    res.status(upstream.status);
-    for (const [key, value] of upstream.headers.entries()) {
-      const lk = key.toLowerCase();
-      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
-        res.setHeader(key, value);
-      }
-    }
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    if (!upstream.body) {
-      return res.end();
-    }
-    const { Readable: Readable4 } = await import("stream");
-    const source = Readable4.fromWeb(upstream.body);
-    let sourceFailed = false;
-    source.on("error", () => {
-      if (sourceFailed || res.writableEnded) return;
-      sourceFailed = true;
-      controller.abort();
-      if (upstream.status === 206) res.destroy();
-      else res.end();
-    });
-    source.pipe(res);
-    res.on("close", () => controller.abort());
-    res.on("error", () => controller.abort());
-  } catch (err) {
-    if (err?.name === "AbortError") {
-      if (!res.headersSent) res.end();
-      return;
-    }
-    console.error("[MixDrop Proxy Error]:", err);
-    if (!res.headersSent) {
-      res.status(500).send("Erro no proxy do MixDrop");
-    } else {
-      res.destroy();
-    }
+  const videoUrl = String(req3.query.url || "").trim();
+  const explicitId = String(req3.query.fileId || "").trim();
+  if (explicitId && !/^[a-zA-Z0-9_-]+$/.test(explicitId)) {
+    return res.status(400).send("ID de arquivo inv\xE1lido.");
   }
+  let legacyId = "";
+  try {
+    legacyId = new URL(videoUrl).pathname.match(/\/([a-zA-Z0-9_-]+)\.mp4$/)?.[1] || "";
+  } catch {
+  }
+  const fileId = explicitId || legacyId;
+  const release = mixdropPool.begin(fileId);
+  res.once("close", release);
+  res.once("finish", release);
+  await proxyMixdropVideo(req3, res, {
+    videoUrl,
+    observe: (ok, latencyMs) => mixdropPool.report(fileId, ok, latencyMs),
+    renewUrl: fileId ? () => refreshMixdropUrl(fileId, videoUrl) : void 0
+  });
 });
 router7.get("/api/download", async (req3, res) => {
   try {
@@ -9440,8 +10323,8 @@ router7.get("/api/download", async (req3, res) => {
       if (!upstream.body) {
         return res.end();
       }
-      const { Readable: Readable4 } = await import("stream");
-      const sourceReadable = Readable4.fromWeb(upstream.body);
+      const { Readable: Readable5 } = await import("stream");
+      const sourceReadable = Readable5.fromWeb(upstream.body);
       sourceReadable.on("error", () => {
         if (res.writableEnded) return;
         if (upstream.status === 206) res.destroy();
@@ -9460,10 +10343,1412 @@ router7.get("/api/download", async (req3, res) => {
 });
 var mixdrop_default = router7;
 
-// server/routes/cast.ts
+// server/services/byse/tickets.ts
+var import_node_crypto = __toESM(require("node:crypto"), 1);
+var import_node_fs2 = __toESM(require("node:fs"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
+function createByseTickets(key) {
+  if (key.length !== 32) throw new Error("Invalid proxy key");
+  return {
+    seal(url, fileId = "", context = "") {
+      const iv = import_node_crypto.default.randomBytes(12), cipher = import_node_crypto.default.createCipheriv("aes-256-gcm", key, iv);
+      const data = Buffer.concat([cipher.update(JSON.stringify({ url, fileId, context, expires: Date.now() + 6 * 36e5 })), cipher.final()]);
+      return Buffer.concat([iv, cipher.getAuthTag(), data]).toString("base64url");
+    },
+    open(ticket) {
+      return this.openMedia(ticket).url;
+    },
+    openMedia(ticket) {
+      if (ticket.length > 16384) throw new Error("Invalid ticket");
+      const data = Buffer.from(ticket, "base64url");
+      if (data.toString("base64url") !== ticket) throw new Error("Invalid ticket");
+      const cipher = import_node_crypto.default.createDecipheriv("aes-256-gcm", key, data.subarray(0, 12));
+      cipher.setAuthTag(data.subarray(12, 28));
+      const result = JSON.parse(Buffer.concat([cipher.update(data.subarray(28)), cipher.final()]).toString());
+      if (result.expires <= Date.now() || typeof result.url !== "string") throw new Error("Expired ticket");
+      return { context: typeof result.context === "string" ? result.context : "", url: result.url, fileId: typeof result.fileId === "string" ? result.fileId : "" };
+    }
+  };
+}
+var tickets;
+function getByseTickets() {
+  if (tickets) return tickets;
+  const file = import_node_path.default.join(process.cwd(), "data", "byse-proxy.key");
+  import_node_fs2.default.mkdirSync(import_node_path.default.dirname(file), { recursive: true });
+  try {
+    import_node_fs2.default.writeFileSync(file, import_node_crypto.default.randomBytes(32), { flag: "wx", mode: 384 });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+  }
+  return tickets = createByseTickets(import_node_fs2.default.readFileSync(file));
+}
+
+// server/services/byse/pow.ts
+var import_node_worker_threads = require("node:worker_threads");
+var WORKER_SOURCE = String.raw`
+
+"use strict";
+
+const POW_BE = 512, POW_LT = POW_BE - 1, POW_DR = 2, POW_LR = 2654435761, POW_HR = 2246822519;
+
+const powRotl = (t, e) => ((t << e) | (t >>> (32 - e))) >>> 0;
+
+const powMul = (t, e) => Math.imul(t, e) >>> 0;
+
+function powMix(t) {
+
+  t[0] = (t[0] + t[1]) >>> 0; t[3] = powRotl(t[3] ^ t[0], 16);
+
+  t[2] = (t[2] + t[3]) >>> 0; t[1] = powRotl(t[1] ^ t[2], 12);
+
+  t[0] = (t[0] + t[1]) >>> 0; t[3] = powRotl(t[3] ^ t[0], 8);
+
+  t[2] = (t[2] + t[3]) >>> 0; t[1] = powRotl(t[1] ^ t[2], 7);
+
+}
+
+function powHash(t) {
+
+  const e = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762]);
+
+  for (let i = 0; i < t.length; i++) { e[0] = (e[0] + t[i]) >>> 0; e[0] = powRotl(e[0], 7); powMix(e); }
+
+  for (let i = 0; i < 8; i++) powMix(e);
+
+  const r = new Uint32Array(POW_BE);
+
+  for (let i = 0; i < POW_BE; i++) { powMix(e); r[i] = (e[0] ^ e[2]) >>> 0; }
+
+  for (let i = 0; i < POW_DR; i++) {
+
+    for (let s = 0; s < POW_BE; s++) {
+
+      const a = r[s] & POW_LT;
+
+      let c = (r[s] + r[a]) >>> 0;
+
+      c = powRotl(c, 13);
+
+      c = (c ^ powMul(r[(s + 1) & POW_LT], POW_LR)) >>> 0;
+
+      r[s] = c; e[0] = (e[0] ^ c) >>> 0; powMix(e);
+
+    }
+
+  }
+
+  const n = new Uint32Array(8), o = POW_BE / 8;
+
+  for (let i = 0; i < 8; i++) {
+
+    powMix(e);
+
+    let s = e[0];
+
+    const a = i * o;
+
+    for (let c = 0; c < o; c++) {
+
+      const d = r[a + c];
+
+      s = (s + d) >>> 0; s = powRotl(s, 5); s = (s ^ powMul(d, POW_HR)) >>> 0;
+
+    }
+
+    n[i] = (s ^ e[2]) >>> 0;
+
+  }
+
+  return n;
+
+}
+
+function powLeadingZeros(t) {
+
+  let e = 0;
+
+  for (let r = 0; r < t.length; r++) {
+
+    const n = t[r];
+
+    if (n === 0) { e += 32; continue; }
+
+    return e + Math.clz32(n);
+
+  }
+
+  return e;
+
+}
+
+function powStrBytes(t) {
+
+  const e = new Uint8Array(t.length);
+
+  for (let r = 0; r < t.length; r++) e[r] = t.charCodeAt(r) & 255;
+
+  return e;
+
+}
+
+const { parentPort } = require("node:worker_threads");
+
+parentPort.on("message", (m) => {
+
+  const { nonce, difficulty, timeoutMs } = m;
+
+  if (!(typeof nonce === "string") || !(typeof difficulty === "number")) {
+
+    parentPort.postMessage({ id: m.id, solution: null, error: "argumentos inválidos" });
+
+    return;
+
+  }
+
+  if (difficulty <= 0) { parentPort.postMessage({ id: m.id, solution: "0" }); return; }
+
+  const prefix = nonce + ":";
+
+  const start = Date.now();
+
+  let s = 0;
+
+  for (;;) {
+
+    for (let c = 0; c < 1024; c++) {
+
+      if (powLeadingZeros(powHash(powStrBytes(prefix + s))) >= difficulty) {
+
+        parentPort.postMessage({ id: m.id, solution: String(s), ms: Date.now() - start });
+
+        return;
+
+      }
+
+      s++;
+
+    }
+
+    if (Date.now() - start > timeoutMs) {
+
+      parentPort.postMessage({ id: m.id, solution: null, ms: Date.now() - start, timeout: true });
+
+      return;
+
+    }
+
+  }
+
+});
+
+`;
+var queue = [];
+var MAX_ACTIVE_WORKERS = 2;
+var MAX_QUEUE_LENGTH = 8;
+var activeWorkers = 0;
+function pump() {
+  while (activeWorkers < MAX_ACTIVE_WORKERS && queue.length > 0) {
+    const job = queue.shift();
+    const remaining = job.expires - Date.now();
+    if (remaining <= 0) {
+      job.resolve(null);
+      continue;
+    }
+    activeWorkers++;
+    let worker, settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      void worker?.terminate();
+      activeWorkers = Math.max(0, activeWorkers - 1);
+      job.resolve(value);
+      pump();
+    };
+    const timer = setTimeout(() => finish(null), remaining);
+    try {
+      worker = new import_node_worker_threads.Worker(WORKER_SOURCE, { eval: true, resourceLimits: { maxOldGenerationSizeMb: 32 } });
+      worker.once("message", (value) => finish(typeof value.solution === "string" ? value.solution : null));
+      worker.once("error", () => finish(null));
+      worker.once("exit", () => finish(null));
+      worker.postMessage({ id: 1, nonce: job.nonce, difficulty: job.difficulty, timeoutMs: remaining });
+    } catch {
+      finish(null);
+    }
+  }
+}
+function solveBysePowAsync(nonce, difficulty, timeoutMs = 3e4) {
+  if (typeof nonce !== "string" || nonce.length > 256 || !Number.isInteger(difficulty) || difficulty < 0 || difficulty > 24 || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.resolve(null);
+  if (difficulty === 0) return Promise.resolve("0");
+  if (queue.length >= MAX_QUEUE_LENGTH) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    queue.push({ nonce, difficulty, expires: Date.now() + Math.min(timeoutMs, 3e4), resolve });
+    pump();
+  });
+}
+
+// server/services/byse/core.ts
+var import_node_crypto2 = __toESM(require("node:crypto"), 1);
+var import_node_fs3 = __toESM(require("node:fs"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var BYSE_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
+var POW_BE = 512;
+var POW_LT = POW_BE - 1;
+var b64u = (buf) => Buffer.from(buf).toString("base64url");
+function rndId(len = 22) {
+  const abc = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-";
+  let s = "";
+  for (let i = 0; i < len; i++) s += abc[import_node_crypto2.default.randomInt(abc.length)];
+  return s;
+}
+var _session = null;
+function getByseSession() {
+  if (_session) return _session;
+  const { privateKey, publicKey } = import_node_crypto2.default.generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const jwk = publicKey.export({ format: "jwk" });
+  _session = {
+    viewerId: rndId(22),
+    privateKey,
+    publicJwk: { kty: jwk.kty, crv: jwk.crv, x: jwk.x, y: jwk.y },
+    attest: null
+  };
+  return _session;
+}
+var stableFingerprint;
+function buildClientFingerprint() {
+  return stableFingerprint ||= createClientFingerprint();
+}
+function createClientFingerprint() {
+  return {
+    user_agent: BYSE_UA,
+    architecture: "x86",
+    bitness: "64",
+    platform: "Win32",
+    platform_version: "10.0",
+    model: "",
+    ua_full_version: "131.0.0.0",
+    brand_full_versions: [
+      { brand: "Google Chrome", version: "131.0.0.0" },
+      { brand: "Chromium", version: "131.0.0.0" },
+      { brand: "Not A(Brand", version: "24.0.0.0" }
+    ],
+    pixel_ratio: 1,
+    screen_width: 1920,
+    screen_height: 1080,
+    color_depth: 24,
+    languages: ["pt-BR", "pt", "en"],
+    timezone: "America/Sao_Paulo",
+    hardware_concurrency: 8,
+    device_memory: 8,
+    touch_points: 0,
+    webgl_vendor: "Google Inc. (NVIDIA)",
+    webgl_renderer: "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 Direct3D11 vs_5_0 ps_5_0)",
+    canvas_hash: b64u(import_node_crypto2.default.randomBytes(24)),
+    audio_hash: b64u(import_node_crypto2.default.randomBytes(24)),
+    webgl_params_hash: b64u(import_node_crypto2.default.randomBytes(24)),
+    fonts_hash: b64u(import_node_crypto2.default.randomBytes(24)),
+    codecs_hash: b64u(import_node_crypto2.default.randomBytes(24)),
+    media_devices: b64u(import_node_crypto2.default.randomBytes(10)),
+    pointer_type: "fine,hover",
+    extra: {
+      vendor: "Google Inc.",
+      appVersion: "5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+  };
+}
+async function byseJsonFetch(url, opts = {}) {
+  const res = await fetch(url, {
+    method: opts.method || "GET",
+    redirect: "manual",
+    body: opts.body,
+    headers: {
+      "User-Agent": BYSE_UA,
+      Accept: "application/json, text/plain, */*",
+      "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      ...opts.body ? { "Content-Type": "application/json" } : {},
+      ...opts.headers || {}
+    },
+    signal: AbortSignal.timeout(15e3)
+  });
+  if (!res.ok) throw new Error("BYSE upstream HTTP " + res.status);
+  const text = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+  }
+  return { status: res.status, json, text };
+}
+var attestPending;
+async function getByseAttest(N1, embedUrl) {
+  return await (attestPending ||= createByseAttest(N1, embedUrl).finally(() => {
+    attestPending = void 0;
+  }));
+}
+async function createByseAttest(N1, embedUrl) {
+  const sess = getByseSession();
+  if (sess.attest && sess.attest.expiresAt > Date.now()) {
+    return { token: sess.attest.token, deviceId: sess.attest.deviceId, confidence: sess.attest.confidence };
+  }
+  const base = { Origin: N1, Referer: embedUrl, Cookie: `byse_viewer_id=${sess.viewerId}` };
+  const ch = await byseJsonFetch(`${N1}/api/videos/access/challenge`, { method: "POST", body: "{}", headers: base });
+  if (!ch.json || typeof ch.json !== "object" || !("nonce" in ch.json) || !("challenge_id" in ch.json)) {
+    throw new Error(`challenge falhou (${ch.status}): [upstream]`);
+  }
+  const cj = ch.json;
+  const signature = b64u(import_node_crypto2.default.sign("sha256", Buffer.from(cj.nonce, "utf8"), sess.privateKey));
+  const att = await byseJsonFetch(`${N1}/api/videos/access/attest`, {
+    method: "POST",
+    body: JSON.stringify({
+      viewer_id: "",
+      device_id: "",
+      challenge_id: cj.challenge_id,
+      nonce: cj.nonce,
+      signature,
+      public_key: { crv: "P-256", ext: true, key_ops: ["verify"], kty: "EC", x: sess.publicJwk.x, y: sess.publicJwk.y },
+      client: buildClientFingerprint(),
+      storage: {},
+      attributes: { entropy: "high" }
+    }),
+    headers: base
+  });
+  if (!att.json || typeof att.json !== "object" || !("token" in att.json) || !("device_id" in att.json)) {
+    throw new Error(`attest falhou (${att.status}): [upstream]`);
+  }
+  const aj = att.json;
+  const confidence = Number(aj.confidence ?? 0.55);
+  sess.attest = { token: aj.token, deviceId: aj.device_id, confidence, expiresAt: Date.now() + 8 * 60 * 1e3 };
+  return { token: aj.token, deviceId: aj.device_id, confidence };
+}
+function b64uToBuf(s) {
+  return Buffer.from(s, "base64url");
+}
+function deriveByseKey(playback) {
+  const parts = Array.isArray(playback?.key_parts) ? playback.key_parts : [];
+  if (parts.length === 0) return null;
+  const n = Number(String(playback?.version ?? "").trim());
+  let sel;
+  if (Number.isInteger(n) && n >= 1 && n <= 20 && n <= parts.length && 31 - n >= 1 && 31 - n <= parts.length) {
+    sel = [parts[n - 1], parts[31 - n - 1]];
+  } else {
+    return null;
+  }
+  const bufs = sel.filter((p) => typeof p === "string" && p.length > 0).map(b64uToBuf);
+  if (bufs.length === 0) return null;
+  return Buffer.concat(bufs);
+}
+function decryptBysePlayback(playback) {
+  try {
+    const key = deriveByseKey(playback);
+    const iv = b64uToBuf(String(playback.iv));
+    const payload = b64uToBuf(String(playback.payload));
+    if (!key || key.length !== 32 || iv.length !== 12 || payload.length <= 16) return null;
+    const ct = payload.subarray(0, payload.length - 16);
+    const tag = payload.subarray(payload.length - 16);
+    const decipher = import_node_crypto2.default.createDecipheriv("aes-256-gcm", key, iv, { authTagLength: 16 });
+    decipher.setAuthTag(tag);
+    const plain = Buffer.concat([decipher.update(ct), decipher.final()]);
+    return JSON.parse(plain.toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+var byseResolveCache = /* @__PURE__ */ new Map();
+var byseResolveInflight = /* @__PURE__ */ new Map();
+var BYSE_CACHE_TTL = 20 * 60 * 1e3;
+var BYSE_SHARED_CACHE_FILE = import_node_path2.default.join(process.cwd(), "data", "byse-resolve-cache.json");
+var sharedCacheMtimeMs = 0;
+var isTestEnv = (process.env.NODE_ENV === "test" || process.argv.some((a) => a.includes("test"))) && !process.env.TEST_SHARED_CACHE;
+function syncFromSharedByseCache() {
+  if (isTestEnv) return;
+  try {
+    if (!import_node_fs3.default.existsSync(BYSE_SHARED_CACHE_FILE)) return;
+    const stat = import_node_fs3.default.statSync(BYSE_SHARED_CACHE_FILE);
+    if (stat.mtimeMs <= sharedCacheMtimeMs) return;
+    sharedCacheMtimeMs = stat.mtimeMs;
+    const raw = JSON.parse(import_node_fs3.default.readFileSync(BYSE_SHARED_CACHE_FILE, "utf8"));
+    const now = Date.now();
+    if (raw && typeof raw === "object") {
+      for (const [k, v] of Object.entries(raw)) {
+        if (v && typeof v.m3u8 === "string" && typeof v.expiresAt === "number" && v.expiresAt > now && allowedByseMediaUrl(v.m3u8)) {
+          const existing = byseResolveCache.get(k);
+          if (!existing || existing.expiresAt < v.expiresAt) {
+            byseResolveCache.set(k, v);
+          }
+        }
+      }
+    }
+  } catch {
+  }
+}
+function persistSharedByseCache() {
+  if (isTestEnv) return;
+  try {
+    const now = Date.now();
+    const serializable = {};
+    for (const [k, v] of byseResolveCache.entries()) {
+      if (v.expiresAt > now) serializable[k] = v;
+    }
+    import_node_fs3.default.mkdirSync(import_node_path2.default.dirname(BYSE_SHARED_CACHE_FILE), { recursive: true });
+    const tmpFile = `${BYSE_SHARED_CACHE_FILE}.${process.pid}.tmp`;
+    import_node_fs3.default.writeFileSync(tmpFile, JSON.stringify(serializable));
+    import_node_fs3.default.renameSync(tmpFile, BYSE_SHARED_CACHE_FILE);
+    sharedCacheMtimeMs = import_node_fs3.default.statSync(BYSE_SHARED_CACHE_FILE).mtimeMs;
+  } catch {
+  }
+}
+async function resolveByseStreamUncached(fileId) {
+  const det = await byseJsonFetch(
+    `https://bysebuho.com/api/videos/${encodeURIComponent(fileId)}/embed/details`,
+    { headers: { Referer: `https://bysebuho.com/e/${encodeURIComponent(fileId)}` } }
+  );
+  if (!det.json || typeof det.json !== "object" || !("embed_frame_url" in det.json)) {
+    throw new Error(`embed/details falhou (${det.status}): [upstream]`);
+  }
+  const embedFrameUrl = String(det.json.embed_frame_url);
+  if (!embedFrameUrl || !/^https:\/\//.test(embedFrameUrl)) {
+    throw new Error("embed_frame_url inv\xE1lido");
+  }
+  const embedUrl = new URL(embedFrameUrl);
+  if (embedUrl.protocol !== "https:" || embedUrl.username || embedUrl.password || embedUrl.hostname !== "n1mwq.org" || embedUrl.port) throw new Error("Origem BYSE inv\xE1lida");
+  const N1 = embedUrl.origin;
+  const { token, deviceId, confidence } = await getByseAttest(N1, embedUrl.href);
+  const sess = getByseSession();
+  const fingerprint = { token, viewer_id: sess.viewerId, device_id: deviceId, confidence };
+  const cookie = `byse_viewer_id=${sess.viewerId}; byse_device_id=${deviceId}`;
+  const cap = await byseJsonFetch(`${N1}/api/videos/${encodeURIComponent(fileId)}/embed/captcha`, {
+    method: "POST",
+    body: JSON.stringify({ fingerprint }),
+    headers: { Origin: N1, Referer: embedUrl.href, Cookie: cookie }
+  });
+  if (!cap.json || typeof cap.json !== "object" || !("pow_nonce" in cap.json) || typeof cap.json.pow_difficulty !== "number") {
+    throw new Error(`captcha falhou (${cap.status}): [upstream]`);
+  }
+  const cj = cap.json;
+  const solution = await solveBysePowAsync(cj.pow_nonce, cj.pow_difficulty);
+  if (solution === null) throw new Error("PoW n\xE3o convergiu em 30s");
+  const ver = await byseJsonFetch(`${N1}/api/videos/${encodeURIComponent(fileId)}/embed/captcha/verify`, {
+    method: "POST",
+    body: JSON.stringify({ pow_token: cj.pow_token, solution, fingerprint }),
+    headers: { Origin: N1, Referer: embedUrl.href, Cookie: cookie }
+  });
+  if (!ver.json || typeof ver.json !== "object" || ver.json.status !== "ok" || !ver.json.token) {
+    throw new Error(`captcha/verify falhou (${ver.status}): [upstream]`);
+  }
+  const vj = ver.json;
+  const pb = await byseJsonFetch(`${N1}/api/videos/${encodeURIComponent(fileId)}/embed/playback`, {
+    method: "POST",
+    body: JSON.stringify({ fingerprint }),
+    headers: {
+      Origin: N1,
+      Referer: embedUrl.href,
+      Cookie: cookie,
+      "X-Captcha-Token": vj.token,
+      "X-Embed-Parent": `https://bysebuho.com/e/${encodeURIComponent(fileId)}`
+    }
+  });
+  if (!pb.json || typeof pb.json !== "object" || !pb.json.playback) {
+    throw new Error(`playback falhou (${pb.status}): [upstream]`);
+  }
+  const info = decryptBysePlayback(pb.json.playback);
+  const m3u8 = info?.sources?.[0]?.url;
+  if (!m3u8 || !allowedByseMediaUrl(String(m3u8))) {
+    throw new Error("payload decriptografado sem fonte HLS v\xE1lida");
+  }
+  return { fileId, m3u8: String(m3u8), resolvedAt: Date.now(), expiresAt: Date.now() + BYSE_CACHE_TTL };
+}
+function getWarmByseStream(fileId) {
+  let value = byseResolveCache.get(fileId);
+  if (!value || value.expiresAt <= Date.now() + 15e3) {
+    syncFromSharedByseCache();
+    value = byseResolveCache.get(fileId);
+  }
+  return value && value.expiresAt > Date.now() + 15e3 ? value : null;
+}
+function hasWarmByseStream(fileId) {
+  return !!getWarmByseStream(fileId);
+}
+async function resolveByseStream(fileId, refresh = false) {
+  const cleanId = String(fileId || "").trim();
+  if (!/^[a-zA-Z0-9_-]{1,100}$/.test(cleanId)) throw new Error("fileId inv\xE1lido");
+  if (refresh) {
+    byseResolveCache.delete(cleanId);
+    persistSharedByseCache();
+  } else {
+    let cached = byseResolveCache.get(cleanId);
+    if (!cached || cached.expiresAt <= Date.now()) {
+      syncFromSharedByseCache();
+      cached = byseResolveCache.get(cleanId);
+    }
+    if (cached && cached.expiresAt > Date.now()) return cached;
+  }
+  const inflight = byseResolveInflight.get(cleanId);
+  if (inflight) return inflight;
+  if (byseResolveInflight.size >= 6) throw new Error("BYSE ocupado");
+  const p = resolveByseStreamUncached(cleanId).then((r) => {
+    if (byseResolveCache.size >= 500) byseResolveCache.delete(byseResolveCache.keys().next().value);
+    byseResolveCache.set(cleanId, r);
+    persistSharedByseCache();
+    return r;
+  }).finally(() => byseResolveInflight.delete(cleanId));
+  byseResolveInflight.set(cleanId, p);
+  return p;
+}
+function allowedByseMediaUrl(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password || url.port && url.port !== "443") return false;
+    const h = url.hostname.toLowerCase();
+    return /(^|\.)((r66nv9ed|owphbf24)\.com)$/.test(h) || /(^|\.)sprintcdn\.[a-z0-9-]+$/.test(h) || h === "n1mwq.org" || h.endsWith(".n1mwq.org") || h === "bysebuho.com" || h.endsWith(".bysebuho.com") || h === "img-place.com" || h.endsWith(".img-place.com");
+  } catch {
+    return false;
+  }
+}
+function buildByseWrapperHtml(streamUrl, fileId, initialTime) {
+  return `<!DOCTYPE html>
+
+
+
+<html lang="pt-BR">
+
+
+
+<head>
+
+
+
+<meta charset="utf-8">
+
+
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+
+
+
+<title>Byse Player</title>
+
+
+
+<style>
+
+
+
+  html, body { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
+
+
+
+  #container { width: 100%; height: 100%; position: relative; }
+
+
+
+  video { width: 100%; height: 100%; object-fit: contain; }
+
+
+
+</style>
+
+
+
+</head>
+
+
+
+<body>
+
+
+
+  <div id="container">
+
+
+
+    <video id="video" playsinline webkit-playsinline></video>
+
+
+
+  </div>
+
+
+
+  <script src="/api/byse-hls.js"></script>
+
+
+
+  <script>
+
+
+
+  (function() {
+
+
+
+    var v = document.getElementById("video");
+
+
+
+    var streamUrl = ${JSON.stringify(streamUrl)};
+
+
+
+    var initialSeek = ${Number(initialTime) || 0};
+
+
+
+    var fatalReported = false;
+
+
+
+    var appliedInitial = false;
+
+
+
+    var pausedAt = null, pausedPosition = initialSeek, renewing = false, desiredPaused = false;
+
+
+
+    function requestPlay() {
+
+
+
+      desiredPaused = false;
+
+
+
+      if (renewing) return;
+
+
+
+      if (pausedAt !== null && Date.now() - pausedAt > 180000) {
+
+
+
+        initialSeek = pausedPosition; pausedAt = null;
+
+
+
+        reportFatal("Byse: renovando ap\xF3s pausa longa", true); return;
+
+
+
+      }
+
+
+
+      pausedAt = null; v.play().catch(function() {});
+
+
+
+    }
+
+
+
+
+
+
+
+    function applySeek() {
+
+
+
+      if (!appliedInitial && v && v.readyState >= 1 && initialSeek > 0) {
+
+
+
+        appliedInitial = true;
+
+
+
+        try { v.currentTime = initialSeek; } catch (e) {}
+
+
+
+      }
+
+
+
+    }
+
+
+
+
+
+
+
+    function sendStatus() {
+
+
+
+      if (!v || renewing) return;
+
+
+
+      var dur = v.duration || 0;
+
+
+
+      var cur = v.currentTime || 0;
+
+
+
+      var bufferedEnd = 0;
+
+
+
+      if (v.buffered && v.buffered.length > 0) {
+
+
+
+        bufferedEnd = v.buffered.end(v.buffered.length - 1);
+
+
+
+      }
+
+
+
+      try {
+
+
+
+        window.parent.postMessage({
+
+
+
+          type: "WATCHPLAY_STATUS",
+
+
+
+          currentTime: cur,
+
+
+
+          duration: dur,
+
+
+
+          paused: !!v.paused,
+
+
+
+          muted: !!v.muted,
+
+
+
+          volume: typeof v.volume === "number" ? v.volume : 1,
+
+
+
+          buffered: bufferedEnd,
+
+
+
+          playbackRate: v.playbackRate || 1,
+
+
+
+          readyState: v.readyState || 0
+
+
+
+        }, "*");
+
+
+
+      } catch (e) {}
+
+
+
+    }
+
+
+
+    setInterval(sendStatus, 300);
+
+
+
+
+
+
+
+    v.addEventListener("loadedmetadata", applySeek);
+
+
+
+    v.addEventListener("canplay", applySeek);
+
+
+
+    v.addEventListener("play", function() {
+
+
+
+      applySeek();
+
+
+
+      try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PLAYING" }, "*"); } catch (e) {}
+
+
+
+    });
+
+
+
+    v.addEventListener("pause", function() {
+
+
+
+      if (!renewing) { if (pausedAt === null) pausedAt = Date.now(); pausedPosition = v.currentTime || initialSeek || 0; desiredPaused = true; }
+
+
+
+      try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PAUSED" }, "*"); } catch (e) {}
+
+
+
+    });
+
+
+
+    v.addEventListener("seeked", function() { if (!renewing && v.paused) pausedPosition = v.currentTime; });
+
+
+
+    v.addEventListener("ended", function() {
+
+
+
+      try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch (e) {}
+
+
+
+    });
+
+
+
+    v.addEventListener("error", function() {
+
+
+
+      reportFatal("Byse: erro de m\xEDdia no elemento de v\xEDdeo");
+
+
+
+    });
+
+
+
+
+
+
+
+    window.addEventListener("message", function(event) {
+
+
+
+      if (event.source !== window.parent || !event.data) return;
+
+
+
+      var d = event.data;
+
+
+
+      if (d.type === "PAUSE" && v) { desiredPaused = true; v.pause(); }
+
+
+
+      if (d.type === "PLAY" && v) requestPlay();
+
+
+
+      if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
+
+
+
+        if (v.readyState >= 1) v.currentTime = d.targetTime; else initialSeek = d.targetTime;
+
+
+
+      }
+
+
+
+      if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") {
+
+
+
+        if (v.readyState >= 1) v.currentTime = d.time; else initialSeek = d.time;
+
+
+
+      }
+
+
+
+      if (d.type === "SEEK_RELATIVE" && v && typeof d.seconds === "number") v.currentTime = Math.max(0, v.currentTime + d.seconds);
+
+
+
+      if (d.type === "SKIP_INTRO" && v) {
+
+
+
+        var secIntro = typeof d.seconds === "number" ? d.seconds : 75;
+
+
+
+        v.currentTime = Math.max(0, Math.min(v.currentTime + secIntro, (v.duration || 99999) - 5));
+
+
+
+      }
+
+
+
+      if (d.type === "SET_MUTED") v.muted = !!d.muted;
+
+
+
+      if (d.type === "TOGGLE_PLAY") { if (desiredPaused) requestPlay(); else { desiredPaused=true; v.pause(); } }
+
+
+
+      if (d.type === "MUTE" && v) v.muted = true;
+
+
+
+      if (d.type === "UNMUTE" && v) v.muted = false;
+
+
+
+      if (d.type === "SET_VOLUME" && v && typeof d.volume === "number") v.volume = d.volume;
+
+
+
+      if (d.type === "SET_PLAYBACK_RATE" && v && typeof d.rate === "number") v.playbackRate = d.rate;
+
+
+
+    });
+
+
+
+
+
+
+
+    function reportFatal(reason, resume) {
+
+
+
+      if (fatalReported) return;
+
+
+
+      fatalReported = true;
+
+
+
+      try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*"); } catch (e) {}
+
+
+
+    }
+
+
+
+
+
+
+
+    var activeHls;
+
+
+
+    window.addEventListener("pagehide",function(){if(activeHls)activeHls.destroy()});
+
+
+
+    function startHls() {
+
+
+
+      if(activeHls){activeHls.destroy();activeHls=null;}
+
+
+
+      if (window.Hls && window.Hls.isSupported()) {
+
+
+
+        var hls = new window.Hls({
+
+
+
+          enableWorker: true,
+
+
+
+          lowLatencyMode: false,
+
+
+
+          maxBufferLength: 60,
+
+
+
+          maxMaxBufferLength: 120,
+
+
+
+          backBufferLength: 30,
+
+
+
+          fragLoadingMaxRetry: 4,
+
+
+
+          manifestLoadingMaxRetry: 2,
+
+
+
+          levelLoadingMaxRetry: 2
+
+
+
+        });
+
+
+
+        activeHls=hls;
+
+
+
+        hls.loadSource(streamUrl);
+
+
+
+        hls.attachMedia(v);
+
+
+
+        hls.on(window.Hls.Events.ERROR, function(evt, data) {
+
+
+
+          if (!data || !data.fatal) return;
+
+
+
+          switch (data.type) {
+
+
+
+            case window.Hls.ErrorTypes.NETWORK_ERROR:
+
+
+
+              if (data.details === window.Hls.ErrorDetails.MANIFEST_LOAD_ERROR ||
+
+
+
+                  data.details === window.Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT) {
+
+
+
+                reportFatal("Byse: manifesto HLS indispon\xEDvel (CDN offline ou link expirado)");
+
+
+
+              } else {
+
+
+
+                try { hls.startLoad(); } catch (e) {}
+
+
+
+              }
+
+
+
+              break;
+
+
+
+            case window.Hls.ErrorTypes.MEDIA_ERROR:
+
+
+
+              try { hls.recoverMediaError(); } catch (e) {}
+
+
+
+              break;
+
+
+
+            default:
+
+
+
+              reportFatal("Byse: erro fatal no player HLS (" + (data.details || "?") + ")");
+
+
+
+          }
+
+
+
+        });
+
+
+
+      } else if (v.canPlayType && v.canPlayType("application/vnd.apple.mpegurl")) {
+
+
+
+        v.src = streamUrl;
+
+
+
+      } else {
+
+
+
+        reportFatal("Byse: navegador sem suporte a HLS");
+
+
+
+      }
+
+
+
+    }
+
+
+
+    startHls();
+
+
+
+
+
+
+
+    var playPromise = v.play();
+
+
+
+    if (playPromise !== undefined) {
+
+
+
+      playPromise.catch(function() {
+
+
+
+        v.muted = true;
+
+
+
+        v.play().catch(function() {});
+
+
+
+      });
+
+
+
+    }
+
+
+
+  })();
+
+
+
+  </script>
+
+
+
+</body>
+
+
+
+</html>`;
+}
+function rewriteM3u82(body, playlistUrl, proxyPrefix) {
+  const lines = body.split(/\r?\n/);
+  const out = [];
+  const proxied = (url) => typeof proxyPrefix === "function" ? proxyPrefix(url) : `${proxyPrefix}?url=${encodeURIComponent(url)}`;
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (line === "") {
+      out.push(raw);
+      continue;
+    }
+    if (line.startsWith("#")) {
+      if (/URI="/i.test(line)) {
+        out.push(
+          line.replace(/URI="([^"]+)"/gi, (m, uri) => {
+            try {
+              const abs = new URL(uri, playlistUrl).toString();
+              if (allowedByseMediaUrl(abs)) return `URI="${proxied(abs)}"`;
+            } catch {
+            }
+            throw new Error("Recurso HLS n\xE3o autorizado");
+          })
+        );
+      } else {
+        out.push(raw);
+      }
+      continue;
+    }
+    try {
+      const abs = new URL(line, playlistUrl).toString();
+      if (!allowedByseMediaUrl(abs)) throw new Error("Recurso HLS n\xE3o autorizado");
+      out.push(proxied(abs));
+    } catch {
+      throw new Error("Recurso HLS n\xE3o autorizado");
+    }
+  }
+  return out.join("\n");
+}
+var BYSE_USER_AGENT = BYSE_UA;
+
+// server/routes/playbackHealth.ts
 var import_express9 = require("express");
+var providers = /* @__PURE__ */ new Set(["srv_streamtape", "srv_mixdrop", "srv_watchplay", "srv_vip", "srv_nixplay", "srv_byse"]);
+var check = createPlaybackHealthCache();
 var router8 = (0, import_express9.Router)();
-router8.get("/api/find-cast-source", async (req3, res) => {
+var activeDiscovery = 0;
+var discovery = /* @__PURE__ */ new Map();
+router8.get("/api/playback-candidates", async (req3, res) => {
+  const id = Number(req3.query.id), type = String(req3.query.type), s = Number(req3.query.s), e = Number(req3.query.e);
+  if (!Number.isInteger(id) || id < 1 || !["movie", "tv"].includes(type) || type === "tv" && (!Number.isInteger(s) || s < 1 || s > 999 || !Number.isInteger(e) || e < 1 || e > 9999)) return res.status(400).json({ error: "Invalid content" });
+  let hints = getPlaybackCataloguePresence(id, type === "tv" ? s : void 0, type === "tv" ? e : void 0);
+  const name = String(req3.query.name || "").slice(0, 160), key = `${type}:${id}:${s}:${e}`;
+  if (name && (req3.query.refresh === "1" || !Object.values(hints).some((v) => v.listed))) {
+    const cached = discovery.get(key);
+    let task = cached && cached.expires > Date.now() ? cached.promise : void 0;
+    if (!task && discovery.size < 500 && activeDiscovery < 4) {
+      activeDiscovery++;
+      task = getByseSources(id, type === "tv" ? s : void 0, type === "tv" ? e : void 0, name, true).catch(() => []).finally(() => {
+        activeDiscovery--;
+      });
+      discovery.set(key, { expires: Date.now() + 3e4, promise: task });
+    }
+    let timer;
+    try {
+      const sources = await Promise.race([task || Promise.resolve([]), new Promise((r) => {
+        timer = setTimeout(() => r([]), 800);
+      })]);
+      hints = getPlaybackCataloguePresence(id, type === "tv" ? s : void 0, type === "tv" ? e : void 0);
+      if (sources.length) hints.srv_byse = { audioPriority: sources.some((v) => /dublad|pt[-_ ]?br|nacional/i.test(v.audio || "")) ? 0 : 1, listed: true, fileIds: sources.map((v) => v.fileId) };
+    } finally {
+      clearTimeout(timer);
+    }
+    for (const [k, v] of discovery) if (v.expires < Date.now()) discovery.delete(k);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ identity: `${type}:${id}:${type === "tv" ? `${s}:${e}` : ""}`, servers: Object.fromEntries(Object.entries(hints).map(([key2, value]) => [key2, { listed: value.listed, audioPriority: value.audioPriority, warm: key2 !== "srv_byse" || value.fileIds.some(hasWarmByseStream) }])) });
+});
+router8.get("/api/playback-health", async (req3, res) => {
+  const id = String(req3.query.id || "");
+  const type = String(req3.query.type || "");
+  const season = Number(req3.query.s || 1), episode = Number(req3.query.e || 1);
+  if (!/^(?:[1-9]\d{0,9}|tt\d{5,12})$/.test(id) || !["movie", "tv"].includes(type) || !Number.isInteger(season) || season < 1 || season > 999 || !Number.isInteger(episode) || episode < 1 || episode > 9999) {
+    return res.status(400).json({ error: "Conte\xFAdo inv\xE1lido" });
+  }
+  const requested = [...new Set(String(req3.query.servers || "").split(","))];
+  if (!requested.length || requested.length > 6 || requested.some((key) => !providers.has(key) || isServerBlacklisted(key))) {
+    return res.status(400).json({ error: "Servidor inv\xE1lido" });
+  }
+  const port = req3.socket.localPort;
+  const origin = `http://127.0.0.1:${port}`;
+  const name = String(req3.query.name || "").slice(0, 160);
+  const nixId = String(req3.query.nixId || "").replace(/[^0-9]/g, "").slice(0, 12);
+  const identity = [type, id, type === "tv" ? season : 0, type === "tv" ? episode : 0, name, nixId].join(":");
+  const params = new URLSearchParams({ id, type, s: String(season), e: String(episode), name });
+  const json = async (url, signal) => {
+    const response = await fetch(url, { signal });
+    const bytes = await readHealthPrefix(response, 64 * 1024);
+    if (!response.ok) throw new Error("Resolver unavailable");
+    return JSON.parse(new TextDecoder().decode(bytes));
+  };
+  const localMedia = (raw, allowedPaths) => {
+    const parsed = new URL(raw, origin);
+    if (!allowedPaths.includes(parsed.pathname) || isServerBlacklisted(raw)) throw new Error("Unexpected media path");
+    return origin + parsed.pathname + parsed.search;
+  };
+  const selected = req3.query.startup === "1" ? requested.slice(0, 2) : requested.filter((key) => key !== "srv_byse");
+  const entries = await Promise.all(selected.map(async (key) => [key, await check(identity + ":" + key, async (signal) => {
+    if (key === "srv_byse") {
+      const hints = getPlaybackCataloguePresence(Number(id), type === "tv" ? season : void 0, type === "tv" ? episode : void 0);
+      if (!hints.srv_byse.fileIds.some(hasWarmByseStream)) return { state: "unknown", reason: "cold_resolution" };
+      const cached = hints.srv_byse.fileIds.map(getWarmByseStream).find(Boolean);
+      if (!cached) return { state: "unknown", reason: "cold_resolution" };
+      const context = `${type}:${id}:${type === "tv" ? `${season}:${episode}` : ""}`;
+      const prepared = getByseTickets().seal(cached.m3u8, cached.fileId, context);
+      const result = await probeHealthMedia(origin + "/api/byse-stream?ticket=" + encodeURIComponent(prepared), signal);
+      const iframeParams = new URLSearchParams({ id, name, prepared });
+      if (type === "tv") {
+        iframeParams.set("s", String(season));
+        iframeParams.set("e", String(episode));
+      }
+      return { ...result, ...result.state === "available" ? { iframeUrl: "/api/byse-proxy-iframe?" + iframeParams } : {} };
+    }
+    if (key === "srv_mixdrop" || key === "srv_streamtape") {
+      let resolved;
+      if (key === "srv_streamtape") {
+        const identity2 = new URLSearchParams({ id, name });
+        if (type === "tv") {
+          identity2.set("s", String(season));
+          identity2.set("e", String(episode));
+        }
+        resolved = await json(origin + "/api/streamtape-resolve?" + identity2, signal);
+      } else {
+        const identity2 = new URLSearchParams({ id, name, format: "json" });
+        if (type === "tv") {
+          identity2.set("s", String(season));
+          identity2.set("e", String(episode));
+        }
+        resolved = await json(origin + "/api/md-stream?" + identity2, signal);
+      }
+      return probeHealthMedia(localMedia(resolved.proxyUrl || resolved.videoUrl, ["/api/md-proxy", "/api/streamtape-stream"]), signal);
+    }
+    if (key === "srv_nixplay") {
+      let mediaUrl = `https://nixplay.lat/movie/testelogado-vods/GwXanZ3Dj/${id}.mp4`;
+      if (type === "tv") {
+        const resolved = await json(origin + "/api/nixplay-episode-id?" + new URLSearchParams({ seriesId: nixId || id, season: String(season), episode: String(episode) }), signal);
+        mediaUrl = resolved.nixplayUrl;
+      }
+      const parsed = new URL(mediaUrl);
+      if (parsed.protocol !== "https:" || parsed.hostname !== "nixplay.lat" || !/^\/(movie|series)\//.test(parsed.pathname)) throw new Error("Unexpected Nixplay source");
+      return probeHealthMedia(origin + "/api/nixplay-proxy?" + new URLSearchParams({ url: mediaUrl }), signal);
+    }
+    const watchUrl = type === "tv" ? `https://v1.watchplay.shop/tvshow/${id}/${episode > 50 ? 1 : season}/${episode}` : `https://v1.watchplay.shop/movie/${id}`;
+    const url = key === "srv_vip" ? origin + "/api/myembed-stream?" + params + (nixId ? "&series_id=" + nixId : "") : origin + "/api/watchplayer-stream?" + new URLSearchParams({ url: watchUrl });
+    const response = await fetch(url, { signal });
+    const html = new TextDecoder().decode(await readHealthPrefix(response, 256 * 1024));
+    if (response.status === 404 || response.status === 410) return { state: "unavailable", reason: "not_found" };
+    if (!response.ok) return { state: "unknown", reason: "upstream_" + response.status };
+    if (/type:\s*["'](?:WATCHPLAY_UNAVAILABLE|VIP_UNAVAILABLE)["']/.test(html)) return { state: "unavailable", reason: "resolver_unavailable" };
+    const source = html.match(/var hlsUrl\s*=\s*["']([^"']+)["']/)?.[1];
+    if (!source) return { state: "unknown", reason: "requires_player" };
+    return probeHealthMedia(localMedia(source, ["/api/stream-proxy", "/api/hls-proxy", "/api/watchplayer-proxy", "/api/anime/hls-proxy", "/api/live-stream-proxy"]), signal);
+  })]));
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ identity: `${type}:${id}:${type === "tv" ? `${season}:${episode}` : ""}`, servers: Object.fromEntries(entries) });
+});
+var playbackHealth_default = router8;
+
+// server/routes/cast.ts
+var import_express10 = require("express");
+var router9 = (0, import_express10.Router)();
+router9.get("/api/find-cast-source", async (req3, res) => {
   try {
     const tmdbId = req3.query.tmdbId;
     const mediaType = req3.query.mediaType;
@@ -9514,11 +11799,11 @@ router8.get("/api/find-cast-source", async (req3, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
-var cast_default = router8;
+var cast_default = router9;
 
 // server/routes/iptv.ts
-var import_express10 = require("express");
-var router9 = (0, import_express10.Router)();
+var import_express11 = require("express");
+var router10 = (0, import_express11.Router)();
 var cachedToken = null;
 async function getFreshXtreamToken() {
   if (cachedToken && cachedToken.expires > Date.now()) {
@@ -9545,7 +11830,7 @@ async function getFreshXtreamToken() {
   };
   return base;
 }
-router9.get("/api/iptv/:channelId", async (req3, res) => {
+router10.get("/api/iptv/:channelId", async (req3, res) => {
   try {
     const channelId = req3.params.channelId;
     const base = await getFreshXtreamToken();
@@ -9557,7 +11842,7 @@ router9.get("/api/iptv/:channelId", async (req3, res) => {
     res.status(500).send("Erro obtendo token Xtream: " + e.message);
   }
 });
-router9.post("/api/parse-m3u-playlist", async (req3, res) => {
+router10.post("/api/parse-m3u-playlist", async (req3, res) => {
   try {
     let { url, content } = req3.body || {};
     if (!url && !content) {
@@ -9793,7 +12078,7 @@ router9.post("/api/parse-m3u-playlist", async (req3, res) => {
     return res.status(500).json({ success: false, error: err.message || "Erro ao processar lista M3U" });
   }
 });
-router9.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req3, res) => {
+router10.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/watchplay-proxy", "/api/watchplay-proxy/api"], async (req3, res) => {
   try {
     const upstreamRes = await fetch("https://v1.watchplay.shop/api", {
       signal: AbortSignal.timeout(15e3),
@@ -9812,11 +12097,11 @@ router9.all(["/api/watchplay-proxy-api", "/api/watchplay-proxy-api/api", "/api/w
     return res.status(500).json({ errors: "1", message: err.message });
   }
 });
-var iptv_default = router9;
+var iptv_default = router10;
 
 // server/routes/bolodechocolate.ts
-var import_express11 = require("express");
-var router10 = (0, import_express11.Router)();
+var import_express12 = require("express");
+var router11 = (0, import_express12.Router)();
 var BREADCRUMB_BASE = 17890309;
 var boloCacheMap = /* @__PURE__ */ new Map();
 function decodeDCI(html) {
@@ -9847,7 +12132,7 @@ function decodeDCI(html) {
     ck_key: ckKeyMatch[1]
   };
 }
-router10.get("/api/bolodechocolate", async (req3, res) => {
+router11.get("/api/bolodechocolate", async (req3, res) => {
   try {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "public, max-age=60");
@@ -9891,12 +12176,12 @@ router10.get("/api/bolodechocolate", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
-var bolodechocolate_default = router10;
+var bolodechocolate_default = router11;
 
 // server/routes/nixplayRoutes.ts
-var import_express12 = require("express");
-var router11 = (0, import_express12.Router)();
-router11.get("/api/nixplay-check", async (req3, res) => {
+var import_express13 = require("express");
+var router12 = (0, import_express13.Router)();
+router12.get("/api/nixplay-check", async (req3, res) => {
   const { tmdb_id, type, name } = req3.query;
   if (!tmdb_id || !type) return res.status(400).json({ error: "Missing tmdb_id or type" });
   await loadNixplayCatalog();
@@ -9946,7 +12231,7 @@ router11.get("/api/nixplay-check", async (req3, res) => {
     return res.json({ available });
   }
 });
-router11.get("/api/nixplay-resolve", async (req3, res) => {
+router12.get("/api/nixplay-resolve", async (req3, res) => {
   const nixUrl = req3.query.url;
   if (!nixUrl) return res.status(400).json({ error: "Missing url" });
   try {
@@ -9982,7 +12267,7 @@ router11.get("/api/nixplay-resolve", async (req3, res) => {
 });
 var nixplayEpisodeCache = /* @__PURE__ */ new Map();
 var NIXPLAY_CACHE_TTL = 6 * 60 * 60 * 1e3;
-router11.get("/api/nixplay-episode-id", async (req3, res) => {
+router12.get("/api/nixplay-episode-id", async (req3, res) => {
   const seriesId = req3.query.seriesId;
   const season = parseInt(req3.query.season, 10) || 1;
   const episode = parseInt(req3.query.episode, 10) || 1;
@@ -10065,7 +12350,7 @@ router11.get("/api/nixplay-episode-id", async (req3, res) => {
     return res.status(500).json({ error: err?.message || "Erro interno" });
   }
 });
-router11.get("/api/native-player", async (req3, res) => {
+router12.get("/api/native-player", async (req3, res) => {
   let videoUrl = req3.query.url;
   if (!videoUrl) return res.status(400).send("Missing url parameter");
   if (videoUrl.includes("nixplay.lat/series/")) {
@@ -10415,7 +12700,7 @@ router11.get("/api/native-player", async (req3, res) => {
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   return res.send(html);
 });
-router11.get("/api/nixplay-proxy", async (req3, res) => {
+router12.get("/api/nixplay-proxy", async (req3, res) => {
   try {
     const targetUrl = String(req3.query.url || "").trim();
     if (!targetUrl) {
@@ -10450,8 +12735,8 @@ router11.get("/api/nixplay-proxy", async (req3, res) => {
     if (!upstream.body) {
       return res.end();
     }
-    const { Readable: Readable4 } = await import("stream");
-    const source = Readable4.fromWeb(upstream.body);
+    const { Readable: Readable5 } = await import("stream");
+    const source = Readable5.fromWeb(upstream.body);
     let sourceFailed = false;
     source.on("error", () => {
       if (sourceFailed || res.writableEnded) return;
@@ -10473,7 +12758,7 @@ router11.get("/api/nixplay-proxy", async (req3, res) => {
     else res.destroy();
   }
 });
-router11.get("/api/proxy-test", async (req3, res) => {
+router12.get("/api/proxy-test", async (req3, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const targetUrl = String(req3.query.url || "").trim();
   if (!targetUrl) {
@@ -10517,13 +12802,13 @@ router11.get("/api/proxy-test", async (req3, res) => {
     });
   }
 });
-var nixplayRoutes_default = router11;
+var nixplayRoutes_default = router12;
 
 // server/routes/serverBlocks.ts
-var import_express13 = require("express");
+var import_express14 = require("express");
 var import_fs7 = __toESM(require("fs"), 1);
 var import_path7 = __toESM(require("path"), 1);
-var router12 = (0, import_express13.Router)();
+var router13 = (0, import_express14.Router)();
 var BLOCKS_FILE = import_path7.default.join(process.cwd(), "data", "server-blocks.json");
 var BLOCKS_DIR = import_path7.default.dirname(BLOCKS_FILE);
 var _blocks = [];
@@ -10642,6 +12927,7 @@ async function isAdminToken(req3) {
   }
 }
 var VALID_SERVER_KEYS = /* @__PURE__ */ new Set([
+  "srv_streamtape",
   "srv_watchplay",
   "srv_mixdrop",
   "srv_vip",
@@ -10649,7 +12935,7 @@ var VALID_SERVER_KEYS = /* @__PURE__ */ new Set([
   "srv_vidsrc"
   // Nuvix HD
 ]);
-router12.get("/api/server-blocks", async (req3, res) => {
+router13.get("/api/server-blocks", async (req3, res) => {
   try {
     ensureLoaded();
     const tmdbIdParam = req3.query.tmdb_id;
@@ -10674,7 +12960,7 @@ router12.get("/api/server-blocks", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
-router12.post("/api/admin/server-blocks", async (req3, res) => {
+router13.post("/api/admin/server-blocks", async (req3, res) => {
   try {
     if (!await isAdminToken(req3)) {
       return res.status(401).json({ error: "N\xE3o autorizado" });
@@ -10720,7 +13006,7 @@ router12.post("/api/admin/server-blocks", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
-router12.delete("/api/admin/server-blocks/:id", async (req3, res) => {
+router13.delete("/api/admin/server-blocks/:id", async (req3, res) => {
   try {
     if (!await isAdminToken(req3)) {
       return res.status(401).json({ error: "N\xE3o autorizado" });
@@ -10754,7 +13040,7 @@ router12.delete("/api/admin/server-blocks/:id", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
-router12.patch("/api/admin/server-blocks/:id", async (req3, res) => {
+router13.patch("/api/admin/server-blocks/:id", async (req3, res) => {
   try {
     if (!await isAdminToken(req3)) {
       return res.status(401).json({ error: "N\xE3o autorizado" });
@@ -10780,311 +13066,837 @@ router12.patch("/api/admin/server-blocks/:id", async (req3, res) => {
     return res.status(500).json({ error: "Erro interno" });
   }
 });
-var serverBlocks_default = router12;
+var serverBlocks_default = router13;
+
+// server/services/byse/sources.ts
+function createByseSourcePool(options) {
+  const fresh = /* @__PURE__ */ new Set();
+  const pool = createMediaSourcePool({
+    timeoutMs: options.timeoutMs ?? 35e3,
+    ttlMs: options.ttlMs ?? 10 * 60 * 1e3,
+    resolve: (id, refresh) => {
+      const force = fresh.delete(id);
+      return options.resolve(id, refresh || force);
+    },
+    probe: async (url, signal) => {
+      for (let hop = 0; hop < 4; hop++) {
+        if (!allowedByseMediaUrl(url)) return false;
+        const r = await options.fetch(url, { signal, redirect: "manual", headers: { "User-Agent": BYSE_USER_AGENT, "Accept-Encoding": "identity" } });
+        if (r.status >= 300 && r.status < 400) {
+          const next = r.headers.get("location");
+          await r.body?.cancel();
+          if (!next) return false;
+          url = new URL(next, url).href;
+          continue;
+        }
+        const prefix = await readHealthPrefix(r, 1024);
+        return r.ok && new TextDecoder().decode(prefix).trimStart().startsWith("#EXTM3U");
+      }
+      return false;
+    }
+  });
+  return { ...pool, refresh(id) {
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(id)) return;
+    if (fresh.size >= 1e3) fresh.delete(fresh.values().next().value);
+    fresh.add(id);
+    pool.report(id, false);
+  } };
+}
+
+// server/routes/byseRoutes.ts
+var import_express15 = require("express");
+var import_node_module = require("node:module");
+var import_node_stream = require("node:stream");
+function createByseRouter(deps = { resolve: resolveByseStream, sources: getByseSources, tickets: getByseTickets, fetch: (...args) => fetch(...args) }) {
+  const router14 = (0, import_express15.Router)();
+  const pool = createByseSourcePool({ resolve: async (id, refresh) => (await deps.resolve(id, refresh)).m3u8, fetch: deps.fetch });
+  const proxy = (url, fileId = "") => "/api/byse-stream?ticket=" + deps.tickets().seal(url, fileId);
+  router14.get("/api/byse-hls.js", (_req, res) => {
+    const require2 = (0, import_node_module.createRequire)(process.cwd() + "/package.json");
+    res.type("application/javascript").sendFile(require2.resolve("hls.js/dist/hls.min.js"));
+  });
+  const select = async (query) => {
+    const id = Number(query.id || 0), season = query.s === void 0 ? void 0 : Number(query.s), episode = query.e === void 0 ? void 0 : Number(query.e);
+    if (query.id && (!Number.isInteger(id) || id < 1 || season === void 0 !== (episode === void 0) || season !== void 0 && (!Number.isInteger(season) || season < 1 || season > 999 || !Number.isInteger(episode) || episode < 1 || episode > 9999))) throw new Error("Invalid identity");
+    if (query.prepared) {
+      const media = deps.tickets().openMedia(String(query.prepared));
+      const identity = `${season === void 0 ? "movie" : "tv"}:${id}:${season === void 0 ? "" : `${season}:${episode}`}`;
+      if (!id || media.context !== identity || !allowedByseMediaUrl(media.url) || !media.fileId) throw Error("Invalid prepared source");
+      return { fileId: media.fileId, m3u8: media.url, expiresAt: Date.now() + 3e4, source: "prepared" };
+    }
+    const exclude = String(query.exclude || "").split(",").filter(Boolean);
+    const name = String(query.name || "").slice(0, 160);
+    let sources = id ? await deps.sources(id, season, episode, name) : [{ fileId: String(query.fileId || ""), audio: "Dublado", source: "direct" }];
+    const tried = /* @__PURE__ */ new Set();
+    for (let pass = 0; pass < (id ? 2 : 1); pass++) {
+      if (query.refresh === "1") pool.refresh(String(query.fileId || ""));
+      let selected = await pool.select(sources, exclude);
+      if (!selected && exclude.length && query.refresh === "1") selected = await pool.select(sources, []);
+      if (selected) return { ...selected, m3u8: selected.directUrl, expiresAt: Date.now() + 6e5 };
+      for (const source of sources) tried.add(source.fileId);
+      if (id && pass === 0) sources = (await deps.sources(id, season, episode, name, true)).filter((source) => !tried.has(source.fileId));
+    }
+    throw new Error("No available BYSE source");
+  };
+  router14.get(["/api/byse-resolve", "/api/byse-proxy-iframe"], async (req3, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    let timer;
+    try {
+      const resolved = await Promise.race([select(req3.query), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("timeout")), 45e3);
+      })]);
+      const proxyUrl = proxy(resolved.m3u8, resolved.fileId);
+      const identity = new URLSearchParams();
+      for (const field of ["id", "s", "e", "name"]) if (req3.query[field]) identity.set(field, String(req3.query[field]));
+      identity.set("fileId", resolved.fileId);
+      if (req3.path === "/api/byse-resolve") return res.json({ success: true, fileId: resolved.fileId, source: resolved.source, proxyUrl, iframeUrl: "/api/byse-proxy-iframe?" + identity, expiresIn: Math.max(0, Math.floor((resolved.expiresAt - Date.now()) / 1e3)) });
+      let html = buildByseWrapperHtml(proxyUrl, resolved.fileId, Math.max(0, Number(req3.query.t) || 0));
+      const renewalIdentity = new URLSearchParams(identity);
+      renewalIdentity.delete("fileId");
+      const renewal = "/api/byse-resolve?" + renewalIdentity;
+      html = html.replace("var fatalReported = false;", `var fatalReported = false; var renewalAttempted = false; var currentFileId = ${JSON.stringify(resolved.fileId)};`);
+      html = html.replace("function reportFatal(reason, resume) {", `function reportFatal(reason, resume) {
+        if (renewing) return;
+        if (resume) renewalAttempted = false;
+        if (!renewalAttempted) {
+          renewalAttempted = true;
+          var position=resume ? pausedPosition : (v.currentTime||pausedPosition||initialSeek||0);
+          desiredPaused = resume ? false : v.paused; renewing=true;
+          var ctl=new AbortController();var deadline=setTimeout(function(){ctl.abort()},45000);
+          fetch(${JSON.stringify(renewal)}+'&refresh=1&fileId='+encodeURIComponent(currentFileId)+(resume?'':'&exclude='+encodeURIComponent(currentFileId)),{signal:ctl.signal,cache:'no-store'}).then(function(r){if(!r.ok)throw Error('resolve');return r.json()}).then(function(data){
+            if(!data.proxyUrl)throw Error('source'); streamUrl=data.proxyUrl;if(data.fileId)currentFileId=data.fileId;
+            initialSeek=position;appliedInitial=false;
+            v.addEventListener('loadedmetadata',function(){
+              v.currentTime=position;renewing=false;pausedAt=null;
+              if(!desiredPaused)v.play().catch(function(){});else v.pause();
+            },{once:true});startHls();
+          }).catch(function(){renewing=false;reportFatal(reason)}).finally(function(){clearTimeout(deadline)}); return;
+        }`);
+      html = html.replace(/type: "WATCHPLAY_ERROR",/g, 'type: "WATCHPLAY_ERROR", byseExhausted: true,');
+      res.type("html").send(html);
+    } catch {
+      if (req3.path === "/api/byse-resolve") return res.status(502).json({ success: false, error: "BYSE indispon\xEDvel para este conte\xFAdo." });
+      res.status(502).type("html").send('<html><body style="background:#000;color:white"><p>BYSE temporariamente indispon\xEDvel.</p><script>window.parent.postMessage({type:"WATCHPLAY_ERROR",reason:"BYSE indispon\xEDvel",byseExhausted:true},"*")</script></body></html>');
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+  router14.get("/api/byse-stream", async (req3, res) => {
+    let url, fileId = "";
+    try {
+      const media = deps.tickets().openMedia(String(req3.query.ticket || ""));
+      url = media.url;
+      fileId = media.fileId;
+      if (!allowedByseMediaUrl(url)) throw new Error("host");
+    } catch {
+      return res.status(400).end("Recurso BYSE inv\xE1lido.");
+    }
+    const done = pool.begin(fileId);
+    const ctl = new AbortController();
+    let timer;
+    const arm = (ms) => {
+      clearTimeout(timer);
+      timer = setTimeout(() => ctl.abort(), ms);
+    };
+    const stop = () => {
+      clearTimeout(timer);
+      ctl.abort();
+    };
+    res.once("close", stop);
+    req3.once("aborted", stop);
+    try {
+      let upstream;
+      const range = req3.headers.range;
+      if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) return res.status(416).end();
+      arm(8e3);
+      for (let hop = 0; hop < 4; hop++) {
+        if (!allowedByseMediaUrl(url)) throw new Error("redirect");
+        upstream = await deps.fetch(url, { redirect: "manual", signal: ctl.signal, headers: { "User-Agent": BYSE_USER_AGENT, "Accept-Encoding": "identity", ...range ? { Range: range } : {} } });
+        if (upstream.status < 300 || upstream.status >= 400) break;
+        const location = upstream.headers.get("location");
+        await upstream.body?.cancel();
+        if (!location || hop === 3) throw new Error("redirect");
+        url = new URL(location, url).href;
+      }
+      if (!upstream?.ok || !upstream.body || /text\/html|application\/json/i.test(upstream.headers.get("content-type") || "")) throw new Error("upstream");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Accel-Buffering", "no");
+      if (/\.m3u8(?:\?|$)/i.test(url) || /mpegurl/i.test(upstream.headers.get("content-type") || "")) {
+        const reader = upstream.body.getReader();
+        const chunks = [];
+        let size = 0;
+        try {
+          while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            size += part.value.length;
+            if (size > 512 * 1024) throw new Error("size");
+            chunks.push(part.value);
+            arm(8e3);
+          }
+        } finally {
+          await reader.cancel().catch(() => {
+          });
+        }
+        const body = Buffer.concat(chunks).toString();
+        if (!body.trimStart().startsWith("#EXTM3U")) throw new Error("playlist");
+        return res.type("application/vnd.apple.mpegurl").send(rewriteM3u82(body, url, (target) => proxy(target, fileId)));
+      }
+      res.status(upstream.status);
+      for (const field of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+        const value = upstream.headers.get(field);
+        if (value) res.setHeader(field, value);
+      }
+      const stream = import_node_stream.Readable.fromWeb(upstream.body);
+      stream.on("data", () => arm(2e4));
+      arm(2e4);
+      await new Promise((resolve) => {
+        stream.once("end", resolve);
+        stream.once("error", () => {
+          res.destroy();
+          resolve();
+        });
+        res.once("close", () => {
+          stream.destroy();
+          resolve();
+        });
+        stream.pipe(res);
+      });
+    } catch {
+      pool.report(fileId, false);
+      if (res.headersSent) res.destroy();
+      else res.status(502).end("Falha no recurso BYSE.");
+    } finally {
+      done();
+      stop();
+      res.off("close", stop);
+      req3.off("aborted", stop);
+    }
+  });
+  return router14;
+}
+var byseRoutes_default = createByseRouter();
 
 // server/routes/streamtapeRoutes.ts
-var import_express14 = require("express");
-var import_stream2 = require("stream");
-var import_fs8 = __toESM(require("fs"), 1);
-var import_path8 = __toESM(require("path"), 1);
-var streamtapeRouter = (0, import_express14.Router)();
-var streamtapeMemoryCache = /* @__PURE__ */ new Map();
-var directUrlToFileId = /* @__PURE__ */ new Map();
-var CACHE_TTL_MS = 20 * 60 * 1e3;
-var _localCatalog = null;
-function getLocalCatalog() {
-  if (!_localCatalog) {
-    try {
-      const p = import_path8.default.join(process.cwd(), "data", "encontrei-catalog.json");
-      if (import_fs8.default.existsSync(p)) {
-        _localCatalog = JSON.parse(import_fs8.default.readFileSync(p, "utf8"));
-      }
-    } catch (e) {
-      console.warn("[StreamTape] Falha ao carregar encontrei-catalog.json:", e);
-    }
-  }
-  return _localCatalog;
-}
-function findStreamtapeInCatalog(tmdbId, season, episode) {
-  const cat = getLocalCatalog();
-  if (!cat) return null;
-  if (season !== void 0 && episode !== void 0) {
-    const ep = (cat.episodes || []).find(
-      (x) => Number(x.tmdb_id) === Number(tmdbId) && Number(x.season) === Number(season) && Number(x.episode) === Number(episode)
-    );
-    if (ep?.servers?.streamtape) return ep.servers.streamtape;
-  } else {
-    const m = (cat.movies || []).find((x) => Number(x.tmdb_id) === Number(tmdbId));
-    if (m?.servers?.streamtape) return m.servers.streamtape;
-  }
-  return null;
-}
-async function resolveStreamTapeToken(fileId) {
-  const cleanId = String(fileId || "").trim();
-  if (!cleanId) return null;
-  const cached = streamtapeMemoryCache.get(cleanId);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.directUrl;
-  }
-  const embedUrl = `https://streamtape.com/e/${cleanId}/`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12e3);
+var import_express16 = require("express");
+
+// server/services/streamtapeMediaProxy.ts
+var import_node_stream2 = require("node:stream");
+function allowedMediaUrl(value) {
   try {
-    const upstream = await fetch(embedUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7"
-      },
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    if (!upstream.ok) return null;
-    const html = await upstream.text();
-    if (html.includes("Video not found") || html.includes("has been deleted")) {
-      return null;
-    }
-    let nextUrl = null;
-    const dynamicMatch = html.match(/document\.getElementById\(['"](?:botlink|robotlink)['"]\)\.innerHTML\s*=\s*(.+?);/);
-    if (dynamicMatch && dynamicMatch[1]) {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password && ["tapecontent.net", "streamtape.com", "streamtape.net", "streamtape.cc", "streamtape.site"].some((host) => url.hostname === host || url.hostname.endsWith("." + host));
+  } catch {
+    return false;
+  }
+}
+async function proxyStreamtapeMedia(req3, res, options) {
+  if (!allowedMediaUrl(options.url)) {
+    res.status(400).end("URL de streaming inv\xE1lida.");
+    return;
+  }
+  const timeoutMs = options.timeoutMs ?? 15e3;
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "*/*",
+    "Accept-Encoding": "identity",
+    Referer: "https://streamtape.com/",
+    Origin: "https://streamtape.com",
+    ...req3.headers.range ? { Range: String(req3.headers.range) } : {}
+  };
+  let controller;
+  let timer;
+  let source;
+  let disconnected = false;
+  const stop = () => {
+    disconnected = true;
+    clearTimeout(timer);
+    controller?.abort();
+    source?.destroy();
+  };
+  req3.once("aborted", stop);
+  res.once("close", stop);
+  const armTimeout = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller?.abort(), timeoutMs);
+  };
+  let url = options.url;
+  try {
+    for (let attempt = 0; attempt < 2 && !disconnected; attempt++) {
+      controller = new AbortController();
+      clearTimeout(timer);
+      timer = setTimeout(() => controller?.abort(), Math.min(timeoutMs, 6e3));
+      const started = Date.now();
+      let upstream;
       try {
-        const evaluated = new Function(`return ${dynamicMatch[1]};`)();
-        let target = String(evaluated).trim();
-        if (target.startsWith("//")) {
-          nextUrl = "https:" + target;
-        } else if (target.startsWith("http")) {
-          nextUrl = target;
-        } else {
-          nextUrl = "https://streamtape.com" + (target.startsWith("/") ? "" : "/") + target;
-        }
-        if (!nextUrl.includes("&stream=1")) {
-          nextUrl += "&stream=1";
-        }
-      } catch (e) {
-        console.warn(`[StreamTape Resolver] Falha ao avaliar script din\xE2mico para ${cleanId}:`, e);
+        upstream = await fetch(url, { headers, signal: controller.signal });
+        clearTimeout(timer);
+      } catch {
+        clearTimeout(timer);
+        if (disconnected) return;
       }
+      const rejectedMedia = upstream?.ok && /text\/html|application\/json/i.test(upstream.headers.get("content-type") || "");
+      const retryable = !upstream || rejectedMedia || [403, 404, 410, 429, 500, 502, 503, 504].includes(upstream.status);
+      if (retryable) options.observe?.(false);
+      else if (upstream?.ok) options.observe?.(true, Date.now() - started);
+      if (attempt === 0 && retryable && options.fileId) {
+        await upstream?.body?.cancel().catch(() => {
+        });
+        const fresh = await options.refresh(options.fileId);
+        if (disconnected) return;
+        if (fresh && allowedMediaUrl(fresh)) {
+          url = fresh;
+          continue;
+        }
+        res.status(502).end("StreamTape temporariamente indispon\xEDvel.");
+        return;
+      }
+      if (!upstream || rejectedMedia) {
+        res.status(502).end("Falha ao conectar ao v\xEDdeo do StreamTape.");
+        return;
+      }
+      res.status(upstream.status);
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("X-Accel-Buffering", "no");
+      for (const key of ["content-type", "content-length", "content-range", "accept-ranges"]) {
+        const value = upstream.headers.get(key);
+        if (value !== null) res.setHeader(key, value);
+      }
+      if (!upstream.body) {
+        res.end();
+        return;
+      }
+      source = import_node_stream2.Readable.fromWeb(upstream.body);
+      source.on("data", armTimeout);
+      source.once("end", () => clearTimeout(timer));
+      source.once("error", () => {
+        options.observe?.(false);
+        clearTimeout(timer);
+        controller?.abort();
+        res.destroy();
+      });
+      armTimeout();
+      source.pipe(res);
+      return;
     }
-    if (!nextUrl) {
-      const subMatch = html.match(/document\.getElementById\(['"][^'"]+link['"]\)\.innerHTML\s*=\s*['"][^'"]+['"]\s*\+\s*\((['"][^'"]+['"]\)\.substring\([0-9]+\)(?:\.substring\([0-9]+\))?)/);
-      if (subMatch && subMatch[1]) {
+  } catch {
+    clearTimeout(timer);
+    controller?.abort();
+    if (disconnected) return;
+    if (res.headersSent) res.destroy();
+    else res.status(502).end("Erro de comunica\xE7\xE3o com o StreamTape.");
+  }
+}
+
+// server/services/streamtapeRecovery.ts
+function createStreamtapeRecovery(video, options) {
+  let fileId = options.fileId;
+  const tried = /* @__PURE__ */ new Set([fileId]), renewed = /* @__PURE__ */ new Set();
+  let recovering = false, resolving = false, failed = false, wantsPlay = true;
+  let target = 0, epoch = 0;
+  let timer;
+  let stallTimer;
+  let controller;
+  function fatal() {
+    if (failed) return;
+    failed = true;
+    recovering = false;
+    resolving = false;
+    epoch++;
+    clearTimeout(timer);
+    clearTimeout(stallTimer);
+    controller?.abort();
+    options.onFatal("StreamTape: falha persistente no v\xEDdeo (c\xF3digo " + (video.error?.code || 0) + ")");
+  }
+  async function recover(alternate = false) {
+    if (failed || resolving) return;
+    clearTimeout(stallTimer);
+    if (!recovering) {
+      target = options.getTime();
+      timer = setTimeout(fatal, options.timeoutMs ?? (options.context ? 18e3 : 12e3));
+    }
+    recovering = true;
+    resolving = true;
+    const ticket = ++epoch;
+    controller?.abort();
+    controller = new AbortController();
+    const current = () => !failed && ticket === epoch;
+    async function get(url) {
+      const response = await fetch(url, { signal: controller.signal, cache: "no-store" });
+      if (!response.ok) throw new Error("Resolver unavailable");
+      const data = await response.json();
+      if (!data?.proxyUrl) throw new Error("Missing media URL");
+      return data;
+    }
+    try {
+      let data;
+      if (!alternate && video.error?.code !== 3 && !renewed.has(fileId)) {
+        renewed.add(fileId);
         try {
-          const evalStr = new Function(`return (${subMatch[1]})`)();
-          const cleanQuery = evalStr.replace(/^[/?&]+/, "");
-          if (cleanQuery.includes("id=")) {
-            nextUrl = `https://streamtape.com/get_video?${cleanQuery}&stream=1`;
-          }
+          data = await get("/api/streamtape-resolve?fileId=" + encodeURIComponent(fileId) + "&refresh=1");
         } catch {
         }
       }
+      if (!current()) return;
+      if (!data) {
+        const context = options.context;
+        if (!context || tried.size >= 3) {
+          fatal();
+          return;
+        }
+        let url = "/api/streamtape-resolve?id=" + context.id + "&exclude=" + encodeURIComponent(Array.from(tried).join(","));
+        if (context.season !== void 0 && context.episode !== void 0) url += "&s=" + context.season + "&e=" + context.episode;
+        if (context.name) url += "&name=" + encodeURIComponent(context.name);
+        data = await get(url);
+        if (!current()) return;
+        if (!/^[a-zA-Z0-9_-]{1,100}$/.test(data.fileId || "") || tried.has(data.fileId)) throw new Error("No distinct source");
+        fileId = data.fileId;
+        tried.add(fileId);
+      }
+      if (!current()) return;
+      video.addEventListener("loadedmetadata", () => {
+        if (!current()) return;
+        video.currentTime = target;
+        if (wantsPlay) video.play().catch(() => {
+        });
+        else {
+          clearTimeout(timer);
+          recovering = false;
+        }
+      }, { once: true });
+      resolving = false;
+      video.src = data.proxyUrl;
+      video.load();
+    } catch {
+      if (current()) fatal();
     }
-    if (!nextUrl) {
-      console.warn(`[StreamTape Resolver] N\xE3o foi poss\xEDvel extrair o link de v\xEDdeo para fileId: ${cleanId}`);
-      return null;
-    }
-    const headRes = await fetch(nextUrl, {
-      method: "HEAD",
-      redirect: "manual",
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": embedUrl
-      },
-      signal: AbortSignal.timeout(15e3)
-    });
-    const location = headRes.headers.get("location");
-    if (!location) {
-      console.warn(`[StreamTape Resolver] HEAD em get_video n\xE3o retornou Location redirect (status: ${headRes.status})`);
-      return null;
-    }
-    streamtapeMemoryCache.set(cleanId, {
-      directUrl: location,
-      fileId: cleanId,
-      expiresAt: Date.now() + CACHE_TTL_MS
-    });
-    directUrlToFileId.set(location, cleanId);
-    return location;
-  } catch (err) {
-    clearTimeout(timeoutId);
-    if (err?.name !== "AbortError") {
-      console.error(`[StreamTape Resolver] Erro ao resolver fileId ${cleanId}:`, err?.message || err);
-    }
-    return null;
   }
+  video.addEventListener("error", () => {
+    if (!options.context && (renewed.has(fileId) || video.error?.code === 3)) {
+      fatal();
+      return;
+    }
+    void recover();
+  });
+  const stalled = () => {
+    if (!options.context || failed || video.paused || recovering || stallTimer) return;
+    const position = options.getTime();
+    stallTimer = setTimeout(() => {
+      stallTimer = void 0;
+      if (!video.paused && options.getTime() <= position + 0.5) void recover(true);
+    }, 8e3);
+  };
+  video.addEventListener("waiting", stalled);
+  video.addEventListener("stalled", stalled);
+  video.addEventListener("playing", () => {
+    clearTimeout(stallTimer);
+    stallTimer = void 0;
+    if (!recovering || resolving) return;
+    recovering = false;
+    clearTimeout(timer);
+  });
+  return {
+    setPaused(paused) {
+      wantsPlay = !paused;
+      if (paused) {
+        clearTimeout(stallTimer);
+        stallTimer = void 0;
+      }
+    },
+    seek(time) {
+      if (recovering) target = Math.max(0, time);
+    }
+  };
+}
+
+// server/services/streamtapeResolver.ts
+var USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+var pageHosts = ["streamtape.com", "streamtape.net", "streamtape.cc", "streamtape.site"];
+var isHost = (host, roots) => roots.some((root) => host === root || host.endsWith("." + root));
+function stringExpression(source, values) {
+  let pos = 0;
+  const space = () => {
+    while (/\s/.test(source[pos] || "") && pos < source.length) pos++;
+  };
+  const expect = (token) => {
+    space();
+    if (!source.startsWith(token, pos)) throw new Error("Unsupported expression");
+    pos += token.length;
+  };
+  function literal() {
+    space();
+    const quote = source[pos++];
+    if (quote !== '"' && quote !== "'") throw new Error("Expected string");
+    let value2 = "";
+    while (pos < source.length) {
+      let char = source[pos++];
+      if (char === quote) return value2;
+      if (char === "\\") {
+        char = source[pos++];
+        if (char === "x" || char === "u") {
+          const length = char === "x" ? 2 : 4;
+          const hex = source.slice(pos, pos + length);
+          if (!new RegExp("^[a-fA-F0-9]{" + length + "}$").test(hex)) throw new Error("Bad escape");
+          value2 += String.fromCharCode(parseInt(hex, 16));
+          pos += length;
+          continue;
+        }
+        if (char === "\n") continue;
+        value2 += { n: "\n", r: "\r", t: "	", b: "\b", f: "\f", v: "\v" }[char] ?? char;
+      } else value2 += char;
+      if (value2.length > 16384) throw new Error("Link too long");
+    }
+    throw new Error("Unterminated string");
+  }
+  function number() {
+    space();
+    const match = source.slice(pos).match(/^-?\d{1,6}(?!\d)/);
+    if (!match) throw new Error("Expected index");
+    pos += match[0].length;
+    return Number(match[0]);
+  }
+  function primary() {
+    space();
+    let value2;
+    if (source[pos] === "(") {
+      pos++;
+      value2 = expression();
+      expect(")");
+    } else if (source[pos] === '"' || source[pos] === "'") value2 = literal();
+    else {
+      expect("document");
+      expect(".");
+      expect("getElementById");
+      expect("(");
+      const id = literal();
+      expect(")");
+      expect(".");
+      expect("innerHTML");
+      if (!values.has(id)) throw new Error("Unknown link element");
+      value2 = values.get(id);
+    }
+    while (true) {
+      space();
+      if (source[pos] !== ".") break;
+      pos++;
+      space();
+      const method = source.slice(pos).match(/^(substring|slice)\b/)?.[0];
+      if (!method) throw new Error("Unsupported string method");
+      pos += method.length;
+      expect("(");
+      const start = number();
+      space();
+      let end;
+      if (source[pos] === ",") {
+        pos++;
+        end = number();
+      }
+      expect(")");
+      value2 = method === "slice" ? value2.slice(start, end) : value2.substring(start, end);
+    }
+    return value2;
+  }
+  function expression() {
+    let value2 = primary();
+    space();
+    while (source[pos] === "+") {
+      pos++;
+      value2 += primary();
+      space();
+      if (value2.length > 16384) throw new Error("Link too long");
+    }
+    return value2;
+  }
+  const value = expression();
+  space();
+  if (pos !== source.length) throw new Error("Trailing script");
+  return value;
+}
+function extractStreamtapeVideoUrl(html, fileId) {
+  const values = /* @__PURE__ */ new Map();
+  const seen = /* @__PURE__ */ new Set();
+  const assignment = /document\s*\.\s*getElementById\s*\(\s*(['"])(robotlink|botlink|norobotlink)\1\s*\)\s*\.\s*innerHTML\s*(\+?=)\s*/g;
+  for (const match of html.matchAll(assignment)) {
+    const id = match[2];
+    seen.add(id);
+    let end = match.index + match[0].length, quote = "", escaped = false;
+    for (; end < html.length; end++) {
+      const char = html[end];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (char === "\\") escaped = true;
+        else if (char === quote) quote = "";
+      } else if (char === '"' || char === "'") quote = char;
+      else if (char === ";" || html.startsWith("</script", end)) break;
+      if (end - match.index > 2e4) break;
+    }
+    try {
+      const value = stringExpression(html.slice(match.index + match[0].length, end), values);
+      values.set(id, (match[3] === "+=" ? values.get(id) || "" : "") + value);
+    } catch {
+      values.delete(id);
+    }
+  }
+  const ids = seen.has("robotlink") || seen.has("botlink") ? ["robotlink", "botlink"] : ["norobotlink"];
+  for (const id of ids) {
+    const value = values.get(id);
+    if (!value) continue;
+    try {
+      const url = new URL(value.replace(/&amp;/g, "&"), "https://streamtape.com");
+      if (url.protocol !== "https:" || url.username || url.password || !isHost(url.hostname, pageHosts) || url.pathname !== "/get_video" || url.searchParams.get("id") !== fileId) continue;
+      if (!url.searchParams.has("stream")) url.search += (url.search ? "&" : "?") + "stream=1";
+      return url.href;
+    } catch {
+    }
+  }
+  return null;
+}
+function createStreamtapeResolver(options = {}) {
+  const cache = /* @__PURE__ */ new Map();
+  const inflight = /* @__PURE__ */ new Map();
+  async function load3(fileId) {
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), options.timeoutMs ?? 12e3);
+    const embedUrl = `https://streamtape.com/e/${encodeURIComponent(fileId)}/`;
+    const cookies = /* @__PURE__ */ new Map();
+    let stage = "embed";
+    async function request(url, method, text = false) {
+      const phase = new AbortController();
+      const abort = () => phase.abort();
+      controller.signal.addEventListener("abort", abort, { once: true });
+      if (controller.signal.aborted) phase.abort();
+      const timer = setTimeout(abort, Math.min(options.phaseTimeoutMs ?? 5e3, method === "HEAD" ? 3e3 : 5e3));
+      try {
+        const host = new URL(url).hostname;
+        const cookie = [...cookies.get(host)?.entries() || []].map(([key, value]) => key + "=" + value).join("; ");
+        const response = await fetch(url, {
+          method,
+          redirect: "manual",
+          signal: phase.signal,
+          headers: {
+            "User-Agent": USER_AGENT,
+            Accept: text ? "text/html,application/xhtml+xml,*/*" : "*/*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            Referer: embedUrl,
+            ...cookie ? { Cookie: cookie } : {}
+          }
+        });
+        for (const item of response.headers.getSetCookie()) {
+          const pair = item.split(";", 1)[0];
+          const separator = pair.indexOf("=");
+          if (separator > 0) {
+            if (!cookies.has(host)) cookies.set(host, /* @__PURE__ */ new Map());
+            cookies.get(host).set(pair.slice(0, separator), pair.slice(separator + 1));
+          }
+        }
+        const body = text ? await response.text() : "";
+        if (!text) await response.body?.cancel().catch(() => {
+        });
+        return { response, body };
+      } finally {
+        clearTimeout(timer);
+        controller.signal.removeEventListener("abort", abort);
+      }
+    }
+    try {
+      let page;
+      for (let attempt = 0; attempt < 2 && !controller.signal.aborted; attempt++) {
+        try {
+          let pageUrl = embedUrl;
+          for (let hop = 0; hop < 3; hop++) {
+            page = await request(pageUrl, "GET", true);
+            const location = page.response.headers.get("location");
+            if (page.response.status < 300 || page.response.status >= 400 || !location) break;
+            const target = new URL(location, pageUrl);
+            if (target.protocol !== "https:" || target.username || target.password || !isHost(target.hostname, pageHosts)) {
+              return { directUrl: null, failure: { stage, code: "invalid_redirect" } };
+            }
+            pageUrl = target.href;
+          }
+        } catch {
+          if (attempt === 1) throw new Error("network");
+        }
+        if (page?.response.ok || page && page.response.status < 500) break;
+      }
+      if (!page) throw new Error("network");
+      if (!page.response.ok) return { directUrl: null, failure: { stage, code: "upstream_http", status: page.response.status } };
+      if (/Video not found|has been deleted/i.test(page.body)) return { directUrl: null, failure: { stage, code: "file_removed" } };
+      stage = "extract";
+      const next = extractStreamtapeVideoUrl(page.body, fileId);
+      if (!next) return { directUrl: null, failure: { stage, code: "playback_link_missing" } };
+      stage = "handoff";
+      let url = next;
+      for (let hop = 0; hop < 3 && !controller.signal.aborted; hop++) {
+        let head;
+        try {
+          head = await request(url, "HEAD");
+        } catch {
+        }
+        let result = head;
+        if (!head?.response.headers.get("location") || head.response.status >= 400) result = await request(url, "GET");
+        if (!result) throw new Error("network");
+        const location = result.response.headers.get("location");
+        if (!location) {
+          if (result.response.ok && /^video\//i.test(result.response.headers.get("content-type") || "")) return { directUrl: url };
+          return { directUrl: null, failure: { stage, code: "redirect_missing", status: result.response.status } };
+        }
+        const target = new URL(location, url);
+        if (target.protocol !== "https:" || target.username || target.password || !isHost(target.hostname, [...pageHosts, "tapecontent.net"])) return { directUrl: null, failure: { stage, code: "invalid_redirect" } };
+        if (isHost(target.hostname, ["tapecontent.net"])) return { directUrl: target.href };
+        url = target.href;
+      }
+      return { directUrl: null, failure: { stage, code: controller.signal.aborted ? "timeout" : "redirect_limit" } };
+    } catch {
+      return { directUrl: null, failure: { stage, code: controller.signal.aborted ? "timeout" : "network" } };
+    } finally {
+      clearTimeout(deadline);
+    }
+  }
+  return {
+    resolve(fileId, refresh = false) {
+      const clean = String(fileId || "").trim();
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(clean)) return Promise.resolve({ directUrl: null, failure: { stage: "extract", code: "invalid_file_id" } });
+      const pending = inflight.get(clean);
+      if (pending) return pending;
+      const hit = cache.get(clean);
+      if (!refresh && hit && hit.expires > Date.now()) return Promise.resolve(hit.result);
+      cache.delete(clean);
+      const promise = load3(clean).then((result) => {
+        if (result.directUrl) {
+          if (cache.size >= 500) cache.delete(cache.keys().next().value);
+          cache.set(clean, { result, expires: Date.now() + (options.ttlMs ?? 20 * 60 * 1e3) });
+        }
+        return result;
+      }).finally(() => inflight.delete(clean));
+      inflight.set(clean, promise);
+      return promise;
+    }
+  };
+}
+
+// server/services/streamtapeSources.ts
+function createStreamtapeSourcePool(options) {
+  const probe = options.probe || (async (url, signal) => {
+    const response = await fetch(url, { signal, headers: { Range: "bytes=0-1023", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36", Referer: "https://streamtape.com/", Origin: "https://streamtape.com" } });
+    const bytes = await readHealthPrefix(response, 1024);
+    return response.ok && bytes.length >= 12 && new TextDecoder().decode(bytes.subarray(4, 8)) === "ftyp";
+  });
+  return createMediaSourcePool({ ...options, probe });
+}
+
+// server/routes/streamtapeRoutes.ts
+var streamtapeRouter = (0, import_express16.Router)();
+var tokenResolver = createStreamtapeResolver();
+var directUrlToFileId = /* @__PURE__ */ new Map();
+async function resolveStreamTapeDetails(fileId, refresh = false) {
+  const result = await tokenResolver.resolve(fileId, refresh);
+  if (result.directUrl) {
+    if (directUrlToFileId.size >= 1e3) directUrlToFileId.delete(directUrlToFileId.keys().next().value);
+    directUrlToFileId.set(result.directUrl, fileId);
+  } else if (result.failure) {
+    console.warn("[StreamTape Resolver]", JSON.stringify({ fileId, ...result.failure }));
+  }
+  return result;
+}
+var sourcePool = createStreamtapeSourcePool({ resolve: (fileId, refresh) => resolveStreamTapeToken(fileId, refresh) });
+function readIdentity(req3) {
+  const raw = req3.query.tmdbId || req3.query.id;
+  if (!raw) return null;
+  const id = Number(raw), season = req3.query.s ? Number(req3.query.s) : void 0, episode = req3.query.e ? Number(req3.query.e) : void 0;
+  if (!Number.isInteger(id) || id < 1 || id > 9999999999 || season === void 0 !== (episode === void 0) || season !== void 0 && (!Number.isInteger(season) || season < 1 || season > 999) || episode !== void 0 && (!Number.isInteger(episode) || episode < 1 || episode > 9999)) throw new Error("invalid_identity");
+  return { id, season, episode, name: String(req3.query.name || "").slice(0, 160) };
+}
+async function selectIdentitySource(identity, exclude = []) {
+  let timer;
+  const work = (async () => {
+    const sources = await getStreamtapeSources(identity.id, identity.season, identity.episode, identity.name);
+    const selected = await sourcePool.select(sources, exclude);
+    if (selected) return selected;
+    return sourcePool.select(await getStreamtapeSources(identity.id, identity.season, identity.episode, identity.name, true), exclude);
+  })();
+  try {
+    return await Promise.race([work, new Promise((resolve) => {
+      timer = setTimeout(() => resolve(null), 18e3);
+    })]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+var safeScriptJson = (value) => JSON.stringify(value).replace(/</g, "\\u003c");
+async function resolveStreamTapeToken(fileId, refresh = false) {
+  return (await resolveStreamTapeDetails(fileId, refresh)).directUrl;
 }
 streamtapeRouter.get("/api/streamtape-resolve", async (req3, res) => {
   try {
     let fileId = String(req3.query.fileId || "").trim();
-    const tmdbId = Number(req3.query.tmdbId || req3.query.id);
-    const season = req3.query.s ? Number(req3.query.s) : void 0;
-    const episode = req3.query.e ? Number(req3.query.e) : void 0;
-    if (!fileId && tmdbId) {
-      fileId = findStreamtapeInCatalog(tmdbId, season, episode) || "";
+    const identity = readIdentity(req3);
+    res.setHeader("Cache-Control", "no-store");
+    let directUrl = null, source = "direct";
+    if (identity) {
+      const exclude = String(req3.query.exclude || "").split(",").filter(Boolean).slice(0, 4);
+      if (exclude.some((value) => !/^[a-zA-Z0-9_-]{1,100}$/.test(value))) return res.status(400).json({ success: false, error: "Arquivo inv\xE1lido" });
+      const selected = await selectIdentitySource(identity, exclude);
+      if (!selected) return res.status(502).json({ success: false, error: "Nenhuma fonte StreamTape verificada para este conte\xFAdo.", diagnostic: { stage: "sources", code: "no_verified_source" } });
+      fileId = selected.fileId;
+      directUrl = selected.directUrl;
+      source = selected.source;
+    } else {
+      if (!fileId) return res.status(404).json({ success: false, error: "File ID do StreamTape n\xE3o encontrado para este conte\xFAdo." });
+      const resolution = await resolveStreamTapeDetails(fileId, req3.query.refresh === "1");
+      directUrl = resolution.directUrl;
+      if (!directUrl) return res.status(502).json({ success: false, error: "N\xE3o foi poss\xEDvel resolver o v\xEDdeo do StreamTape.", diagnostic: resolution.failure });
     }
-    if (!fileId) {
-      return res.status(404).json({ success: false, error: "File ID do StreamTape n\xE3o encontrado para este conte\xFAdo." });
-    }
-    const directUrl = await resolveStreamTapeToken(fileId);
-    if (!directUrl) {
-      return res.status(502).json({ success: false, error: "V\xEDdeo do StreamTape indispon\xEDvel ou expirado." });
-    }
+    res.setHeader("Cache-Control", "no-store");
     res.json({
       success: true,
+      source,
       fileId,
       directUrl,
       proxyUrl: `/api/streamtape-stream?url=${encodeURIComponent(directUrl)}&fileId=${encodeURIComponent(fileId)}`
     });
   } catch (err) {
-    res.status(500).json({ success: false, error: err?.message || "Erro interno no resolvedor" });
+    res.status(err?.message === "invalid_identity" ? 400 : 500).json({ success: false, error: "N\xE3o foi poss\xEDvel consultar este conte\xFAdo." });
   }
 });
 streamtapeRouter.get("/api/streamtape-stream", async (req3, res) => {
-  try {
-    let videoUrl = String(req3.query.url || "").trim();
-    const fileId = String(req3.query.fileId || "").trim();
-    if (!videoUrl || !videoUrl.includes("tapecontent.net") && !videoUrl.includes("streamtape")) {
-      return res.status(400).send("URL de streaming inv\xE1lida.");
-    }
-    const headers = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      "Accept": "*/*",
-      "Accept-Encoding": "identity",
-      "Referer": "https://streamtape.com/",
-      "Origin": "https://streamtape.com",
-      "Connection": "keep-alive"
-    };
-    if (req3.headers.range) {
-      headers["Range"] = req3.headers.range;
-    }
-    let controller = new AbortController();
-    let timeoutId = setTimeout(() => controller.abort(), 15e3);
-    req3.on("close", () => controller.abort());
-    let upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-    clearTimeout(timeoutId);
-    if ((upstream.status === 403 || upstream.status === 404 || upstream.status === 410) && !res.headersSent) {
-      const targetFileId = fileId || directUrlToFileId.get(videoUrl) || "";
-      if (targetFileId) {
-        console.warn(`[StreamTape Proxy] Token CDN expirado (${upstream.status}) para fileId ${targetFileId}. Renovando token em tempo real...`);
-        streamtapeMemoryCache.delete(targetFileId);
-        try {
-          await upstream.text();
-        } catch (_) {
-        }
-        const freshDirectUrl = await resolveStreamTapeToken(targetFileId);
-        if (freshDirectUrl) {
-          videoUrl = freshDirectUrl;
-          controller = new AbortController();
-          timeoutId = setTimeout(() => controller.abort(), 15e3);
-          upstream = await fetch(videoUrl, { signal: controller.signal, headers });
-          clearTimeout(timeoutId);
-        }
-      }
-    }
-    res.status(upstream.status);
-    for (const [key, value] of upstream.headers.entries()) {
-      const lk = key.toLowerCase();
-      if (["content-type", "content-range", "accept-ranges", "content-length"].includes(lk)) {
-        res.setHeader(key, value);
-      }
-    }
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    if (!upstream.body) return res.end();
-    const source = import_stream2.Readable.fromWeb(upstream.body);
-    let sourceFailed = false;
-    source.on("error", () => {
-      if (sourceFailed || res.writableEnded) return;
-      sourceFailed = true;
-      controller.abort();
-      if (upstream.status === 206) res.destroy();
-      else res.end();
-    });
-    source.pipe(res);
-    res.on("close", () => controller.abort());
-    res.on("error", () => controller.abort());
-  } catch (err) {
-    if (err?.name === "AbortError") {
-      if (!res.headersSent) res.end();
-      return;
-    }
-    console.error("[StreamTape Proxy Error]:", err?.message || err);
-    if (!res.headersSent) res.status(500).send("Erro no proxy de v\xEDdeo");
-    else res.destroy();
-  }
+  const url = String(req3.query.url || "").trim();
+  const fileId = String(req3.query.fileId || directUrlToFileId.get(url) || "").trim();
+  const release = sourcePool.begin(fileId);
+  res.once("close", release);
+  res.once("finish", release);
+  await proxyStreamtapeMedia(req3, res, {
+    url,
+    fileId,
+    refresh: (id) => resolveStreamTapeToken(id, true),
+    observe: (ok, latencyMs) => sourcePool.report(fileId, ok, latencyMs)
+  });
 });
 streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
   try {
+    const identity = readIdentity(req3);
     let fileId = String(req3.query.fileId || "").trim();
-    const id = req3.query.id ? Number(req3.query.id) : void 0;
-    const season = req3.query.s ? Number(req3.query.s) : void 0;
-    const episode = req3.query.e ? Number(req3.query.e) : void 0;
-    const name = req3.query.name ? String(req3.query.name) : void 0;
-    const initialTime = Math.max(0, parseFloat(String(req3.query.t || "0")));
-    if (id && season !== void 0 && episode !== void 0) {
-      const catalogFid = findStreamtapeInCatalog(id, season, episode);
-      if (catalogFid) {
-        fileId = catalogFid;
+    const initialTime = Math.max(0, Number(req3.query.t) || 0);
+    let directUrl = null;
+    if (identity) {
+      const selected = await selectIdentitySource(identity);
+      if (selected) {
+        fileId = selected.fileId;
+        directUrl = selected.directUrl;
       }
-    }
-    if (!fileId && id) {
-      fileId = findStreamtapeInCatalog(id, season, episode) || "";
-      if (!fileId) {
-        try {
-          if (season !== void 0 && episode !== void 0) {
-            const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-            fileId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || "";
-          } else {
-            const liveEnc = await resolveEncontreiMovie(id, name);
-            fileId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || "";
-          }
-        } catch (e) {
-          console.warn("[StreamTape Live Lookup Error]:", e);
-        }
-      }
-    }
-    if (!fileId) {
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body>
-          <div style="text-align:center;"><h2>StreamTape Indispon\xEDvel</h2><p>Conte\xFAdo n\xE3o encontrado no cat\xE1logo do StreamTape.</p></div>
-          <script>
-            try {
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Conte\xFAdo n\xE3o encontrado no cat\xE1logo" }, "*");
-              }
-            } catch(e) {}
-          </script>
-        </body></html>
-      `);
-    }
-    let directUrl = await resolveStreamTapeToken(fileId);
-    if (!directUrl && id) {
-      console.warn(`[StreamTape] fileId ${fileId} expirado ou removido. Buscando novo link ao vivo do Encontrei/Vizer...`);
-      try {
-        let freshId = null;
-        if (season !== void 0 && episode !== void 0) {
-          const liveEnc = await resolveEncontreiEpisode(id, season, episode, name);
-          freshId = liveEnc?.streamtape || (await resolveVizerEpisode(id, season, episode, name))?.streamtape || null;
-        } else {
-          const liveEnc = await resolveEncontreiMovie(id, name);
-          freshId = liveEnc?.streamtape || (await resolveVizerMovie(id, name))?.streamtape || null;
-        }
-        if (freshId && freshId !== fileId) {
-          fileId = freshId;
-          directUrl = await resolveStreamTapeToken(fileId);
-        }
-      } catch (e) {
-        console.warn("[StreamTape Auto-Recovery Error]:", e);
-      }
+    } else if (fileId) {
+      directUrl = await resolveStreamTapeToken(fileId);
     }
     if (!directUrl) {
       return res.status(502).send(`
         <!DOCTYPE html>
         <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
         <body>
-          <div style="text-align:center;"><h2>V\xEDdeo Expirado</h2><p>O arquivo no StreamTape foi removido ou est\xE1 temporariamente offline.</p></div>
+          <div style="text-align:center;"><h2>V\xEDdeo Indispon\xEDvel</h2><p>N\xE3o foi poss\xEDvel iniciar este v\xEDdeo no StreamTape.</p></div>
           <script>
             try {
               if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: V\xEDdeo expirado ou removido" }, "*");
+                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: N\xE3o foi poss\xEDvel iniciar este v\xEDdeo", streamtapeExhausted: true }, "*");
               }
             } catch(e) {}
           </script>
@@ -11164,46 +13976,24 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
       });
 
-      // Auto-recovery de erro no v\xEDdeo: se falhar ap\xF3s o v\xEDdeo j\xE1 ter iniciado, tenta recarregar fonte com o tempo salvo
-      var hasRecoveredOnce = false;
-      v.addEventListener("error", function() {
-        var cur = (v && v.currentTime > 2) ? v.currentTime : initialSeek;
-        if (!hasRecoveredOnce && cur > 2) {
-          hasRecoveredOnce = true;
-          console.warn("[StreamTape Iframe] Erro detectado no v\xEDdeo. Renovando token via auto-recovery na posi\xE7\xE3o:", cur);
-          fetch("/api/streamtape-resolve?fileId=" + encodeURIComponent("${fileId}"))
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-              if (data && data.proxyUrl) {
-                v.src = data.proxyUrl + "&_cb=" + Date.now();
-                var onReloadSeek = function() {
-                  try {
-                    v.currentTime = cur;
-                    v.play().catch(function(){});
-                  } catch(e) {}
-                };
-                v.addEventListener("loadedmetadata", onReloadSeek, { once: true });
-                v.addEventListener("canplay", onReloadSeek, { once: true });
-                v.load();
-                return;
-              }
-              throw new Error("Sem proxyUrl");
-            })
-            .catch(function() {
-              try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de v\xEDdeo" }, "*"); } catch(e) {}
-            });
-          return;
+      // Retry even when the first media request fails before any playback.
+      var recovery = (${createStreamtapeRecovery.toString()})(v, {
+        fileId: ${safeScriptJson(fileId)},
+        context: ${safeScriptJson(identity)},
+        getTime: function() { return v.currentTime || initialSeek || 0; },
+        onFatal: function(reason) {
+          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, streamtapeExhausted: true }, "*"); } catch(e) {}
         }
-        try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro no elemento de v\xEDdeo" }, "*"); } catch(e) {}
       });
 
       // Receptor de comandos da NetflixPlayerSkin
       window.addEventListener("message", function(event) {
         if (!event.data) return;
         var d = event.data;
-        if (d.type === "PAUSE" && v) v.pause();
-        if (d.type === "PLAY" && v) v.play().catch(function(){});
+        if (d.type === "PAUSE" && v) { recovery.setPaused(true); v.pause(); }
+        if (d.type === "PLAY" && v) { recovery.setPaused(false); v.play().catch(function(){}); }
         if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
+          recovery.seek(d.targetTime);
           if (v.readyState >= 1) {
             v.currentTime = d.targetTime;
           } else {
@@ -11211,6 +14001,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
           }
         }
         if (d.type === "SEEK_ABSOLUTE" && v && typeof d.time === "number") {
+          recovery.seek(d.time);
           if (v.readyState >= 1) {
             v.currentTime = d.time;
           } else {
@@ -11263,29 +14054,29 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req3, res) => {
 var streamtapeRoutes_default = streamtapeRouter;
 
 // server/routes/doodstreamRoutes.ts
-var import_express15 = require("express");
-var import_stream3 = require("stream");
-var import_fs9 = __toESM(require("fs"), 1);
-var import_path9 = __toESM(require("path"), 1);
-var doodstreamRouter = (0, import_express15.Router)();
+var import_express17 = require("express");
+var import_stream2 = require("stream");
+var import_fs8 = __toESM(require("fs"), 1);
+var import_path8 = __toESM(require("path"), 1);
+var doodstreamRouter = (0, import_express17.Router)();
 var doodstreamMemoryCache = /* @__PURE__ */ new Map();
-var CACHE_TTL_MS2 = 2 * 60 * 60 * 1e3;
-var _localCatalog2 = null;
-function getLocalCatalog2() {
-  if (!_localCatalog2) {
+var CACHE_TTL_MS = 2 * 60 * 60 * 1e3;
+var _localCatalog = null;
+function getLocalCatalog() {
+  if (!_localCatalog) {
     try {
-      const p = import_path9.default.join(process.cwd(), "data", "encontrei-catalog.json");
-      if (import_fs9.default.existsSync(p)) {
-        _localCatalog2 = JSON.parse(import_fs9.default.readFileSync(p, "utf8"));
+      const p = import_path8.default.join(process.cwd(), "data", "encontrei-catalog.json");
+      if (import_fs8.default.existsSync(p)) {
+        _localCatalog = JSON.parse(import_fs8.default.readFileSync(p, "utf8"));
       }
     } catch (e) {
       console.warn("[DoodStream] Falha ao carregar encontrei-catalog.json:", e);
     }
   }
-  return _localCatalog2;
+  return _localCatalog;
 }
 function findDoodstreamInCatalog(tmdbId, season, episode) {
-  const cat = getLocalCatalog2();
+  const cat = getLocalCatalog();
   if (!cat) return null;
   if (season !== void 0 && episode !== void 0) {
     const ep = (cat.episodes || []).find(
@@ -11319,12 +14110,12 @@ async function resolveDoodStreamToken(fileId) {
     });
     clearTimeout(timeoutId);
     if (upstream.status === 404) {
-      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS2 });
+      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS });
       return { alive: false, embedUrl };
     }
     const html = await upstream.text();
     if (html.includes("Video not found") || html.includes("video you are looking for is not found") || html.includes("no_video_3.svg")) {
-      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS2 });
+      doodstreamMemoryCache.set(cleanId, { alive: false, embedUrl, fileId: cleanId, expiresAt: Date.now() + CACHE_TTL_MS });
       return { alive: false, embedUrl };
     }
     let directUrl = void 0;
@@ -11354,7 +14145,7 @@ async function resolveDoodStreamToken(fileId) {
       directUrl,
       embedUrl,
       fileId: cleanId,
-      expiresAt: Date.now() + CACHE_TTL_MS2
+      expiresAt: Date.now() + CACHE_TTL_MS
     };
     doodstreamMemoryCache.set(cleanId, entry);
     return entry;
@@ -11421,7 +14212,7 @@ doodstreamRouter.get("/api/doodstream-stream", async (req3, res) => {
     }
     res.setHeader("Access-Control-Allow-Origin", "*");
     if (!upstream.body) return res.end();
-    const source = import_stream3.Readable.fromWeb(upstream.body);
+    const source = import_stream2.Readable.fromWeb(upstream.body);
     let sourceFailed = false;
     source.on("error", () => {
       if (sourceFailed || res.writableEnded) return;
@@ -11663,30 +14454,30 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req3, res) => {
 });
 
 // server/routes/adminOps.ts
-var import_express16 = require("express");
-var import_fs10 = __toESM(require("fs"), 1);
-var import_path10 = __toESM(require("path"), 1);
+var import_express18 = require("express");
+var import_fs9 = __toESM(require("fs"), 1);
+var import_path9 = __toESM(require("path"), 1);
 init_firebaseAdmin();
 var import_child_process = require("child_process");
 var import_ssh2 = require("ssh2");
-var adminOpsRouter = (0, import_express16.Router)();
+var adminOpsRouter = (0, import_express18.Router)();
 var ORACLE_VPS_HOST = process.env.ORACLE_VPS_HOST || "147.15.57.146";
 var ORACLE_VPS_PORT = parseInt(process.env.ORACLE_VPS_PORT || "22", 10);
 var ORACLE_VPS_USER = process.env.ORACLE_VPS_USER || "ubuntu";
 var ORACLE_HEALTH_URL = process.env.ORACLE_HEALTH_URL || "https://play-infinity.stream/api/health";
 function getSshPrivateKey() {
   const possiblePaths = [
-    import_path10.default.join(process.cwd(), "oracle-vps.key"),
-    import_path10.default.join(process.cwd(), "secrets", "oracle-vps.key"),
+    import_path9.default.join(process.cwd(), "oracle-vps.key"),
+    import_path9.default.join(process.cwd(), "secrets", "oracle-vps.key"),
     "/home/ubuntu/play-infinity/secrets/oracle-vps.key",
     "/home/ubuntu/.ssh/id_rsa",
     "/home/ubuntu/.ssh/id_ed25519",
     "/etc/secrets/oracle-vps.key"
   ];
   for (const p of possiblePaths) {
-    if (import_fs10.default.existsSync(p)) {
+    if (import_fs9.default.existsSync(p)) {
       try {
-        return import_fs10.default.readFileSync(p, "utf-8");
+        return import_fs9.default.readFileSync(p, "utf-8");
       } catch (err) {
         console.warn(`[AdminOps] Falha ao ler chave em ${p}:`, err);
       }
@@ -11698,7 +14489,7 @@ function getSshPrivateKey() {
   return null;
 }
 async function executeSystemOrSshCommand(command, timeoutMs = 25e3) {
-  const isDirectOnVps = process.platform === "linux" && (import_fs10.default.existsSync("/home/ubuntu/play-infinity") || import_fs10.default.existsSync("/home/ubuntu/.pm2") || process.cwd().includes("/home/ubuntu"));
+  const isDirectOnVps = process.platform === "linux" && (import_fs9.default.existsSync("/home/ubuntu/play-infinity") || import_fs9.default.existsSync("/home/ubuntu/.pm2") || process.cwd().includes("/home/ubuntu"));
   if (isDirectOnVps) {
     try {
       return await new Promise((resolve) => {
@@ -11828,40 +14619,12 @@ adminOpsRouter.get("/health-check", async (req3, res) => {
       };
     }
   };
-  const checkVizer = async () => {
-    const start = Date.now();
-    const primaryBase = "https://www.vizer.reisen";
-    try {
-      const res2 = await fetch(primaryBase, {
-        signal: AbortSignal.timeout(8e3),
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-        }
-      });
-      const latency = Date.now() - start;
-      return {
-        name: "Cat\xE1logo Vizer",
-        url: primaryBase,
-        status: res2.ok ? "ONLINE" : "OFFLINE",
-        latencyMs: latency,
-        statusCode: res2.status
-      };
-    } catch (error) {
-      return {
-        name: "Cat\xE1logo Vizer",
-        url: primaryBase,
-        status: "OFFLINE",
-        latencyMs: null,
-        statusCode: 0,
-        error: `Falha ao conectar no Vizer: ${error?.message || "fetch falhou"}`
-      };
-    }
-  };
+  const checkVizer = async () => ({ ...await checkVizerHealth(), catalog: getVizerCatalogStatus() });
   const staticTargets = [
-    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
-    { name: "VIP Player", url: "https://myembed.biz", type: "html" },
-    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
-    { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
+    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", redirect: "follow" },
+    { name: "VIP Player", url: "https://myembed.biz", type: "html", redirect: "manual" },
+    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html", redirect: "manual" },
+    { name: "MixDrop", url: "https://mxdrop.top", type: "html", redirect: "manual" }
   ];
   const [encontreiResult, vizerResult, ...staticResults] = await Promise.all([
     checkEncontrei(),
@@ -11870,6 +14633,7 @@ adminOpsRouter.get("/health-check", async (req3, res) => {
       try {
         const start = Date.now();
         const response = await fetch(target.url, {
+          redirect: target.redirect || "follow",
           signal: AbortSignal.timeout(8e3),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
@@ -12057,45 +14821,23 @@ adminOpsRouter.post("/vps-action", async (req3, res) => {
   let commandToRun = "";
   let actionDescription = "";
   switch (action) {
+    // Legacy action names now target only the web app, never the video proxy.
     case "restart-all":
     case "reload-all":
-      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
-      actionDescription = "Recarregar todos os servi\xE7os na VPS com Zero-Downtime (sem queda de conex\xF5es)";
-      break;
-    case "restart-proxy":
-      commandToRun = "sudo fuser -k 8080/tcp || true; sudo pm2 restart video-proxy";
-      actionDescription = "Reiniciar servi\xE7o do Proxy de TV (e eliminar processos fantasmas)";
-      break;
     case "restart-app":
     case "reload-app":
-      commandToRun = "(sleep 1 && cd /home/ubuntu/play-infinity && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 reload play-infinity-app) > /dev/null 2>&1 & echo 'Comando enviado (Recarregamento Zero-Downtime agendado).'";
-      actionDescription = "Recarregar aplica\xE7\xE3o web com Zero-Downtime (play-infinity-app)";
+      commandToRun = `test -f /home/ubuntu/play-infinity/deploy-tools/reload-app.sh && sudo -n bash -c '(sleep 1; bash /home/ubuntu/play-infinity/deploy-tools/reload-app.sh /home/ubuntu/play-infinity) >> /home/ubuntu/play-infinity/reload.log 2>&1 < /dev/null & echo "Reload agendado. Consulte reload.log para confirmar o resultado."'`;
+      actionDescription = "Agendar reload da aplica\xE7\xE3o web; proxy de v\xEDdeo preservado";
+      break;
+    case "restart-proxy":
+      commandToRun = "sudo -u ubuntu pm2 restart video-proxy";
+      actionDescription = "Reiniciar proxy de TV (interrompe conex\xF5es de v\xEDdeo ativas)";
       break;
     case "git-pull-build":
-      commandToRun = `
-        set -e
-        echo "\u{1F680} Localizando diret\xF3rio do projeto..."
-        if [ -d "/home/ubuntu/Play-Infinity" ]; then
-          cd /home/ubuntu/Play-Infinity
-        elif [ -d "/home/ubuntu/play-infinity" ]; then
-          cd /home/ubuntu/play-infinity
-        else
-          cd /home/ubuntu
-        fi
-        
-        echo "\u{1F4E5} Executando git pull..."
-        git pull origin main || git pull origin master || true
-        
-        echo "\u{1F4E6} Instalando depend\xEAncias e gerando build..."
-        npm run build || echo "Aviso no build"
-        
-        echo "\u{1F504} Recarregando os servi\xE7os PM2 com Zero-Downtime..."
-        (sleep 1 && sudo pm2 reload ecosystem.config.cjs --update-env || sudo pm2 restart all) > /dev/null 2>&1 &
-        
-        echo "\u2705 A\xE7\xE3o conclu\xEDda com sucesso! Os servi\xE7os foram recarregados sem quedas."
-      `;
-      actionDescription = "Atualiza\xE7\xE3o manual via Git Pull e Build na VPS (Zero-Downtime)";
-      break;
+      return res.status(409).json({
+        success: false,
+        error: "Build na pasta ativa desabilitado. Use o bot\xE3o de deploy via GitHub Actions para preparar uma vers\xE3o separada."
+      });
     default:
       return res.status(400).json({
         success: false,
@@ -12346,10 +15088,10 @@ adminOpsRouter.post("/delete-bug-image", (req3, res) => {
     if (!imageUrl.startsWith(prefix) || imageUrl.includes("..")) {
       return res.status(400).json({ success: false, error: "Caminho de imagem inv\xE1lido." });
     }
-    const filename = import_path10.default.basename(imageUrl);
-    const filePath = import_path10.default.join(process.cwd(), "uploads", "bug_reports", filename);
-    if (import_fs10.default.existsSync(filePath)) {
-      import_fs10.default.unlinkSync(filePath);
+    const filename = import_path9.default.basename(imageUrl);
+    const filePath = import_path9.default.join(process.cwd(), "uploads", "bug_reports", filename);
+    if (import_fs9.default.existsSync(filePath)) {
+      import_fs9.default.unlinkSync(filePath);
       console.log(`[adminOps] Imagem de bug removida do disco: ${filePath}`);
     }
     res.json({ success: true });
@@ -12459,10 +15201,10 @@ adminOpsRouter.post("/push", async (req3, res) => {
 init_requireAdminAuth();
 
 // server/routes/userOps.ts
-var import_express17 = require("express");
+var import_express19 = require("express");
 init_firebaseAdmin();
 init_requireAdminAuth();
-var userOpsRouter = (0, import_express17.Router)();
+var userOpsRouter = (0, import_express19.Router)();
 userOpsRouter.post("/api/start-trial", async (req3, res) => {
   const authHeader = req3.header("authorization") || req3.header("Authorization");
   let token = "";
@@ -12501,13 +15243,9 @@ userOpsRouter.post("/api/start-trial", async (req3, res) => {
 });
 
 // server.ts
-if (import_fs11.default.existsSync(".env.local")) {
-  import_dotenv.default.config({ path: ".env.local" });
-}
-import_dotenv.default.config();
-var app = (0, import_express18.default)();
+var app = (0, import_express20.default)();
 app.use(subtitlesRouter);
-var PORT = 3e3;
+var PORT = Number(process.env.PORT || 3e3);
 var db = null;
 try {
   const fbConfig = {
@@ -12531,7 +15269,12 @@ process.on("uncaughtException", (err) => {
   console.log("[Process Guard] Suppressed background assertion:", err?.message);
 });
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok", timestamp: (/* @__PURE__ */ new Date()).toISOString() });
+  res.json({
+    status: "ok",
+    release: process.env.APP_RELEASE_ID || "development",
+    codeRelease: process.env.NODE_ENV === "production" && typeof __dirname !== "undefined" ? import_path10.default.basename(import_path10.default.resolve(__dirname, "..")) : "development",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString()
+  });
 });
 app.set("trust proxy", 1);
 app.use((req3, res, next) => {
@@ -12572,7 +15315,7 @@ var playerHelmet = (0, import_helmet.default)({ ...commonHelmet, contentSecurity
 app.use(
   (req3, res, next) => req3.path.startsWith("/api/") ? playerHelmet(req3, res, next) : appHelmet(req3, res, next)
 );
-app.use("/api/upload-bug-image", import_express18.default.json({ limit: "10mb" }));
+app.use("/api/upload-bug-image", import_express20.default.json({ limit: "10mb" }));
 var bugUploadLimiter = (0, import_express_rate_limit3.default)({
   windowMs: 60 * 60 * 1e3,
   limit: 5,
@@ -12605,9 +15348,9 @@ app.post("/api/upload-bug-image", bugUploadLimiter, (req3, res) => {
     if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(imageBase64)) {
       return res.status(400).json({ error: "Formato inv\xE1lido. Apenas imagens PNG, JPG, GIF ou WEBP." });
     }
-    const uploadDir = import_path11.default.join(process.cwd(), "uploads", "bug_reports");
-    if (!import_fs11.default.existsSync(uploadDir)) {
-      import_fs11.default.mkdirSync(uploadDir, { recursive: true });
+    const uploadDir = import_path10.default.join(process.cwd(), "uploads", "bug_reports");
+    if (!import_fs10.default.existsSync(uploadDir)) {
+      import_fs10.default.mkdirSync(uploadDir, { recursive: true });
     }
     const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
     const buffer = Buffer.from(base64Data, "base64");
@@ -12619,17 +15362,17 @@ app.post("/api/upload-bug-image", bugUploadLimiter, (req3, res) => {
       return res.status(400).json({ error: "Arquivo inv\xE1lido: o conte\xFAdo n\xE3o corresponde a uma imagem aut\xEAntica." });
     }
     const safeFilename = `${import_crypto3.default.randomUUID()}${detected.ext}`;
-    const filePath = import_path11.default.join(uploadDir, safeFilename);
-    import_fs11.default.writeFileSync(filePath, buffer);
+    const filePath = import_path10.default.join(uploadDir, safeFilename);
+    import_fs10.default.writeFileSync(filePath, buffer);
     res.json({ success: true, url: `/uploads/bug_reports/${safeFilename}`, filename: safeFilename });
   } catch (err) {
     console.error("[Upload API] Erro:", err);
     res.status(500).json({ error: "Erro ao processar imagem no servidor." });
   }
 });
-app.use(import_express18.default.json({ limit: "10kb" }));
-app.use(import_express18.default.urlencoded({ extended: true, limit: "10kb" }));
-app.use("/uploads", import_express18.default.static(import_path11.default.join(process.cwd(), "uploads"), {
+app.use(import_express20.default.json({ limit: "10kb" }));
+app.use(import_express20.default.urlencoded({ extended: true, limit: "10kb" }));
+app.use("/uploads", import_express20.default.static(import_path10.default.join(process.cwd(), "uploads"), {
   setHeaders: (res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
@@ -12672,9 +15415,16 @@ var liveStreamLimiter = (0, import_express_rate_limit3.default)({
 });
 app.use(globalLimiter);
 if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
-  const distPath = import_path11.default.join(process.cwd(), "dist");
-  if (import_fs11.default.existsSync(distPath)) {
-    app.use(import_express18.default.static(distPath, {
+  const distPath = import_path10.default.join(process.cwd(), "dist");
+  if (process.env.APP_ASSET_DIR) {
+    app.use("/assets", import_express20.default.static(process.env.APP_ASSET_DIR, {
+      maxAge: "1y",
+      immutable: true,
+      index: false
+    }));
+  }
+  if (import_fs10.default.existsSync(distPath)) {
+    app.use(import_express20.default.static(distPath, {
       maxAge: "30d",
       setHeaders: (res, filePath) => {
         if (filePath.endsWith(".html") || filePath.endsWith("metadata.json")) {
@@ -12691,6 +15441,8 @@ if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
 var scrapingPrefixes = [
   "/watchplayer-stream",
   "/myembed-stream",
+  "/byse-resolve",
+  "/byse-proxy-iframe",
   "/md-stream",
   // ex-/mixdrop-stream (renomeado p/ driblar adblockers) — precisa continuar com limite restrito
   "/bolodechocolate",
@@ -12700,7 +15452,7 @@ var scrapingPrefixes = [
   "/nixplay"
 ];
 app.use("/api", (req3, res, next) => {
-  if (req3.path.startsWith("/live-stream-proxy") || req3.path.startsWith("/anime/hls-proxy") || req3.path.startsWith("/md-proxy") || req3.path.startsWith("/vidsrc-proxy") || req3.path.startsWith("/streamtape-stream") || req3.path.startsWith("/streamtape-proxy-iframe") || req3.path.startsWith("/doodstream-stream") || req3.path.startsWith("/doodstream-proxy-iframe")) {
+  if (req3.path.startsWith("/live-stream-proxy") || req3.path.startsWith("/anime/hls-proxy") || req3.path.startsWith("/md-proxy") || req3.path.startsWith("/byse-stream") || req3.path.startsWith("/byse-hls.js") || req3.path.startsWith("/vidsrc-proxy") || req3.path.startsWith("/streamtape-stream") || req3.path.startsWith("/streamtape-proxy-iframe") || req3.path.startsWith("/doodstream-stream") || req3.path.startsWith("/doodstream-proxy-iframe")) {
     return liveStreamLimiter(req3, res, next);
   }
   if (scrapingPrefixes.some((prefix) => req3.path.startsWith(prefix))) {
@@ -12709,9 +15461,9 @@ app.use("/api", (req3, res, next) => {
   return apiLimiter(req3, res, next);
 });
 app.get(["/privacy", "/privacidade"], (req3, res, next) => {
-  const distPath = import_path11.default.join(process.cwd(), "dist");
-  if (import_fs11.default.existsSync(distPath)) {
-    res.sendFile(import_path11.default.join(distPath, "index.html"));
+  const distPath = import_path10.default.join(process.cwd(), "dist");
+  if (import_fs10.default.existsSync(distPath)) {
+    res.sendFile(import_path10.default.join(distPath, "index.html"));
   } else {
     next();
   }
@@ -12721,6 +15473,7 @@ app.use(encontreiLookup_default);
 app.use(bolodechocolate_default);
 app.use(nixplayRoutes_default);
 app.use(vidsrcRoutes_default);
+app.use(byseRoutes_default);
 app.use(streamtapeRoutes_default);
 app.use(doodstreamRouter);
 app.use("/api/admin", requireAdminAuth);
@@ -12732,6 +15485,7 @@ app.use(videoScrapers_default);
 app.use(catalog_default);
 app.use(diagnostics_default);
 app.use(mixdrop_default);
+app.use(playbackHealth_default);
 app.use(cast_default);
 if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
   app.get("/assets/:file", async (req3, res, next) => {
@@ -12822,13 +15576,13 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = import_path11.default.join(process.cwd(), "dist");
-    if (import_fs11.default.existsSync(distPath)) {
+    const distPath = import_path10.default.join(process.cwd(), "dist");
+    if (import_fs10.default.existsSync(distPath)) {
       app.get("*", (_req, res) => {
         res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
         res.setHeader("Pragma", "no-cache");
         res.setHeader("Expires", "0");
-        res.sendFile(import_path11.default.join(distPath, "index.html"));
+        res.sendFile(import_path10.default.join(distPath, "index.html"));
       });
     }
   }
@@ -12839,7 +15593,7 @@ async function startServer() {
     }
   });
   if (!process.env.VERCEL) {
-    const server = app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, process.env.APP_BIND_HOST || "0.0.0.0", () => {
       console.log(`
   \u279C  Local:   http://localhost:${PORT}`);
       try {
@@ -12856,31 +15610,9 @@ async function startServer() {
       }
       console.log("");
     });
-    server.on("error", (err) => {
-      console.error("[Server Listen Error]:", err);
-    });
+    configureServerLifecycle(server);
     server.setTimeout(3e4);
-    if (typeof process.send === "function") {
-      process.send("ready");
-      console.log("[Server] Sinal 'ready' emitido para o PM2.");
-    }
-    startCatalogWatcher();
-    let isShuttingDown = false;
-    const gracefulShutdown = (signal) => {
-      if (isShuttingDown) return;
-      isShuttingDown = true;
-      console.log(`[Server] Recebido ${signal}. Drenando conex\xF5es ativas...`);
-      server.close(() => {
-        console.log("[Server] Todas as conex\xF5es ativas encerradas com sucesso.");
-        process.exit(0);
-      });
-      setTimeout(() => {
-        console.warn("[Server] Timeout de shutdown atingido (10s). Encerrando.");
-        process.exit(0);
-      }, 1e4).unref();
-    };
-    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+    if (process.env.APP_PROBE !== "1") startCatalogWatcher();
   }
 }
 startServer().catch((err) => console.error("Server start error:", err));

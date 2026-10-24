@@ -32,7 +32,7 @@ import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/
 import { rankPlaybackServers, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
-import { StatusBar } from '@capacitor/status-bar';
+import { StatusBar } from '../utils/statusBar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { Chromecast } from '@caprockapps/capacitor-chromecast';
 

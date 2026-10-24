@@ -1,5 +1,9 @@
 [
 	{
+		"pkg": "@capacitor-firebase/messaging",
+		"classpath": "io.capawesome.capacitorjs.plugins.firebase.messaging.FirebaseMessagingPlugin"
+	},
+	{
 		"pkg": "@capacitor/screen-orientation",
 		"classpath": "com.capacitorjs.plugins.screenorientation.ScreenOrientationPlugin"
 	},
@@ -8,11 +12,7 @@
 		"classpath": "com.capacitorjs.plugins.splashscreen.SplashScreenPlugin"
 	},
 	{
-		"pkg": "@capacitor/status-bar",
-		"classpath": "com.capacitorjs.plugins.statusbar.StatusBarPlugin"
-	},
-	{
-		"pkg": "capacitor-chromecast",
-		"classpath": "com.marioshtika.capacitorchromecast.ChromecastPlugin"
+		"pkg": "@caprockapps/capacitor-chromecast",
+		"classpath": "com.caprockapps.plugins.chromecast.Chromecast"
 	}
 ]

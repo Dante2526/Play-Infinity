@@ -1,21 +1,40 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Project specific ProGuard / R8 rules for Play Infinity
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Capacitor Plugin and Bridge Protection for R8
+-keep class com.getcapacitor.** { *; }
+-keep interface com.getcapacitor.** { *; }
+-keep class * extends com.getcapacitor.Plugin { *; }
+-keepclasseswithmembers class * {
+    @com.getcapacitor.annotation.CapacitorPlugin <methods>;
+    @com.getcapacitor.PluginMethod <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Local App Plugins and Activity
+-keep class com.playinfinity.app.** { *; }
+-keep class androidx.activity.EdgeToEdge { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# WebView and JavaScript Interface
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
+-keepattributes JavascriptInterface
+-keepclassmembers class * extends android.webkit.WebChromeClient {
+    public *;
+}
+-keepclassmembers class * extends android.webkit.WebViewClient {
+    public *;
+}
+
+# AndroidX Core, Window and Insets
+-keep class androidx.core.view.WindowInsetsControllerCompat { *; }
+-keep class androidx.core.view.WindowCompat { *; }
+-keep class androidx.core.view.ViewCompat { *; }
+
+# Firebase & Google Play Services
+-keep class com.google.firebase.** { *; }
+-keep class com.google.android.gms.** { *; }
+-dontwarn com.google.firebase.**
+-dontwarn com.google.android.gms.**
+
+# Line numbers for crash traces in Play Console
+-keepattributes SourceFile,LineNumberTable

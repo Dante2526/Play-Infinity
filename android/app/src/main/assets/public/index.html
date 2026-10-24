@@ -36,6 +36,37 @@
           };
         }
 
+        // Ativação do DevTools Mobile (Eruda) via barra de endereços (?debug=true, ?dev=true, ?eruda=true, ?devtools=true)
+        try {
+          var search = window.location.search.toLowerCase();
+          var href = window.location.href.toLowerCase();
+          var isDebugRequested = search.indexOf('debug=true') !== -1 || 
+                                search.indexOf('dev=true') !== -1 || 
+                                search.indexOf('eruda=true') !== -1 || 
+                                search.indexOf('devtools=true') !== -1 ||
+                                href.indexOf('/devtools') !== -1;
+          
+          var isDebugDisabled = search.indexOf('debug=false') !== -1 || 
+                                search.indexOf('dev=false') !== -1 || 
+                                search.indexOf('eruda=false') !== -1 || 
+                                search.indexOf('devtools=false') !== -1;
+
+          if (isDebugDisabled) {
+            window.localStorage.removeItem('playinfinity_eruda_active');
+          } else if (isDebugRequested || window.localStorage.getItem('playinfinity_eruda_active') === 'true') {
+            window.localStorage.setItem('playinfinity_eruda_active', 'true');
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/eruda';
+            script.onload = function() {
+              if (window.eruda) {
+                window.eruda.init();
+                console.log('🚀 [DevTools Mobile] Eruda ativado com sucesso!');
+              }
+            };
+            document.head.appendChild(script);
+          }
+        } catch (e) {}
+
         // Detecção precoce de Smart TV
         try {
           var ua = (navigator.userAgent || '').toLowerCase();
@@ -47,13 +78,43 @@
         } catch (e) {}
       })();
     </script>
-    <script type="module" crossorigin src="/assets/index-BSS8R27N.js"></script>
-    <link rel="modulepreload" crossorigin href="/assets/vendor_react-CYSfZuHu.js">
-    <link rel="modulepreload" crossorigin href="/assets/vendor_firebase-6yefG_JX.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-Cyx2rbpH.css">
+    <script type="module" crossorigin src="/assets/index-CXKKo3uN.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor_react-f1V9Tz9l.js">
+    <link rel="modulepreload" crossorigin href="/assets/vendor_firebase-CoZDbHpU.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DL9mw94-.css">
   </head>
   <body class="bg-[#0a0a0a] text-white min-h-screen overflow-x-hidden w-full max-w-[100vw] m-0 p-0">
-    <div id="root" class="bg-[#0a0a0a] min-h-screen overflow-x-hidden w-full max-w-[100vw]"></div>
+    <div id="root" class="bg-[#0a0a0a] min-h-screen overflow-x-hidden w-full max-w-[100vw]">
+      <div id="boot-loading" role="status" aria-busy="true" aria-label="Preparando Play Infinity">
+        <style>
+          #boot-loading{min-height:100vh;box-sizing:border-box;background:#0a0a0a;color:#fff;font:16px system-ui,sans-serif;padding:32px 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px}
+          #boot-loading *{box-sizing:border-box}#boot-loading .boot-logo{font-size:28px;font-weight:900}#boot-loading .boot-logo span{color:#f97316}
+          #boot-loading .boot-card{width:100%;max-width:380px;padding:32px 24px;border:1px solid #292929;border-radius:24px;background:#171717}
+          #boot-loading .boot-bar{height:44px;border-radius:12px;background:#292929;margin:16px 0}#boot-loading .boot-title{height:28px;width:55%;margin:0 auto 28px}
+          #boot-loading p{text-align:center;color:#c4c4c4;line-height:1.5}#boot-loading button{display:block;margin:20px auto 0;border:0;border-radius:10px;padding:14px 20px;background:#ea580c;color:white;font:inherit;cursor:pointer}
+          #boot-loading [hidden]{display:none!important}@media(prefers-reduced-motion:no-preference){#boot-loading .boot-bar{animation:boot-pulse 1.8s ease-in-out infinite}@keyframes boot-pulse{50%{opacity:.5}}}
+        </style>
+        <div class="boot-logo" aria-hidden="true">Play<span>Infinity</span></div>
+        <div class="boot-card"><div aria-hidden="true"><div class="boot-bar boot-title"></div><div class="boot-bar"></div><div class="boot-bar"></div><div class="boot-bar"></div></div>
+          <p id="boot-message">Preparando Play Infinity…</p><button id="boot-retry" type="button" hidden>Tentar novamente</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function(){
+        var shell=document.getElementById('boot-loading');
+        var message=document.getElementById('boot-message');
+        var retry=document.getElementById('boot-retry');
+        function slow(){if(!shell.isConnected)return;message.textContent='O carregamento está demorando. Verifique sua conexão ou tente novamente.';retry.hidden=false;}
+        function failed(event){var el=event.target;if(el&&el.tagName==='SCRIPT'&&el.type==='module')slow();}
+        retry.addEventListener('click',function(){window.location.reload();});
+        window.addEventListener('error',failed,true);
+        var timer=setTimeout(slow,15000);
+        var observer=new MutationObserver(function(){if(!shell.isConnected){clearTimeout(timer);window.removeEventListener('error',failed,true);observer.disconnect();}});
+        observer.observe(document.getElementById('root'),{childList:true});
+      })();
+    </script>
+    <noscript><p style="color:white;background:#0a0a0a;padding:24px">Ative o JavaScript para abrir o Play Infinity.</p></noscript>
   </body>
 </html>
 

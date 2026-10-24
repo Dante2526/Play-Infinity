@@ -200,8 +200,8 @@
     "semantic_hash": ""
   },
   "server/routes/adminOps.ts": {
-    "mtime": 1792847790.9683444,
-    "ast_hash": "cf17401b2cfac9496f5a27e30efc9e08",
+    "mtime": 1792858731.457317,
+    "ast_hash": "996f419c64aa7bdb4bb4c44fb5521cc3",
     "semantic_hash": ""
   },
   "server/routes/bolodechocolate.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792854696.5864844,
-    "ast_hash": "f198fc841aae4142a71d121267b3b82c",
+    "mtime": 1792858854.0152507,
+    "ast_hash": "eaf70c5deaba99d8e39d17e507c35513",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,13 +1135,13 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792854707.3121622,
-    "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
+    "mtime": 1792858797.751237,
+    "ast_hash": "c67f039fd7f593a61f6eff7da3ca7998",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792854707.3141625,
-    "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
+    "mtime": 1792858797.7522767,
+    "ast_hash": "c67f039fd7f593a61f6eff7da3ca7998",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
@@ -1240,13 +1240,13 @@
     "semantic_hash": ""
   },
   "server/services/vizerDomains.ts": {
-    "mtime": 1792847791.0010054,
-    "ast_hash": "9763d91d6ca09060219189973b810265",
+    "mtime": 1792858472.1967402,
+    "ast_hash": "41d94c159deb8875966c5c960484ac46",
     "semantic_hash": ""
   },
   "server/utils/loadEnvironment.ts": {
-    "mtime": 1792847791.0020037,
-    "ast_hash": "950ef0ac3f70f01169ff8a4303474fbb",
+    "mtime": 1792858479.5925703,
+    "ast_hash": "a2afea3e7035d6e4b06cac07bdd8f284",
     "semantic_hash": ""
   },
   "server/utils/serverLifecycle.ts": {

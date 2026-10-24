@@ -1,3 +1,39 @@
+## 24/10/2026 - Correção das 3 Recomendações da Google Play Console (Android 15/16, Edge-to-Edge e R8)
+
+**Contexto e Diagnóstico:**
+A Google Play Console emitiu 3 alertas no painel de lançamento:
+1. **Exibição de ponta a ponta (Edge-to-Edge):** Usuários de Android 14 e anteriores não recebiam a interface edge-to-edge obrigatória pela Play Store.
+2. **APIs e Parâmetros Descontinuados:** O pacote `@capacitor/status-bar` continha chamadas a `Window.setStatusBarColor`, `Window.getStatusBarColor`, `FLAG_TRANSLUCENT_STATUS` e `setSystemUiVisibility` (depreciados no Android 15/16).
+3. **Otimização do R8:** `minifyEnabled` usava `proguard-android.txt` (que continha `-dontoptimize`) e faltava `shrinkResources true`.
+
+**Modificações Realizadas (7 arquivos):**
+1. **`android/app/build.gradle`:**
+   - Adicionada dependência `androidx.activity:activity:$androidxActivityVersion`.
+   - Atualizado para `proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'` (ativando otimização do R8).
+   - Ativado `shrinkResources true` em `buildTypes.release`.
+   - Versionamento Android incrementado para **`versionCode 52`** e **`versionName "1.4.20"`**.
+2. **`android/app/src/main/java/com/playinfinity/app/MainActivity.java`:**
+   - Invocado `EdgeToEdge.enable(this)` no `onCreate` para compatibilidade retroativa com todos os dispositivos.
+   - Configurado `ViewCompat.setOnApplyWindowInsetsListener` para aplicar safe-area insets no container de conteúdo e zerar os insets em tela cheia/PiP.
+   - Registrado o novo `StatusBarPlugin.class`.
+3. **`android/app/src/main/java/com/playinfinity/app/StatusBarPlugin.java` (Novo):**
+   - Implementado plugin local moderno usando exclusivamente `WindowCompat.getInsetsController()` (`WindowInsetsControllerCompat`) sem nenhuma API depreciada do Android 15.
+4. **`android/app/proguard-rules.pro`:**
+   - Adicionadas regras `-keep` abrangentes para Capacitor, WebView, BridgeActivity, Firebase e plugins locais.
+5. **`package.json` & `package-lock.json`:**
+   - Removida dependência nativa desnecessária `@capacitor/status-bar`.
+6. **`src/utils/statusBar.ts` (Novo), `src/App.tsx` e `src/components/VideoPlayerModal.tsx`:**
+   - Migrado o import de StatusBar para o wrapper local via `registerPlugin('StatusBar')`.
+7. **`capacitor.config.ts`:**
+   - Removidas configurações legadas `splashFullScreen` e `splashImmersive` em favor da API nativa do Android 12+.
+
+**Validação Realizada:**
+- `npx cap sync android`: Sincronização executada com sucesso, removendo `:capacitor-status-bar` dos plugins nativos.
+- `npm run build`: Vite e esbuild compilaram com 0 erros.
+- Testes automatizados do frontend e reprodutor: 192 testes aprovados.
+
+---
+
 ## 24/10/2026 - Correção do Health Monitor: Vizer (vizer.press) e Resolução DNS IPv4 First no Node 24
 
 **Contexto e Diagnóstico:**

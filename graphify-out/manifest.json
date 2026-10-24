@@ -1,13 +1,13 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1792849406.4083004,
-    "ast_hash": "0653d9e56f9fa6b4f5cde87bf13ba642",
+    "mtime": 1792860929.8243284,
+    "ast_hash": "dddf73f7b217b71d4cda359c7e6e09ab",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
-    "mtime": 1791157059.155728,
-    "ast_hash": "21ef66e853854b016a4bd06c00b9c993",
-    "semantic_hash": "21ef66e853854b016a4bd06c00b9c993"
+    "mtime": 1792861033.9877646,
+    "ast_hash": "bfcd4f0ac1c4ca2e650182023e5428ce",
+    "semantic_hash": ""
   },
   "android/app/src/androidTest/java/com/getcapacitor/myapp/ExampleInstrumentedTest.java": {
     "mtime": 1789138888.0,
@@ -15,9 +15,9 @@
     "semantic_hash": "fbaf7cc870c663eb52dcf218531c439d"
   },
   "android/app/src/main/java/com/playinfinity/app/MainActivity.java": {
-    "mtime": 1791031141.0675502,
-    "ast_hash": "8dfb2fc130e7d02164a508a1212c86eb",
-    "semantic_hash": "8dfb2fc130e7d02164a508a1212c86eb"
+    "mtime": 1792860824.8295417,
+    "ast_hash": "b2d0de6d345e91ff0945c2f3212d76a3",
+    "semantic_hash": ""
   },
   "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java": {
     "mtime": 1792456433.22795,
@@ -40,9 +40,9 @@
     "semantic_hash": "682315a426653617c6a74fc12bef55b6"
   },
   "android/capacitor.settings.gradle": {
-    "mtime": 1791157059.155728,
-    "ast_hash": "2968dcfea4d4ac137a620ddb0eea1cfb",
-    "semantic_hash": "2968dcfea4d4ac137a620ddb0eea1cfb"
+    "mtime": 1792861033.9831862,
+    "ast_hash": "3315722bdbe9e0b99328ec4893eca77b",
+    "semantic_hash": ""
   },
   "android/gradlew": {
     "mtime": 1789138888.0,
@@ -60,9 +60,9 @@
     "semantic_hash": "4b3fce8ea2a515a9d2e47e74757172ec"
   },
   "capacitor.config.ts": {
-    "mtime": 1790706878.2714355,
-    "ast_hash": "3a13d27693c4a6d203cc1f0774cfa6db",
-    "semantic_hash": "3a13d27693c4a6d203cc1f0774cfa6db"
+    "mtime": 1792860912.602285,
+    "ast_hash": "462192977935121943cbba4a3adc3146",
+    "semantic_hash": ""
   },
   "check.js": {
     "mtime": 1789170044.7238681,
@@ -110,8 +110,8 @@
     "semantic_hash": "331ef318616a37831a3cef798301577a"
   },
   "package.json": {
-    "mtime": 1792849599.4270034,
-    "ast_hash": "f185b43855231c284e26f5b6b21bb24a",
+    "mtime": 1792860886.50641,
+    "ast_hash": "32b6cdb46b2ac72cf1ebdde22b3f206a",
     "semantic_hash": ""
   },
   "patch_channels.js": {
@@ -310,8 +310,8 @@
     "semantic_hash": "af2bd18a7bdd45f4be5dc3c7a7b88bd7"
   },
   "src/App.tsx": {
-    "mtime": 1792847791.0030031,
-    "ast_hash": "5ef6b56ff788473031908dfe77fcdc09",
+    "mtime": 1792860854.2188983,
+    "ast_hash": "53690ee6590bb5fb9c3bd5f448e9f30a",
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
@@ -445,8 +445,8 @@
     "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1792849406.4391322,
-    "ast_hash": "18c569becbb5c5b6d6e535f3b4236d29",
+    "mtime": 1792860857.703296,
+    "ast_hash": "0045b1d3968a42f394e4cf0e09a86ff5",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792858854.0152507,
-    "ast_hash": "eaf70c5deaba99d8e39d17e507c35513",
+    "mtime": 1792861167.0729387,
+    "ast_hash": "fbcf672f6d3a9911260183b24960b877",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,13 +1135,13 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792858797.751237,
-    "ast_hash": "c67f039fd7f593a61f6eff7da3ca7998",
+    "mtime": 1792861059.35797,
+    "ast_hash": "df575752981138b325b8b80e8ce3d9a9",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792858797.7522767,
-    "ast_hash": "c67f039fd7f593a61f6eff7da3ca7998",
+    "mtime": 1792861059.359127,
+    "ast_hash": "df575752981138b325b8b80e8ce3d9a9",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
@@ -1312,6 +1312,16 @@
   "docs/playback-health.md": {
     "mtime": 1792847790.9347086,
     "ast_hash": "3ddfb8fdb730eb55a52e29d9820ad442",
+    "semantic_hash": ""
+  },
+  "android/app/src/main/java/com/playinfinity/app/StatusBarPlugin.java": {
+    "mtime": 1792860809.5147343,
+    "ast_hash": "ea4a0125f8b881007e0fae14c3daa7f7",
+    "semantic_hash": ""
+  },
+  "src/utils/statusBar.ts": {
+    "mtime": 1792860829.6494792,
+    "ast_hash": "30b6cd4673757eb7ab499b2ed0e06501",
     "semantic_hash": ""
   }
 }
