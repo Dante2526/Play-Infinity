@@ -1,3 +1,24 @@
+## 24/10/2026 - Reativação do Canal SporTV 3 HD com 4 Servidores Redundantes
+
+**Contexto e Diagnóstico:**
+O canal SporTV 3 HD estava fora do ar para os usuários:
+1. O Servidor 1 (`/api/iptv/1226`) caiu no provedor upstream com erro HTTP 404.
+2. O Servidor 2 (`http://195.178.110.110/sportv3/index.m3u8`) retornava HTTP 403 Forbidden.
+
+**Modificações Realizadas (1 arquivo):**
+1. **`src/data/liveChannels.ts`:**
+   - Atualizados os servidores do SporTV 3 HD com 4 novas fontes ativas extraídas da API do provedor:
+     - Servidor 1 (HD 720p): `/api/iptv/296212` (Online 200 OK)
+     - Servidor 2 (FHD H265): `/api/iptv/1224` (Online 200 OK)
+     - Servidor 3 (UHD Backup): `/api/iptv/296213` (Online 200 OK)
+     - Servidor 4 (SD Leve): `/api/iptv/1228` (Online 200 OK)
+
+**Validação Realizada:**
+- Sondagem direta dos streams na VPS Oracle: 4/4 servidores online com entrega ativa de chunks HLS.
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+
+---
+
 ## 24/10/2026 - Correção de UI: Remoção de Setas, Cartão Unificado e Formatação Automática (R$)
 
 **Contexto e Motivação:**

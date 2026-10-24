@@ -262,13 +262,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1 (HD 720p)',
-        url: '/api/iptv/1226',
+        url: '/api/iptv/296212',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Backup BR)',
-        url: 'http://195.178.110.110/sportv3/index.m3u8',
-        isProxy: true
+        name: 'Servidor 2 (FHD H265)',
+        url: '/api/iptv/1224',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3 (UHD Backup)',
+        url: '/api/iptv/296213',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 4 (SD Leve)',
+        url: '/api/iptv/1228',
+        isProxy: false
       }
     ]
   },
