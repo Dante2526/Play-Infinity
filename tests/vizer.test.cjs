@@ -27,21 +27,21 @@ test('health and resolver share the current configured domain order', async () =
   const calls = [];
   global.fetch = async raw => { calls.push(raw); return new Response(listing); };
   const result = await api.checkVizerHealth();
-  assert.equal(calls[0], 'https://www.vizer.uno/series/online/');
+  assert.equal(calls[0], 'https://www.vizer.press/series/online/');
   assert.equal(result.url, api.VIZER_DOMAINS[0]); assert.equal(result.status, 'ONLINE');
   assert.equal(api.getVizerWorkingDomain(), result.url);
 });
 test('a failed primary falls back and the working domain becomes preferred by later resolver calls', async () => {
-  global.fetch = async raw => raw.includes('.uno/') ? new Response('', { status: 503 }) : new Response(listing);
+  global.fetch = async raw => raw.includes('.press/') ? new Response('', { status: 503 }) : new Response(listing);
   const result = await api.checkVizerHealth();
-  assert.equal(result.status, 'ONLINE'); assert.equal(result.url, 'https://www.vizer.reisen');
+  assert.equal(result.status, 'ONLINE'); assert.equal(result.url, 'https://www.vizer.uno');
   assert.equal(api.getVizerDomainOrder()[0], result.url);
 });
 test('migration redirects report the actual validated domain rather than the old configured URL', async () => {
   api.rememberVizerDomain('https://www.vizer.reisen');
-  global.fetch = async raw => raw.includes('.reisen/') ? new Response(null, { status: 302, headers: { location: 'https://www.vizer.uno/series/online/' } }) : new Response(listing);
+  global.fetch = async raw => raw.includes('.reisen/') ? new Response(null, { status: 302, headers: { location: 'https://www.vizer.press/series/online/' } }) : new Response(listing);
   const result = await api.checkVizerHealth();
-  assert.equal(result.url, 'https://www.vizer.uno'); assert.equal(result.redirectedFrom, 'https://www.vizer.reisen');
+  assert.equal(result.url, 'https://www.vizer.press'); assert.equal(result.redirectedFrom, 'https://www.vizer.reisen');
 });
 test('HTTP 200 login, challenge or parked pages do not count as an available catalogue', async () => {
   for (const html of ['<title>Log In</title>' + listing, '<title>Just a moment...</title>' + listing, '<title>Domain for sale</title>']) {
@@ -55,7 +55,7 @@ test('an unrelated redirect is never contacted or remembered', async () => {
   global.fetch = async raw => { calls.push(raw); return new Response(null, { status: 302, headers: { location: 'https://unrelated.invalid/private?token=secret' } }); };
   const result = await api.checkVizerHealth();
   assert.equal(result.status, 'OFFLINE'); assert.match(result.error, /domínio não configurado/);
-  assert.equal(calls.length, 3); assert.ok(calls.every(raw => !raw.includes('unrelated')));
+  assert.equal(calls.length, api.VIZER_DOMAINS.length); assert.ok(calls.every(raw => !raw.includes('unrelated')));
   api.rememberVizerDomain('https://unrelated.invalid'); assert.equal(api.getVizerWorkingDomain(), null);
   assert.doesNotMatch(JSON.stringify(result), /secret|private/);
 });

@@ -224,11 +224,11 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   // Use the resolver's domain order; a failed live check never deletes the snapshot.
   const checkVizer = async () => ({ ...(await checkVizerHealth()), catalog: getVizerCatalogStatus() });
 
-  const staticTargets = [
-    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json" },
-    { name: "VIP Player", url: "https://myembed.biz", type: "html" },
-    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html" },
-    { name: "MixDrop", url: "https://mxdrop.top", type: "html" }
+  const staticTargets: Array<{ name: string; url: string; type: string; redirect?: RequestRedirect }> = [
+    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", redirect: "follow" },
+    { name: "VIP Player", url: "https://myembed.biz", type: "html", redirect: "manual" },
+    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html", redirect: "manual" },
+    { name: "MixDrop", url: "https://mxdrop.top", type: "html", redirect: "manual" }
   ];
 
   // Encontrei e Vizer usam validação dedicada (cookie de sessão e detecção de
@@ -240,6 +240,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
       try {
         const start = Date.now();
         const response = await fetch(target.url, {
+          redirect: target.redirect || "follow",
           signal: AbortSignal.timeout(8000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",

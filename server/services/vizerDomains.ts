@@ -1,5 +1,5 @@
 // One domain list for catalogue resolution and the admin health monitor.
-export const VIZER_DOMAINS = ['https://www.vizer.uno', 'https://www.vizer.reisen', 'https://www.vizer.website'];
+export const VIZER_DOMAINS = ['https://www.vizer.press', 'https://www.vizer.uno', 'https://www.vizer.reisen', 'https://www.vizer.website'];
 let workingDomain: string | null = null;
 export const getVizerWorkingDomain = () => workingDomain;
 export const getVizerDomainOrder = () => workingDomain ? [workingDomain, ...VIZER_DOMAINS.filter(base => base !== workingDomain)] : [...VIZER_DOMAINS];

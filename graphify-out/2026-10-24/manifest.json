@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792853375.7539425,
-    "ast_hash": "ef417b88a5b77bfc56f77aff9e583bd2",
+    "mtime": 1792854696.5864844,
+    "ast_hash": "f198fc841aae4142a71d121267b3b82c",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,12 +1135,12 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792851713.5411956,
+    "mtime": 1792854707.3121622,
     "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792851713.5431957,
+    "mtime": 1792854707.3141625,
     "ast_hash": "845b1b8c368877219e4c9a6dc1310ac7",
     "semantic_hash": ""
   },
@@ -1280,8 +1280,8 @@
     "semantic_hash": ""
   },
   "src/services/playbackStartup.ts": {
-    "mtime": 1792849406.441424,
-    "ast_hash": "da3397f456db1082f9eabba9743cac2d",
+    "mtime": 1792854642.4072099,
+    "ast_hash": "159d0fed265f42c0d515b07e0aa3e9d0",
     "semantic_hash": ""
   },
   "src/utils/playerFrameMessages.ts": {

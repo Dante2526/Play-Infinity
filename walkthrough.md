@@ -1,3 +1,27 @@
+## 24/10/2026 - Correção do Health Monitor: Vizer (vizer.press) e Resolução DNS IPv4 First no Node 24
+
+**Contexto e Diagnóstico:**
+No Painel Administrativo (`/admin`), quatro serviços constavam como `OFFLINE`:
+1. **Catálogo Vizer:** Falhava com `HTTP 301 - Vizer redirecionou para um domínio não configurado` porque o Vizer migrou de `vizer.uno` para `https://www.vizer.press`.
+2. **VIP Player (`myembed.biz`) e Watchplayer (`v1.watchplay.shop`):** Apresentavam `HTTP 0 - The operation was aborted due to timeout`. A VPS Oracle não possui rota de saída IPv6, e o Node 24 por padrão tentava os registros AAAA (IPv6) da Cloudflare primeiro, gerando timeout de 8 segundos em chamadas HTTP do backend.
+3. **Redirecionamentos em Probes:** Alvos estáticos que redirecionavam (ex: `v1.watchplay.shop` para `v2.watchplay.shop`) tentavam seguir toda a cadeia de redirects.
+
+**Modificações Realizadas (4 arquivos):**
+1. **`server/services/vizerDomains.ts`:**
+   - Adicionado `https://www.vizer.press` no topo da lista `VIZER_DOMAINS` como primário, com fallback transparente para os domínios legados.
+2. **`server/utils/loadEnvironment.ts`:**
+   - Inserida configuração global `dns.setDefaultResultOrder("ipv4first")`, garantindo que todas as requisições `fetch` e HTTP de saída do Node 24 na VPS Oracle priorizem IPv4 e resolvam em < 100ms.
+3. **`server/routes/adminOps.ts`:**
+   - Adicionada opção `redirect: "manual"` para os reprodutores homologados (`VIP Player`, `Watchplayer`, `MixDrop`), permitindo validar a resposta de borda imediatamente sem seguir cadeias de redirecionamento.
+4. **`tests/vizer.test.cjs`:**
+   - Atualizados testes automatizados para validar a precedência de `https://www.vizer.press` e o comportamento de fallback.
+
+**Validação Realizada:**
+- Testes automatizados executados: 25/25 testes passando (100% de sucesso).
+- Compilação de produção (`npm run build`): Vite e esbuild concluídos com sucesso (código de saída 0).
+
+---
+
 ## 24/10/2026 - Priorização do BYSE como Titular #1 na Abertura com Janela de 12s para PoW
 
 **Contexto e Diagnóstico:**
