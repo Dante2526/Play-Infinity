@@ -26,9 +26,6 @@ test('wrong episode identity cannot confirm media for this episode',async()=>{
  const f=fixture({srv_mixdrop:hint(true)},{});const fetcher=async(...args)=>{const r=await f.fetch(...args),d=await r.json();d.identity='tv:84958:1:3';return Response.json(d)};let valid=false;await api.preparePlaybackStartup(input,new AbortController().signal,()=>valid=true,fetcher);assert.equal(valid,false);
 });
 
-test('startup budget includes preparation; provider 95-second deadline cannot override it',()=>{
- assert.equal(api.startupAttemptTimeout(8000,95000,0),8000);assert.equal(api.startupAttemptTimeout(8000,95000,5700),2300);assert.equal(api.startupAttemptTimeout(8000,95000,9000),100);
-});
 
 test('fallback tries only the prepared alternatives once, keeping unlisted servers out of this phase',()=>{
  const health={srv_mixdrop:{state:'available'},srv_watchplay:{state:'available'}};const tried=new Set(['srv_watchplay']);assert.equal(api.nextStartupKey(['srv_watchplay','srv_mixdrop'],tried,health),'srv_mixdrop');tried.add('srv_mixdrop');assert.equal(api.nextStartupKey(['srv_watchplay','srv_mixdrop'],tried,health),undefined);
@@ -41,4 +38,14 @@ test('a ready subtitled copy does not outrank an available dubbed provider',()=>
 test('definitive probe failures never open an already unavailable provider',async()=>{
  const f=fixture({srv_streamtape:hint(true),srv_mixdrop:hint(true)},{srv_streamtape:{state:'unavailable'},srv_mixdrop:{state:'unavailable'}});
  const p=await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},f.fetch);assert.equal(p.selected,undefined);
+});
+
+test('five seconds of discovery still leaves a full eight seconds after iframe attachment',()=>{
+ const clock=api.createStartupMediaClock();assert.equal(clock.remaining('mixdrop-frame',8000,5000),8000);assert.equal(clock.remaining('mixdrop-frame',8000,6000),7000);assert.equal(clock.remaining('mixdrop-frame',8000,13001),100);assert.equal(clock.remaining('next-frame',8000,14000),8000);
+});
+test('content-routed MixDrop is never reloaded by a late catalogue file ID',()=>{
+ assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&t=4',false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&url=https%3A%2F%2Fmxdrop.top%2Fe%2Fmknjxedxixxo8l3',true),false);assert.equal(api.shouldReloadMixdropFrame(null,false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',false),true);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',true),false);
+});
+test('cold BYSE as final listed source can resolve before giving up, without slowing ready alternatives',()=>{
+ assert.equal(api.startupMediaLimit('srv_byse',false,false),45000);assert.equal(api.startupMediaLimit('srv_byse',true,false),8000);assert.equal(api.startupMediaLimit('srv_byse',false,true),8000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),8000);
 });

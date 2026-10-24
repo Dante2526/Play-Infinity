@@ -1,4 +1,4 @@
-import { preparePlaybackStartup, startupAttemptTimeout, nextStartupKey } from "../services/playbackStartup";
+import { preparePlaybackStartup, createStartupMediaClock, startupMediaLimit, shouldReloadMixdropFrame, nextStartupKey } from "../services/playbackStartup";
 export const __NIXPLAY_TOTAL_EPISODES_VERSION__ = "2.1.0";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Hls from "hls.js";
@@ -383,9 +383,10 @@ export function VideoPlayerModal({
   // definitiva do catálogo local; false => sondagem de rede, não ocultar eps do TMDB)
   const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = useState<EpisodeAvailabilityInfo | null>(null);
   const [isCheckingEpisodes, setIsCheckingEpisodes] = useState<boolean>(false);
+  const startupClockRef=useRef(createStartupMediaClock());
   const startupExpandedRef=useRef(false);
   const startupControllerRef=useRef<AbortController|null>(null);
-  const startupPlanRef=useRef<{identity:string;candidates:string[];deadline:number;urls:Record<string,string>}|null>(null);
+  const startupPlanRef=useRef<{identity:string;candidates:string[];urls:Record<string,string>}|null>(null);
   const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_byse");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
@@ -1407,7 +1408,6 @@ export function VideoPlayerModal({
     startupControllerRef.current?.abort();const controller=new AbortController();startupControllerRef.current=controller;
     const id=String(effectiveMovieId||tmdbId||resolvedId),type=isSeries?'tv':'movie';
     const identity=`${type}:${id}:${type==='tv'?`${targetSeason}:${targetEpisode}`:''}`;
-    const deadline=Date.now()+8000;
     const result=await preparePlaybackStartup({id,type,season:targetSeason,episode:targetEpisode,keys:keys||serversRef.current.map(s=>s.key),preferred,name:title,nixId:nixplaySeriesId?String(nixplaySeriesId):undefined,refresh},controller.signal,health=>{
       if(epoch!==serverSelectionEpochRef.current||controller.signal.aborted)return;
       healthRef.current={identity,servers:health};setServerHealth({identity,servers:health});
@@ -1420,7 +1420,7 @@ export function VideoPlayerModal({
       if(!refresh&&remaining.length){startupExpandedRef.current=true;return prepareStartup(targetSeason,targetEpisode,epoch,undefined,remaining,true);}
       setActiveIframeUrl(null);setIsLoading(false);setError('Nenhuma fonte respondeu disponível para este conteúdo. Tente novamente.');return null;
     }
-    startupPlanRef.current={identity,candidates:result.candidates.slice(0,2),deadline,urls:result.urls};return result.selected;
+    startupPlanRef.current={identity,candidates:result.candidates.slice(0,2),urls:result.urls};return result.selected;
   };
 
   // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
@@ -1429,6 +1429,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!mixdropFileId || !isOpen) return;
     if (selectedServerKey !== "srv_mixdrop") return;
+    if(!shouldReloadMixdropFrame(activeIframeUrl,healthPlaybackStartedRef.current))return;
     // Busca o servidor MixDrop (já recomputado pelo useMemo quando mixdropFileId mudou)
     const srv = servers.find(s => s.key === "srv_mixdrop");
     if (!srv) return;
@@ -1454,7 +1455,6 @@ export function VideoPlayerModal({
     const selectionEpoch = ++serverSelectionEpochRef.current;
     startupControllerRef.current?.abort();
     if(!automatic)startupPlanRef.current=null;
-    if(startupPlanRef.current)startupPlanRef.current.deadline=Date.now()+8000;
     if (serverKey === 'srv_mixdrop') mixdropRoutingRef.current.reset(mixdropRoutingIdentity);
     hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
@@ -1599,8 +1599,11 @@ export function VideoPlayerModal({
     // Allow bounded source selection, token renewal and one alternate file.
     const providerTimeout = selectedServerKey === "srv_byse" ? 95000 : selectedServerKey === "srv_streamtape" ? 45000 : (isWatchplay ? 18000 : (isMixdrop ? 45000 : 15000));
     const plan=startupPlanRef.current;
+    const health=healthRef.current.identity===healthIdentityRef.current?healthRef.current.servers:{};
+    const alternative=plan?.candidates.some(key=>key!==selectedServerKey&&!fallbackAttemptsRef.current.has(key)&&playbackHealthState(health,key)!=='unavailable')||false;
+    const limit=startupMediaLimit(selectedServerKey,alternative,!!plan?.urls[selectedServerKey]);
     const timeoutDuration=plan&&plan.identity===healthIdentityRef.current&&!healthPlaybackStartedRef.current
-      ? startupAttemptTimeout(plan.deadline,providerTimeout):providerTimeout;
+      ? startupClockRef.current.remaining(`${activeIframeUrl}:${transitionEpochRef.current}`,limit):providerTimeout;
     const timer = setTimeout(() => {
       if (!(plan?healthPlaybackStartedRef.current:playbackConfirmedRef.current) && !error) {
         console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) demorou mais de ${timeoutDuration / 1000}s sem iniciar. Tentando fallback automático.`);

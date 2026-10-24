@@ -1683,3 +1683,13 @@ Validações encerradas: TypeScript passou; build Vite final /tmp/play-infinity-
 ## Publicação do lote pendente autorizada
 
 Usuário autorizou explicitamente envio das alterações pendentes ao GitHub; proposta futura de reorganização em API não será implementada neste lote. Inclui startup por disponibilidade, comparação BYSE, tickets preparados, skeletons/recuperação de chunks e scripts de carga/telemetria/testes. Android50/1.4.18 preparado para nova compilação. TypeScript/build e testes anteriores passaram; execução real de carga/ganho após este deploy ainda não medida. Resultado do envio/Actions deve ser verificado, sem presumir ativação da VPS.
+
+## Correção de fallback prematuro — Harry Potter e o Cálice de Fogo
+
+Usuário trouxe logs do releasea70767a: MixDrop reiniciado por chegada de fileId e watchdog só3,065s, StreamTape502 e BYSE8s/fallback/502. Causa comprovada: orçamento8s incluía sondagem anterior de~5s; lookup tardio também mudava query da rota adaptativa e recriava iframe sem necessidade. Corrigidos: relógio inicia na conexão do iframe com8scompletos (rerender não renova prazo, novo frame sim); guard ignora chegada de fileId para /api/md-stream comid de conteúdo, para frame ausente e reprodução em andamento. Retirado deadline antigo do plano. BYSE frio como última fonte sem alternativa/preparação tem45slimitados, compatíveis com sua resolução, em vez de8s; BYSE preparado/com alternativa mantém8s. Não foi corrigido nem atribuída causa específica aos502upstream com estes logs.
+
+Checagem real naVPS: presença dos três hosters para movie674; BYSE resolveu fileIdxriiku9vsffa em8,41s; consulta posterior do manifesto proxy retornou200/#EXTM3U em5,33s total. StreamTape resolver retornou502 em0,58s. Não afirmar episódio integral decodificado nesta rodada nem que os502intermitentes desapareceram. Validações locais finais: TypeScript passou;66testes direcionados passaram; buildVite /tmp/play-infinity-startup-fix-build passou; git diff--check passou. Testes reproduzem consulta consumindo5s sem reduzir janela do novoiframe, guards de recarga e prazo da última fonteBYSE. Logs /tmp/startup-premature-fix-tests-final.log e /tmp/startup-premature-fix-build-final.log. Todos os processos concluídos. Correção apenas local; nenhum push autorizado neste turno, última produção permanecea70767a.
+
+## Envio autorizado da correção de prazo inicial
+
+Usuário autorizou explicitamente novo envio. Lote: relógio por iframe, bloqueio de recarga redundante MixDrop, prazo limitado da última fonte BYSE e testes/documentação. Android51/1.4.19. TypeScript/build e66testes direcionados passaram antes do envio; status do Actions e ativação devem ser verificados separadamente.

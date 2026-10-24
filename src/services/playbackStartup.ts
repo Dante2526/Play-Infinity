@@ -40,11 +40,26 @@ export async function preparePlaybackStartup(input:StartupInput,signal:AbortSign
   return {selected:selected||ordered.find(k=>health[k]?.state!=='unavailable'),candidates:ordered,hints,urls};
 }
 
-export function startupAttemptTimeout(deadline:number,providerTimeout:number,now=Date.now()){
-  return Math.min(providerTimeout,Math.max(100,deadline-now));
-}
 
 export function nextStartupKey(keys:string[],attempted:Set<string>,health:ServerHealthMap) {
   const score=(key:string)=>health[key]?.state==='available'?0:1;
   return keys.filter(key=>!attempted.has(key)&&health[key]?.state!=='unavailable').sort((a,b)=>score(a)-score(b))[0];
+}
+
+// Start the media budget when its iframe is attached, never during metadata probes.
+// Re-renders keep the same deadline; a genuinely new frame gets its own window.
+export function createStartupMediaClock() {
+  let frame='',started=0;
+  return {remaining(identity:string,limit:number,now=Date.now()){
+    if(frame!==identity){frame=identity;started=now;}
+    return Math.max(100,limit-(now-started));
+  }};
+}
+export function startupMediaLimit(key:string,hasAlternative:boolean,prepared:boolean) {
+  return key==='srv_byse'&&!hasAlternative&&!prepared?45000:8000;
+}
+export function shouldReloadMixdropFrame(activeUrl:string|null|undefined,started:boolean) {
+  if(!activeUrl||started)return false;
+  try{const u=new URL(activeUrl,'https://local');if(u.pathname==='/api/md-stream'&&/^[1-9]\d*$/.test(u.searchParams.get('id')||''))return false;}catch{}
+  return true;
 }
