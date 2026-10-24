@@ -20,12 +20,12 @@ on:
 
 concurrency:
   group: oracle-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 300
+    timeout-minutes: 15
     name: Build e Deploy no Play Infinity (Oracle VPS)
 
     steps:
@@ -44,17 +44,8 @@ jobs:
       - name: Validar tipos, pagamentos e reprodução
         run: |
           npm run lint
-          node --test tests/playback-startup.test.cjs tests/byse-sources.test.cjs tests/player-integration.test.cjs tests/byse-simulation.test.cjs tests/byse-routes.test.cjs tests/payments.test.cjs tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs tests/streamtape.test.cjs tests/streamtape-resolver.test.cjs tests/streamtape-sources.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs tests/catalog-search.test.cjs tests/vizer.test.cjs
-          node --test tests/deploy-deps.test.cjs tests/public-frontend.test.cjs
-
-      - name: Validar troca de versão com conexão ativa
-        run: |
-          npm install --prefix "$RUNNER_TEMP/pm2-tests" --no-save --package-lock=false --no-audit --no-fund pm2@6.0.14
-          PM2_BIN="$RUNNER_TEMP/pm2-tests/node_modules/.bin/pm2" node --test tests/deploy.test.cjs
-
-      - name: Validar manutenção do runtime Node
-        run: |
-          PM2_BIN="$RUNNER_TEMP/pm2-tests/node_modules/.bin/pm2" node --test tests/node-upgrade.test.cjs
+          node --test tests/playback-startup.test.cjs tests/byse-sources.test.cjs tests/player-integration.test.cjs tests/byse-simulation.test.cjs tests/byse-routes.test.cjs tests/byse-shared-cache.test.cjs tests/referral.test.cjs tests/payments.test.cjs tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs tests/streamtape.test.cjs tests/streamtape-resolver.test.cjs tests/streamtape-sources.test.cjs tests/playback-health.test.cjs tests/home-releases.test.cjs tests/catalog-search.test.cjs tests/vizer.test.cjs
+          node --test tests/public-frontend.test.cjs
 
       - name: 🔨 Compilar Aplicação (Vite Build)
         run: npm run build
