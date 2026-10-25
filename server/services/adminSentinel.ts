@@ -326,6 +326,11 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
       console.log(`[AdminSentinel] TV: testando ${visibleChannels.length} canais visíveis (saltando ${skippedCount} oculto(s)).`);
     }
     let downCount = 0;
+    // Flag setada quando detectamos que o provedor Xtream (up.kiwi) caiu.
+    // Quando isso acontece, todos os 48 canais /api/iptv/<id> dariam o mesmo
+    // erro, então não faz sentido testar um por um nem gerar 48 alertas.
+    let providerDownDetected = false;
+    let providerDownInfo: { name: string; error: string } | null = null;
 
     // Só testa os canais de TV se conseguimos ler a lista de ocultos do Firestore.
     // Sem isso, o Sentinela testaria cegamente os 40 canais (inclusive os ocultos)
@@ -348,8 +353,71 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
             const titularServer = servers && servers[0] ? servers[0].url : "";
             if (!titularServer) continue;
 
+            // Otimização: se o provedor Xtream caiu, PULA os outros canais
+            // que dependem dele (todos dariam o mesmo erro e gerariam
+            // 48 alertas falsos de "canal fora do ar").
+            if (providerDownDetected && titularServer.startsWith("/api/iptv/")) {
+              continue;
+            }
+
             const probeRes = await probeLiveStreamUrl(titularServer, 5000);
             const alertId = `channel:${ch.id}`;
+
+            // =========================================================================
+            // DETECÇÃO DE QUEDA DO PROVEDOR XTREAM (não de canal individual)
+            // =========================================================================
+            if (probeRes.providerDown) {
+              if (!providerDownDetected) {
+                providerDownDetected = true;
+                providerDownInfo = {
+                  name: probeRes.providerName || "up.kiwi",
+                  error: probeRes.error || "Indisponível"
+                };
+
+                // Gera 1 ÚNICO alerta de sistema (não 48 alertas de canal)
+                const providerAlertId = `system:provider_down_xtream`;
+                const providerAlert: SentinelAlert = {
+                  id: providerAlertId,
+                  category: "system",
+                  title: `🌐 Provedor ${providerDownInfo.name} indisponível`,
+                  message: `${providerDownInfo.error}. Os canais que dependem deste provedor não podem ser testados até a recuperação automática. Não há ação manual necessária.`,
+                  level: "error",
+                  actionTab: "health",
+                  actionUrl: "/admin?tab=health",
+                  detectedAt: now,
+                  metadata: {
+                    provider: providerDownInfo.name,
+                    error: probeRes.error,
+                    affectedChannelsCount: visibleChannels.filter(c =>
+                      (customServersMap[c.id]?.[0]?.url || c.servers?.[0]?.url || "").startsWith("/api/iptv/")
+                    ).length
+                  },
+                };
+                activeAlerts.set(providerAlertId, providerAlert);
+                const lastNotified = notifiedHistory.get(providerAlertId) || 0;
+                if (forcePush || !notifiedHistory.has(providerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+                  alertsToNotify.push(providerAlert);
+                  notifiedHistory.set(providerAlertId, now);
+                }
+
+                // Limpa alertas antigos de canais que dependem do up.kiwi
+                // (eles podem ter sido marcados como "fora do ar" antes por erro falso)
+                let clearedChannelAlerts = 0;
+                for (const staleId of Array.from(activeAlerts.keys())) {
+                  if (!staleId.startsWith("channel:")) continue;
+                  const chId = staleId.substring("channel:".length);
+                  const chObj = INITIAL_LIVE_CHANNELS.find(c => c.id === chId);
+                  if (chObj && (chObj.servers?.[0]?.url || "").startsWith("/api/iptv/")) {
+                    activeAlerts.delete(staleId);
+                    notifiedHistory.delete(staleId);
+                    clearedChannelAlerts++;
+                  }
+                }
+                console.log(`[AdminSentinel] Provedor Xtream (${providerDownInfo.name}) indisponível. Pulando teste dos outros canais /api/iptv/. ${clearedChannelAlerts} alerta(s) de canal antigos foram limpos.`);
+              }
+              // Não incrementa downCount (não é problema de canal individual)
+              continue;
+            }
 
             if (!probeRes.online) {
               downCount++;
@@ -383,6 +451,17 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
           }
         })
       );
+
+      // =========================================================================
+      // RECUPERAÇÃO DO PROVEDOR: se nesta rodada o provedor NÃO caiu mas
+      // tínhamos um alerta antigo de "provedor indisponível", limpa ele.
+      // =========================================================================
+      const providerAlertKey = "system:provider_down_xtream";
+      if (!providerDownDetected && activeAlerts.has(providerAlertKey)) {
+        activeAlerts.delete(providerAlertKey);
+        notifiedHistory.delete(providerAlertKey);
+        console.log(`[AdminSentinel] Provedor Xtream recuperado e online novamente.`);
+      }
 
       lastMonitoredCounts.channelsTotal = visibleChannels.length;
       lastMonitoredCounts.channelsDown = downCount;

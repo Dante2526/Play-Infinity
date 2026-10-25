@@ -108,13 +108,41 @@ router.get("/api/admin/iptv-streams", async (req, res) => {
   }
 });
 
-export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): Promise<{ online: boolean; statusCode: number; error?: string }> {
+export interface ProbeResult {
+  online: boolean;
+  statusCode: number;
+  error?: string;
+  /** Quando true, o problema não é do canal individual, mas do provedor
+   *  Xtream inteiro (ex: up.kiwi caiu). O Sentinela usa isso pra gerar 1
+   *  alerta de sistema ao invés de N alertas de "canal fora do ar". */
+  providerDown?: boolean;
+  /** Nome do provedor quando providerDown=true (ex: "up.kiwi"). */
+  providerName?: string;
+}
+
+export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): Promise<ProbeResult> {
+  let isXtreamPath = false;
   try {
     let urlToProbe = targetUrl;
     if (targetUrl.startsWith("/api/iptv/")) {
       const channelId = targetUrl.replace("/api/iptv/", "");
-      const base = await getFreshXtreamToken();
-      urlToProbe = `${base}/${channelId}.m3u8`;
+      isXtreamPath = true;
+      // getFreshXtreamToken faz fetch + .json() no player_api.php. Se o
+      // provedor (up.kiwi) caiu e respondeu HTML (Cloudflare error page),
+      // .json() lança SyntaxError "Unexpected token '<'". Capturamos isso
+      // e marcamos como providerDown ao invés de erro de canal individual.
+      try {
+        const base = await getFreshXtreamToken();
+        urlToProbe = `${base}/${channelId}.m3u8`;
+      } catch (authErr: any) {
+        return {
+          online: false,
+          statusCode: 0,
+          error: `Provedor Xtream indisponível: ${authErr.message}`,
+          providerDown: true,
+          providerName: process.env.XTREAM_HOST || "up.kiwi"
+        };
+      }
     } else if (targetUrl.startsWith("/")) {
       const port = process.env.PORT || 8080;
       urlToProbe = `http://127.0.0.1:${port}${targetUrl}`;
@@ -128,6 +156,17 @@ export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): P
         "Referer": "https://play-infinity.stream/"
       }
     });
+
+    // Status 5xx do provedor Xtream também = queda do provedor (não do canal)
+    if (isXtreamPath && response.status >= 500) {
+      return {
+        online: false,
+        statusCode: response.status,
+        error: `Provedor Xtream (${process.env.XTREAM_HOST || "up.kiwi"}) retornou HTTP ${response.status}`,
+        providerDown: true,
+        providerName: process.env.XTREAM_HOST || "up.kiwi"
+      };
+    }
 
     const isOk = response.status === 200;
     let isHls = false;
