@@ -241,6 +241,8 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
     // =========================================================================
     let blockedIds: string[] = [];
     let customServersMap: Record<string, Array<{ name: string; url: string }>> = {};
+    let blockedIdsLoaded = false;
+    let blockedIdsError: string | null = null;
 
     if (db) {
       try {
@@ -252,69 +254,139 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
             customServersMap = sData.customServers;
           }
         }
+        blockedIdsLoaded = true;
       } catch (e: any) {
-        console.warn("[AdminSentinel] Falha ao carregar configurações de canais no Firestore:", e?.message);
+        blockedIdsError = e?.message || String(e);
+        console.warn("[AdminSentinel] Falha ao carregar configurações de canais no Firestore:", blockedIdsError);
+      }
+    } else {
+      blockedIdsError = "Firebase Admin não inicializado (db = null)";
+    }
+
+    // =========================================================================
+    // RESOLUÇÃO AUTOMÁTICA DE ALERTAS DE CANAIS OCULTADOS
+    // Se um canal antes alertado (channel:<id>) foi adicionado a blockedIds,
+    // removemos o alerta ativo e o histórico de push — não faz sentido avisar
+    // queda de um canal que o admin já decidiu ocultar.
+    // =========================================================================
+    if (blockedIds.length > 0) {
+      const staleChannelAlerts = Array.from(activeAlerts.keys()).filter((aid) => {
+        if (!aid.startsWith("channel:")) return false;
+        const chId = aid.substring("channel:".length);
+        return blockedIds.includes(chId);
+      });
+      for (const staleId of staleChannelAlerts) {
+        activeAlerts.delete(staleId);
+        notifiedHistory.delete(staleId);
+      }
+      if (staleChannelAlerts.length > 0) {
+        console.log(`[AdminSentinel] ${staleChannelAlerts.length} alerta(s) de canais ocultos foram resolvidos automaticamente.`);
+      }
+    }
+
+    // =========================================================================
+    // GUARDA DE SEGURANÇA: se não conseguimos ler blockedIds, NÃO testamos
+    // canais cegamente — isso evita enxame de alertas falsos quando as regras
+    // do Firestore mudam ou quando o Admin SDK falha. Gera um alerta de sistema
+    // para o admin saber que algo está errado.
+    // =========================================================================
+    if (!blockedIdsLoaded) {
+      const sysAlertId = "system:sentinel_blocked_ids_unavailable";
+      const sysAlert: SentinelAlert = {
+        id: sysAlertId,
+        category: "system",
+        title: "Sentinela não consegue ler canais ocultos",
+        message: `Não foi possível ler system_settings/live_channels (${blockedIdsError}). Verifique as regras do Firestore. Verificação de canais de TV pausada até resolver.`,
+        level: "warning",
+        actionTab: "health",
+        actionUrl: "/admin?tab=health",
+        detectedAt: now,
+        metadata: { error: blockedIdsError },
+      };
+      activeAlerts.set(sysAlertId, sysAlert);
+      const lastNotified = notifiedHistory.get(sysAlertId) || 0;
+      if (forcePush || !notifiedHistory.has(sysAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+        alertsToNotify.push(sysAlert);
+        notifiedHistory.set(sysAlertId, now);
+      }
+      lastMonitoredCounts.channelsTotal = INITIAL_LIVE_CHANNELS.length;
+      lastMonitoredCounts.channelsDown = 0;
+    } else {
+      // Sistema saudável — remove alerta antigo se existir
+      if (activeAlerts.has("system:sentinel_blocked_ids_unavailable")) {
+        activeAlerts.delete("system:sentinel_blocked_ids_unavailable");
+        notifiedHistory.delete("system:sentinel_blocked_ids_unavailable");
+        console.log("[AdminSentinel] Leitura de canais ocultos restaurada.");
       }
     }
 
     const visibleChannels = INITIAL_LIVE_CHANNELS.filter((ch) => !blockedIds.includes(ch.id));
+    const skippedCount = INITIAL_LIVE_CHANNELS.length - visibleChannels.length;
+    if (skippedCount > 0) {
+      console.log(`[AdminSentinel] TV: testando ${visibleChannels.length} canais visíveis (saltando ${skippedCount} oculto(s)).`);
+    }
     let downCount = 0;
 
-    // Testa os canais com pool de 3 workers concorrentes
-    const CONCURRENCY = 3;
-    const queue = [...visibleChannels];
+    // Só testa os canais de TV se conseguimos ler a lista de ocultos do Firestore.
+    // Sem isso, o Sentinela testaria cegamente os 40 canais (inclusive os ocultos)
+    // e geraria um enxame de alertas falsos de "fora do ar".
+    if (blockedIdsLoaded) {
+      // Testa os canais com pool de 3 workers concorrentes
+      const CONCURRENCY = 3;
+      const queue = [...visibleChannels];
 
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
-        while (queue.length > 0) {
-          const ch = queue.shift();
-          if (!ch) break;
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+          while (queue.length > 0) {
+            const ch = queue.shift();
+            if (!ch) break;
 
-          const servers = customServersMap[ch.id] && customServersMap[ch.id].length > 0
-            ? customServersMap[ch.id]
-            : ch.servers;
+            const servers = customServersMap[ch.id] && customServersMap[ch.id].length > 0
+              ? customServersMap[ch.id]
+              : ch.servers;
 
-          const titularServer = servers && servers[0] ? servers[0].url : "";
-          if (!titularServer) continue;
+            const titularServer = servers && servers[0] ? servers[0].url : "";
+            if (!titularServer) continue;
 
-          const probeRes = await probeLiveStreamUrl(titularServer, 5000);
-          const alertId = `channel:${ch.id}`;
+            const probeRes = await probeLiveStreamUrl(titularServer, 5000);
+            const alertId = `channel:${ch.id}`;
 
-          if (!probeRes.online) {
-            downCount++;
-            const alertObj: SentinelAlert = {
-              id: alertId,
-              category: "tv",
-              title: `🚨 Canal ${ch.name} Fora do Ar!`,
-              message: `O servidor titular falhou (${probeRes.statusCode || probeRes.error || "Sem Sinal"}). Toque para trocar o sinal no painel.`,
-              level: "error",
-              actionTab: "channels",
-              actionUrl: "/admin?tab=channels",
-              detectedAt: now,
-              metadata: { channelId: ch.id, channelName: ch.name, statusCode: probeRes.statusCode },
-            };
-            activeAlerts.set(alertId, alertObj);
+            if (!probeRes.online) {
+              downCount++;
+              const alertObj: SentinelAlert = {
+                id: alertId,
+                category: "tv",
+                title: `🚨 Canal ${ch.name} Fora do Ar!`,
+                message: `O servidor titular falhou (${probeRes.statusCode || probeRes.error || "Sem Sinal"}). Toque para trocar o sinal no painel.`,
+                level: "error",
+                actionTab: "channels",
+                actionUrl: "/admin?tab=channels",
+                detectedAt: now,
+                metadata: { channelId: ch.id, channelName: ch.name, statusCode: probeRes.statusCode },
+              };
+              activeAlerts.set(alertId, alertObj);
 
-            // Verifica se deve notificar via push (anti-spam 2h)
-            const lastNotified = notifiedHistory.get(alertId) || 0;
-            if (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
-              alertsToNotify.push(alertObj);
-              notifiedHistory.set(alertId, now);
-            }
-          } else {
-            // Se voltou a ficar online, limpa o alerta ativo e histórico para renotificar se cair de novo
-            if (activeAlerts.has(alertId)) {
-              activeAlerts.delete(alertId);
-              notifiedHistory.delete(alertId);
-              console.log(`[AdminSentinel] Canal ${ch.name} recuperado e online novamente.`);
+              // Verifica se deve notificar via push (anti-spam 2h)
+              const lastNotified = notifiedHistory.get(alertId) || 0;
+              if (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+                alertsToNotify.push(alertObj);
+                notifiedHistory.set(alertId, now);
+              }
+            } else {
+              // Se voltou a ficar online, limpa o alerta ativo e histórico para renotificar se cair de novo
+              if (activeAlerts.has(alertId)) {
+                activeAlerts.delete(alertId);
+                notifiedHistory.delete(alertId);
+                console.log(`[AdminSentinel] Canal ${ch.name} recuperado e online novamente.`);
+              }
             }
           }
-        }
-      })
-    );
+        })
+      );
 
-    lastMonitoredCounts.channelsTotal = visibleChannels.length;
-    lastMonitoredCounts.channelsDown = downCount;
+      lastMonitoredCounts.channelsTotal = visibleChannels.length;
+      lastMonitoredCounts.channelsDown = downCount;
+    }
 
     // =========================================================================
     // 2. VERIFICAÇÃO DE RELATÓRIOS DE BUGS PENDENTES
