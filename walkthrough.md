@@ -1,3 +1,21 @@
+## 25/10/2026 - Ajuste do Subtítulo do Header do ADM ('Visão geral em tempo real')
+
+**Contexto e Diagnóstico:**
+No topo do Painel Administrativo (`AdminPage.tsx`):
+1. **Problema:** O subtítulo *"Visão geral e métricas em tempo real da plataforma."* era extenso e ficava apertado no mobile.
+2. **Ajuste:** Alterado para o formato direto e limpo solicitado: *"Visão geral em tempo real"*.
+
+**Modificações Realizadas (1 arquivo):**
+1. **`src/pages/AdminPage.tsx`:**
+   - Atualizado o texto para *"Visão geral em tempo real"*.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 100% de sucesso.
+- Compilação de produção (`npm run build`): Concluída com sucesso em 19.63s.
+
+---
+
 ## 24/10/2026 - Correção da Quebra de Linha do Badge de Clientes Cadastrados
 
 **Contexto e Diagnóstico:**

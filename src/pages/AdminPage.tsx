@@ -955,7 +955,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 Painel Administrativo
               </h1>
               <p className="text-white/50 text-xs sm:text-sm mt-0.5 truncate sm:whitespace-normal">
-                Visão geral e métricas em tempo real da plataforma.
+                Visão geral em tempo real
               </p>
             </div>
           </div>

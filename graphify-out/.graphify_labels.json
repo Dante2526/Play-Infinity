@@ -22,6 +22,7 @@
   "20": "firebase.ts",
   "21": "GlobalErrorModal.tsx",
   "22": "RokuDiscoveryPlugin",
+  "23": "encontreiCatalog.ts",
   "24": "nixplayCatalog.ts",
   "25": "PaywallModal.tsx",
   "26": "manifest.json",
@@ -89,7 +90,6 @@
   "88": "streamtapeRoutes.ts",
   "89": "@caprockapps/capacitor-chromecast",
   "90": "cheerio",
-  "91": "@consumet/extensions",
   "92": "express-rate-limit",
   "93": "firebase",
   "94": "firebase-admin",
@@ -102,7 +102,5 @@
   "102": "byseRoutes.ts",
   "103": "pow.ts",
   "104": "resolveByseStream",
-  "105": "episodeAvailability.ts",
-  "106": "LoadBoundary",
-  "108": "ensureVizerFreshContent"
+  "105": "episodeAvailability.ts"
 }
