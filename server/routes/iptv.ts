@@ -6,7 +6,7 @@ const router = Router();
 // Cache de tokens por 1 hora (tokens Xtream duram mais que isso, mas refresh preventivo)
 let cachedToken: { url: string; expires: number } | null = null;
 
-async function getFreshXtreamToken(): Promise<string> {
+export async function getFreshXtreamToken(): Promise<string> {
   if (cachedToken && cachedToken.expires > Date.now()) {
     return cachedToken.url;
   }
@@ -108,14 +108,8 @@ router.get("/api/admin/iptv-streams", async (req, res) => {
   }
 });
 
-// GET /api/admin/probe-channel -> Testa sinal HLS em tempo real
-router.get("/api/admin/probe-channel", async (req, res) => {
+export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): Promise<{ online: boolean; statusCode: number; error?: string }> {
   try {
-    const targetUrl = String(req.query.url || "").trim();
-    if (!targetUrl) {
-      return res.status(400).json({ success: false, error: "URL obrigatória" });
-    }
-
     let urlToProbe = targetUrl;
     if (targetUrl.startsWith("/api/iptv/")) {
       const channelId = targetUrl.replace("/api/iptv/", "");
@@ -127,7 +121,7 @@ router.get("/api/admin/probe-channel", async (req, res) => {
     }
 
     const response = await fetch(urlToProbe, {
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "*/*",
@@ -142,17 +136,40 @@ router.get("/api/admin/probe-channel", async (req, res) => {
       isHls = text.includes("#EXTM3U");
     }
 
-    res.json({
-      success: true,
+    return {
       online: isOk && isHls,
       statusCode: response.status
+    };
+  } catch (e: any) {
+    return {
+      online: false,
+      statusCode: 0,
+      error: e.name === "TimeoutError" ? "Timeout" : e.message
+    };
+  }
+}
+
+// GET /api/admin/probe-channel -> Testa sinal HLS em tempo real
+router.get("/api/admin/probe-channel", async (req, res) => {
+  try {
+    const targetUrl = String(req.query.url || "").trim();
+    if (!targetUrl) {
+      return res.status(400).json({ success: false, error: "URL obrigatória" });
+    }
+
+    const result = await probeLiveStreamUrl(targetUrl);
+    res.json({
+      success: true,
+      online: result.online,
+      statusCode: result.statusCode,
+      ...(result.error ? { error: result.error } : {})
     });
   } catch (e: any) {
     res.json({
       success: true,
       online: false,
       statusCode: 0,
-      error: e.name === "TimeoutError" ? "Timeout" : e.message
+      error: e.message
     });
   }
 });

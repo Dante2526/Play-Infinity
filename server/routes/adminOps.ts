@@ -7,6 +7,7 @@ import { exec as cpExec } from "child_process";
 import { Client as SshClient } from "ssh2";
 import { getEncontreiResolverStatus, getVizerCatalogStatus } from "./encontreiLookup";
 import { checkVizerHealth } from "../services/vizerDomains";
+import { getSentinelStatus, runSentinelCheck, registerAdminPushToken, sendPushToAdmins } from "../services/adminSentinel";
 
 export const adminOpsRouter = Router();
 
@@ -953,5 +954,73 @@ adminOpsRouter.post("/push", async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error("[adminOps] Erro ao disparar push:", error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+
+/**
+ * GET /api/admin/sentinel/status
+ * Retorna o estado atual do Guardião (Byte), alertas ativos e contadores.
+ */
+adminOpsRouter.get("/sentinel/status", (_req: Request, res: Response) => {
+  try {
+    const status = getSentinelStatus();
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+/**
+ * POST /api/admin/sentinel/check-now
+ * Força uma verificação imediata de todos os canais, bugs e serviços.
+ */
+adminOpsRouter.post("/sentinel/check-now", async (req: Request, res: Response) => {
+  try {
+    const forcePush = req.body?.forcePush === true;
+    const status = await runSentinelCheck(forcePush);
+    res.json({ success: true, status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+/**
+ * POST /api/admin/sentinel/register-token
+ * Registra o token FCM do navegador do administrador no Guardião.
+ */
+adminOpsRouter.post("/sentinel/register-token", async (req: Request, res: Response) => {
+  try {
+    const { token } = req.body || {};
+    const adminEmail = (req as any).adminUser?.email;
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ success: false, error: "Token FCM é obrigatório." });
+    }
+    const ok = await registerAdminPushToken(token, adminEmail);
+    res.json({ success: ok });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+/**
+ * POST /api/admin/sentinel/test-push
+ * Dispara uma notificação push de teste do Mascote Byte para os administradores.
+ */
+adminOpsRouter.post("/sentinel/test-push", async (_req: Request, res: Response) => {
+  try {
+    const count = await sendPushToAdmins({
+      id: "test:manual_" + Date.now(),
+      category: "system",
+      title: "🤖 Byte: Notificações Ativas com Sucesso!",
+      message: "O Mascote Guardião está monitorando TV Ao Vivo, Bugs, Scrapers e Deploys.",
+      level: "info",
+      actionTab: "channels",
+      actionUrl: "/admin?tab=channels",
+      detectedAt: Date.now(),
+    });
+    res.json({ success: true, sentCount: count });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || String(err) });
   }
 });

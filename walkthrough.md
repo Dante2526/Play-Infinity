@@ -1,3 +1,49 @@
+## 25/10/2026 - Implementação do Mascote Guardião Multi-Funções ('Byte') e Sistema Sentinela de Push Web
+
+**Contexto e Motivação:**
+O administrador acessa o painel de controle pelo navegador do celular (Samsung Internet) e precisava de um mecanismo proativo para ser avisado sobre eventos críticos da plataforma (como queda de canais de TV ao vivo, novos relatos de bugs enviados por clientes, expiração do cookie do Encontrei, deploys e novos usuários) sem precisar ficar abrindo o navegador repetidamente para checar. Foi implementado o mascote animado **"Byte"** como sentinela visual e em background com envio de notificações Web Push oficiais direto no celular.
+
+**Modificações Realizadas (8 arquivos de código + testes):**
+1. **`server/services/adminSentinel.ts` (Novo Serviço):**
+   - Daemon em background rodando na VPS Oracle a cada 15 minutos (e no boot).
+   - Sondagem ativa nos canais titulares de TV Ao Vivo, relatórios pendentes de `bug_reports` no Firestore e saúde dos scrapers/cookie do Encontrei.
+   - Algoritmo de humor do mascote (`happy` verde quando 0 ocorrências, `warning` laranja para avisos, `alert` vermelho para quedas).
+   - Mecanismo anti-spam inteligente com cache em memória e janela de cooldown de 2 horas para não saturar o celular do administrador.
+   - Disparo direcionado de notificações push via Firebase Admin SDK (`sendPushToAdmins`) com título amigável, ícone oficial do Play Infinity e link direto para a aba de resolução (`/admin?tab=...`).
+2. **`server/routes/iptv.ts`:**
+   - Extraída e exportada a rotina reutilizável `probeLiveStreamUrl(targetUrl, timeoutMs)` e `getFreshXtreamToken()`, unificando a sondagem de streams HLS tanto para o endpoint HTTP quanto para o Sentinela em background.
+3. **`server/routes/adminOps.ts`:**
+   - Adicionadas as rotas administrativas:
+     - `GET /api/admin/sentinel/status`: Consulta do status e lista de alertas ativos.
+     - `POST /api/admin/sentinel/check-now`: Força verificação imediata sob demanda.
+     - `POST /api/admin/sentinel/register-token`: Registra o token FCM do navegador admin no Firestore e na memória do Sentinela.
+     - `POST /api/admin/sentinel/test-push`: Dispara push de teste para validação imediata no smartphone.
+4. **`server.ts`:**
+   - Integrada a inicialização automática `startAdminSentinel()` no boot do servidor Node.js.
+5. **`public/firebase-messaging-sw.js`:**
+   - Service Worker atualizado para exibir notificações em segundo plano com logotipo oficial do Play Infinity, vibração (`[200, 100, 200]`) e tag única.
+   - Adicionado listener de `notificationclick`: ao tocar na notificação no celular (Samsung Internet / Chrome), foca a aba existente ou abre nova janela navegando diretamente para a aba do problema (`/admin?tab=channels`, `/admin?tab=bugs`, etc.).
+6. **`src/services/pushNotifications.ts`:**
+   - Adicionada função `registerAdminFcmToken(userId, email)`: captura o token Web Push do navegador do admin, etiqueta no Firestore com `isAdminDevice: true` e sincroniza com a VPS via `/api/admin/sentinel/register-token`.
+7. **`src/components/AdminMascotWidget.tsx` (Novo Componente):**
+   - Widget flutuante Mobile-First no canto inferior direito do Painel Administrativo.
+   - Visual SVG dinâmico do robô "Byte" com expressões faciais (Feliz, Alerta, Alarme), antena luminosa, propulsor e efeitos de aura.
+   - Pílula compacta de 48px com contador numérico de alertas. Ao tocar, expande um cartão moderno com balão de fala, resumo dos serviços, botões de ação rápida para saltar direto para as abas (`Ir para TV Ao Vivo`, `Ver Bugs`, `Scrapers`), botão "Testar Agora" e "Testar Push".
+8. **`src/pages/AdminPage.tsx`:**
+   - Leitura de query parameters (`?tab=...` e `?section=...`) no carregamento inicial da página para atender aos toques de notificações push.
+   - Registro automático do token do navegador admin ao efetuar login ou carregar a sessão.
+   - Inclusão do `<AdminMascotWidget />` flutuante no painel.
+9. **`tests/admin-sentinel.test.cjs` (Novo):**
+   - 7 testes automatizados cobrindo exportações do serviço, lógica de cálculo de humor, anti-spam (cooldown 2h), tratador de clique no Service Worker, renderização do widget e rotas do Express.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código de saída 0).
+- Suíte completa de testes automatizados: 36/36 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 30.87s com bundles e `dist/server.cjs` gerados sem falhas.
+- Grafo de conhecimento (`graphify update .`) sincronizado com 1533 nós, 3134 conexões e 103 comunidades.
+
+---
+
 ## 25/10/2026 - Ajuste do Subtítulo do Header do ADM ('Visão geral em tempo real')
 
 **Contexto e Diagnóstico:**

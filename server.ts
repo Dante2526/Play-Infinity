@@ -20,6 +20,7 @@ import { checkVidsrcSeason } from "./server/routes/vidsrcRoutes";
 import { checkVipSeason, checkVizerSeason } from "./server/routes/encontreiLookup";
 import { configureServerLifecycle } from "./server/utils/serverLifecycle";
 import { startCatalogWatcher } from "./server/services/catalogWatcher";
+import { startAdminSentinel } from "./server/services/adminSentinel";
 
 // In-memory store for episodes received via webhook/endpoint
 // Interface e armazenamento dos Mais Assistidos pelos usuários
@@ -574,7 +575,10 @@ app.use(castRouter);
       });
       configureServerLifecycle(server);
       server.setTimeout(30000);
-      if (process.env.APP_PROBE !== "1") startCatalogWatcher();
+      if (process.env.APP_PROBE !== "1") {
+        startCatalogWatcher();
+        startAdminSentinel();
+      }
     }
   }
 

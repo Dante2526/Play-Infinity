@@ -136,3 +136,76 @@ export function setupFcmTokenRefreshListener(): () => void {
     handle?.remove?.();
   };
 }
+
+
+/**
+ * Registra o dispositivo do administrador especificamente no Guardião (Sentinel).
+ * - Gera/recupera o token Web Push ou nativo.
+ * - Envia para /api/admin/sentinel/register-token.
+ * - Marca isAdminDevice: true no Firestore do usuário.
+ */
+export async function registerAdminFcmToken(userId: string, userEmail?: string): Promise<string | null> {
+  try {
+    let token = localStorage.getItem(FCM_LOCAL_TOKEN_KEY);
+
+    if (Capacitor.isNativePlatform()) {
+      const result = await FirebaseMessaging.requestPermissions();
+      if (result?.receive === "granted") {
+        const tokenResult = await FirebaseMessaging.getToken();
+        if (tokenResult?.token) {
+          token = tokenResult.token;
+          localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
+        }
+      }
+    } else {
+      // Navegador Web (Samsung Internet, Chrome, etc)
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
+      if (vapidKey && typeof Notification !== "undefined" && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+        const permission = await Notification.requestPermission();
+        if (permission === "granted") {
+          const { getMessaging, getToken, isSupported } = await import("firebase/messaging");
+          if (await isSupported()) {
+            const swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+            const messaging = getMessaging(app);
+            const webToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swRegistration });
+            if (webToken) {
+              token = webToken;
+              localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
+            }
+          }
+        }
+      }
+    }
+
+    if (!token) return null;
+
+    // 1. Marca dispositivo no Firestore do admin
+    try {
+      await updateDoc(doc(db, "usuarios", userId), {
+        isAdminDevice: true,
+        fcmTokens: arrayUnion(token),
+        fcmToken: token,
+        fcmTokenUpdatedAt: Date.now()
+      });
+    } catch (e) {
+      console.warn("[Push] Falha ao atualizar doc de admin no Firestore:", e);
+    }
+
+    // 2. Registra na VPS / Sentinela
+    try {
+      const { adminFetch } = await import("./adminApi");
+      await adminFetch("/api/admin/sentinel/register-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, email: userEmail })
+      });
+    } catch (e) {
+      console.warn("[Push] Falha ao registrar token no Sentinela da VPS:", e);
+    }
+
+    return token;
+  } catch (err) {
+    console.warn("[Push] Erro em registerAdminFcmToken:", err);
+    return null;
+  }
+}

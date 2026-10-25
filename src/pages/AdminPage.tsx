@@ -15,6 +15,8 @@ import { AdminBugReports } from "../components/AdminBugReports";
 import { AdminPushNotifications } from "../components/AdminPushNotifications";
 import { AdminLiveChannels } from "../components/AdminLiveChannels";
 import { EncontreiCookieAlert, EncontreiCookieBadge } from "../components/EncontreiCookieAlert";
+import { AdminMascotWidget } from "../components/AdminMascotWidget";
+import { registerAdminFcmToken } from "../services/pushNotifications";
 
 export interface ClientUser {
   id: string;
@@ -49,7 +51,16 @@ interface AdminPageProps {
 export function AdminPage({ onBack }: AdminPageProps) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(!!sessionStorage.getItem("adminSessionToken"));
-  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health" | "bugs" | "push" | "channels">("users");
+  const [adminSection, setAdminSection] = useState<"users" | "deploy" | "blocks" | "health" | "bugs" | "push" | "channels">(() => {
+    if (typeof window !== "undefined") {
+      const p = new URLSearchParams(window.location.search);
+      const t = p.get("tab") || p.get("section");
+      if (t && ["users", "deploy", "blocks", "health", "bugs", "push", "channels"].includes(t)) {
+        return t as any;
+      }
+    }
+    return "users";
+  });
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -66,6 +77,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
             sessionStorage.setItem("adminSessionToken", user.uid);
             sessionStorage.setItem("isAdmin", "true");
             setIsAdmin(true);
+            registerAdminFcmToken(user.uid, user.email).catch(() => {});
           } else {
             sessionStorage.removeItem("adminSessionToken");
             sessionStorage.removeItem("adminEmail");
@@ -232,6 +244,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         sessionStorage.setItem("adminSessionToken", userCredential.user.uid);
         sessionStorage.setItem("adminEmail", userCredential.user.email);
         sessionStorage.setItem("isAdmin", "true");
+        registerAdminFcmToken(userCredential.user.uid, userCredential.user.email).catch(() => {});
       } else {
         await auth.signOut();
         setError("Acesso negado. Este e-mail não possui privilégios de administrador.");
@@ -2486,6 +2499,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
       )}
 
       {/* Modal de Confirmação de Revogação */}
+      {isAdmin && <AdminMascotWidget onSelectSection={setAdminSection} />}
+
       {confirmRevokeUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fade-in">
           <div className="bg-[#1c1c1e] border border-white/10 rounded-[28px] p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
