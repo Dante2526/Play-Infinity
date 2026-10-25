@@ -17,6 +17,7 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
   const deadline = AbortSignal.timeout(options.timeoutMs ?? 10000);
   let lastStatus = 0;
   let lastError = 'Não foi possível conectar aos domínios configurados do Vizer.';
+  let detectedNewDomain: string | undefined = undefined;
   const first = getVizerDomainOrder()[0];
   for (const base of getVizerDomainOrder()) {
     if (deadline.aborted) break;
@@ -32,17 +33,11 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
           await response.body?.cancel().catch(() => {});
           const target = new URL(redirect, url);
           if (target.protocol !== 'https:' || target.username || target.password || !VIZER_DOMAINS.includes(target.origin)) {
-            const newDomain = target.origin;
-            lastError = `Vizer redirecionou para um domínio não configurado: ${newDomain}`;
-            return {
-              name: 'Catálogo Vizer',
-              url: first,
-              status: 'OFFLINE' as const,
-              latencyMs: Date.now() - started,
-              statusCode: response.status,
-              error: lastError,
-              detectedNewDomain: newDomain
-            };
+            lastError = 'Vizer redirecionou para um domínio não configurado.';
+            if (target.protocol === 'https:' && !target.username && !target.password) {
+              detectedNewDomain = target.origin;
+            }
+            break;
           }
           url = target.href; continue;
         }
@@ -72,5 +67,6 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
     } catch { lastError = 'Falha ou timeout ao consultar a listagem do Vizer; disponibilidade não confirmada.'; }
   }
   return { name: 'Catálogo Vizer', url: first, status: 'OFFLINE' as const,
-    latencyMs: Date.now() - started, statusCode: lastStatus, error: lastError };
+    latencyMs: Date.now() - started, statusCode: lastStatus, error: lastError,
+    ...(detectedNewDomain ? { detectedNewDomain } : {}) };
 }
