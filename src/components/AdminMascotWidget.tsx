@@ -37,6 +37,7 @@ export interface SentinelStatusData {
     channelsDown: number;
     pendingBugs: number;
     cookieOk: boolean;
+    vizerOk?: boolean;
     activeAdmins: number;
   };
   isProbing: boolean;
@@ -374,10 +375,10 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
                 </div>
 
                 <div className="p-2.5 rounded-2xl bg-black/30 border border-white/5 flex flex-col">
-                  <span className="text-white/40 text-[10px]">Cookie Encontrei</span>
+                  <span className="text-white/40 text-[10px]">Vizer & Encontrei</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-white font-bold text-xs">Válido & Ativo</span>
+                    <span className="text-white font-bold text-xs truncate">Domínios 100%</span>
                   </div>
                 </div>
 

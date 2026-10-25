@@ -34,13 +34,15 @@ O administrador acessa o painel de controle pelo navegador do celular (Samsung I
    - Registro automático do token do navegador admin ao efetuar login ou carregar a sessão.
    - Inclusão do `<AdminMascotWidget />` flutuante no painel.
 9. **`tests/admin-sentinel.test.cjs` (Novo):**
-   - 7 testes automatizados cobrindo exportações do serviço, lógica de cálculo de humor, anti-spam (cooldown 2h), tratador de clique no Service Worker, renderização do widget e rotas do Express.
+   - 8 testes automatizados cobrindo exportações do serviço, lógica de cálculo de humor, anti-spam (cooldown 2h), tratador de clique no Service Worker, detecção de troca de domínio do Vizer, renderização do widget e rotas do Express.
+10. **`server/services/vizerDomains.ts` & `server/services/adminSentinel.ts`:**
+   - O Sentinela monitora ativamente a saúde dos domínios do Vizer. Caso o provedor migre e redirecione para um novo domínio não homologado (como ocorreu na troca para `.press`), o Sentinela captura o novo endereço (`detectedNewDomain`) e dispara alerta push imediato no celular: `🌐 Vizer mudou de domínio para [URL]!`.
 
 **Validação Realizada:**
 - `npm run lint` (`tsc --noEmit`): 0 erros (código de saída 0).
-- Suíte completa de testes automatizados: 36/36 testes aprovados (100% de sucesso).
-- Compilação de produção (`npm run build`): Concluída com sucesso em 30.87s com bundles e `dist/server.cjs` gerados sem falhas.
-- Grafo de conhecimento (`graphify update .`) sincronizado com 1533 nós, 3134 conexões e 103 comunidades.
+- Suíte completa de testes automatizados: 37/37 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 15.74s com bundles e `dist/server.cjs` gerados sem falhas.
+- Grafo de conhecimento (`graphify update .`) sincronizado com 1534 nós, 3138 conexões e 105 comunidades.
 
 ---
 

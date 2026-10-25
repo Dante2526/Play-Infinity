@@ -105,4 +105,17 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     const content = fs.readFileSync(serverFile, "utf-8");
     assert.match(content, /startAdminSentinel/, "server.ts deve importar e inicializar startAdminSentinel");
   });
+
+  test("8. Monitoramento e alerta de mudança de domínio do Vizer", () => {
+    const vizerFile = path.join(__dirname, "..", "server", "services", "vizerDomains.ts");
+    assert.ok(fs.existsSync(vizerFile), "vizerDomains.ts deve existir");
+    const vizerContent = fs.readFileSync(vizerFile, "utf-8");
+    assert.match(vizerContent, /detectedNewDomain/, "Deve capturar o novo domínio ao detectar redirecionamento");
+
+    const sentinelFile = path.join(__dirname, "..", "server", "services", "adminSentinel.ts");
+    const sentinelContent = fs.readFileSync(sentinelFile, "utf-8");
+    assert.match(sentinelContent, /checkVizerHealth/, "Sentinela deve invocar checkVizerHealth");
+    assert.match(sentinelContent, /scraper:vizer_domain/, "Sentinela deve gerar alerta scraper:vizer_domain");
+    assert.match(sentinelContent, /Vizer mudou de domínio/, "Mensagem deve alertar sobre mudança de domínio do Vizer");
+  });
 });

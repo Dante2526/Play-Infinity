@@ -130,9 +130,9 @@
     "semantic_hash": "836cf7b85cdc36685004d639b71e9d25"
   },
   "public/firebase-messaging-sw.js": {
-    "mtime": 1791481071.811875,
-    "ast_hash": "f0b0f9e9a34fd118f4c8fbe546525bff",
-    "semantic_hash": "f0b0f9e9a34fd118f4c8fbe546525bff"
+    "mtime": 1792935069.8989518,
+    "ast_hash": "f5f0c0b50e221607b95c53300952715a",
+    "semantic_hash": ""
   },
   "public/manifest.json": {
     "mtime": 1790425440.2489367,
@@ -185,8 +185,8 @@
     "semantic_hash": "ba199d81330d41efb7e9277dd777d2a2"
   },
   "server.ts": {
-    "mtime": 1792847790.9667542,
-    "ast_hash": "8abea86930b5e3139e10005051d625b7",
+    "mtime": 1792935055.6064184,
+    "ast_hash": "628fd8ea768d0bdbd8a15ed1a28f533a",
     "semantic_hash": ""
   },
   "server/firebaseAdmin.ts": {
@@ -200,8 +200,8 @@
     "semantic_hash": ""
   },
   "server/routes/adminOps.ts": {
-    "mtime": 1792858731.457317,
-    "ast_hash": "996f419c64aa7bdb4bb4c44fb5521cc3",
+    "mtime": 1792935029.1390662,
+    "ast_hash": "9fb80d779908adaf31e6b14955b356f0",
     "semantic_hash": ""
   },
   "server/routes/bolodechocolate.ts": {
@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
-    "mtime": 1792888524.30579,
-    "ast_hash": "77c57fed4a3a45565af5468c4cd4d11d",
+    "mtime": 1792934928.8772914,
+    "ast_hash": "b588c83d70cbc4826de803ee6b516e83",
     "semantic_hash": ""
   },
   "server/routes/mixdrop.ts": {
@@ -505,8 +505,8 @@
     "semantic_hash": "5b8602d81fc297a03740eb3d61fb5e93"
   },
   "src/pages/AdminPage.tsx": {
-    "mtime": 1792932574.6434803,
-    "ast_hash": "b0313d491334076d45f312c2a744e6aa",
+    "mtime": 1792935191.0085914,
+    "ast_hash": "b328abc1ee777c707778d6823c800a86",
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
@@ -615,9 +615,9 @@
     "semantic_hash": ""
   },
   "src/services/pushNotifications.ts": {
-    "mtime": 1791481071.8327718,
-    "ast_hash": "0c21a7717ba1af1b8d1b8839b46b095d",
-    "semantic_hash": "0c21a7717ba1af1b8d1b8839b46b095d"
+    "mtime": 1792935119.0339985,
+    "ast_hash": "2b82acc106a5bb2410b1420cd81348d0",
+    "semantic_hash": ""
   },
   "src/services/tmdb.ts": {
     "mtime": 1792847791.0362766,
@@ -1135,13 +1135,13 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792932615.4505508,
-    "ast_hash": "3b0c3676ca249d8b0b66806cfdc4c70c",
+    "mtime": 1792935301.0306761,
+    "ast_hash": "b99d104821e33efb96092bd2ff86809a",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792932615.4519525,
-    "ast_hash": "3b0c3676ca249d8b0b66806cfdc4c70c",
+    "mtime": 1792935301.0318885,
+    "ast_hash": "b99d104821e33efb96092bd2ff86809a",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
@@ -1347,6 +1347,16 @@
   "src/components/ConfirmModal.tsx": {
     "mtime": 1792890089.9592428,
     "ast_hash": "de72b9343c9ec10f65b592b743f64cc4",
+    "semantic_hash": ""
+  },
+  "server/services/adminSentinel.ts": {
+    "mtime": 1792935236.958587,
+    "ast_hash": "ef112ef3d5141354edac654c777b8c08",
+    "semantic_hash": ""
+  },
+  "src/components/AdminMascotWidget.tsx": {
+    "mtime": 1792935169.2170017,
+    "ast_hash": "97b951f3d569928b6377e3a0f9d1a441",
     "semantic_hash": ""
   }
 }

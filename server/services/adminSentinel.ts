@@ -1,6 +1,7 @@
 import { getAdminDb, getAdminMessaging, getAdminFieldValue } from "../firebaseAdmin";
 import { probeLiveStreamUrl } from "../routes/iptv";
 import { getEncontreiResolverStatus } from "../routes/encontreiLookup";
+import { checkVizerHealth } from "./vizerDomains";
 import { INITIAL_LIVE_CHANNELS } from "../../src/data/liveChannels";
 
 export interface SentinelAlert {
@@ -24,6 +25,7 @@ export interface SentinelStatus {
     channelsDown: number;
     pendingBugs: number;
     cookieOk: boolean;
+    vizerOk: boolean;
     activeAdmins: number;
   };
   isProbing: boolean;
@@ -41,6 +43,7 @@ let lastMonitoredCounts = {
   channelsDown: 0,
   pendingBugs: 0,
   cookieOk: true,
+  vizerOk: true,
   activeAdmins: 0,
 };
 
@@ -395,6 +398,50 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
       }
     } catch (err: any) {
       console.warn("[AdminSentinel] Falha ao verificar status do Encontrei resolver:", err?.message);
+    }
+
+    // =========================================================================
+    // 3.2 VERIFICAÇÃO DO DOMÍNIO DO VIZER (Detecção de Mudança de Domínio)
+    // =========================================================================
+    try {
+      const vizerRes: any = await checkVizerHealth({ timeoutMs: 8000, phaseTimeoutMs: 3000 });
+      const vizerAlertId = "scraper:vizer_domain";
+      const isVizerOk = vizerRes.status === "ONLINE";
+
+      lastMonitoredCounts.vizerOk = isVizerOk;
+
+      if (!isVizerOk) {
+        const isDomainChange = Boolean(vizerRes.detectedNewDomain || vizerRes.error?.includes("redirecionou"));
+        const newDomain = vizerRes.detectedNewDomain || "";
+
+        const vizerAlert: SentinelAlert = {
+          id: vizerAlertId,
+          category: "scraper",
+          title: isDomainChange
+            ? `🌐 Vizer mudou de domínio${newDomain ? ` para ${newDomain}` : ""}!`
+            : "⚠️ Catálogo do Vizer Inacessível!",
+          message: isDomainChange
+            ? `O Vizer redirecionou para um novo domínio (${newDomain || "não homologado"}). Toque para atualizar no painel.`
+            : `O catálogo do Vizer não respondeu (${vizerRes.error || "Offline"}). Toque para verificar na aba Scrapers.`,
+          level: isDomainChange ? "error" : "warning",
+          actionTab: "health",
+          actionUrl: "/admin?tab=health",
+          detectedAt: now,
+          metadata: { detectedNewDomain: newDomain, error: vizerRes.error },
+        };
+        activeAlerts.set(vizerAlertId, vizerAlert);
+
+        const lastNotified = notifiedHistory.get(vizerAlertId) || 0;
+        if (forcePush || !notifiedHistory.has(vizerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+          alertsToNotify.push(vizerAlert);
+          notifiedHistory.set(vizerAlertId, now);
+        }
+      } else {
+        activeAlerts.delete(vizerAlertId);
+        notifiedHistory.delete(vizerAlertId);
+      }
+    } catch (err: any) {
+      console.warn("[AdminSentinel] Falha ao verificar saúde do Vizer:", err?.message);
     }
 
     // =========================================================================

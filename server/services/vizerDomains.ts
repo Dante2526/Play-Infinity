@@ -32,7 +32,17 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
           await response.body?.cancel().catch(() => {});
           const target = new URL(redirect, url);
           if (target.protocol !== 'https:' || target.username || target.password || !VIZER_DOMAINS.includes(target.origin)) {
-            lastError = 'Vizer redirecionou para um domínio não configurado.'; break;
+            const newDomain = target.origin;
+            lastError = `Vizer redirecionou para um domínio não configurado: ${newDomain}`;
+            return {
+              name: 'Catálogo Vizer',
+              url: first,
+              status: 'OFFLINE' as const,
+              latencyMs: Date.now() - started,
+              statusCode: response.status,
+              error: lastError,
+              detectedNewDomain: newDomain
+            };
           }
           url = target.href; continue;
         }
