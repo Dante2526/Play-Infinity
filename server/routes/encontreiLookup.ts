@@ -26,6 +26,15 @@ import fs from "fs";
 import path from "path";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
 import { getVizerDomainOrder, rememberVizerDomain } from "../services/vizerDomains";
+import {
+  isSqliteAvailable,
+  findVizerDb,
+  openVizerSqlite,
+  SqliteMovieIndex,
+  SqliteEpisodeIndex,
+  SqliteSeriesSeasonsIndex,
+  type VizerSqliteStore,
+} from "../services/vizerSqliteStore";
 
 const router = Router();
 
@@ -1125,11 +1134,14 @@ let _encontreiSeriesSeasonsIndex: Map<number, number[]> = new Map();
 let _encontreiLastMtime = 0;
 
 // Catálogo vizer (PRIMÁRIO, mais episódios)
+// Quando SQLite disponível (Node 24+), os 3 índices abaixo viram adaptadores
+// que consultam vizer-catalog.db (READ-ONLY) — ver tryLoadVizerSqlite().
 let _vizerCatalog: any = null;
-let _vizerMovieIndex: Map<number, any> = new Map();
-let _vizerEpisodeIndex: Map<string, any> = new Map();
-let _vizerSeriesSeasonsIndex: Map<number, number[]> = new Map();
+let _vizerMovieIndex: Map<number, any> | SqliteMovieIndex = new Map();
+let _vizerEpisodeIndex: Map<string, any> | SqliteEpisodeIndex = new Map();
+let _vizerSeriesSeasonsIndex: Map<number, number[]> | SqliteSeriesSeasonsIndex = new Map();
 let _vizerLastMtime = 0;
+let _vizerSqliteStore: VizerSqliteStore | null = null;
 
 function tryLoadCatalog(
   filename: string,
@@ -1221,16 +1233,26 @@ function tryLoadCatalog(
 }
 
 function loadCatalogs() {
-  // Carrega vizer (primário) primeiro
-  tryLoadCatalog(
-    "vizer-catalog.json",
-    { get value() { return _vizerCatalog; }, set value(v) { _vizerCatalog = v; } },
-    _vizerMovieIndex,
-    _vizerEpisodeIndex,
-    _vizerSeriesSeasonsIndex,
-    { get value() { return _vizerLastMtime; }, set value(v) { _vizerLastMtime = v; } },
-    "vizer-lookup",
-  );
+  // Vizer: tenta SQLite primeiro (Node 24+, sem custo de RAM); se indisponível,
+  // cai no JSON existente. Se antes estava em SQLite e o .db sumiu/quebrou,
+  // reseta os índices pra Map fresco antes do caminho JSON.
+  const sqliteOk = tryLoadVizerSqlite();
+  if (!sqliteOk) {
+    if (!(_vizerMovieIndex instanceof Map)) {
+      _vizerMovieIndex = new Map();
+      _vizerEpisodeIndex = new Map();
+      _vizerSeriesSeasonsIndex = new Map();
+    }
+    tryLoadCatalog(
+      "vizer-catalog.json",
+      { get value() { return _vizerCatalog; }, set value(v) { _vizerCatalog = v; } },
+      _vizerMovieIndex as Map<number, any>,
+      _vizerEpisodeIndex as Map<string, any>,
+      _vizerSeriesSeasonsIndex as Map<number, number[]>,
+      { get value() { return _vizerLastMtime; }, set value(v) { _vizerLastMtime = v; } },
+      "vizer-lookup",
+    );
+  }
   // Carrega encontrei (fallback) segundo
   tryLoadCatalog(
     "encontrei-catalog.json",
@@ -1244,6 +1266,63 @@ function loadCatalogs() {
 
   // Aplica patches de catálogo (conteúdo novo demais para esperar o snapshot)
   applyCatalogPatches();
+}
+
+/**
+ * Carrega o catálogo Vizer via SQLite (vizer-catalog.db), aberto READ-ONLY.
+ * Substitui os 3 Maps por adaptadores que consultam o DB; mutações em runtime
+ * ficam em overrides/tombstones em memória (mesma semântica dos Maps: perdem-se
+ * no restart). Recarrega quando o mtime do .db muda (regeneração via pipeline).
+ *
+ * Retorna true se o catálogo está ativo via SQLite, false se deve cair pro JSON.
+ */
+function tryLoadVizerSqlite(): boolean {
+  if (!isSqliteAvailable()) return false;
+  const dbPath = findVizerDb();
+  if (!dbPath) return false;
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(dbPath);
+  } catch {
+    return false;
+  }
+  const currentMtime = stat.mtimeMs;
+
+  // Já carregado e mesmo mtime: mantém (idempotente, igual ao caminho JSON)
+  if (_vizerSqliteStore && currentMtime <= _vizerLastMtime) {
+    return true;
+  }
+
+  // (Re)abre: fecha o anterior, instancia novos adaptadores
+  if (_vizerSqliteStore) {
+    _vizerSqliteStore.close();
+    _vizerSqliteStore = null;
+  }
+
+  const store = openVizerSqlite(dbPath);
+  if (!store) return false;
+
+  _vizerSqliteStore = store;
+  _vizerMovieIndex = store.movieIndex;
+  _vizerEpisodeIndex = store.episodeIndex;
+  _vizerSeriesSeasonsIndex = store.seriesSeasonsIndex;
+  _vizerLastMtime = currentMtime;
+  _vizerCatalog = null; // Sem catálogo bruto em memória (RAM poupada)
+
+  // Hidrata o _tmdbToSerieIdMap compartilhado a partir da base (igual ao loop
+  // do tryLoadCatalog, que popula o map a partir dos eps)
+  store.hydrateSerieIds(_tmdbToSerieIdMap);
+
+  // Invalida cache de temporadas verificadas (catálogo mudou)
+  _verifiedSeasonsCache.clear();
+
+  const cv = store.meta("content_version") || "?";
+  console.log(
+    `[vizer-lookup] Catálogo via SQLite (content_version=${cv}, db=${path.basename(dbPath)}): ` +
+      `${_vizerMovieIndex.size} filmes, ${_vizerEpisodeIndex.size} episódios, ${_vizerSeriesSeasonsIndex.size} séries`,
+  );
+  return true;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1892,8 +1971,19 @@ router.get("/api/downloads-catalog", (req, res) => {
       // Junta filmes dos DOIS catálogos (vizer + encontrei), dedup por tmdbId
       const movieMap = new Map<number, { tmdbId: number; type: "movie"; mixdrop: string; audio: string }>();
 
-      // Vizer primeiro
-      if (_vizerCatalog) {
+      // Vizer primeiro (SQLite se ativo, senão JSON bruto)
+      if (_vizerSqliteStore) {
+        _vizerSqliteStore.movieIndex.forEachBaseWithMixdrop((m: any) => {
+          if (m.tmdb_id && m.servers?.mixdrop && !movieMap.has(m.tmdb_id)) {
+            movieMap.set(m.tmdb_id, {
+              tmdbId: m.tmdb_id,
+              type: "movie" as const,
+              mixdrop: m.servers.mixdrop,
+              audio: m.audio || "Dublado"
+            });
+          }
+        });
+      } else if (_vizerCatalog) {
         for (const m of _vizerCatalog.movies || []) {
           if (m.tmdb_id && m.servers?.mixdrop && !movieMap.has(m.tmdb_id)) {
             movieMap.set(m.tmdb_id, {
@@ -1923,7 +2013,24 @@ router.get("/api/downloads-catalog", (req, res) => {
       const seriesMap = new Map<number, { tmdbId: number; type: "series"; totalEpisodes: number; seasons: number[]; audio: string }>();
 
       // Vizer
-      if (_vizerCatalog) {
+      if (_vizerSqliteStore) {
+        _vizerSqliteStore.episodeIndex.forEachBaseWithMixdrop((ep: any) => {
+          if (ep.tmdb_id && ep.servers?.mixdrop) {
+            const current = seriesMap.get(ep.tmdb_id) || {
+              tmdbId: ep.tmdb_id,
+              type: "series" as const,
+              totalEpisodes: 0,
+              seasons: [] as number[],
+              audio: ep.audio || "Dublado"
+            };
+            current.totalEpisodes += 1;
+            if (ep.season && !current.seasons.includes(ep.season)) {
+              current.seasons.push(ep.season);
+            }
+            seriesMap.set(ep.tmdb_id, current);
+          }
+        });
+      } else if (_vizerCatalog) {
         for (const ep of _vizerCatalog.episodes || []) {
           if (ep.tmdb_id && ep.servers?.mixdrop) {
             const current = seriesMap.get(ep.tmdb_id) || {

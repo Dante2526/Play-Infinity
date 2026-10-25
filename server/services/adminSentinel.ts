@@ -1,6 +1,6 @@
 import { getAdminDb, getAdminMessaging, getAdminFieldValue } from "../firebaseAdmin";
 import { probeLiveStreamUrl } from "../routes/iptv";
-import { getEncontreiResolverStatus } from "../routes/encontreiLookup";
+import { getEncontreiResolverStatus, getVizerCatalogStatus } from "../routes/encontreiLookup";
 import { checkVizerHealth } from "./vizerDomains";
 import { INITIAL_LIVE_CHANNELS } from "../../src/data/liveChannels";
 
@@ -593,6 +593,45 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
       }
     } catch (err: any) {
       console.warn("[AdminSentinel] Falha ao verificar saúde do Vizer:", err?.message);
+    }
+
+    // =========================================================================
+    // 3.3 VERIFICAÇÃO DO CATÁLOGO VIZER EM MEMÓRIA (Detecção de catálogo vazio)
+    // =========================================================================
+    // Se o vizer-catalog.db/.json está ausente/corrompido, o loadCatalogs()
+    // popula 0 filmes — exatamente o incidente que vivemos (10/2026). O Byte
+    // precisa avisar antes que usuários percebam “catálogo sumiu”.
+    try {
+      const vizerCatAlertId = "system:vizer_catalog_empty";
+      const cat = getVizerCatalogStatus();
+      const isEmpty = cat.movies === 0 && cat.episodes === 0;
+
+      if (isEmpty) {
+        const vizerCatAlert: SentinelAlert = {
+          id: vizerCatAlertId,
+          category: "system",
+          title: "📂 Catálogo do Vizer está vazio na memória!",
+          message:
+            "O catálogo do Vizer carregou 0 filmes e 0 episódios — provável arquivo .db/.json ausente ou corrompido. Verifique deploy e o data/ da VPS.",
+          level: "error",
+          actionTab: "health",
+          actionUrl: "/admin?tab=health",
+          detectedAt: now,
+          metadata: { movies: cat.movies, episodes: cat.episodes, series: cat.series },
+        };
+        activeAlerts.set(vizerCatAlertId, vizerCatAlert);
+
+        const lastNotified = notifiedHistory.get(vizerCatAlertId) || 0;
+        if (forcePush || !notifiedHistory.has(vizerCatAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+          alertsToNotify.push(vizerCatAlert);
+          notifiedHistory.set(vizerCatAlertId, now);
+        }
+      } else {
+        activeAlerts.delete(vizerCatAlertId);
+        notifiedHistory.delete(vizerCatAlertId);
+      }
+    } catch (err: any) {
+      console.warn("[AdminSentinel] Falha ao checar catálogo do Vizer na memória:", err?.message);
     }
 
     // =========================================================================
