@@ -34,6 +34,7 @@ import {
   mergeChannelsWithSettings
 } from '../services/liveChannelService';
 import { ChannelLogo } from './ChannelLogo';
+import { ConfirmModal } from './ConfirmModal';
 
 interface StreamSearchResult {
   streamId: string;
@@ -104,6 +105,7 @@ export function AdminLiveChannels() {
   const [savingServers, setSavingServers] = useState(false);
   const [actionSuccess, setActionSuccess] = useState('');
   const [actionError, setActionError] = useState('');
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   // Sincronização em tempo real das configurações do Firestore
   useEffect(() => {
@@ -189,20 +191,39 @@ export function AdminLiveChannels() {
     }
   };
 
-  // Sondar todos os canais visíveis
+  // Sondar todos os canais visíveis (testa todos os servidores configurados de cada canal)
   const handleProbeAll = async () => {
     if (isProbingAll) return;
     setIsProbingAll(true);
-    setProbingProgress({ current: 0, total: filteredChannels.length });
 
-    for (let i = 0; i < filteredChannels.length; i++) {
-      const ch = filteredChannels[i];
-      setProbingProgress({ current: i + 1, total: filteredChannels.length });
-      if (ch.servers && ch.servers.length > 0) {
-        // Testa o servidor principal (1º servidor)
-        await probeSingleServer(ch.servers[0].url);
+    // Coleta todas as URLs únicas de servidores dos canais visíveis filtrados
+    const serversToProbe: string[] = [];
+    filteredChannels.forEach(ch => {
+      (ch.servers || []).forEach(srv => {
+        if (srv.url && !serversToProbe.includes(srv.url)) {
+          serversToProbe.push(srv.url);
+        }
+      });
+    });
+
+    setProbingProgress({ current: 0, total: serversToProbe.length });
+
+    // Pool com concorrência de 3 requisições simultâneas para alta velocidade sem gargalo
+    const CONCURRENCY = 3;
+    let completed = 0;
+    const queue = [...serversToProbe];
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const url = queue.shift();
+        if (!url) break;
+        await probeSingleServer(url);
+        completed++;
+        setProbingProgress({ current: completed, total: serversToProbe.length });
       }
-    }
+    });
+
+    await Promise.all(workers);
     setIsProbingAll(false);
   };
 
@@ -305,10 +326,15 @@ export function AdminLiveChannels() {
     }
   };
 
-  // Restaurar servidores originais de fábrica
-  const handleResetServers = async () => {
+  // Abrir diálogo próprio para restaurar servidores originais de fábrica
+  const handlePromptResetServers = () => {
     if (!editingChannel) return;
-    if (!confirm(`Deseja restaurar os servidores originais do canal ${editingChannel.name}?`)) return;
+    setConfirmResetOpen(true);
+  };
+
+  // Executar restauração definitiva confirmada no modal próprio
+  const handleExecuteResetServers = async () => {
+    if (!editingChannel) return;
 
     setSavingServers(true);
     try {
@@ -317,11 +343,13 @@ export function AdminLiveChannels() {
       if (original) {
         setEditServers([...original.servers]);
       }
-      setActionSuccess(`Servidores originais restaurados!`);
+      setActionSuccess(`Servidores originais restaurados com sucesso!`);
+      setConfirmResetOpen(false);
       setEditingChannel(null);
       setTimeout(() => setActionSuccess(''), 4000);
     } catch (e: any) {
       setActionError("Erro ao restaurar: " + e.message);
+      setConfirmResetOpen(false);
     } finally {
       setSavingServers(false);
     }
@@ -525,6 +553,10 @@ export function AdminLiveChannels() {
             const isCustom = Boolean(settings.customServers[channel.id]?.length);
             const primaryServer = channel.servers[0];
             const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
+            const probedServers = channel.servers.map(s => probeResults[s.url]).filter(Boolean);
+            const anyProbing = probedServers.some(p => p.probing);
+            const onlineCount = probedServers.filter(p => p.online).length;
+            const hasTestedServers = probedServers.length > 0;
 
             return (
               <div
@@ -565,12 +597,25 @@ export function AdminLiveChannels() {
                         <span>{channel.category}</span>
                         <span>•</span>
                         <span>{channel.servers.length} {channel.servers.length === 1 ? 'servidor' : 'servidores'}</span>
-                        {primaryProbe && (
+                        {hasTestedServers && (
                           <>
                             <span>•</span>
-                            <span className={primaryProbe.online ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                              {primaryProbe.probing ? 'Testando...' : (primaryProbe.online ? '● Online (200 OK)' : '● Fora do Ar')}
-                            </span>
+                            {anyProbing ? (
+                              <span className="text-orange-400 font-bold animate-pulse inline-flex items-center gap-1">
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                                <span>Verificando...</span>
+                              </span>
+                            ) : onlineCount > 0 ? (
+                              <span className="text-emerald-400 font-bold">
+                                {onlineCount === channel.servers.length
+                                  ? '● Online (200 OK)'
+                                  : `● Online (${onlineCount}/${channel.servers.length} ativos)`}
+                              </span>
+                            ) : (
+                              <span className="text-red-400 font-bold">
+                                ● Fora do Ar
+                              </span>
+                            )}
                           </>
                         )}
                       </div>
@@ -593,19 +638,27 @@ export function AdminLiveChannels() {
                           </span>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {probe && (
-                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                                probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                              }`}>
-                                {probe.probing ? '...' : (probe.online ? '200 OK' : 'OFF')}
-                              </span>
+                              probe.probing ? (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                  <span>...</span>
+                                </span>
+                              ) : (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                }`}>
+                                  {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                                </span>
+                              )
                             )}
                             <button
                               type="button"
+                              disabled={probe?.probing}
                               onClick={() => probeSingleServer(srv.url)}
                               title="Testar sinal deste servidor"
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer"
+                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
                             >
-                              Testar
+                              {probe?.probing ? '...' : 'Testar'}
                             </button>
                           </div>
                         </div>
@@ -749,19 +802,28 @@ export function AdminLiveChannels() {
                             <div className="flex items-center gap-2 text-[10px] text-white/40 font-mono mt-0.5">
                               <span>ID: {stream.streamId}</span>
                               {probe && (
-                                <span className={`font-bold ${probe.online ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  ● {probe.online ? '200 OK (Sinal Ativo)' : 'Fora do Ar'}
-                                </span>
+                                probe.probing ? (
+                                  <span className="inline-flex items-center gap-1 font-bold text-orange-400 animate-pulse text-[10px]">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>Verificando sinal...</span>
+                                  </span>
+                                ) : (
+                                  <span className={`font-bold ${probe.online ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    ● {probe.online ? '200 OK (Sinal Ativo)' : `Fora do Ar (${probe.status})`}
+                                  </span>
+                                )
                               )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
                             <button
                               type="button"
+                              disabled={probe?.probing}
                               onClick={() => probeSingleServer(`/api/iptv/${stream.streamId}`)}
-                              className="px-2.5 py-1.5 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white/80 text-[11px] sm:text-[10px] font-bold cursor-pointer min-h-[36px] sm:min-h-0"
+                              className="px-2.5 py-1.5 sm:py-1 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white/80 text-[11px] sm:text-[10px] font-bold cursor-pointer min-h-[36px] sm:min-h-0 flex items-center gap-1 transition-all"
                             >
-                              Testar
+                              {probe?.probing && <Loader2 className="w-3 h-3 animate-spin text-orange-400" />}
+                              <span>{probe?.probing ? 'Testando...' : 'Testar'}</span>
                             </button>
                             <button
                               type="button"
@@ -822,82 +884,123 @@ export function AdminLiveChannels() {
                 </div>
 
                 <div className="space-y-2">
-                  {editServers.map((srv, idx) => (
-                    <div key={idx} className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
-                          {idx === 0 ? '★ Servidor 1 (Titular / Primário)' : `Servidor ${idx + 1} (Backup)`}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          {idx > 0 && (
+                  {editServers.map((srv, idx) => {
+                    const srvProbe = probeResults[srv.url];
+                    return (
+                      <div key={idx} className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
+                            {idx === 0 ? '★ Servidor 1 (Titular / Primário)' : `Servidor ${idx + 1} (Backup)`}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {idx > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const copy = [...editServers];
+                                  const tmp = copy[idx];
+                                  copy[idx] = copy[idx - 1];
+                                  copy[idx - 1] = tmp;
+                                  setEditServers(copy);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center text-white/60 hover:text-white rounded-lg hover:bg-white/10 text-xs font-bold cursor-pointer transition-colors"
+                                title="Subir prioridade (▲)"
+                              >
+                                ▲
+                              </button>
+                            )}
+                            {idx < editServers.length - 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const copy = [...editServers];
+                                  const tmp = copy[idx];
+                                  copy[idx] = copy[idx + 1];
+                                  copy[idx + 1] = tmp;
+                                  setEditServers(copy);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center text-white/60 hover:text-white rounded-lg hover:bg-white/10 text-xs font-bold cursor-pointer transition-colors"
+                                title="Descer prioridade (▼)"
+                              >
+                                ▼
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => {
-                                const copy = [...editServers];
-                                const tmp = copy[idx];
-                                copy[idx] = copy[idx - 1];
-                                copy[idx - 1] = tmp;
-                                setEditServers(copy);
+                                setEditServers(prev => prev.filter((_, i) => i !== idx));
                               }}
-                              className="p-1 text-white/40 hover:text-white rounded hover:bg-white/10 text-[10px] font-bold"
-                              title="Subir prioridade"
+                              className="p-1.5 text-red-400 hover:text-red-300 rounded-lg hover:bg-red-500/10 cursor-pointer transition-colors ml-1"
+                              title="Remover servidor"
                             >
-                              ▲
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditServers(prev => prev.filter((_, i) => i !== idx));
-                            }}
-                            className="p-1 text-red-400 hover:text-red-300 rounded hover:bg-red-500/10 cursor-pointer"
-                            title="Remover servidor"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-white/50 mb-0.5">Nome do Servidor</label>
-                          <input
-                            type="text"
-                            value={srv.name}
-                            onChange={(e) => {
-                              const copy = [...editServers];
-                              copy[idx].name = e.target.value;
-                              setEditServers(copy);
-                            }}
-                            className="w-full bg-white/5 border border-white/10 py-1 px-2 rounded-lg text-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-orange-500"
-                          />
-                        </div>
-                        <div className="sm:col-span-2">
-                          <label className="block text-[10px] text-white/50 mb-0.5">URL ou Rota do Stream</label>
-                          <div className="flex gap-1.5">
-                            <input
-                              type="text"
-                              value={srv.url}
-                              onChange={(e) => {
-                                const copy = [...editServers];
-                                copy[idx].url = e.target.value;
-                                setEditServers(copy);
-                              }}
-                              placeholder="/api/iptv/ID ou http://...m3u8"
-                              className="w-full bg-white/5 border border-white/10 py-1 px-2 rounded-lg text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-500 flex-1"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => probeSingleServer(srv.url)}
-                              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-bold shrink-0 cursor-pointer"
-                            >
-                              Testar
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                          <div>
+                            <label className="block text-[10px] text-white/50 mb-0.5">Nome do Servidor</label>
+                            <input
+                              type="text"
+                              value={srv.name}
+                              onChange={(e) => {
+                                const copy = [...editServers];
+                                copy[idx].name = e.target.value;
+                                setEditServers(copy);
+                              }}
+                              className="w-full bg-white/5 border border-white/10 py-1.5 px-2 rounded-lg text-white text-xs font-medium focus:outline-none focus:ring-1 focus:ring-orange-500 min-h-[38px]"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="flex items-center justify-between mb-0.5">
+                              <label className="block text-[10px] text-white/50">URL ou Rota do Stream</label>
+                              {srvProbe && (
+                                srvProbe.probing ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-orange-400 animate-pulse">
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    <span>Verificando sinal...</span>
+                                  </span>
+                                ) : (
+                                  <span className={`text-[10px] font-bold ${srvProbe.online ? 'text-emerald-400' : 'text-red-400'}`}>
+                                    ● {srvProbe.online ? '200 OK (Sinal Ativo)' : `Fora do Ar (${srvProbe.status})`}
+                                  </span>
+                                )
+                              )}
+                            </div>
+                            <div className="flex gap-1.5">
+                              <input
+                                type="text"
+                                value={srv.url}
+                                onChange={(e) => {
+                                  const copy = [...editServers];
+                                  copy[idx].url = e.target.value;
+                                  setEditServers(copy);
+                                }}
+                                placeholder="/api/iptv/ID ou http://...m3u8"
+                                className="w-full bg-white/5 border border-white/10 py-1.5 px-2 rounded-lg text-white text-xs font-mono focus:outline-none focus:ring-1 focus:ring-orange-500 flex-1 min-h-[38px]"
+                              />
+                              <button
+                                type="button"
+                                disabled={!srv.url || srvProbe?.probing}
+                                onClick={() => probeSingleServer(srv.url)}
+                                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1.5 min-h-[38px] transition-all"
+                              >
+                                {srvProbe?.probing ? (
+                                  <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
+                                    <span>Testando...</span>
+                                  </>
+                                ) : (
+                                  <span>Testar</span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -906,7 +1009,7 @@ export function AdminLiveChannels() {
             <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/10 shrink-0">
               <button
                 type="button"
-                onClick={handleResetServers}
+                onClick={handlePromptResetServers}
                 disabled={savingServers}
                 className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-white/60 hover:text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer min-h-[44px]"
               >
@@ -937,6 +1040,20 @@ export function AdminLiveChannels() {
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmação de Restauração 100% Próprio (Sem diálogos nativos do navegador) */}
+      <ConfirmModal
+        isOpen={confirmResetOpen}
+        title="Restaurar Servidores Originais"
+        message={`Deseja restaurar as configurações de fábrica do canal "${editingChannel?.name}"?\n\nTodas as alterações manuais e servidores customizados serão substituídos pelos servidores originais.`}
+        confirmText="Restaurar Padrão"
+        cancelText="Voltar"
+        variant="warning"
+        iconType="reset"
+        loading={savingServers}
+        onConfirm={handleExecuteResetServers}
+        onCancel={() => setConfirmResetOpen(false)}
+      />
     </div>
   );
 }

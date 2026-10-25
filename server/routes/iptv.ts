@@ -121,9 +121,20 @@ router.get("/api/admin/probe-channel", async (req, res) => {
       const channelId = targetUrl.replace("/api/iptv/", "");
       const base = await getFreshXtreamToken();
       urlToProbe = `${base}/${channelId}.m3u8`;
+    } else if (targetUrl.startsWith("/")) {
+      const port = process.env.PORT || 8080;
+      urlToProbe = `http://127.0.0.1:${port}${targetUrl}`;
     }
 
-    const response = await fetch(urlToProbe, { signal: AbortSignal.timeout(6000) });
+    const response = await fetch(urlToProbe, {
+      signal: AbortSignal.timeout(7000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Referer": "https://play-infinity.stream/"
+      }
+    });
+
     const isOk = response.status === 200;
     let isHls = false;
     if (isOk) {

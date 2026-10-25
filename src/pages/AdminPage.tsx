@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
+import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
@@ -179,6 +179,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editExpirationDate, setEditExpirationDate] = useState("");
   const [quickExtendLoadingId, setQuickExtendLoadingId] = useState<string | null>(null);
   const [actionSuccessToast, setActionSuccessToast] = useState<string | null>(null);
+  const [actionErrorToast, setActionErrorToast] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSuccess, setEditSuccess] = useState("");
@@ -705,7 +706,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
       await loadStats();
     } catch (err: any) {
       console.error("Erro ao renovar tempo:", err);
-      alert(getFriendlyErrorMessage(err, "Erro ao renovar tempo de acesso."));
+      setActionErrorToast(getFriendlyErrorMessage(err, "Erro ao renovar tempo de acesso."));
+      setTimeout(() => setActionErrorToast(null), 5000);
     } finally {
       setQuickExtendLoadingId(null);
     }
@@ -933,33 +935,44 @@ export function AdminPage({ onBack }: AdminPageProps) {
           <span>{actionSuccessToast}</span>
         </div>
       )}
+      {actionErrorToast && (
+        <div className="fixed top-6 right-6 z-50 p-4 bg-red-600 text-white font-bold text-sm rounded-2xl shadow-2xl shadow-red-500/40 flex items-center gap-3 animate-fade-in border border-red-400/30">
+          <AlertTriangle className="w-5 h-5 text-white shrink-0" />
+          <span>{actionErrorToast}</span>
+        </div>
+      )}
 
       <div className="max-w-6xl mx-auto animate-fade-in">
         
-        {/* Header Admin */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-12 gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-3">
-                <ShieldAlert className="w-8 h-8 text-orange-500" />
+        {/* Header Admin em Cartão */}
+        <div className="p-4 sm:p-6 bg-white/5 border border-white/10 rounded-2xl sm:rounded-3xl backdrop-blur-xl mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
+            <div className="p-2.5 sm:p-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl shrink-0">
+              <ShieldAlert className="w-6 h-6 sm:w-7 sm:h-7 text-orange-500" />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black tracking-tight text-white truncate">
                 Painel Administrativo
               </h1>
+              <p className="text-white/50 text-xs sm:text-sm mt-0.5 truncate sm:whitespace-normal">
+                Visão geral e métricas em tempo real da plataforma.
+              </p>
             </div>
-            <p className="text-white/50 pl-14">Visão geral e métricas em tempo real da plataforma.</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
             <button 
+              type="button"
               onClick={() => {
                 sessionStorage.removeItem("adminSessionToken");
                 sessionStorage.removeItem("adminEmail");
                 sessionStorage.removeItem("isAdmin");
                 setIsAdmin(false);
               }}
-              className="flex items-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-full font-medium transition-colors"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/20 rounded-2xl font-semibold text-sm transition-all cursor-pointer min-h-[44px] w-full sm:w-auto"
             >
-              <LogOut className="w-4 h-4" />
-              Sair do Painel
+              <LogOut className="w-4 h-4 shrink-0" />
+              <span>Sair do Painel</span>
             </button>
           </div>
         </div>
@@ -1102,9 +1115,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span className="font-semibold">Contas Criadas</span>
             </div>
             {loadingUsers ? (
-              <div className="h-10 w-24 bg-white/10 rounded-xl animate-pulse my-0.5" />
+              <div className="h-10 min-w-[48px] w-12 bg-white/10 rounded-xl animate-pulse my-0.5" />
             ) : (
-              <div className="text-4xl font-black text-white">{stats.total}</div>
+              <div className="min-w-[48px] w-fit text-center text-4xl font-black text-white whitespace-nowrap">{stats.total}</div>
             )}
             <p className="text-white/40 text-sm mt-2 font-medium">Total de registros no banco</p>
           </div>
@@ -1118,9 +1131,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span className="font-semibold">Assinaturas Ativas</span>
             </div>
             {loadingUsers ? (
-              <div className="h-10 w-24 bg-green-500/20 rounded-xl animate-pulse my-0.5" />
+              <div className="h-10 min-w-[48px] w-12 bg-green-500/20 rounded-xl animate-pulse my-0.5" />
             ) : (
-              <div className="text-4xl font-black text-green-400">{stats.active}</div>
+              <div className="min-w-[48px] w-fit text-center text-4xl font-black text-green-400 whitespace-nowrap">{stats.active}</div>
             )}
             <p className="text-white/40 text-sm mt-2 font-medium">Pagamentos em dia</p>
           </div>
@@ -1134,9 +1147,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               <span className="font-semibold">Inativas / Atrasadas</span>
             </div>
             {loadingUsers ? (
-              <div className="h-10 w-24 bg-red-500/20 rounded-xl animate-pulse my-0.5" />
+              <div className="h-10 min-w-[48px] w-12 bg-red-500/20 rounded-xl animate-pulse my-0.5" />
             ) : (
-              <div className="text-4xl font-black text-red-400">{stats.inactive}</div>
+              <div className="min-w-[48px] w-fit text-center text-4xl font-black text-red-400 whitespace-nowrap">{stats.inactive}</div>
             )}
             <p className="text-white/40 text-sm mt-2 font-medium">Requer atenção ou cobrança</p>
           </div>
@@ -1162,9 +1175,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             </div>
             {loadingUsers ? (
-              <div className="h-12 w-28 bg-orange-500/20 rounded-xl animate-pulse my-0.5" />
+              <div className="h-12 min-w-[48px] w-12 bg-orange-500/20 rounded-xl animate-pulse my-0.5" />
             ) : (
-              <div className="text-5xl font-black text-white drop-shadow-md">{stats.watchingNow}</div>
+              <div className="min-w-[48px] w-fit text-center text-5xl font-black text-white drop-shadow-md whitespace-nowrap">{stats.watchingNow}</div>
             )}
             <p className="text-orange-200/60 text-sm mt-2 font-medium flex items-center gap-2">
               <span className="relative flex h-2 w-2 ml-1">
@@ -1181,18 +1194,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
         <div className="mt-12 bg-[#1c1c1e]/60 border border-white/10 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
             <div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl">
+              <div className="flex items-start sm:items-center gap-3">
+                <div className="p-2 bg-blue-500/20 text-blue-400 rounded-xl shrink-0 mt-0.5 sm:mt-0">
                   <Users className="w-5 h-5" />
                 </div>
-                <h3 className="text-2xl font-bold text-white">Clientes Cadastrados</h3>
-                <span className="px-3 py-1 bg-white/10 text-white/80 rounded-full text-xs font-semibold">
-                  {usersList.length} {usersList.length === 1 ? 'cliente' : 'clientes'}
-                </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="text-xl sm:text-2xl font-bold text-white">Clientes Cadastrados</h3>
+                    <span className="px-2.5 py-0.5 bg-white/10 text-white/80 rounded-full text-xs font-semibold whitespace-nowrap shrink-0">
+                      {usersList.length} {usersList.length === 1 ? 'cliente' : 'clientes'}
+                    </span>
+                  </div>
+                  <p className="text-white/50 text-xs sm:text-sm mt-1">
+                    Visualize todos os acessos criados, credenciais, planos e gerencie assinaturas.
+                  </p>
+                </div>
               </div>
-              <p className="text-white/50 text-sm mt-1 ml-11">
-                Visualize todos os acessos criados, credenciais, planos e gerencie assinaturas.
-              </p>
             </div>
 
             {/* Barra de Pesquisa */}

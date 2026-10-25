@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
-    "mtime": 1792876670.8770847,
-    "ast_hash": "6822a2c72e20cf03069a7c03d072b156",
+    "mtime": 1792888524.30579,
+    "ast_hash": "77c57fed4a3a45565af5468c4cd4d11d",
     "semantic_hash": ""
   },
   "server/routes/mixdrop.ts": {
@@ -315,8 +315,8 @@
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
-    "mtime": 1792863330.6205657,
-    "ast_hash": "9a023d43343d7b8f60f840c1973947de",
+    "mtime": 1792890305.336747,
+    "ast_hash": "998943b389f25d4ebac3fc17f15aabc0",
     "semantic_hash": ""
   },
   "src/components/AdminDeployMonitor.tsx": {
@@ -435,8 +435,8 @@
     "semantic_hash": ""
   },
   "src/components/ServerBlocksAdmin.tsx": {
-    "mtime": 1792863315.3449497,
-    "ast_hash": "b44b8ed2138a158df1781f3d7c446d4d",
+    "mtime": 1792892665.881238,
+    "ast_hash": "29c6609d87a5c351217d63eaf2c820ff",
     "semantic_hash": ""
   },
   "src/components/TurnstileWidget.tsx": {
@@ -505,8 +505,8 @@
     "semantic_hash": "5b8602d81fc297a03740eb3d61fb5e93"
   },
   "src/pages/AdminPage.tsx": {
-    "mtime": 1792876861.083213,
-    "ast_hash": "739f1204684c3ea3f869795e39c67b78",
+    "mtime": 1792893403.2086277,
+    "ast_hash": "384830570c787cc6390d1a1d8f9af5c6",
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1792887097.8793697,
-    "ast_hash": "e29a4e85d2829319b3cb390c1f4050fb",
+    "mtime": 1792894020.8851404,
+    "ast_hash": "2c712b7de6db9993b47224b10d9e0fc1",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,13 +1135,13 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1792887043.2175653,
-    "ast_hash": "3562cfd531505824ff0ae83eb6b21854",
+    "mtime": 1792893458.4118714,
+    "ast_hash": "4d6bbb92ea9d7f83013b0d8f4ded6df1",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1792887043.2191634,
-    "ast_hash": "3562cfd531505824ff0ae83eb6b21854",
+    "mtime": 1792893458.4164069,
+    "ast_hash": "4d6bbb92ea9d7f83013b0d8f4ded6df1",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
@@ -1170,8 +1170,8 @@
     "semantic_hash": ""
   },
   "server/routes/byseRoutes.ts": {
-    "mtime": 1792851582.2415013,
-    "ast_hash": "02c96aae32be06fd7eaf97b88216a4e9",
+    "mtime": 1792891574.8700755,
+    "ast_hash": "2cfb65b03458dadfcb34c11a7934c56b",
     "semantic_hash": ""
   },
   "server/routes/playbackHealth.ts": {
@@ -1180,7 +1180,7 @@
     "semantic_hash": ""
   },
   "server/services/byse/core.ts": {
-    "mtime": 1792885763.1578443,
+    "mtime": 1792893936.8690865,
     "ast_hash": "c1c54fc9374a73f2fb04c2e0a048e3b6",
     "semantic_hash": ""
   },
@@ -1330,8 +1330,8 @@
     "semantic_hash": ""
   },
   "src/components/AdminLiveChannels.tsx": {
-    "mtime": 1792877486.4179964,
-    "ast_hash": "a49adf90e2ee7b2b990e8efaf56f5059",
+    "mtime": 1792892866.7400937,
+    "ast_hash": "cf781e301a3497a6b52a375dd28ce166",
     "semantic_hash": ""
   },
   "src/services/liveChannelService.ts": {
@@ -1342,6 +1342,11 @@
   "src/types/firebase-modules.d.ts": {
     "mtime": 1792867509.425739,
     "ast_hash": "7f7b3dd0b80c67acce1c3750d4a32362",
+    "semantic_hash": ""
+  },
+  "src/components/ConfirmModal.tsx": {
+    "mtime": 1792890089.9592428,
+    "ast_hash": "de72b9343c9ec10f65b592b743f64cc4",
     "semantic_hash": ""
   }
 }

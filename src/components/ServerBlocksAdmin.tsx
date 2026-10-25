@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { auth } from "../services/firebase";
 import { adminFetch } from "../services/adminApi";
+import { ConfirmModal } from "./ConfirmModal";
 
 interface ServerBlock {
   id: string;
@@ -52,48 +53,54 @@ interface ServerOption {
 }
 
 const HOMOLOGATED_SERVERS: ServerOption[] = [
-  {key:'srv_byse',label:'BYSE HD',badge:'HLS integrado',badgeColor:'bg-purple-500/20 text-purple-300',description:'BYSE com skin Netflix e proxy próprio'},
+  {
+    key: "srv_byse",
+    label: "BYSE HD",
+    badge: "HLS",
+    badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    description: "Streaming HLS adaptativo 1080p (skin Netflix)",
+  },
   {
     key: "srv_streamtape",
     label: "StreamTape HD",
-    badge: "MP4 direto",
-    badgeColor: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
-    description: "StreamTape com player integrado",
+    badge: "MP4",
+    badgeColor: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+    description: "Arquivo MP4 progressivo de alta compatibilidade",
   },
   {
     key: "srv_watchplay",
     label: "WatchPlayer",
-    badge: "Oficial",
-    badgeColor: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
-    description: "Player padrão do app (CDN direta)",
+    badge: "HLS",
+    badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    description: "Player padrão do app via CDN direta (M3U8)",
   },
   {
     key: "srv_vip",
     label: "VIP Player",
-    badge: "Dublado PT-BR",
-    badgeColor: "bg-amber-500/20 text-amber-300 border-amber-500/30",
-    description: "Fontes prioritárias com áudio nacional",
+    badge: "HLS",
+    badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    description: "Streaming HLS com prioridade em dublagem PT-BR",
   },
   {
     key: "srv_mixdrop",
     label: "MixDrop",
-    badge: "Secundário",
-    badgeColor: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-    description: "Player alternativo de alta velocidade",
+    badge: "MP4",
+    badgeColor: "bg-cyan-500/15 text-cyan-300 border-cyan-500/30",
+    description: "Arquivo MP4 progressivo direto de alta velocidade",
   },
   {
     key: "srv_nixplay",
     label: "Nixplay",
-    badge: "Acervo",
-    badgeColor: "bg-purple-500/20 text-purple-300 border-purple-500/30",
-    description: "Catálogo complementar homologado",
+    badge: "HLS",
+    badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    description: "Streaming HLS do acervo complementar homologado",
   },
   {
     key: "srv_vidsrc",
     label: "Seriesflix HD",
-    badge: "Vidsrc",
-    badgeColor: "bg-rose-500/20 text-rose-300 border-rose-500/30",
-    description: "Provedor Vidsrc/Seriesflix",
+    badge: "HLS",
+    badgeColor: "bg-purple-500/15 text-purple-300 border-purple-500/30",
+    description: "Streaming HLS do provedor Seriesflix/Vidsrc",
   },
 ];
 
@@ -140,6 +147,8 @@ export function ServerBlocksAdmin() {
   const [editingBlockId, setEditingBlockId] = useState<string | null>(null);
   const [editingReasonText, setEditingReasonText] = useState<string>("");
   const [savingEdit, setSavingEdit] = useState(false);
+  const [blockToDelete, setBlockToDelete] = useState<{ id: string; label: string } | null>(null);
+  const [deletingBlock, setDeletingBlock] = useState(false);
 
   const loadBlocks = useCallback(async () => {
     setLoading(true);
@@ -326,11 +335,16 @@ export function ServerBlocksAdmin() {
     }
   };
 
-  const handleDeleteBlock = async (id: string, label: string) => {
-    if (!confirm(`Remover bloqueio de ${label}? O servidor voltará a ser consultado para este título.`)) return;
+  const handlePromptDeleteBlock = (id: string, label: string) => {
+    setBlockToDelete({ id, label });
+  };
+
+  const handleExecuteDeleteBlock = async () => {
+    if (!blockToDelete) return;
+    setDeletingBlock(true);
     setError(null);
     try {
-      const res = await adminFetch(`/api/admin/server-blocks/${encodeURIComponent(id)}`, {
+      const res = await adminFetch(`/api/admin/server-blocks/${encodeURIComponent(blockToDelete.id)}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -338,10 +352,14 @@ export function ServerBlocksAdmin() {
         throw new Error(data.error || `HTTP ${res.status}`);
       }
       setSuccess("Bloqueio removido com sucesso!");
+      setBlockToDelete(null);
       await loadBlocks();
       setTimeout(() => setSuccess(null), 3500);
     } catch (err: any) {
       setError(err.message || "Erro ao remover bloqueio.");
+      setBlockToDelete(null);
+    } finally {
+      setDeletingBlock(false);
     }
   };
 
@@ -888,7 +906,7 @@ export function ServerBlocksAdmin() {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => handleDeleteBlock(b.id, `"${b.title}" no servidor ${serverName}`)}
+                                onClick={() => handlePromptDeleteBlock(b.id, `"${b.title}" no servidor ${serverName}`)}
                                 className="p-2 text-white/40 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-colors cursor-pointer"
                                 title="Desbloquear servidor para este título"
                               >
@@ -975,6 +993,19 @@ export function ServerBlocksAdmin() {
           </div>
         )}
       </div>
+      {/* Modal Próprio de Remoção de Bloqueio de Servidor */}
+      <ConfirmModal
+        isOpen={Boolean(blockToDelete)}
+        title="Remover Bloqueio de Servidor"
+        message={`Deseja remover o bloqueio de ${blockToDelete?.label}?\n\nO servidor voltará a ser consultado normalmente para este título.`}
+        confirmText="Remover Bloqueio"
+        cancelText="Cancelar"
+        variant="warning"
+        iconType="reset"
+        loading={deletingBlock}
+        onConfirm={handleExecuteDeleteBlock}
+        onCancel={() => setBlockToDelete(null)}
+      />
     </div>
   );
 }

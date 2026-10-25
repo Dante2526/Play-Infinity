@@ -27,7 +27,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
     let sources = id ? await deps.sources(id, season, episode, name) : [{ fileId: String(query.fileId || ''), audio: 'Dublado', source: 'direct' as const }];
     const tried = new Set<string>();
     for (let pass=0;pass<(id?2:1);pass++) {
-      if(query.refresh==='1')pool.refresh(String(query.fileId||''));
+      if(query.refresh==='1' && id)pool.refresh(String(query.fileId||''));
       let selected=await pool.select(sources,exclude);
       if(!selected&&exclude.length&&query.refresh==='1')selected=await pool.select(sources,[]);
       if(selected)return {...selected,m3u8:selected.directUrl,expiresAt:Date.now()+600000};
@@ -66,7 +66,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
               v.currentTime=position;renewing=false;pausedAt=null;
               if(!desiredPaused)v.play().catch(function(){});else v.pause();
             },{once:true});startHls();
-          }).catch(function(){renewing=false;reportFatal(reason)}).finally(function(){clearTimeout(deadline)}); return;
+          }).catch(function(){renewing=false; if (resume) { if (!desiredPaused) v.play().catch(function(){}); } else { reportFatal(reason); } }).finally(function(){clearTimeout(deadline)}); return;
         }`);
       html=html.replace(/type: "WATCHPLAY_ERROR",/g, 'type: "WATCHPLAY_ERROR", byseExhausted: true,');
       res.type('html').send(html);
@@ -81,13 +81,15 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
     catch { return res.status(400).end('Recurso BYSE inválido.'); }
     const done=pool.begin(fileId);
     const ctl = new AbortController(); let timer: ReturnType<typeof setTimeout> | undefined;
+    let clientDisconnected = false;
     const arm = (ms: number) => {clearTimeout(timer);timer=setTimeout(()=>ctl.abort(),ms)};
-    const stop = () => {clearTimeout(timer);ctl.abort()}; res.once('close',stop);req.once('aborted',stop);
+    const stop = () => {clientDisconnected = true;clearTimeout(timer);ctl.abort()};
+    res.once('close',stop);req.once('aborted',stop);
     try {
       let upstream: globalThis.Response | undefined;
       const range = req.headers.range;
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) return res.status(416).end();
-      arm(8000);
+      arm(15000);
       for (let hop=0;hop<4;hop++) {
         if (!allowedByseMediaUrl(url)) throw new Error('redirect');
         upstream = await deps.fetch(url,{redirect:'manual',signal:ctl.signal,headers:{'User-Agent':BYSE_USER_AGENT,'Accept-Encoding':'identity',...(range?{Range:range}:{})}});
@@ -98,15 +100,27 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       res.setHeader('Cache-Control','no-store');res.setHeader('X-Accel-Buffering','no');
       if (/\.m3u8(?:\?|$)/i.test(url) || /mpegurl/i.test(upstream.headers.get('content-type')||'')) {
         const reader=upstream.body.getReader();const chunks:Uint8Array[]=[];let size=0;
-        try {while(true){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>512*1024)throw new Error('size');chunks.push(part.value);arm(8000)}}finally{await reader.cancel().catch(()=>{})}
+        try {while(true){const part=await reader.read();if(part.done)break;size+=part.value.length;if(size>512*1024)throw new Error('size');chunks.push(part.value);arm(15000)}}finally{await reader.cancel().catch(()=>{})}
         const body=Buffer.concat(chunks).toString();if(!body.trimStart().startsWith('#EXTM3U'))throw new Error('playlist');
         return res.type('application/vnd.apple.mpegurl').send(rewriteM3u8(body,url,target=>proxy(target,fileId)));
       }
       res.status(upstream.status);
       for(const field of ['content-type','content-length','content-range','accept-ranges']){const value=upstream.headers.get(field);if(value)res.setHeader(field,value)}
-      const stream=Readable.fromWeb(upstream.body as any);stream.on('data',()=>arm(20000));arm(20000);
+      const stream=Readable.fromWeb(upstream.body as any);stream.on('data',()=>arm(30000));arm(30000);
       await new Promise<void>(resolve=>{stream.once('end',resolve);stream.once('error',()=>{res.destroy();resolve()});res.once('close',()=>{stream.destroy();resolve()});stream.pipe(res)});
-    } catch {pool.report(fileId,false);if(res.headersSent)res.destroy();else res.status(502).end('Falha no recurso BYSE.');}
+    } catch {
+      const isClientCancellation = clientDisconnected || req.destroyed || res.destroyed || res.writableEnded;
+      if (!isClientCancellation) {
+        pool.report(fileId,false);
+      }
+      if (res.headersSent) {
+        res.destroy();
+      } else if (!isClientCancellation) {
+        res.status(502).end('Falha no recurso BYSE.');
+      } else {
+        res.end();
+      }
+    }
     finally {done();stop();res.off('close',stop);req.off('aborted',stop)}
   });
   return router;

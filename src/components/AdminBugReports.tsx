@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { adminFetch } from '../services/adminApi';
-import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink, ChevronDown, Trash2 } from 'lucide-react';
+import { ConfirmModal } from './ConfirmModal';
+import { ShieldAlert, CheckCircle2, MessageSquare, ExternalLink, ChevronDown, Trash2, AlertTriangle } from 'lucide-react';
 
 interface BugReport {
   id: string;
@@ -35,6 +36,9 @@ export function AdminBugReports() {
   const [selectedResponse, setSelectedResponse] = useState<Record<string, string>>({});
   const [customResponse, setCustomResponse] = useState<Record<string, string>>({});
   const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [reportToDelete, setReportToDelete] = useState<BugReport | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(collection(db, 'bug_reports'), orderBy('createdAt', 'desc'));
@@ -68,9 +72,12 @@ export function AdminBugReports() {
         status: 'resolved',
         adminResponse: resp
       });
-    } catch (err) {
+      setActionSuccess('Resposta enviada e bug marcado como resolvido!');
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: any) {
       console.error('Erro ao resolver bug:', err);
-      alert('Falha ao atualizar o bug.');
+      setActionError('Falha ao atualizar o bug: ' + (err?.message || 'erro desconhecido'));
+      setTimeout(() => setActionError(null), 4000);
     } finally {
       setResolvingId(null);
     }
@@ -78,29 +85,32 @@ export function AdminBugReports() {
 
   // Exclui permanentemente: remove a imagem da VPS (disco) e o documento do Firestore.
   // Dá vazão à fila de reports e ao disco do servidor (antes os arquivos nunca eram apagados).
-  const handleDelete = async (report: BugReport) => {
-    if (!confirm(`Excluir o relatório "${report.mediaTitle}" permanentemente?\n(A imagem anexa também será removida da VPS)`)) {
-      return;
-    }
+  const handleExecuteDelete = async () => {
+    if (!reportToDelete) return;
     try {
-      setDeletingId(report.id);
+      setDeletingId(reportToDelete.id);
       // 1. Remove a imagem do disco da VPS (se houver)
-      if (report.imageUrl) {
+      if (reportToDelete.imageUrl) {
         try {
           await adminFetch('/api/admin/delete-bug-image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imageUrl: report.imageUrl })
+            body: JSON.stringify({ imageUrl: reportToDelete.imageUrl })
           });
         } catch (e) {
           console.warn('Falha ao deletar imagem da VPS (continuando com o doc):', e);
         }
       }
       // 2. Remove o documento do Firestore
-      await deleteDoc(doc(db, 'bug_reports', report.id));
-    } catch (err) {
+      await deleteDoc(doc(db, 'bug_reports', reportToDelete.id));
+      setActionSuccess('Relatório e imagem excluídos com sucesso!');
+      setReportToDelete(null);
+      setTimeout(() => setActionSuccess(null), 3500);
+    } catch (err: any) {
       console.error('Erro ao excluir bug:', err);
-      alert('Falha ao excluir o relatório.');
+      setActionError('Falha ao excluir o relatório: ' + (err?.message || 'erro desconhecido'));
+      setReportToDelete(null);
+      setTimeout(() => setActionError(null), 4000);
     } finally {
       setDeletingId(null);
     }
@@ -109,7 +119,19 @@ export function AdminBugReports() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
+        {actionSuccess && (
+        <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 animate-fade-in shadow-lg">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>{actionSuccess}</span>
+        </div>
+      )}
+      {actionError && (
+        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 animate-fade-in shadow-lg">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{actionError}</span>
+        </div>
+      )}
+      <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
           <div className="flex items-center gap-3 mb-6">
             <div className="w-7 h-7 rounded-lg bg-red-500/20 animate-pulse" />
             <div className="h-7 w-48 bg-white/10 rounded-md animate-pulse" />
@@ -265,7 +287,7 @@ export function AdminBugReports() {
                       )}
                     </button>
                     <button
-                      onClick={() => handleDelete(report)}
+                      onClick={() => setReportToDelete(report)}
                       disabled={deletingId === report.id}
                       title="Excluir relatório e imagem permanentemente"
                       className="px-3 py-2.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-lg transition-colors flex items-center justify-center disabled:opacity-50 shrink-0"
@@ -300,7 +322,7 @@ export function AdminBugReports() {
                       Resolvido
                     </span>
                     <button
-                      onClick={() => handleDelete(report)}
+                      onClick={() => setReportToDelete(report)}
                       disabled={deletingId === report.id}
                       title="Excluir relatório e imagem permanentemente"
                       className="p-1.5 bg-red-600/20 hover:bg-red-600/40 text-red-400 border border-red-500/30 rounded-lg transition-colors disabled:opacity-50"
@@ -323,6 +345,19 @@ export function AdminBugReports() {
           </div>
         )}
       </div>
+      {/* Modal Próprio de Confirmação de Exclusão de Bug */}
+      <ConfirmModal
+        isOpen={Boolean(reportToDelete)}
+        title="Excluir Relatório Permanentemente"
+        message={`Deseja excluir o relatório "${reportToDelete?.mediaTitle || 'Sem título'}"?\n\nA imagem anexa também será removida da VPS Oracle.`}
+        confirmText="Excluir Permanentemente"
+        cancelText="Cancelar"
+        variant="danger"
+        iconType="trash"
+        loading={Boolean(deletingId)}
+        onConfirm={handleExecuteDelete}
+        onCancel={() => setReportToDelete(null)}
+      />
     </div>
   );
 }

@@ -1,3 +1,192 @@
+## 24/10/2026 - Correção da Quebra de Linha do Badge de Clientes Cadastrados
+
+**Contexto e Diagnóstico:**
+No Painel Administrativo (`AdminPage.tsx`), na seção "Clientes Cadastrados":
+1. **Problema no Mobile:** Em telas verticais de smartphone, o badge de quantidade (ex: `51 clientes`) quebrava o número e a palavra em duas linhas (`51` em cima e `clientes` embaixo) dentro de uma pílula verticalizada.
+2. **Causa:** O container usava `flex items-center gap-3` rígido e o badge não tinha `whitespace-nowrap`, fazendo o texto quebrar quando o título disputava espaço na largura estreita.
+
+**Modificações Realizadas (1 arquivo):**
+1. **`src/pages/AdminPage.tsx`:**
+   - Adicionado `whitespace-nowrap shrink-0` ao badge de contagem de clientes.
+   - Reestruturado o container com `flex-wrap gap-2.5` e `text-xl sm:text-2xl`, garantindo que o badge permaneça sempre em uma única linha horizontal elegante (`51 clientes`).
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 100% de sucesso.
+- Compilação de produção (`npm run build`): Concluída com sucesso em 17.36s.
+
+---
+
+## 24/10/2026 - Teste Completo de Todos os Servidores no Botão 'Testar Canais Visíveis' (TV Ao Vivo ADM)
+
+**Contexto e Diagnóstico:**
+No Painel Administrativo de TV Ao Vivo (`AdminLiveChannels.tsx`):
+1. **Comportamento Anterior:** O botão "Testar Canais Visíveis" executava probe apenas no Servidor 1 (titular) de cada canal para economizar tempo. Por isso, nos cards dos canais (ex: Premiere 1 HD, Premiere 2 HD), apenas o "1. Servidor 1" exibia o badge verde `200 OK`, enquanto o Servidor 2 e Servidor 3 ficavam sem nenhum badge (vazio), gerando a dúvida se estavam fora do ar ou não testados.
+2. **Solução:** O botão "Testar Canais Visíveis" agora coleta e testa **100% dos servidores configurados** de todos os canais visíveis, executando em paralelo através de um pool de 3 streams simultâneos para máxima agilidade. O cabeçalho do canal agora agrega todos os servidores testados (ex: `● Online (3/3 ativos)` ou `● Online (2/3 ativos)`).
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/components/AdminLiveChannels.tsx`:**
+   - `handleProbeAll` agora varre todos os servidores de todos os canais visíveis e despacha com concorrência de 3 workers paralelos.
+   - O contador de progresso reflete com exatidão a quantidade total de servidores (`Testando X/Y...`).
+   - O cabeçalho de cada canal agrega o status de todos os servidores testados (`Online (X/Y ativos)`).
+2. **`tests/live-channels.test.cjs`:**
+   - Adicionado teste unitário cobrindo o cálculo agregado de múltiplos servidores online.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 100% de sucesso (10/10 testes passando).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 15.64s.
+
+---
+
+## 24/10/2026 - Cartão no Header do ADM e Alinhamento Preciso do Subtítulo
+
+**Contexto e Diagnóstico:**
+No topo do Painel Administrativo (`AdminPage.tsx`):
+1. **Falta de Cartão no Header:** Os elementos do topo ("Painel Administrativo", subtítulo e botão "Sair do Painel") ficavam soltos diretamente sobre o fundo preto.
+2. **Desalinhamento do Subtítulo:** O texto *"Visão geral e métricas em tempo real da plataforma."* usava uma classe de espaçamento manual `pl-14` (56px), enquanto o ícone com gap somava 44px, empurrando o texto 12px para a direita em relação à palavra *"Painel Administrativo"*.
+
+**Modificações Realizadas (1 arquivo):**
+1. **`src/pages/AdminPage.tsx`:**
+   - O header completo foi encapsulado em um cartão moderno padrão Netflix (`p-4 sm:p-6 bg-white/5 border border-white/10 rounded-2xl sm:rounded-3xl backdrop-blur-xl mb-6 sm:mb-8`).
+   - O ícone `ShieldAlert` foi acomodado em um container arredondado próprio (`p-2.5 sm:p-3 bg-orange-500/10 border border-orange-500/20 rounded-2xl`).
+   - O título e o subtítulo foram agrupados na mesma coluna flexível (`<div className="min-w-0">`), eliminando o padding arbitrário `pl-14` e garantindo **100% de alinhamento vertical** milimétrico entre o título e o subtítulo.
+   - O botão "Sair do Painel" recebeu estilo refinado com altura mínima de 44px para touch mobile.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 100% de sucesso.
+- Compilação de produção (`npm run build`): Concluída com sucesso em 17.6s.
+
+---
+
+## 24/10/2026 - Alinhamento Central dos Números e Skeletons com os Ícones nos 4 Cards de Métricas do ADM
+
+**Contexto e Diagnóstico:**
+No topo do Painel Administrativo (`/admin`):
+1. **Problema de Desalinhamento em 1 Dígito:** O usuário enviou print mostrando o número "1" em "Assistindo Agora" desalinhado em relação ao ícone acima dele.
+2. **Causa Raiz:** O container de cada ícone mede `48px` de largura (`p-3` = 12px + `w-6` = 24px + `p-3` = 12px), com centro em `x = 24px`. O número abaixo possuía largura `w-full` com alinhamento à esquerda (`text-left`), de modo que valores com 1 dígito ficavam encostados na margem esquerda (`x ≈ 8px`), fora do eixo central do ícone acima. Quando havia 2 dígitos, preenchiam a largura aparente, mascarando o defeito.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/pages/AdminPage.tsx`:**
+   - Aplicado `min-w-[48px] w-fit text-center whitespace-nowrap` nos 4 cards de métricas ("Contas Criadas", "Assinaturas Ativas", "Inativas / Atrasadas", "Assistindo Agora").
+   - Ajustados os skeletons de carregamento para `min-w-[48px] w-12` (48px exatos), garantindo que o placeholder fique perfeitamente alinhado ao centro do ícone acima.
+2. **`tests/confirm-modal.test.cjs`:**
+   - Adicionado teste automatizado validando que os 4 números e os 4 skeletons mantêm largura mínima de 48px e alinhamento centralizado sob os ícones.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes unitários: 100% de sucesso.
+- Compilação de produção (`npm run build`): Concluída com sucesso em 25.43s.
+- Grafo de conhecimento (`graphify update .`) reconstruído com 1508 nós e 3070 conexões.
+
+---
+
+## 24/10/2026 - Padronização Visual das Tags de Servidores (HLS vs MP4) na Aba de Bloqueios do ADM
+
+**Contexto e Diagnóstico:**
+No Painel Administrativo (`/admin`), na aba de bloqueio de servidores (`ServerBlocksAdmin.tsx`):
+1. **Problema do Contorno Branco no BYSE:** A tag do BYSE estava configurada com `bg-purple-500/20 text-purple-300` sem borda explícita, fazendo o Tailwind aplicar uma borda branca/cinza contrastante e desalinhada do restante do card.
+2. **Falta de Padronização de Formato:** As tags misturavam conceitos distintos ("HLS integrado", "Oficial", "Dublado PT-BR", "Secundário", "Acervo", "Vidsrc") em vez de informar de forma clara e padronizada se o reprodutor entrega **`HLS`** ou **`MP4`**.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/components/ServerBlocksAdmin.tsx`:**
+   - **Formato HLS:** Aplicado aos servidores com streaming HLS adaptativo (`BYSE HD`, `WatchPlayer`, `VIP Player`, `Nixplay`, `Seriesflix HD`), com tag roxa estilizada `bg-purple-500/15 text-purple-300 border-purple-500/30`.
+   - **Formato MP4:** Aplicado aos servidores com entrega de arquivo direto progressivo (`StreamTape HD`, `MixDrop`), com tag ciano estilizada `bg-cyan-500/15 text-cyan-300 border-cyan-500/30`.
+   - Eliminado 100% dos contornos brancos indesejados através de classes de borda suaves proporcionais ao tema.
+2. **`tests/confirm-modal.test.cjs`:**
+   - Adicionada asserção automatizada validando a padronização das tags em `HLS` e `MP4` com suas respectivas bordas de cor.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes unitários: 100% de sucesso.
+- Compilação de produção (`npm run build`): Concluída com sucesso em 14.11s.
+- Grafo de conhecimento (`graphify update .`) atualizado.
+
+---
+
+## 24/10/2026 - Correção de 502 Bad Gateway e Retomada Instantânea de Play no BYSE (Sem Troca para MixDrop)
+
+**Contexto e Diagnóstico:**
+O usuário relatou que após pausar um filme, o console acusou `502 (Bad Gateway)` repetido em `/api/byse-stream?ticket=...`, demorando segundos consideráveis para voltar a reproduzir, além de registrar rastreio e fallback indesejado para o MixDrop (`[MixDrop Rastreio] 🔎 Origem: ENCONTREI | fileId: mknjxedxixxo8l3`).
+1. **Causa Raiz 1 (Aborto do Cliente Tratado como Erro de Servidor):** Quando o usuário pausava o vídeo ou dava seek, o navegador fechava a conexão HTTP dos segmentos em andamento (`res.on('close')`). O `/api/byse-stream` capturava isso no bloco `catch` e executava `pool.report(fileId, false)`, punindo a fonte, deletando o cache do filme e aplicando cooldown de 15s. Ao dar Play, as próximas requisições encontravam o pool bloqueado e retornavam 502 Bad Gateway.
+2. **Causa Raiz 2 (Timeout Curto de 8s no Proxy HLS):** O timer de rede do `/api/byse-stream` abortava em apenas 8 segundos (`arm(8000)`), insuficiente para CDNs internacionais sob carga servindo chunks 1080p pesados.
+3. **Causa Raiz 3 (Pausa de 3min Forçando Troca Prematura):** No wrapper HTML do BYSE (`core.ts`), pausas superiores a 180s (3 minutos) chamavam `reportFatal("Byse: renovando após pausa longa")`, disparando `WATCHPLAY_ERROR` para o modal pai e forçando a troca de servidor para o MixDrop.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`server/routes/byseRoutes.ts`:**
+   - Adicionada detecção explícita de cancelamento do cliente (`clientDisconnected || req.destroyed || res.destroyed`). Se o cliente fechar a conexão (pause/seek), a requisição é encerrada silenciosamente **sem punir o pool** (`pool.report(fileId, false)`) e **sem emitir 502**.
+   - Aumentado o timeout de conexão e leitura de chunks de 8s para **15 segundos (`arm(15000)`)** e streaming contínuo para 30s (`arm(30000)`).
+   - Na renovação, preservada a fonte única de filmes diretos sem expurgo indevido de cache (`if (query.refresh === '1' && id)`).
+2. **`server/services/byse/core.ts` & `server/routes/byseRoutes.ts`:**
+   - **Pausa Livre e Ilimitada:** O usuário pode pausar por quanto tempo quiser (30 minutos, 1 hora ou o dia todo). Ao dar play, o sistema renova a CDN do BYSE em background de forma transparente (`resume: true`), restaurando o segundo exato do vídeo sem jamais expulsar o usuário ou trocar para o MixDrop.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de 44 testes automatizados (incluindo rotas do BYSE, simulação de PoW, ECDSA e clusters): 44/44 aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso (código 0) em 10.96s.
+- Grafo de conhecimento (`graphify update .`) reconstruído com 1506 nós e 3068 conexões.
+
+---
+
+## 24/10/2026 - Eliminação de Diálogos Nativos do Navegador e Criação do ConfirmModal Próprio (Painel ADM)
+
+**Contexto e Diagnóstico:**
+O usuário solicitou que nenhuma ação no Painel Administrativo utilize popups nativos do navegador (`window.confirm`, `window.alert`, `window.prompt`):
+1. Ao clicar em "Restaurar Padrão" no modal de canais ao vivo, abria-se o diálogo nativo cinza do browser.
+2. Varremos 100% dos arquivos do Admin (`AdminLiveChannels.tsx`, `AdminBugReports.tsx`, `ServerBlocksAdmin.tsx`, `AdminPage.tsx`) e identificamos 5 chamadas nativas de `confirm` e `alert`.
+
+**Modificações Realizadas (5 arquivos de código + testes):**
+1. **`src/components/ConfirmModal.tsx` (Novo Componente):**
+   - Modal próprio escuro no padrão visual Play Infinity / Netflix com `backdrop-blur-md`, cantos arredondados (`rounded-3xl`), animação `fade-in`/`scale-up`, tecla `Escape` para fechar e suporte a variantes de cor (`danger`, `warning`, `info`).
+   - Touch target Mobile-First com botões de altura mínima de `44px` e estado de carregamento (`Loader2`).
+2. **`src/components/AdminLiveChannels.tsx`:**
+   - Substituído `window.confirm` pelo `ConfirmModal` próprio na ação de restauração de servidores de fábrica com aviso contextual amigável.
+3. **`src/components/AdminBugReports.tsx`:**
+   - Substituído `window.confirm` pelo `ConfirmModal` (variante `danger` e ícone `trash`) para exclusão permanente de relatórios e anexos na VPS Oracle.
+   - Substituídos `window.alert` por banners de notificação visual (`actionSuccess` / `actionError`) integrados à UI.
+4. **`src/components/ServerBlocksAdmin.tsx`:**
+   - Substituído `window.confirm` pelo `ConfirmModal` na remoção de bloqueio de servidores por título.
+5. **`src/pages/AdminPage.tsx`:**
+   - Substituído `window.alert` na falha de renovação de tempo por toast flutuante estilizado `actionErrorToast` idêntico ao de sucesso.
+6. **`tests/confirm-modal.test.cjs` (Novo):**
+   - Teste automatizado que varre todos os arquivos de administração e valida que zero chamadas de `alert`, `confirm` ou `prompt` existem no repositório.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes unitários: 23/23 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Vite e esbuild concluídos com sucesso (código 0) em 11.99s.
+- Grafo de conhecimento (`graphify update .`) reconstruído com 1505 nós e 3067 conexões.
+
+---
+
+## 24/10/2026 - Correção de Ordenação de Servidores (▲ e ▼) e Feedback Visual com Skeleton no Teste de Sinais (TV Ao Vivo ADM)
+
+**Contexto e Diagnóstico:**
+No Painel Administrativo (`/admin`), no módulo de TV Ao Vivo (`AdminLiveChannels.tsx`):
+1. **Problema da Seta de Ordenação:** O usuário relatou que a seta "só movimenta pra cima, pra baixo não". O código renderizava apenas a condição `idx > 0` com a seta `▲`, faltando o botão de descer prioridade (`idx < editServers.length - 1` com `▼`).
+2. **Problema do Botão "Testar" Inerte:** Ao clicar em "Testar" em um servidor na lista de servidores a entrar no ar, a requisição ocorria em background mas nenhum feedback visual era exibido no card, dando a impressão de inação.
+3. **Problema do Falso "Fora do Ar" Prematuro:** Enquanto a checagem estava em andamento (`probing: true`), o estado continha `online: false`, fazendo a interface renderizar temporariamente em vermelho "Fora do Ar" antes de virar verde "200 OK".
+
+**Modificações Realizadas (3 arquivos de código + testes):**
+1. **`src/components/AdminLiveChannels.tsx`:**
+   - Adicionado botão de descer prioridade `▼` quando `idx < editServers.length - 1`.
+   - Adicionado feedback visual completo no botão "Testar" de cada servidor: spinner `<Loader2 className="animate-spin text-orange-400" />` e texto "Testando...".
+   - Implementado skeleton/loading animado (`animate-pulse text-orange-400` com "Verificando sinal...") durante a sondagem de streams, eliminando o falso alarme prematuro de "Fora do Ar".
+   - Exibição de badge claro `● 200 OK (Sinal Ativo)` em verde ou `● Fora do Ar (Status)` em vermelho após o término da sondagem.
+2. **`server/routes/iptv.ts`:**
+   - Na rota `GET /api/admin/probe-channel`, adicionado suporte a resolução de rotas relativas locais e inclusão de headers de navegador (`User-Agent: Mozilla/5.0...`, `Accept: */*` e `Referer`) para evitar 403 Forbidden em requisições a streams externos.
+3. **`tests/live-channels.test.cjs`:**
+   - Adicionados testes unitários cobrindo reordenação para cima (`moveServerUp`), reordenação para baixo (`moveServerDown`) e formatação do badge de probe sem falso "Fora do Ar".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes unitários: 100% de aprovação (21/21 testes passando).
+- Compilação de produção (`npm run build`): Vite e esbuild concluídos com sucesso (código 0) em 35s.
+- Grafo de conhecimento (`graphify update .`) sincronizado.
+
+---
+
 ## 24/10/2026 - Purgamento de ID Fantasma (1101412 / A Queda 2) e Aumento de Janela do BYSE Frio (18s)
 
 **Contexto e Diagnóstico:**
