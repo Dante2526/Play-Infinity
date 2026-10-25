@@ -115,6 +115,7 @@ export interface PlaybackHistoryItem {
 const STORAGE_KEY = "playinfinity_playback_history";
 const DELETED_STORAGE_KEY = "playinfinity_deleted_history";
 const MAX_HISTORY_ITEMS = 25;
+const GHOST_HISTORY_IDS = new Set(['1101412']);
 
 function getDeletedStore(): Record<string, number> {
   try {
@@ -167,7 +168,23 @@ function makeHistoryKey(id: string | number, type: 'movie' | 'series', season?: 
 function getStore(): Record<string, PlaybackHistoryItem> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+
+    // Purgar IDs fantasmas conhecidos (ex: 1101412) do store local
+    let hasGhost = false;
+    for (const key of Object.keys(parsed)) {
+      const it = parsed[key];
+      if (it && (GHOST_HISTORY_IDS.has(String(it.id)) || GHOST_HISTORY_IDS.has(String(it.tmdbId)))) {
+        delete parsed[key];
+        hasGhost = true;
+      }
+    }
+    if (hasGhost) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch(e) {}
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -317,11 +334,19 @@ export async function fetchHistoryFromCloud(): Promise<void> {
         const merged: Record<string, PlaybackHistoryItem> = {};
         const allKeys = new Set([...Object.keys(local), ...Object.keys(remoteMap)]);
 
+        let purgedGhostFromCloud = false;
         for (const key of allKeys) {
           const a = local[key];
           const b = remoteMap[key];
           const item = (b && (!a || (b.updatedAt || 0) >= (a.updatedAt || 0))) ? b : a;
           if (!item) continue;
+
+          // Se for o ID fantasma 1101412, remove da nuvem permanentemente
+          if (GHOST_HISTORY_IDS.has(String(item.id)) || GHOST_HISTORY_IDS.has(String(item.tmdbId))) {
+            mergedDeleted[String(item.id)] = Date.now();
+            purgedGhostFromCloud = true;
+            continue;
+          }
 
           // Se o item foi removido pelo usuário (em qualquer dispositivo) e não foi reassistido depois, ignora!
           const deletedAt = mergedDeleted[String(item.id)] || 0;
@@ -330,6 +355,11 @@ export async function fetchHistoryFromCloud(): Promise<void> {
           }
 
           merged[key] = item;
+        }
+
+        if (purgedGhostFromCloud) {
+          saveDeletedStore(mergedDeleted);
+          syncStoreToCloudImmediate(merged, mergedDeleted);
         }
 
         try {
@@ -361,6 +391,7 @@ const seriesLastSeasonCache = new Map<number, Promise<{ season: number; episodeC
 /** Descobre (via TMDB) se o episódio atual é o último da série — única situação
  *  em que uma série deve sair do "Continue Assistindo" ao ser finalizada. */
 function fetchSeriesFinale(tmdbId: number): Promise<{ season: number; episodeCount: number } | null> {
+  if (GHOST_HISTORY_IDS.has(String(tmdbId))) return Promise.resolve(null);
   const cached = seriesLastSeasonCache.get(tmdbId);
   if (cached) return cached;
 

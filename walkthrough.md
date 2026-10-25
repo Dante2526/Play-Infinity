@@ -1,3 +1,27 @@
+## 24/10/2026 - Purgamento de ID Fantasma (1101412 / A Queda 2) e Aumento de Janela do BYSE Frio (18s)
+
+**Contexto e Diagnóstico:**
+1. **Problema do ID Fantasma 1101412:** O usuário relatou que sempre que abria o app, o sistema puxava o filme *A Queda 2* (ID 1101412) e gerava o log `[TMDB Service] Proxy local retornou status 404 para /api/tmdb/tv/1101412`. Identificamos que o ID 1101412 foi salvo historicamente no documento do usuário no Firestore (`historicoReproducao`) como se fosse uma série. Ao abrir o app, `fetchHistoryFromCloud()` puxava o item, e `fetchSeriesFinale(1101412)` disparava a busca por temporadas em `/api/tmdb/tv/1101412`, gerando 404 repetido.
+2. **Problema do Fallback Prematuro do BYSE:** No filme *Harry Potter e o Cálice de Fogo*, o BYSE demorou 13s para resolver o PoW inicial (cache frio). Como o limite em `startupMediaLimit` estava configurado para 12s, o player cancelava o BYSE prematuramente e caía no StreamTape (que estava 404/deletado) antes de ir para o MixDrop.
+
+**Modificações Realizadas (3 arquivos):**
+1. **`src/services/playbackHistory.ts`:**
+   - Declarado conjunto de IDs corrompidos/fantasmas: `GHOST_HISTORY_IDS = new Set(['1101412'])`.
+   - Em `getStore()`: purga entradas com ID 1101412 do `localStorage` automaticamente.
+   - Em `fetchHistoryFromCloud()`: ao mesclar o histórico remoto, se encontrar o ID 1101412, remove-o, registra tombstone no `mergedDeleted` e executa sincronização imediata (`syncStoreToCloudImmediate`) para deletá-lo permanentemente do Firestore.
+   - Em `fetchSeriesFinale(tmdbId)`: ignora o ID 1101412 de imediato, eliminando qualquer requisição desnecessária para `/api/tmdb/tv/1101412`.
+2. **`src/services/playbackStartup.ts`:**
+   - Aumentada a janela de tolerância de inicialização do BYSE frio de **12s para 18s (`18000ms`)** quando há alternativas disponíveis, permitindo ao BYSE concluir o cálculo do PoW e iniciar a reprodução em 1080p sem acionar fallback prematuro.
+3. **`tests/playback-startup.test.cjs` & `tests/playback-history.test.cjs`:**
+   - Atualizados os testes unitários do limite do BYSE (18s) e criado teste cobrindo o purgamento do ID 1101412.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes: 77/77 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): 0 erros em 31s.
+
+---
+
 ## 24/10/2026 - Correção de Reprodução e Loading Travado em Smart TVs (TCL / Android TV)
 
 **Contexto e Diagnóstico:**

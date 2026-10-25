@@ -60,7 +60,7 @@ export function createStartupMediaClock() {
   }};
 }
 export function startupMediaLimit(key:string,hasAlternative:boolean,prepared:boolean) {
-  if(key==='srv_byse'&&!prepared)return hasAlternative?12000:45000;
+  if(key==='srv_byse'&&!prepared)return hasAlternative?18000:45000;
   return 8000;
 }
 export function shouldReloadMixdropFrame(activeUrl:string|null|undefined,started:boolean) {
