@@ -427,6 +427,13 @@ import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from './server/middlewares/requireAdminAuth';
 import { userOpsRouter } from './server/routes/userOps.js';
 
+// Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de
+// Admin para QUALQUER rota /api/admin/* — montado ANTES dos routers abaixo
+// porque o iptvRouter define /api/admin/iptv-streams e /api/admin/probe-channel
+// (sem isso, o Express responderia essas rotas antes do auth rodar, deixando-as
+// públicas — vulnerabilidade de rotas admin sem autenticação + SSRF cego).
+app.use("/api/admin", requireAdminAuth);
+
   app.use(iptvRouter);
 app.use(encontreiLookupRouter);
 app.use(bolodechocolateRouter);
@@ -436,8 +443,6 @@ app.use(byseRouter);
 app.use(streamtapeRouter);
 app.use(doodstreamRouter);
 
-// Middleware de Proteção Estrita: exige autenticação Firebase e privilégios de Admin para qualquer rota /api/admin/*
-app.use("/api/admin", requireAdminAuth);
 app.use(serverBlocksRouter);
 app.use("/api/admin", adminOpsRouter);
 app.use(userOpsRouter);

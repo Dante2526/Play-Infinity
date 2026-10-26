@@ -151,6 +151,24 @@ export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): P
       // abaixo cobre dev local e execução direta via node dist/server.cjs.
       const port = process.env.PORT || 3000;
       urlToProbe = `http://127.0.0.1:${port}${targetUrl}`;
+    } else if (/^https?:\/\//i.test(targetUrl)) {
+      // URL absoluta externa: proteção Anti-SSRF — sem isto, o endpoint
+      // /api/admin/probe-channel permitiria escanear a rede interna do VPS
+      // (ex: 127.0.0.1, 10.x, 169.254.169.254 do metadata da OCI) através de
+      // fetch do servidor, vazando status codes internos.
+      try {
+        const parsedExt = new URL(targetUrl);
+        if (await isPrivateOrLocalHost(parsedExt.hostname)) {
+          return {
+            online: false,
+            statusCode: 0,
+            error: "Bloqueado: endereço privado/local não permitido (Anti-SSRF)."
+          };
+        }
+      } catch {
+        // URL malformada segue para o fetch falhar naturalmente
+        // (comportamento anterior preservado)
+      }
     }
 
     const response = await fetch(urlToProbe, {

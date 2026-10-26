@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { adminFetch } from "../services/adminApi";
 import { 
   Tv, 
   Search, 
@@ -175,7 +176,7 @@ export function AdminLiveChannels() {
     }));
 
     try {
-      const res = await fetch(`/api/admin/probe-channel?url=${encodeURIComponent(serverUrl)}`);
+      const res = await adminFetch(`/api/admin/probe-channel?url=${encodeURIComponent(serverUrl)}`);
       const data = await res.json();
       setProbeResults(prev => ({
         ...prev,
@@ -261,7 +262,7 @@ export function AdminLiveChannels() {
 
     setSearchingProvider(true);
     try {
-      const res = await fetch(`/api/admin/iptv-streams?q=${encodeURIComponent(query)}`);
+      const res = await adminFetch(`/api/admin/iptv-streams?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data.success && Array.isArray(data.streams)) {
         setProviderSearchResults(data.streams);

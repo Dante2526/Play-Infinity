@@ -1,23 +1,18 @@
 /**
  * Testes de unidade do probeLiveStreamUrl (server/routes/iptv.ts)
  *
- * Contexto (relatório de revisão #4): URLs relativas de canal que não começam
- * com /api/iptv/ (ex: /api/live-stream-proxy?url=...) caíam no branch
- * `else if (targetUrl.startsWith("/"))` e eram sondadas contra
- * http://127.0.0.1:8080 quando process.env.PORT não estava definido.
- * O 8080 é o video-proxy (processo SEPARADO, watchdog.sh), que NÃO serve as
- * rotas do Express — na prática o probe daria 404/connection refused e o
- * canal apareceria "fora do ar" falsamente.
+ * Contexto 1 (relatório #4): URLs relativas sondadas contra a porta do app
+ * Express (3000) e não a 8080 do video-proxy — default alinhado a server.ts.
  *
- * Nota de produção: o PM2 injeta PORT=3000 via ecosystem.config.cjs, então o
- * fallback nunca disparava em produção — o impacto real era dev local e
- * execução direta (node dist/server.cjs). O fix alinha o default a
- * server.ts:45 e encontreiLookup.ts:57/87 (todos 3000).
+ * Contexto 2 (relatório #7): URLs absolutas externas passavam SEM validação
+ * Anti-SSRF — o endpoint /api/admin/probe-channel permitia escanear a rede
+ * interna do VPS (127.0.0.1, 10.x, 169.254.169.254). Fix: branch
+ * /^https?:\/\// chama isPrivateOrLocalHost e bloqueia hosts privados.
  *
- * Estratégia: unit test com global.fetch mockado — não sobe servidor; apenas
- * captura a URL que o probe tentaria atingir e valida a porta.
+ * Estratégia: unit test com global.fetch mockado + esbuild plugin mockando
+ * server/utils/helpers (isPrivateOrLocalHost controlável via globalThis).
  */
-const { test, before, after } = require('node:test');
+const { test, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path'), Module = require('node:module');
 const esbuild = require('esbuild');
@@ -27,8 +22,12 @@ const nativeFetch = global.fetch;
 let capturedUrls = [];
 let savedPort;
 
+// Hosts considerados privados pelo mock (globalThis para controle por teste)
+globalThis.__MOCK_PRIVATE_HOSTS = new Set();
+
 before(async () => {
   const root = path.resolve(__dirname, '..');
+  const privateHostsSrc = 'export async function isPrivateOrLocalHost(h) { return (globalThis.__MOCK_PRIVATE_HOSTS || new Set()).has(h); }';
   const out = await esbuild.build({
     stdin: {
       // Named re-export: com format=cjs o default viraria .default
@@ -40,7 +39,19 @@ before(async () => {
     platform: 'node',
     packages: 'external',
     format: 'cjs',
-    write: false
+    write: false,
+    plugins: [{
+      name: 'helpers-fixture',
+      setup(b) {
+        // Substitui ../utils/helpers por mock (iptv.ts só usa isPrivateOrLocalHost)
+        b.onResolve({ filter: /utils\/helpers$/ }, a => ({
+          path: a.path, namespace: 'helpers-fixture'
+        }));
+        b.onLoad({ filter: /.*/, namespace: 'helpers-fixture' }, () => ({
+          contents: privateHostsSrc
+        }));
+      }
+    }]
   });
 
   const virtualPath = path.join(root, 'tests/virtual-iptv-probe.cjs');
@@ -51,8 +62,13 @@ before(async () => {
   probeLiveStreamUrl = m.exports.probeLiveStreamUrl;
 });
 
+beforeEach(() => {
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set();
+});
+
 after(() => {
   global.fetch = nativeFetch;
+  delete globalThis.__MOCK_PRIVATE_HOSTS;
   if (savedPort === undefined) delete process.env.PORT;
   else process.env.PORT = savedPort;
 });
@@ -72,15 +88,12 @@ test('sem PORT definida, URL relativa é sondada contra a porta do app Express (
 
   const res = await probeLiveStreamUrl('/api/live-stream-proxy?url=https%3A%2F%2Fexemplo.com%2Fx.m3u8');
 
-  // A rota /api/live-stream-proxy só existe no app Express (3000);
-  // no video-proxy (8080) ela retorna 404 (verificado em produção).
   assert.equal(capturedUrls.length, 1, 'fetch deve ser chamado exatamente 1 vez');
   assert.match(capturedUrls[0], /^http:\/\/127\.0\.0\.1:3000\//,
     `URL sondada deveria começar com http://127.0.0.1:3000/ — foi: ${capturedUrls[0]}`);
   assert.doesNotMatch(capturedUrls[0], /:8080/,
     'probe não deve mirar a porta 8080 do video-proxy para rotas do Express');
 
-  // resposta m3u8 válida → online
   assert.equal(res.online, true);
   assert.equal(res.statusCode, 200);
 });
@@ -96,7 +109,7 @@ test('PORT customizada via ambiente é respeitada', async () => {
   assert.equal(res.online, true);
 });
 
-test('URL absoluta não ganha host local (comportamento preservado)', async () => {
+test('URL absoluta pública não ganha host local e prossegue para o fetch (comportamento preservado)', async () => {
   delete process.env.PORT;
   mockFetch();
 
@@ -105,11 +118,76 @@ test('URL absoluta não ganha host local (comportamento preservado)', async () =
   assert.equal(capturedUrls[0], 'https://cdn.exemplo.com/canal.m3u8');
 });
 
-test('path relativo sem barra inicial não cai no branch de self-probe', async () => {
+test('path relativo sem barra inicial não cai em nenhum branch de normalização', async () => {
   delete process.env.PORT;
   mockFetch();
 
   await probeLiveStreamUrl('api/sem-barra');
 
   assert.equal(capturedUrls[0], 'api/sem-barra');
+});
+
+// ===========================================================================
+// Anti-SSRF (relatório #7): URLs absolutas com host privado são bloqueadas
+// ===========================================================================
+
+test('URL absoluta com host privado (10.x) é bloqueada SEM fetch', async () => {
+  delete process.env.PORT;
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set(['10.0.0.5']);
+  mockFetch();
+
+  const res = await probeLiveStreamUrl('http://10.0.0.5:8080/interno.m3u8');
+
+  assert.equal(capturedUrls.length, 0, 'fetch NÃO deve ser chamado para host privado');
+  assert.equal(res.online, false);
+  assert.equal(res.statusCode, 0);
+  assert.match(res.error || '', /Anti-SSRF/i);
+});
+
+test('URL absoluta com localhost é bloqueada SEM fetch', async () => {
+  delete process.env.PORT;
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set(['localhost']);
+  mockFetch();
+
+  const res = await probeLiveStreamUrl('http://localhost:3000/api/health');
+
+  assert.equal(capturedUrls.length, 0);
+  assert.equal(res.online, false);
+  assert.match(res.error || '', /Anti-SSRF/i);
+});
+
+test('URL absoluta com IP de metadata (169.254.169.254) é bloqueada SEM fetch', async () => {
+  delete process.env.PORT;
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set(['169.254.169.254']);
+  mockFetch();
+
+  const res = await probeLiveStreamUrl('http://169.254.169.254/opc/v2/instance/');
+
+  assert.equal(capturedUrls.length, 0);
+  assert.equal(res.online, false);
+  assert.match(res.error || '', /Anti-SSRF/i);
+});
+
+test('hostname público que resolve para IP privado via DNS é bloqueado (DNS rebinding)', async () => {
+  delete process.env.PORT;
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set(['rebind.atacante.com']);
+  mockFetch();
+
+  const res = await probeLiveStreamUrl('https://rebind.atacante.com/stream.m3u8');
+
+  assert.equal(capturedUrls.length, 0, 'hosts que resolvem para privado devem ser bloqueados');
+  assert.equal(res.online, false);
+  assert.match(res.error || '', /Anti-SSRF/i);
+});
+
+test('URL absoluta pública segue para o fetch mesmo com privados configurados (não sobe o bloqueio)', async () => {
+  delete process.env.PORT;
+  globalThis.__MOCK_PRIVATE_HOSTS = new Set(['10.0.0.5', '169.254.169.254']);
+  mockFetch();
+
+  const res = await probeLiveStreamUrl('https://cdn.publico.com/canal.m3u8');
+
+  assert.equal(capturedUrls.length, 1, 'host público deve seguir para fetch');
+  assert.equal(capturedUrls[0], 'https://cdn.publico.com/canal.m3u8');
+  assert.equal(res.online, true);
 });
