@@ -917,60 +917,24 @@ const router = Router();
         return res.status(400).send("ID de arquivo do MixDrop não encontrado na URL.");
       }
 
-      // Reusa cache do mixdrop-stream (mesmo Map em memória)
+      // Reusa cache do mixdrop-stream (mesmo Map em memória) e, quando vencido,
+      // resolve pelo resolvedor CANÔNICO (resolveFreshMixdropToken): TTL de 10 min
+      // — igual a todo o resto do app. O scraping inline daqui gravava expiresAt
+      // de 4 HORAS antes mesmo de saber se o token da CDN funciona; um 403 deixava
+      // a URL morta presa no cache por 4h, quebrando downloads nesse worker sem
+      // nenhuma chance de auto-cura (o caminho de streaming se cura sozinho via
+      // pool probe + renewUrl do md-proxy; este aqui não tinha nada).
       let videoUrl = "";
       const cached = mixdropMemoryCache.get(fileId);
 
       if (cached && cached.expiresAt > Date.now() + 60000) {
         videoUrl = cached.videoUrl;
       } else {
-        // Resolve o videoUrl fazendo fetch no embed do mixdrop
-        const embedUrl = `https://${host}/e/${fileId}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-        try {
-          const upstream = await fetch(embedUrl, {
-            headers: {
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            },
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (!upstream.ok) {
-            return res.status(502).send(`MixDrop retornou status HTTP ${upstream.status}`);
-          }
-
-          const html = await upstream.text();
-          const packerMatch = html.match(/eval\(function\(p,a,c,k,e,d\)[\s\S]+?\}\)\)/);
-          if (!packerMatch) {
-            return res.status(502).send("Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
-          }
-
-          const unpacked = new Function("return " + packerMatch[0].slice(4))() as string;
-          const wurlMatch = unpacked.match(/MDCore\.wurl\s*=\s*['"]([^'"]+)['"]/);
-          if (!wurlMatch || !wurlMatch[1]) {
-            return res.status(502).send("URL de vídeo não encontrada no player do MixDrop.");
-          }
-
-          videoUrl = wurlMatch[1];
-          if (videoUrl.startsWith("//")) videoUrl = "https:" + videoUrl;
-
-          // Atualiza cache
-          mixdropMemoryCache.set(fileId, {
-            videoUrl,
-            posterUrl: "",
-            title: filename,
-            expiresAt: Date.now() + 4 * 60 * 60 * 1000,
-          });
-        } catch (fetchErr: any) {
-          clearTimeout(timeoutId);
-          console.error("[MixDrop Download Scraper Error]:", fetchErr);
-          return res.status(502).send("Tempo limite ou erro ao contatar MixDrop.");
+        const fresh = await resolveFreshMixdropToken(fileId, host);
+        if (!fresh) {
+          return res.status(502).send("Não foi possível desembalar os dados do player do MixDrop. Arquivo possivelmente deletado.");
         }
+        videoUrl = fresh.videoUrl;
       }
 
       // Sanitiza filename (remove caracteres problemáticos pra header)
@@ -1001,19 +965,39 @@ const router = Router();
       req.on("close", () => controller.abort());
 
       try {
-        const upstream = await fetch(videoUrl, { signal: controller.signal, headers: upstreamHeaders });
+        let upstream = await fetch(videoUrl, { signal: controller.signal, headers: upstreamHeaders });
+
+        // Token pode ter nascido morto ou expirado na CDN: renova 1x antes de
+        // desistir (mesmo padrão do /api/md-proxy; sem isto um 403 devolvia 502
+        // direto, sem nenhuma chance de recuperação).
+        if ([403, 404, 410].includes(upstream.status)) {
+          void upstream.body?.cancel().catch(() => {});
+          const fresh = await resolveFreshMixdropToken(fileId, host);
+          if (fresh) {
+            videoUrl = fresh.videoUrl;
+            upstream = await fetch(videoUrl, { signal: controller.signal, headers: upstreamHeaders });
+          }
+        }
         clearTimeout(timeoutId);
 
         if (!upstream.ok) {
           return res.status(502).send(`CDN retornou status ${upstream.status}`);
         }
 
-        // Mesma política do proxy: sem Content-Length (chunked sempre). Um
-        // download cortado (aborto/reset) não pode disparar mismatch no Chrome.
+        // Download ≠ streaming: aqui o Content-Length é o que habilita o
+        // progresso REAL no cliente (downloadService divide received/total —
+        // sem ele a barra fica em 0% o download inteiro). Repassamos o tamanho
+        // sempre que o upstream o declara sem re-codificar o corpo (200 completo
+        // ou 206 parcial). A política "chunked sempre" do /api/md-proxy existe
+        // para abort de player em streaming; num download, falha explícita
+        // (conexão fechada antes do total prometido) é a semântica correta.
         const keepLength =
-          upstream.status === 206 &&
           !!upstream.body &&
           !upstream.headers.get("content-encoding");
+        // Coerência HTTP: se o upstream respondeu 206 (cliente pediu Range), o
+        // cliente também deve receber 206 + content-range — não 200 com headers
+        // parciais, que é ambíguo pra qualquer downloader externo.
+        if (upstream.status === 206) res.status(206);
         for (const [key, value] of upstream.headers.entries()) {
           if (["content-length", "content-range", "accept-ranges", "content-type"].includes(key.toLowerCase())) {
             if (key.toLowerCase() === "content-type") {
