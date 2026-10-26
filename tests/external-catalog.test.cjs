@@ -448,7 +448,11 @@ test('resolver: cache de probe evita re-fetch dentro da janela positiva', async 
   }
 });
 
-test('resolver: todas mortas → cai para a primeira fonte PERMITIDA sem probe (fallback cego)', async () => {
+test('resolver: todas mortas → retorna null (NÃO serve fonte sabidamente morta — fallback inteligente)', async () => {
+  // Bug histórico: fallback cego antigo retornava allowed[0] mesmo quando
+  // probe rejeitou (iscas confirmadas). Player recebia a isca e não tocava.
+  // Novo: se TODAS foram sondadas e falharam, retorna null (502 na rota) —
+  // player tenta próximo server do canal, e admin vê que precisa de atenção.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'extcat-'));
   writeFixtures(dir, 'canal: X\nfonte: https://8.8.8.8/morta.m3u8\nfonte: https://8.8.4.4/morta2.m3u8\n');
   process.env.EXTERNAL_CATALOG_DIR = dir;
@@ -459,10 +463,50 @@ test('resolver: todas mortas → cai para a primeira fonte PERMITIDA sem probe (
   });
   try {
     const r = await catalog.resolveExternalChannel('X');
-    assert.ok(r, 'fallback cego retorna a primeira fonte permitida');
-    assert.equal(r.url, 'https://8.8.8.8/morta.m3u8');
+    assert.equal(r, null, 'todas sondadas e mortas → null (não serve fonte ruim)');
   } finally {
     m.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete process.env.EXTERNAL_CATALOG_DIR;
+    catalog.clearExternalCatalogCache();
+  }
+});
+
+test('resolver: deadline cortou antes de sondar todas → fallback pega primeira NÃO sondada', async () => {
+  // 5 fontes: 4 sondadas (500) + 1 não sondada (deadline cortou no 2o batch)
+  // Esperado: retorna a 5a fonte (não sondada) como fallback cego
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'extcat-'));
+  writeFixtures(dir, 'canal: X\nfonte: https://8.8.8.8/a.m3u8\nfonte: https://8.8.4.4/b.m3u8\nfonte: https://8.8.8.9/c.m3u8\nfonte: https://8.8.4.5/d.m3u8\nfonte: https://8.8.8.10/e.m3u8\n');
+  process.env.EXTERNAL_CATALOG_DIR = dir;
+  catalog.clearExternalCatalogCache();
+
+  // Mock fetch com delay real (5ms) para o deadline cortar entre batches.
+  // mockFetch padrão resolve síncrono — Date.now() não avança, deadline não dispara.
+  const calls = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, opts) => {
+    calls.push({ url: String(url), opts });
+    await new Promise(r => setTimeout(r, 5));
+    return {
+      ok: false, status: 500,
+      headers: new Map(Object.entries({ 'content-type': 'application/vnd.apple.mpegurl', 'content-length': '1' })),
+      text: async () => 'x',
+      arrayBuffer: async () => new ArrayBuffer(0),
+    };
+  };
+  const dnsStub = { address: '104.21.5.10', family: 4 };
+  const originalLookup = dns.promises.lookup;
+  dns.promises.lookup = async () => [dnsStub];
+  try {
+    // deadline 1ms — primeiro batch roda (4 sources paralelas em ~5ms),
+    // próximo batch cortado pelo deadline
+    const r = await catalog.resolveExternalChannel('X', { deadlineMs: 1, batch: 4 });
+    assert.ok(r, 'deve resolver via fallback não-sondado');
+    assert.equal(r.url, 'https://8.8.8.10/e.m3u8', '5a fonte (não sondada) retornada');
+    assert.ok(!calls.some(c => c.url.includes('8.8.8.10/e.m3u8')), '5a fonte nunca é sondada');
+  } finally {
+    dns.promises.lookup = originalLookup;
+    globalThis.fetch = originalFetch;
     fs.rmSync(dir, { recursive: true, force: true });
     delete process.env.EXTERNAL_CATALOG_DIR;
     catalog.clearExternalCatalogCache();

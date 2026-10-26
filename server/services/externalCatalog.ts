@@ -590,17 +590,31 @@ export async function resolveExternalChannel(
     }
   }
 
-  // Nenhuma fonte sondada como viva: cai para a primeira permitida SEM probe
-  // (melhor tentar cego do que falhar — o player tem fallback próprio).
-  const first = allowed[0];
-  return {
-    channelName: channel.name,
-    fonteIndex: first.index,
-    url: first.url,
-    qualidade: first.fonte.qualidade,
-    referer: first.fonte.referer,
-    agente: first.fonte.agente,
-  };
+  // Nenhuma fonte sondada como viva. Fallback inteligente:
+  //   - Se o deadline cortou antes de sondar todas (batch incompleto),
+  //     retorna a primeira fonte PERMITIDA que ainda não foi sondada —
+  //     pode estar viva, melhor tentar cego do que falhar.
+  //   - Se TODAS foram sondadas e falharam (iscas confirmadas mortas),
+  //     retorna null (502) — NUNCA servir fonte sabidamente ruim. O
+  //     player tem fallback próprio para outros servers do canal, e o
+  //     admin vê no painel que o canal realmente precisa de atenção.
+  // Bug observado em produção: SporTV/Premiere 2 tinham iscas em #1
+  // que passavam no probe raso antigo; depois do fix do probe profundo,
+  // as iscas são corretamente rejeitadas, mas o fallback cego antigo
+  // ainda as retornava — player recebia a isca e não reproduzia.
+  for (const c of allowed) {
+    if (!probed.has(c.index)) {
+      return {
+        channelName: channel.name,
+        fonteIndex: c.index,
+        url: c.url,
+        qualidade: c.fonte.qualidade,
+        referer: c.fonte.referer,
+        agente: c.fonte.agente,
+      };
+    }
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
