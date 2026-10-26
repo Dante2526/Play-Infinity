@@ -262,7 +262,16 @@ process.on("uncaughtException", (err) => {
   // ========================================================
   // PROTEÇÃO CONTRA DDOS (Camada de Aplicação)
   // ========================================================
-  
+  // Sub-requisições internas do próprio servidor (playbackHealth faz fetch
+  // a http://127.0.0.1:PORT para /api/md-stream, /api/myembed-stream etc.)
+  // compartilhavam o IP 127.0.0.1 num único balde: zapeando ~10 episódios
+  // seguidos (ou 2-3 usuários simultâneos) estourava o scraperLimiter de
+  // 30 req/min → health recebia 429 → servidores "indisponíveis". Loopback
+  // só é alcançável por processos na própria VPS (nginx anexa o IP real no
+  // X-Forwarded-For; conexões externas diretas têm o IP do cliente), então
+  // isentar essas chamadas não abre brecha para clientes externos.
+  const isLoopback = (req: any) => req.ip === "127.0.0.1" || req.ip === "::1" || req.ip === "::ffff:127.0.0.1";
+
   // Limite Global: Protege a renderização estática e recursos sem travar o usuário
   const globalLimiter = rateLimit({
     windowMs: 1 * 60 * 1000, // 1 minuto
@@ -270,6 +279,7 @@ process.on("uncaughtException", (err) => {
     message: "Muitas requisições deste IP, tente novamente em um minuto.",
     standardHeaders: true,
     legacyHeaders: false,
+    skip: isLoopback,
   });
 
   // Limite para API geral (busca, metadados)
@@ -279,6 +289,7 @@ process.on("uncaughtException", (err) => {
     message: { success: false, error: "Limite de requisições excedido. A proteção anti-DDoS bloqueou este endereço temporariamente." },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: isLoopback,
   });
 
   // Limite restrito para rotas de scraping (evita abuso e drenagem do proxy/backend)
@@ -288,6 +299,7 @@ process.on("uncaughtException", (err) => {
     message: { success: false, error: "Limite de scraping excedido. Aguarde um instante." },
     standardHeaders: true,
     legacyHeaders: false,
+    skip: isLoopback,
   });
 
   // Limite dedicado por IP para streaming de TV ao vivo (/api/live-stream-proxy)
@@ -302,6 +314,7 @@ process.on("uncaughtException", (err) => {
     message: "Limite de taxa para streaming excedido. Aguarde um instante.",
     standardHeaders: true,
     legacyHeaders: false,
+    skip: isLoopback,
   });
 
   // Aplica limitação global a todo o servidor
