@@ -25,7 +25,7 @@ const router = Router();
 interface ServerBlock {
   id: string;              // `${tmdbId}_${serverKey}`
   tmdbId: number;
-  serverKey: string;       // ex: "srv_watchplay", "srv_mixdrop", "srv_vip", "srv_nixplay", "srv_vidsrc"
+  serverKey: string;       // ex: "srv_byse", "srv_watchplay", "srv_mixdrop", "srv_vip", "srv_nixplay", "srv_vidsrc"
   contentType: "movie" | "series";
   title: string;
   reason: string;
@@ -180,6 +180,7 @@ async function isAdminToken(req: Request): Promise<boolean> {
 
 /** Valida serverKey contra whitelist */
 const VALID_SERVER_KEYS = new Set([
+  "srv_byse", // BYSE HD
   "srv_streamtape",
   "srv_watchplay",
   "srv_mixdrop",
