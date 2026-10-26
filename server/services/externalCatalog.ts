@@ -258,8 +258,29 @@ export function loadExternalBases(): Map<number, string> {
 }
 
 // ---------------------------------------------------------------------------
-// Probe HLS (com cache: positivo 3 min, negativo 45 s)
+// Probe HLS profundo (com cache: positivo 3 min, negativo 45 s)
 // ---------------------------------------------------------------------------
+//
+// Histórico (motivação): o probe original aceitava qualquer resposta 2xx cujo
+// corpo contivesse "#EXTM3U" ou "#EXT-X". Isso permitia que playlists-isca
+// passassem como "vivas": catálogos adversários servem m3u8 sintaticamente
+// válido mas com segmentos apontando para .png/.woff (404), ou páginas HTML de
+// bloqueio do Cloudflare. O resolver escolhia essas fontes como #1 e o player
+// não reproduzia nada. Bug confirmado em produção com SporTV/Premiere.
+//
+// Validação agora é estratificada e barata:
+//   1. Texto deve conter "#EXTM3U".
+//   2. Deve haver ≥1 "#EXTINF" (playlist de mídia) OU "#EXT-X-STREAM-INF"
+//      (playlist master — variante a ser sondada recursivamente, depth=1).
+//   3. A primeira URL de segmento/variante não pode ter extensão em
+//      NON_MEDIA_EXTENSIONS (.png/.woff/.txt/.html/.js/...).
+//   4. Buscar os primeiros 188 bytes do primeiro segmento e validar magic
+//      bytes: TS sync 0x47 / fMP4 ftyp|styp / AAC ADTS 0xFF F0. Rejeita .png
+//      de verdade, woff de verdade, HTML, e segmentos 404.
+//
+// Custo: 1 fetch extra por fonte sondada (~1.5s). Deadline do resolver
+// mantido em 7s (Sentinela usa timeout 7s); batch paralelo de 4 fontes
+// completa dentro do deadline.
 const PROBE_POSITIVE_TTL_MS = 3 * 60 * 1000;
 const PROBE_NEGATIVE_TTL_MS = 45 * 1000;
 const probeCache = new Map<string, { ok: boolean; expires: number }>();
@@ -267,18 +288,144 @@ const probeCache = new Map<string, { ok: boolean; expires: number }>();
 const PROBE_DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-export async function probeExternalFonte(
+// Extensões de caminho que NÃO são segmentos de vídeo HLS legítimos.
+// Playlists-isca frequentemente listam URLs .png/.woff que 404 ou retornam
+// lixo. Sem extensão (Xtream com query, paths estilo /live/u/p/123.m3u8)
+// passa direto — denylist, não allowlist.
+export const NON_MEDIA_EXTENSIONS = new Set([
+  "png", "jpg", "jpeg", "gif", "svg", "webp", "bmp", "ico", "tif", "tiff",
+  "woff", "woff2", "ttf", "otf", "eot",
+  "txt", "html", "htm", "js", "css", "json", "xml", "md",
+]);
+
+/**
+ * Valida conteúdo de playlist HLS de forma estrita e barata (puro, síncrono,
+ * testável em node sem rede).
+ *
+ * Retorna:
+ *   { ok: true, kind: "media"|"master", firstUrl }
+ *     firstUrl é a URL absoluta (resolvida contra baseUrl se relativa) do
+ *     primeiro segmento (media) ou primeira variante (master).
+ *   { ok: false, reason }
+ */
+export function validatePlaylistContent(
+  text: string,
+  baseUrl?: string
+): { ok: boolean; kind?: "media" | "master"; firstUrl?: string | null; reason?: string } {
+  if (!text || !text.includes("#EXTM3U")) {
+    return { ok: false, reason: "sem #EXTM3U" };
+  }
+  const hasInf = /^#EXTINF:/m.test(text);
+  const hasStreamInf = /^#EXT-X-STREAM-INF:/m.test(text);
+  if (!hasInf && !hasStreamInf) {
+    return { ok: false, reason: "sem #EXTINF ou #EXT-X-STREAM-INF" };
+  }
+  const kind: "media" | "master" = hasInf ? "media" : "master";
+
+  // Primeira linha não-vazia que não começa com '#' é a URL do segmento
+  // (media) ou variante (master). Pode ser relativa.
+  let firstRaw: string | null = null;
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    firstRaw = line;
+    break;
+  }
+  if (!firstRaw) {
+    return { ok: false, reason: "playlist sem URL de segmento/variante" };
+  }
+
+  // Resolve URL relativa contra baseUrl (a URL da playlist original)
+  let firstUrl: string;
+  if (/^https?:\/\//i.test(firstRaw)) {
+    firstUrl = firstRaw;
+  } else if (baseUrl) {
+    try {
+      firstUrl = new URL(firstRaw, baseUrl).toString();
+    } catch {
+      return { ok: false, reason: "URL de segmento inválida/irresolvível" };
+    }
+  } else {
+    // Sem baseUrl não dá pra checar extensão relativa; aceita (não deveria
+    // acontecer em produção — probe sempre tem a URL da playlist).
+    firstUrl = firstRaw;
+  }
+
+  // Denylist de extensão: isca clássica é .png/.woff que 404 ou retorna lixo
+  try {
+    const u = new URL(firstUrl);
+    const pathLower = u.pathname.toLowerCase();
+    const dot = pathLower.lastIndexOf(".");
+    if (dot >= 0) {
+      const ext = pathLower.slice(dot + 1);
+      if (NON_MEDIA_EXTENSIONS.has(ext)) {
+        return { ok: false, reason: `extensão .${ext} não é mídia (segmento isca)` };
+      }
+    }
+    // Sem extensão: aceita (Xtream, /live/u/p/123 sem .m3u8, etc.)
+  } catch {
+    // URL inválida — deixa o fetch falhar mais adiante
+  }
+
+  return { ok: true, kind, firstUrl };
+}
+
+/**
+ * Busca os primeiros 188 bytes de um segmento e valida magic bytes.
+ * Aceita:
+ *   - MPEG-TS: byte 0 == 0x47 (sync byte, presente a cada 188 bytes)
+ *   - fMP4 init/media: bytes 4..8 == "ftyp" ou "styp"
+ *   - AAC ADTS: byte 0 == 0xFF e byte 1 & 0xF0 == 0xF0 (áudio, raro em TV)
+ * Rejeita: PNG (0x89 'PNG'), wOFF ('wOFF'), HTML ('<'), etc.
+ * Também rejeita se o fetch falhar (404, timeout, rede).
+ */
+export async function probeSegmentMagicBytes(
   url: string,
   opts: { referer?: string; agente?: string; timeoutMs?: number } = {}
 ): Promise<boolean> {
-  const cacheKey = `${url}|${opts.referer || ""}`;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 1500),
+      redirect: "follow",
+      headers: {
+        "User-Agent": opts.agente || PROBE_DEFAULT_UA,
+        Accept: "*/*",
+        Range: "bytes=0-188",
+        ...(opts.referer ? { Referer: opts.referer } : {}),
+      },
+    });
+    if (res.status < 200 || res.status >= 400) return false;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    if (buf.length === 0) return false;
+    // TS sync byte
+    if (buf[0] === 0x47) return true;
+    // fMP4 ftyp/styp box (size 4 bytes + tag 4 bytes)
+    if (buf.length >= 8) {
+      const tag = String.fromCharCode(buf[4], buf[5], buf[6], buf[7]);
+      if (tag === "ftyp" || tag === "styp") return true;
+    }
+    // AAC ADTS sync (áudio)
+    if (buf[0] === 0xff && (buf[1] & 0xf0) === 0xf0) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export async function probeExternalFonte(
+  url: string,
+  opts: { referer?: string; agente?: string; timeoutMs?: number; _depth?: number } = {}
+): Promise<boolean> {
+  const depth = opts._depth ?? 0;
+  // Cache key inclui depth para diferenciar probe direto vs recursão de master
+  const cacheKey = `${url}|${opts.referer || ""}|d=${depth}`;
   const cached = probeCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.ok;
 
   let ok = false;
   try {
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 4000),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 3000),
       redirect: "follow",
       headers: {
         "User-Agent": opts.agente || PROBE_DEFAULT_UA,
@@ -289,17 +436,40 @@ export async function probeExternalFonte(
     });
     if (res.status >= 200 && res.status < 400) {
       const contentType = (res.headers.get("content-type") || "").toLowerCase();
-      if (contentType.includes("mpegurl") || contentType.includes("vnd.apple")) {
+      const contentLength = Number(res.headers.get("content-length") || "0");
+      // Resposta 2xx grande (MP4 que ignora Range): aceita sem parsear corpo
+      // — legado de compat para fontes que são MP4 direto, não HLS.
+      if (
+        !contentType.includes("mpegurl") &&
+        !contentType.includes("vnd.apple") &&
+        !contentType.includes("text/") &&
+        contentLength > 2 * 1024 * 1024
+      ) {
         ok = true;
       } else {
-        const contentLength = Number(res.headers.get("content-length") || "0");
-        if (contentLength > 2 * 1024 * 1024) {
-          // Respondeu 2xx com corpo grande (ex: MP4 que ignora Range) —
-          // considerar online sem baixar o corpo.
-          ok = true;
+        // Lê texto e valida conteúdo da playlist estritamente
+        const text = await res.text();
+        const valid = validatePlaylistContent(text, url);
+        if (!valid.ok) {
+          ok = false;
+        } else if (valid.kind === "master" && valid.firstUrl) {
+          // Master playlist: sonda recursivamente a primeira variante.
+          // Guard de depth impede loop infinito (master → master → ...).
+          if (depth < 1) {
+            ok = await probeExternalFonte(valid.firstUrl, { ...opts, _depth: depth + 1 });
+          } else {
+            // Já estamos na recursão: variante era master — suspeito, falha
+            ok = false;
+          }
+        } else if (valid.kind === "media" && valid.firstUrl) {
+          // Media playlist: checar magic bytes do primeiro segmento
+          ok = await probeSegmentMagicBytes(valid.firstUrl, {
+            referer: opts.referer,
+            agente: opts.agente,
+            timeoutMs: 1500,
+          });
         } else {
-          const text = await res.text();
-          ok = text.includes("#EXTM3U") || text.includes("#EXT-X");
+          ok = false;
         }
       }
     }
@@ -335,7 +505,7 @@ async function isFonteAllowed(url: string): Promise<boolean> {
 // Resolver principal
 // ---------------------------------------------------------------------------
 export interface ResolveOptions {
-  /** Deadline total da resolução (default 5000 ms — Sentinela usa timeout 7 s). */
+  /** Deadline total da resolução (default 7000 ms — Sentinela usa timeout 7 s; probe profundo precisa de ~5s por batch de 4). */
   deadlineMs?: number;
   /** Máximo de fontes sondadas em paralelo por batelada. */
   batch?: number;
@@ -347,9 +517,9 @@ export async function resolveExternalChannel(
   name: string,
   opts: ResolveOptions = {}
 ): Promise<ResolvedExternalChannel | null> {
-  const deadline = Date.now() + (opts.deadlineMs ?? 5000);
+  const deadline = Date.now() + (opts.deadlineMs ?? 7000);
   const batchSize = opts.batch ?? 4;
-  const probeTimeoutMs = opts.probeTimeoutMs ?? 4000;
+  const probeTimeoutMs = opts.probeTimeoutMs ?? 3000;
 
   const channels = loadExternalChannels();
   if (channels.length === 0) return null;

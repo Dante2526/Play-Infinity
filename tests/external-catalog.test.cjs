@@ -49,7 +49,7 @@ async function loadModule(exportsFrom, file) {
 let catalog, validation, scraper;
 test.before(async () => {
   catalog = await loadModule(
-    '{parseExternalChannels, parseExternalBases, buildFonteUrl, normalizeChannelName, findExternalChannel, resolveExternalChannel, clearExternalCatalogCache, externalCatalogStats}',
+    '{parseExternalChannels, parseExternalBases, buildFonteUrl, normalizeChannelName, findExternalChannel, resolveExternalChannel, clearExternalCatalogCache, externalCatalogStats, validatePlaylistContent, probeSegmentMagicBytes, NON_MEDIA_EXTENSIONS, probeExternalFonte}',
     './server/services/externalCatalog'
   );
   validation = await loadModule(
@@ -111,7 +111,7 @@ function mockFetch(router) {
     calls.push({ url: String(url), opts });
     const handler = router[String(url)];
     if (!handler) {
-      return { ok: false, status: 404, headers: new Map(), text: async () => 'not found' };
+      return { ok: false, status: 404, headers: new Map(), text: async () => 'not found', arrayBuffer: async () => new ArrayBuffer(0) };
     }
     return handler;
   };
@@ -124,6 +124,69 @@ function fakeResponse(status, body, contentType = 'application/vnd.apple.mpegurl
     status,
     headers: new Map(Object.entries({ 'content-type': contentType, 'content-length': String(body ? body.length : 0) })),
     text: async () => body,
+    arrayBuffer: async () => new ArrayBuffer(0),
+  };
+}
+
+// Playlist de mídia válida com 1 segmento em `segUrl` (absoluta ou relativa à playlist)
+function mediaPlaylistResponse(segUrl, opts = {}) {
+  const body = `#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:8\n#EXT-X-MEDIA-SEQUENCE:1\n#EXTINF:8.0,\n${segUrl}\n#EXT-X-ENDLIST`;
+  return fakeResponse(200, body, opts.contentType || 'application/vnd.apple.mpegurl');
+}
+
+// Playlist master com 1 variante (para testar recursão depth-1)
+function masterPlaylistResponse(variantUrl) {
+  const body = `#EXTM3U\n#EXT-X-VERSION:6\n#EXT-X-STREAM-INF:BANDWIDTH=2000000\n${variantUrl}\n#EXT-X-ENDLIST`;
+  return fakeResponse(200, body, 'application/vnd.apple.mpegurl');
+}
+
+// Segmento MPEG-TS válido: 188 bytes, byte 0 = 0x47 (sync byte)
+function tsSegmentResponse() {
+  const buf = Buffer.alloc(188, 0x47);
+  buf[0] = 0x47;
+  return {
+    ok: true,
+    status: 206,
+    headers: new Map(Object.entries({ 'content-type': 'video/mp2t', 'content-length': '188' })),
+    arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    text: async () => { throw new Error('binary'); },
+  };
+}
+
+// Segmento fMP4 com box ftyp no offset 4
+function fmp4SegmentResponse() {
+  const buf = Buffer.alloc(32, 0);
+  buf.writeUInt32BE(0x18, 0);
+  buf.write('ftyp', 4, 'ascii');
+  return {
+    ok: true,
+    status: 200,
+    headers: new Map(Object.entries({ 'content-type': 'video/mp4', 'content-length': '32' })),
+    arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    text: async () => { throw new Error('binary'); },
+  };
+}
+
+// Segmento PNG (bytes 0x89 'PNG') — deve ser rejeitado pelo magic byte check
+function pngSegmentResponse() {
+  const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  return {
+    ok: true,
+    status: 200,
+    headers: new Map(Object.entries({ 'content-type': 'image/png', 'content-length': '8' })),
+    arrayBuffer: async () => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength),
+    text: async () => { throw new Error('binary'); },
+  };
+}
+
+// Segmento 404 (isca .png que nem existe)
+function notFoundSegmentResponse() {
+  return {
+    ok: false,
+    status: 404,
+    headers: new Map(),
+    text: async () => 'not found',
+    arrayBuffer: async () => new ArrayBuffer(0),
   };
 }
 
@@ -249,7 +312,8 @@ test('resolver: primeira fonte viva em ORDEM é escolhida (fonte 1 morta, 2 viva
 
   const m = mockFetch({
     'https://8.8.8.8/alive1.m3u8': fakeResponse(502, 'erro'),
-    'http://8.8.4.4:8080/alive2.m3u8': fakeResponse(200, '#EXTM3U\n#EXT-X-VERSION:3\n'),
+    'http://8.8.4.4:8080/alive2.m3u8': mediaPlaylistResponse('http://8.8.4.4:8080/seg-1.ts'),
+    'http://8.8.4.4:8080/seg-1.ts': tsSegmentResponse(),
   });
   try {
     const r = await catalog.resolveExternalChannel('Premiere 2');
@@ -279,7 +343,8 @@ fonte: https://8.8.8.8/ok.m3u8
   catalog.clearExternalCatalogCache();
 
   const m = mockFetch({
-    'https://8.8.8.8/ok.m3u8': fakeResponse(200, '#EXTM3U\n'),
+    'https://8.8.8.8/ok.m3u8': mediaPlaylistResponse('https://8.8.8.8/seg.ts'),
+    'https://8.8.8.8/seg.ts': tsSegmentResponse(),
   });
   try {
     const r = await catalog.resolveExternalChannel('Premiere 2');
@@ -308,8 +373,9 @@ fonte: https://8.8.8.8/hls.m3u8
   process.env.EXTERNAL_CATALOG_DIR = dir;
   catalog.clearExternalCatalogCache();
   const m = mockFetch({
-    'https://8.8.8.8/hls.m3u8': fakeResponse(200, '#EXTM3U\n'),
-    'https://8.8.8.8/dash.m3u8': fakeResponse(200, '#EXTM3U\n'),
+    'https://8.8.8.8/hls.m3u8': mediaPlaylistResponse('https://8.8.8.8/seg.ts'),
+    'https://8.8.8.8/seg.ts': tsSegmentResponse(),
+    'https://8.8.8.8/dash.m3u8': mediaPlaylistResponse('https://8.8.8.8/dash-seg.ts'),
   });
   try {
     const r = await catalog.resolveExternalChannel('Premiere 2');
@@ -332,7 +398,8 @@ fonte: 9:98765
   process.env.EXTERNAL_CATALOG_DIR = dir;
   catalog.clearExternalCatalogCache();
   const m = mockFetch({
-    'https://1.0.0.1:443/live/zzz/yyy/98765.m3u8': fakeResponse(200, '#EXTM3U\n'),
+    'https://1.0.0.1:443/live/zzz/yyy/98765.m3u8': mediaPlaylistResponse('https://1.0.0.1:443/live/zzz/yyy/98765.ts'),
+    'https://1.0.0.1:443/live/zzz/yyy/98765.ts': tsSegmentResponse(),
   });
   try {
     const r = await catalog.resolveExternalChannel('Base Ref Canal');
@@ -364,7 +431,10 @@ test('resolver: cache de probe evita re-fetch dentro da janela positiva', async 
   writeFixtures(dir, 'canal: X\nfonte: https://8.8.8.8/a.m3u8\n');
   process.env.EXTERNAL_CATALOG_DIR = dir;
   catalog.clearExternalCatalogCache();
-  const m = mockFetch({ 'https://8.8.8.8/a.m3u8': fakeResponse(200, '#EXTM3U\n') });
+  const m = mockFetch({
+    'https://8.8.8.8/a.m3u8': mediaPlaylistResponse('https://8.8.8.8/seg.ts'),
+    'https://8.8.8.8/seg.ts': tsSegmentResponse(),
+  });
   try {
     await catalog.resolveExternalChannel('X');
     await catalog.resolveExternalChannel('X');
@@ -405,6 +475,224 @@ test('lookup: match normalizado (case/acento) e por contenção', () => {
   assert.ok(catalog.findExternalChannel('PREMIERE 2', channels));
   assert.ok(catalog.findExternalChannel('Premiere 2 HD', channels), 'contenção: query contém nome do catálogo');
   assert.equal(catalog.findExternalChannel('Canal Inexistente Zzz', channels), null);
+});
+
+// ===========================================================================
+// 4b. Probe profundo — valida que playlists-isca NÃO passam (bug .png/.woff)
+// ===========================================================================
+test('validatePlaylistContent: aceita playlist de mídia válida com #EXTINF + URL .ts', () => {
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXTINF:8.0,\nhttps://example.com/seg-1.ts\n#EXT-X-ENDLIST',
+    'https://example.com/p.m3u8'
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.kind, 'media');
+  assert.equal(r.firstUrl, 'https://example.com/seg-1.ts');
+});
+
+test('validatePlaylistContent: aceita master playlist com #EXT-X-STREAM-INF', () => {
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=2000000\nhttps://example.com/var.m3u8\n#EXT-X-ENDLIST',
+    'https://example.com/master.m3u8'
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.kind, 'master');
+  assert.equal(r.firstUrl, 'https://example.com/var.m3u8');
+});
+
+test('validatePlaylistContent: REJEITA playlist sem #EXTM3U (página HTML)', () => {
+  const r = catalog.validatePlaylistContent('<html>Cloudflare block</html>');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /#EXTM3U/);
+});
+
+test('validatePlaylistContent: REJEITA playlist com #EXTM3U mas sem #EXTINF/#EXT-X-STREAM-INF', () => {
+  const r = catalog.validatePlaylistContent('#EXTM3U\n#EXT-X-VERSION:3\n');
+  assert.equal(r.ok, false);
+  assert.match(r.reason, /EXTINF/);
+});
+
+test('validatePlaylistContent: REJEITA playlist-isca com segmentos .png (bug observado em prod)', () => {
+  // Bug concreto da família meufut.top (aws.s13-s1001604.lat): playlist
+  // sintaticamente válido mas segmentos são .png que 404.
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXTINF:8.0,\nhttps://aws.s13-s1001604.lat/uploads/abc.png\n#EXT-X-ENDLIST',
+    'https://aws.s13-s1001604.lat/stream/x/sportv.m3u8'
+  );
+  assert.equal(r.ok, false, '.png é extensão isca');
+  assert.match(r.reason, /\.png/);
+});
+
+test('validatePlaylistContent: REJEITA segmento .woff (família error.txt)', () => {
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXTINF:6.0,\nhttps://x.s25-cloudfront-net.lat/assets/y.woff\n#EXT-X-ENDLIST',
+    'https://x.s25-cloudfront-net.lat/stream/z/p.m3u8'
+  );
+  assert.equal(r.ok, false, '.woff é extensão isca');
+  assert.match(r.reason, /woff/);
+});
+
+test('validatePlaylistContent: resolve URL relativa contra baseUrl', () => {
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXTINF:8.0,\nseg-1.ts\n#EXT-X-ENDLIST',
+    'https://example.com/p.m3u8'
+  );
+  assert.equal(r.ok, true);
+  assert.equal(r.firstUrl, 'https://example.com/seg-1.ts');
+});
+
+test('validatePlaylistContent: aceita segmento sem extensão (Xtream com query)', () => {
+  const r = catalog.validatePlaylistContent(
+    '#EXTM3U\n#EXTINF:8.0,\nhttp://x:80/live/u/p/123?token=abc\n#EXT-X-ENDLIST',
+    'http://x:80/master.m3u8'
+  );
+  assert.equal(r.ok, true, 'sem extensão é permitido (denylist, não allowlist)');
+});
+
+test('probeSegmentMagicBytes: aceita segmento MPEG-TS (byte 0 = 0x47)', async () => {
+  const m = mockFetch({ 'https://x/seg.ts': tsSegmentResponse() });
+  try {
+    const ok = await catalog.probeSegmentMagicBytes('https://x/seg.ts');
+    assert.equal(ok, true);
+  } finally { m.restore(); }
+});
+
+test('probeSegmentMagicBytes: aceita segmento fMP4 (ftyp no offset 4)', async () => {
+  const m = mockFetch({ 'https://x/seg.m4s': fmp4SegmentResponse() });
+  try {
+    const ok = await catalog.probeSegmentMagicBytes('https://x/seg.m4s');
+    assert.equal(ok, true);
+  } finally { m.restore(); }
+});
+
+test('probeSegmentMagicBytes: REJEITA segmento PNG (bytes 0x89 PNG)', async () => {
+  const m = mockFetch({ 'https://x/fake.png': pngSegmentResponse() });
+  try {
+    const ok = await catalog.probeSegmentMagicBytes('https://x/fake.png');
+    assert.equal(ok, false, 'magic bytes PNG não deve passar');
+  } finally { m.restore(); }
+});
+
+test('probeSegmentMagicBytes: REJEITA segmento 404', async () => {
+  const m = mockFetch({ 'https://x/missing.ts': notFoundSegmentResponse() });
+  try {
+    const ok = await catalog.probeSegmentMagicBytes('https://x/missing.ts');
+    assert.equal(ok, false, '404 não deve passar');
+  } finally { m.restore(); }
+});
+
+test('probeExternalFonte: REJEITA playlist-isca .png (bug real da família meufut.top)', async () => {
+  const m = mockFetch({
+    'https://aws.s13-s1001604.lat/p.m3u8': mediaPlaylistResponse('https://aws.s13-s1001604.lat/uploads/abc.png'),
+    // segment .png não precisa nem estar mockado — denylist rejeita antes do fetch
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://aws.s13-s1001604.lat/p.m3u8');
+    assert.equal(ok, false, 'playlist-isca com .png deve ser rejeitada no probe');
+    // Garante que o segmento .png nunca chegou a ser buscado
+    assert.ok(!m.calls.some(c => c.url.includes('abc.png')), 'segmento .png nunca é buscado (denylist corta antes)');
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: REJEITA playlist com segmento .woff', async () => {
+  const m = mockFetch({
+    'https://x/p.m3u8': mediaPlaylistResponse('https://x/assets/y.woff'),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    assert.equal(ok, false);
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: REJEITA playlist válida mas com segmento PNG nos bytes (isca mais sofisticada)', async () => {
+  // Isca que tem .ts na URL mas serve PNG nos bytes — magic byte check pega
+  const m = mockFetch({
+    'https://x/p.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
+    'https://x/seg.ts': pngSegmentResponse(),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    assert.equal(ok, false, 'segmento com magic bytes PNG deve falhar');
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: aceita playlist válida com segmento TS real', async () => {
+  const m = mockFetch({
+    'https://x/p.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
+    'https://x/seg.ts': tsSegmentResponse(),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    assert.equal(ok, true);
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: recursão master → variante de mídia (Xtream-style)', async () => {
+  const m = mockFetch({
+    'https://x/master.m3u8': masterPlaylistResponse('https://x/var.m3u8'),
+    'https://x/var.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
+    'https://x/seg.ts': tsSegmentResponse(),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://x/master.m3u8');
+    assert.equal(ok, true, 'master com variante válida deve passar por recursão');
+    // Deve ter buscado master, variante e segmento (3 fetches)
+    assert.ok(m.calls.some(c => c.url.includes('master.m3u8')));
+    assert.ok(m.calls.some(c => c.url.includes('var.m3u8')));
+    assert.ok(m.calls.some(c => c.url.includes('seg.ts')));
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: master com variante isca .png falha', async () => {
+  const m = mockFetch({
+    'https://x/master.m3u8': masterPlaylistResponse('https://x/uploads/abc.png'),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://x/master.m3u8');
+    assert.equal(ok, false, 'variante .png é isca, recursão falha');
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('probeExternalFonte: página HTML de bloqueio Cloudflare é rejeitada', async () => {
+  // Bug concreto da família error.txt (dbcd70be...s25-cloudfront-net.lat)
+  const m = mockFetch({
+    'https://dbcd70be.s25-cloudfront-net.lat/stream/x/error.txt': fakeResponse(200, '<!DOCTYPE html><html><head><title>Attention Required! | Cloudflare</title></head></html>', 'text/html'),
+  });
+  try {
+    const ok = await catalog.probeExternalFonte('https://dbcd70be.s25-cloudfront-net.lat/stream/x/error.txt', { referer: 'https://w7.embedtv.cc/' });
+    assert.equal(ok, false, 'HTML de bloqueio não deve passar como playlist');
+  } finally { m.restore(); catalog.clearExternalCatalogCache(); }
+});
+
+test('resolver: pula fonte-isca .png e escolhe a próxima fonte viva (cenário SporTV/Premiere)', async () => {
+  // Cenário que reproduz o bug real: fonte #1 é isca meufut.top (.png),
+  // fonte #2 é Xtream real com .ts — probe profundo deve pular a #1 e usar #2.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'extcat-'));
+  writeFixtures(dir, `canal: SporTV\nfonte: https://aws.s13-s1001604.lat/sportv.m3u8\nfonte: http://real-xtream.com:80/live/u/p/1.m3u8\n`, 'base: 2 https://real-xtream.com:80/live/u/p/');
+  process.env.EXTERNAL_CATALOG_DIR = dir;
+  catalog.clearExternalCatalogCache();
+  const m = mockFetch({
+    'https://aws.s13-s1001604.lat/sportv.m3u8': mediaPlaylistResponse('https://aws.s13-s1001604.lat/uploads/abc.png'),
+    'http://real-xtream.com:80/live/u/p/1.m3u8': mediaPlaylistResponse('http://real-xtream.com:80/live/u/p/seg-1.ts'),
+    'http://real-xtream.com:80/live/u/p/seg-1.ts': tsSegmentResponse(),
+  });
+  // Mock DNS para evitar NXDOMAIN em real-xtream.com (domínio de teste)
+  const dnsStub = { address: '104.21.5.10', family: 4 };
+  const originalLookup = dns.promises.lookup;
+  dns.promises.lookup = async () => [dnsStub];
+  try {
+    const r = await catalog.resolveExternalChannel('SporTV');
+    assert.ok(r, 'deve resolver');
+    assert.equal(r.url, 'http://real-xtream.com:80/live/u/p/1.m3u8', 'deve pular isca .png e usar fonte real');
+    assert.equal(r.fonteIndex, 1, 'segunda fonte (isca pulada na 0)');
+    assert.ok(!m.calls.some(c => c.url.includes('abc.png')), 'segmento .png nunca buscado');
+  } finally {
+    dns.promises.lookup = originalLookup;
+    m.restore();
+    fs.rmSync(dir, { recursive: true, force: true });
+    delete process.env.EXTERNAL_CATALOG_DIR;
+    catalog.clearExternalCatalogCache();
+  }
 });
 
 // ===========================================================================
