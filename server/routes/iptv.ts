@@ -219,7 +219,16 @@ router.get("/api/admin/probe-channel", async (req, res) => {
       return res.status(400).json({ success: false, error: "URL obrigatória" });
     }
 
-    const result = await probeLiveStreamUrl(targetUrl);
+    // Timeout 12s para canais externos (/api/external-channel?name=...):
+    // a cadeia é resolver com probe profundo (deadline 4.5s: playlist +
+    // magic bytes do segmento) + redirect 302 + /api/live-stream-proxy que
+    // re-busca a playlist upstream (timeout 8s lá dentro). O default 7s
+    // estourava no meio e o teste de conexão do painel acusava "fora do ar"
+    // mesmo com o canal funcionando. Canais diretos/amagi seguem rápidos.
+    const result = await probeLiveStreamUrl(
+      targetUrl,
+      targetUrl.startsWith("/api/external-channel") ? 12000 : 7000
+    );
     res.json({
       success: true,
       online: result.online,

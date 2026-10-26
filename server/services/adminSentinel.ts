@@ -360,7 +360,17 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
               continue;
             }
 
-            const probeRes = await probeLiveStreamUrl(titularServer, 5000);
+            // Timeout 12s (era 5s): canais externos (/api/external-channel) têm
+            // cadeia mais longa — resolver com probe profundo (playlist + magic
+            // bytes do segmento, deadline 4.5s) + redirect 302 + proxy
+            // /api/live-stream-proxy que re-busca a playlist upstream (até 8s).
+            // 5s estourava no meio da cadeia e o painel acusava "fora do ar"
+            // mesmo com canal funcionando. 12s = 4.5s resolver + ~3s proxy +
+            // folga para DNS/fila. Canais diretos/amagi continuam rápidos (<1s).
+            const probeRes = await probeLiveStreamUrl(
+              titularServer,
+              titularServer.startsWith("/api/external-channel") ? 12000 : 5000
+            );
             const alertId = `channel:${ch.id}`;
 
             // =========================================================================

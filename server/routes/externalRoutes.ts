@@ -80,7 +80,15 @@ router.get("/api/external-channel", async (req, res) => {
       return res.status(400).json({ success: false, error: formatValidation.error });
     }
 
-    const resolved = await resolveExternalChannel(nameValidation.value!);
+    // Deadline 4.5s (default do resolver é 7s): o orçamento do cliente precisa
+    // cobrir a cadeia INTEIRA — resolver + redirect 302 + proxy re-buscando a
+    // playlist upstream (timeout 8s no /api/live-stream-proxy). A Sentinela
+    // (12s) e o teste de conexão do painel (12s) só cabem a cadeia se o
+    // resolver devolver rápido. Com 4.5s: 1 batch de 4 fontes (playlist 3s +
+    // segmento 1.5s em paralelo) completa; se houver fonte viva no batch 1,
+    // retorna em ~4.5s. O player (hls.js) tem timeouts próprios de fragmento
+    // e não depende deste orçamento.
+    const resolved = await resolveExternalChannel(nameValidation.value!, { deadlineMs: 4500 });
     if (!resolved) {
       return res.status(502).json({
         success: false,

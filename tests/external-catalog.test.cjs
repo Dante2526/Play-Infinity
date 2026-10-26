@@ -951,3 +951,28 @@ test('guard: sentinela continua compatível — probeLiveStreamUrl trata caminho
   const iptv = read('server/routes/iptv.ts');
   assert.ok(iptv.includes('targetUrl.startsWith("/")'), 'caminhos relativos /api/ são sondados via 127.0.0.1 (segue o 302 da rota externa)');
 });
+
+test('guard: timeouts da cadeia externa coerentes — painel e sentinela não estouram antes do fim', () => {
+  // Bug observado em produção: sentinela usava 5s e o teste de conexão do
+  // painel 7s, mas a cadeia externa (resolver com probe profundo + redirect
+  // 302 + proxy re-buscando playlist upstream com timeout 8s) precisa de
+  // mais tempo — o timeout estourava no meio e o canal era acusado "fora
+  // do ar" mesmo funcionando. Fix: 12s para /api/external-channel em ambos
+  // + resolver deadline 4500ms na rota (default do resolver segue 7s para
+  // uso interno/futuro).
+  const iptv = read('server/routes/iptv.ts');
+  assert.ok(
+    iptv.includes('targetUrl.startsWith("/api/external-channel") ? 12000 : 7000'),
+    'rota probe-channel (teste de conexão do painel) usa 12s para cadeia externa'
+  );
+  const sentinel = read('server/services/adminSentinel.ts');
+  assert.ok(
+    sentinel.includes('titularServer.startsWith("/api/external-channel") ? 12000 : 5000'),
+    'sentinela usa 12s para cadeia externa (canais diretos continuam 5s)'
+  );
+  const routes = read('server/routes/externalRoutes.ts');
+  assert.ok(
+    routes.includes('deadlineMs: 4500'),
+    'rota externa usa resolver com deadline 4.5s (deixa folga para o redirect+proxy dentro dos 12s)'
+  );
+});
