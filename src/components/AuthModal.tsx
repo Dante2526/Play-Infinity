@@ -3,6 +3,7 @@ import { X, Lock, Mail, AlertCircle, User } from "lucide-react";
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
+import { clearLocalUserData } from "../utils/safeStorage";
 import { reportAppError } from "./GlobalErrorModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "./TurnstileWidget";
@@ -71,11 +72,14 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
     try {
       if (isLogin) {
-        // Limpa resquícios locais de contas anteriores antes de logar
-        localStorage.removeItem("playinfinity_playback_history");
-        localStorage.removeItem("playinfinity_favorites");
-        localStorage.removeItem("playinfinity_watched_episodes");
-        localStorage.removeItem("playinfinity_watched_seasons");
+        // Limpa resquícios locais de contas anteriores antes de logar.
+        // clearLocalUserData cobre TODAS as chaves reais de dados de conta
+        // (playinfinity_user_favorites, favorite_timestamps, read_notifications,
+        // deleted_history, etc.) — o removeItem manual antigo apagava a chave
+        // morta "playinfinity_favorites" e deixava os favoritos de verdade no
+        // localStorage, que o fetchFavoritesFromCloud() mesclava pra conta nova
+        // (e sincronizava pro Firestore dela via syncFavoritesToCloud).
+        clearLocalUserData();
 
         const userCred = await signInWithEmailAndPassword(auth, email.trim(), password);
         // Verifica se a conta ainda existe no Firestore (não foi revogada/excluída)

@@ -71,11 +71,18 @@ export const safeSessionStorage = {
 };
 
 export function clearLocalUserData() {
+  // Chaves REAIS lidas/escritas pelos serviços (verificar ao adicionar novos
+  // serviços com estado local). favorite_timestamps e deleted_history ficavam
+  // de fora antes — vazavam pra próxima conta no mesmo navegador em TODA troca
+  // (timestamps contaminando a ordem dos favoritos; tombstones de histórico
+  // deletado filtrando o histórico baixado da nuvem da conta nova).
   const keysToRemove = [
     "playinfinity_logged_in",
     "playinfinity_playback_history",
+    "playinfinity_deleted_history",
     "playinfinity_favorites",
     "playinfinity_user_favorites",
+    "playinfinity_favorite_timestamps",
     "playinfinity_watched_episodes",
     "playinfinity_watched_seasons",
     "playinfinity_watched_v2",

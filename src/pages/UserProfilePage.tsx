@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import { removeFcmTokenFromCloud } from "../services/pushNotifications";
+import { clearLocalUserData } from "../utils/safeStorage";
 import {
   Play,
   Bookmark,
@@ -188,11 +189,14 @@ export function UserProfilePage({
   const handleLogout = async () => {
     try {
       await removeFcmTokenFromCloud(); // Remove o token FCM deste aparelho antes de sair
-      localStorage.removeItem("playinfinity_logged_in");
-      localStorage.removeItem("playinfinity_playback_history");
-      localStorage.removeItem("playinfinity_favorites");
-      localStorage.removeItem("playinfinity_watched_episodes");
-      localStorage.removeItem("playinfinity_watched_seasons");
+      // clearLocalUserData() cobre TODAS as chaves reais de dados de conta
+      // (playinfinity_user_favorites, favorite_timestamps, read_notifications,
+      // deleted_history, comments_*, caches de agenda, etc.). A lista manual
+      // antiga removia a chave morta "playinfinity_favorites" — os favoritos
+      // reais sobravam no navegador até um login seguinte mesclá-los na conta
+      // nova. Limpa ANTES do signOut pra garantir limpeza mesmo se o signOut
+      // falhar (o onAuthStateChanged(null) do App.tsx chama de novo — idempotente).
+      clearLocalUserData();
       await signOut(auth);
       onNavigate('home');
     } catch (err) {
