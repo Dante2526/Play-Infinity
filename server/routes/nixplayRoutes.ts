@@ -3,8 +3,35 @@
  */
 import { Router } from "express";
 import { isNixplayAvailable, loadNixplayCatalog, resolveNixplaySeriesId } from "../services/nixplayCatalog";
+import { isPrivateOrLocalHost } from "../utils/helpers";
+import { requireAdminAuth } from "../middlewares/requireAdminAuth";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// Allowlist Anti-SSRF dos endpoints de proxy/resolução (relatório #8):
+// /api/nixplay-proxy e /api/nixplay-resolve fetchavam QUALQUER URL recebida
+// na query (verificado em produção: streamavam a resposta de
+// http://127.0.0.1:3000/api/health — proxy aberto + oráculo de rede interna).
+// Agora o hostname precisa estar na allowlist E passar pela validação
+// anti-SSRF com resolução DNS ativa (isPrivateOrLocalHost).
+const NIXPLAY_PROXY_ALLOWED_HOSTS = [
+  "nixplay.lat",          // origem Xtream: player_api + arquivos .mp4
+  "r2.dev",               // buckets públicos do Cloudflare R2 (pub-<hash>.r2.dev)
+  "workers.dev",          // "Worker de reprodução" do Nixplay (Cloudflare Workers)
+  "cloudflarestream.com", // entrega via Cloudflare Stream
+  // Extensão sem redeploy caso o provedor rotacione a CDN:
+  // NIXPLAY_PROXY_EXTRA_HOSTS=cdn1.exemplo.com.br,cdn2.exemplo.com.br
+  ...(process.env.NIXPLAY_PROXY_EXTRA_HOSTS || "")
+    .split(",")
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean),
+];
+
+function isAllowedNixplayProxyHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return NIXPLAY_PROXY_ALLOWED_HOSTS.some((allowed) => host === allowed || host.endsWith("." + allowed));
+}
 
 // Verifica se um filme/série existe no Nixplay e retorna o series_id correto
 // (necessário porque para algumas séries, series_id != tmdb_id, ex: HxH)
@@ -73,6 +100,28 @@ router.get("/api/nixplay-check", async (req, res) => {
 router.get("/api/nixplay-resolve", async (req, res) => {
   const nixUrl = req.query.url as string;
   if (!nixUrl) return res.status(400).json({ error: "Missing url" });
+
+  // Anti-SSRF (relatório #8): a resolução só aceita a própria origem Nixplay.
+  // Antes, o endpoint fetchava qualquer host e devolvia status/Location de
+  // serviços internos (oráculo cego de rede, confirmado em produção com
+  // http://127.0.0.1:3000/api/health). O único caller legítimo (iframe do
+  // /api/native-player) só chama com URLs nixplay.lat (needsResolve).
+  let parsedInput: URL;
+  try {
+    parsedInput = new URL(String(nixUrl));
+  } catch {
+    return res.status(400).json({ error: "Formato de URL inválido." });
+  }
+  const inputHost = parsedInput.hostname.toLowerCase();
+  if (parsedInput.protocol !== "http:" && parsedInput.protocol !== "https:") {
+    return res.status(400).json({ error: "Protocolo inválido. Apenas HTTP e HTTPS são permitidos." });
+  }
+  if (inputHost !== "nixplay.lat" && !inputHost.endsWith(".nixplay.lat")) {
+    return res.status(403).json({ error: `Domínio '${inputHost}' não autorizado na resolução.` });
+  }
+  if (await isPrivateOrLocalHost(inputHost)) {
+    return res.status(403).json({ error: "Acesso a endereço IP privado ou interno bloqueado por segurança (Anti-SSRF)." });
+  }
 
   try {
     const controller = new AbortController();
@@ -617,6 +666,27 @@ router.get("/api/nixplay-proxy", async (req, res) => {
       return res.status(400).send("URL de mídia inválida.");
     }
 
+    // Anti-SSRF + allowlist de hostname (relatório #8): este endpoint era um
+    // proxy ABERTO — fetchava qualquer URL (inclusive interna) e streamava a
+    // resposta de volta (confirmado em produção lendo o loopback). Hostnames
+    // válidos: origem Nixplay e CDNs Cloudflare (R2/Workers/Stream) para onde
+    // o redirect de reprodução aponta; hosts privados são barrados SEM fetch.
+    let parsedTarget: URL;
+    try {
+      parsedTarget = new URL(targetUrl);
+    } catch {
+      return res.status(400).send("URL de mídia inválida.");
+    }
+    if (parsedTarget.protocol !== "http:" && parsedTarget.protocol !== "https:") {
+      return res.status(400).send("URL de mídia inválida.");
+    }
+    if (!isAllowedNixplayProxyHost(parsedTarget.hostname)) {
+      return res.status(403).send(`Domínio '${parsedTarget.hostname}' não autorizado no proxy de mídia.`);
+    }
+    if (await isPrivateOrLocalHost(parsedTarget.hostname)) {
+      return res.status(403).send("Acesso a endereço IP privado ou interno bloqueado por segurança (Anti-SSRF).");
+    }
+
     const headers: Record<string, string> = {
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
       "Accept": "*/*",
@@ -679,8 +749,12 @@ router.get("/api/nixplay-proxy", async (req, res) => {
   }
 });
 
-// Endpoint de TESTE pra validar Cloudflare Worker
-router.get("/api/proxy-test", async (req, res) => {
+// Endpoint de TESTE pra validar Cloudflare Worker.
+// (relatório #8) Era público e devolvia o CORPO de qualquer URL (sample de
+// 500 chars) — inclusive interna: SSRF full-read confirmado em produção
+// lendo o /api/health do loopback. Agora exige autenticação admin, como o
+// restante das ferramentas de diagnóstico do painel.
+router.get("/api/proxy-test", requireAdminAuth, async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const targetUrl = String(req.query.url || "").trim();
   if (!targetUrl) {

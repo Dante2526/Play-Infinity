@@ -8,8 +8,27 @@ import {
   resolveEncontreiMovie,
   resolveVizerMovie,
 } from "./encontreiLookup";
+import { isPrivateOrLocalHost } from "../utils/helpers";
 
 export const doodstreamRouter = Router();
+
+// ---------------------------------------------------------------------------
+// Allowlist de hostname dos CDNs do DoodStream (relatório #8): o check antigo
+// era includes("dood") na STRING INTEIRA da URL — http://127.0.0.1:3000/x?dood
+// passava e o endpoint virava proxy aberto (SSRF confirmado em produção
+// streamando resposta interna com o bypass). O matching agora acontece no
+// HOSTNAME parseado via new URL(), nunca em query/string crua.
+const DOODSTREAM_HOST_SUFFIXES = ["playmogo.com", "cloudatacdn.com", "doodstream.com"];
+// Domínios rotativos do DoodStream (dood.wf, dood.yt, mx41.dood.lol, doodcdn.xyz…):
+// o domínio registrável precisa COMEÇAR com "dood" — "dood" em subdomínio de
+// terceiros (dood.evil.com) ou escondido em query (?x=dood) não passa mais.
+const DOODSTREAM_HOST_PATTERN = /^(?:[a-z0-9-]+\.)*dood[a-z0-9-]*\.[a-z]{2,}$/;
+
+function isAllowedDoodstreamHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  if (DOODSTREAM_HOST_SUFFIXES.some((s) => host === s || host.endsWith("." + s))) return true;
+  return DOODSTREAM_HOST_PATTERN.test(host);
+}
 
 interface DoodstreamCacheEntry {
   directUrl?: string;
@@ -179,8 +198,29 @@ doodstreamRouter.get("/api/doodstream-resolve", async (req: Request, res: Respon
 doodstreamRouter.get("/api/doodstream-stream", async (req: Request, res: Response) => {
   try {
     const videoUrl = String(req.query.url || "").trim();
-    if (!videoUrl || (!videoUrl.includes("dood") && !videoUrl.includes("cloudatacdn.com") && !videoUrl.includes("playmogo.com"))) {
+    if (!videoUrl) {
       return res.status(400).send("URL de streaming inválida.");
+    }
+
+    // Validação estrita Anti-SSRF (relatório #8): parse formal da URL,
+    // protocolo explícito http/https, allowlist no HOSTNAME (não na string
+    // inteira) e resolução DNS ativa — loopback, 169.254.169.254, faixas
+    // privadas, notações alternativas de IP e DNS rebinding são bloqueados
+    // SEM chegar ao fetch. O bypass antigo (?dood no query) morre aqui.
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(videoUrl);
+    } catch {
+      return res.status(400).send("URL de streaming inválida.");
+    }
+    if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+      return res.status(400).send("URL de streaming inválida.");
+    }
+    if (!isAllowedDoodstreamHost(parsedUrl.hostname)) {
+      return res.status(400).send("URL de streaming inválida.");
+    }
+    if (await isPrivateOrLocalHost(parsedUrl.hostname)) {
+      return res.status(403).send("Acesso a endereço privado ou interno bloqueado por segurança (Anti-SSRF).");
     }
 
     const headers: Record<string, string> = {
