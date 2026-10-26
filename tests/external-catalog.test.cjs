@@ -922,7 +922,18 @@ test('guard: rota usa redirect 302 + signProxyUrl + validação estrita + format
   assert.ok(src.includes('validateExternalFormatParam'), 'validação de format');
   assert.ok(src.includes('/api/live-stream-proxy'), 'envelope no proxy interno');
   assert.ok(src.includes('"json"'), 'modo format=json disponível');
-  assert.ok(src.includes('NODE_ENV === "production" ? "https" : "http"'), 'protocolo absoluto forçado (padrão iptv.ts)');
+  // Redirect RELATIVO: cliente resolve contra a origem que usou (browser →
+  // https://play-infinity.stream; Sentinela interna → http://127.0.0.1:3000).
+  // URL absoluta com protocolo forçado quebrava a sondagem interna: Location
+  // https://127.0.0.1:3000 → TLS em porta HTTP → painel acusava "fora do ar".
+  assert.ok(
+    src.includes('target = `/api/live-stream-proxy?${params.toString()}`'),
+    'target do proxy é caminho RELATIVO (Location: /api/live-stream-proxy?...)'
+  );
+  assert.ok(
+    !src.includes('NODE_ENV === "production" ? "https" : "http"'),
+    'sem protocolo absoluto forçado (bug da sondagem interna)'
+  );
 });
 
 test('guard: scraper tem allowlist Saimo hardcoded + anti-SSRF + escrita atômica', () => {

@@ -104,15 +104,25 @@ router.get("/api/external-channel", async (req, res) => {
 
     let target: string;
     if (needsProxy) {
-      // Protocolo absoluto forçado (mesmo padrão do iptv.ts: o Express atrás
-      // de proxy local herdaria http:// e quebraria o redirect em produção).
-      const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
-      const host = req.get("host") || `localhost:${process.env.PORT || 3000}`;
+      // Location RELATIVO (RFC 7231 permite URI-reference): cada cliente
+      // resolve contra a origem que já usou —
+      //   browser:  https://play-infinity.stream/api/live-stream-proxy (sem
+      //             mixed content, TLS certo)
+      //   Sentinela/teste do painel: http://127.0.0.1:3000/api/live-stream-proxy
+      //             (porta HTTP do Express, sem tentativa de TLS)
+      // Bug que este fix fecha: com URL absoluta montada como
+      // `${NODE_ENV=production ? https}://${req.get("host")}`, a sondagem
+      // interna da Sentinela (http://127.0.0.1:3000) recebia
+      // Location: https://127.0.0.1:3000/... — TLS numa porta HTTP puro →
+      // "wrong version number" → painel acusava "fora do ar" mesmo com o
+      // canal tocando. (O nginx também não repassa X-Forwarded-Proto, então
+      // detecção por header não era opção.) hls.js e fetch do Node seguem
+      // redirects relativos nativamente.
       const params = new URLSearchParams();
       params.set("url", resolved.url);
       params.set("sig", signProxyUrl(resolved.url));
       if (resolved.referer) params.set("referer", resolved.referer);
-      target = `${protocol}://${host}/api/live-stream-proxy?${params.toString()}`;
+      target = `/api/live-stream-proxy?${params.toString()}`;
     } else {
       target = resolved.url;
     }
