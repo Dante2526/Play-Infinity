@@ -25,6 +25,25 @@ fi
 expected_dir=$(readlink -f "$app_root/current")
 expected_release=$(basename "$expected_dir")
 pm2 jlist | node "$tools_dir/check-app-processes.cjs" "$expected_release" --release-dir "$expected_dir"
-node "$tools_dir/verify-release.cjs" "http://127.0.0.1:${PLAY_INFINITY_PORT:-3000}/api/health" "$expected_release"
+# Verificação da porta ao vivo com janela limitada de retentativas: logo após
+# um rolling reload o primeiro /api/health pode exceder o timeout de 5s do
+# fetch enquanto os workers aquecem (init SQLite/catálogo). Uma única
+# tentativa marcava deploys saudáveis como falhos (2x em 2026-10-26), pois
+# o trap de cleanup não reverte um reload já concluído. Workers antigos em
+# drenagem respondem com release anterior e continuam falhando a checagem,
+# então o retry também preserva a verificação de identidade da versão.
+verify_attempts=${PLAY_INFINITY_VERIFY_ATTEMPTS:-30}
+verified=0
+for (( attempt=1; attempt<=verify_attempts; attempt++ )); do
+  if node "$tools_dir/verify-release.cjs" "http://127.0.0.1:${PLAY_INFINITY_PORT:-3000}/api/health" "$expected_release"; then
+    verified=1
+    break
+  fi
+  sleep 1
+done
+if (( verified != 1 )); then
+  echo "Healthcheck da porta ao vivo falhou após ${verify_attempts} tentativas; inspecione o PM2." >&2
+  exit 1
+fi
 pm2 save
 echo "Reload verificado: $expected_release"
