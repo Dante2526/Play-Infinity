@@ -2,73 +2,18 @@ import { useState, useEffect } from "react";
 import { doc, onSnapshot, setDoc } from "firebase/firestore";
 import { auth, db } from "../services/firebase";
 import { isAiStudioOrDevEnvironment } from "../utils/envUtils";
+import {
+  deriveStatus,
+  parseTrialTimestamp,
+  NO_TRIAL,
+  TRIAL_DURATION_MS,
+  type TrialStatus,
+} from "../utils/subscriptionStatus";
 
-export const TRIAL_DURATION_MS = 30 * 60 * 1000; // 30 minutos
-
-export interface TrialStatus {
-  /** Timestamp (ms) até quando o teste de 30 min está liberado (null = nunca ativou) */
-  trialUntil: number | null;
-  isTrialActive: boolean;
-  hasUsedTrial: boolean;
-  /** true = pode ativar o teste de 30 min (conta sem trial anterior e sem Premium ativo) */
-  canUseTrial: boolean;
-}
-
-const NO_TRIAL: TrialStatus = {
-  trialUntil: null,
-  isTrialActive: false,
-  hasUsedTrial: false,
-  canUseTrial: false,
-};
-
-function parseTrialTimestamp(value: any): number | null {
-  if (value === undefined || value === null || value === "") return null;
-  const d = new Date(value);
-  return isNaN(d.getTime()) ? null : d.getTime();
-}
-
-interface DerivedUserStatus {
-  isPremium: boolean;
-  trial: TrialStatus;
-  isPlus: boolean;
-  isVitalicio: boolean;
-}
-
-function deriveStatus(data: any): DerivedUserStatus {
-  const isExplicitlyActive = data.subscription === "ACTIVE" || data.assinatura === "ATIVA";
-  const expDateStr = data.dataExpiracao || data.expirationDate;
-  let isExpired = false;
-
-  if (expDateStr) {
-    const expDate = new Date(expDateStr);
-    if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
-      isExpired = expDate.getTime() <= Date.now();
-    }
-  }
-
-  const isPremium = isExplicitlyActive && !isExpired;
-
-  const trialUntil = parseTrialTimestamp(
-    data.testarAte ?? data.testarAteEm ?? data.testeExpiracao ?? data.trialUntil
-  );
-  const hasUsedTrial = trialUntil !== null;
-  const isTrialActive = hasUsedTrial && trialUntil! > Date.now();
-
-  const isPlus = data.plano === "plus";
-  const isVitalicio = data.tipoAcesso === "vitalicio" || data.tipoAcesso === "vitalício";
-
-  return {
-    isPremium,
-    trial: {
-      trialUntil,
-      isTrialActive,
-      hasUsedTrial,
-      canUseTrial: !hasUsedTrial && !isPremium,
-    },
-    isPlus,
-    isVitalicio,
-  };
-}
+// Re-exportações para compatibilidade com quem já importa de useSubscription
+// (PaywallModal.tsx importa TRIAL_DURATION_MS; App.tsx importa useSubscription).
+export { TRIAL_DURATION_MS } from "../utils/subscriptionStatus";
+export type { TrialStatus } from "../utils/subscriptionStatus";
 
 /** Ativa o teste de 30 minutos, gravando a expiração no Firestore do usuário logado. */
 export async function startTrial(): Promise<boolean> {

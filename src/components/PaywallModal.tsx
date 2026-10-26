@@ -4,6 +4,7 @@ import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode,
 import { auth, db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useSubscription, startTrial, TRIAL_DURATION_MS } from '../hooks/useSubscription';
+import { deriveStatus } from '../utils/subscriptionStatus';
 import { reportAppError } from './GlobalErrorModal';
 import { getFriendlyErrorMessage } from '../utils/errorTranslator';
 
@@ -225,7 +226,13 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
       let isPaid = false;
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.assinatura === 'premium' || data.isPremium === true || data.assinaturaStatus === 'ACTIVE') {
+        // Alinhado com deriveStatus em useSubscription/subscriptionStatus:
+        // webhook Asaas escreve assinatura="ATIVA"|"INATIVA", cliente escreve
+        // "EXPIRADA"; subscription="ACTIVE"|"INACTIVE" vem de migrations/admin.
+        // O check antigo (assinatura==='premium' || isPremium===true ||
+        // assinaturaStatus==='ACTIVE') nunca batia — botão de verificar pagamento
+        // não confirmava premium nem após PIX confirmado pelo webhook.
+        if (deriveStatus(data).isPremium) {
           isPaid = true;
         }
       }
@@ -235,7 +242,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         const docSnap2 = await getDoc(docRef2);
         if (docSnap2.exists()) {
            const data = docSnap2.data();
-           if (data.assinatura === 'premium' || data.isPremium === true || data.assinaturaStatus === 'ACTIVE') {
+           if (deriveStatus(data).isPremium) {
              isPaid = true;
            }
         }
