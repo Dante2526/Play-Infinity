@@ -144,7 +144,12 @@ export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): P
         };
       }
     } else if (targetUrl.startsWith("/")) {
-      const port = process.env.PORT || 8080;
+      // Rotas relativas (ex: /api/live-stream-proxy?url=...) são servidas pelo
+      // app Express — default 3000 (idem server.ts e encontreiLookup.ts).
+      // 8080 é o video-proxy, processo SEPARADO que não serve essas rotas.
+      // Em produção o PM2 injeta PORT via ecosystem.config.cjs; o default
+      // abaixo cobre dev local e execução direta via node dist/server.cjs.
+      const port = process.env.PORT || 3000;
       urlToProbe = `http://127.0.0.1:${port}${targetUrl}`;
     }
 
