@@ -1,21 +1,15 @@
 import { Router } from "express";
-import axios from "axios";
-import fs from "fs";
-import path from "path";
-import crypto from "crypto";
-import * as cheerio from "cheerio";
-import { isServerBlacklisted } from "../../src/data/serverBlacklist";
-import { validateSafeUrl, sanitizeString } from "../utils/helpers";
-import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, tmdbCache } from "../utils/caches";
-import { Readable } from "stream";
-import { getFirestore, doc, setDoc } from "firebase/firestore";
+// Nota: imports antigos (axios, cheerio, firebase, fs/path/crypto, etc.) eram
+// leftovers de copy-paste e NUNCA usados aqui. Com o build usando
+// --packages=external, um require("axios") derrubaria o servidor em produção
+// (axios nao esta em dependencies) — removidos ao montar o router no server.ts.
+import { tmdbCache } from "../utils/caches";
 
 const router = Router();
 const _tmdbProxyInflight = new Map<string, Promise<{ status: number; data: any }>>();
 
-// API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  // TMDB Proxy (Oculta a chave de API do cliente, evita vazamento no DevTools e cacheia em LRU 15min)
-  router.get(["/api/tmdb", "/api/tmdb/*"], async (req, res) => {
+// TMDB Proxy (Oculta a chave de API do cliente, evita vazamento no DevTools e cacheia em LRU 15min)
+router.get(["/api/tmdb", "/api/tmdb/*"], async (req, res) => {
     try {
       const tmdbPath = (req.params as any)[0] || (req.query.path as string) || "";
       const query = new URLSearchParams(req.query as any);

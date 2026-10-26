@@ -39,6 +39,7 @@ import diagnosticsRouter from "./server/routes/diagnostics";
 import mixdropRouter from "./server/routes/mixdrop";
 import playbackHealthRouter from "./server/routes/playbackHealth";
 import castRouter from "./server/routes/cast";
+import tmdbProxyRouter from "./server/routes/tmdbProxy";
 
 export const app = express();
 app.use(subtitlesRouter);
@@ -449,6 +450,9 @@ app.use(diagnosticsRouter);
 app.use(mixdropRouter);
 app.use(playbackHealthRouter);
 app.use(castRouter);
+// TMDB Proxy com cache LRU de 15 min + dedup de requests inflight — substitui a
+// rota antiga inline (sem cache) que ficava no fim deste arquivo.
+app.use(tmdbProxyRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
@@ -509,31 +513,6 @@ app.use(castRouter);
     } catch (err: any) {
       console.error("[VIP Player Ajax Proxy Error]:", err);
       return res.status(500).json({ status: false, error: "Erro ao buscar opções do player VIP" });
-    }
-  });
-
-  // API: MyEmbed / Playerflix VIP Player com Extração Direta de Stream e Escudo Anti-Popups
-  app.get(["/api/tmdb", "/api/tmdb/*"], async (req, res) => {
-    try {
-      const tmdbPath = (req.params as any)[0] || (req.query.path as string) || "";
-      const query = new URLSearchParams(req.query as any);
-      query.delete("path");
-      
-      const apiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
-
-      query.set("api_key", apiKey);
-      
-      const cleanPath = tmdbPath.replace(/^\/+/, "");
-      const url = `https://api.themoviedb.org/3/${cleanPath}?${query.toString()}`;
-      const response = await fetch(url, {
-        headers: { "accept": "application/json" }
-      });
-      
-      const data = await response.json();
-      return res.status(response.status).json(data);
-    } catch (err) {
-      console.error("[TMDB Proxy Error]:", err);
-      return res.status(500).json({ error: "Erro interno no proxy do TMDB." });
     }
   });
 
