@@ -62,6 +62,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
     return "users";
   });
 
+  // Sincroniza a aba atual na URL (?tab=...). Sem isso, um ?tab= antigo (ex.: link de
+  // notificação do Byte "/admin?tab=channels") fica congelado na URL e um F5 restaura
+  // a aba VELHA em vez da atual. Com a sincronização: F5 restaura a aba corrente;
+  // abrir do zero (sem ?tab=) continua caindo no default "users".
+  useEffect(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      if (p.get("tab") === adminSection) return;
+      p.set("tab", adminSection);
+      const qs = p.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${qs ? `?${qs}` : ""}`,
+      );
+    } catch {
+      /* histórico indisponível (raro) — aba em memória já mudou, segue o jogo */
+    }
+  }, [adminSection]);
+
   useEffect(() => {
     const checkAuth = async () => {
       try {

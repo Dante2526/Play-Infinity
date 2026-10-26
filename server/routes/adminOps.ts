@@ -5,7 +5,7 @@ import { getAdminMessaging, getAdminDb, getAdminFieldValue } from "../firebaseAd
 import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
-import { getEncontreiResolverStatus, getVizerCatalogStatus } from "./encontreiLookup";
+import { getEncontreiResolverStatus, getVizerCatalogStatus, getEncontreiCatalogStatus } from "./encontreiLookup";
 import { checkVizerHealth } from "../services/vizerDomains";
 import { getSentinelStatus, runSentinelCheck, registerAdminPushToken, sendPushToAdmins } from "../services/adminSentinel";
 
@@ -195,6 +195,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
           status: "ONLINE" as const,
           latencyMs: latency,
           statusCode,
+          catalog: getEncontreiCatalogStatus(),
         };
       }
 
@@ -204,6 +205,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         status: "OFFLINE" as const,
         latencyMs: latency,
                 statusCode,
+        catalog: getEncontreiCatalogStatus(),
         error: isLoginPage
           ? (encontreiCookie
               ? "Sessão expirada/inválida: recapturar ENCONTREI_COOKIE (logar no site com \"Manter-me conectado\" + F12 > Network > Cookie)."
@@ -217,6 +219,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         status: "OFFLINE" as const,
         latencyMs: null,
         statusCode: 0,
+        catalog: getEncontreiCatalogStatus(),
         error: `Possível bloqueio Cloudflare ao IP da VPS: ${error?.message || "fetch falhou"}`,
       };
     }

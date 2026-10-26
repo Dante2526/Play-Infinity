@@ -2120,6 +2120,12 @@ export function getVizerCatalogStatus() {
   return { movies: _vizerMovieIndex.size, episodes: _vizerEpisodeIndex.size, series: _vizerSeriesSeasonsIndex.size };
 }
 
+/** Espelho do getVizerCatalogStatus para o catálogo encontrei (fallback, mais filmes). */
+export function getEncontreiCatalogStatus() {
+  loadCatalogs();
+  return { movies: _encontreiMovieIndex.size, episodes: _encontreiEpisodeIndex.size, series: _encontreiSeriesSeasonsIndex.size };
+}
+
 /** Read both catalogue copies independently, including StreamTape-only entries.
  * A shared lookup avoids duplicate live scans when viewers start together. */
 const catalogueMediaSourcePending = new Map<string, Promise<Array<{ fileId: string; source: 'encontrei' | 'vizer'; audio: string }>>>();
