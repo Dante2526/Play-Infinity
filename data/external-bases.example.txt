@@ -1,0 +1,13 @@
+# Modelo de data/external-bases.txt (o arquivo REAL é gerado pelo scraper
+# server/services/saimoCatalogScraper.ts e é GITIGNORED — contém credenciais
+# Xtream embutidas no path das URLs).
+#
+# Formato: base: <idx> <url-prefix-do-painel>
+#  - idx é inteiro; fontes "idx:streamId" do external-channels.txt referenciam
+#    este índice para montar <url-prefix><streamId>.m3u8
+#  - Painéis desativados são gravados pela Saimo como http://desativado.invalid/...
+#    e o scraper os PULA (não grava no arquivo final).
+#  - URLs devem terminar com / (o parser completa se faltar).
+
+base: 2 http://exemplo-painel-xtream.com:80/live/usuario/senha/
+base: 3 http://outro-painel.com:80/live/usuario2/senha2/

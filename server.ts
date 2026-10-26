@@ -40,6 +40,8 @@ import mixdropRouter from "./server/routes/mixdrop";
 import playbackHealthRouter from "./server/routes/playbackHealth";
 import castRouter from "./server/routes/cast";
 import tmdbProxyRouter from "./server/routes/tmdbProxy";
+import externalRouter from "./server/routes/externalRoutes";
+import { startSaimoSyncCron } from "./server/services/saimoCatalogScraper";
 
 export const app = express();
 app.use(subtitlesRouter);
@@ -458,6 +460,10 @@ app.use(castRouter);
 // TMDB Proxy com cache LRU de 15 min + dedup de requests inflight — substitui a
 // rota antiga inline (sem cache) que ficava no fim deste arquivo.
 app.use(tmdbProxyRouter);
+// Canais externos "Saimo-style": catálogo texto populado pelo scraper
+// (canais-saimo.pages.dev) + resolução com fallback de fontes + redirect 302
+// (proxy assinado para http:// / referer — Mixed Content).
+app.use(externalRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
@@ -575,6 +581,9 @@ app.use(tmdbProxyRouter);
       if (process.env.APP_PROBE !== "1") {
         startCatalogWatcher();
         startAdminSentinel();
+        // Sync do catálogo externo de canais (Saimo) no boot + cron 6h.
+        // APP_PROBE=1 pula (mesma condição dos demais services de background).
+        startSaimoSyncCron();
       }
     }
   }
