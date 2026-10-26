@@ -30,6 +30,7 @@ import {
 import { savePlaybackProgress } from "../services/playbackHistory";
 import { getTimelinePreviewImages } from "../services/tmdb";
 import { Capacitor, registerPlugin } from "@capacitor/core";
+import { parseVtt, type VttCue } from "../utils/vttParser";
 
 const PiP = registerPlugin<any>("PiP");
 
@@ -109,45 +110,10 @@ export interface NextMovieInfo {
   sagaTitle?: string;
 }
 
-interface VttCue {
-  start: number;
-  end: number;
-  text: string;
-}
-
-function timeToSeconds(t: string): number {
-  const parts = t.trim().split(":");
-  let h = 0, m = 0, s = 0;
-  if (parts.length === 3) {
-    h = parseFloat(parts[0]);
-    m = parseFloat(parts[1]);
-    s = parseFloat(parts[2]);
-  } else {
-    m = parseFloat(parts[0]);
-    s = parseFloat(parts[1]);
-  }
-  return h * 3600 + m * 60 + s;
-}
-
-function parseVtt(vttText: string): VttCue[] {
-  const cues: VttCue[] = [];
-  const text = vttText.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
-  const blocks = text.split(/\n\n+/);
-  for (const block of blocks) {
-    const lines = block.trim().split("\n");
-    const arrowIdx = lines.findIndex(l => l.includes("-->"));
-    if (arrowIdx === -1) continue;
-    const match = lines[arrowIdx].match(/^([\d:.,]+)\s+-->\s+([\d:.,]+)/);
-    if (!match) continue;
-    const start = timeToSeconds(match[1].replace(",", "."));
-    const end = timeToSeconds(match[2].replace(",", "."));
-    const textLines = lines.slice(arrowIdx + 1).filter(l => !l.startsWith("NOTE") && l.trim() !== "");
-    if (textLines.length === 0) continue;
-    const rawText = textLines.join("\n").replace(/<\d{2}:\d{2}[^>]*>/g, "");
-    cues.push({ start, end, text: rawText });
-  }
-  return cues;
-}
+// parseVtt, VttCue e timeToSeconds extraídos para src/utils/vttParser.ts
+// (relatório #12: teste de regressão em node puro, sem deps React/Firebase).
+// O regex de strip de tags agora cobre TODAS as tags HTML <...>, não apenas
+// timestamps VTT — previne XSS via legendas externas do SubtitleCat.
 function formatTime(sec: number): string {
   if (isNaN(sec) || sec < 0) return "00:00";
   const h = Math.floor(sec / 3600);
@@ -1715,8 +1681,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               textShadow: "0px 0px 7px rgba(0,0,0,1), 0px 0px 5px rgba(0,0,0,1), -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000",
               whiteSpace: "pre-line",
             }}
-            dangerouslySetInnerHTML={{ __html: activeCue }}
-          />
+          >
+            {activeCue}
+          </span>
         </div>
       )}
       {/* ========================================================

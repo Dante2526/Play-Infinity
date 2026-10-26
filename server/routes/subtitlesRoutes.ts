@@ -2,6 +2,7 @@ import { Router } from "express";
 import fs from "fs";
 import path from "path";
 import * as cheerio from "cheerio";
+import { validateSubtitleParams } from "../utils/subtitleValidation";
 
 export const subtitlesRouter = Router();
 
@@ -132,16 +133,28 @@ async function tryFetchSubtitleFromResult(resultHref: string): Promise<string | 
 subtitlesRouter.get("/api/subtitles", async (req, res) => {
   try {
     const { tmdb, type, season, episode, lang } = req.query;
-    if (!tmdb || !type || !lang) {
-      return res.status(400).json({ error: "Parâmetros tmdb, type e lang são obrigatórios." });
+    // Validação estrita de formato (relatório #12): previne path traversal em
+    // cacheKey (que vira filename via path.join — path.join normaliza '..') e
+    // injeção em URLs externas (TMDB, SubtitleCat). Antes, lang="../../etc/passwd"
+    // escapava CACHE_DIR e fs.writeFileSync(cachePath, vttText) permitia escrita
+    // arbitrária após SubtitleCat retornar legenda válida.
+    const validation = validateSubtitleParams({ tmdb, type, season, episode, lang });
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
     }
-
-    const tmdbId = String(tmdb);
-    const mediaType = String(type);
-    const s = season ? String(season) : "1";
-    const e = episode ? String(episode) : "1";
-    const cacheKey = `${mediaType}_${tmdbId}_s${s}_e${e}_${lang}.vtt`;
+    const { tmdbId, mediaType, season: s, episode: e, lang: langStr } = validation.params!;
+    const cacheKey = `${mediaType}_${tmdbId}_s${s}_e${e}_${langStr}.vtt`;
     const cachePath = path.join(CACHE_DIR, cacheKey);
+
+    // Defense in depth: garante que mesmo após path.join normalizar '..', o
+    // caminho resolvido continua dentro de CACHE_DIR. Com a validação regex
+    // acima, isso nunca deveria falhar — mas pega bugs de regressão silenciosa.
+    const resolvedCache = path.resolve(cachePath);
+    const resolvedCacheDir = path.resolve(CACHE_DIR);
+    if (resolvedCache !== resolvedCacheDir && !resolvedCache.startsWith(resolvedCacheDir + path.sep)) {
+      console.warn(`[Subtitles] BUG: cachePath escapou CACHE_DIR após validação: ${resolvedCache}`);
+      return res.status(400).json({ error: "Parâmetros inválidos." });
+    }
 
     // 1. Verifica cache local — mas valida cues mínimas (evita reutilizar cache corrompido)
     if (fs.existsSync(cachePath)) {
