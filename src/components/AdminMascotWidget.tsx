@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { adminFetch } from "../services/adminApi";
 import {
   Bell,
@@ -47,6 +47,54 @@ interface AdminMascotWidgetProps {
   onSelectSection: (section: "users" | "deploy" | "blocks" | "health" | "bugs" | "push" | "channels") => void;
 }
 
+// ============================================================================
+// Posição arrastável do Byte (persistida por dispositivo via localStorage)
+// ============================================================================
+const BYTE_POS_STORAGE_KEY = "playinfinity:byteWidgetPos:v1";
+const BYTE_EDGE_MARGIN = 10; // px — folga mínima das bordas da tela
+const BYTE_DRAG_THRESHOLD = 6; // px — abaixo disso é clique, não arrasto
+
+interface BytePosition {
+  x: number;
+  y: number;
+}
+
+function readSavedPosition(): BytePosition | null {
+  try {
+    const raw = localStorage.getItem(BYTE_POS_STORAGE_KEY);
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (typeof p?.x !== "number" || typeof p?.y !== "number" || !isFinite(p.x) || !isFinite(p.y)) {
+      return null;
+    }
+    return { x: p.x, y: p.y };
+  } catch {
+    return null; // storage indisponível (modo privado etc.) — usa o canto padrão
+  }
+}
+
+function clampToViewport(p: BytePosition, el?: HTMLElement | null): BytePosition {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // Tamanho real do widget; estimativa quando o elemento ainda não existe
+  const w = el?.offsetWidth || 104;
+  const h = el?.offsetHeight || 48;
+  const maxX = Math.max(BYTE_EDGE_MARGIN, vw - w - BYTE_EDGE_MARGIN);
+  const maxY = Math.max(BYTE_EDGE_MARGIN, vh - h - BYTE_EDGE_MARGIN);
+  return {
+    x: Math.min(Math.max(BYTE_EDGE_MARGIN, p.x), maxX),
+    y: Math.min(Math.max(BYTE_EDGE_MARGIN, p.y), maxY),
+  };
+}
+
+function persistPosition(p: BytePosition) {
+  try {
+    localStorage.setItem(BYTE_POS_STORAGE_KEY, JSON.stringify(p));
+  } catch {
+    /* storage cheio/indisponível — posição vale só pra sessão atual */
+  }
+}
+
 export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState<SentinelStatusData | null>(null);
@@ -54,6 +102,124 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
   const [probingNow, setProbingNow] = useState(false);
   const [testPushLoading, setTestPushLoading] = useState(false);
   const [testPushFeedback, setTestPushFeedback] = useState<string | null>(null);
+
+  // ===== Byte arrastável: posição, gesto de arrasto e memorização =====
+  const asideRef = useRef<HTMLElement | null>(null);
+  // null = canto padrão (inferior direito, via classes); objeto = posição custom salva
+  const [pos, setPos] = useState<BytePosition | null>(() => {
+    const saved = readSavedPosition();
+    return saved ? clampToViewport(saved) : null;
+  });
+  const [dragging, setDragging] = useState(false);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origLeft: number;
+    origTop: number;
+    moved: boolean;
+    last: BytePosition;
+  } | null>(null);
+  const swallowClickRef = useRef(false);
+
+  // Re-ajusta na montagem (tamanho real) e quando a janela muda de tamanho/gira
+  useEffect(() => {
+    setPos((p) => (p ? clampToViewport(p, asideRef.current) : p));
+    const onViewportChange = () => setPos((p) => (p ? clampToViewport(p, asideRef.current) : p));
+    window.addEventListener("resize", onViewportChange);
+    window.addEventListener("orientationchange", onViewportChange);
+    return () => {
+      window.removeEventListener("resize", onViewportChange);
+      window.removeEventListener("orientationchange", onViewportChange);
+    };
+  }, []);
+
+  const beginDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return; // só botão esquerdo
+    const aside = asideRef.current;
+    if (!aside) return;
+    swallowClickRef.current = false; // novo gesto começa limpo
+    const rect = aside.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      // Sem posição salva o widget fica ancorado por classes (bottom/right):
+      // parte da posição real medida na tela na hora do gesto
+      origLeft: pos?.x ?? rect.left,
+      origTop: pos?.y ?? rect.top,
+      moved: false,
+      last: pos ?? { x: rect.left, y: rect.top },
+    };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* navegador sem pointer capture — arrasto via move/up ainda funciona */
+    }
+  };
+
+  const moveDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX;
+    const dy = e.clientY - d.startY;
+    if (!d.moved) {
+      if (Math.abs(dx) < BYTE_DRAG_THRESHOLD && Math.abs(dy) < BYTE_DRAG_THRESHOLD) return;
+      d.moved = true;
+      setDragging(true);
+      setIsOpen(false); // card fecha durante o arrasto
+    }
+    d.last = clampToViewport({ x: d.origLeft + dx, y: d.origTop + dy }, asideRef.current);
+    // Atualiza o DOM direto (sem re-render) pra manter 60fps no arrasto
+    const aside = asideRef.current;
+    if (aside) {
+      aside.style.left = `${d.last.x}px`;
+      aside.style.top = `${d.last.y}px`;
+      aside.style.right = "auto";
+      aside.style.bottom = "auto";
+    }
+  };
+
+  const endDrag = (e: React.PointerEvent<HTMLButtonElement>) => {
+    const d = dragRef.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    dragRef.current = null;
+    if (!d.moved) return; // foi um toque/clique comum — deixa o onClick agir
+    setDragging(false);
+    // O clique sintético disparado logo após soltar não deve abrir o card
+    swallowClickRef.current = true;
+    const final = clampToViewport(d.last, asideRef.current);
+    setPos(final);
+    persistPosition(final); // 🧠 memoriza onde o Byte ficou
+  };
+
+  const handleWidgetClick = () => {
+    if (swallowClickRef.current) {
+      swallowClickRef.current = false;
+      return;
+    }
+    setIsOpen((prev) => !prev);
+  };
+
+  // Duplo clique restaura o canto padrão (inferior direito)
+  const handleWidgetDoubleClick = () => {
+    swallowClickRef.current = false;
+    try {
+      localStorage.removeItem(BYTE_POS_STORAGE_KEY);
+    } catch {
+      /* ignora */
+    }
+    setPos(null);
+    setIsOpen(false);
+    // Limpa estilos inline aplicados manualmente durante o último arrasto
+    const aside = asideRef.current;
+    if (aside) {
+      aside.style.left = "";
+      aside.style.top = "";
+      aside.style.right = "";
+      aside.style.bottom = "";
+    }
+  };
 
   // Busca status do sentinela
   const fetchStatus = useCallback(async (showLoading = false) => {
@@ -134,6 +300,16 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
   const alerts = status?.activeAlerts || [];
   const alertCount = alerts.length;
 
+  // Mantém o Byte dentro da tela quando o balão de alertas aparece/some
+  // (a altura do aside muda e o botão pode encostar na borda)
+  useEffect(() => {
+    setPos((p) => (p ? clampToViewport(p, asideRef.current) : p));
+  }, [alertCount, isOpen]);
+
+  // Direção de abertura do card conforme o canto em que o Byte foi deixado
+  const openUpward = !pos ? true : pos.y > window.innerHeight / 2;
+  const alignRight = !pos ? true : pos.x > window.innerWidth / 2;
+
   // Cores dinâmicas por humor
   const moodColors = {
     happy: {
@@ -160,8 +336,16 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
     <>
       {/* Botão Flutuante do Mascote (Canto Inferior Direito) */}
       <aside
+        ref={asideRef}
         aria-label="Assistente Byte"
-        className="fixed bottom-4 right-4 z-40 sm:bottom-6 sm:right-6 flex flex-col items-end pointer-events-auto select-none"
+        className={`fixed flex flex-col items-end pointer-events-auto select-none ${
+          dragging ? "z-50" : "z-40"
+        }${pos ? "" : " bottom-4 right-4 sm:bottom-6 sm:right-6"}`}
+        style={
+          pos
+            ? { left: `${pos.x}px`, top: `${pos.y}px`, right: "auto", bottom: "auto" }
+            : undefined
+        }
       >
         {/* Balão de fala sutil quando recolhido com alertas */}
         {!isOpen && alertCount > 0 && (
@@ -179,8 +363,16 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
         {/* Botão de Pílula com o Mascote */}
         <button
           type="button"
-          onClick={() => setIsOpen((prev) => !prev)}
-          className={`group flex items-center gap-2.5 p-1.5 pr-3 sm:pr-4 rounded-full border shadow-2xl backdrop-blur-xl transition-all duration-300 min-h-[48px] min-w-[48px] ${
+          onPointerDown={beginDrag}
+          onPointerMove={moveDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onClick={handleWidgetClick}
+          onDoubleClick={handleWidgetDoubleClick}
+          style={{ touchAction: "none" }}
+          className={`group flex items-center gap-2.5 p-1.5 pr-3 sm:pr-4 rounded-full border shadow-2xl backdrop-blur-xl transition-all duration-300 min-h-[48px] min-w-[48px] cursor-grab ${
+            dragging ? "cursor-grabbing scale-105" : ""
+          } ${
             isOpen
               ? "bg-[#1f1f23] border-white/20 scale-105"
               : mood === "alert"
@@ -189,7 +381,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
               ? "bg-[#18181b]/90 border-orange-500/40 hover:border-orange-500 shadow-orange-500/20"
               : "bg-[#18181b]/90 border-emerald-500/30 hover:border-emerald-500 shadow-emerald-500/10"
           }`}
-          title="Guardião Byte - Clique para ver o status da plataforma"
+          title="Guardião Byte — clique para o status, arraste para mover, duplo clique volta pro canto padrão"
         >
           {/* Container do Mascote SVG Miniatura */}
           <div className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shrink-0">
@@ -268,7 +460,11 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
 
         {/* Modal / Card Expansível do Mascote */}
         {isOpen && (
-          <div className="absolute bottom-16 right-0 w-[calc(100vw-32px)] max-w-sm sm:w-96 bg-[#121214]/95 border border-white/15 rounded-3xl p-4 sm:p-5 shadow-2xl backdrop-blur-2xl flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-200">
+          <div
+            className={`absolute w-[calc(100vw-32px)] max-w-sm sm:w-96 bg-[#121214]/95 border border-white/15 rounded-3xl p-4 sm:p-5 shadow-2xl backdrop-blur-2xl flex flex-col gap-3.5 animate-in fade-in zoom-in-95 duration-200 ${
+              openUpward ? "bottom-16" : "top-16"
+            } ${alignRight ? "right-0" : "left-0"}`}
+          >
             
             {/* Header do Card */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
