@@ -33,7 +33,7 @@ const NAME_MAX_LENGTH = 80;
  * Letras unicode (inclui acentos), dígitos, espaços e pontuação comum de
  * nomes de canal: & ( ) . - + ' : ,
  */
-const NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} &().\-+':,]*$/u;
+const NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} &().\-+':,!]*$/u;
 
 export function validateExternalChannelName(raw: unknown): ExternalChannelNameValidation {
   if (typeof raw !== "string") {

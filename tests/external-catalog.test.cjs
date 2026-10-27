@@ -267,6 +267,9 @@ test('validação: nome válido com acentos, parênteses e & é aceito', () => {
   assert.ok(validation.validateExternalChannelName('DAZN (Jogo 1)').ok);
   assert.ok(validation.validateExternalChannelName('Filmes & Séries HD').ok);
   assert.ok(validation.validateExternalChannelName('Canal OFF').ok);
+  assert.ok(validation.validateExternalChannelName('E!').ok);
+  assert.ok(validation.validateExternalChannelName('Rede TV!').ok);
+  assert.ok(validation.validateExternalChannelName('RedeTV!').ok);
 });
 
 test('validação: name vazio/ausente/não-string é rejeitado', () => {

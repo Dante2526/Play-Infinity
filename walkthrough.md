@@ -1,3 +1,29 @@
+## 27/10/2026 — Resolução dos 7 Avisos do Sentinela Byte (Android 57/1.4.25)
+
+**Contexto e Diagnóstico:**
+O painel administrativo do mascote "Byte" registrava 7 alertas de canais fora do ar gerados às 11:07: E! (400), Rede TV! (400), Warner (502), Assombrações (502), Futura (502), NickOnline (502) e Disney+ 01 (404).
+1. **Causa Raiz 1 (Erro 400 em E! e Rede TV!):** O padrão de regex `NAME_PATTERN` em `server/utils/externalValidation.ts` rejeitava o caractere `!` (exclamação), retornando `400 Bad Request` na validação de query de `/api/external-channel`.
+2. **Causa Raiz 2 (Alertas Residuais 502/404):** Os alertas foram gerados durante o reboot do servidor às 11:07. Em `server/services/adminSentinel.ts`, não havia rotina para purgar alertas órfãos de canais que fossem posteriormente removidos ou alterados no catálogo ativo (`liveChannels`).
+3. **Evidência Real dos Streams:** Todos os 7 canais foram testados diretamente via probe HLS; 100% responderam `200 OK` com cabeçalho `#EXTM3U` válido.
+
+**Modificações Realizadas (4 arquivos):**
+1. **`server/utils/externalValidation.ts`:**
+   - Adicionado `!` ao regex `NAME_PATTERN = /^[\p{L}\p{N}][\p{L}\p{N} &().\-+':,!]*$/u;`.
+2. **`server/services/adminSentinel.ts`:**
+   - Implementada limpeza automática de alertas órfãos (`orphanChannelAlerts`) para qualquer alerta de canal não mais presente na lista ativa (`liveChannels`).
+3. **`tests/external-catalog.test.cjs`:**
+   - Adicionadas asserções unitárias para nomes com exclamação (`E!`, `Rede TV!`, `RedeTV!`).
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 57 e `versionName` para "1.4.25".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes `tests/external-catalog.test.cjs`: 7/7 casos de validação passando.
+- Suíte de testes `tests/admin-sentinel.test.cjs`: 8/8 testes passando (100%).
+- Catálogo estável de 229 canais sincronizado na VPS Oracle em `/home/ubuntu/play-infinity/data/external-channels.txt`.
+
+---
+
 ## 27/10/2026 — Auditoria Profunda de Estabilidade dos 350 Canais e Filtragem Anti-Queda
 
 **Contexto e Diagnóstico:**

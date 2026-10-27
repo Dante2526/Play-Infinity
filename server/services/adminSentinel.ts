@@ -288,6 +288,26 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
     }
 
     // =========================================================================
+    // RESOLUÇÃO AUTOMÁTICA DE ALERTAS DE CANAIS REMOVIDOS DO CATÁLOGO
+    // Se um canal antes alertado (channel:<id>) não existe mais no catálogo
+    // ativo (liveChannels), removemos o alerta ativo e o histórico para
+    // não manter alertas fantasmas eternamente.
+    // =========================================================================
+    const activeChannelIds = new Set(liveChannels.map((c) => c.id));
+    const orphanChannelAlerts = Array.from(activeAlerts.keys()).filter((aid) => {
+      if (!aid.startsWith("channel:")) return false;
+      const chId = aid.substring("channel:".length);
+      return !activeChannelIds.has(chId);
+    });
+    for (const orphanId of orphanChannelAlerts) {
+      activeAlerts.delete(orphanId);
+      notifiedHistory.delete(orphanId);
+    }
+    if (orphanChannelAlerts.length > 0) {
+      console.log(`[AdminSentinel] ${orphanChannelAlerts.length} alerta(s) de canais removidos do catálogo foram limpos.`);
+    }
+
+    // =========================================================================
     // GUARDA DE SEGURANÇA: se não conseguimos ler blockedIds, NÃO testamos
     // canais cegamente — isso evita enxame de alertas falsos quando as regras
     // do Firestore mudam ou quando o Admin SDK falha. Gera um alerta de sistema
