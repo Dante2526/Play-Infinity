@@ -109,98 +109,128 @@ export function useSubscription() {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       const gen = ++authGeneration;
       if (user) {
-        // Cria um listener em tempo real no documento do usuário na coleção 'usuarios'
-        const userRef = doc(db, "usuarios", user.uid);
-        const unsubscribeSnap = onSnapshot(
-          userRef,
-          async (snapshot) => {
-            if (snapshot.exists()) {
-              const data = snapshot.data();
-              applyStatus(data);
+        let activeUnsubscribeSnap: (() => void) | null = null;
 
-              // Se o documento estava como ATIVA mas já expirou, atualiza no Firestore
-              const isExplicitlyActive = data.subscription === "ACTIVE" || data.assinatura === "ATIVA";
-              const expDateStr = data.dataExpiracao || data.expirationDate;
-              let isExpired = false;
-              if (expDateStr) {
-                const expDate = new Date(expDateStr);
-                if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
-                  isExpired = expDate.getTime() <= Date.now();
+        const attachUserSubscriptionListener = (targetUser: any, retryAttempt = 0) => {
+          if (disposed || gen !== authGeneration) return;
+          const userRef = doc(db, "usuarios", targetUser.uid);
+
+          activeUnsubscribeSnap = onSnapshot(
+            userRef,
+            async (snapshot) => {
+              if (disposed || gen !== authGeneration) return;
+              if (snapshot.exists()) {
+                const data = snapshot.data();
+                applyStatus(data);
+
+                // Se o documento estava como ATIVA mas já expirou, atualiza no Firestore
+                const isExplicitlyActive = data.subscription === "ACTIVE" || data.assinatura === "ATIVA";
+                const expDateStr = data.dataExpiracao || data.expirationDate;
+                let isExpired = false;
+                if (expDateStr) {
+                  const expDate = new Date(expDateStr);
+                  if (!isNaN(expDate.getTime()) && expDate.getFullYear() < 2099) {
+                    isExpired = expDate.getTime() <= Date.now();
+                  }
                 }
-              }
-              if (isExplicitlyActive && isExpired) {
+                if (isExplicitlyActive && isExpired) {
+                  try {
+                    const { updateDoc } = await import("firebase/firestore");
+                    await updateDoc(userRef, {
+                      assinatura: "EXPIRADA",
+                      subscription: "INACTIVE",
+                    });
+                  } catch (e) {
+                    console.warn("Silenced error:", e);
+                  }
+                }
+
+                setLoading(false);
+              } else {
                 try {
-                  const { updateDoc } = await import("firebase/firestore");
-                  await updateDoc(userRef, {
-                    assinatura: "EXPIRADA",
-                    subscription: "INACTIVE",
-                  });
-                } catch(e){console.warn("Silenced error:", e);}
+                  const { getDoc } = await import("firebase/firestore");
+                  const legacySnap = await getDoc(doc(db, "users", targetUser.uid));
+                  if (legacySnap.exists()) {
+                    applyStatus(legacySnap.data());
+                    setLoading(false);
+                    return;
+                  }
+                } catch (e) {
+                  console.warn("Silenced error:", e);
+                }
+                clearExpiryTimer();
+                setIsPremium(isDev);
+                setTrial(NO_TRIAL);
+                setIsPlus(false);
+                setIsVitalicio(false);
+                setLoading(false);
+              }
+            },
+            (err) => {
+              if (disposed || gen !== authGeneration) return;
+              clearExpiryTimer();
+
+              // Detecta rejeição transitória por expiração ou renovação de token (Missing or insufficient permissions)
+              const errMsg = String(err?.message || "").toLowerCase();
+              const errCode = String((err as any)?.code || "").toLowerCase();
+              const isPermissionIssue =
+                errCode.includes("permission-denied") ||
+                errMsg.includes("permission") ||
+                errMsg.includes("insufficient");
+
+              if (isPermissionIssue && retryAttempt < 2) {
+                console.warn(`[useSubscription] Sessão em renovação (tentativa ${retryAttempt + 1}/2). Atualizando credencial...`);
+                (async () => {
+                  try {
+                    const currentUser = auth.currentUser;
+                    if (currentUser) await currentUser.getIdToken(true);
+                  } catch (tokenErr) {
+                    console.warn("[useSubscription] Falha ao renovar token ID:", tokenErr);
+                  }
+
+                  await new Promise((resolve) => setTimeout(resolve, 600));
+                  if (disposed || gen !== authGeneration) return;
+
+                  // Reestabelece a escuta em tempo real com a nova credencial válida
+                  attachUserSubscriptionListener(targetUser, retryAttempt + 1);
+                })();
+                return;
               }
 
-              setLoading(false);
-            } else {
-              try {
-                const { getDoc } = await import("firebase/firestore");
-                const legacySnap = await getDoc(doc(db, "users", user.uid));
-                if (legacySnap.exists()) {
-                  const data = legacySnap.data();
-                  applyStatus(data);
-                  setLoading(false);
-                  return;
+              // Se as tentativas se esgotarem ou for outro erro de rede, registra aviso limpo e tenta leitura única
+              console.warn("[useSubscription] Listener do usuário indisponível:", err?.message || err);
+
+              (async () => {
+                if (disposed || gen !== authGeneration) return;
+                try {
+                  const { getDoc, doc: docFn } = await import("firebase/firestore");
+                  const retrySnap = await getDoc(docFn(db, "usuarios", targetUser.uid));
+                  if (retrySnap.exists()) {
+                    applyStatus(retrySnap.data());
+                    setLoading(false);
+                    return;
+                  }
+                } catch (retryErr) {
+                  console.warn("Silenced error:", retryErr);
                 }
-              } catch(e){console.warn("Silenced error:", e);}
-              clearExpiryTimer();
-              setIsPremium(isDev);
-              setTrial(NO_TRIAL);
-              setIsPlus(false);
-              setIsVitalicio(false);
-              setLoading(false);
+                if (disposed || gen !== authGeneration) return;
+                setIsPremium(isDev);
+                setTrial(NO_TRIAL);
+                setIsPlus(false);
+                setIsVitalicio(false);
+                setLoading(false);
+              })();
             }
-          },
-          (err) => {
-            console.error("Erro ao escutar assinatura do usuário:", err);
-            clearExpiryTimer();
-            // Erros transitórios (ex.: refresh do token de sessão) podem negar a
-            // leitura por alguns segundos. Antes de assumir "não premium" — o que
-            // trancaria o player de um assinante legítimo — tenta uma leitura única.
-            (async () => {
-              if (disposed || gen !== authGeneration) return;
-              // Causa raiz provável: token ID expirado → as regras avaliam
-              // request.auth == null e negam a leitura do próprio doc. Forçar o
-              // refresh resolve; sem ele, só caíamos no fallback "não premium".
-              try {
-                const currentUser = auth.currentUser;
-                if (currentUser) await currentUser.getIdToken(true);
-              } catch (tokenErr) {
-                console.warn("Silenced error:", tokenErr);
-              }
-              await new Promise((resolve) => setTimeout(resolve, 800));
-              if (disposed || gen !== authGeneration) return;
-              try {
-                const { getDoc, doc: docFn } = await import("firebase/firestore");
-                const retrySnap = await getDoc(docFn(db, "usuarios", user.uid));
-                if (retrySnap.exists()) {
-                  applyStatus(retrySnap.data());
-                  setLoading(false);
-                  return;
-                }
-              } catch (retryErr) {
-                console.warn("Silenced error:", retryErr);
-              }
-              if (disposed || gen !== authGeneration) return;
-              setIsPremium(isDev);
-              setTrial(NO_TRIAL);
-              setIsPlus(false);
-              setIsVitalicio(false);
-              setLoading(false);
-            })();
-          }
-        );
+          );
+        };
+
+        attachUserSubscriptionListener(user, 0);
 
         return () => {
           clearExpiryTimer();
-          unsubscribeSnap();
+          if (activeUnsubscribeSnap) {
+            activeUnsubscribeSnap();
+          }
         };
       } else {
         clearExpiryTimer();

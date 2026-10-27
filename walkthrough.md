@@ -1,3 +1,25 @@
+## 27/10/2026 — Auto-Recuperação Resiliente do Listener de Assinatura e Fim do Falso Alarme de Permissão (Android 60/1.4.28)
+
+**Contexto e Diagnóstico:**
+O usuário reportou o erro no console: `Erro ao escutar assinatura do usuário: FirebaseError: Missing or insufficient permissions.`.
+1. **Causa Raiz:** O hook `useSubscription.ts` escuta em tempo real o documento `/usuarios/{uid}` via `onSnapshot`. Durante transições de tela ou suspensão de aba do navegador, o Firebase Auth renova o token ID de sessão em background. Nesses milissegundos, o Firestore Security Rules avalia `request.auth` como nulo e rejeita a escuta com `Missing or insufficient permissions`.
+2. **Defeito Anterior:** O código emitia um `console.error` assustador em vermelho no console, cancelava o `onSnapshot` e realizava apenas uma leitura estática (`getDoc`), perdendo a escuta em tempo real subsequente.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/hooks/useSubscription.ts`:**
+   - Adicionada detecção inteligente de rejeição transitória por token em renovação (`permission-denied` ou `Missing or insufficient permissions`).
+   - Substituído o `console.error` fatal por aviso suave de recuperação (`console.warn`).
+   - Implementado fluxo com auto-recuperação recursiva (`attachUserSubscriptionListener`): força a renovação da credencial com `user.getIdToken(true)` e reconecta o listener `onSnapshot` em tempo real automaticamente (até 2 tentativas).
+2. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 60 e `versionName` para "1.4.28".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de pagamentos e status (`tests/paywall-status-check.test.cjs` e `tests/payments.test.cjs`): 35/35 testes aprovados.
+- Compilação de produção (`npm run build` — Vite + esbuild): 0 erros gerando bundles com sucesso em 15s.
+
+---
+
 ## 27/10/2026 — Redesign do 'Continue Assistindo' no Padrão Netflix com Setas Circulares e Scrollbar Oculta (Android 59/1.4.27)
 
 **Contexto e Diagnóstico:**
