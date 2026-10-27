@@ -36,6 +36,8 @@ import {
 } from '../services/liveChannelService';
 import { ChannelLogo } from './ChannelLogo';
 import { ConfirmModal } from './ConfirmModal';
+import { ExternalChannelSources } from './ExternalChannelSources';
+import { fetchLiveCatalogue, getLiveCatalogue } from '../services/liveCatalogue';
 
 interface StreamSearchResult {
   streamId: string;
@@ -81,6 +83,17 @@ function getSmartSearchTerm(channel: LiveChannel): { term: string; chips: string
 }
 
 export function AdminLiveChannels() {
+  const [catalogue, setCatalogue] = useState<LiveChannel[]>(getLiveCatalogue);
+  const [catalogueError, setCatalogueError] = useState('');
+  useEffect(() => {
+    let mounted = true;
+    const load = () => { void fetchLiveCatalogue().then(channels => {
+      if (mounted) { setCatalogue(channels); setCatalogueError(''); }
+    }).catch(() => { if (mounted) setCatalogueError('Catálogo remoto indisponível. Exibindo a última lista disponível.'); }); };
+    load();
+    const timer = setInterval(load, 5 * 60 * 1000);
+    return () => { mounted = false; clearInterval(timer); };
+  }, []);
   const [settings, setSettings] = useState<LiveChannelSettings>({
     blockedChannelIds: [],
     customServers: {}
@@ -125,15 +138,15 @@ export function AdminLiveChannels() {
 
   // Catálogo completo mesclado (incluindo canais bloqueados para visualização do admin)
   const allChannels = useMemo(() => {
-    return mergeChannelsWithSettings(INITIAL_LIVE_CHANNELS, settings, true);
-  }, [settings]);
+    return mergeChannelsWithSettings(catalogue, settings, true);
+  }, [settings, catalogue]);
 
   // Categorias disponíveis
   const categories = useMemo(() => {
     const set = new Set<string>();
-    INITIAL_LIVE_CHANNELS.forEach(c => set.add(c.category));
+    catalogue.forEach(c => set.add(c.category));
     return Array.from(set);
-  }, []);
+  }, [catalogue]);
 
   // Canais filtrados para exibição
   const filteredChannels = useMemo(() => {
@@ -340,7 +353,7 @@ export function AdminLiveChannels() {
     setSavingServers(true);
     try {
       await resetChannelCustomServers(editingChannel.id);
-      const original = INITIAL_LIVE_CHANNELS.find(c => c.id === editingChannel.id);
+      const original = catalogue.find(c => c.id === editingChannel.id);
       if (original) {
         setEditServers([...original.servers]);
       }
@@ -358,6 +371,7 @@ export function AdminLiveChannels() {
 
   return (
     <div className="space-y-4">
+      {catalogueError && <p role="alert" className="text-amber-300 text-sm">{catalogueError}</p>}
       {/* Feedback flutuante */}
       {actionSuccess && (
         <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 animate-fade-in shadow-lg">
@@ -672,6 +686,11 @@ export function AdminLiveChannels() {
                     )}
                   </div>
                 </div>
+
+                {[...new Set(channel.servers.filter(s => s.url.startsWith('/api/external-channel?'))
+                  .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name')))]
+                  .filter((name): name is string => !!name)
+                  .map(name => <div key={name}><ExternalChannelSources name={name} /></div>)}
 
                 {/* Botões de Ação */}
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">

@@ -1,6 +1,7 @@
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
 import { getLocalChannelSettings, mergeChannelsWithSettings } from './liveChannelService';
 import { resolveChannelLogo } from '../utils/channelLogos';
+import { getLiveCatalogue } from './liveCatalogue';
 
 const FAVORITES_KEY = 'play_infinity_live_favorites';
 const CUSTOM_CHANNELS_KEY = 'play_infinity_custom_channels';
@@ -74,9 +75,10 @@ export function clearAllCustomChannels(): void {
 }
 
 export function getAllChannels(): LiveChannel[] {
+  const baseChannels = getLiveCatalogue();
   const custom = getCustomChannels();
   // Se o usuário tiver um canal customizado antigo com url descontinuada da Pluto, descarta para usar a lista oficial atualizada
-  const initialMap = new Map(INITIAL_LIVE_CHANNELS.map(c => [c.id, c]));
+  const initialMap = new Map(baseChannels.map(c => [c.id, c]));
   const validCustom = custom.filter(c => {
     const blockedIds = ['xxx-anal', 'canal-adulto-1', 'canal-adulto-2', 'xxx-gay', 'xxx-hardcore', 'xxx-live-cams', 'of-juliana-bonde', 'of-elisa-sanches', 'of-mc-pipokinha'];
     if (blockedIds.includes(c.id) || (c as any).category === '+18' || (c as any).category === 'Adultos') {
@@ -91,7 +93,7 @@ export function getAllChannels(): LiveChannel[] {
   });
 
   const customIds = new Set(validCustom.map(c => c.id));
-  const initialFiltered = INITIAL_LIVE_CHANNELS.filter(c => !customIds.has(c.id));
+  const initialFiltered = baseChannels.filter(c => !customIds.has(c.id));
   const combined = [...validCustom, ...initialFiltered];
 
   // Aplica bloqueios e servidores customizados configurados pelo admin no Firestore

@@ -1,3 +1,15 @@
+## 27/10/2026 — Fontes individuais Saimo no painel administrativo
+
+Publicação do lote completo autorizada pelo usuário. Android 55/1.4.23 preparado. A ativação na VPS e quantidade real importada devem ser verificadas após o deploy.
+
+Escopo ampliado pelo usuário: publicar o catálogo completo de canais Saimo. Nova rota pública /api/live-channels entrega metadados e rotas internas (sem URLs de fontes). Cliente e admin carregam lista remota, revalidam em cinco minutos e preservam lista anterior se a consulta falhar. IDs dos canais existentes preservados; novos canais têm IDs estáveis pelo nome normalizado, sem limite artificial de 40. Duplicatas por nome/alias do resolvedor omitidas; restrição existente de categorias adultas mantida. Configurações Firestore, favoritos e canais customizados continuam aplicados sobre a lista ampliada; Byte também usa a lista completa, com concorrência de três workers preservada. Teste usa catálogo com 325 entradas adicionais e valida total, IDs únicos/estáveis e ausência de credenciais. Quantidade real do arquivo Saimo na VPS ainda não medida neste lote; não prometer 300 fontes funcionais.
+
+Validação adicional encerrada: 91 testes direcionados passaram, mais um teste de catálogo no cliente confirmou 325 entradas, deduplicação de requisições concorrentes e preservação da lista em falha de rede (92 casos no total). TypeScript, build frontend e bundle backend em /tmp/play-infinity-tv-complete aprovados. Nenhum envio neste turno.
+
+Adicionada expansão por canal Multi-Fonte com todas as fontes, domínio/qualidade, estado (não testada, cache, teste falhou, incompatível/base ausente), teste individual e horário/latência do teste. Consulta não dispara sondagens em massa. Rotas /api/admin/external-sources e POST /api/admin/external-source-test protegidas pelo middleware admin existente; recebem nome/índice do catálogo, nunca URL arbitrária. Validação anti-SSRF reaproveitada; máximo de três testes simultâneos por worker. Respostas sem URLs, paths, referer, chaves ou credenciais. Teste individual invalida cache daquela fonte antes da sondagem. Indicador da última fonte escolhida é local ao processo PM2, não representa servidor de todos os clientes ou stream decodificado. Seleção automática e catálogo Saimo existente preservados.
+
+Validações: 64 testes direcionados passaram, TypeScript passou, build Vite em /tmp/play-infinity-tv-source-details passou; cenário Chromium em viewport mobile validou expansão sem consulta antecipada, lista completa, teste por índice, resultado e desativação de formato incompatível (/tmp/test-tv-source-panel.cjs). Testes cobrem omissão de credenciais, índices, fonte inexistente, DASH e bloqueio de loopback. Nenhuma validação nova de CDN real ou autenticação administrativa em produção. Nenhum push/deploy deste lote.
+
 ## 27/10/2026 — Correção de origem do player de TV e sondagem dos backups
 
 Envio ao GitHub autorizado pelo usuário. Validação local: 81 testes direcionados, TypeScript e build Vite aprovados. Android atualizado para 54/1.4.22 para a próxima compilação. Publicação/ativação na VPS devem ser confirmadas separadamente.

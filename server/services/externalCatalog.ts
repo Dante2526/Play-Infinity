@@ -35,6 +35,7 @@
 import fs from "fs";
 import path from "path";
 import { isPrivateOrLocalHost } from "../utils/helpers";
+import { INITIAL_LIVE_CHANNELS, type LiveChannel } from '../../src/data/liveChannels';
 
 // ---------------------------------------------------------------------------
 // Caminhos — EXTERNAL_CATALOG_DIR na VPS aponta para o deploy real; em dev o
@@ -693,4 +694,88 @@ export function externalCatalogStats(): {
     channelsFileExists: fs.existsSync(channelsFilePath()),
     basesFileExists: fs.existsSync(basesFilePath()),
   };
+}
+
+/** Publish catalogue metadata and internal resolver routes, never upstream credentials. */
+export function getPublicLiveChannels(): LiveChannel[] {
+  const channels = [...INITIAL_LIVE_CHANNELS];
+  const represented = new Set<string>();
+  for (const channel of channels) {
+    represented.add(normalizeChannelName(channel.name));
+    for (const server of channel.servers) {
+      if (server.url.startsWith('/api/external-channel?')) {
+        const name = new URL(server.url, 'https://play-infinity.stream').searchParams.get('name');
+        if (name) represented.add(normalizeChannelName(name));
+      }
+    }
+  }
+  for (const channel of loadExternalChannels()) {
+    const normalized = normalizeChannelName(channel.name);
+    if (represented.has(normalized)) continue;
+    represented.add(normalized);
+    // Preserve the existing product restriction on adult channels.
+    if (/adult|\+18|xxx|porn/i.test(channel.category || '')) continue;
+    const category = normalizeChannelName(channel.category || '');
+    const mapped: LiveChannel['category'] = /esport|sport|futebol/.test(category) ? 'Esportes'
+      : /noticia|news/.test(category) ? 'Notícias'
+      : /infantil|kids|anime|desenho/.test(category) ? 'Infantil'
+      : /filme|serie|cinema/.test(category) ? 'Filmes & Séries'
+      : /aberta|loca[il]|region/.test(category) ? 'TV Aberta' : 'Variedades';
+    let logo = '';
+    try { const parsed = new URL(channel.logo || ''); if (parsed.protocol === 'https:') logo = parsed.href; } catch {}
+    channels.push({
+      id: `saimo-${encodeURIComponent(normalized)}`, name: channel.name, category: mapped,
+      logo, quality: 'HD',
+      servers: [{ name: 'Servidor Multi-Fonte Saimo', url: `/api/external-channel?name=${encodeURIComponent(channel.name)}`, isProxy: false }],
+    });
+  }
+  return channels;
+}
+
+const lastExternalSelections = new Map<string, { url: string; at: number }>();
+export function recordExternalSelection(channel: string, url: string) {
+  if (lastExternalSelections.size >= 500) lastExternalSelections.clear();
+  lastExternalSelections.set(normalizeChannelName(channel), { url, at: Date.now() });
+}
+
+/** Administrative metadata only: no upstream paths, tokens or credentials. */
+export function getExternalSourceDetails(name: string) {
+  const channel = findExternalChannel(name, loadExternalChannels());
+  if (!channel) return null;
+  const bases = loadExternalBases();
+  const selected = lastExternalSelections.get(normalizeChannelName(channel.name));
+  return {
+    channel: channel.name,
+    sources: channel.fontes.map((fonte, index) => {
+      const url = buildFonteUrl(fonte, bases);
+      let host = '';
+      try { host = url ? new URL(url).hostname : ''; } catch {}
+      const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|d=0`) : undefined;
+      const fresh = cached && cached.expires > Date.now();
+      return {
+        index, host, quality: fonte.qualidade || null,
+        lastSelectedAt: url && selected?.url === url ? selected.at : null,
+        state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') ? 'unavailable'
+          : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
+        cached: !!fresh,
+      };
+    }),
+  };
+}
+
+export async function testExternalSource(name: string, index: number) {
+  const channel = findExternalChannel(name, loadExternalChannels());
+  const fonte = channel?.fontes[index];
+  if (!fonte) return null;
+  const url = buildFonteUrl(fonte, loadExternalBases());
+  const start = Date.now();
+  let state = 'blocked';
+  if (fonte.chave) state = 'unsupported';
+  else if (url && await isFonteAllowed(url)) {
+    probeCache.delete(`${url}|${fonte.referer || ''}|d=0`);
+    probeCache.delete(`${url}|${fonte.referer || ''}|d=1`);
+    state = await probeExternalFonte(url, { referer: fonte.referer, agente: fonte.agente, timeoutMs: 3500 })
+      ? 'available' : 'failed';
+  }
+  return { index, state, latencyMs: Date.now() - start, checkedAt: Date.now(), cached: false };
 }

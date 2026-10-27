@@ -29,7 +29,7 @@
  */
 import { Router } from "express";
 import { validateExternalChannelName, validateExternalFormatParam } from "../utils/externalValidation";
-import { resolveExternalChannel, externalCatalogStats } from "../services/externalCatalog";
+import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
 import { syncSaimoAllDeduped } from "../services/saimoCatalogScraper";
 import { signProxyUrl } from "../utils/helpers";
 
@@ -95,6 +95,8 @@ router.get("/api/external-channel", async (req, res) => {
         error: "Canal não encontrado no catálogo externo ou sem fontes utilizáveis.",
       });
     }
+
+    recordExternalSelection(resolved.channelName, resolved.url);
 
     // Regra de Mixed Content / cabeçalhos custom:
     // http:// (bloqueado pelo browser em página https) ou referer/agente
@@ -193,6 +195,37 @@ router.get("/api/admin/external-catalog", (_req, res) => {
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || "Erro interno." });
   }
+});
+
+let activeSourceTests = 0;
+router.get('/api/live-channels', (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  return res.json({ success: true, channels: getPublicLiveChannels() });
+});
+router.get('/api/admin/external-sources', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const name = validateExternalChannelName(req.query.name);
+  if (!name.ok) return res.status(400).json({ success: false, error: name.error });
+  const details = getExternalSourceDetails(name.value!);
+  if (!details) return res.status(404).json({ success: false, error: 'Canal ausente no catálogo externo.' });
+  return res.json({ success: true, ...details });
+});
+router.post('/api/admin/external-source-test', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const name = validateExternalChannelName(req.body?.name);
+  const index = req.body?.index;
+  if (!name.ok || !Number.isInteger(index) || index < 0) {
+    return res.status(400).json({ success: false, error: 'Canal ou índice inválido.' });
+  }
+  if (activeSourceTests >= 3) return res.status(429).json({ success: false, error: 'Há testes em andamento. Tente novamente.' });
+  activeSourceTests++;
+  try {
+    const result = await testExternalSource(name.value!, index);
+    if (!result) return res.status(404).json({ success: false, error: 'Fonte não encontrada.' });
+    return res.json({ success: true, ...result });
+  } catch {
+    return res.status(502).json({ success: false, error: 'Não foi possível verificar a fonte.' });
+  } finally { activeSourceTests--; }
 });
 
 export default router;

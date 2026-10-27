@@ -4,6 +4,7 @@ import { probeChannelServers } from "./liveChannelProbe";
 import { getEncontreiResolverStatus, getVizerCatalogStatus } from "../routes/encontreiLookup";
 import { checkVizerHealth } from "./vizerDomains";
 import { INITIAL_LIVE_CHANNELS } from "../../src/data/liveChannels";
+import { getPublicLiveChannels } from './externalCatalog';
 
 export interface SentinelAlert {
   id: string;
@@ -236,6 +237,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
 
   try {
     const db = getAdminDb();
+    const liveChannels = getPublicLiveChannels();
 
     // =========================================================================
     // 1. VERIFICAÇÃO DE CANAIS DE TV AO VIVO
@@ -310,7 +312,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
         alertsToNotify.push(sysAlert);
         notifiedHistory.set(sysAlertId, now);
       }
-      lastMonitoredCounts.channelsTotal = INITIAL_LIVE_CHANNELS.length;
+      lastMonitoredCounts.channelsTotal = liveChannels.length;
       lastMonitoredCounts.channelsDown = 0;
     } else {
       // Sistema saudável — remove alerta antigo se existir
@@ -321,8 +323,8 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
       }
     }
 
-    const visibleChannels = INITIAL_LIVE_CHANNELS.filter((ch) => !blockedIds.includes(ch.id));
-    const skippedCount = INITIAL_LIVE_CHANNELS.length - visibleChannels.length;
+    const visibleChannels = liveChannels.filter((ch) => !blockedIds.includes(ch.id));
+    const skippedCount = liveChannels.length - visibleChannels.length;
     if (skippedCount > 0) {
       console.log(`[AdminSentinel] TV: testando ${visibleChannels.length} canais visíveis (saltando ${skippedCount} oculto(s)).`);
     }
@@ -414,7 +416,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
                 for (const staleId of Array.from(activeAlerts.keys())) {
                   if (!staleId.startsWith("channel:")) continue;
                   const chId = staleId.substring("channel:".length);
-                  const chObj = INITIAL_LIVE_CHANNELS.find(c => c.id === chId);
+                  const chObj = liveChannels.find(c => c.id === chId);
                   if (chObj && (chObj.servers?.[0]?.url || "").startsWith("/api/iptv/")) {
                     activeAlerts.delete(staleId);
                     notifiedHistory.delete(staleId);

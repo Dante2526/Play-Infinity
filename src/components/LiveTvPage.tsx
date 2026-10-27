@@ -27,6 +27,7 @@ import {
 import { useVoiceSearch } from '../hooks/useVoiceSearch';
 import { LiveChannel, INITIAL_LIVE_CHANNELS } from '../data/liveChannels';
 import { subscribeLiveChannelSettings } from '../services/liveChannelService';
+import { fetchLiveCatalogue } from '../services/liveCatalogue';
 import { ChannelLogo } from './ChannelLogo';
 import { 
   getAllChannels, 
@@ -54,6 +55,7 @@ interface LiveTvPageProps {
 
 export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayChannel, onCloseActiveChannel, pendingEditChannelId, onPendingEditHandled }) => {
   const [channels, setChannels] = useState<LiveChannel[]>([]);
+  const [catalogueError, setCatalogueError] = useState('');
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('Todos');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -132,10 +134,16 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
 
   useEffect(() => {
     refreshChannels();
+    let mounted = true;
+    const loadCatalogue = () => { void fetchLiveCatalogue().then(() => {
+      if (mounted) { refreshChannels(); setCatalogueError(''); }
+    }).catch(() => { if (mounted) setCatalogueError('Não foi possível atualizar os canais. Mantendo a última lista disponível.'); }); };
+    loadCatalogue();
+    const catalogueTimer = setInterval(loadCatalogue, 5 * 60 * 1000);
     const unsubscribe = subscribeLiveChannelSettings(() => {
       refreshChannels();
     });
-    return () => unsubscribe();
+    return () => { mounted = false; clearInterval(catalogueTimer); unsubscribe(); };
   }, []);
 
   const categories = [
@@ -306,6 +314,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pt-14 sm:pt-20 pb-28 md:pb-16 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto w-full overflow-x-hidden">
+      {catalogueError && <p role="alert" className="text-amber-300 text-sm py-2">{catalogueError}</p>}
       {/* Toast de Notificação / Feedback de Ação */}
       {toastMsg && (
         <div className="fixed top-16 sm:top-20 left-1/2 -translate-x-1/2 z-50 bg-emerald-600/95 text-white px-4 py-2 rounded-full shadow-2xl border border-emerald-400/40 flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-top-3 duration-200">
