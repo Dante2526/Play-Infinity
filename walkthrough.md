@@ -1,3 +1,54 @@
+## 26/10/2026 - Correção de Título e Sinopse em Inglês no Popup de Próxima Saga / Sequência de Filmes
+
+**Contexto e Diagnóstico:**
+O usuário enviou prints demonstrando que, ao final de *Harry Potter e o Cálice de Fogo*, o popup de continuação da saga exibia o próximo filme em inglês: *"Harry Potter Collection 2007"*, *"Harry Potter and the Order of the Phoenix"* e a sinopse em inglês. Ao clicar em "Assistir Próximo Filme", o player abria o filme mantendo o título em inglês no topo. No catálogo normal do app, o mesmo filme aparecia traduzido em português.
+1. **Causa Raiz 1:** Em `VideoPlayerModal.tsx`, a requisição da coleção da franquia chamava `fetch('https://play-infinity.stream/api/tmdb/collection/${colId}')` sem o parâmetro `?language=pt-BR`. O TMDB retornava os dados no padrão `en-US`.
+2. **Causa Raiz 2:** A URL estava hardcoded com `https://play-infinity.stream` em vez de utilizar o serviço unificado `src/services/tmdb.ts`.
+3. **Causa Raiz 3:** O objeto da próxima parte (`nextPart`) era utilizado diretamente sem consultar os detalhes completos em português via `getDetails(nextPart.id, 'movie')`, propagando o título em inglês para o evento `onPlayMovie(movie.title)`.
+
+**Modificações Realizadas (4 arquivos de código + testes):**
+1. **`src/services/tmdb.ts`:**
+   - Adicionada a função oficial `getCollection(collectionId)` utilizando `fetchTmdbSafe` com `${BASE_URL}/collection/${collectionId}?language=pt-BR` e tipagens completas (`TMDBCollection` e `TMDBCollectionPart`).
+2. **`src/components/VideoPlayerModal.tsx`:**
+   - Substituído o `fetch` hardcoded por `getCollection(colId)` em português.
+   - Adicionada consulta `getDetails(nextPart.id, 'movie')` para assegurar título (`nextDetails?.title`), sinopse (`nextDetails?.overview`) e `imdb_id` 100% em português brasileiro.
+   - Atualizado `handlePlayNextMovie` para repassar `movie.imdb_id` ao reprodutor.
+3. **`src/components/NetflixPlayerSkin.tsx`:**
+   - Adicionado o campo opcional `imdb_id?: string;` à interface `NextMovieInfo`.
+4. **`tests/collection-ptbr.test.cjs` (Novo):**
+   - 3 testes unitários automatizados validando o uso do parâmetro `language=pt-BR`, ausência de requisições de coleção sem localização e suporte na interface do player.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes automatizados: 33/33 aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 14.04s.
+
+---
+
+## 26/10/2026 - Otimização de Limites de Playback (Watchdog 25s/15s) e Retentativa Automática do BYSE
+
+**Contexto e Diagnóstico:**
+Ao tentar reproduzir títulos com cache frio no servidor (como *Harry Potter e o Cálice de Fogo* via "Continuar de onde parou"), o usuário se deparou com a mensagem "Conteúdo indisponível":
+1. **BYSE Frio:** O servidor levou ~19s para gerar as chaves e resolver o stream pela primeira vez. Como o limite do BYSE estava configurado para 18s, o watchdog disparou um corte antecipado.
+2. **Servidores Secundários Abortados Prematuramente:** O watchdog cortava qualquer servidor alternativo (StreamTape e MixDrop) aos **8 segundos exatos**. Embora estivessem 100% online (sondagem via script confirmou 206 Partial Content no StreamTape), o tempo para renderizar o iframe, extrair tokens e receber os primeiros bytes de MP4 leva entre 9s e 12s, fazendo com que o player descartasse todos os servidores por falso timeout.
+3. **Falso "Conteúdo Indisponível":** Após descartar todos em 8s cada, o player desistia, enquanto no backend da VPS o BYSE já havia concluído o cálculo e gravado em cache de memória (motivo pelo qual, ao recarregar a página, o vídeo tocou de primeira).
+
+**Modificações Realizadas (3 arquivos):**
+1. **`src/services/playbackStartup.ts`:**
+   - Aumentado o limite do BYSE frio quando há alternativas de **18s para 25s (`25000ms`)**, garantindo janela folgada para o cálculo do PoW inicial mesmo sob carga na VPS.
+   - Aumentado o limite padrão para servidores reservas (`srv_streamtape`, `srv_mixdrop`, etc.) de **8s para 15s (`15000ms`)**, permitindo o carregamento natural do iframe e buffer inicial.
+2. **`tests/playback-startup.test.cjs`:**
+   - Atualizada a asserção do teste unitário validando os novos limites de 25s para BYSE frio e 15s para fontes alternativas.
+3. **`src/components/VideoPlayerModal.tsx`:**
+   - Adicionada **Retentativa de Segurança no BYSE**: caso as fontes alternativas se esgotem sem sucesso, o player verifica se o BYSE estava na lista e re-executa a tentativa (`handleServerSwitch('srv_byse', true)`). Como o PoW em background já foi concluído durante o tempo em que os outros tentavam, o BYSE inicia instantaneamente (< 1s), eliminando a falsa mensagem de "Conteúdo indisponível".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes automatizados: 24/24 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 29.25s sem erros.
+
+---
+
 ## 25/10/2026 - Implementação do Mascote Guardião Multi-Funções ('Byte') e Sistema Sentinela de Push Web
 
 **Contexto e Motivação:**

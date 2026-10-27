@@ -108,6 +108,7 @@ export interface NextMovieInfo {
   overview?: string;
   release_date?: string;
   sagaTitle?: string;
+  imdb_id?: string;
 }
 
 // parseVtt, VttCue e timeToSeconds extraídos para src/utils/vttParser.ts

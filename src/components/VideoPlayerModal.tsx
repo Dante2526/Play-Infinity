@@ -24,7 +24,7 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { isServerBlacklisted } from "../data/serverBlacklist";
-import { getSeasonDetails, getDetails, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
+import { getSeasonDetails, getDetails, getCollection, resolveCardIdentity, searchMulti, TMDBDetails, Season } from "../services/tmdb";
 import { sagas } from "../data/sagas";
 import { createMixdropSourceRouting } from "../services/mixdropSourceRouting";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
@@ -675,30 +675,33 @@ export function VideoPlayerModal({
         const movieData = await getDetails(Number(currentMovieId), 'movie');
         if (movieData && (movieData as any).belongs_to_collection) {
           const colId = (movieData as any).belongs_to_collection.id;
-          const colRes = await fetch(`https://play-infinity.stream/api/tmdb/collection/${colId}`);
-          if (colRes.ok) {
-            const colData = await colRes.json();
+          const colData = await getCollection(colId);
+          if (colData && colData.parts) {
             const parts = (colData.parts || []).sort((a: any, b: any) =>
               (a.release_date || '').localeCompare(b.release_date || '')
             );
             const cIdx = parts.findIndex((p: any) => p.id === Number(currentMovieId));
             if (cIdx !== -1 && cIdx < parts.length - 1) {
               const nextPart = parts[cIdx + 1];
+              const nextDetails = await getDetails(nextPart.id, 'movie').catch(() => null);
               if (isMounted) {
                 setNextMovieInfo({
                   id: nextPart.id,
-                  title: nextPart.title,
-                  backdrop_path: nextPart.backdrop_path,
-                  poster_path: nextPart.poster_path,
-                  overview: nextPart.overview,
-                  release_date: nextPart.release_date,
-                  sagaTitle: colData.name,
+                  title: nextDetails?.title || nextPart.title,
+                  backdrop_path: nextDetails?.backdrop_path || nextPart.backdrop_path || undefined,
+                  poster_path: nextDetails?.poster_path || nextPart.poster_path || undefined,
+                  overview: nextDetails?.overview || nextPart.overview,
+                  release_date: nextDetails?.release_date || nextPart.release_date,
+                  sagaTitle: colData.name || "Coleção da Franquia",
+                  imdb_id: nextDetails?.imdb_id,
                 });
                 return;
               }
             }
           }
         }
+
+
 
         // 2º Nível: Catálogo local de sagas.ts como retaguarda
         const sagaMatch = sagas.find(s => s.movies.includes(Number(currentMovieId)));
@@ -738,7 +741,7 @@ export function VideoPlayerModal({
         `https://v1.watchplay.shop/movie/${movie.id}`,
         'movie',
         movie.id,
-        undefined,
+        movie.imdb_id,
         undefined,
         undefined,
         quality,
@@ -1520,6 +1523,13 @@ export function VideoPlayerModal({
           if(recovered){void handleServerSwitch(recovered,true);return;}
         }catch{if(epoch!==serverSelectionEpochRef.current)return;}
       }
+      if(plan.candidates.includes('srv_byse') && servers.some(s=>s.key==='srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')){
+        fallbackAttemptsRef.current.add('srv_byse_retried');
+        fallbackAttemptsRef.current.delete('srv_byse');
+        console.warn('[VideoPlayerModal] Fontes alternativas esgotadas durante inicialização. Retestando BYSE com resolução em background concluída...');
+        void handleServerSwitch('srv_byse', true);
+        return;
+      }
       setActiveIframeUrl(null);setIsLoading(false);setError('Não foi possível iniciar nas fontes disponíveis. Tente novamente.');return;
     }
 
@@ -1560,6 +1570,15 @@ export function VideoPlayerModal({
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
       hasSeekedInitialTimeRef.current = false;
       handleServerSwitch(nextServer.key);
+      return;
+    }
+
+    if (servers.some(s => s.key === 'srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')) {
+      fallbackAttemptsRef.current.add('srv_byse_retried');
+      fallbackAttemptsRef.current.delete('srv_byse');
+      console.warn('[VideoPlayerModal] Fontes alternativas esgotadas. Retestando BYSE com resolução em background concluída...');
+      hasSeekedInitialTimeRef.current = false;
+      handleServerSwitch('srv_byse');
       return;
     }
 

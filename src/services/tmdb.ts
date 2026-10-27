@@ -525,6 +525,28 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
   return fetchTmdbSafe<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, DEFAULT_SEASON);
 };
 
+export interface TMDBCollectionPart {
+  id: number;
+  title: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  release_date: string;
+}
+
+export interface TMDBCollection {
+  id: number;
+  name: string;
+  overview: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
+  parts: TMDBCollectionPart[];
+}
+
+export const getCollection = async (collectionId: number): Promise<TMDBCollection | null> => {
+  return fetchTmdbSafe<TMDBCollection | null>(`${BASE_URL}/collection/${collectionId}?language=pt-BR`, null);
+};
+
 export const getSimilarRecommendations = async (id: number, type: 'movie' | 'tv'): Promise<TMDBResponse> => {
   return fetchTmdbSafe<TMDBResponse>(`${BASE_URL}/${type}/${id}/recommendations?language=pt-BR&page=1`, DEFAULT_EMPTY_RESPONSE);
 };
