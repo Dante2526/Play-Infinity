@@ -67,7 +67,6 @@ input[type="number"] {
   appearance: textfield;
 }
 
-
 /* Scrollbar ultrafina e premium estilo streaming escuro (elimina barra cinza clássica do Windows) */
 ::-webkit-scrollbar {
   width: 5px;
@@ -120,30 +119,6 @@ input[type="number"] {
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.45);
-}
-
-/* Barra arrastável para acessar toda a lista de Continue Assistindo. */
-.continue-watching-scrollbar {
-  scrollbar-width: auto;
-  scrollbar-color: #f97316 rgba(255, 255, 255, 0.1);
-}
-
-.continue-watching-scrollbar::-webkit-scrollbar {
-  height: 10px;
-}
-
-.continue-watching-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-}
-
-.continue-watching-scrollbar::-webkit-scrollbar-thumb {
-  background: #f97316;
-  border-radius: 999px;
-}
-
-.continue-watching-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #fb923c;
 }
 
 /* Utilitário para ocultar scrollbars completamente */

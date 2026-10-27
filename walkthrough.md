@@ -1,3 +1,32 @@
+## 27/10/2026 — Redesign do 'Continue Assistindo' no Padrão Netflix com Setas Circulares e Scrollbar Oculta (Android 59/1.4.27)
+
+**Contexto e Diagnóstico:**
+O usuário enviou captura de tela mostrando a fileira "Continue Assistindo" no PC/Desktop com uma barra de rolagem grossa alaranjada nativa do Windows com setas rígidas `◄` e `►` que aparecia em desktop/TV e quebrava a consistência visual moderna da interface.
+1. **Causa Raiz:** A classe `.continue-watching-scrollbar` em `src/index.css` utilizava propriedades de rolagem nativa (`scrollbar-width: auto; scrollbar-color: #f97316 ...;`). No Windows (Edge/Chrome), isso forçava o navegador a desenhar botões de seta do sistema operacional.
+2. **Opção Escolhida pelo Usuário (Opção 2):** Redesign moderno no padrão Netflix com navegação por botões circulares `<` e `>` no topo direito para PC/TV, barra nativa 100% oculta (`scrollbar-hide`), suporte a arraste por mouse (`mouse drag`), swipe por toque no mobile e indicador slim minimalista de 2.5px em gradiente laranja/âmbar discreto abaixo dos cards.
+
+**Modificações Realizadas (4 arquivos):**
+1. **`src/components/ContinueWatchingRow.tsx` (Novo Componente):**
+   - Criado componente isolado com botões redondos de navegação no cabeçalho (visíveis apenas no PC/TV quando há overflow).
+   - Scrollbar nativa 100% oculta com `scrollbar-hide`.
+   - Suporte a arraste com o mouse no PC (`handleMouseDown`, `isDragging` com cursor grab/grabbing).
+   - Suporte completo a navegação por controle remoto de Smart TV (`data-tv-focusable="true"`, `scrollIntoView` suave).
+   - Botão flutuante de remoção rápida (`X`) com feedback visual.
+   - Indicador slim discreto de 2.5px em gradiente laranja que reflete com precisão a proporção e posição da rolagem sem botões rígidos de seta.
+2. **`src/index.css`:**
+   - Removida a classe obsoleta `.continue-watching-scrollbar`.
+3. **`src/pages/HomePage.tsx`:**
+   - Substituído o bloco inline de mais de 100 linhas pela chamada limpa de `<ContinueWatchingRow />`.
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 59 e `versionName` para "1.4.27".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código de saída 0).
+- Suíte de testes unitários: 10/10 testes em `tests/home-releases.test.cjs` passando.
+- Compilação de produção (`npm run build` — Vite + esbuild): 0 erros gerando bundles e `dist/server.cjs` com sucesso em 17s.
+
+---
+
 ## 27/10/2026 — Correção e Enriquecimento de 'Lançamentos Séries' (Android 58/1.4.26)
 
 **Contexto e Diagnóstico:**

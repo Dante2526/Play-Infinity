@@ -1,6 +1,7 @@
 import { loadHomeReleases, readHomeReleases } from "../services/homeReleaseFeed";
 
 import { ContentRow } from '../components/ContentRow';
+import { ContinueWatchingRow } from '../components/ContinueWatchingRow';
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
 import {
@@ -995,116 +996,15 @@ export function HomePage({
           </div>
         )}
 
-        {/* Continue Assistindo */}
+        {/* Continue Assistindo (Redesign Padrão Netflix com Indicador Slim 2px) */}
         {continueWatchingList.length > 0 && (
-          <section>
-            <div className="flex items-center mb-6 pl-2">
-              <h2 className="text-xl md:text-2xl font-bold text-white border-l-4 border-orange-500 pl-2">Continue Assistindo</h2>
-            </div>
-            <div 
-              style={{ touchAction: "pan-y pan-x pinch-zoom" }}
-              className="continue-watching-scrollbar flex gap-4 md:gap-6 overflow-x-auto overflow-y-hidden snap-x snap-mandatory pt-5 pb-8 pl-5 pr-8 sm:pl-6 sm:pr-10 scroll-pl-5 scroll-pr-8 sm:scroll-pl-6 sm:scroll-pr-10 select-none"
-              tabIndex={0}
-              role="region"
-              aria-label="Continue Assistindo — role para ver mais títulos"
-            >
-              {continueWatchingList.map((item, idx) => (
-                <div 
-                  key={`cw-${item.id}-${idx}`} 
-                  tabIndex={0} 
-                  role="button" 
-                  onClick={() => {
-                    if (item.currentTime !== undefined && onPlay) {
-                      onPlay(
-                        item.title,
-                        item.playerUrl,
-                        item.mediaType || 'movie',
-                        item.tmdbId,
-                        item.imdbId,
-                        item.season,
-                        item.episodeNumber,
-                        item.quality,
-                        item.isCam,
-                        item.currentTime,
-                        true, // Auto-fullscreen imediato
-                        item.imageUrl,
-                        item.backdropUrl,
-                        item.posterUrl,
-                        false,
-                        item.serverKey
-                      );
-                    } else if (onPlay) {
-                      // Fallback estático
-                      onPlay(
-                        item.title,
-                        item.playerUrl,
-                        item.title.includes("STRANGER") ? 'series' : 'movie',
-                        item.tmdbId,
-                        item.imdbId,
-                        item.title.includes("STRANGER") ? 4 : undefined,
-                        item.title.includes("STRANGER") ? 1 : undefined,
-                        undefined,
-                        false,
-                        item.progress ? 45 * 60 : undefined,
-                        true, // Auto-fullscreen imediato
-                        item.imageUrl
-                      );
-                    } else {
-                      onItemClick(item.id);
-                    }
-                  }} 
-                  className="snap-start shrink-0 relative group cursor-pointer w-[280px] md:w-[320px] h-[160px] md:h-[180px] rounded-xl overflow-hidden shadow-lg border border-neutral-800/80 group-hover:border-orange-500/50 transition-all outline-none"
-                >
-                  <img 
-                    src={item.imageUrl} 
-                    alt={item.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                    loading="lazy" 
-                    onError={(e) => handlePosterError(e, (item as any).backdropUrl)}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent pointer-events-none"></div>
-
-                  {/* Botão X para remover do Continue Assistindo */}
-                  <button
-                    type="button"
-                    onClick={(e) => handleRemoveHistoryItem(e, item)}
-                    onTouchEnd={(e) => handleRemoveHistoryItem(e, item)}
-                    title="Remover do Continue Assistindo"
-                    aria-label="Remover do Continue Assistindo"
-                    className="absolute top-2.5 right-2.5 z-30 w-8 h-8 rounded-full bg-black/80 hover:bg-red-600 active:bg-red-600 text-white flex items-center justify-center backdrop-blur-md border border-white/20 hover:border-red-500/50 transition-all duration-200 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 hover:scale-110 active:scale-95 shadow-xl cursor-pointer"
-                  >
-                    <X className="w-4 h-4 text-white" />
-                  </button>
-                  
-                  {/* Play Overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 pointer-events-none">
-                    <div className="w-12 h-12 bg-orange-600/90 rounded-full flex items-center justify-center backdrop-blur-sm transform scale-90 group-hover:scale-100 transition-all shadow-[0_0_15px_rgba(234,88,12,0.5)]">
-                      <Play className="w-5 h-5 fill-white text-white ml-1" />
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
-                    <div className="flex justify-between items-end mb-2">
-                      <div className="truncate mr-2">
-                        <h3 className="font-bold text-white text-base md:text-lg drop-shadow-md truncate">{item.title}</h3>
-                        <p className="text-neutral-300 text-xs mt-0.5 drop-shadow-md truncate">{item.episode}</p>
-                      </div>
-                      <span className="text-[11px] font-mono text-orange-400 shrink-0 font-bold">
-                        {item.progress}%
-                      </span>
-                    </div>
-                    {/* Progress Bar */}
-                    <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-orange-500 transition-all duration-300 shadow-[0_0_8px_rgba(234,88,12,0.8)]" 
-                        style={{ width: `${item.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
+          <ContinueWatchingRow
+            items={continueWatchingList}
+            onPlay={onPlay}
+            onItemClick={onItemClick}
+            onRemoveItem={handleRemoveHistoryItem}
+            onPosterError={handlePosterError}
+          />
         )}
 
 
