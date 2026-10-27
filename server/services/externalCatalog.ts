@@ -285,6 +285,17 @@ const PROBE_POSITIVE_TTL_MS = 3 * 60 * 1000;
 const PROBE_NEGATIVE_TTL_MS = 45 * 1000;
 const probeCache = new Map<string, { ok: boolean; expires: number }>();
 
+export const RELIABLE_CDN_PATTERNS = [
+  "corruptx.org",
+  "64.31.23.207",
+  "45.185.11.126",
+  "45.162.64.114",
+  "138.204.86.4",
+  "frostview.squareweb.app",
+  "amagi.tv",
+  "logicahost.com.br"
+];
+
 const PROBE_DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
@@ -462,12 +473,18 @@ export async function probeExternalFonte(
             ok = false;
           }
         } else if (valid.kind === "media" && valid.firstUrl) {
-          // Media playlist: checar magic bytes do primeiro segmento
-          ok = await probeSegmentMagicBytes(valid.firstUrl, {
-            referer: opts.referer,
-            agente: opts.agente,
-            timeoutMs: 2500,
-          });
+          // Se a playlist é de um CDN confiável, o corpo #EXTM3U + #EXTINF é suficiente
+          const isTrusted = RELIABLE_CDN_PATTERNS.some((p) => url.toLowerCase().includes(p));
+          if (isTrusted) {
+            ok = true;
+          } else {
+            // Fontes não homologadas: checa magic bytes do primeiro segmento contra fake png
+            ok = await probeSegmentMagicBytes(valid.firstUrl, {
+              referer: opts.referer,
+              agente: opts.agente,
+              timeoutMs: 2500,
+            });
+          }
         } else {
           ok = false;
         }
@@ -572,16 +589,6 @@ export async function resolveExternalChannel(
   const allowed = candidates.filter((c) => c.ssrfOk);
   if (allowed.length === 0) return null;
 
-  const RELIABLE_CDN_PATTERNS = [
-    "corruptx.org",
-    "64.31.23.207",
-    "45.185.11.126",
-    "45.162.64.114",
-    "138.204.86.4",
-    "frostview.squareweb.app",
-    "amagi.tv",
-    "logicahost.com.br"
-  ];
   const getCdnPriority = (url: string): number => {
     const u = url.toLowerCase();
     for (let p = 0; p < RELIABLE_CDN_PATTERNS.length; p++) {

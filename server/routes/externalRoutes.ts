@@ -88,7 +88,7 @@ router.get("/api/external-channel", async (req, res) => {
     // segmento 1.5s em paralelo) completa; se houver fonte viva no batch 1,
     // retorna em ~4.5s. O player (hls.js) tem timeouts próprios de fragmento
     // e não depende deste orçamento.
-    const resolved = await resolveExternalChannel(nameValidation.value!, { deadlineMs: 7000, batch: 6, probeTimeoutMs: 2000 });
+    const resolved = await resolveExternalChannel(nameValidation.value!, { deadlineMs: 8000, batch: 6, probeTimeoutMs: 3500 });
     if (!resolved) {
       return res.status(502).json({
         success: false,

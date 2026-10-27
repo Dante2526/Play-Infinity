@@ -30,7 +30,7 @@ test('externalCatalog checks probeCache positive entry before probe loop for ins
 
 test('externalRoutes uses expanded deadline and batch concurrency to reach active IPTV sources', () => {
   const code = fs.readFileSync(path.join(__dirname, '../server/routes/externalRoutes.ts'), 'utf8');
-  assert.match(code, /deadlineMs: 7000/);
+  assert.match(code, /deadlineMs: 8000/);
   assert.match(code, /batch: 6/);
-  assert.match(code, /probeTimeoutMs: 2000/);
+  assert.match(code, /probeTimeoutMs: 3500/);
 });
