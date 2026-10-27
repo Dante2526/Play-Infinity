@@ -1,3 +1,29 @@
+## 27/10/2026 — Correção e Enriquecimento de 'Lançamentos Séries' (Android 58/1.4.26)
+
+**Contexto e Diagnóstico:**
+Na tela inicial (`HomePage.tsx`), a fileira "Lançamentos Séries" exibia apenas 1 único card ("Verônica com K") e deixava o restante da fileira vazio.
+1. **Causa Raiz 1 (Query do TMDB por data crua):** `getSeriesReleases` usava `sort_by=first_air_date.desc` com `vote_count.gte=0`. Isso retornava produções mundiais obscuras lançadas nas últimas 48 horas (sem dublagem/legendas e sem links de vídeo).
+2. **Causa Raiz 2 (Funil de Disponibilidade):** De 60 séries retornadas pelo TMDB, apenas 1 ("Verônica com K") existia no catálogo.
+3. **Causa Raiz 3 (Substituição e Cache):** O feed gravava a lista de 1 item no `localStorage` e substituía a lista rica (`newest`), esvaziando a fileira.
+
+**Modificações Realizadas (4 arquivos):**
+1. **`src/services/tmdb.ts`:**
+   - Atualizado `getSeriesReleases` para buscar títulos recentes populares do último ano (`sort_by=popularity.desc&first_air_date.gte=${oneYearAgo}&vote_count.gte=3`). Nos testes, o número de séries disponíveis saltou de 1 para **34 séries lançamentos** com links prontos (ex: *Lanternas*, *Monstro: Lizzie Borden*, *Cabo do Medo*, *Stranger Things: 85*, *Spider-Noir*, *O Cavaleiro dos Sete Reinos*).
+   - Atualizado `getMovieReleases` com o mesmo padrão de popularidade e lançamentos do último ano (43 filmes confirmados disponíveis).
+2. **`src/services/homeReleaseFeed.ts`:**
+   - Atualizada a chave de cache para `v2` (`playinfinity:home-releases:v2:tv`), invalidando o cache anterior de 1 item.
+   - Adicionada trava de segurança: nunca publicar ou salvar listas com menos de 4 itens (`if (items.length >= 4)`).
+3. **`src/pages/HomePage.tsx`:**
+   - Adicionada proteção anti-fileira vazia: se o cache inicial tiver menos de 4 itens, preserva o catálogo base enriquecido (`newest` / `releases`).
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 58 e `versionName` para "1.4.26".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Simulação de consulta TMDB + Catálogo: 34 séries confirmadas no acervo.
+
+---
+
 ## 27/10/2026 — Resolução dos 7 Avisos do Sentinela Byte (Android 57/1.4.25)
 
 **Contexto e Diagnóstico:**

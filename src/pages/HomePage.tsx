@@ -244,11 +244,11 @@ export function HomePage({
   // Lançamentos: última lista válida em cache, com fallback inicial estático
   const [movieReleases, setMovieReleases] = useState<any[]>(() => {
     const cached = readHomeReleases('movie');
-    return cached.length ? releaseCards(cached, 'movie') : releases;
+    return cached.length >= 4 ? releaseCards(cached, 'movie') : releases;
   });
   const [seriesReleases, setSeriesReleases] = useState<any[]>(() => {
     const cached = readHomeReleases('tv');
-    return cached.length ? releaseCards(cached, 'tv') : newest;
+    return cached.length >= 4 ? releaseCards(cached, 'tv') : newest;
   });
   // Top 10 Mais Assistidos decidido dinamicamente pela audiência dos usuários
   const [mostWatchedItems, setMostWatchedItems] = useState<any[]>(mostWatched);
@@ -635,8 +635,8 @@ export function HomePage({
       clearTimeout(retry);
       try {
         const results = await Promise.allSettled([
-          loadHomeReleases('movie', controller.signal, items => setMovieReleases(releaseCards(items, 'movie'))),
-          loadHomeReleases('tv', controller.signal, items => setSeriesReleases(releaseCards(items, 'tv'))),
+          loadHomeReleases('movie', controller.signal, items => { if (items.length >= 4) setMovieReleases(releaseCards(items, 'movie')); }),
+          loadHomeReleases('tv', controller.signal, items => { if (items.length >= 4) setSeriesReleases(releaseCards(items, 'tv')); }),
         ]);
         // A transient TMDB failure must not leave the static fallback all session.
         if (!controller.signal.aborted && results.some(result => result.status === 'rejected')) retry = setTimeout(() => void refresh(), 60000);

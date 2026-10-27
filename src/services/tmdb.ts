@@ -622,14 +622,16 @@ export const getGenreIdByName = (name: string): number | undefined => {
 export const getMovieReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
   const providers = "8|119|337|1899|350|531|307";
-  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=primary_release_date.desc&primary_release_date.lte=${today}&vote_count.gte=0&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&primary_release_date.gte=${oneYearAgo}&primary_release_date.lte=${today}&vote_count.gte=5&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const getSeriesReleases = async (page: number = 1): Promise<TMDBResponse> => {
   const today = new Date().toISOString().split('T')[0];
   const providers = "8|119|337|1899|350|531|307";
-  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=first_air_date.desc&first_air_date.lte=${today}&vote_count.gte=0&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
+  const oneYearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&first_air_date.gte=${oneYearAgo}&first_air_date.lte=${today}&vote_count.gte=3&include_adult=false&with_watch_providers=${providers}&watch_region=BR&page=${page}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
