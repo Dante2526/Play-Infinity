@@ -403,21 +403,19 @@ process.on("uncaughtException", (err) => {
   });
 
   // Rota explícita para a página de privacidade pública (obrigatória para Google Play Console)
+  // Serve diretamente o HTML estático autônomo para garantir 100% de disponibilidade a bots e humanos
   app.get(["/privacy", "/privacidade", "/politica-de-privacidade"], (req, res, next) => {
     const distStaticPath = path.join(process.cwd(), "dist", "privacidade.html");
     const publicStaticPath = path.join(process.cwd(), "public", "privacidade.html");
-    const distPath = path.join(process.cwd(), "dist");
-
-    // Se o cliente pedir formato HTML direto ou crawler, entrega o HTML estático instantâneo
-    if (req.query.raw === "1" || req.query.html === "1") {
-      if (fs.existsSync(distStaticPath)) return res.sendFile(distStaticPath);
-      if (fs.existsSync(publicStaticPath)) return res.sendFile(publicStaticPath);
+    if (fs.existsSync(distStaticPath)) {
+      return res.sendFile(distStaticPath);
     }
-
+    if (fs.existsSync(publicStaticPath)) {
+      return res.sendFile(publicStaticPath);
+    }
+    const distPath = path.join(process.cwd(), "dist");
     if (fs.existsSync(distPath)) {
       res.sendFile(path.join(distPath, "index.html"));
-    } else if (fs.existsSync(publicStaticPath)) {
-      res.sendFile(publicStaticPath);
     } else {
       next();
     }

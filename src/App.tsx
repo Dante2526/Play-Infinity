@@ -546,8 +546,12 @@ export default function App() {
     }
 
     const handlePopState = (e: PopStateEvent) => {
-      if (e.state && e.state.type) {
-        setViewState(e.state);
+      const state = (e && e.state) || window.history.state;
+      const pathUpper = window.location.pathname.toUpperCase();
+      if (pathUpper.includes('/PRIVACY') || pathUpper.includes('/PRIVACIDADE') || pathUpper.includes('/POLITICA')) {
+        setViewState({ type: 'privacy' });
+      } else if (state && state.type) {
+        setViewState(state);
       } else {
         setViewState({ type: 'home' });
       }

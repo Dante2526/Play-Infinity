@@ -358,9 +358,13 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
               onClick={(e) => {
                 e.preventDefault();
                 window.history.pushState({ type: 'privacy' }, '', '/privacidade');
-                window.dispatchEvent(new Event('popstate'));
+                try {
+                  window.dispatchEvent(new PopStateEvent('popstate', { state: { type: 'privacy' } }));
+                } catch {
+                  window.dispatchEvent(new Event('popstate'));
+                }
               }}
-              className="text-neutral-400 hover:text-orange-400 underline underline-offset-2 transition-colors cursor-pointer"
+              className="text-neutral-400 hover:text-orange-400 underline underline-offset-2 transition-colors cursor-pointer inline-block py-1.5"
             >
               Política de Privacidade
             </a>
