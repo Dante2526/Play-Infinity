@@ -385,7 +385,7 @@ export async function probeSegmentMagicBytes(
 ): Promise<boolean> {
   try {
     const res = await fetch(url, {
-      signal: AbortSignal.timeout(opts.timeoutMs ?? 1500),
+      signal: AbortSignal.timeout(opts.timeoutMs ?? 2500),
       redirect: "follow",
       headers: {
         "User-Agent": opts.agente || PROBE_DEFAULT_UA,
@@ -466,7 +466,7 @@ export async function probeExternalFonte(
           ok = await probeSegmentMagicBytes(valid.firstUrl, {
             referer: opts.referer,
             agente: opts.agente,
-            timeoutMs: 1500,
+            timeoutMs: 2500,
           });
         } else {
           ok = false;
@@ -495,7 +495,20 @@ async function isFonteAllowed(url: string): Promise<boolean> {
     // Hosts .invalid (marcador de painel desativado da Saimo): pulpar sem DNS
     if (parsed.hostname.toLowerCase().endsWith(".invalid")) return false;
     const host = parsed.hostname.toLowerCase();
-    if (host.includes("vaiagora.vip") || host.includes("vivlar.me")) return false;
+    if (
+      host.includes("vaiagora.vip") ||
+      host.includes("vivlar.me") ||
+      host.includes("s13-s1001604.lat") ||
+      host.includes("s25-cloudfront-net.lat") ||
+      host.includes("dadinhodetapioca.fun")
+    ) return false;
+    const pathnameLower = parsed.pathname.toLowerCase();
+    if (
+      pathnameLower.endsWith(".html") ||
+      pathnameLower.endsWith(".htm") ||
+      pathnameLower.endsWith(".txt") ||
+      pathnameLower.endsWith(".php")
+    ) return false;
     if (await isPrivateOrLocalHost(parsed.hostname)) return false;
     return true;
   } catch {
@@ -558,6 +571,25 @@ export async function resolveExternalChannel(
   );
   const allowed = candidates.filter((c) => c.ssrfOk);
   if (allowed.length === 0) return null;
+
+  const RELIABLE_CDN_PATTERNS = [
+    "corruptx.org",
+    "64.31.23.207",
+    "45.185.11.126",
+    "45.162.64.114",
+    "138.204.86.4",
+    "frostview.squareweb.app",
+    "amagi.tv",
+    "logicahost.com.br"
+  ];
+  const getCdnPriority = (url: string): number => {
+    const u = url.toLowerCase();
+    for (let p = 0; p < RELIABLE_CDN_PATTERNS.length; p++) {
+      if (u.includes(RELIABLE_CDN_PATTERNS[p])) return p;
+    }
+    return 999;
+  };
+  allowed.sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
 
   for (const c of allowed) {
     const cacheKey = `${c.url}|${c.fonte.referer || ""}|d=0`;

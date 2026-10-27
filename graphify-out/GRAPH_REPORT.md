@@ -1,7 +1,7 @@
-# Graph Report - Play-Infinity  (2026-10-26)
+# Graph Report - Play-Infinity  (2026-10-27)
 
 ## Corpus Check
-- 214 files · ~1,654,360 words
+- 214 files · ~1,654,504 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
@@ -10,7 +10,7 @@
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8db85d14`
+- Built from commit: `3ecdac84`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 

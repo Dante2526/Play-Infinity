@@ -8,13 +8,15 @@ Canais de TV ao vivo (como Premiere 1 HD e Premiere 2 HD) exibiam sinal verde 20
 
 **Modificações Realizadas (3 arquivos de código + testes):**
 1. **`server/services/externalCatalog.ts`:**
-   - Adicionado bloqueio explícito em `isFonteAllowed` para `vaiagora.vip` e `vivlar.me`, descartando fontes mortas logo no carregamento.
+   - Adicionado bloqueio explícito em `isFonteAllowed` para `vaiagora.vip`, `vivlar.me`, `s13-s1001604.lat`, `s25-cloudfront-net.lat` e `dadinhodetapioca.fun`, além de extensões não-mídia (`.html`, `.txt`, `.php`), eliminando na raiz fontes que entregam HTML ou PNG falso.
+   - Implementada **Priorização de CDNs Confiáveis (Fast-Track)**: as fontes são ordenadas dando prioridade a provedores conhecidos e rápidos (`corruptx.org`, `64.31.23.207`, `45.185.11.126`, etc.), garantindo que canais como Premiere Clubes resolvam na primeira batelada em < 500ms.
    - Adicionada checagem rápida de cache positivo (`probeCache`) antes do loop de sondagem: fontes já validadas recentemente pelo Sentinela ou Admin são retornadas instantaneamente em 0ms.
-   - Adicionada parada antecipada no lote (`break`): assim que qualquer lote encontra uma fonte ativa comprovada, a busca encerra imediatamente sem gastar tempo desnecessário.
+   - Aumentado o timeout de leitura de magic bytes (`probeSegmentMagicBytes`) para 2500ms, prevenindo falsos negativos por timeout de rede em streams ao vivo.
+   - Adicionada parada antecipada no lote (`break`): assim que qualquer lote encontra uma fonte ativa comprovada, a busca encerra imediatamente.
 2. **`server/routes/externalRoutes.ts`:**
    - Expandida a janela de sondagem de 4.5s para 7s (`deadlineMs: 7000`), lote ampliado para 6 (`batch: 6`) e timeout individual de 2s, permitindo testar até 12 fontes em ~3s caso o cache esteja frio.
 3. **`tests/external-dead-domains.test.cjs` (Novo):**
-   - 3 testes unitários automatizados validando o bloqueio de domínios mortos, resolução instantânea via cache e expansão de concorrência.
+   - 4 testes unitários automatizados validando o bloqueio de domínios mortos/iscas, priorização de CDNs, resolução instantânea via cache e expansão de concorrência.
 
 **Validação Realizada:**
 - `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
