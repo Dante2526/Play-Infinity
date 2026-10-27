@@ -449,18 +449,30 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
               continue;
             }
 
-            if (!probeRes.online) {
+            let finalProbeRes = probeRes;
+            if (!finalProbeRes.online && !finalProbeRes.providerDown) {
+              await new Promise((resolve) => setTimeout(resolve, 800));
+              const retryRes = await probeChannelServers(servers, probeLiveStreamUrl, providerDownDetected);
+              if (retryRes.online) {
+                console.log(`[AdminSentinel] Canal ${ch.name} recuperado na retentativa (falso alarme evitado).`);
+                finalProbeRes = retryRes;
+              } else {
+                finalProbeRes = retryRes;
+              }
+            }
+
+            if (!finalProbeRes.online) {
               downCount++;
               const alertObj: SentinelAlert = {
                 id: alertId,
                 category: "tv",
                 title: `🚨 Canal ${ch.name} Fora do Ar!`,
-                message: `Nenhuma das alternativas HLS respondeu ao teste (${probeRes.statusCode || probeRes.error || "Sem Sinal"}). Confira as fontes no painel.`,
+                message: `Nenhuma das alternativas HLS respondeu ao teste (${finalProbeRes.statusCode || finalProbeRes.error || "Sem Sinal"}). Confira as fontes no painel.`,
                 level: "error",
                 actionTab: "channels",
                 actionUrl: "/admin?tab=channels",
                 detectedAt: now,
-                metadata: { channelId: ch.id, channelName: ch.name, statusCode: probeRes.statusCode },
+                metadata: { channelId: ch.id, channelName: ch.name, statusCode: finalProbeRes.statusCode },
               };
               activeAlerts.set(alertId, alertObj);
 
@@ -692,10 +704,10 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
 export function startAdminSentinel(): void {
   console.log("[AdminSentinel] Iniciando daemon do Guardião de Alertas e Monitoramento...");
 
-  // Primeira verificação após 15 segundos para dar tempo ao servidor e caches subirem
+  // Primeira verificação após 45 segundos para dar tempo ao servidor e caches subirem
   setTimeout(() => {
     runSentinelCheck().catch((err) => console.warn("[AdminSentinel] Falha na verificação inicial:", err));
-  }, 15000);
+  }, 45000);
 
   // Verificações periódicas a cada 15 minutos
   const CHECK_INTERVAL_MS = 15 * 60 * 1000;

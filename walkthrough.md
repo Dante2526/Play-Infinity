@@ -1,3 +1,41 @@
+## 27/10/2026 — Resolução dos Falsos Alarmes do Sentinela Byte e Atualização de Fontes de TV (Android 63/1.4.31)
+
+**Contexto e Diagnóstico:**
+O usuário enviou capturas de tela do Mascote Sentinela "Byte" emitindo notificações repetidas de canais fora do ar (erro 502) para 5 canais: *Assombrações*, *NickOnline*, *Globo MG*, *DreamWorks* e *Telecine Premium*.
+1. **Assombrações:** O canal roda via Pluto TV oficial com criptografia HLS AES-128 (`#EXT-X-KEY:METHOD=AES-128`). Em `server/services/externalCatalog.ts`, a função de probe tentava ler os primeiros 188 bytes do segmento `.ts` procurando o byte de sincronia `0x47`. Em fluxos com criptografia AES, os bytes iniciais são texto cifrado aleatório, causando reprovação indevida. Além disso, `validatePlaylistContent` usava a URL inicial da requisição (`url`) em vez da URL final pós-redirecionamento (`res.url`), fazendo variantes relativas do Pluto TV tentarem ser resolvidas em `jmp2.uk` em vez de `pluto.tv`, gerando 404 falso.
+2. **NickOnline:** O domínio `x1colegal.com` aplica bloqueio de ASN de datacenter (`HTTP/2 218 Restreamer or Datacenter Forbidden`) quando consultado a partir de IPs de nuvem (como a VPS Oracle), embora funcionasse normalmente a partir de IPs residenciais.
+3. **Telecine Premium:** As duas fontes estavam 100% online no `corruptx.org`, mas sofreram timeout pontual durante o reboot da VPS no pico de sondagem simultânea de 229 canais.
+4. **Globo MG:** Os streams legados no `external-channels.txt` (`1168938` e `1168939`) expiraram no provedor upstream com erro 404 Not Found.
+5. **DreamWorks:** O stream upstream na NXPlay BunnyCDN foi descontinuado pela operadora (403 Unconfigured).
+
+**Modificações Realizadas (5 arquivos de código e catálogo + testes):**
+1. **`server/services/externalCatalog.ts`:**
+   - Adicionados `jmp2.uk`, `pluto.tv` e `plutotv.net` à lista `RELIABLE_CDN_PATTERNS`.
+   - Corrigido `validatePlaylistContent` para resolver variantes relativas contra `res.url || url` (URL final após redirects HTTP 302).
+   - Adicionada detecção e aceitação de manifestos com criptografia `METHOD=AES-128` ou `SAMPLE-AES`, dispensando checagem de magic bytes em blocos cifrados.
+   - Adicionada trava `if (i > 0 && Date.now() > deadline) break;` garantindo que a primeira batelada de candidatos seja sempre processada.
+2. **`server/services/adminSentinel.ts`:**
+   - Implementado reteste rápido de confirmação (retry com 800ms) antes de registrar qualquer canal como fora do ar, eliminando falsos alarmes por oscilação momentânea de socket ou pico de CPU.
+   - Aumentado o delay de boot de 15s para 45s (`startAdminSentinel`), dando tempo para SQLite, rotas e caches estabilizarem antes da primeira varredura em massa.
+3. **`data/external-channels.txt` & `data/external-channels-clean.txt`:**
+   - **Globo MG:** Atualizado para 3 novas fontes ativas e verificadas (`1168940.m3u8` Globo Minas HD, `1169040.m3u8` Globo TV Integração Juiz de Fora FHD e `1169041.m3u8` HD).
+   - **NickOnline:** Adicionadas fontes 100% ativas em `stmv2.srvif.com` (`gafeab` e `nicktoons`) sem bloqueio de ASN/datacenter.
+   - **DreamWorks:** Entrada descontinuada removida do catálogo, disparando a purga automática de alertas órfãos pelo Sentinela.
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 63 e `versionName` para "1.4.31".
+5. **`tests/admin-sentinel.test.cjs` & `tests/external-catalog.test.cjs`:**
+   - Adicionados testes unitários automatizados 9 e 10 cobrindo reteste anti-falso-alarme, boot delay de 45s, suporte a Pluto TV / AES-128 e catálogo limpo.
+   - Adicionada verificação de compatibilidade Windows para asserção de chmod POSIX.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte `tests/admin-sentinel.test.cjs`: 10/10 testes aprovados (100%).
+- Suíte `tests/external-catalog.test.cjs`: 58/58 testes aprovados (100%).
+- Compilação de produção (`npm run build`): Bundles Vite e `dist/server.cjs` gerados com sucesso em 14.75s.
+- Sincronização na VPS Oracle: `external-channels.txt` sincronizado via SCP, PM2 recarregado com sucesso e endpoints `/api/external-channel` testados diretamente via HTTPS com retorno 302 Found para Globo MG, NickOnline e Telecine Premium.
+
+---
+
 ## 27/10/2026 — Liberação Pública da Política de Privacidade para o Google Play Console (Android 62/1.4.30)
 
 **Contexto e Diagnóstico:**

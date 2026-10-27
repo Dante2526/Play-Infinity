@@ -118,4 +118,22 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(sentinelContent, /scraper:vizer_domain/, "Sentinela deve gerar alerta scraper:vizer_domain");
     assert.match(sentinelContent, /Vizer mudou de domínio/, "Mensagem deve alertar sobre mudança de domínio do Vizer");
   });
+
+  test("9. Reteste de confirmação anti-falso-positivo e delay de boot de 45s", () => {
+    const sentinelFile = path.join(__dirname, "..", "server", "services", "adminSentinel.ts");
+    const content = fs.readFileSync(sentinelFile, "utf-8");
+    assert.match(content, /recuperado na retentativa \(falso alarme evitado\)/, "Sentinela deve executar retentativa antes de disparar alerta");
+    assert.match(content, /(45000|45\s*\*\s*1000)/, "Boot deve aguardar 45s para estabilização de caches e SQLite");
+  });
+
+  test("10. Suporte a Pluto TV / AES-128 e atualização de catálogo de TV", () => {
+    const extCatFile = path.join(__dirname, "..", "server", "services", "externalCatalog.ts");
+    const content = fs.readFileSync(extCatFile, "utf-8");
+    assert.match(content, /pluto\.tv/, "RELIABLE_CDN_PATTERNS deve incluir pluto.tv");
+    assert.match(content, /METHOD=AES-128/, "Deve aceitar streams com criptografia AES-128 sem falha de magic bytes");
+
+    const channelsTxt = fs.readFileSync(path.join(__dirname, "..", "data", "external-channels.txt"), "utf-8");
+    assert.match(channelsTxt, /1168940\.m3u8/, "Globo MG deve conter novo stream ativo 1168940");
+    assert.strictEqual(/canal:\s*DreamWorks/i.test(channelsTxt), false, "DreamWorks descontinuado deve estar removido do catalogo");
+  });
 });

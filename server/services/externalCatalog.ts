@@ -294,7 +294,10 @@ export const RELIABLE_CDN_PATTERNS = [
   "138.204.86.4",
   "frostview.squareweb.app",
   "amagi.tv",
-  "logicahost.com.br"
+  "logicahost.com.br",
+  "jmp2.uk",
+  "pluto.tv",
+  "plutotv.net"
 ];
 
 const PROBE_DEFAULT_UA =
@@ -461,7 +464,7 @@ export async function probeExternalFonte(
       } else {
         // Lê texto e valida conteúdo da playlist estritamente
         const text = await res.text();
-        const valid = validatePlaylistContent(text, url);
+        const valid = validatePlaylistContent(text, res.url || url);
         if (!valid.ok) {
           ok = false;
         } else if (valid.kind === "master" && valid.firstUrl) {
@@ -475,8 +478,9 @@ export async function probeExternalFonte(
           }
         } else if (valid.kind === "media" && valid.firstUrl) {
           // Se a playlist é de um CDN confiável, o corpo #EXTM3U + #EXTINF é suficiente
-          const isTrusted = RELIABLE_CDN_PATTERNS.some((p) => url.toLowerCase().includes(p));
-          if (isTrusted) {
+          const isTrusted = RELIABLE_CDN_PATTERNS.some((p) => url.toLowerCase().includes(p) || (res.url && res.url.toLowerCase().includes(p)));
+          const isAesEncrypted = text.includes("METHOD=AES-128") || text.includes("METHOD=SAMPLE-AES");
+          if (isTrusted || isAesEncrypted) {
             ok = true;
           } else {
             // Fontes não homologadas: checa magic bytes do primeiro segmento contra fake png
@@ -618,7 +622,7 @@ export async function resolveExternalChannel(
   // escolhe a primeira fonte viva NA ORDEM ORIGINAL (a preferida da Saimo).
   const probed = new Map<number, boolean>();
   for (let i = 0; i < allowed.length; i += batchSize) {
-    if (Date.now() > deadline) break;
+    if (i > 0 && Date.now() > deadline) break;
     const slice = allowed.slice(i, i + batchSize);
     await Promise.all(
       slice.map(async (c) => {

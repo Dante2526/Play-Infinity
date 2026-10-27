@@ -814,7 +814,9 @@ test('scraper: syncSaimoAll grava arquivos, retorna stats e invalida cache', asy
     assert.ok(fs.existsSync(basesFile));
     assert.ok(fs.readFileSync(basesFile, 'utf-8').includes('base: 2 '));
     assert.ok(!fs.readFileSync(basesFile, 'utf-8').includes('desativado.invalid'));
-    assert.equal((fs.statSync(basesFile).mode & 0o777), 0o600, 'bases com chmod 600 (credenciais)');
+    if (process.platform !== 'win32') {
+      assert.equal((fs.statSync(basesFile).mode & 0o777), 0o600, 'bases com chmod 600 (credenciais)');
+    }
 
     // Cache do resolver foi invalidado — stats enxergam o catálogo novo
     const s = catalog.externalCatalogStats();
