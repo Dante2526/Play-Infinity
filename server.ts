@@ -402,13 +402,24 @@ process.on("uncaughtException", (err) => {
     return apiLimiter(req, res, next);
   });
 
-  // Rota explícita para a página de privacidade (SPA Fallback imediato)
-  app.get(["/privacy", "/privacidade"], (req, res, next) => {
+  // Rota explícita para a página de privacidade pública (obrigatória para Google Play Console)
+  app.get(["/privacy", "/privacidade", "/politica-de-privacidade"], (req, res, next) => {
+    const distStaticPath = path.join(process.cwd(), "dist", "privacidade.html");
+    const publicStaticPath = path.join(process.cwd(), "public", "privacidade.html");
     const distPath = path.join(process.cwd(), "dist");
+
+    // Se o cliente pedir formato HTML direto ou crawler, entrega o HTML estático instantâneo
+    if (req.query.raw === "1" || req.query.html === "1") {
+      if (fs.existsSync(distStaticPath)) return res.sendFile(distStaticPath);
+      if (fs.existsSync(publicStaticPath)) return res.sendFile(publicStaticPath);
+    }
+
     if (fs.existsSync(distPath)) {
       res.sendFile(path.join(distPath, "index.html"));
+    } else if (fs.existsSync(publicStaticPath)) {
+      res.sendFile(publicStaticPath);
     } else {
-      next(); // Passa para o Vite em dev mode
+      next();
     }
   });
 

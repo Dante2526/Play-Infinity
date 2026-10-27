@@ -7,14 +7,17 @@ export default function PrivacyPolicyPage() {
       <div className="max-w-3xl mx-auto">
         <button 
           onClick={() => {
-            window.history.back();
-            // trigger custom event to navigate home if history is empty
+            if (window.history.length > 1) {
+              window.history.back();
+            } else {
+              window.location.href = '/';
+            }
             window.dispatchEvent(new Event('popstate'));
           }}
-          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8"
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-8 cursor-pointer"
         >
           <ArrowLeft size={20} />
-          <span>Voltar</span>
+          <span>Voltar para o Início</span>
         </button>
         
         <div className="flex items-center gap-3 mb-8">

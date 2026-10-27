@@ -156,10 +156,18 @@ export default function App() {
   const { isSmartTV } = useSmartTV();
 
   const [viewState, setViewState] = useState<ViewState>(() => {
-    if (window.location.pathname.toUpperCase().includes('/ADM')) {
+    const pathUpper = window.location.pathname.toUpperCase();
+    const searchUpper = window.location.search.toUpperCase();
+    if (pathUpper.includes('/ADM')) {
       return { type: 'admin' };
     }
-    if (window.location.pathname.toUpperCase().includes('/PRIVACY') || window.location.pathname.toUpperCase().includes('/PRIVACIDADE')) {
+    if (
+      pathUpper.includes('/PRIVACY') || 
+      pathUpper.includes('/PRIVACIDADE') || 
+      pathUpper.includes('/POLITICA') ||
+      searchUpper.includes('PAGE=PRIVACY') ||
+      searchUpper.includes('PAGE=PRIVACIDADE')
+    ) {
       return { type: 'privacy' };
     }
     if (window.history.state && window.history.state.type) {
@@ -716,8 +724,9 @@ export default function App() {
 
   // TELA DE BLOQUEIO INICIAL (FORÇA O LOGIN ANTES DO CATÁLOGO)
   // No Google AI Studio (desenvolvimento/testes), desabilita para permitir testes diretos de funções
-  // Na versão de deploy (produção), a tela de login permanece 100% ativa e obrigatória
-  if (!currentUser && viewState.type !== 'admin' && !isDevEnvironment) {
+  // Na versão de deploy (produção), a tela de login permanece 100% ativa e obrigatória,
+  // EXCETO para telas públicas como a Política de Privacidade (obrigatória para o Google Play) e Admin
+  if (!currentUser && viewState.type !== 'admin' && viewState.type !== 'privacy' && !isDevEnvironment) {
     return (
       <div className="bg-[#0a0a0a] min-h-screen relative overflow-hidden flex flex-col">
         {/* Background Cinematográfico Desfocado */}

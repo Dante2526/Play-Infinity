@@ -349,6 +349,22 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
               {isLogin ? "Assine agora" : "Entre agora"}
             </button>
           </div>
+
+          {/* Link público da Política de Privacidade para o Google Play Console */}
+          <div className="mt-6 pt-4 border-t border-white/10 text-center text-xs text-white/40">
+            <span>Ao continuar, você concorda com a nossa </span>
+            <a 
+              href="/privacidade" 
+              onClick={(e) => {
+                e.preventDefault();
+                window.history.pushState({ type: 'privacy' }, '', '/privacidade');
+                window.dispatchEvent(new Event('popstate'));
+              }}
+              className="text-neutral-400 hover:text-orange-400 underline underline-offset-2 transition-colors cursor-pointer"
+            >
+              Política de Privacidade
+            </a>
+          </div>
         </div>
       </div>
     </div>

@@ -1,3 +1,34 @@
+## 27/10/2026 — Liberação Pública da Política de Privacidade para o Google Play Console (Android 62/1.4.30)
+
+**Contexto e Diagnóstico:**
+O Google Play Console rejeitou a Política de Privacidade informando que a URL exigia credenciais de login para ser visualizada ("A Política de Privacidade exige login"), anexando captura da tela de login do Play Infinity.
+1. **Causa Raiz 1 (Trava global de autenticação em App.tsx):** Em `src/App.tsx` (linha 720), a verificação de tela de bloqueio forçava o `AuthModal` para qualquer rota se `!currentUser`, exceto `viewState.type === 'admin'`. Como a rota `privacy` não estava listada como exceção pública, qualquer visitante ou bot do Google que abria o link era interceptado pela tela de login.
+2. **Causa Raiz 2 (Ausência de arquivo HTML estático direto):** Crawlers e robôs de indexação do Google muitas vezes não executam JavaScript client-side (SPA). A ausência de um documento estático `privacidade.html` aumentava o risco de falso negativo.
+
+**Modificações Realizadas (6 arquivos):**
+1. **`src/App.tsx`:**
+   - Adicionado bypass de autenticação explícito: `if (!currentUser && viewState.type !== 'admin' && viewState.type !== 'privacy' && !isDevEnvironment)`, permitindo que visitantes deslogados visualizem a Política de Privacidade diretamente.
+   - Expandido o reconhecimento inicial de rotas para `/privacidade`, `/privacy`, `/politica-de-privacidade` e query parameters `?page=privacy`.
+2. **`server.ts`:**
+   - Adicionada rota explícita no Express para `["/privacy", "/privacidade", "/politica-de-privacidade"]` entregando o SPA e com suporte a entrega do HTML estático puro caso requisitado (`?raw=1` ou `?html=1`).
+3. **`public/privacidade.html` & `public/privacy.html` (Novos):**
+   - Criado documento HTML estático, autônomo, Mobile-First e responsivo com as 8 seções completas exigidas pelo Google Play (coleta, finalidade, não compartilhamento, permissões de app, exclusão de dados e contato).
+4. **`src/components/AuthModal.tsx`:**
+   - Inserido link visível no rodapé do modal de login/cadastro ("Ao continuar, você concorda com a nossa Política de Privacidade"), permitindo acesso público direto a partir da própria tela inicial.
+5. **`src/pages/PrivacyPolicyPage.tsx`:**
+   - Atualizado o botão de navegação para redirecionar de forma suave ao Início/Login caso o histórico esteja vazio.
+6. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 62 e `versionName` para "1.4.30".
+7. **`tests/privacy-policy-public.test.cjs` (Novo):**
+   - 4 testes unitários automatizados validando existência do HTML público, liberação de acesso sem login no React, rotas do servidor e presença do link no AuthModal.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes: 4/4 testes de privacidade aprovados (+ suíte geral 100% verde).
+- Compilação de produção (`npm run build` — Vite + esbuild): 0 erros gerando bundles e `dist/server.cjs` com sucesso em 20s.
+
+---
+
 ## 27/10/2026 — Correção e Sincronização Consistente de Favoritos Dinâmicos TMDB (Android 61/1.4.29)
 
 **Contexto e Diagnóstico:**
