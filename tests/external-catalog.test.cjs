@@ -978,12 +978,13 @@ test('guard: timeouts da cadeia externa coerentes — painel e sentinela não es
   );
   const sentinel = read('server/services/adminSentinel.ts');
   assert.ok(
-    sentinel.includes('titularServer.startsWith("/api/external-channel") ? 12000 : 5000'),
-    'sentinela usa 12s para cadeia externa (canais diretos continuam 5s)'
+    sentinel.includes('probeChannelServers(servers, probeLiveStreamUrl, providerDownDetected)') &&
+    read('server/services/liveChannelProbe.ts').includes('server.url.startsWith(\'/api/external-channel\') ? 12000 : 7000'),
+    'sentinela verifica alternativas com o mesmo orçamento do painel'
   );
   const routes = read('server/routes/externalRoutes.ts');
   assert.ok(
-    routes.includes('deadlineMs: 4500'),
-    'rota externa usa resolver com deadline 4.5s (deixa folga para o redirect+proxy dentro dos 12s)'
+    routes.includes('deadlineMs: 8000, batch: 6, probeTimeoutMs: 3500'),
+    'rota externa mantém o orçamento e batch da integração Saimo atual'
   );
 });

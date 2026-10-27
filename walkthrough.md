@@ -1,3 +1,9 @@
+## 27/10/2026 — Correção de origem do player de TV e sondagem dos backups
+
+Envio ao GitHub autorizado pelo usuário. Validação local: 81 testes direcionados, TypeScript e build Vite aprovados. Android atualizado para 54/1.4.22 para a próxima compilação. Publicação/ativação na VPS devem ser confirmadas separadamente.
+
+Confirmado no bundle público LivePlayerModal-CltgNXzM.js: origem compilada http://localhost:3000 causava ERR_CONNECTION_REFUSED nos clientes. Web agora usa origem relativa; Capacitor usa HTTPS oficial. Byte consulta alternativas HLS sequencialmente e para na primeira funcional, com orçamento igual ao painel (12s externa/7s direta). Mantida a integração Saimo existente e cron de sincronização de seis horas; acesso ao site saimo-tv.pages.dev bloqueado por CONNECT 403 neste ambiente, inclusive com execução escalada. Não alegar validação nova desse site nem reprodução real após correção local. Testes de regressão cobrem web com variável localhost, origem nativa, backup funcional e erro de rede. Guard legado do resolver atualizado para orçamento 8s já presente no commit recebido. Nenhum push ou deploy neste lote.
+
 ## 26/10/2026 - Correção de 502/404 em TV Ao Vivo: Bloqueio de Domínios Mortos e Cache Rápido 0ms
 
 **Contexto e Diagnóstico:**

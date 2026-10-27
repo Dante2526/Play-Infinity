@@ -1,5 +1,6 @@
 import { getAdminDb, getAdminMessaging, getAdminFieldValue } from "../firebaseAdmin";
 import { probeLiveStreamUrl } from "../routes/iptv";
+import { probeChannelServers } from "./liveChannelProbe";
 import { getEncontreiResolverStatus, getVizerCatalogStatus } from "../routes/encontreiLookup";
 import { checkVizerHealth } from "./vizerDomains";
 import { INITIAL_LIVE_CHANNELS } from "../../src/data/liveChannels";
@@ -356,7 +357,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
             // Otimização: se o provedor Xtream caiu, PULA os outros canais
             // que dependem dele (todos dariam o mesmo erro e gerariam
             // 48 alertas falsos de "canal fora do ar").
-            if (providerDownDetected && titularServer.startsWith("/api/iptv/")) {
+            if (providerDownDetected && servers.every(s => s.url.startsWith("/api/iptv/"))) {
               continue;
             }
 
@@ -367,10 +368,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
             // 5s estourava no meio da cadeia e o painel acusava "fora do ar"
             // mesmo com canal funcionando. 12s = 4.5s resolver + ~3s proxy +
             // folga para DNS/fila. Canais diretos/amagi continuam rápidos (<1s).
-            const probeRes = await probeLiveStreamUrl(
-              titularServer,
-              titularServer.startsWith("/api/external-channel") ? 12000 : 5000
-            );
+            const probeRes = await probeChannelServers(servers, probeLiveStreamUrl, providerDownDetected);
             const alertId = `channel:${ch.id}`;
 
             // =========================================================================
@@ -435,7 +433,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
                 id: alertId,
                 category: "tv",
                 title: `🚨 Canal ${ch.name} Fora do Ar!`,
-                message: `O servidor titular falhou (${probeRes.statusCode || probeRes.error || "Sem Sinal"}). Toque para trocar o sinal no painel.`,
+                message: `Nenhuma das alternativas HLS respondeu ao teste (${probeRes.statusCode || probeRes.error || "Sem Sinal"}). Confira as fontes no painel.`,
                 level: "error",
                 actionTab: "channels",
                 actionUrl: "/admin?tab=channels",
