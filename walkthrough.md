@@ -1,3 +1,14 @@
+## 27/10/2026 — Auditoria Profunda de Estabilidade dos 350 Canais e Filtragem Anti-Queda
+
+**Contexto e Diagnóstico:**
+O usuário solicitou auditoria completa dos mais de 300 canais ao vivo, com bateria profunda em múltiplas fases para eliminar falsos positivos de 200 OK e fontes que conectam inicialmente mas caem nos primeiros segundos (como o NSports).
+1. **Causa Raiz da Queda Pós-Conexão (NSports e outros):** Determinadas transmissões entregam cabeçalho 200 OK na playlist, mas falham (404, 502, timeout ou corte de socket) ao solicitar os segmentos de vídeo subsequentes, ou entregam arquivos vazios (0 bytes) e páginas HTML de erro de CDN (Square Cloud/Cloudflare).
+2. **Execução Segura:** A bateria foi executada localmente via `scripts/audit-channels-stability.mjs` com timeout garantido de 3.5s por etapa, verificando manifesto `#EXTM3U`, download do 1º chunk com validação de magic bytes (`0x47` MPEG-TS / fMP4) e download do 2º chunk consecutivo após pausa.
+3. **Resultado:** Dos 350 canais auditados, **229 canais foram 100% aprovados** com conexões estáveis comprovadas; **121 canais instáveis/mortos foram descartados** (incluindo o NSports cujas fontes caíam).
+4. **Deploy e Ativação na VPS:** Arquivo limpo publicado em `/home/ubuntu/play-infinity/data/external-channels.txt`, processo PM2 `play-infinity-app` recarregado e validado via endpoint oficial `/api/live-channels` (234 canais ativos entregues com zero erros).
+
+---
+
 ## 27/10/2026 — Fontes individuais Saimo no painel administrativo
 
 Publicação do lote completo autorizada pelo usuário. Android 55/1.4.23 preparado. A ativação na VPS e quantidade real importada devem ser verificadas após o deploy.
