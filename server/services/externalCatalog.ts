@@ -494,6 +494,8 @@ async function isFonteAllowed(url: string): Promise<boolean> {
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
     // Hosts .invalid (marcador de painel desativado da Saimo): pulpar sem DNS
     if (parsed.hostname.toLowerCase().endsWith(".invalid")) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host.includes("vaiagora.vip") || host.includes("vivlar.me")) return false;
     if (await isPrivateOrLocalHost(parsed.hostname)) return false;
     return true;
   } catch {
@@ -557,6 +559,21 @@ export async function resolveExternalChannel(
   const allowed = candidates.filter((c) => c.ssrfOk);
   if (allowed.length === 0) return null;
 
+  for (const c of allowed) {
+    const cacheKey = `${c.url}|${c.fonte.referer || ""}|d=0`;
+    const cached = probeCache.get(cacheKey);
+    if (cached && cached.expires > Date.now() && cached.ok) {
+      return {
+        channelName: channel.name,
+        fonteIndex: c.index,
+        url: c.url,
+        qualidade: c.fonte.qualidade,
+        referer: c.fonte.referer,
+        agente: c.fonte.agente,
+      };
+    }
+  }
+
   // Probe em bateladas paralelas respeitando o deadline global; ao final,
   // escolhe a primeira fonte viva NA ORDEM ORIGINAL (a preferida da Saimo).
   const probed = new Map<number, boolean>();
@@ -575,6 +592,7 @@ export async function resolveExternalChannel(
         );
       })
     );
+    if (slice.some((c) => probed.get(c.index) === true)) break;
   }
 
   for (const c of allowed) {

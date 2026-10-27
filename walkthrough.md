@@ -1,3 +1,28 @@
+## 26/10/2026 - Correção de 502/404 em TV Ao Vivo: Bloqueio de Domínios Mortos e Cache Rápido 0ms
+
+**Contexto e Diagnóstico:**
+Canais de TV ao vivo (como Premiere 1 HD e Premiere 2 HD) exibiam sinal verde 200 OK nos testes do painel administrativo, mas ao tentar reproduzir no player ocorriam erros repetidos de 502 (Bad Gateway) e 404 (Not Found) para os fragmentos de vídeo.
+1. **Causa Raiz 1 (Domínios Mortos):** O arquivo de canais externos continha centenas de linhas legadas apontando para vaiagora.vip e vivlar.me. Esses domínios respondiam HTTP 200 com HTML de boas-vindas do nginx em vez de manifesto HLS (#EXTM3U). O proxy /api/live-stream-proxy detectava o corpo inválido e devolvia 502 Bad Gateway.
+2. **Causa Raiz 2 (Timeout Curto e Fallback Cego):** A rota /api/external-channel usava limite de 4.5s com lotes de 4 fontes. Como as primeiras fontes eram lentas ou inativas, o timeout estourava e a função caía em fallback cego, entregando a primeira fonte não testada da lista (vaiagora.vip), gerando o 502 no player.
+3. **Causa Raiz 3 (Divergência com o Admin):** O teste de sinal do painel administrativo usava timeout maior (12s), alcançando fontes ativas mais abaixo na lista (corruptx.org / 64.31.23.207), enquanto a reprodução falhava por timeout antecipado.
+
+**Modificações Realizadas (3 arquivos de código + testes):**
+1. **`server/services/externalCatalog.ts`:**
+   - Adicionado bloqueio explícito em `isFonteAllowed` para `vaiagora.vip` e `vivlar.me`, descartando fontes mortas logo no carregamento.
+   - Adicionada checagem rápida de cache positivo (`probeCache`) antes do loop de sondagem: fontes já validadas recentemente pelo Sentinela ou Admin são retornadas instantaneamente em 0ms.
+   - Adicionada parada antecipada no lote (`break`): assim que qualquer lote encontra uma fonte ativa comprovada, a busca encerra imediatamente sem gastar tempo desnecessário.
+2. **`server/routes/externalRoutes.ts`:**
+   - Expandida a janela de sondagem de 4.5s para 7s (`deadlineMs: 7000`), lote ampliado para 6 (`batch: 6`) e timeout individual de 2s, permitindo testar até 12 fontes em ~3s caso o cache esteja frio.
+3. **`tests/external-dead-domains.test.cjs` (Novo):**
+   - 3 testes unitários automatizados validando o bloqueio de domínios mortos, resolução instantânea via cache e expansão de concorrência.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes automatizados: 23/23 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Concluída com sucesso em 14.16s gerando `dist/server.cjs` e bundles sem falhas.
+
+---
+
 ## 26/10/2026 - Correção de Título e Sinopse em Inglês no Popup de Próxima Saga / Sequência de Filmes
 
 **Contexto e Diagnóstico:**
