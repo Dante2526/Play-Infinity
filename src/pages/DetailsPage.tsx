@@ -218,7 +218,7 @@ export function DetailsPage({
   useEffect(() => {
     setComments(getCommentsForItem(commentTargetId));
   }, [commentTargetId]);
-  const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId));
+  const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId, item.tmdbId));
   const [, setWatchedUpdateTick] = useState(0);
   const [trailerVideo, setTrailerVideo] = useState<TrailerVideo | null>(null);
   const [trailerVideosList, setTrailerVideosList] = useState<TrailerVideo[]>([]);
@@ -253,21 +253,44 @@ export function DetailsPage({
 
   // Sincronizar estado de favoritos
   useEffect(() => {
-    setIsFavorite(isItemFavorite(itemId));
+    const checkFav = () => {
+      const ids = getFavoriteIds();
+      const idToMatch = [itemId, item.id, item.tmdbId].filter(Boolean) as number[];
+      return idToMatch.some(id => ids.includes(Number(id)));
+    };
+
+    setIsFavorite(checkFav());
 
     const handleFavUpdate = (e: any) => {
       const ids: number[] = e.detail || getFavoriteIds();
-      setIsFavorite(ids.includes(itemId));
+      const idToMatch = [itemId, item.id, item.tmdbId].filter(Boolean) as number[];
+      setIsFavorite(idToMatch.some(id => ids.includes(Number(id))));
     };
 
     window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
     return () => {
       window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
     };
-  }, [itemId]);
+  }, [itemId, item.id, item.tmdbId]);
 
   const handleToggleFavorite = () => {
-    const newState = toggleFavorite(itemId);
+    const favTargetId = Number(item.tmdbId || item.id || itemId);
+    const newState = toggleFavorite(favTargetId, {
+      id: favTargetId,
+      tmdbId: item.tmdbId || item.id || itemId,
+      title: item.title,
+      posterUrl: item.posterUrl || item.imageUrl,
+      imageUrl: item.imageUrl || item.posterUrl,
+      backdropUrl: item.backdropUrl,
+      type: item.type,
+      year: item.year,
+      rating: item.rating,
+      genres: item.genres,
+      duration: item.duration,
+      match: item.match,
+      playerUrl: item.playerUrl,
+      imdbId: item.imdbId
+    });
     setIsFavorite(newState);
   };
 

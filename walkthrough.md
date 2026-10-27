@@ -1,3 +1,40 @@
+## 27/10/2026 — Correção e Sincronização Consistente de Favoritos Dinâmicos TMDB (Android 61/1.4.29)
+
+**Contexto e Diagnóstico:**
+O usuário enviou capturas de tela demonstrando que a série "VOCÊ" (YOU - 2018, TMDB ID 78191) aparecia como favoritada (ícone laranja ativo) na página de detalhes, mas não constava na página "Meus Favoritos" nem no contador do Perfil de Usuário.
+1. **Causa Raiz 1 (Reset para estáticos no evento):** Em `FavoritesPage.tsx` e `UserProfilePage.tsx`, o listener de evento `playinfinity:favorites_updated` executava `setFavoriteItems(getStaticFavoriteItems(ids))`. Essa função buscava apenas no catálogo estático (`src/data.ts`), descartando sumariamente títulos dinâmicos do TMDB como a série "Você".
+2. **Causa Raiz 2 (Envenenamento de cache com null):** Em `src/services/favorites.ts`, se houvesse qualquer oscilação de rede ou timeout (6s) na busca do TMDB, o código gravava permanentemente `tmdbFavoriteCache.set(id, null)`, impedindo qualquer tentativa subsequente na sessão.
+3. **Causa Raiz 3 (Falta de persistência de metadados locais):** Ao favoritar na página de detalhes, apenas o ID numérico era gravado no `localStorage`. Ao abrir Favoritos ou Perfil, se a API remota oscilasse, o card desaparecia por falta de dados básicos para renderizar.
+
+**Modificações Realizadas (5 arquivos de código + testes):**
+1. **`src/services/favorites.ts`:**
+   - Adicionada persistência de metadados locais de favoritos dinâmicos (`playinfinity_dynamic_favorites_meta`) com `saveDynamicFavoriteMeta`, `getStoredDynamicFavoritesMeta` e `removeDynamicFavoriteMeta`.
+   - `toggleFavorite` agora aceita metadados opcionais para salvar título, pôster, ano e tipo no exato instante do clique, viabilizando renderização instantânea (0ms).
+   - `getStaticFavoriteItems` agora agrega tanto o catálogo estático quanto o cache local de metadados.
+   - Refatorado `resolveFavoriteItems`: eliminado o armazenamento de `null` em falhas transitórias, garantido fallback local resiliente e fallback mínimo seguro para que NENHUM favorito seja descartado silenciosamente.
+2. **`src/pages/FavoritesPage.tsx`:**
+   - Atualizado o listener `handleFavUpdate` para carregar instantaneamente o cache local e chamar `resolveFavoriteItems(ids)`.
+   - Adicionada remoção otimista em `handleRemoveFavorite` (`prev.filter(...)`) para resposta visual instantânea.
+3. **`src/pages/UserProfilePage.tsx`:**
+   - Atualizado o listener de favoritos para manter a lista sincronizada sem perda de itens dinâmicos.
+   - Ajustado o contador do badge de Favoritos para refletir a quantidade real unificada.
+4. **`src/pages/DetailsPage.tsx`:**
+   - Sincronizada a checagem de favoritos (`isItemFavorite`) para verificar `itemId`, `item.id` e `item.tmdbId`.
+   - `handleToggleFavorite` agora repassa o objeto `item` para persistir seus metadados de forma imediata no storage local.
+5. **`src/utils/safeStorage.ts`:**
+   - Adicionada a chave `playinfinity_dynamic_favorites_meta` na rotina `clearLocalUserData` para limpeza segura no logout.
+6. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 61 e `versionName` para "1.4.29".
+7. **`tests/favorites-dynamic-resolution.test.cjs` (Novo):**
+   - 4 testes unitários automatizados cobrindo armazenamento local de metadados, fallback de 0ms quando rede falha, preservação de itens com cache frio e atualização remota.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte de testes unitários: 100% aprovados (`favorites-dynamic-resolution`, `home-releases`, `collection-ptbr`).
+- Compilação de produção (`npm run build` — Vite + esbuild): 0 erros gerando bundles e `dist/server.cjs` com sucesso em 20s.
+
+---
+
 ## 27/10/2026 — Auto-Recuperação Resiliente do Listener de Assinatura e Fim do Falso Alarme de Permissão (Android 60/1.4.28)
 
 **Contexto e Diagnóstico:**

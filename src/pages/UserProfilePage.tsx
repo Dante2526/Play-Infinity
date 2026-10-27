@@ -391,19 +391,9 @@ export function UserProfilePage({
 
   const userInitial = (userName.trim() || 'N').charAt(0).toUpperCase();
 
-  useEffect(() => {
-    const handleFavUpdate = (e: any) => {
-      setFavoriteIds(e.detail || getFavoriteIds());
-    };
-    window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
-    return () => {
-      window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
-    };
-  }, []);
-
   const [favoriteItems, setFavoriteItems] = useState<CatalogItem[]>(() => getStaticFavoriteItems(getFavoriteIds()));
 
-  // Resolve favoritos completos (catálogo estático + TMDB para itens fora do catálogo local)
+  // Resolve favoritos completos (catálogo estático + cache local + TMDB para itens fora do catálogo local)
   useEffect(() => {
     let mounted = true;
     resolveFavoriteItems(favoriteIds).then(items => {
@@ -411,6 +401,23 @@ export function UserProfilePage({
     });
     return () => { mounted = false; };
   }, [favoriteIds]);
+
+  useEffect(() => {
+    let mounted = true;
+    const handleFavUpdate = (e: any) => {
+      const ids = e.detail || getFavoriteIds();
+      setFavoriteIds(ids);
+      setFavoriteItems(getStaticFavoriteItems(ids));
+      resolveFavoriteItems(ids).then(items => {
+        if (mounted) setFavoriteItems(items);
+      });
+    };
+    window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    return () => {
+      mounted = false;
+      window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    };
+  }, []);
 
   const followedSeries = favoriteItems.filter(item => item.type === 'series');
   const scheduledEpisodes = getScheduleForFavorites(favoriteIds);
@@ -460,7 +467,7 @@ export function UserProfilePage({
                 className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl p-3 text-center cursor-pointer transition-all hover:scale-105"
                 title="Ver Favoritos"
               >
-                <span className="block text-xl font-black text-orange-500">{favoriteItems.length}</span>
+                <span className="block text-xl font-black text-orange-500">{Math.max(favoriteItems.length, favoriteIds.length)}</span>
                 <span className="text-[11px] text-neutral-400 font-medium ml-[3px]">Favoritos</span>
               </button>
 

@@ -151,13 +151,18 @@ export function FavoritesPage({
   }, [favoriteIds]);
 
   useEffect(() => {
+    let mounted = true;
     const handleFavUpdate = (e: any) => {
       const ids = e.detail || getFavoriteIds();
       setFavoriteIds(ids);
       setFavoriteItems(getStaticFavoriteItems(ids));
+      resolveFavoriteItems(ids).then(items => {
+        if (mounted) setFavoriteItems(items);
+      });
     };
     window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
     return () => {
+      mounted = false;
       window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
     };
   }, []);
@@ -171,7 +176,9 @@ export function FavoritesPage({
   const handleRemoveFavorite = (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
     toggleFavorite(id);
-    setFavoriteIds(getFavoriteIds());
+    const updatedIds = getFavoriteIds();
+    setFavoriteIds(updatedIds);
+    setFavoriteItems(prev => prev.filter(item => item.id !== id && item.tmdbId !== id));
   };
 
   const seriesCount = favoriteItems.filter(i => i.type === 'series').length;

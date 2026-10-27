@@ -1,6 +1,6 @@
 import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";;
 import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";;
-import { getDetails, formatImageUrl, TMDBDetails } from "./tmdb";
+import { getDetails, formatImageUrl, TMDBDetails, FALLBACK_POSTER_IMAGE, FALLBACK_BACKDROP_IMAGE } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 
@@ -168,6 +168,55 @@ export const saveFavoriteIds = (ids: number[]) => {
 };
 
 const FAVORITE_TIMESTAMPS_KEY = "playinfinity_favorite_timestamps";
+export const DYNAMIC_FAVORITES_META_KEY = "playinfinity_dynamic_favorites_meta";
+
+export const getStoredDynamicFavoritesMeta = (): Record<number, CatalogItem> => {
+  try {
+    const saved = localStorage.getItem(DYNAMIC_FAVORITES_META_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return {};
+};
+
+export const saveDynamicFavoriteMeta = (item: Partial<CatalogItem> & { id: number }): void => {
+  if (!item || !item.id) return;
+  try {
+    const meta = getStoredDynamicFavoritesMeta();
+    const id = Number(item.id);
+    const tmdbId = Number(item.tmdbId || item.id);
+    meta[id] = {
+      id,
+      tmdbId,
+      title: item.title || meta[id]?.title || "Sem título",
+      imageUrl: item.imageUrl || item.posterUrl || meta[id]?.imageUrl || "",
+      posterUrl: item.posterUrl || item.imageUrl || meta[id]?.posterUrl || "",
+      backdropUrl: item.backdropUrl || item.posterUrl || meta[id]?.backdropUrl || "",
+      type: item.type === 'series' ? 'series' : 'movie',
+      genres: item.genres || meta[id]?.genres || [],
+      synopsis: item.synopsis || meta[id]?.synopsis || "Sem sinopse disponível em português.",
+      year: item.year || meta[id]?.year || new Date().getFullYear(),
+      rating: item.rating || meta[id]?.rating || "8.0 ★",
+      duration: item.duration || (item.type === 'series' ? "Série" : "Filme"),
+      match: item.match || meta[id]?.match || 85,
+      playerUrl: item.playerUrl || meta[id]?.playerUrl || (item.type === 'series'
+        ? `https://v1.watchplay.shop/tvshow/${tmdbId}/1/1`
+        : `https://v1.watchplay.shop/movie/${tmdbId}`),
+      imdbId: item.imdbId || meta[id]?.imdbId
+    };
+    localStorage.setItem(DYNAMIC_FAVORITES_META_KEY, JSON.stringify(meta));
+  } catch {}
+};
+
+export const removeDynamicFavoriteMeta = (itemId: number): void => {
+  try {
+    const meta = getStoredDynamicFavoritesMeta();
+    const id = Number(itemId);
+    if (meta[id]) {
+      delete meta[id];
+      localStorage.setItem(DYNAMIC_FAVORITES_META_KEY, JSON.stringify(meta));
+    }
+  } catch {}
+};
 
 export const getFavoriteTimestamps = (): Record<number, number> => {
   try {
@@ -183,7 +232,7 @@ export const saveFavoriteTimestamps = (timestamps: Record<number, number>) => {
   } catch {}
 };
 
-export const toggleFavorite = (itemId: number): boolean => {
+export const toggleFavorite = (itemId: number, meta?: Partial<CatalogItem>): boolean => {
   const current = getFavoriteIds();
   const exists = current.includes(itemId);
   let updated: number[];
@@ -193,10 +242,14 @@ export const toggleFavorite = (itemId: number): boolean => {
   if (exists) {
     updated = current.filter(id => id !== itemId);
     delete timestamps[itemId];
+    removeDynamicFavoriteMeta(itemId);
   } else {
     updated = [...current, itemId];
     // Salva o timestamp exato de quando foi favoritado (em ms)
     timestamps[itemId] = Date.now();
+    if (meta) {
+      saveDynamicFavoriteMeta({ ...meta, id: itemId });
+    }
   }
   
   saveFavoriteTimestamps(timestamps);
@@ -204,8 +257,11 @@ export const toggleFavorite = (itemId: number): boolean => {
   return !exists;
 };
 
-export const isItemFavorite = (itemId: number): boolean => {
-  return getFavoriteIds().includes(itemId);
+export const isItemFavorite = (itemId: number, tmdbId?: number): boolean => {
+  const favs = getFavoriteIds();
+  if (favs.includes(Number(itemId))) return true;
+  if (tmdbId && favs.includes(Number(tmdbId))) return true;
+  return false;
 };
 
 // Constrói um CatalogItem a partir dos detalhes do TMDB (para favoritos fora do catálogo estático)
@@ -230,53 +286,97 @@ const buildCatalogItemFromTmdb = (details: TMDBDetails, type: 'movie' | 'series'
 });
 
 // Cache para não refazer chamadas ao TMDB a cada render/abertura do perfil
-const tmdbFavoriteCache = new Map<number, CatalogItem | null>();
+const tmdbFavoriteCache = new Map<number, CatalogItem>();
 
-// Resolve favoritos contra o catálogo estático casando por id OU tmdbId
+// Resolve favoritos contra o catálogo estático casando por id OU tmdbId,
+// incluindo também metadados salvos localmente para entrega síncrona instantânea (0ms).
 export const getStaticFavoriteItems = (ids: number[]): CatalogItem[] => {
   const allItems = getAllCatalogItems();
+  const dynamicMeta = getStoredDynamicFavoritesMeta();
   const idsNum = ids.map(Number).filter(n => Number.isFinite(n) && n > 0);
+
   return idsNum
-    .map(id => allItems.find(i => i.id === Number(id) || Number(i.tmdbId) === Number(id)))
+    .map(id => {
+      const staticItem = allItems.find(i => i.id === Number(id) || Number(i.tmdbId) === Number(id));
+      if (staticItem) return staticItem;
+      const dynamicItem = dynamicMeta[Number(id)];
+      if (dynamicItem) return dynamicItem;
+      return null;
+    })
     .filter((i): i is CatalogItem => !!i);
 };
 
-// Resolve favoritos completos: estáticos primeiro, depois busca no TMDB os IDs que
-// não estão no catálogo local (ex: séries encontradas só via busca/direto).
+// Resolve favoritos completos: estáticos e cache local primeiro, depois busca no TMDB os IDs que
+// não estão no catálogo local (ex: séries como "Você" encontradas só via busca/direto).
 export async function resolveFavoriteItems(ids: number[]): Promise<CatalogItem[]> {
   const idsNum = Array.from(new Set(ids.map(Number).filter(n => Number.isFinite(n) && n > 0)));
-  const staticItems = getStaticFavoriteItems(idsNum);
+  const initialItems = getStaticFavoriteItems(idsNum);
   const foundIds = new Set<number>();
-  staticItems.forEach(i => { foundIds.add(Number(i.id)); if (i.tmdbId) foundIds.add(Number(i.tmdbId)); });
+  initialItems.forEach(i => { foundIds.add(Number(i.id)); if (i.tmdbId) foundIds.add(Number(i.tmdbId)); });
 
   const missing = idsNum.filter(id => !foundIds.has(Number(id)));
-  if (missing.length === 0) return staticItems;
 
-  const dynamic = (await Promise.all(
-    missing.map(async (id): Promise<CatalogItem | null> => {
-      if (tmdbFavoriteCache.has(id)) return tmdbFavoriteCache.get(id) ?? null;
+  const dynamic = await Promise.all(
+    missing.map(async (id): Promise<CatalogItem> => {
+      if (tmdbFavoriteCache.has(id)) {
+        return tmdbFavoriteCache.get(id)!;
+      }
+
       try {
         const tv = await getDetails(id, 'tv');
         if (tv && tv.id === id) {
           const item = buildCatalogItemFromTmdb(tv, 'series');
           tmdbFavoriteCache.set(id, item);
+          saveDynamicFavoriteMeta(item);
           return item;
         }
       } catch { /* tenta como filme */ }
+
       try {
         const movie = await getDetails(id, 'movie');
         if (movie && movie.id === id) {
           const item = buildCatalogItemFromTmdb(movie, 'movie');
           tmdbFavoriteCache.set(id, item);
+          saveDynamicFavoriteMeta(item);
           return item;
         }
-      } catch { /* não resolvível */ }
-      tmdbFavoriteCache.set(id, null);
-      return null;
-    })
-  )).filter((i): i is CatalogItem => !!i);
+      } catch { /* não resolvível via TMDB */ }
 
-  return [...staticItems, ...dynamic];
+      // Se falhou no TMDB mas temos metadados salvos no storage
+      const meta = getStoredDynamicFavoritesMeta()[id];
+      if (meta) {
+        tmdbFavoriteCache.set(id, meta);
+        return meta;
+      }
+
+      // Fallback seguro: NUNCA excluir o ID do usuário da tela
+      const fallbackItem: CatalogItem = {
+        id,
+        tmdbId: id,
+        title: `Conteúdo #${id}`,
+        imageUrl: FALLBACK_POSTER_IMAGE,
+        posterUrl: FALLBACK_POSTER_IMAGE,
+        backdropUrl: FALLBACK_BACKDROP_IMAGE,
+        type: 'series',
+        genres: [],
+        synopsis: "Sincronizando detalhes do título...",
+        year: 2024,
+        rating: "8.0 ★",
+        duration: "Série",
+        match: 80,
+        playerUrl: `https://v1.watchplay.shop/tvshow/${id}/1/1`
+      };
+      return fallbackItem;
+    })
+  );
+
+  const resultMap = new Map<number, CatalogItem>();
+  initialItems.forEach(item => resultMap.set(Number(item.id), item));
+  dynamic.forEach(item => {
+    if (item) resultMap.set(Number(item.id), item);
+  });
+
+  return idsNum.map(id => resultMap.get(id)).filter((i): i is CatalogItem => !!i);
 }
 
 // Cronograma de episódios estáticos (apenas séries com episódios futuros confirmados oficialmente)

@@ -83,6 +83,7 @@ export function clearLocalUserData() {
     "playinfinity_favorites",
     "playinfinity_user_favorites",
     "playinfinity_favorite_timestamps",
+    "playinfinity_dynamic_favorites_meta",
     "playinfinity_watched_episodes",
     "playinfinity_watched_seasons",
     "playinfinity_watched_v2",
