@@ -5,7 +5,7 @@ type ReleaseType = 'movie' | 'tv';
 const availability = new Map<string, { available: boolean; expires: number }>();
 const pending = new Map<string, Promise<boolean>>();
 const lastAttempt = new Map<string, number>();
-const storageKey = (type: ReleaseType) => `playinfinity:home-releases:v2:${type}`;
+const storageKey = (type: ReleaseType) => `playinfinity:home-releases:v1:${type}`;
 
 function allowed(item: TMDBItem) {
   return Number.isInteger(item.id) && item.id > 0 && item.poster_path && (item.title || item.name) &&
@@ -15,10 +15,7 @@ function allowed(item: TMDBItem) {
 export function readHomeReleases(type: ReleaseType): TMDBItem[] {
   try {
     const data = JSON.parse(localStorage.getItem(storageKey(type)) || 'null');
-    if (data && Date.now() - data.savedAt < 24 * 60 * 60 * 1000 && Array.isArray(data.items)) {
-      const valid = data.items.filter(allowed).slice(0, 20);
-      if (valid.length >= 4) return valid;
-    }
+    if (data && Date.now() - data.savedAt < 24 * 60 * 60 * 1000 && Array.isArray(data.items)) return data.items.filter(allowed).slice(0, 20);
   } catch { /* Storage can be disabled in private browsing. */ }
   return [];
 }
@@ -78,7 +75,7 @@ export async function loadHomeReleases(type: ReleaseType, signal: AbortSignal, o
   const publish = () => {
     if (signal.aborted) return;
     const items = candidates.filter(item => confirmed.has(item.id)).slice(0, 20);
-    if (items.length >= 4) { saveHomeReleases(type, items); onUpdate(items); }
+    if (items.length) { saveHomeReleases(type, items); onUpdate(items); }
   };
   publish();
   // At most eight new titles per row/cycle, two simultaneous lookups per row.
