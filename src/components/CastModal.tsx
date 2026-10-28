@@ -7,6 +7,7 @@ import { registerPlugin } from '@capacitor/core';
 const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
 
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from '../services/encontreiCatalog';
+import { loadCastFramework, isChromiumBrowser, buildWebCastLoadRequest, isCastUserCancel } from '../services/webCastSdk';
 
 export interface CastMediaDetails {
   mediaType: 'movie' | 'series';
@@ -43,14 +44,15 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
 
 
 
-  const handleExternalPlayer = async () => {
-    setStatusMsg("Buscando link direto do vídeo...");
-    try {
-      let finalUrl = streamUrl || currentUrl;
-      const isDefaultWatchplay = finalUrl.includes("watchplay.shop") || !streamUrl;
+  // Resolução do link DIRETO do vídeo (a TV e o Web Video Caster não tocam o
+  // player embedado — precisam da URL final do stream). Compartilhada pelo
+  // App Externo de Transmissão e pela transmissão web do Google Cast.
+  const resolveCastStreamUrl = async (): Promise<string> => {
+    let finalUrl = streamUrl || currentUrl;
+    const isDefaultWatchplay = finalUrl.includes("watchplay.shop") || !streamUrl;
 
-      // Se temos os detalhes da mídia e estamos no player padrão, buscamos a melhor fonte disponível
-      if (mediaDetails && isDefaultWatchplay) {
+    // Se temos os detalhes da mídia e estamos no player padrão, buscamos a melhor fonte disponível
+    if (mediaDetails && isDefaultWatchplay) {
         let mixdropFileId: string | null = null;
 
         if (mediaDetails.mediaType === 'series' && mediaDetails.season && mediaDetails.episode) {
@@ -96,7 +98,15 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
             console.warn("Falha no Auto-Router de Cast", e);
           }
         }
-      }
+    }
+
+    return finalUrl;
+  };
+
+  const handleExternalPlayer = async () => {
+    setStatusMsg("Buscando link direto do vídeo...");
+    try {
+      const finalUrl = await resolveCastStreamUrl();
 
       setStatusMsg("Abrindo Web Video Caster...");
       const absoluteUrl = new URL(finalUrl, window.location.origin).href;
@@ -124,6 +134,56 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
       console.error(e);
       setStatusMsg("Erro: " + (e.message || "Não foi possível abrir."));
     }
+  };
+
+  // Transmissão web via Google Cast Framework SDK (Chrome/Edge desktop e
+  // Chrome Android): o seletor nativo do navegador lista as TVs da rede e a
+  // TV busca o stream direto da URL — não depende do player do navegador
+  // (contorna o bloqueio do Remote Playback com MSE/hls.js no Chrome).
+  // Retorna true quando este fluxo assumiu (sucesso, cancel ou erro já
+  // reportado); false quando o SDK não carregou (segue para AirPlay etc.).
+  const handleWebCastFramework = async (): Promise<boolean> => {
+    let ctx: any;
+    try {
+      ctx = await loadCastFramework();
+    } catch (sdkErr: any) {
+      console.warn("SDK do Cast indisponível neste navegador", sdkErr);
+      return false;
+    }
+
+    setStatusMsg("Buscando o melhor link do vídeo...");
+    const directUrl = await resolveCastStreamUrl();
+
+    setStatusMsg("Escolha a TV na janela que vai abrir...");
+    try {
+      await ctx.requestSession();
+    } catch (sessionErr: any) {
+      if (isCastUserCancel(sessionErr)) {
+        setStatusMsg(null);
+        return true;
+      }
+      console.error("Cast requestSession (web)", sessionErr);
+      setStatusMsg("Não foi possível conectar na TV. Verifique se a TV e este aparelho estão na mesma rede Wi-Fi e se a TV tem Chromecast embutido.");
+      return true;
+    }
+
+    const session = ctx.getCurrentSession();
+    if (!session) {
+      // Janela fechada sem escolher TV — não é erro.
+      setStatusMsg(null);
+      return true;
+    }
+
+    setStatusMsg("Iniciando transmissão na TV...");
+    try {
+      const absoluteUrl = new URL(directUrl, window.location.origin).href;
+      await session.loadMedia(buildWebCastLoadRequest({ url: absoluteUrl, isLive, title }));
+      onClose();
+    } catch (mediaErr: any) {
+      console.error("Cast loadMedia (web)", mediaErr);
+      setStatusMsg("A TV não conseguiu reproduzir este conteúdo. Tente outro servidor do canal ou use o App Externo de Transmissão.");
+    }
+    return true;
   };
 
   const handleNativeCast = async () => {
@@ -184,8 +244,15 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
         return;
       }
 
-      // Navegador (web): sem plugin nativo, tenta as APIs do browser.
-      // 1. Remote Playback API (Chrome Android / iOS Safari AirPlay)
+      // Navegador (web): sem plugin nativo.
+      // 1. Google Cast Framework SDK (Chrome/Edge desktop e Chrome Android):
+      //    seletor nativo do navegador; a TV busca o stream direto da URL.
+      if (isChromiumBrowser()) {
+        const handled = await handleWebCastFramework();
+        if (handled) return;
+      }
+
+      // 2. Remote Playback API (Chrome Android / iOS Safari AirPlay)
       const videos = videoElement ? [videoElement] : document.querySelectorAll('video');
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i] as any;
@@ -205,7 +272,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
         }
       }
 
-      // 2. Presentation API do navegador (Chrome / Edge / TVs)
+      // 3. Presentation API do navegador (Chrome / Edge / TVs)
       if ((navigator as any).presentation && (navigator as any).presentation.defaultRequest) {
         try {
           await (navigator as any).presentation.defaultRequest.start();
@@ -253,20 +320,22 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
 
         {!showQR ? (
           <div className="space-y-2 mt-3 text-left">
-            {Capacitor.isNativePlatform() && (
-              <button
-                onClick={handleNativeCast}
-                className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
-              >
-                <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
-                  <MonitorUp className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+            <button
+              onClick={handleNativeCast}
+              className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-800/80 hover:bg-neutral-700/80 border border-neutral-700 transition-colors cursor-pointer group"
+            >
+              <div className="w-8 h-8 rounded-lg bg-orange-500/15 flex items-center justify-center shrink-0">
+                <MonitorUp className="w-4 h-4 text-orange-400 group-hover:scale-110 transition-transform" />
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-semibold text-neutral-200">
+                  {Capacitor.isNativePlatform() ? 'Transmitir (Chromecast / Google Cast)' : 'Transmitir para a TV'}
                 </div>
-                <div className="flex-1">
-                  <div className="text-sm font-semibold text-neutral-200">Transmitir (Chromecast / Google Cast)</div>
-                  <div className="text-[10px] text-neutral-400">Busca TVs na mesma rede Wi-Fi</div>
+                <div className="text-[10px] text-neutral-400">
+                  {Capacitor.isNativePlatform() ? 'Busca TVs na mesma rede Wi-Fi' : 'Chromecast no Chrome/Edge · AirPlay no Safari'}
                 </div>
-              </button>
-            )}
+              </div>
+            </button>
             
             <button
               onClick={handleExternalPlayer}
