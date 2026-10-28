@@ -1,3 +1,33 @@
+## 28/10/2026 — Correção da Colisão de TMDB ID entre Filmes e Séries no Batch e Cache (Android 69/1.4.37)
+
+**Contexto e Diagnóstico:**
+Filmes e séries compartilham o mesmo espaço numérico de ID no TMDB (ex.: `movie:1399` e `tv:1399`).
+1. **Falso Positivo de Catálogo Estático no Backend:** Em `server/routes/encontreiLookup.ts`, a rota `/api/check-playable-batch` verificava os índices estáticos sem validar o `item.type`. Se um filme `{ id: 1399, type: 'movie' }` era consultado e o ID `1399` existia no índice de séries (`_vizerSeriesSeasonsIndex`), a flag `found` tornava-se `true`, inserindo o ID em `playableSeriesIds` e pulando (`continue;`) a sondagem do filme no catálogo de filmes.
+2. **Envenenamento de Cache de Sondagem (`_playableProbeCache`):** O backend utilizava `Map<number, ...>` indexado apenas pelo ID puro, sobrescrevendo status de filmes com séries de mesmo ID numérico.
+3. **Envenenamento de Cache no Frontend (`episodeAvailability.ts`):** O `clientPlayableCache` utilizava `Map<number, boolean>`, gerando colisões de estado entre filmes e séries na interface.
+
+**Modificações Realizadas (3 arquivos de código + testes):**
+1. **`server/routes/encontreiLookup.ts`:**
+   - Adicionada função `getProbeCacheKey(id: number, type?: string): string` gerando chaves no formato `movie:${id}`, `tv:${id}` ou `any:${id}`.
+   - Atualizado `_playableProbeCache` para `Map<string, ...>`.
+   - Condicionada a checagem em índices locais estáticos ao tipo solicitado (`isExplicitMovie` checa exclusivamente `_vizerMovieIndex` e `_encontreiMovieIndex`; `isExplicitTv` checa exclusivamente `_vizerSeriesSeasonsIndex` e `_encontreiSeriesSeasonsIndex`).
+   - Leitura e gravação do cache de probe agora usam chave tipada.
+2. **`src/services/episodeAvailability.ts`:**
+   - Adicionada função `getClientPlayableCacheKey(id: number, type?: string): string`.
+   - Atualizado `clientPlayableCache` para `Map<string, boolean>`.
+   - Na resposta do batch, itens com tipo `'movie'` validam contra `playableMovieIds`, itens `'tv'`/`'series'` contra `playableSeriesIds` e genéricos contra `playableIds`.
+3. **`tests/playable-batch-type-collision.test.cjs` (Novo):**
+   - 2 testes unitários automatizados validando o isolamento de consultas e de cache para mesmo ID numérico entre filmes e séries.
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 69 e `versionName` para "1.4.37".
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- Suíte de testes: 2/2 testes de colisão aprovados e 10/10 testes de busca em catálogo aprovados.
+- Compilação de produção (`npm run build`): Vite e `dist/server.cjs` gerados com sucesso em 39.81s.
+
+---
+
 ## 27/10/2026 — Blindagem Anti-Flood do Sentinela e Desativação do Scraper Saimo (Android 68/1.4.36)
 
 **Diagnóstico da Causa Raiz dos 108 Alertas:**

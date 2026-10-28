@@ -37,7 +37,12 @@ function fullRange(count: number): number[] {
 // temporadas novas (ex: T5 do Ghosts adicionado depois do cache populado)
 const clientAvailabilityCache = new Map<string, { timestamp: number; episodes: number[]; verifiedFromCatalog: boolean }>();
 const clientSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
-const clientPlayableCache = new Map<number, boolean>();
+const clientPlayableCache = new Map<string, boolean>();
+function getClientPlayableCacheKey(id: number, type?: string): string {
+  if (type === 'movie') return `movie:${id}`;
+  if (type === 'tv' || type === 'series') return `tv:${id}`;
+  return `any:${id}`;
+}
 const CLIENT_CACHE_TTL = 3 * 60 * 1000; // 3 minutos (reduzido de 15min)
 
 export type PlayableCheckItem = number | { id: number; type?: 'movie' | 'tv' | 'series' };
@@ -47,15 +52,16 @@ export type PlayableCheckItem = number | { id: number; type?: 'movie' | 'tv' | '
  */
 export async function checkPlayableBatch(items: PlayableCheckItem[]): Promise<Set<number>> {
   const result = new Set<number>();
-  const toFetchItems: { id: number; type?: string }[] = [];
+  const toFetchItems: { id: number; type?: 'movie' | 'tv' | 'series' }[] = [];
 
   for (const item of items) {
     const id = typeof item === "number" ? item : item.id;
     const type = typeof item === "object" ? item.type : undefined;
     if (!id) continue;
 
-    if (clientPlayableCache.has(id)) {
-      if (clientPlayableCache.get(id)) {
+    const cacheKey = getClientPlayableCacheKey(id, type);
+    if (clientPlayableCache.has(cacheKey)) {
+      if (clientPlayableCache.get(cacheKey)) {
         result.add(id);
       }
     } else {
@@ -78,12 +84,25 @@ export async function checkPlayableBatch(items: PlayableCheckItem[]): Promise<Se
     });
     if (res.ok) {
       const data = await res.json();
-      const playableList: number[] = data.playableIds || [];
-      const playableSet = new Set(playableList);
+      const movieSet = new Set<number>(data.playableMovieIds || []);
+      const seriesSet = new Set<number>(data.playableSeriesIds || []);
+      const allSet = new Set<number>(data.playableIds || []);
 
       for (const item of toFetchItems) {
-        const isPlayable = playableSet.has(item.id);
-        clientPlayableCache.set(item.id, isPlayable);
+        const isMovie = item.type === 'movie';
+        const isTv = item.type === 'tv' || item.type === 'series';
+
+        let isPlayable = false;
+        if (isMovie) {
+          isPlayable = movieSet.has(item.id);
+        } else if (isTv) {
+          isPlayable = seriesSet.has(item.id);
+        } else {
+          isPlayable = allSet.has(item.id);
+        }
+
+        const cacheKey = getClientPlayableCacheKey(item.id, item.type);
+        clientPlayableCache.set(cacheKey, isPlayable);
         if (isPlayable) {
           result.add(item.id);
         }

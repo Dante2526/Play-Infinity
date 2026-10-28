@@ -1602,7 +1602,12 @@ router.get("/api/series-seasons-available", async (req, res) => {
   }
 });
 
-const _playableProbeCache = new Map<number, { playable: boolean; type?: 'movie' | 'tv'; timestamp: number }>();
+const _playableProbeCache = new Map<string, { playable: boolean; type?: 'movie' | 'tv'; timestamp: number }>();
+function getProbeCacheKey(id: number, type?: string): string {
+  if (type === 'movie') return `movie:${id}`;
+  if (type === 'tv' || type === 'series') return `tv:${id}`;
+  return `any:${id}`;
+}
 const PLAYABLE_PROBE_TTL = 30 * 60 * 1000;
 
 router.all("/api/check-playable-batch", async (req, res) => {
@@ -1638,23 +1643,42 @@ router.all("/api/check-playable-batch", async (req, res) => {
 
     for (const item of items) {
       const id = item.id;
+      const isExplicitMovie = item.type === 'movie';
+      const isExplicitTv = item.type === 'tv' || item.type === 'series';
       let found = false;
 
-      // 1. Checa índice de filmes e séries locais
-      if (_vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id)) {
-        playableMovieIds.push(id);
-        found = true;
-      }
-      if (_vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id)) {
-        playableSeriesIds.push(id);
-        found = true;
+      // 1. Checa índice de filmes e séries locais respeitando o tipo solicitado
+      const inMovieIndex = _vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id);
+      const inSeriesIndex = _vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id);
+
+      if (isExplicitMovie) {
+        if (inMovieIndex) {
+          playableMovieIds.push(id);
+          found = true;
+        }
+      } else if (isExplicitTv) {
+        if (inSeriesIndex) {
+          playableSeriesIds.push(id);
+          found = true;
+        }
+      } else {
+        // Tipo não especificado: checa ambos
+        if (inMovieIndex) {
+          playableMovieIds.push(id);
+          found = true;
+        }
+        if (inSeriesIndex) {
+          playableSeriesIds.push(id);
+          found = true;
+        }
       }
 
-      // 2. Se já achou em catálogo estático, segue
+      // 2. Se já achou em catálogo estático correspondente, segue
       if (found) continue;
 
-      // 3. Checa cache de sondagem em memória
-      const cached = _playableProbeCache.get(id);
+      // 3. Checa cache de sondagem em memória com chave tipada
+      const cacheKey = getProbeCacheKey(id, item.type);
+      const cached = _playableProbeCache.get(cacheKey);
       if (cached && now - cached.timestamp < PLAYABLE_PROBE_TTL) {
         if (cached.playable) {
           if (cached.type === 'movie') playableMovieIds.push(id);
@@ -1719,7 +1743,8 @@ router.all("/api/check-playable-batch", async (req, res) => {
             }
           }
 
-          _playableProbeCache.set(id, {
+          const cacheKey = getProbeCacheKey(id, item.type);
+          _playableProbeCache.set(cacheKey, {
             playable: isPlayable,
             type: verifiedType,
             timestamp: now,
