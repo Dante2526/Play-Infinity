@@ -109,10 +109,10 @@ test('catalogue lookups are limited to two simultaneous requests and publish suc
   await api.searchCatalog('series', [], new AbortController().signal, items => updates.push(items));
   assert.equal(maximum, 2); assert.equal(updates.at(-1).length, 5); assert.ok(updates.some(items => items.length === 1));
 });
-test('native Android lookups use the configured HTTPS API origin', async () => {
+test('native Android lookups use the public HTTPS API origin', async () => {
   global.window = { Capacitor: { isNativePlatform: () => true }, location: { protocol: 'https:' } };
   global.fetch = async raw => {
-    assert.ok(raw.startsWith('https://native.test/api/'));
+    assert.ok(raw.startsWith('https://play-infinity.stream/api/'));
     return Response.json(raw.includes('check-playable') ? {} : { streamtape: 'file' });
   };
   const updates = [];

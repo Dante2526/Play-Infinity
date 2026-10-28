@@ -1669,6 +1669,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
           {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {!isEmbedStream && !isDashStream && streamUrl && (
+              <button type="button" onClick={() => setShowCastModal(true)}
+                aria-label="Transmitir canal para TV" title="Transmitir canal para TV"
+                className="p-1.5 sm:p-2 rounded-xl bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white transition-all cursor-pointer shrink-0">
+                <Cast className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            )}
             {/* Mini Player Flutuante (arrastável, continua tocando em qualquer página do app) */}
             <button
               onClick={handleToggleMiniPlayer}
@@ -1689,6 +1696,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           </div>
         </div>
       </div>
+      )}
+      {showCastModal && !isEmbedStream && !isDashStream && (
+        <CastModal onClose={() => setShowCastModal(false)} title={channel.name}
+          streamUrl={new URL(streamUrl, 'https://play-infinity.stream').href}
+          isLive videoElement={videoRef.current} />
       )}
     </div>
   );

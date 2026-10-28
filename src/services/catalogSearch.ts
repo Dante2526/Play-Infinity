@@ -1,13 +1,11 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 import { searchMulti, formatImageUrl, getGenreNames, type TMDBItem } from './tmdb';
 import type { CatalogItem } from '../utils/mediaUtils';
 
 const confirmed = new Map<string, number>();
 export const catalogSearchKey = (item: Pick<CatalogItem, 'id' | 'type'>) => `${item.type === 'movie' ? 'movie' : 'tv'}:${item.id}`;
 export const normalizeCatalogSearch = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-const apiBase = () => {
-  const native = typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:');
-  return native ? ((import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream') : '';
-};
+const apiBase = getApiBaseUrl;
 
 function formatResult(item: TMDBItem): CatalogItem {
   const tv = item.media_type === 'tv' || (!item.media_type && !!(item.name && !item.title));

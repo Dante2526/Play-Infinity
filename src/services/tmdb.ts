@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 // A chave de API do TMDB foi movida para o servidor para segurança (evitar vazamento no DevTools).
 // As requisições agora passam pelo proxy /api/tmdb definido em server.ts.
 
@@ -193,15 +194,7 @@ const CLIENT_TMDB_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
  * a URL em todo warning — sem isso não dá pra saber qual recurso falhou no DevTools.
  * Possui cache em memória (10 min) e deduplicação de chamadas concorrentes.
  */
-function getTmdbApiBase(): string {
-  if (typeof window !== 'undefined') {
-    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
-    if (isNative) {
-      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
-    }
-  }
-  return '';
-}
+const getTmdbApiBase = getApiBaseUrl;
 
 async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
   const now = Date.now();

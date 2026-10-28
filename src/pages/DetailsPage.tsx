@@ -323,6 +323,34 @@ export function DetailsPage({
 
         const details = identity.detailsOk ? identity.details : null;
 
+        // Só aplica detalhes reais: DEFAULT_DETAILS (id 0 sem temporadas) não deve
+        // sobrescrever sinopse/pôster/gêneros já vindos do catálogo. Aceita também
+        // o fallback do cache de temporadas (id 0 + seasons preenchidas).
+        const hasUsableDetails = !!(details && (details.id !== 0 || (Array.isArray(details.seasons) && details.seasons.length > 0)) && !('status_code' in (details as any)));
+
+        if (isMounted && hasUsableDetails) {
+          setTmdbDetails(details);
+          // Enriquecer item se faltar sinopse ou imagens
+          setItem(prev => ({
+            ...prev,
+            title: details.title || details.name || prev.title,
+            synopsis: details.overview || prev.synopsis,
+            backdropUrl: details.backdrop_path ? formatImageUrl(details.backdrop_path, 'original') : prev.backdropUrl,
+            posterUrl: details.poster_path ? formatImageUrl(details.poster_path, 'w500') : prev.posterUrl,
+            year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
+            rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
+            genres: details.genres ? normalizeGenres(details.genres) : prev.genres,
+            imdbId: details.imdb_id || prev.imdbId,
+            isAnime: Boolean(
+              prev.isAnime ||
+              initialItem?.isAnime ||
+              (details.genres?.some((g: any) => g.id === 16 || g.name?.toLowerCase().includes("anima")) &&
+               (details.origin_country?.includes("JP") || details.original_language === "ja"))
+            )
+          }));
+        }
+        if (isMounted) setLoadingTmdb(false);
+
         // Trailer/recomendações só no tipo que de fato existe — quando o card
         // está quebrado (sem identidade utilizável) pula a chamada que daria 404.
         let trailers: any[] = [];
@@ -372,32 +400,7 @@ export function DetailsPage({
           setLoadingTrailer(false);
         }
 
-        // Só aplica detalhes reais: DEFAULT_DETAILS (id 0 sem temporadas) não deve
-        // sobrescrever sinopse/pôster/gêneros já vindos do catálogo. Aceita também
-        // o fallback do cache de temporadas (id 0 + seasons preenchidas).
-        const hasUsableDetails = !!(details && (details.id !== 0 || (Array.isArray(details.seasons) && details.seasons.length > 0)) && !('status_code' in (details as any)));
 
-        if (isMounted && hasUsableDetails) {
-          setTmdbDetails(details);
-          // Enriquecer item se faltar sinopse ou imagens
-          setItem(prev => ({
-            ...prev,
-            title: details.title || details.name || prev.title,
-            synopsis: details.overview || prev.synopsis,
-            backdropUrl: details.backdrop_path ? formatImageUrl(details.backdrop_path, 'original') : prev.backdropUrl,
-            posterUrl: details.poster_path ? formatImageUrl(details.poster_path, 'w500') : prev.posterUrl,
-            year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
-            rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
-            genres: details.genres ? normalizeGenres(details.genres) : prev.genres,
-            imdbId: details.imdb_id || prev.imdbId,
-            isAnime: Boolean(
-              prev.isAnime || 
-              initialItem?.isAnime || 
-              (details.genres?.some((g: any) => g.id === 16 || g.name?.toLowerCase().includes("anima")) &&
-               (details.origin_country?.includes("JP") || details.original_language === "ja"))
-            )
-          }));
-        }
       } catch (err) {
         console.warn("Erro ao buscar detalhes no TMDB:", err);
       } finally {
@@ -450,8 +453,7 @@ export function DetailsPage({
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
 
-    // Se o TMDB ainda está carregando e não temos as temporadas candidatas, aguarda
-    if (loadingTmdb && candidates.length === 0) return;
+    // O catálogo pode descobrir temporadas enquanto os metadados ainda carregam.
 
     getAvailableSeasonsForSeries(effectiveTmdbId, candidates.length > 0 ? candidates : undefined).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {

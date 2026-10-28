@@ -21,9 +21,11 @@ interface CastModalProps {
   streamUrl?: string;
   title?: string;
   mediaDetails?: CastMediaDetails;
+  isLive?: boolean;
+  videoElement?: HTMLVideoElement | null;
 }
 
-export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title, mediaDetails }) => {
+export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title, mediaDetails, isLive = false, videoElement }) => {
   const [showQR, setShowQR] = useState(false);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
@@ -132,7 +134,10 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
           // Compat: versões antigas do plugin expõem `show`; a API atual usa `requestSession`
           const anyCast = Chromecast as any;
-          if (typeof anyCast.show === 'function') {
+          if (isLive) {
+            await Chromecast.requestSession();
+            await anyCast.loadMedia({ contentId: streamUrl, contentType: 'application/x-mpegURL', streamType: 'live', autoPlay: true, metadata: { title: title || 'TV ao vivo' } });
+          } else if (typeof anyCast.show === 'function') {
             await anyCast.show();
           } else {
             await Chromecast.requestSession();
@@ -145,7 +150,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
       }
 
       // 1. Tentar Remote Playback API nativa nos elementos de vídeo presentes (Chrome Android / iOS Safari AirPlay)
-      const videos = document.querySelectorAll('video');
+      const videos = videoElement ? [videoElement] : document.querySelectorAll('video');
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i] as any;
         if (video.remote && typeof video.remote.prompt === 'function') {

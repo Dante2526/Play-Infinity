@@ -80,10 +80,10 @@ test('manual retry resets exclusions while unavailable sources do not start endl
   routing.reset('episode4'); global.fetch = async raw => { assert.equal(new URL(raw, 'http://fixture').searchParams.get('exclude'), ''); return Response.json({ fileId: 'a' }); };
   assert.equal((await routing.next(identity)).kind, 'selected');
 });
-test('native app uses its configured HTTPS API and cancelled lookups cannot switch sources', async () => {
+test('native app uses its public HTTPS API and cancelled lookups cannot switch sources', async () => {
   global.window = { Capacitor: { isNativePlatform: () => true } };
   const routing = api.createMixdropSourceRouting(); routing.ensure('episode4'); const controller = new AbortController();
-  let finish; global.fetch = (raw, options) => { assert.ok(raw.startsWith('https://native.test/api/md-stream?')); return new Promise(resolve => { finish = resolve; }); };
+  let finish; global.fetch = (raw, options) => { assert.ok(raw.startsWith('https://play-infinity.stream/api/md-stream?')); return new Promise(resolve => { finish = resolve; }); };
   const pending = routing.next(identity, controller.signal); controller.abort(); finish(Response.json({ fileId: 'late' }));
   assert.equal((await pending).kind, 'cancelled');
 });

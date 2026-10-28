@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 import { getMovieReleases, getSeriesReleases, TMDBItem } from './tmdb';
 import { isMediaAvailable, UNAVAILABLE_TITLES_OR_IDS } from '../utils/mediaUtils';
 
@@ -34,8 +35,7 @@ async function confirmNewRelease(item: TMDBItem, type: ReleaseType): Promise<boo
   const timer = setTimeout(() => controller.abort(), 4500);
   const request = (async () => {
     try {
-      const native = typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:');
-      const origin = native ? ((import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream') : '';
+      const origin = getApiBaseUrl();
       const params = new URLSearchParams({ tmdb_id: String(item.id), type, name: item.title || item.name || '' });
       if (type === 'tv') { params.set('season', '1'); params.set('episode', '1'); }
       const response = await fetch(origin + '/api/encontrei-lookup?' + params, { signal: controller.signal });

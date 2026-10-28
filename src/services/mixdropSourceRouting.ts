@@ -1,10 +1,10 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 type Identity = { id: number; season?: number; episode?: number; name?: string };
 const validId = (id: string) => /^[a-zA-Z0-9_-]{1,100}$/.test(id);
 export function createMixdropSourceRouting() {
   const fresh = (identity: string) => ({ identity, current: '', failed: new Set<string>(), busy: false, exhausted: false, paused: false, seekTarget: undefined as number | undefined });
   let state = fresh('');
-  const origin = () => typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:')
-    ? ((import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream') : '';
+  const origin = getApiBaseUrl;
   return {
     ensure(identity: string) { if (state.identity !== identity) state = fresh(identity); },
     reset(identity: string) { state = fresh(identity); },

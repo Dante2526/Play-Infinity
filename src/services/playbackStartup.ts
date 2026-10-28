@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 import type {ServerHealthMap} from './playbackHealth';
 export type StartupInput={id:string;type:'movie'|'tv';season:number;episode:number;name?:string;keys:string[];preferred?:string;nixId?:string;refresh?:boolean};
 export type CatalogueHint={listed:boolean;warm:boolean;audioPriority?:number};
@@ -10,7 +11,7 @@ export function startupOrder(keys:string[],hints:Record<string,CatalogueHint>,pr
     return score(a)-score(b);
   });
 }
-const apiOrigin=()=>typeof window!=='undefined'&&(window as any).Capacitor?.isNativePlatform?.()?((import.meta.env.VITE_PROXY_URL as string)||'https://play-infinity.stream'):'';
+const apiOrigin = getApiBaseUrl;
 export async function preparePlaybackStartup(input:StartupInput,signal:AbortSignal,onHealth:(value:ServerHealthMap)=>void,fetcher:typeof fetch=fetch) {
   const identity=`${input.type}:${input.id}:${input.type==='tv'?`${input.season}:${input.episode}`:''}`;
   const params=new URLSearchParams({id:input.id,type:input.type,s:String(input.season),e:String(input.episode),name:input.name||'',nixId:input.nixId||'',refresh:input.refresh?'1':'0'});

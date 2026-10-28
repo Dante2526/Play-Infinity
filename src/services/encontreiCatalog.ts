@@ -1,12 +1,5 @@
-function getApiBase(): string {
-  if (typeof window !== 'undefined') {
-    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
-    if (isNative) {
-      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
-    }
-  }
-  return '';
-}
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
+const getApiBase = getApiBaseUrl;
 
 export interface EncontreiResult {
   mixdrop: string | null;

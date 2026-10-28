@@ -1,3 +1,4 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 export type ServerHealth = { state: 'available' | 'unavailable' | 'unknown'; checkedAt: number; reason: string; iframeUrl?:string };
 export type ServerHealthMap = Record<string, ServerHealth>;
 
@@ -23,8 +24,7 @@ export function chooseHealthStartupServer<T extends { key: string }>(servers: T[
 export async function fetchPlaybackHealth(input: {
   id: string; type: 'movie' | 'tv'; season: number; episode: number; servers: string[]; name?: string; nixId?: string;
 }, signal: AbortSignal): Promise<ServerHealthMap> {
-  const native = typeof window !== 'undefined' && ((window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:');
-  const origin = native ? ((import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream') : '';
+  const origin = getApiBaseUrl();
   const query = new URLSearchParams({ id: input.id, type: input.type, s: String(input.season), e: String(input.episode), servers: input.servers.filter(key=>key!=='srv_byse').join(','), name: input.name || '', nixId: input.nixId || '' });
   const response = await fetch(origin + '/api/playback-health?' + query, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error('Health check unavailable');

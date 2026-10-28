@@ -1,14 +1,7 @@
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 // Serviço de verificação de disponibilidade real de episódios nos servidores homologados (WatchPlayer e VIP Player)
 
-function getApiBase(): string {
-  if (typeof window !== 'undefined') {
-    const isNative = (window as any).Capacitor?.isNativePlatform?.() || window.location.protocol === 'capacitor:';
-    if (isNative) {
-      return (import.meta.env.VITE_PROXY_URL as string) || 'https://play-infinity.stream';
-    }
-  }
-  return '';
-}
+const getApiBase = getApiBaseUrl;
 
 interface AvailableEpisodesResponse {
   success: boolean;
