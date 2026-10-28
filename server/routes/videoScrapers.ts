@@ -263,7 +263,7 @@ const router = Router();
                       type: "WATCHPLAY_STATUS",
                       currentTime: cur,
                       duration: dur,
-                      paused: !!v.paused,
+                      paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
                       muted: !!v.muted,
                       volume: typeof v.volume === "number" ? v.volume : 1,
                       buffered: bufferedEnd,
@@ -770,7 +770,7 @@ const router = Router();
                         type: "WATCHPLAY_STATUS",
                         currentTime: cur,
                         duration: dur,
-                        paused: !!v.paused,
+                        paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
                         muted: !!v.muted,
                         volume: typeof v.volume === "number" ? v.volume : 1,
                         buffered: bufferedEnd,
@@ -2212,7 +2212,7 @@ const router = Router();
                   type: "WATCHPLAY_STATUS",
                   currentTime: v.currentTime || 0,
                   duration: dur,
-                  paused: !!v.paused,
+                  paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
                   muted: !!v.muted,
                   volume: typeof v.volume === "number" ? v.volume : 1,
                   buffered: bufferedEnd,
@@ -2878,10 +2878,13 @@ const router = Router();
       }
 
       // Verifica cache em memória apenas para manifestos/playlists (.m3u8), sem acumular vídeos pesados na RAM
-      const isSegment = req.query.is_segment === "true" || rawUrl.includes(".ts") || rawUrl.includes(".m4s") || rawUrl.includes(".mp4");
+      const isExplicitSegment = req.query.is_segment === "true";
+      const agente = typeof req.query.agente === "string" ? req.query.agente : "";
+      const agenteParam = agente ? `&agente=${encodeURIComponent(agente)}` : "";
+      const cacheKey = JSON.stringify([rawUrl, agente, req.query.referer || "", isExplicitSegment]);
       const isM3U8Request = rawUrl.includes(".m3u8");
       
-      const cached = isM3U8Request ? liveChunkCache.get(rawUrl) : null;
+      const cached = isM3U8Request ? liveChunkCache.get(cacheKey) : null;
       if (cached && cached.expires > Date.now()) {
         res.setHeader("Content-Type", cached.contentType);
         res.setHeader("Cache-Control", "public, max-age=2, immutable");
@@ -2910,7 +2913,7 @@ const router = Router();
 
       // 3. Headers seguros: sem forjar IP arbitrário de terceiros
       const headers: Record<string, string> = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "User-Agent": agente || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
         "Accept": "*/*"
       };
 
@@ -3022,7 +3025,7 @@ const router = Router();
 
       const finalUrl = upstreamRes.url || currentUrl;
       const contentType = upstreamRes.headers.get("content-type") || "";
-      const isExplicitSegment = req.query.is_segment === "true" || isSegment;
+
 
       let isM3U8 = !isExplicitSegment && (
         req.query.is_manifest === "true" ||
@@ -3033,7 +3036,7 @@ const router = Router();
         contentType.includes("vnd.apple.mpegurl")
       );
 
-      if (!isExplicitSegment && upstreamText === null && (isM3U8 || rawUrl.includes("up.kiwi") || !contentType.includes("mp2t"))) {
+      if (!isExplicitSegment && upstreamText === null && (isM3U8 || rawUrl.includes("up.kiwi") || (!contentType.includes("mp2t") && !new URL(finalUrl).pathname.toLowerCase().endsWith(".ts")))) {
         try {
           const peekText = await upstreamRes.text();
           if (peekText.includes("#EXTM3U")) {
@@ -3124,7 +3127,7 @@ const router = Router();
                 // Devem usar is_manifest=true para que o proxy reescreva as URLs internas
                 // (se usarmos is_segment=true, o proxy pula o rewriting e o HLS.js
                 // recebe URLs diretas de plosia*.xyz causando erros CORS)
-                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}&sig=${signProxyUrl(fullUri)}&is_manifest=true"`;
+                return `URI="/api/live-stream-proxy?url=${encodeURIComponent(fullUri)}${refererParam}${agenteParam}&sig=${signProxyUrl(fullUri)}&is_manifest=true"`;
               } catch {
                 return `URI="${uri}"`;
               }
@@ -3139,7 +3142,7 @@ const router = Router();
             const isStreamManifest = lastTag === "#EXT-X-STREAM-INF" || isMasterManifest;
             const segParam = isStreamManifest ? `&is_manifest=true${masterParam}&vidx=${variantIndex++}` : "&is_segment=true";
             
-            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}&sig=${signProxyUrl(fullSegUrl)}${segParam}`;
+            return `/api/live-stream-proxy?url=${encodeURIComponent(fullSegUrl)}${refererParam}${agenteParam}&sig=${signProxyUrl(fullSegUrl)}${segParam}`;
           } catch {
             return trimmed;
           }
@@ -3147,7 +3150,7 @@ const router = Router();
         
         const rewrittenBuffer = Buffer.from(rewritten, "utf-8");
         // Em live streaming contínuo com fragmentos curtos (2s), o manifesto M3U8 deve ser sempre ultra-fresco
-        liveChunkCache.set(rawUrl, {
+        liveChunkCache.set(cacheKey, {
           buffer: rewrittenBuffer,
           contentType: "application/vnd.apple.mpegurl; charset=utf-8",
           expires: Date.now() + 500
@@ -3160,7 +3163,7 @@ const router = Router();
 
       // Se não for M3U8 e for uma requisição direta de canal MPEG-TS (sem ser requisição de segmento interno),
       // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
-      if (!isExplicitSegment && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || finalUrl.endsWith(".ts"))) {
+      if (!isExplicitSegment && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || new URL(finalUrl).pathname.toLowerCase().endsWith(".ts"))) {
         // Libera explicitamente o corpo upstream se ainda não foi lido
         if (upstreamText === null) {
           try {
@@ -3177,7 +3180,7 @@ const router = Router();
           "#EXT-X-TARGETDURATION:6",
           `#EXT-X-MEDIA-SEQUENCE:${seq}`,
           "#EXTINF:6.0,",
-          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}&sig=${signProxyUrl(finalUrl)}&is_segment=true&_ts=${Date.now()}`
+          `/api/live-stream-proxy?url=${encodeURIComponent(finalUrl)}${agenteParam}${typeof req.query.referer === "string" ? `&referer=${encodeURIComponent(req.query.referer)}` : ""}&sig=${signProxyUrl(finalUrl)}&is_segment=true&_ts=${Date.now()}`
         ].join("\n");
         return res.send(manifest);
       }
@@ -3538,7 +3541,7 @@ const router = Router();
             type: "WATCHPLAY_STATUS",
             currentTime: cur,
             duration: dur,
-            paused: !!v.paused,
+            paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
             muted: !!v.muted,
             volume: typeof v.volume === "number" ? v.volume : 1,
             buffered: bufferedEnd,
@@ -4023,7 +4026,7 @@ const router = Router();
                 type: 'WATCHPLAY_STATUS',
                 currentTime: cur,
                 duration: dur,
-                paused: !!v.paused,
+                paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
                 muted: !!v.muted,
                 volume: typeof v.volume === 'number' ? v.volume : 1,
                 buffered: buf,

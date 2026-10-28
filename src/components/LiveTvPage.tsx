@@ -153,6 +153,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
     { id: 'Notícias', label: 'Notícias', icon: <Flame className="w-4 h-4" /> },
     { id: 'Filmes & Séries', label: 'Filmes & Séries', icon: <Tv className="w-4 h-4" /> },
     { id: 'Infantil', label: 'Infantil & Anime', icon: <Sparkles className="w-4 h-4" /> },
+    { id: 'Variedades', label: 'Variedades & Docs', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'Favoritos', label: 'Meus Favoritos', icon: <Star className="w-4 h-4" /> },
   ];
 
@@ -195,7 +196,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
       const found = channels.find(c => c.id === lastId);
       if (found) return found;
     }
-    return channels.find(c => c.id === 'premiere-clubes') || channels[0];
+    return channels.find(c => c.id === 'premiere-1') || channels[0];
   }, [channels]);
 
   const handlePlayChannel = (channel: LiveChannel) => {

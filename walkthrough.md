@@ -8314,3 +8314,39 @@ Usuário autorizou explicitamente novo envio. Lote: relógio por iframe, bloquei
 
 
 
+
+## 28/10/2026 — Contexto de fontes externas e abertura MPEG-TS
+
+Corrigido repasse de agente no redirect external-channel, User-Agent upstream e URLs reescritas/sintéticas do live-stream-proxy. Cache de manifestos separado por URL, agente, referer e tipo de requisição. Apenas is_segment=true identifica segmento explícito; abertura .ts (inclusive com query) pode gerar manifesto sintético, sem ler o stream TS como texto por extensão. Testes locais de redirect, classificação, reescrita e manifesto sintético; TypeScript aprovado. Sem deploy ou validação de reprodução real nesta alteração.
+
+## 28/10/2026 — Probes externos: validação de alvos e leitura limitada
+
+Variantes e segmentos extraídos de HLS passam por isFonteAllowed; fetch compartilhado valida alvo inicial e cada redirect manual (máximo 5). Probes de segmentos também validam destinos e leem somente 189 bytes, cancelando corpo mesmo se upstream ignorar Range. Playlists sem Range de 2 KB: leitura por stream limitada a 64 KB, descartando última linha incompleta ao atingir limite. Cache inclui agente. Testes com respostas Web Response reais cobrem destino privado em master/media/redirect, URI longa e limite excedido. Validação local, sem deploy.
+
+## 28/10/2026 — Probe de saúde limitado e nomes publicáveis
+
+probeLiveStreamUrl usa readHealthPrefix com limite de 4 KB e cancelamento do corpo; respostas de erro também são canceladas. Mantida semântica de saúde HLS (MP4 bruto não vira sinal HLS aprovado). getPublicLiveChannels omite nomes externos rejeitados pelo validador da rota. Testes verificam todas as URLs external-channel publicadas, inclusive catálogo estático, e cancelamento de streams contínuos HLS/binários/erro. Consultas/invalidação de cache externo alinhadas à chave com agente da correção anterior. Sem publicação.
+
+## 28/10/2026 — Rotação de fontes externas após falha no player
+
+LivePlayerModal inclui retry e _cb com reloadNonce nas URLs external-channel; recarga manual e automática de servidor único incrementam o contador. Rota valida retry numérico e responde no-store. Resolver mantém preferência inicial e, nas tentativas, sonda alternativas dentro do deadline e rotaciona entre fontes aprovadas (inclusive cache positivo); removido retorno antecipado por cache que ignorava a rotação. Quando só uma fonte é utilizável, não há alternativa garantida. Teste com primeira fonte morta e duas fontes vivas confirma alternância com cache quente. Sem deploy/teste de navegador real.
+
+## 28/10/2026 — Atualização dos status individuais no painel
+
+ExternalChannelSources exporta invalidateExternalSourcesCache e emite evento ouvido pelos componentes montados. probeSingleServer invalida ao terminar; teste geral suprime invalidações por item e emite uma ao finalizar o lote. Cache e busca normalizam acentos, caixa e espaços. Geração impede resposta antiga de repovoar cache invalidado ou apagar requisição nova em andamento. Teste cobre corrida entre respostas, deduplicação, recarga e normalização. Sem deploy.
+
+## 28/10/2026 — Categoria Variedades, Premiere e filtro adulto
+
+Adicionado chip Variedades & Docs em LiveTvPage. Destaque e favoritos padrão usam premiere-1 em vez do ID antigo. Filtro adulto do catálogo externo considera nome e categoria. Teste de publicação cobre canal adulto identificado apenas pelo nome e apenas pela categoria. Favoritos já gravados no armazenamento do usuário não são migrados neste ajuste.
+
+## 28/10/2026 — Loading inicial VOD e autoplay após metadados
+
+Arquitetura atual difere dos nomes relatados: BYSE usa core.ts, skin usa playerStatus e modal playbackConfirmedRef. Skin mantém spinner antes de metadados/dados reais, não trata status vazio como sincronização real. Timer de 4,5s não retira loading sem mídia confirmada. Modal dispara seek salvo e PLAY uma vez na primeira duração válida por transição; confirmação não aceita readyState=1 isolado. Status internos sinalizam buffering durante vídeo vazio/pausado. MixDrop PLAY e StreamTape PLAY tentam muted após NotAllowedError; BYSE já possui fallback muted no canplay/MANIFEST_PARSED. 69 testes direcionados e TypeScript passaram. Sem reprodução real em navegador/aparelho e sem deploy nesta alteração.
+
+## 28/10/2026 — Recuperação MixDrop e conexões persistentes
+
+Arquitetura atual: md-stream renderiza iframe; md-proxy usa mixdropProxy.ts; sourceReadable encontrado em mixdrop.ts pertence ao download. Mantido timeout upstream de 6s já existente (sem contar backpressure do cliente). Adicionado Agent undici persistente e dependência direta/lockfile. Erro do proxy invalida mixdropMemoryCache; próximo Range com cache ausente renova token. refresh=1 força renovação no proxy. Recovery solicita refresh e restaura currentTime, prazo padrão de reload reduzido de 12s a 6s (fluxo preparado mantém 4s). 40 testes MixDrop e TypeScript aprovados; sem teste de CDN real ou garantia de nova borda/deploy.
+
+## 28/10/2026 — BYSE: warm-up, alternativas HLS e retomada
+
+Implementação vigente usa core.ts, não resolver.ts/playerHtml.ts. Healthcheck de startup inicia resolução fria em background, máximo 2 aquecimentos por processo, com deduplicação existente. Resolver ordena sources por altura/qualidade e valida playlist de cada alternativa com timeout 5s, allowlist por redirect e leitura limitada, seguindo à próxima em falha. Hls usa startPosition, capLevelToPlayerSize, buffer 30/60s, backbuffer30, frag retries4/500ms; rota aceita start além de t. Proxy usa 8s para recursos não-m3u8 e inatividade de corpo de mídia, mantendo manifesto15s. Item resolveIdsFromQuery não aplicado: essa função inexiste; id é TMDB e e é episódio, fileId identifica arquivo. Não reinterpretar esses parâmetros sem mudança explícita de contrato. Testes simulados de fallback e rotas; sem deploy/CDN real.

@@ -113,7 +113,9 @@ function mockFetch(router) {
     if (!handler) {
       return { ok: false, status: 404, headers: new Map(), text: async () => 'not found', arrayBuffer: async () => new ArrayBuffer(0) };
     }
-    return handler;
+    let body;
+    try { body = await handler.text(); } catch { body = await handler.arrayBuffer(); }
+    return new Response(body, { status: handler.status, headers: Object.fromEntries(handler.headers) });
   };
   return { calls, restore: () => { globalThis.fetch = original; } };
 }
@@ -597,33 +599,33 @@ test('validatePlaylistContent: aceita segmento sem extensão (Xtream com query)'
 });
 
 test('probeSegmentMagicBytes: aceita segmento MPEG-TS (byte 0 = 0x47)', async () => {
-  const m = mockFetch({ 'https://x/seg.ts': tsSegmentResponse() });
+  const m = mockFetch({ 'https://93.184.216.34/seg.ts': tsSegmentResponse() });
   try {
-    const ok = await catalog.probeSegmentMagicBytes('https://x/seg.ts');
+    const ok = await catalog.probeSegmentMagicBytes('https://93.184.216.34/seg.ts');
     assert.equal(ok, true);
   } finally { m.restore(); }
 });
 
 test('probeSegmentMagicBytes: aceita segmento fMP4 (ftyp no offset 4)', async () => {
-  const m = mockFetch({ 'https://x/seg.m4s': fmp4SegmentResponse() });
+  const m = mockFetch({ 'https://93.184.216.34/seg.m4s': fmp4SegmentResponse() });
   try {
-    const ok = await catalog.probeSegmentMagicBytes('https://x/seg.m4s');
+    const ok = await catalog.probeSegmentMagicBytes('https://93.184.216.34/seg.m4s');
     assert.equal(ok, true);
   } finally { m.restore(); }
 });
 
 test('probeSegmentMagicBytes: REJEITA segmento PNG (bytes 0x89 PNG)', async () => {
-  const m = mockFetch({ 'https://x/fake.png': pngSegmentResponse() });
+  const m = mockFetch({ 'https://93.184.216.34/fake.png': pngSegmentResponse() });
   try {
-    const ok = await catalog.probeSegmentMagicBytes('https://x/fake.png');
+    const ok = await catalog.probeSegmentMagicBytes('https://93.184.216.34/fake.png');
     assert.equal(ok, false, 'magic bytes PNG não deve passar');
   } finally { m.restore(); }
 });
 
 test('probeSegmentMagicBytes: REJEITA segmento 404', async () => {
-  const m = mockFetch({ 'https://x/missing.ts': notFoundSegmentResponse() });
+  const m = mockFetch({ 'https://93.184.216.34/missing.ts': notFoundSegmentResponse() });
   try {
-    const ok = await catalog.probeSegmentMagicBytes('https://x/missing.ts');
+    const ok = await catalog.probeSegmentMagicBytes('https://93.184.216.34/missing.ts');
     assert.equal(ok, false, '404 não deve passar');
   } finally { m.restore(); }
 });
@@ -643,10 +645,10 @@ test('probeExternalFonte: REJEITA playlist-isca .png (bug real da família meufu
 
 test('probeExternalFonte: REJEITA playlist com segmento .woff', async () => {
   const m = mockFetch({
-    'https://x/p.m3u8': mediaPlaylistResponse('https://x/assets/y.woff'),
+    'https://93.184.216.34/p.m3u8': mediaPlaylistResponse('https://93.184.216.34/assets/y.woff'),
   });
   try {
-    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    const ok = await catalog.probeExternalFonte('https://93.184.216.34/p.m3u8');
     assert.equal(ok, false);
   } finally { m.restore(); catalog.clearExternalCatalogCache(); }
 });
@@ -654,34 +656,34 @@ test('probeExternalFonte: REJEITA playlist com segmento .woff', async () => {
 test('probeExternalFonte: REJEITA playlist válida mas com segmento PNG nos bytes (isca mais sofisticada)', async () => {
   // Isca que tem .ts na URL mas serve PNG nos bytes — magic byte check pega
   const m = mockFetch({
-    'https://x/p.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
-    'https://x/seg.ts': pngSegmentResponse(),
+    'https://93.184.216.34/p.m3u8': mediaPlaylistResponse('https://93.184.216.34/seg.ts'),
+    'https://93.184.216.34/seg.ts': pngSegmentResponse(),
   });
   try {
-    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    const ok = await catalog.probeExternalFonte('https://93.184.216.34/p.m3u8');
     assert.equal(ok, false, 'segmento com magic bytes PNG deve falhar');
   } finally { m.restore(); catalog.clearExternalCatalogCache(); }
 });
 
 test('probeExternalFonte: aceita playlist válida com segmento TS real', async () => {
   const m = mockFetch({
-    'https://x/p.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
-    'https://x/seg.ts': tsSegmentResponse(),
+    'https://93.184.216.34/p.m3u8': mediaPlaylistResponse('https://93.184.216.34/seg.ts'),
+    'https://93.184.216.34/seg.ts': tsSegmentResponse(),
   });
   try {
-    const ok = await catalog.probeExternalFonte('https://x/p.m3u8');
+    const ok = await catalog.probeExternalFonte('https://93.184.216.34/p.m3u8');
     assert.equal(ok, true);
   } finally { m.restore(); catalog.clearExternalCatalogCache(); }
 });
 
 test('probeExternalFonte: recursão master → variante de mídia (Xtream-style)', async () => {
   const m = mockFetch({
-    'https://x/master.m3u8': masterPlaylistResponse('https://x/var.m3u8'),
-    'https://x/var.m3u8': mediaPlaylistResponse('https://x/seg.ts'),
-    'https://x/seg.ts': tsSegmentResponse(),
+    'https://93.184.216.34/master.m3u8': masterPlaylistResponse('https://93.184.216.34/var.m3u8'),
+    'https://93.184.216.34/var.m3u8': mediaPlaylistResponse('https://93.184.216.34/seg.ts'),
+    'https://93.184.216.34/seg.ts': tsSegmentResponse(),
   });
   try {
-    const ok = await catalog.probeExternalFonte('https://x/master.m3u8');
+    const ok = await catalog.probeExternalFonte('https://93.184.216.34/master.m3u8');
     assert.equal(ok, true, 'master com variante válida deve passar por recursão');
     // Deve ter buscado master, variante e segmento (3 fetches)
     assert.ok(m.calls.some(c => c.url.includes('master.m3u8')));
@@ -692,10 +694,10 @@ test('probeExternalFonte: recursão master → variante de mídia (Xtream-style)
 
 test('probeExternalFonte: master com variante isca .png falha', async () => {
   const m = mockFetch({
-    'https://x/master.m3u8': masterPlaylistResponse('https://x/uploads/abc.png'),
+    'https://93.184.216.34/master.m3u8': masterPlaylistResponse('https://93.184.216.34/uploads/abc.png'),
   });
   try {
-    const ok = await catalog.probeExternalFonte('https://x/master.m3u8');
+    const ok = await catalog.probeExternalFonte('https://93.184.216.34/master.m3u8');
     assert.equal(ok, false, 'variante .png é isca, recursão falha');
   } finally { m.restore(); catalog.clearExternalCatalogCache(); }
 });
@@ -752,7 +754,7 @@ test('scraper: validateChannelsText aceita catálogo com canais e fontes, rejeit
   assert.equal(ok.ok, true);
   const bad = scraper.validateChannelsText('<html>erro</html>');
   assert.equal(bad.ok, false);
-  const poucosCanais = scraper.validateChannelsText('canal: A\nfonte: https://x/a.m3u8\n');
+  const poucosCanais = scraper.validateChannelsText('canal: A\nfonte: https://93.184.216.34/a.m3u8\n');
   assert.equal(poucosCanais.ok, false, 'menos de 10 canais é tratado como formato quebrado');
 });
 
@@ -992,4 +994,22 @@ test('guard: timeouts da cadeia externa coerentes — painel e sentinela não es
     routes.includes('deadlineMs: 8000, batch: 6, probeTimeoutMs: 3500'),
     'rota externa mantém o orçamento e batch da integração Saimo atual'
   );
+});
+
+test('resolver: retries rotate viable sources even with positive probe cache',async()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'extcat-retry-'));
+ writeFixtures(dir,'canal: Retry TV\nfonte: https://8.8.8.8/dead.m3u8\nfonte: https://8.8.8.8/a.m3u8\nfonte: https://8.8.8.8/b.m3u8\n');
+ process.env.EXTERNAL_CATALOG_DIR=dir;catalog.clearExternalCatalogCache();
+ const m=mockFetch({
+ 'https://8.8.8.8/dead.m3u8':fakeResponse(404,'dead'),
+ 'https://8.8.8.8/a.m3u8':mediaPlaylistResponse('https://8.8.8.8/a.ts'),
+ 'https://8.8.8.8/b.m3u8':mediaPlaylistResponse('https://8.8.8.8/b.ts'),
+ 'https://8.8.8.8/a.ts':tsSegmentResponse(),
+ 'https://8.8.8.8/b.ts':tsSegmentResponse(),
+ });
+ try {
+ assert.equal((await catalog.resolveExternalChannel('Retry TV')).fonteIndex,1);
+ assert.equal((await catalog.resolveExternalChannel('Retry TV',{retry:1})).fonteIndex,2);
+ assert.equal((await catalog.resolveExternalChannel('Retry TV',{retry:2})).fonteIndex,1);
+ }finally{m.restore();delete process.env.EXTERNAL_CATALOG_DIR;catalog.clearExternalCatalogCache();fs.rmSync(dir,{recursive:true,force:true});}
 });

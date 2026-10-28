@@ -406,6 +406,7 @@ export function VideoPlayerModal({
   const [playerSkinReady, setPlayerSkinReady] = useState<boolean>(false);
   // Ref para confirmar que o vídeo realmente iniciou a reprodução (usado pelo watchdog e seek)
   const playbackConfirmedRef = useRef<boolean>(false);
+  const metadataStartedRef = useRef(false);
   const healthPlaybackStartedRef = useRef(false);
   const serverSelectionEpochRef = useRef(0);
   const mixdropRoutingRef = useRef(createMixdropSourceRouting());
@@ -1470,6 +1471,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse");
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
+    metadataStartedRef.current = false;
     setIframeVisible(false);
     setError(null);
 
@@ -1640,7 +1642,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     const loadingSafetyTimer = setTimeout(() => {
-      setIsLoading(false);
+      if (playbackConfirmedRef.current) setIsLoading(false);
       setPlayerSkinReady(true);
       setIframeVisible(true);
     }, 4500);
@@ -1661,7 +1663,8 @@ export function VideoPlayerModal({
       setActiveIframeUrl(null);
       setPlayerSkinReady(false); // Reset overlay anti-flash ao abrir/mudar mídia
       healthPlaybackStartedRef.current = false;
-      playbackConfirmedRef.current = false; // Reset de reprodução real
+      playbackConfirmedRef.current = false;
+    metadataStartedRef.current = false; // Reset de reprodução real
       setIframeVisible(false); // Oculta iframe até rodar
       // fallbackAttemptsRef não é mais limpo aqui cegamente. Limpamos quando volta a conexão ou toca com sucesso
       retrySameServerRef.current = false;
@@ -1974,11 +1977,22 @@ export function VideoPlayerModal({
           lastKnownTimeRef.current = incomingTime;
         }
 
+        if (data.duration > 0 && !metadataStartedRef.current) {
+          metadataStartedRef.current = true;
+          const target = lastKnownTimeRef.current;
+          if (target > 2 && !hasSeekedInitialTimeRef.current) {
+            hasSeekedInitialTimeRef.current = true;
+            iframeRef.current?.contentWindow?.postMessage({ type: "SEEK", targetTime: target }, "*");
+            iframeRef.current?.contentWindow?.postMessage({ type: "SEEK_ABSOLUTE", time: target }, "*");
+          }
+          iframeRef.current?.contentWindow?.postMessage({ type: "PLAY" }, "*");
+        }
+
         if (!playbackConfirmedRef.current) {
           if (
             (typeof data.duration === "number" && data.duration > 0) ||
             (typeof data.currentTime === "number" && data.currentTime > 0) ||
-            (typeof data.readyState === "number" && data.readyState >= 1)
+            (typeof data.readyState === "number" && data.readyState >= 2)
           ) {
             // Se for transição recente (< 800ms), aguarda estabilização do novo frame
             if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
@@ -2348,6 +2362,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false); // Reset overlay anti-flash ao trocar episódio
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
+    metadataStartedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
     startupExpandedRef.current=false;
@@ -2407,6 +2422,7 @@ export function VideoPlayerModal({
     setPlayerSkinReady(false);
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
+    metadataStartedRef.current = false;
     setIframeVisible(false);
     fallbackAttemptsRef.current.clear();
     startupExpandedRef.current=false;

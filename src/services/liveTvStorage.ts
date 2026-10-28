@@ -10,10 +10,10 @@ const LAST_CHANNEL_KEY = 'play_infinity_last_channel_id';
 export function getFavoriteChannelIds(): string[] {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
-    return raw ? JSON.parse(raw) : ['premiere-clubes', 'ge-fast', 'globo'];
+    return raw ? JSON.parse(raw) : ['premiere-1', 'ge-fast', 'globo'];
   } catch (err) {
     console.error("Erro em liveTvStorage (getFavorites):", err);
-    return ['premiere-clubes', 'ge-fast'];
+    return ['premiere-1', 'ge-fast'];
   }
 }
 

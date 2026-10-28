@@ -192,7 +192,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
             type: "WATCHPLAY_STATUS",
             currentTime: cur,
             duration: dur,
-            paused: !!v.paused,
+            paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
             muted: !!v.muted,
             volume: typeof v.volume === "number" ? v.volume : 1,
             buffered: bufferedEnd,
@@ -230,7 +230,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         if (!event.data) return;
         var d = event.data;
         if (d.type === "PAUSE" && v) { recovery.setPaused(true); v.pause(); }
-        if (d.type === "PLAY" && v) { recovery.setPaused(false); v.play().catch(function(){}); }
+        if (d.type === "PLAY" && v) { recovery.setPaused(false); v.play().catch(function(err){ if(err && err.name === "NotAllowedError") { v.muted = true; v.play().catch(function(){}); } }); }
         if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
           recovery.seek(d.targetTime);
           if (v.readyState >= 1) {

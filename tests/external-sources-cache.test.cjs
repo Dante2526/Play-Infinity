@@ -1,0 +1,27 @@
+const {test}=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const ts=require('typescript');
+test('source cache normalizes accents, refreshes once and rejects stale cache writes',async()=>{
+ const source=fs.readFileSync('src/components/ExternalChannelSources.tsx','utf8');
+ const code=source.slice(source.indexOf('let allSourcesCache'),source.indexOf('export interface ExternalChannelSourcesProps'));
+ const pending=[];const exports={};const window=new EventTarget();let events=0;
+ window.addEventListener('external-sources-updated',()=>events++);
+ vm.runInNewContext(ts.transpileModule(code,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports,window,Event,adminFetch:()=>new Promise(resolve=>pending.push(resolve))});
+ const response=state=>({json:async()=>({success:true,channels:{'TV São Luís':{sources:[{state}]}}})});
+ const old=exports.fetchAllExternalSources();
+ exports.invalidateExternalSourcesCache();
+ const fresh=exports.fetchAllExternalSources();
+ const shared=exports.fetchAllExternalSources();
+ assert.equal(pending.length,2);
+ pending[1](response('available'));
+ assert.equal((await fresh)['tv sao luis'][0].state,'available');await shared;
+ pending[0](response('failed'));await old;
+ assert.equal((await exports.fetchAllExternalSources())['tv sao luis'][0].state,'available');
+ assert.equal(exports.normalizeExternalSourceName('  TV SÃO   LUÍS '),'tv sao luis');
+ assert.equal(events,1);
+ exports.invalidateExternalSourcesCache();
+ const next=exports.fetchAllExternalSources();assert.equal(pending.length,3);
+ pending[2](response('failed'));assert.equal((await next)['tv sao luis'][0].state,'failed');
+});

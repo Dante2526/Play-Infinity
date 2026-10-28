@@ -1,3 +1,5 @@
+import { Agent } from "undici";
+const mixdropDispatcher = new Agent({ connections: 16, pipelining: 1, keepAliveTimeout: 30000, keepAliveMaxTimeout: 60000 });
 import type { Request, Response } from "express";
 import { once } from "node:events";
 
@@ -8,6 +10,7 @@ type Options = {
   headerTimeoutMs?: number;
   idleTimeoutMs?: number;
   maxRetries?: number;
+  onStreamError?: () => void;
   observe?: (ok: boolean, latencyMs?: number) => void;
 };
 
@@ -113,7 +116,7 @@ export async function proxyMixdropVideo(req: Request, res: Response, options: Op
         let response: globalThis.Response | undefined;
         for (let redirects = 0; redirects <= 3; redirects++) {
           if (!isMixdropMediaUrl(url)) throw new Error("Invalid CDN redirect");
-          response = await fetchVideo(url, { signal: controller.signal, headers, redirect: "manual" });
+          response = await fetchVideo(url, { signal: controller.signal, headers, redirect: "manual", dispatcher: mixdropDispatcher } as RequestInit);
           if (![301, 302, 303, 307, 308].includes(response.status)) break;
           const location = response.headers.get("location");
           void response.body?.cancel().catch(() => {});
@@ -216,6 +219,7 @@ export async function proxyMixdropVideo(req: Request, res: Response, options: Op
         }
       } catch {
         if (client.signal.aborted) return;
+        options.onStreamError?.();
         options.observe?.(false);
         const safeResume = bytesSent === 0 || !!original?.validator && original.end !== null;
         if (attempt === maxRetries || !safeResume) throw new Error("Video transfer failed");

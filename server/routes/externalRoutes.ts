@@ -80,6 +80,13 @@ router.get("/api/external-channel", async (req, res) => {
       return res.status(400).json({ success: false, error: formatValidation.error });
     }
 
+    const retryRaw = req.query.retry;
+    if (retryRaw !== undefined && (typeof retryRaw !== "string" || !/^\d{1,6}$/.test(retryRaw))) {
+      return res.status(400).json({ success: false, error: "Retry inválido." });
+    }
+    const retry = Number(retryRaw || 0);
+    res.setHeader("Cache-Control", "no-store");
+
     // Deadline 4.5s (default do resolver é 7s): o orçamento do cliente precisa
     // cobrir a cadeia INTEIRA — resolver + redirect 302 + proxy re-buscando a
     // playlist upstream (timeout 8s no /api/live-stream-proxy). A Sentinela
@@ -88,7 +95,7 @@ router.get("/api/external-channel", async (req, res) => {
     // segmento 1.5s em paralelo) completa; se houver fonte viva no batch 1,
     // retorna em ~4.5s. O player (hls.js) tem timeouts próprios de fragmento
     // e não depende deste orçamento.
-    const resolved = await resolveExternalChannel(nameValidation.value!, { deadlineMs: 8000, batch: 6, probeTimeoutMs: 3500 });
+    const resolved = await resolveExternalChannel(nameValidation.value!, { deadlineMs: 8000, batch: 6, probeTimeoutMs: 3500, retry });
     if (!resolved) {
       return res.status(502).json({
         success: false,
@@ -124,6 +131,7 @@ router.get("/api/external-channel", async (req, res) => {
       params.set("url", resolved.url);
       params.set("sig", signProxyUrl(resolved.url));
       if (resolved.referer) params.set("referer", resolved.referer);
+      if (resolved.agente) params.set("agente", resolved.agente);
       target = `/api/live-stream-proxy?${params.toString()}`;
     } else {
       target = resolved.url;
@@ -154,7 +162,7 @@ router.get("/api/external-channel", async (req, res) => {
       });
     }
 
-    res.setHeader("Cache-Control", "public, max-age=30");
+    res.setHeader("Cache-Control", "no-store");
     return res.redirect(302, target);
   } catch (err: any) {
     console.error("[external] Erro na rota /api/external-channel:", err?.message || err);

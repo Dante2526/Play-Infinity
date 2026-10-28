@@ -41,7 +41,23 @@ test('admin source details preserve indices and never disclose credentials or UR
  fs.writeFileSync(path.join(dir,'external-channels.txt'),Array.from({length:325},(_,i)=>`canal: Canal Extra ${i}\nfonte: https://cdn.example/SECRET/PASSWORD/${i}.m3u8\n`).join(''));
  m.exports.clearExternalCatalogCache();
  assert.equal(typeof m.exports.getPublicLiveChannels,'function');
+ fs.appendFileSync(path.join(dir,'external-channels.txt'),'canal: Invalid/Name\nfonte: https://cdn.example/live.m3u8\ncanal: '+ 'A'.repeat(81)+'\nfonte: https://cdn.example/live.m3u8\n');
+ m.exports.clearExternalCatalogCache();
+ fs.appendFileSync(path.join(dir,'external-channels.txt'),'canal: Adult TV\ncategoria: Variedades\nfonte: https://cdn.example/live.m3u8\ncanal: Normal TV\ncategoria: Adultos\nfonte: https://cdn.example/live.m3u8\n');
+ m.exports.clearExternalCatalogCache();
  const full=m.exports.getPublicLiveChannels();
+ assert.ok(!full.some(c=>['Adult TV','Normal TV'].includes(c.name)));
+
+ const validationExports={};
+ require('node:vm').runInNewContext(require('typescript').transpileModule(fs.readFileSync('server/utils/externalValidation.ts','utf8'),{compilerOptions:{module:require('typescript').ModuleKind.CommonJS}}).outputText,{exports:validationExports});
+ for(const channel of full) for(const server of channel.servers) {
+   if(server.url.startsWith('/api/external-channel?')) {
+     const name=new URL(server.url,'https://app.example').searchParams.get('name');
+     assert.equal(validationExports.validateExternalChannelName(name).ok,true,channel.name);
+   }
+ }
+
+ assert.ok(!full.some(c=>c.name==='Invalid/Name'||c.name.length>80));
  assert.equal(full.filter(c=>c.id.startsWith('saimo-')).length,325);
  assert.equal(new Set(full.map(c=>c.id)).size,full.length);
  assert.ok(full.some(c=>c.id==='premiere-1'));

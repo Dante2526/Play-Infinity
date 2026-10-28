@@ -273,7 +273,7 @@ const router = Router();
               window.artInstance = art;
               var bufferRecovery = (${createMixdropRecovery.toString()})(art.video, {
                 sourceUrl: videoUrl,
-                reloadAfterMs: ${context ? 4000 : 12000}, stallTimeoutMs: ${context ? 10000 : 20000}, retryWindowMs: ${context ? 6000 : 20000},
+                reloadAfterMs: ${context ? 4000 : 6000}, stallTimeoutMs: ${context ? 10000 : 20000}, retryWindowMs: ${context ? 6000 : 20000},
                 onFatal: function(reason) {
                   window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, mixdropFileId: ${scriptJson(fileId)} }, "*");
                 }
@@ -296,7 +296,7 @@ const router = Router();
                     currentTime: cur,
                     duration: dur,
                     paused: !!v.paused && !bufferRecovery.holding,
-                    buffering: bufferRecovery.holding,
+                    buffering: bufferRecovery.holding || (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
                     muted: !!v.muted,
                     volume: typeof v.volume === "number" ? v.volume : 1,
                     buffered: bufferedEnd,
@@ -762,20 +762,21 @@ const router = Router();
                 bufferRecovery.command(String(e.data.type || ""));
                 switch (e.data.type) {
                   case "PLAY":
-                    if (_playBlocked) return; // Já tentou e falhou — não tenta de novo
-                    if (art) {
-                      art.play().catch(function() {
-                        _playBlocked = true;
-                        console.log("[MixDrop] Autoplay bloqueado — mostrando botao de clique");
-                        // Mostra overlay de play (clique direto no vídeo = gesto do usuário = permitido)
-                        showPlayOverlay();
-                        // Reporta UMA vez que está pausado (não repete)
-                        window.parent.postMessage({ type: "WATCHPLAY_STATUS", paused: true, readyState: 4 }, "*");
+                    if (_playBlocked) return;
+                    if (v) {
+                      v.play().catch(function(err) {
+                        if (!err || err.name !== "NotAllowedError") return;
+                        v.muted = true;
+                        return v.play().then(function() {
+                          window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*");
+                          sendStatus();
+                        }).catch(function() {
+                          _playBlocked = true;
+                          showPlayOverlay();
+                          sendStatus();
+                        });
                       });
-                    } else if (v) {
-                      v.play().catch(function() { _playBlocked = true; showPlayOverlay(); });
                     }
-                    // NÃO chama sendStatus() aqui se play falhou — isso causa loop
                     break;
                   case "PAUSE":
                     if (art) art.pause();
@@ -857,7 +858,7 @@ const router = Router();
 
   // Streaming with bounded recovery and byte-exact CDN resume.
   router.get("/api/md-proxy", async (req, res) => {
-    const videoUrl = String(req.query.url || "").trim();
+    let videoUrl = String(req.query.url || "").trim();
     const explicitId = String(req.query.fileId || "").trim();
     if (explicitId && !/^[a-zA-Z0-9_-]+$/.test(explicitId)) {
       return res.status(400).send("ID de arquivo inválido.");
@@ -866,10 +867,26 @@ const router = Router();
     let legacyId = "";
     try { legacyId = new URL(videoUrl).pathname.match(/\/([a-zA-Z0-9_-]+)\.mp4$/)?.[1] || ""; } catch {}
     const fileId = explicitId || legacyId;
+    if (!isMixdropMediaUrl(videoUrl)) return res.status(400).send("URL de vídeo inválida.");
+    if (fileId && req.query.refresh === '1') {
+      mixdropMemoryCache.delete(fileId);
+      const fresh = await refreshMixdropUrl(fileId, videoUrl);
+      if (!fresh) return res.status(502).send("Não foi possível renovar o vídeo.");
+      videoUrl = fresh;
+    } else if (fileId) {
+      const cached = mixdropMemoryCache.get(fileId);
+      if (cached && cached.expiresAt > Date.now() + 60000) videoUrl = cached.videoUrl;
+      else {
+        const fresh = await refreshMixdropUrl(fileId, videoUrl);
+        if (!fresh) return res.status(502).send("Não foi possível renovar o vídeo.");
+        videoUrl = fresh;
+      }
+    }
     const release = mixdropPool.begin(fileId);
     res.once('close', release); res.once('finish', release);
     await proxyMixdropVideo(req, res, {
       videoUrl,
+      onStreamError: () => { if (fileId) mixdropMemoryCache.delete(fileId); },
       observe: (ok, latencyMs) => mixdropPool.report(fileId, ok, latencyMs),
       renewUrl: fileId ? () => refreshMixdropUrl(fileId, videoUrl) : undefined,
     });

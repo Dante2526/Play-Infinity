@@ -1,3 +1,4 @@
+import { validateExternalChannelName } from "../utils/externalValidation";
 /**
  * Catálogo externo de canais ao vivo (modelo "Saimo-style").
  *
@@ -369,6 +370,7 @@ export function validatePlaylistContent(
   // Denylist de extensão: isca clássica é .png/.woff que 404 ou retorna lixo
   try {
     const u = new URL(firstUrl);
+    if (!["http:", "https:"].includes(u.protocol)) return { ok: false, reason: "protocolo de mídia inválido" };
     const pathLower = u.pathname.toLowerCase();
     const dot = pathLower.lastIndexOf(".");
     if (dot >= 0) {
@@ -394,14 +396,45 @@ export function validatePlaylistContent(
  * Rejeita: PNG (0x89 'PNG'), wOFF ('wOFF'), HTML ('<'), etc.
  * Também rejeita se o fetch falhar (404, timeout, rede).
  */
+async function fetchAllowedFonte(url: string, init: RequestInit): Promise<Response> {
+  for (let hop = 0; hop <= 5; hop++) {
+    if (!await isFonteAllowed(url)) throw new Error("Fonte bloqueada");
+    const res = await fetch(url, { ...init, redirect: "manual" });
+    if (![301, 302, 303, 307, 308].includes(res.status)) return res;
+    const location = res.headers.get("location");
+    await res.body?.cancel();
+    if (!location || hop === 5) throw new Error("Redirect inválido");
+    url = new URL(location, url).toString();
+  }
+  throw new Error("Redirect inválido");
+}
+
+async function readProbePrefix(res: Response, limit: number): Promise<{ bytes: Uint8Array; complete: boolean }> {
+  const reader = res.body?.getReader();
+  if (!reader) return { bytes: new Uint8Array(), complete: true };
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (size < limit) {
+      const { value, done } = await reader.read();
+      if (done) return { bytes: Buffer.concat(chunks), complete: true };
+      const part = value.subarray(0, limit - size);
+      chunks.push(part);
+      size += part.length;
+    }
+    return { bytes: Buffer.concat(chunks), complete: false };
+  } finally {
+    await reader.cancel();
+  }
+}
+
 export async function probeSegmentMagicBytes(
   url: string,
   opts: { referer?: string; agente?: string; timeoutMs?: number } = {}
 ): Promise<boolean> {
   try {
-    const res = await fetch(url, {
+    const res = await fetchAllowedFonte(url, {
       signal: AbortSignal.timeout(opts.timeoutMs ?? 2500),
-      redirect: "follow",
       headers: {
         "User-Agent": opts.agente || PROBE_DEFAULT_UA,
         Accept: "*/*",
@@ -410,7 +443,7 @@ export async function probeSegmentMagicBytes(
       },
     });
     if (res.status < 200 || res.status >= 400) return false;
-    const buf = new Uint8Array(await res.arrayBuffer());
+    const { bytes: buf } = await readProbePrefix(res, 189);
     if (buf.length === 0) return false;
     // TS sync byte
     if (buf[0] === 0x47) return true;
@@ -433,19 +466,17 @@ export async function probeExternalFonte(
 ): Promise<boolean> {
   const depth = opts._depth ?? 0;
   // Cache key inclui depth para diferenciar probe direto vs recursão de master
-  const cacheKey = `${url}|${opts.referer || ""}|d=${depth}`;
+  const cacheKey = `${url}|${opts.referer || ""}|${opts.agente || ""}|d=${depth}`;
   const cached = probeCache.get(cacheKey);
   if (cached && cached.expires > Date.now()) return cached.ok;
 
   let ok = false;
   try {
-    const res = await fetch(url, {
+    const res = await fetchAllowedFonte(url, {
       signal: AbortSignal.timeout(opts.timeoutMs ?? 3000),
-      redirect: "follow",
       headers: {
         "User-Agent": opts.agente || PROBE_DEFAULT_UA,
         Accept: "*/*",
-        Range: "bytes=0-2048",
         ...(opts.referer ? { Referer: opts.referer } : {}),
       },
     });
@@ -460,12 +491,16 @@ export async function probeExternalFonte(
         !contentType.includes("text/") &&
         contentLength > 2 * 1024 * 1024
       ) {
+        await res.body?.cancel();
         ok = true;
       } else {
         // Lê texto e valida conteúdo da playlist estritamente
-        const text = await res.text();
+        const prefix = await readProbePrefix(res, 64 * 1024);
+        let text = new TextDecoder().decode(prefix.bytes);
+        // A capped prefix must never turn a partial URI into a request.
+        if (!prefix.complete) text = text.slice(0, text.lastIndexOf("\n") + 1);
         const valid = validatePlaylistContent(text, res.url || url);
-        if (!valid.ok) {
+        if (!valid.ok || !valid.firstUrl || !await isFonteAllowed(valid.firstUrl)) {
           ok = false;
         } else if (valid.kind === "master" && valid.firstUrl) {
           // Master playlist: sonda recursivamente a primeira variante.
@@ -542,6 +577,7 @@ async function isFonteAllowed(url: string): Promise<boolean> {
 // Resolver principal
 // ---------------------------------------------------------------------------
 export interface ResolveOptions {
+  retry?: number;
   /** Deadline total da resolução (default 7000 ms — Sentinela usa timeout 7 s; probe profundo precisa de ~5s por batch de 4). */
   deadlineMs?: number;
   /** Máximo de fontes sondadas em paralelo por batelada. */
@@ -602,22 +638,7 @@ export async function resolveExternalChannel(
     return 999;
   };
   allowed.sort((a, b) => getCdnPriority(a.url) - getCdnPriority(b.url));
-
-  for (const c of allowed) {
-    const cacheKey = `${c.url}|${c.fonte.referer || ""}|d=0`;
-    const cached = probeCache.get(cacheKey);
-    if (cached && cached.expires > Date.now() && cached.ok) {
-      return {
-        channelName: channel.name,
-        fonteIndex: c.index,
-        url: c.url,
-        qualidade: c.fonte.qualidade,
-        referer: c.fonte.referer,
-        agente: c.fonte.agente,
-      };
-    }
-  }
-
+  const retry = Number.isSafeInteger(opts.retry) && opts.retry! > 0 ? opts.retry! : 0;
   // Probe em bateladas paralelas respeitando o deadline global; ao final,
   // escolhe a primeira fonte viva NA ORDEM ORIGINAL (a preferida da Saimo).
   const probed = new Map<number, boolean>();
@@ -636,10 +657,15 @@ export async function resolveExternalChannel(
         );
       })
     );
-    if (slice.some((c) => probed.get(c.index) === true)) break;
+    if (!retry && slice.some((c) => probed.get(c.index) === true)) break;
   }
 
-  for (const c of allowed) {
+  const working = allowed.filter(c => probed.get(c.index) === true);
+  if (working.length) {
+    const offset = retry % working.length;
+    working.push(...working.splice(0, offset));
+  }
+  for (const c of working) {
     if (probed.get(c.index) === true) {
       return {
         channelName: channel.name,
@@ -714,11 +740,12 @@ export function getPublicLiveChannels(): LiveChannel[] {
     }
   }
   for (const channel of loadExternalChannels()) {
+    if (!validateExternalChannelName(channel.name).ok) continue;
     const normalized = normalizeChannelName(channel.name);
     if (represented.has(normalized)) continue;
     represented.add(normalized);
     // Preserve the existing product restriction on adult channels.
-    if (/adult|\+18|xxx|porn/i.test(channel.category || '')) continue;
+    if (/adult|\+18|xxx|porn/i.test(`${channel.category || ''} ${channel.name}`)) continue;
     const category = normalizeChannelName(channel.category || '');
     const mapped: LiveChannel['category'] = /esport|sport|futebol/.test(category) ? 'Esportes'
       : /noticia|news/.test(category) ? 'Notícias'
@@ -755,7 +782,7 @@ export function getAllExternalSourceDetails(): Record<string, { channel: string;
         const url = buildFonteUrl(fonte, bases);
         let host = '';
         try { host = url ? new URL(url).hostname : ''; } catch {}
-        const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|d=0`) : undefined;
+        const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
         const fresh = cached && cached.expires > Date.now();
         return {
           index, host, quality: fonte.qualidade || null,
@@ -784,7 +811,7 @@ export function getExternalSourceDetails(name: string) {
       const url = buildFonteUrl(fonte, bases);
       let host = '';
       try { host = url ? new URL(url).hostname : ''; } catch {}
-      const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|d=0`) : undefined;
+      const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
       const fresh = cached && cached.expires > Date.now();
       return {
         index, host, quality: fonte.qualidade || null,
@@ -806,8 +833,8 @@ export async function testExternalSource(name: string, index: number) {
   let state = 'blocked';
   if (fonte.chave) state = 'unsupported';
   else if (url && await isFonteAllowed(url)) {
-    probeCache.delete(`${url}|${fonte.referer || ''}|d=0`);
-    probeCache.delete(`${url}|${fonte.referer || ''}|d=1`);
+    probeCache.delete(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`);
+    probeCache.delete(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=1`);
     state = await probeExternalFonte(url, { referer: fonte.referer, agente: fonte.agente, timeoutMs: 3500 })
       ? 'available' : 'failed';
   }

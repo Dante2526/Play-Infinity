@@ -746,14 +746,46 @@ async function resolveByseStreamUncached(fileId: string): Promise<ByseResolved> 
 
   const info = decryptBysePlayback((pb.json as any).playback);
 
-  const m3u8 = info?.sources?.[0]?.url;
-
-  if (!m3u8 || !allowedByseMediaUrl(String(m3u8))) {
-
-    throw new Error("payload decriptografado sem fonte HLS válida");
-
-  }
-
+  const sources = Array.isArray(info?.sources) ? info.sources : [];
+  const quality = (source: any) => Number(String(source.h || source.height || source.quality || source.label || '').match(/\d+/)?.[0] || 0);
+  sources.sort((a: any, b: any) => quality(b) - quality(a));
+  let m3u8 = '';
+  for (const source of sources) {
+    let candidate = String(source?.url || '');
+    if (!allowedByseMediaUrl(candidate)) continue;
+    try {
+      const signal = AbortSignal.timeout(5000);
+      for (let hop = 0; hop < 4; hop++) {
+        if (!allowedByseMediaUrl(candidate)) throw new Error('host');
+        const response = await fetch(candidate, { signal, redirect: 'manual', headers: { 'User-Agent': BYSE_USER_AGENT } });
+        if ([301,302,303,307,308].includes(response.status)) {
+          const location = response.headers.get('location');
+          await response.body?.cancel();
+          if (!location) break;
+          candidate = new URL(location, candidate).href;
+          continue;
+        }
+        if (!response.ok) { await response.body?.cancel(); break; }
+        const reader = response.body?.getReader();
+        if (!reader) break;
+        let text = '', size = 0;
+        const decoder = new TextDecoder();
+        try {
+          while (size < 65536) {
+            const part = await reader.read(); if (part.done) break;
+            const chunk = part.value.subarray(0,65536-size); size += chunk.length;
+            text += decoder.decode(chunk,{stream:true});
+            if (text.includes('#EXTM3U')) break;
+          }
+        } finally { await reader.cancel().catch(()=>{}); }
+        if (text.trimStart().startsWith('#EXTM3U')) m3u8 = candidate;
+        break;
+      }
+    } catch {}
+    if (m3u8) break;
+  }
+  if (!m3u8) throw new Error('Nenhuma fonte HLS BYSE disponível');
+
   return { fileId, m3u8: String(m3u8), resolvedAt: Date.now(), expiresAt: Date.now() + BYSE_CACHE_TTL };
 
 }
@@ -994,7 +1026,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
           duration: dur,
 
-          paused: !!v.paused,
+          paused: !!v.paused, buffering: (v.readyState < 2 && !(v.duration > 0) && !(v.currentTime > 0)) || (v.readyState < 3 && !v.paused),
 
           muted: !!v.muted,
 
@@ -1137,13 +1169,16 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
         var hls = new window.Hls({
 
-          enableWorker: true,
+          enableWorker: true,
+          startPosition: initialSeek > 0 ? initialSeek : -1,
+          capLevelToPlayerSize: true,
+          fragLoadingRetryDelay: 500,
 
           lowLatencyMode: false,
 
-          maxBufferLength: 60,
+          maxBufferLength: 30,
 
-          maxMaxBufferLength: 120,
+          maxMaxBufferLength: 60,
 
           backBufferLength: 30,
 

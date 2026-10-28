@@ -141,6 +141,7 @@ test('refuses to splice a response without a strong object validator', async () 
 });
 
 test('detects body inactivity after headers and resumes the stalled CDN', async () => {
+  let invalidations = 0; options.onStreamError = () => invalidations++;
   options.fetchImpl = async (url, request) => {
     calls.push(request);
     return calls.length === 1 ? interrupted({ hang: true, signal: request.signal }) : complete(5, 19);
@@ -148,6 +149,7 @@ test('detects body inactivity after headers and resumes the stalled CDN', async 
   assert.equal(await (await nativeFetch(base + '/proxy')).text(), media.toString());
   assert.equal(calls.length, 2);
   assert.equal(calls[1].headers.Range, 'bytes=5-19');
+  assert.equal(invalidations, 1);
 });
 
 test('resumes a real upstream HTTP connection reset without changing the video bytes', async () => {
@@ -446,6 +448,9 @@ test('actual iframe HTML reports persistent dry-buffer duration and applies rela
   const stalls = b.messages.filter(m => m.type === 'NIXPLAY_TELEMETRY_EVENT' && m.event === 'stall');
   assert.ok(stalls.some(m => m.duration >= 7 && m.bufferAhead === 0));
   assert.equal(b.messages.filter(m => m.type === 'WATCHPLAY_ERROR').length, 0);
+  assert.equal(b.loads, 1);
+  assert.match(b.video.src, /refresh=1/);
+  b.video.emit('loadedmetadata');
   b.command('SEEK_RELATIVE', { seconds: 0.01 });
   assert.equal(b.video.currentTime, 619.01);
 });

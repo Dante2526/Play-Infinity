@@ -36,7 +36,7 @@ import {
 } from '../services/liveChannelService';
 import { ChannelLogo } from './ChannelLogo';
 import { ConfirmModal } from './ConfirmModal';
-import { ExternalChannelSources } from './ExternalChannelSources';
+import { ExternalChannelSources, invalidateExternalSourcesCache } from './ExternalChannelSources';
 import { fetchLiveCatalogue, getLiveCatalogue } from '../services/liveCatalogue';
 
 interface StreamSearchResult {
@@ -182,7 +182,7 @@ export function AdminLiveChannels() {
   }, [allChannels, settings]);
 
   // Sondagem individual de um servidor
-  const probeSingleServer = async (serverUrl: string) => {
+  const probeSingleServer = async (serverUrl: string, refreshSources = true) => {
     setProbeResults(prev => ({
       ...prev,
       [serverUrl]: { online: false, status: '...', probing: true }
@@ -202,6 +202,8 @@ export function AdminLiveChannels() {
         [serverUrl]: { online: false, status: 'ERR', probing: false }
       }));
       return false;
+    } finally {
+      if (refreshSources) invalidateExternalSourcesCache();
     }
   };
 
@@ -231,14 +233,18 @@ export function AdminLiveChannels() {
       while (queue.length > 0) {
         const url = queue.shift();
         if (!url) break;
-        await probeSingleServer(url);
+        await probeSingleServer(url, false);
         completed++;
         setProbingProgress({ current: completed, total: serversToProbe.length });
       }
     });
 
-    await Promise.all(workers);
-    setIsProbingAll(false);
+    try {
+      await Promise.all(workers);
+    } finally {
+      setIsProbingAll(false);
+      invalidateExternalSourcesCache();
+    }
   };
 
   // Alternar Bloqueio / Ocultação do Canal

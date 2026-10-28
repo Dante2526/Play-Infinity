@@ -1,3 +1,4 @@
+import { readHealthPrefix } from "../services/playbackHealth";
 import { Router } from "express";
 import { isPrivateOrLocalHost } from "../utils/helpers";
 
@@ -182,6 +183,7 @@ export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): P
 
     // Status 5xx do provedor Xtream também = queda do provedor (não do canal)
     if (isXtreamPath && response.status >= 500) {
+      await response.body?.cancel();
       return {
         online: false,
         statusCode: response.status,
@@ -194,8 +196,10 @@ export async function probeLiveStreamUrl(targetUrl: string, timeoutMs = 7000): P
     const isOk = response.status === 200;
     let isHls = false;
     if (isOk) {
-      const text = await response.text();
+      const text = new TextDecoder().decode(await readHealthPrefix(response, 4096));
       isHls = text.includes("#EXTM3U");
+    } else {
+      await response.body?.cancel();
     }
 
     return {

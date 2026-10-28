@@ -69,7 +69,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     };
     video.addEventListener("loadedmetadata", restore, { once: true });
     const separator = options.sourceUrl.includes("?") ? "&" : "?";
-    video.src = options.sourceUrl + separator + "retry=" + Date.now();
+    video.src = options.sourceUrl + separator + "refresh=1&retry=" + Date.now();
     video.load();
   }
   function waiting() {
@@ -138,7 +138,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
       video.play().catch(() => fail("mixdrop_resume_blocked"));
       return;
     }
-    if (duration >= (options.reloadAfterMs ?? 12000)) reloadSource();
+    if (duration >= (options.reloadAfterMs ?? 6000)) reloadSource();
   }, 1000);
 
   return {

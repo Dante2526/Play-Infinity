@@ -318,7 +318,10 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   // Web uses its own origin; a build-time localhost must never reach viewers.
   // Packaged Capacitor clients use the public HTTPS API.
   const proxyBase = Capacitor.isNativePlatform() ? 'https://play-infinity.stream' : '';
-  const rawUrl = currentServer?.url || '';
+  const serverUrl = currentServer?.url || '';
+  const rawUrl = serverUrl.startsWith('/api/external-channel?')
+    ? `${serverUrl}&retry=${reloadNonce}&_cb=${reloadNonce}`
+    : serverUrl;
   const isInternalApi = rawUrl.startsWith('/api/');
   const streamUrl = currentServer?.isProxy 
     ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}` 

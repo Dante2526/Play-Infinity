@@ -9,12 +9,13 @@ beforeEach(async()=>{
  const m=new Module(path.join(root,'tests/virtual-byse.cjs'),module);m.filename=path.join(root,'tests/virtual-byse.cjs');m.paths=module.paths;m._compile(out.outputFiles[0].text,m.filename);api=m.exports;
 });
 afterEach(()=>{global.fetch=nativeFetch});
-function chain({tamper=false,foreign=false}={}){
+function chain({tamper=false,foreign=false,alternatives=false}={}){
  const calls=[];let nonce='simulation-nonce';
  global.fetch=async(raw,opts)=>{
   const url=new URL(raw);calls.push(url.pathname);
   if(url.pathname.endsWith('/details'))return Response.json({embed_frame_url:'https://n1mwq.org/e/simulation'});
   if(url.pathname.endsWith('/challenge'))return Response.json({nonce,challenge_id:'challenge'});
+  if(url.pathname.endsWith('.m3u8')) return url.pathname.includes('bad') ? new Response('down',{status:503}) : new Response('#EXTM3U\n#EXTINF:6,\npart.ts');
   const data=JSON.parse(opts.body||'{}');
   if(url.pathname.endsWith('/attest')){
    const pub=crypto.createPublicKey({key:data.public_key,format:'jwk'});
@@ -26,20 +27,20 @@ function chain({tamper=false,foreign=false}={}){
   assert.equal(opts.headers['X-Captcha-Token'],'clearance');
   const parts=Array.from({length:32},()=>crypto.randomBytes(16));const key=Buffer.concat([parts[0],parts[29]]);const iv=crypto.randomBytes(12);
   const cipher=crypto.createCipheriv('aes-256-gcm',key,iv);
-  const ct=Buffer.concat([cipher.update(JSON.stringify({sources:[{url:foreign?'https://unrelated.invalid/master.m3u8':'https://r66nv9ed.com/master.m3u8'}]})),cipher.final()]);
+  const ct=Buffer.concat([cipher.update(JSON.stringify({sources:alternatives?[{h:720,url:'https://r66nv9ed.com/master.m3u8'},{h:1080,url:'https://r66nv9ed.com/bad.m3u8'}]:[{url:foreign?'https://unrelated.invalid/master.m3u8':'https://r66nv9ed.com/master.m3u8'}]})),cipher.final()]);
   const payload=Buffer.concat([ct,cipher.getAuthTag()]);if(tamper)payload[0]^=1;
   return Response.json({playback:{version:1,key_parts:parts.map(b=>b.toString('base64url')),iv:iv.toString('base64url'),payload:payload.toString('base64url')}});
  };return calls;
 }
 test('simulated full chain verifies a real ECDSA signature, captcha clearance and AES-GCM playback',async()=>{
- const calls=chain();const result=await api.resolveByseStream('episode4');assert.equal(result.m3u8,'https://r66nv9ed.com/master.m3u8');assert.equal(calls.length,6);
+ const calls=chain();const result=await api.resolveByseStream('episode4');assert.equal(result.m3u8,'https://r66nv9ed.com/master.m3u8');assert.equal(calls.length,7);
 });
 test('simultaneous viewers share the complete resolution; refresh obtains a new result',async()=>{
- const calls=chain();await Promise.all(Array.from({length:12},()=>api.resolveByseStream('episode4')));assert.equal(calls.length,6);
- await api.resolveByseStream('episode4');assert.equal(calls.length,6);await api.resolveByseStream('episode4',true);assert.equal(calls.length,10);
+ const calls=chain();await Promise.all(Array.from({length:12},()=>api.resolveByseStream('episode4')));assert.equal(calls.length,7);
+ await api.resolveByseStream('episode4');assert.equal(calls.length,7);await api.resolveByseStream('episode4',true);assert.equal(calls.length,12);
 });
-test('tampered encrypted payload cannot become playable media',async()=>{chain({tamper:true});await assert.rejects(api.resolveByseStream('episode4'),/payload decriptografado/)});
-test('decrypted foreign media URL is rejected',async()=>{chain({foreign:true});await assert.rejects(api.resolveByseStream('episode4'),/payload decriptografado/)});
+test('tampered encrypted payload cannot become playable media',async()=>{chain({tamper:true});await assert.rejects(api.resolveByseStream('episode4'),/Nenhuma fonte HLS/)});
+test('decrypted foreign media URL is rejected',async()=>{chain({foreign:true});await assert.rejects(api.resolveByseStream('episode4'),/Nenhuma fonte HLS/)});
 test('JSON errors and removed files do not produce successful playback or permanent failure cache',async()=>{
  global.fetch=async()=>new Response('Unavailable',{status:404});await assert.rejects(api.resolveByseStream('episode4'));
  chain();assert.ok((await api.resolveByseStream('episode4')).m3u8);
@@ -71,4 +72,10 @@ test('native HLS wrapper responds to Netflix skin commands and emits playback st
  const script=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][0][1];vm.runInNewContext(script,{window,document:{getElementById:()=>v},setInterval:f=>status=f});
  listeners.loadedmetadata[0]();assert.equal(v.currentTime,100);
  const command=data=>winListeners.message({source:parent,data});command({type:'PAUSE'});assert.equal(v.paused,true);command({type:'SEEK_ABSOLUTE',time:300});assert.equal(v.currentTime,300);command({type:'SET_MUTED',muted:true});assert.equal(v.muted,true);status();assert.equal(messages.at(-1).type,'WATCHPLAY_STATUS');
+});
+
+test('higher-quality HLS failure falls back to the next valid source',async()=>{
+ const calls=chain({alternatives:true});const result=await api.resolveByseStream('fallbackVideo');
+ assert.equal(result.m3u8,'https://r66nv9ed.com/master.m3u8');
+ assert.ok(calls.indexOf('/bad.m3u8')<calls.indexOf('/master.m3u8'));
 });

@@ -46,7 +46,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       for (const field of ['id','s','e','name']) if (req.query[field]) identity.set(field,String(req.query[field]));
       identity.set('fileId',resolved.fileId);
       if (req.path === '/api/byse-resolve') return res.json({success:true,fileId:resolved.fileId,source:resolved.source,proxyUrl,iframeUrl:'/api/byse-proxy-iframe?'+identity,expiresIn:Math.max(0,Math.floor((resolved.expiresAt-Date.now())/1000))});
-      let html = buildByseWrapperHtml(proxyUrl, resolved.fileId, Math.max(0, Number(req.query.t) || 0));
+      let html = buildByseWrapperHtml(proxyUrl, resolved.fileId, Math.max(0, Number(req.query.t ?? req.query.start) || 0));
       const renewalIdentity=new URLSearchParams(identity);renewalIdentity.delete('fileId');
       const renewal = '/api/byse-resolve?' + renewalIdentity;
       // One bounded renewal on manifest failure. The next error reaches the modal.
@@ -89,7 +89,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       let upstream: globalThis.Response | undefined;
       const range = req.headers.range;
       if (range && !/^bytes=(?:\d+-\d*|-\d+)$/.test(range)) return res.status(416).end();
-      arm(15000);
+      arm(/\.m3u8(?:\?|$)/i.test(url) ? 15000 : 8000);
       for (let hop=0;hop<4;hop++) {
         if (!allowedByseMediaUrl(url)) throw new Error('redirect');
         upstream = await deps.fetch(url,{redirect:'manual',signal:ctl.signal,headers:{'User-Agent':BYSE_USER_AGENT,'Accept-Encoding':'identity',...(range?{Range:range}:{})}});
@@ -106,7 +106,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       }
       res.status(upstream.status);
       for(const field of ['content-type','content-length','content-range','accept-ranges']){const value=upstream.headers.get(field);if(value)res.setHeader(field,value)}
-      const stream=Readable.fromWeb(upstream.body as any);stream.on('data',()=>arm(30000));arm(30000);
+      const stream=Readable.fromWeb(upstream.body as any);stream.on('data',()=>arm(8000));arm(8000);
       await new Promise<void>(resolve=>{stream.once('end',resolve);stream.once('error',()=>{res.destroy();resolve()});res.once('close',()=>{stream.destroy();resolve()});stream.pipe(res)});
     } catch {
       const isClientCancellation = clientDisconnected || req.destroyed || res.destroyed || res.writableEnded;

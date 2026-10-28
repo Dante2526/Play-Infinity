@@ -1,10 +1,11 @@
 import { getByseTickets } from '../services/byse/tickets';
 import { getPlaybackCataloguePresence, getByseSources } from './encontreiLookup';
-import { hasWarmByseStream, getWarmByseStream } from '../services/byse/core';
+import { hasWarmByseStream, getWarmByseStream, resolveByseStream } from '../services/byse/core';
 import { Router } from 'express';
 import { isServerBlacklisted } from '../../src/data/serverBlacklist';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
+const byseWarmups = new Set<string>();
 const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse']);
 const check = createPlaybackHealthCache();
 const router = Router();
@@ -68,7 +69,14 @@ router.get('/api/playback-health' , async (req, res) => {
   const entries = await Promise.all(selected.map(async key => [key, await check(identity + ':' + key, async signal => {
     if(key==='srv_byse') {
       const hints=getPlaybackCataloguePresence(Number(id),type==='tv'?season:undefined,type==='tv'?episode:undefined);
-      if(!hints.srv_byse.fileIds.some(hasWarmByseStream))return {state:'unknown',reason:'cold_resolution'};
+      if(!hints.srv_byse.fileIds.some(hasWarmByseStream)) {
+        const fileId = hints.srv_byse.fileIds[0];
+        if (fileId && byseWarmups.size < 2 && !byseWarmups.has(fileId)) {
+          byseWarmups.add(fileId);
+          void resolveByseStream(fileId).catch(()=>{}).finally(()=>byseWarmups.delete(fileId));
+        }
+        return {state:'unknown',reason:'cold_resolution'};
+      }
       const cached=hints.srv_byse.fileIds.map(getWarmByseStream).find(Boolean);
       if(!cached)return {state:'unknown',reason:'cold_resolution'};
       const context=`${type}:${id}:${type==='tv'?`${season}:${episode}`:''}`;

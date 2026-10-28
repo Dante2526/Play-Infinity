@@ -16,9 +16,22 @@ export interface ExternalSource {
 let allSourcesCache: Record<string, ExternalSource[]> | null = null;
 let allSourcesPromise: Promise<Record<string, ExternalSource[]>> | null = null;
 
+const SOURCES_UPDATED_EVENT = 'external-sources-updated';
+let sourcesGeneration = 0;
+export const normalizeExternalSourceName = (name: string) => name.normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+export function invalidateExternalSourcesCache() {
+  sourcesGeneration++;
+  allSourcesCache = null;
+  allSourcesPromise = null;
+  window.dispatchEvent(new Event(SOURCES_UPDATED_EVENT));
+}
+
 export async function fetchAllExternalSources(): Promise<Record<string, ExternalSource[]>> {
   if (allSourcesCache) return allSourcesCache;
   if (allSourcesPromise) return allSourcesPromise;
+  const generation = sourcesGeneration;
   allSourcesPromise = (async () => {
     try {
       const response = await adminFetch('/api/admin/external-sources?all=1');
@@ -27,15 +40,15 @@ export async function fetchAllExternalSources(): Promise<Record<string, External
         const mapped: Record<string, ExternalSource[]> = {};
         for (const [key, val] of Object.entries<{ channel: string; sources: ExternalSource[] }>(data.channels)) {
           mapped[key] = val.sources;
-          mapped[key.toLowerCase()] = val.sources;
+          mapped[normalizeExternalSourceName(key)] = val.sources;
         }
-        allSourcesCache = mapped;
+        if (generation === sourcesGeneration) allSourcesCache = mapped;
         return mapped;
       }
     } catch {}
     return {};
   })().finally(() => {
-    allSourcesPromise = null;
+    if (generation === sourcesGeneration) allSourcesPromise = null;
   });
   return allSourcesPromise;
 }
@@ -48,24 +61,31 @@ export interface ExternalChannelSourcesProps {
 export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
   const [sources, setSources] = useState<ExternalSource[] | null>(() => {
     if (allSourcesCache) {
-      return allSourcesCache[name] || allSourcesCache[name.toLowerCase()] || null;
+      return allSourcesCache[name] || allSourcesCache[normalizeExternalSourceName(name)] || null;
     }
     return null;
   });
   const [testing, setTesting] = useState<number | null>(null);
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    const refresh = () => setRevision(value => value + 1);
+    window.addEventListener(SOURCES_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(SOURCES_UPDATED_EVENT, refresh);
+  }, []);
+
 
   useEffect(() => {
     let mounted = true;
     if (allSourcesCache) {
-      const cached = allSourcesCache[name] || allSourcesCache[name.toLowerCase()];
+      const cached = allSourcesCache[name] || allSourcesCache[normalizeExternalSourceName(name)];
       if (cached) {
         setSources(cached);
-        return;
+        return () => { mounted = false; };
       }
     }
     void fetchAllExternalSources().then(map => {
       if (!mounted) return;
-      const found = map[name] || map[name.toLowerCase()];
+      const found = map[name] || map[normalizeExternalSourceName(name)];
       if (found) {
         setSources(found);
       } else {
@@ -82,7 +102,7 @@ export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
     return () => {
       mounted = false;
     };
-  }, [name]);
+  }, [name, revision]);
 
   async function test(index: number) {
     setTesting(index);
@@ -98,7 +118,7 @@ export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
           const updated = prev?.map(s => s.index === index ? { ...s, ...data } : s) || null;
           if (updated && allSourcesCache) {
             allSourcesCache[name] = updated;
-            allSourcesCache[name.toLowerCase()] = updated;
+            allSourcesCache[normalizeExternalSourceName(name)] = updated;
           }
           return updated;
         });
