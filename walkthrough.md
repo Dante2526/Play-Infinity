@@ -1682,11 +1682,11 @@ Ao clicar em "Assistir Agora" no card de próximo episódio (ex: Temp 2 Ep 6), a
 
 
 
-   - \uildUrl\ do StreamTape e MixDrop agora verificam se o \s\ e \e\ passados são exatamente iguais ao episódio atual antes de usar qualquer ID de cache, e buscam o \	argetKey\ exato (\	v:id:s:e\).
+   - \uildUrl\ do StreamTape e MixDrop agora verificam se o \s\ e \e\ passados são exatamente iguais ao episódio atual antes de usar qualquer ID de cache, e buscam o \        argetKey\ exato (\      v:id:s:e\).
 
 
 
-   - \	Param\ (tempo salvo) só é anexado se for o mesmo episódio, evitando que o próximo episódio inicie com o tempo do anterior.
+   - \  Param\ (tempo salvo) só é anexado se for o mesmo episódio, evitando que o próximo episódio inicie com o tempo do anterior.
 
 
 
@@ -8362,3 +8362,7 @@ Consultado grafo Graphify existente (comunidades CastModal/LivePlayerModal; snap
 ## 28/10/2026 — Origem da API Android e Lupin
 
 Consultado grafo Graphify existente para TMDB/episodeAvailability e referências atuais de VITE_PROXY_URL (CLI Graphify ausente). Produção retornou temporadas[1,2,3,4] para96677 (catálogo1–3, probe4); não testados oito streams reais. Centralizado getApiBaseUrl: nativo usa domínio oficialHTTPS, web origem relativa. Aplicado em temporadas, TMDB, Encontrei, busca, lançamentos, startup, health, roteamentoMixDrop e downloads. Simulação bundle com VITE_PROXY_URL=localhost3000 confirma chamada pública no Android e recebimento de T4; web permanece relativa. 33 testes passaram e TypeScript aprovado. APK instalado não inspecionado; diagnóstico confirma vulnerabilidade reproduzível, não prova conteúdo do binário do usuário. Sem push.
+
+## 29/10/2026 — Remapeamento de temporadas fonte→TMDB (Lupin S4)
+
+Reproduzido o 404 do F12 em /api/tmdb/tv/96677/season/4 (S4E1 de Lupin): proxy passthrough repassa 404 legítimo do TMDB, que funde Parte 1+2 na T1 (10 eps) e numera Parte 3=T2 (7) e Parte 4=T3 (8, final 3x8 em 23/10/2026), enquanto a fonte encontrei numera por partes (S1..S4; snapshot local só tinha S1E1-E5, serie_id 3019; catálogo de produção fornece o S4E1 tocado). tmdb.ts ganhou resolveTmdbSeasonNumber (consulta getDetails cacheado, devolve a maior temporada válida <= à pedida, memo por série) aplicado em getSeasonDetails (404→remap com console.info único; warn preservado quando nada dá certo; fetchTmdbRaw aceita silent) e em getTimelinePreviewImages (stills do scrubber usam a temporada remapeada). Roteamento de conteúdo/availability seguem na numeração da fonte, intactos. Teste novo tmdb-season-remap (esbuild+vm, 4 casos: remap S4→T3 com 8 eps reais, controle T2 sem remap, resolveTmdbSeasonNumber, stills na T3) verde; tsc limpo; suíte 429/442 com 13 falhas pré-existentes comprovadas idênticas sem o fix (PM2/deploy/sentinel/probeCache). Limitação conhecida: S2 da fonte (Parte 2) busca T2 do TMDB (Parte 3) sem 404 — metadados trocados nesse caso seguem como débito, exigiria mapeamento cumulativo por contagem de episódios. Sem push.

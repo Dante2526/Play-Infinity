@@ -196,7 +196,7 @@ const CLIENT_TMDB_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
  */
 const getTmdbApiBase = getApiBaseUrl;
 
-async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
+async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean }): Promise<TmdbFetchOutcome<T>> {
   const now = Date.now();
   const cached = _clientTmdbCache.get(url);
   if (cached && now < cached.expiresAt) {
@@ -228,7 +228,11 @@ async function fetchTmdbRaw<T>(url: string): Promise<TmdbFetchOutcome<T>> {
       const res = await fetch(resolvedUrl, fetchOptions);
 
       if (!res.ok) {
-        console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
+        // silent: o chamador vai aplicar uma estratégia própria (ex.: remapeamento
+        // de temporada) e só deve avisar no console se nada der certo.
+        if (!opts?.silent) {
+          console.warn(`[TMDB Service] Proxy local retornou status ${res.status} para ${url}. Ativando fallback de dados...`);
+        }
         return { ok: false, status: res.status, data: null };
       }
 
@@ -514,8 +518,63 @@ export const getDetails = async (id: number, type: 'movie' | 'tv'): Promise<TMDB
   return (await lookupDetails(id, type)).details;
 };
 
+// ---------------------------------------------------------------------------
+// Remapeamento de temporadas fonte → TMDB
+//
+// A fonte de conteúdo (encontrei) numera temporadas por "partes" da Netflix,
+// enquanto o TMDB costuma fundir as duas primeiras partes numa única temporada.
+// Ex. real: Lupin (96677) — fonte S1..S4; TMDB T1 = Parte 1+2 (10 eps),
+// T2 = Parte 3 (7 eps), T3 = Parte 4 (8 eps). Assim, /tv/96677/season/4
+// responde 404 legítimo e o app precisa exibir os dados da T3.
+// Consulta a lista real de temporadas (via getDetails, cache client de 10 min)
+// e devolve a maior temporada válida <= à pedida; se a pedida existe, é ela.
+// ---------------------------------------------------------------------------
+const _seasonRemapCache = new Map<string, number>();
+
+export const resolveTmdbSeasonNumber = async (seriesId: number, seasonNumber: number): Promise<number> => {
+  if (!seriesId || !seasonNumber || seasonNumber <= 0) return seasonNumber;
+  const memoKey = `${seriesId}:${seasonNumber}`;
+  const memo = _seasonRemapCache.get(memoKey);
+  if (memo !== undefined) return memo;
+
+  const details = await getDetails(seriesId, 'tv');
+  const valid = (details?.seasons || [])
+    .filter(s => s.season_number > 0 && s.episode_count > 0)
+    .map(s => s.season_number)
+    .sort((a, b) => a - b);
+  if (!valid.length) return seasonNumber; // TMDB sem dados da série — não remapeia
+
+  let target = seasonNumber;
+  if (!valid.includes(seasonNumber)) {
+    const lower = valid.filter(n => n < seasonNumber);
+    target = lower.length ? lower[lower.length - 1] : valid[0];
+  }
+  if (target !== seasonNumber) _seasonRemapCache.set(memoKey, target);
+  return target;
+};
+
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {
-  return fetchTmdbSafe<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, DEFAULT_SEASON);
+  // Tentativa direta (silenciosa no !ok porque ainda há remapeamento a tentar).
+  const direct = await fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, { silent: true });
+  if (direct.ok && direct.data) return direct.data;
+
+  if (direct.status === 404) {
+    const mapped = await resolveTmdbSeasonNumber(seriesId, seasonNumber);
+    if (mapped !== seasonNumber) {
+      const remapped = await fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${mapped}?language=pt-BR`);
+      if (remapped.ok && remapped.data) {
+        console.info(`[TMDB Service] tv/${seriesId}: temporada ${seasonNumber} não existe no TMDB; exibindo dados da temporada ${mapped} (numeração da fonte difere do TMDB).`);
+        return remapped.data;
+      }
+    }
+  }
+
+  // Nada deu certo: avisa uma única vez (status 0 = timeout/rede, que o
+  // fetchTmdbRaw já registrou no catch — evita warn duplicado).
+  if (direct.status !== 0) {
+    console.warn(`[TMDB Service] Proxy local retornou status ${direct.status} para ${BASE_URL}/tv/${seriesId}/season/${seasonNumber}. Ativando fallback de dados...`);
+  }
+  return DEFAULT_SEASON;
 };
 
 export interface TMDBCollectionPart {
@@ -821,8 +880,12 @@ export const getTimelinePreviewImages = async (
     const collected: string[] = [];
 
     if (isTv && season && episode) {
+      // A numeração da fonte pode diferir do TMDB (ex.: Lupin fonte S4 = T3) —
+      // resolve a temporada real antes de montar as URLs de still.
+      const tmdbSeason = await resolveTmdbSeasonNumber(tmdbId, season);
+
       // 1. Tenta stills reais do episódio específico
-      const epUrl = `/api/tmdb/tv/${tmdbId}/season/${season}/episode/${episode}/images`;
+      const epUrl = `/api/tmdb/tv/${tmdbId}/season/${tmdbSeason}/episode/${episode}/images`;
       const epOutcome = await fetchTmdbRaw<any>(epUrl);
       if (epOutcome.ok && epOutcome.data?.stills && epOutcome.data.stills.length > 0) {
         epOutcome.data.stills.forEach((img: any) => {
@@ -834,7 +897,7 @@ export const getTimelinePreviewImages = async (
 
       // 2. Se tiver menos de 8 imagens, busca os stills dos episódios da temporada
       if (collected.length < 8) {
-        const seasonUrl = `/api/tmdb/tv/${tmdbId}/season/${season}`;
+        const seasonUrl = `/api/tmdb/tv/${tmdbId}/season/${tmdbSeason}`;
         const seasonOutcome = await fetchTmdbRaw<any>(seasonUrl);
         if (seasonOutcome.ok && seasonOutcome.data?.episodes && seasonOutcome.data.episodes.length > 0) {
           seasonOutcome.data.episodes.forEach((ep: any) => {
