@@ -684,13 +684,14 @@ export function AdminLiveChannels() {
                         + {channel.servers.length - 3} outros servidores de backup
                       </div>
                     )}
+
+                    {/* Fontes Individuais no mesmo padrao visual de servidor */}
+                    {[...new Set(channel.servers.filter(s => s.url.startsWith('/api/external-channel?'))
+                      .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name')))]
+                      .filter((name): name is string => !!name)
+                      .map(name => <ExternalChannelSources key={name} name={name} />)}
                   </div>
                 </div>
-
-                {[...new Set(channel.servers.filter(s => s.url.startsWith('/api/external-channel?'))
-                  .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name')))]
-                  .filter((name): name is string => !!name)
-                  .map(name => <div key={name}><ExternalChannelSources name={name} /></div>)}
 
                 {/* Botões de Ação */}
                 <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">

@@ -743,6 +743,36 @@ export function recordExternalSelection(channel: string, url: string) {
 }
 
 /** Administrative metadata only: no upstream paths, tokens or credentials. */
+export function getAllExternalSourceDetails(): Record<string, { channel: string; sources: Array<{ index: number; host: string; quality: string | null; state: string; cached: boolean; lastSelectedAt: number | null }> }> {
+  const channels = loadExternalChannels();
+  const bases = loadExternalBases();
+  const result: Record<string, { channel: string; sources: Array<{ index: number; host: string; quality: string | null; state: string; cached: boolean; lastSelectedAt: number | null }> }> = {};
+  for (const channel of channels) {
+    const selected = lastExternalSelections.get(normalizeChannelName(channel.name));
+    const entry = {
+      channel: channel.name,
+      sources: channel.fontes.map((fonte, index) => {
+        const url = buildFonteUrl(fonte, bases);
+        let host = '';
+        try { host = url ? new URL(url).hostname : ''; } catch {}
+        const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|d=0`) : undefined;
+        const fresh = cached && cached.expires > Date.now();
+        return {
+          index, host, quality: fonte.qualidade || null,
+          lastSelectedAt: url && selected?.url === url ? selected.at : null,
+          state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') ? 'unavailable'
+            : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
+          cached: !!fresh,
+        };
+      }),
+    };
+    result[channel.name] = entry;
+    const norm = normalizeChannelName(channel.name);
+    if (!result[norm]) result[norm] = entry;
+  }
+  return result;
+}
+
 export function getExternalSourceDetails(name: string) {
   const channel = findExternalChannel(name, loadExternalChannels());
   if (!channel) return null;

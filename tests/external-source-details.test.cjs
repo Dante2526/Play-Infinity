@@ -14,6 +14,7 @@ test('admin source details preserve indices and never disclose credentials or UR
  const filename=path.join(process.cwd(),'tests/virtual-source-details.cjs');
  const m=new Module(filename,module);m.filename=filename;m.paths=module.paths;m._compile(built.outputFiles[0].text,filename);
  assert.equal(typeof m.exports.getExternalSourceDetails,'function');
+ assert.equal(typeof m.exports.getAllExternalSourceDetails,'function');
  const result=m.exports.getExternalSourceDetails('N SPORTS');
  assert.equal(result.sources.length,3);
  assert.deepEqual(result.sources.map(s=>s.index),[0,1,2]);
@@ -22,6 +23,10 @@ test('admin source details preserve indices and never disclose credentials or UR
  assert.equal(result.sources[1].state,'unavailable');
  assert.equal(result.sources[2].state,'unsupported');
  assert.doesNotMatch(JSON.stringify(result),/SECRET|PASSWORD|secret-key|https:|\.m3u8/);
+ const allDetails=m.exports.getAllExternalSourceDetails();
+ assert.ok(allDetails['N SPORTS']);
+ assert.equal(allDetails['N SPORTS'].sources.length,3);
+ assert.doesNotMatch(JSON.stringify(allDetails),/SECRET|PASSWORD|secret-key|https:|\.m3u8/);
  assert.equal(m.exports.getExternalSourceDetails('Not listed'),null);
  m.exports.recordExternalSelection('N SPORTS','https://cdn.example/live/SECRET/PASSWORD/1.m3u8');
  assert.ok(m.exports.getExternalSourceDetails('N SPORTS').sources[0].lastSelectedAt);

@@ -1,3 +1,32 @@
+## 27/10/2026 — Redesign das Fontes de TV no Padrão do Servidor 1 (Android 67/1.4.35)
+
+**Contexto e Diagnóstico:**
+O usuário enviou captura de tela da listagem de canais no Admin TV Ao Vivo (`AdminLiveChannels.tsx`) no celular demonstrando insatisfação com a exibição das fontes externas do canal:
+1. Havia apenas uma linha para "1. Servidor 1 (Multi-Fonte HD) [Testar]" seguida por um link solto em laranja "Ver fontes individuais · {nome}", que abria um accordion clunky com parágrafos de texto e botões fora do padrão visual.
+2. O usuário solicitou que todas as fontes individuais fossem abertas e exibidas diretamente na lista sob o mesmo padrão visual de linha compacta do Servidor 1 (`p-1.5 rounded-lg bg-white/5 text-[11px]`), contendo o identificador da fonte, qualidade, status de sinal (`200 OK`, `OFF` ou `DASH`) e o botão `[Testar]` alinhado à direita de cada uma.
+
+**Modificações Realizadas (5 arquivos):**
+1. **`src/components/ExternalChannelSources.tsx`:**
+   - Redesenhado completamente: removido o accordion manual, links soltos e blocos pesados.
+   - Cada fonte individual do canal agora é renderizada como uma linha idêntica ao Servidor 1 (`flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]`).
+   - Botão `[Testar]` no canto direito de cada fonte, com feedback animado de loading (`Loader2`), indicador de status de sinal (`200 OK`, `OFF`, `DASH`) e tempo de latência em milissegundos.
+   - Implementado carregamento automático com cache compartilhado em memória (`fetchAllExternalSources`), evitando centenas de requisições simultâneas no carregamento inicial do catálogo.
+2. **`src/components/AdminLiveChannels.tsx`:**
+   - Inseridas as fontes individuais diretamente dentro do bloco `Servidores Configurados:` (`space-y-1`), garantindo alinhamento perfeito de largura e padding em qualquer tela mobile.
+3. **`server/services/externalCatalog.ts` & `server/routes/externalRoutes.ts`:**
+   - Adicionada a função `getAllExternalSourceDetails()` e suporte ao parâmetro `?all=1` na rota `GET /api/admin/external-sources`, entregando os detalhes e estados de todas as fontes em um único payload leve (~25 KB).
+4. **`tests/external-source-details.test.cjs`:**
+   - Atualizado para testar e validar o novo método em lote sem expor senhas ou credenciais upstream.
+5. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 67 e `versionName` para "1.4.35".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de testes: 74/74 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build` — Vite + esbuild): 0 erros gerando bundles e `dist/server.cjs` com sucesso em 14s.
+
+---
+
 ## 27/10/2026 — Push do Byte só após 2 falhas seguidas (Android 66/1.4.34)
 
 **Diagnóstico:** às 22:25 chegaram 5 pushes (Globo MG, Discovery, Cine SKY, Sports, Megapix) já com a versão 68ec16f ativa. Vieram da checagem periódica, não do boot. Log mostrou os canais "recuperado e online novamente" na rodada seguinte: fontes externas oscilam por segundos (502/Timeout) e uma única rodada falha bastava para notificar.

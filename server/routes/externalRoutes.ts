@@ -29,7 +29,7 @@
  */
 import { Router } from "express";
 import { validateExternalChannelName, validateExternalFormatParam } from "../utils/externalValidation";
-import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
+import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, getAllExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
 import { syncSaimoAllDeduped } from "../services/saimoCatalogScraper";
 import { signProxyUrl } from "../utils/helpers";
 
@@ -204,6 +204,9 @@ router.get('/api/live-channels', (_req, res) => {
 });
 router.get('/api/admin/external-sources', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  if (req.query.all === '1' || req.query.all === 'true') {
+    return res.json({ success: true, channels: getAllExternalSourceDetails() });
+  }
   const name = validateExternalChannelName(req.query.name);
   if (!name.ok) return res.status(400).json({ success: false, error: name.error });
   const details = getExternalSourceDetails(name.value!);
