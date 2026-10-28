@@ -37,6 +37,11 @@ export interface SentinelStatus {
 const activeAlerts = new Map<string, SentinelAlert>();
 const notifiedHistory = new Map<string, number>(); // alertId -> timestamp do último push enviado
 const PUSH_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 2 horas de intervalo anti-spam para o mesmo alerta
+// Contador de rodadas consecutivas em que cada canal falhou. O push só é
+// disparado após CHANNEL_FAILS_BEFORE_PUSH rodadas seguidas fora do ar,
+// evitando notificar oscilações de poucos segundos das fontes externas.
+const channelConsecutiveFails = new Map<string, number>();
+const CHANNEL_FAILS_BEFORE_PUSH = 2;
 
 let isProbing = false;
 let lastCheckTime = 0;
@@ -280,6 +285,7 @@ export async function runSentinelCheck(forcePush = false, skipPush = false): Pro
       });
       for (const staleId of staleChannelAlerts) {
         activeAlerts.delete(staleId);
+        channelConsecutiveFails.delete(staleId);
         notifiedHistory.delete(staleId);
       }
       if (staleChannelAlerts.length > 0) {
@@ -301,6 +307,7 @@ export async function runSentinelCheck(forcePush = false, skipPush = false): Pro
     });
     for (const orphanId of orphanChannelAlerts) {
       activeAlerts.delete(orphanId);
+      channelConsecutiveFails.delete(orphanId);
       notifiedHistory.delete(orphanId);
     }
     if (orphanChannelAlerts.length > 0) {
@@ -478,11 +485,18 @@ export async function runSentinelCheck(forcePush = false, skipPush = false): Pro
 
               // Verifica se deve notificar via push (anti-spam 2h)
               const lastNotified = notifiedHistory.get(alertId) || 0;
-              if (!skipPush && (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
+              const failStreak = (channelConsecutiveFails.get(alertId) || 0) + 1;
+              channelConsecutiveFails.set(alertId, failStreak);
+              const confirmedDown = forcePush || failStreak >= CHANNEL_FAILS_BEFORE_PUSH;
+              if (!confirmedDown) {
+                console.log(`[AdminSentinel] Canal ${ch.name} falhou (${failStreak}/${CHANNEL_FAILS_BEFORE_PUSH}). Aguardando próxima rodada antes de notificar.`);
+              }
+              if (!skipPush && confirmedDown && (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
                 alertsToNotify.push(alertObj);
                 notifiedHistory.set(alertId, now);
               }
             } else {
+              channelConsecutiveFails.delete(alertId);
               // Se voltou a ficar online, limpa o alerta ativo e histórico para renotificar se cair de novo
               if (activeAlerts.has(alertId)) {
                 activeAlerts.delete(alertId);

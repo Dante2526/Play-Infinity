@@ -146,4 +146,11 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(content, /runSentinelCheck\(false,\s*true\)/, "Boot inicial deve executar com skipPush=true para evitar falsos alarmes no reinício");
     assert.match(content, /setTimeout\(resolve,\s*2500\)/, "Reteste deve aguardar janela ampliada de 2500ms");
   });
+
+  test("12. Push de canal só após 2 rodadas consecutivas de falha", () => {
+    const content = fs.readFileSync(path.join(__dirname, "..", "server", "services", "adminSentinel.ts"), "utf-8");
+    assert.match(content, /CHANNEL_FAILS_BEFORE_PUSH = 2/, "Deve exigir 2 falhas seguidas");
+    assert.match(content, /confirmedDown/, "Push deve depender da confirmação de queda");
+    assert.match(content, /channelConsecutiveFails\.delete\(alertId\)/, "Contador deve zerar quando o canal volta");
+  });
 });

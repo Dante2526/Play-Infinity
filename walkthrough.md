@@ -1,3 +1,13 @@
+## 27/10/2026 — Push do Byte só após 2 falhas seguidas (Android 66/1.4.34)
+
+**Diagnóstico:** às 22:25 chegaram 5 pushes (Globo MG, Discovery, Cine SKY, Sports, Megapix) já com a versão 68ec16f ativa. Vieram da checagem periódica, não do boot. Log mostrou os canais "recuperado e online novamente" na rodada seguinte: fontes externas oscilam por segundos (502/Timeout) e uma única rodada falha bastava para notificar.
+
+**Mudança (`server/services/adminSentinel.ts`):** novo `channelConsecutiveFails` + `CHANNEL_FAILS_BEFORE_PUSH = 2`. O alerta aparece no painel na hora, mas o push só sai na 2ª rodada consecutiva de falha (~15 min). Contador zera quando o canal volta, quando é ocultado ou removido do catálogo. `forcePush` ignora a regra.
+
+**Validação:** tsc 0 erros; `tests/admin-sentinel.test.cjs` 12/12 (novo teste 12); build ok.
+
+---
+
 ## 27/10/2026 — Correção Mobile-First do Perfil do Usuário e Card de Indicação (Android 65/1.4.33)
 
 **Contexto e Diagnóstico:**
