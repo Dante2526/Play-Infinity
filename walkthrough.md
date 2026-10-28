@@ -1,3 +1,28 @@
+## 27/10/2026 — Correção Mobile-First do Perfil do Usuário e Card de Indicação (Android 65/1.4.33)
+
+**Contexto e Diagnóstico:**
+O usuário enviou captura de tela da página de Perfil (`UserProfilePage.tsx`) no celular demonstrando dois problemas:
+1. **Ícone de IA / Estrelinha (`Sparkles`):** No cabeçalho, abaixo do nome do usuário, o subtítulo exibia o ícone de faísca/estrelinha (`Sparkles`) que ficava solto e desalinhava a linha do texto de assinatura vitalícia no mobile.
+2. **Card "Indique um Amigo" com Overflow Horizontal:** O card estourava a largura da tela do celular na borda direita. O título ("Indique um Amigo & Acompanhe sua Rede") e a descrição tinham palavras cortadas, e o container flexível do link (`https://play-infinity.stream/?ref=...`) não possuía `min-w-0`, forçando o card a ultrapassar os 360px-400px do smartphone.
+
+**Modificações Realizadas (2 arquivos):**
+1. **`src/pages/UserProfilePage.tsx`:**
+   - Removido o import e a renderização do ícone `Sparkles`.
+   - Subtítulo de assinatura refatorado para uma pílula limpa e moderna (`bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-semibold`), centralizada no mobile e alinhada à esquerda no desktop.
+   - Card "Indique um Amigo" adaptado com padding responsivo (`p-4 sm:p-6 md:p-8`), bordas (`rounded-2xl sm:rounded-3xl`), `w-full min-w-0`, títulos e textos com `break-words`.
+   - Caixa do link com `flex-1 min-w-0 truncate select-all` eliminando na raiz o overflow horizontal.
+   - Botões "Copiar Link" e "WhatsApp" organizados em grade simétrica de 2 colunas no mobile (`grid grid-cols-2 sm:flex gap-2 w-full sm:w-auto`) com altura mínima ergonômica de toque de 44px (`min-h-[44px]`).
+2. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 65 e `versionName` para "1.4.33".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa de referral (`tests/referral.test.cjs`): 4/4 testes aprovados (100%).
+- Compilação de produção (`npm run build` — Vite + esbuild): Bundles e `dist/server.cjs` gerados com sucesso em 13.82s.
+- Code Review: Aprovado formalmente por subagente.
+
+---
+
 ## 27/10/2026 — Refinamento Visual do Mascote Byte e Blindagem Anti-Falso-Alarme em Cluster (Android 64/1.4.32)
 
 **Contexto e Diagnóstico:**

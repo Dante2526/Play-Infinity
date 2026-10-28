@@ -25,7 +25,6 @@ import {
   Info,
   Radio,
   Loader2,
-  Sparkles,
   Clock,
   Layers,
   X,
@@ -453,10 +452,11 @@ export function UserProfilePage({
           
           <div className="flex flex-col items-center md:items-start flex-1 text-center md:text-left">
             <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{userName}</h2>
-            <p className="text-neutral-400 mb-5 font-medium text-sm flex items-center justify-center md:justify-start gap-1.5">
-              {isVitalicio && <Sparkles className="w-4 h-4 text-orange-400 shrink-0" />}
-              <span>{subscriptionLabel}</span>
-            </p>
+            <div className="mb-5 flex items-center justify-center md:justify-start">
+              <span className="inline-flex items-center px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-300 text-xs font-semibold tracking-wide">
+                {subscriptionLabel}
+              </span>
+            </div>
             
             {/* Badges de estatísticas */}
             <div className="grid grid-cols-3 gap-3 w-full max-w-md mb-6">
@@ -498,32 +498,32 @@ export function UserProfilePage({
 
         {/* CARD INDIQUE UM AMIGO */}
         {userReferralCode && (
-          <div className="bg-gradient-to-br from-orange-600/15 via-[#161616] to-[#111111] border border-orange-500/25 rounded-3xl p-6 md:p-8 mb-8 shadow-xl relative overflow-hidden">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-              <div className="flex-1 min-w-0">
+          <div className="bg-gradient-to-br from-orange-600/15 via-[#161616] to-[#111111] border border-orange-500/25 rounded-2xl sm:rounded-3xl p-4 sm:p-6 md:p-8 mb-8 shadow-xl relative overflow-hidden w-full min-w-0">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-5 sm:gap-6 w-full min-w-0">
+              <div className="flex-1 min-w-0 w-full">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
-                  <div className="p-2 bg-orange-500/20 text-orange-400 rounded-xl">
+                  <div className="p-2 bg-orange-500/20 text-orange-400 rounded-xl shrink-0">
                     <Gift className="w-5 h-5" />
                   </div>
-                  <h3 className="text-xl md:text-2xl font-black text-white">
+                  <h3 className="text-lg sm:text-xl md:text-2xl font-black text-white break-words min-w-0">
                     Indique um Amigo & Acompanhe sua Rede
                   </h3>
                   {referredFriendsCount > 0 && (
-                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
                       {referredFriendsCount} {referredFriendsCount === 1 ? 'amigo indicado' : 'amigos indicados'}
                     </span>
                   )}
                 </div>
-                <p className="text-neutral-400 text-sm leading-relaxed max-w-2xl">
+                <p className="text-neutral-400 text-xs sm:text-sm leading-relaxed max-w-2xl break-words">
                   Compartilhe seu link exclusivo. Quando seu amigo acessar, poderá criar uma conta, testar 30 minutos grátis e você verá sua rede crescendo!
                 </p>
 
-                {/* Caixa do Link */}
-                <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-xl">
-                  <div className="bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white/80 font-mono flex-1 truncate select-all">
+                {/* Caixa do Link e Ações Mobile-First */}
+                <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 max-w-xl w-full min-w-0">
+                  <div className="bg-black/60 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white/80 font-mono flex-1 min-w-0 truncate select-all">
                     {buildReferralLink(userReferralCode)}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
                     <button
                       type="button"
                       onClick={() => {
