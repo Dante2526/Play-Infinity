@@ -691,12 +691,36 @@ export async function runSentinelCheck(forcePush = false, skipPush = false): Pro
     }
 
     // =========================================================================
-    // 4. DISPARO DE NOTIFICAÇÕES PUSH PARA O ADMINISTRADOR
+    // 4. DISPARO DE NOTIFICAÇÕES PUSH PARA O ADMINISTRADOR (COM TRAVA ANTI-FLOOD)
     // =========================================================================
     if (!skipPush && alertsToNotify.length > 0) {
-      console.log(`[AdminSentinel] Disparando ${alertsToNotify.length} notificações prioritárias aos administradores...`);
-      for (const alert of alertsToNotify) {
-        await sendPushToAdmins(alert);
+      const channelAlerts = alertsToNotify.filter(a => a.category === "tv");
+      const otherAlerts = alertsToNotify.filter(a => a.category !== "tv");
+
+      // Se houver mais de 3 canais caindo juntos (ex: oscilação em massa de upstream),
+      // NUNCA dispara dezenas de notificações individuais. Agrupa em 1 único resumo urgente!
+      if (channelAlerts.length > 3) {
+        console.log(`[AdminSentinel] Alerta em massa detectado (${channelAlerts.length} canais). Agrupando em 1 notificação resumo anti-spam.`);
+        const summaryAlert: SentinelAlert = {
+          id: `channel:mass_outage_${now}`,
+          category: "tv",
+          title: `🚨 Byte: ${channelAlerts.length} canais com instabilidade!`,
+          message: `Foram detectadas ${channelAlerts.length} quedas de canais de TV. Toque para verificar na aba TV Ao Vivo.`,
+          level: "error",
+          actionTab: "channels",
+          actionUrl: "/admin?tab=channels",
+          detectedAt: now,
+          metadata: { count: channelAlerts.length },
+        };
+        await sendPushToAdmins(summaryAlert);
+        for (const alert of otherAlerts.slice(0, 2)) {
+          await sendPushToAdmins(alert);
+        }
+      } else {
+        console.log(`[AdminSentinel] Disparando ${alertsToNotify.length} notificações prioritárias aos administradores...`);
+        for (const alert of alertsToNotify) {
+          await sendPushToAdmins(alert);
+        }
       }
     }
 

@@ -225,6 +225,13 @@ export function startSaimoSyncCron(): void {
   if (cronStarted) return;
   cronStarted = true;
 
+  // O cron de sincronização automática de catálogo externo fica desativado por padrão
+  // para preservar os 229 canais auditados estáveis e evitar sobrescrever com domínios mortos (vivlar/vaiagora).
+  if (process.env.ENABLE_SAIMO_AUTO_SYNC !== "true") {
+    console.log("[saimo-scraper] Cron automático desativado (preservando catálogo auditado de 229 canais).");
+    return;
+  }
+
   const initialDelayMs = Math.floor(Math.random() * 30 * 1000);
   setTimeout(() => {
     const channelsExists = fs.existsSync(channelsFilePath());

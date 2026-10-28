@@ -1,3 +1,22 @@
+## 27/10/2026 — Blindagem Anti-Flood do Sentinela e Desativação do Scraper Saimo (Android 68/1.4.36)
+
+**Diagnóstico da Causa Raiz dos 108 Alertas:**
+1. **Sobrescrita do Catálogo pelo Scraper Saimo:** A função `startSaimoSyncCron()` rodava a cada 6h e no boot baixando a lista crua de `saimo-tv.pages.dev/catalogo.txt` com 408 canais e sobrescrevendo o arquivo `external-channels.txt` auditado e limpo (de 229 canais estáveis), reintroduzindo mais de 100 fontes mortas (como `vivlar.me`, `vaiagora.vip`).
+2. **Metralhadora de Push em Falhas Múltiplas:** Em `server/services/adminSentinel.ts`, o loop de `alertsToNotify` disparava um push individual para cada canal com falha. Quando os 108 canais da lista crua falharam, 108 notificações foram enviadas em cascata para o celular.
+
+**Correções Implementadas (4 arquivos):**
+1. **`server/services/saimoCatalogScraper.ts`:**
+   - Desativado o cron automático de sincronização por padrão (`ENABLE_SAIMO_AUTO_SYNC !== "true"`), protegendo permanentemente o catálogo auditado de 229 canais contra sobrescrita com links mortos.
+2. **`server/services/adminSentinel.ts`:**
+   - Implementada **Trava Anti-Flood / Digest de Notificações**: se mais de 3 canais caírem ao mesmo tempo, o sistema agrupa todas as falhas em **1 única notificação resumo** (`🚨 Byte: N canais com instabilidade!`), eliminando completamente a metralhadora de push no celular.
+3. **VPS Oracle (`/home/ubuntu/play-infinity/data/external-channels.txt`):**
+   - Restaurado o catálogo limpo e auditado de 229 canais estáveis. Processo recarregado.
+4. **`android/app/build.gradle` & `tests/admin-sentinel.test.cjs`:**
+   - Adicionado teste automatizado 13 cobrindo a trava anti-flood.
+   - Incrementado `versionCode` para 68 e `versionName` para "1.4.36".
+
+---
+
 ## 27/10/2026 — Redesign das Fontes de TV no Padrão do Servidor 1 (Android 67/1.4.35)
 
 **Contexto e Diagnóstico:**

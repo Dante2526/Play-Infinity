@@ -153,4 +153,10 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(content, /confirmedDown/, "Push deve depender da confirmação de queda");
     assert.match(content, /channelConsecutiveFails\.delete\(alertId\)/, "Contador deve zerar quando o canal volta");
   });
+
+  test("13. Trava anti-flood: agrupamento em 1 único resumo quando > 3 canais caem", () => {
+    const content = fs.readFileSync(path.join(__dirname, "..", "server", "services", "adminSentinel.ts"), "utf-8");
+    assert.match(content, /channelAlerts.length > 3/, "Deve detectar queda em massa");
+    assert.match(content, /mass_outage/, "Deve criar notificação resumo");
+  });
 });
