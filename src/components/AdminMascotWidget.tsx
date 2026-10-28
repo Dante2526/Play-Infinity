@@ -266,9 +266,23 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
     return () => clearInterval(interval);
   }, [fetchStatus]);
 
-  const mood = status?.mood || "happy";
+  const rawMood = status?.mood || "happy";
   const alerts = status?.activeAlerts || [];
   const alertCount = alerts.length;
+
+  // Modo noturno automático (00:00 às 06:00) quando está tudo 100% online
+  // Permite também testar imediatamente via query param ?byte=sleep ou ?byte=blue
+  const isNightHour = (() => {
+    try {
+      const h = new Date().getHours();
+      const params = new URLSearchParams(window.location.search);
+      return (h >= 0 && h < 6) || params.get("byte") === "sleep" || params.get("byte") === "blue";
+    } catch {
+      const h = new Date().getHours();
+      return h >= 0 && h < 6;
+    }
+  })();
+  const mood: "happy" | "warning" | "alert" | "sleep" = (rawMood === "happy" && alertCount === 0 && isNightHour) ? "sleep" : rawMood;
 
   // Mantém o Byte dentro da tela quando o balão de alertas aparece/some
   // (a altura do aside muda e o botão pode encostar na borda)
@@ -287,6 +301,12 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
       accent: "#10b981",
       badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
       glowClass: "filter drop-shadow-[0_0_8px_rgba(16,185,129,0.7)]"
+    },
+    sleep: {
+      aura: "bg-cyan-500/20",
+      accent: "#06b6d4",
+      badge: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+      glowClass: "filter drop-shadow-[0_0_8px_rgba(6,182,212,0.7)]"
     },
     warning: {
       aura: "bg-orange-500/25",
@@ -349,6 +369,8 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
               ? "bg-[#18181b]/90 border-red-500/50 hover:border-red-500 shadow-red-500/20"
               : mood === "warning"
               ? "bg-[#18181b]/90 border-orange-500/40 hover:border-orange-500 shadow-orange-500/20"
+              : mood === "sleep"
+              ? "bg-[#18181b]/90 border-cyan-500/40 hover:border-cyan-400 shadow-cyan-500/20"
               : "bg-[#18181b]/90 border-emerald-500/30 hover:border-emerald-500 shadow-emerald-500/10"
           }`}
           title="Guardião Byte — clique para o status, arraste para mover, duplo clique volta pro canto padrão"
@@ -396,6 +418,15 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
                   <circle cx="62" cy="42" r="1.5" fill="#ffffff" />
                   <line x1="46" y1="52" x2="54" y2="52" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" />
                 </g>
+              ) : mood === "sleep" ? (
+                <g className={moodColors.glowClass}>
+                  {/* Olhos Fechados Dormindo */}
+                  <path d="M35 44 Q40 48 45 44" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  <path d="M55 44 Q60 48 65 44" stroke="#06b6d4" strokeWidth="2.5" strokeLinecap="round" fill="none" />
+                  {/* Zzz sutil */}
+                  <text x="68" y="32" fill="#06b6d4" fontSize="9" fontWeight="bold" opacity="0.85">z</text>
+                  <text x="74" y="24" fill="#06b6d4" fontSize="11" fontWeight="bold">Z</text>
+                </g>
               ) : (
                 <g className={moodColors.glowClass}>
                   <ellipse cx="40" cy="44" rx="4.5" ry="6" fill="#10b981" />
@@ -423,7 +454,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
               )}
             </div>
             <span className="text-[10px] text-white/50 leading-tight">
-              {mood === "alert" ? "Quedas detectadas" : mood === "warning" ? "Requer atenção" : "100% Online"}
+              {mood === "alert" ? "Quedas detectadas" : mood === "warning" ? "Requer atenção" : mood === "sleep" ? "Modo Noturno (Zzz)" : "100% Online"}
             </span>
           </div>
         </button>
@@ -439,7 +470,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
             {/* Header do Card */}
             <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <div className="flex items-center gap-2 min-w-0">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${mood === "alert" ? "bg-red-500 animate-pulse" : mood === "warning" ? "bg-orange-500" : "bg-emerald-500"}`} />
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${mood === "alert" ? "bg-red-500 animate-pulse" : mood === "warning" ? "bg-orange-500" : mood === "sleep" ? "bg-cyan-400 animate-pulse" : "bg-emerald-500"}`} />
                 <h3 className="text-white font-bold text-sm tracking-wide truncate">
                   Guardião da Plataforma
                 </h3>
@@ -456,11 +487,13 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
             {/* Balão de Fala do Mascote */}
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center shrink-0">
-                <ShieldCheck className={`w-5 h-5 ${mood === "alert" ? "text-red-400" : mood === "warning" ? "text-orange-400" : "text-emerald-400"}`} />
+                <ShieldCheck className={`w-5 h-5 ${mood === "alert" ? "text-red-400" : mood === "warning" ? "text-orange-400" : mood === "sleep" ? "text-cyan-400" : "text-emerald-400"}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs leading-relaxed font-medium">
-                  {alertCount === 0
+                  {mood === "sleep"
+                    ? "Zzz... Modo Noturno ativo. Sistema calmo e monitorando tudo nos bastidores, chefe!"
+                    : alertCount === 0
                     ? "Tudo funcionando perfeitamente, chefe! Todos os canais, bugs e conexões estão sob controle."
                     : alertCount === 1
                     ? "Atenção chefe: encontrei 1 ocorrência que requer sua ação no painel."

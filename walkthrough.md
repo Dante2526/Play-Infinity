@@ -16,6 +16,7 @@
    - Limpos imports não utilizados (`Send`, `Loader2`, `Sparkles`).
    - Substituído `Sparkles` pelo ícone oficial do guardião `ShieldCheck` no balão de fala, com cor dinâmica por humor (`text-emerald-400` para happy, `text-orange-400` para warning, `text-red-400` para alert).
    - Centralizado o botão "Testar Agora" (`w-auto px-6 py-2.5 mx-auto`) no rodapé com toque ergonômico e sem `flex-1`.
+   - **Ativado o Modo Noturno Azul Ciano (#06b6d4):** O Byte agora entra automaticamente em modo repouso/soneca de madrugada (das 00:00 às 06:00) quando todos os serviços estão 100% online, exibindo olhinhos fechados, efeito Zzz, aura ciano e mensagem: *"Zzz... Modo Noturno ativo. Sistema calmo e monitorando tudo nos bastidores, chefe!"* (com suporte a teste imediato via `?byte=sleep`).
 2. **`server/services/adminSentinel.ts`:**
    - Adicionada trava de instância primária em cluster PM2 (`NODE_APP_INSTANCE === "0"`), impedindo que instâncias secundárias executem probes em paralelo.
    - Adicionado parâmetro `skipPush` em `runSentinelCheck(forcePush, skipPush)`.
