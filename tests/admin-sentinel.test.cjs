@@ -83,7 +83,9 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(content, /onSelectSection/, "Deve receber a prop onSelectSection");
     assert.match(content, /\/api\/admin\/sentinel\/status/, "Deve consultar o status do Sentinela");
     assert.match(content, /\/api\/admin\/sentinel\/check-now/, "Deve permitir checagem manual imediata");
-    assert.match(content, /\/api\/admin\/sentinel\/test-push/, "Deve permitir teste de push direto");
+    assert.match(content, /ShieldCheck/, "Deve renderizar o ícone de guardião ShieldCheck");
+    assert.match(content, /Testar Agora/, "Deve conter o botão centralizado de teste manual");
+    assert.strictEqual(content.includes("Testar Push"), false, "Botão Testar Push deve ser removido da UI");
     assert.match(content, /viewBox="0 0 100 100"/, "Deve renderizar o SVG oficial do mascote Byte");
   });
 
@@ -135,5 +137,13 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     const channelsTxt = fs.readFileSync(path.join(__dirname, "..", "data", "external-channels.txt"), "utf-8");
     assert.match(channelsTxt, /1168940\.m3u8/, "Globo MG deve conter novo stream ativo 1168940");
     assert.strictEqual(/canal:\s*DreamWorks/i.test(channelsTxt), false, "DreamWorks descontinuado deve estar removido do catalogo");
+  });
+
+  test("11. Trava anti-duplicação em cluster PM2 e supressão de push no boot frio", () => {
+    const sentinelFile = path.join(__dirname, "..", "server", "services", "adminSentinel.ts");
+    const content = fs.readFileSync(sentinelFile, "utf-8");
+    assert.match(content, /NODE_APP_INSTANCE/, "Sentinela deve verificar NODE_APP_INSTANCE para prevenir duplicidade no cluster PM2");
+    assert.match(content, /runSentinelCheck\(false,\s*true\)/, "Boot inicial deve executar com skipPush=true para evitar falsos alarmes no reinício");
+    assert.match(content, /setTimeout\(resolve,\s*2500\)/, "Reteste deve aguardar janela ampliada de 2500ms");
   });
 });

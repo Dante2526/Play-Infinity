@@ -1,3 +1,42 @@
+## 27/10/2026 — Refinamento Visual do Mascote Byte e Blindagem Anti-Falso-Alarme em Cluster (Android 64/1.4.32)
+
+**Contexto e Diagnóstico:**
+1. **Refinamento do Mascote Byte:**
+   - O usuário solicitou a remoção do botão "Testar Push" da interface do mascote Byte, centralizando o botão "Testar Agora" sem esticá-lo artificialmente (com tamanho natural e toque ergonômico).
+   - Solicitou a substituição do ícone de estrelas brilhantes/IA (`Sparkles`) por um ícone adequado de guardião e segurança.
+   - Solicitou esclarecimento sobre o modo azul do mascote visto no protótipo (`mascot_prototype.html`), onde o azul ciano (`#06b6d4`) representava o estado de "Repouso / Modo Noturno / Soneca (Zzz)".
+2. **Diagnóstico dos 4 Avisos no Celular (16:30 e 16:41):**
+   - O usuário enviou print com 4 notificações push de canais fora do ar (Assombrações, Telecine Premium, AMC e Globo MG).
+   - *Causa Raiz 1 (Cluster PM2 Duplicado):* O processo `play-infinity-app` roda em modo cluster com 2 instâncias. Ambas estavam disparando o daemon de background do Sentinela simultaneamente, gerando o dobro de requisições de probe e duplicando alertas.
+   - *Causa Raiz 2 (Boot Frio e Gatilho Rápido):* No reinício pós-deploy, com caches em memória frios, as dezenas de conexões concorrentes geraram enfileiramento temporário (502). O Sentinela tinha backoff de apenas 800ms e disparava notificação push logo na primeira varredura aos 45s. Segundos depois, os 4 canais recuperaram e responderam 100% online (`Canal Assombrações recuperado e online novamente`), mas o push já havia acordado o administrador.
+
+**Modificações Realizadas (4 arquivos de código e testes):**
+1. **`src/components/AdminMascotWidget.tsx`:**
+   - Removido o botão "Testar Push" da UI, seus estados `testPushLoading`, `testPushFeedback` e a função `handleTestPush`.
+   - Limpos imports não utilizados (`Send`, `Loader2`, `Sparkles`).
+   - Substituído `Sparkles` pelo ícone oficial do guardião `ShieldCheck` no balão de fala, com cor dinâmica por humor (`text-emerald-400` para happy, `text-orange-400` para warning, `text-red-400` para alert).
+   - Centralizado o botão "Testar Agora" (`w-auto px-6 py-2.5 mx-auto`) no rodapé com toque ergonômico e sem `flex-1`.
+2. **`server/services/adminSentinel.ts`:**
+   - Adicionada trava de instância primária em cluster PM2 (`NODE_APP_INSTANCE === "0"`), impedindo que instâncias secundárias executem probes em paralelo.
+   - Adicionado parâmetro `skipPush` em `runSentinelCheck(forcePush, skipPush)`.
+   - Na verificação de inicialização aos 45s, passado `skipPush = true`: caches frios no boot populam o status do painel mas NÃO disparam notificações push.
+   - Condicionado o registro em `notifiedHistory` a `!skipPush`, garantindo que o cooldown de 2h não seja queimado prematuramente durante o boot.
+   - Aumentada a janela de backoff de reteste de 800ms para **2500ms** antes de considerar um canal fora do ar.
+3. **`tests/admin-sentinel.test.cjs`:**
+   - Atualizado o teste 5 para validar `ShieldCheck`, botão centralizado e ausência de "Testar Push" na UI.
+   - Criado o teste 11 cobrindo a checagem de `NODE_APP_INSTANCE`, `skipPush=true` no boot e backoff de 2500ms.
+4. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 64 e `versionName` para "1.4.32".
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- Suíte completa `tests/admin-sentinel.test.cjs`: 11/11 testes aprovados (100%).
+- Suíte completa `tests/external-catalog.test.cjs`: 58/58 testes aprovados (100%).
+- Compilação de produção (`npm run build` — Vite + esbuild): Bundles e `dist/server.cjs` gerados com sucesso em 38.26s.
+- Code Review: Aprovado formalmente por subagente.
+
+---
+
 ## 27/10/2026 — Resolução dos Falsos Alarmes do Sentinela Byte e Atualização de Fontes de TV (Android 63/1.4.31)
 
 **Contexto e Diagnóstico:**

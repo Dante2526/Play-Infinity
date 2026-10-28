@@ -226,7 +226,7 @@ export async function sendPushToAdmins(alert: SentinelAlert): Promise<number> {
 /**
  * Executa uma rodada completa de verificação (TV Ao Vivo, Bugs, Scrapers e Sistema)
  */
-export async function runSentinelCheck(forcePush = false): Promise<SentinelStatus> {
+export async function runSentinelCheck(forcePush = false, skipPush = false): Promise<SentinelStatus> {
   if (isProbing) {
     return getSentinelStatus();
   }
@@ -328,7 +328,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
       };
       activeAlerts.set(sysAlertId, sysAlert);
       const lastNotified = notifiedHistory.get(sysAlertId) || 0;
-      if (forcePush || !notifiedHistory.has(sysAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+      if (!skipPush && (forcePush || !notifiedHistory.has(sysAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
         alertsToNotify.push(sysAlert);
         notifiedHistory.set(sysAlertId, now);
       }
@@ -425,7 +425,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
                 };
                 activeAlerts.set(providerAlertId, providerAlert);
                 const lastNotified = notifiedHistory.get(providerAlertId) || 0;
-                if (forcePush || !notifiedHistory.has(providerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+                if (!skipPush && (forcePush || !notifiedHistory.has(providerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
                   alertsToNotify.push(providerAlert);
                   notifiedHistory.set(providerAlertId, now);
                 }
@@ -451,7 +451,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
 
             let finalProbeRes = probeRes;
             if (!finalProbeRes.online && !finalProbeRes.providerDown) {
-              await new Promise((resolve) => setTimeout(resolve, 800));
+              await new Promise((resolve) => setTimeout(resolve, 2500));
               const retryRes = await probeChannelServers(servers, probeLiveStreamUrl, providerDownDetected);
               if (retryRes.online) {
                 console.log(`[AdminSentinel] Canal ${ch.name} recuperado na retentativa (falso alarme evitado).`);
@@ -478,7 +478,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
 
               // Verifica se deve notificar via push (anti-spam 2h)
               const lastNotified = notifiedHistory.get(alertId) || 0;
-              if (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+              if (!skipPush && (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
                 alertsToNotify.push(alertObj);
                 notifiedHistory.set(alertId, now);
               }
@@ -543,7 +543,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
           activeAlerts.set(bugAlertId, bugAlert);
 
           const lastNotified = notifiedHistory.get(bugAlertId) || 0;
-          if (forcePush || !notifiedHistory.has(bugAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+          if (!skipPush && (forcePush || !notifiedHistory.has(bugAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
             alertsToNotify.push(bugAlert);
             notifiedHistory.set(bugAlertId, now);
           }
@@ -581,7 +581,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
         activeAlerts.set(cookieAlertId, cookieAlert);
 
         const lastNotified = notifiedHistory.get(cookieAlertId) || 0;
-        if (forcePush || !notifiedHistory.has(cookieAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+        if (!skipPush && (forcePush || !notifiedHistory.has(cookieAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
           alertsToNotify.push(cookieAlert);
           notifiedHistory.set(cookieAlertId, now);
         }
@@ -625,7 +625,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
         activeAlerts.set(vizerAlertId, vizerAlert);
 
         const lastNotified = notifiedHistory.get(vizerAlertId) || 0;
-        if (forcePush || !notifiedHistory.has(vizerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+        if (!skipPush && (forcePush || !notifiedHistory.has(vizerAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
           alertsToNotify.push(vizerAlert);
           notifiedHistory.set(vizerAlertId, now);
         }
@@ -664,7 +664,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
         activeAlerts.set(vizerCatAlertId, vizerCatAlert);
 
         const lastNotified = notifiedHistory.get(vizerCatAlertId) || 0;
-        if (forcePush || !notifiedHistory.has(vizerCatAlertId) || now - lastNotified > PUSH_COOLDOWN_MS) {
+        if (!skipPush && (forcePush || !notifiedHistory.has(vizerCatAlertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
           alertsToNotify.push(vizerCatAlert);
           notifiedHistory.set(vizerCatAlertId, now);
         }
@@ -679,7 +679,7 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
     // =========================================================================
     // 4. DISPARO DE NOTIFICAÇÕES PUSH PARA O ADMINISTRADOR
     // =========================================================================
-    if (alertsToNotify.length > 0) {
+    if (!skipPush && alertsToNotify.length > 0) {
       console.log(`[AdminSentinel] Disparando ${alertsToNotify.length} notificações prioritárias aos administradores...`);
       for (const alert of alertsToNotify) {
         await sendPushToAdmins(alert);
@@ -702,16 +702,23 @@ export async function runSentinelCheck(forcePush = false): Promise<SentinelStatu
  * Inicializa o daemon Sentinela na inicialização do servidor (executa a cada 15 min)
  */
 export function startAdminSentinel(): void {
-  console.log("[AdminSentinel] Iniciando daemon do Guardião de Alertas e Monitoramento...");
+  // Em modo cluster PM2, apenas a instância principal (#0) executa o daemon de monitoramento
+  const instance = process.env.NODE_APP_INSTANCE;
+  if (instance !== undefined && instance !== "0") {
+    console.log(`[AdminSentinel] Instância de cluster secundária (#${instance}). Daemon em segundo plano desativado.`);
+    return;
+  }
 
-  // Primeira verificação após 45 segundos para dar tempo ao servidor e caches subirem
+  console.log("[AdminSentinel] Iniciando daemon do Guardião de Alertas e Monitoramento (instância primária)...");
+
+  // Primeira verificação após 45 segundos: caches frios no boot populam o painel mas não disparam push
   setTimeout(() => {
-    runSentinelCheck().catch((err) => console.warn("[AdminSentinel] Falha na verificação inicial:", err));
+    runSentinelCheck(false, true).catch((err) => console.warn("[AdminSentinel] Falha na verificação inicial:", err));
   }, 45000);
 
-  // Verificações periódicas a cada 15 minutos
+  // Verificações periódicas a cada 15 minutos (notificam quedas persistentes normalmente)
   const CHECK_INTERVAL_MS = 15 * 60 * 1000;
   setInterval(() => {
-    runSentinelCheck().catch((err) => console.warn("[AdminSentinel] Falha na verificação periódica:", err));
+    runSentinelCheck(false, false).catch((err) => console.warn("[AdminSentinel] Falha na verificação periódica:", err));
   }, CHECK_INTERVAL_MS);
 }

@@ -5,7 +5,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   RefreshCw,
-  Send,
   X,
   Tv,
   Bug,
@@ -13,8 +12,7 @@ import {
   Layers,
   ChevronRight,
   ExternalLink,
-  Loader2,
-  Sparkles
+  ShieldCheck
 } from "lucide-react";
 
 export interface SentinelAlertItem {
@@ -100,8 +98,6 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
   const [status, setStatus] = useState<SentinelStatusData | null>(null);
   const [loading, setLoading] = useState(false);
   const [probingNow, setProbingNow] = useState(false);
-  const [testPushLoading, setTestPushLoading] = useState(false);
-  const [testPushFeedback, setTestPushFeedback] = useState<string | null>(null);
 
   // ===== Byte arrastável: posição, gesto de arrasto e memorização =====
   const asideRef = useRef<HTMLElement | null>(null);
@@ -259,32 +255,6 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
       console.warn("[AdminMascotWidget] Erro ao forçar checagem:", err);
     } finally {
       setProbingNow(false);
-    }
-  };
-
-  // Dispara push de teste para o celular do admin
-  const handleTestPush = async () => {
-    if (testPushLoading) return;
-    setTestPushLoading(true);
-    setTestPushFeedback(null);
-    try {
-      const res = await adminFetch("/api/admin/sentinel/test-push", {
-        method: "POST"
-      });
-      const data = await res.json();
-      if (data.success) {
-        const count = data.sentCount || 0;
-        setTestPushFeedback(count > 0
-          ? `Push enviado para ${count} aparelho(s)!`
-          : "Nenhum aparelho admin registrado ainda.");
-      } else {
-        setTestPushFeedback("Erro ao enviar push de teste.");
-      }
-    } catch {
-      setTestPushFeedback("Falha na requisição de push.");
-    } finally {
-      setTestPushLoading(false);
-      setTimeout(() => setTestPushFeedback(null), 4000);
     }
   };
 
@@ -486,7 +456,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
             {/* Balão de Fala do Mascote */}
             <div className="p-3 rounded-2xl bg-white/5 border border-white/10 flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center shrink-0">
-                <Sparkles className="w-5 h-5 text-orange-400" />
+                <ShieldCheck className={`w-5 h-5 ${mood === "alert" ? "text-red-400" : mood === "warning" ? "text-orange-400" : "text-emerald-400"}`} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-white text-xs leading-relaxed font-medium">
@@ -588,39 +558,18 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
               </div>
             )}
 
-            {/* Ações do Rodapé: Verificar Agora + Push de Teste */}
-            <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+            {/* Ação do Rodapé: Testar Agora (Centralizado com tamanho natural) */}
+            <div className="flex items-center justify-center pt-2 border-t border-white/10">
               <button
                 type="button"
                 onClick={handleCheckNow}
                 disabled={probingNow}
-                className="flex-1 py-2 px-3 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-orange-600/20 active:scale-95"
+                className="w-auto px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shadow-orange-600/20 active:scale-95 cursor-pointer"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${probingNow ? "animate-spin" : ""}`} />
                 <span>{probingNow ? "Testando..." : "Testar Agora"}</span>
               </button>
-
-              <button
-                type="button"
-                onClick={handleTestPush}
-                disabled={testPushLoading}
-                className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white/80 hover:text-white font-semibold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95"
-                title="Envia notificação push teste para o seu celular"
-              >
-                {testPushLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5 text-purple-400" />
-                )}
-                <span>Testar Push</span>
-              </button>
             </div>
-
-            {testPushFeedback && (
-              <p className="text-[11px] text-center font-medium text-orange-400 animate-in fade-in">
-                {testPushFeedback}
-              </p>
-            )}
 
           </div>
         )}
