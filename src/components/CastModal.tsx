@@ -130,26 +130,62 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
     setStatusMsg(null);
     try {
       if (Capacitor.isNativePlatform()) {
+        // App Android nativo: plugin @caprockapps/capacitor-chromecast.
+        // ⚠️ O initialize nativo lê a chave "appId" (pluginCall.getString("appId")),
+        // NÃO "receiverApplicationId" (essa é só do SDK web do Chrome). CC1AD845 é
+        // o Default Media Receiver, que o strings.xml do app impõe ao manifest.
+        setStatusMsg("Iniciando Chromecast...");
         try {
-          await Chromecast.initialize({ receiverApplicationId: 'CC1AD845' });
-          // Compat: versões antigas do plugin expõem `show`; a API atual usa `requestSession`
-          const anyCast = Chromecast as any;
-          if (isLive) {
-            await Chromecast.requestSession();
-            await anyCast.loadMedia({ contentId: streamUrl, contentType: 'application/x-mpegURL', streamType: 'live', autoPlay: true, metadata: { title: title || 'TV ao vivo' } });
-          } else if (typeof anyCast.show === 'function') {
-            await anyCast.show();
-          } else {
-            await Chromecast.requestSession();
-          }
-          onClose();
+          await Chromecast.initialize({ appId: 'CC1AD845' });
+        } catch (initErr: any) {
+          console.error("Chromecast initialize falhou", initErr);
+          setStatusMsg("Não foi possível iniciar o Chromecast neste dispositivo. Verifique se ele tem Google Play Services atualizado.");
           return;
-        } catch (err) {
-          console.error("Chromecast Native Error", err);
         }
+
+        setStatusMsg("Escolha a TV na lista que vai abrir...");
+        const anyCast = Chromecast as any;
+        try {
+          await Chromecast.requestSession();
+        } catch (sessionErr: any) {
+          const reason = String(sessionErr?.message || sessionErr || '');
+          if (reason.includes('cancel')) {
+            // Usuário fechou o seletor — não é erro.
+            setStatusMsg(null);
+            return;
+          }
+          console.error("Chromecast session error", sessionErr);
+          setStatusMsg("Não foi possível conectar na TV. Verifique se a TV e o celular estão na mesma rede Wi-Fi e se a TV tem Chromecast embutido.");
+          return;
+        }
+
+        if (isLive) {
+          // loadMedia é @PluginMethod nativo (Chromecast.java) — o proxy do
+          // Capacitor encaminha qualquer método ao bridge. Assinatura nativa:
+          // contentId, customData, contentType, duration, streamType
+          // (buffered|live), autoPlay, currentTime, metadata, textTrackStyle.
+          setStatusMsg("Iniciando transmissão na TV...");
+          try {
+            await anyCast.loadMedia({
+              contentId: streamUrl,
+              contentType: 'application/x-mpegURL',
+              streamType: 'live',
+              autoPlay: true,
+              metadata: { title: title || 'TV ao vivo' }
+            });
+          } catch (mediaErr: any) {
+            console.error("Chromecast loadMedia error", mediaErr);
+            setStatusMsg("A TV não conseguiu reproduzir este canal. Tente outro servidor do canal ou use o App Externo de Transmissão.");
+            return;
+          }
+        }
+
+        onClose();
+        return;
       }
 
-      // 1. Tentar Remote Playback API nativa nos elementos de vídeo presentes (Chrome Android / iOS Safari AirPlay)
+      // Navegador (web): sem plugin nativo, tenta as APIs do browser.
+      // 1. Remote Playback API (Chrome Android / iOS Safari AirPlay)
       const videos = videoElement ? [videoElement] : document.querySelectorAll('video');
       for (let i = 0; i < videos.length; i++) {
         const video = videos[i] as any;
@@ -169,7 +205,7 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
         }
       }
 
-      // 2. Tentar Presentation API do navegador (Chrome / Edge / TVs)
+      // 2. Presentation API do navegador (Chrome / Edge / TVs)
       if ((navigator as any).presentation && (navigator as any).presentation.defaultRequest) {
         try {
           await (navigator as any).presentation.defaultRequest.start();
@@ -179,6 +215,8 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           if (err?.name === 'NotFoundError' || err?.name === 'AbortError') return;
         }
       }
+
+      setStatusMsg("Nenhum dispositivo de transmissão encontrado pelo navegador. Use o App Externo de Transmissão ou o Código QR.");
     } catch (e) {
       setStatusMsg("Dispositivo de transmissão não localizado. Conecte na mesma rede Wi-Fi da Smart TV.");
     }

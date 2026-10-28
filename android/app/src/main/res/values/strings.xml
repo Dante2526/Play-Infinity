@@ -4,4 +4,15 @@
     <string name="title_activity_main">Play Infinity</string>
     <string name="package_name">com.playinfinity.app</string>
     <string name="custom_url_scheme">com.playinfinity.app</string>
+    <!-- Override do recurso do plugin @caprockapps/capacitor-chromecast.
+         O manifest do plugin registra o OPTIONS_PROVIDER raiz
+         (com.caprockapps.plugins.chromecast.CastOptionsProvider), que lê
+         R.string.app_id para configurar o receiverApplicationId do CastContext.
+         Sem este override, o valor hardcoded do plugin ("A5FA8135", receiver de
+         demonstração do autor, não lançável na TV do usuário) é usado e toda
+         sessão de Cast falha com session_error. CC1AD845 é o Default Media
+         Receiver, presente em qualquer dispositivo com Chromecast built-in —
+         é o receiver correto para streams HLS simples. Recursos do app vencem
+         os da library no merge do AAPT. -->
+    <string name="app_id">CC1AD845</string>
 </resources>
