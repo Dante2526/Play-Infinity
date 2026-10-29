@@ -2080,6 +2080,20 @@ export function VideoPlayerModal({
         event.data.type === "VIP_UNAVAILABLE" ||
         event.data.type === "STREAM_DISCONNECTED"
       ) {
+        // JANELA DE TRANSIÇÃO: durante um reload transparente ou troca de
+        // servidor, o iframe ANTIGO continua montado por um instante e seus
+        // erros de agonia (token expirado, recovery esgotada) ainda chegam
+        // aqui com origem válida — passam pelo isTrustedPlayerEvent porque
+        // ele ainda é o frame atual enquanto o novo não commita. Processar
+        // esses erros preempta o reload transparente em andamento e comuta o
+        // servidor sem necessidade (ex.: streamtape→byse com fonte viva).
+        // Erros REAIS do iframe novo ficam a cargo do watchdog de startup
+        // (providerTimeout/startupClock), que dispara o fallback sozinho.
+        const msSinceTransition = Date.now() - transitionEpochRef.current;
+        if (msSinceTransition < 3000) {
+          console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
+          return;
+        }
         const reason = String(event.data.reason || "");
         if (selectedServerKey === 'srv_mixdrop') {
           if (event.data.mixdropFileId) mixdropRoutingRef.current.track(String(event.data.mixdropFileId));
