@@ -20,6 +20,7 @@ import {
   Sparkles,
   SlidersHorizontal,
   ChevronDown,
+  Layers,
   ShieldCheck,
   ShieldAlert
 } from 'lucide-react';
@@ -121,6 +122,20 @@ export function AdminLiveChannels() {
   const [actionError, setActionError] = useState('');
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
+  // Cards de canal cuja lista de servidores esta EXPANDIDA (mostra TODOS os
+  // servidores + fontes externas). Default: vazio = todos recolhidos (mostra
+  // so os 3 primeiros, comportamento original). A setinha no header do card
+  // alterna; o botao "Expandir Todos" no topo da grade alterna em massa.
+  const [expandedChannels, setExpandedChannels] = useState<Set<string>>(new Set());
+  const toggleChannelExpanded = (channelId: string) => {
+    setExpandedChannels(prev => {
+      const next = new Set(prev);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
+      return next;
+    });
+  };
+
   // Sincronização em tempo real das configurações do Firestore
   useEffect(() => {
     fetchLiveChannelSettings().then(s => {
@@ -171,6 +186,12 @@ export function AdminLiveChannels() {
       return true;
     });
   }, [allChannels, settings, searchQuery, selectedCategory, statusFilter]);
+
+  // Derived: todos os canais filtrados estao expandidos? (para o botao em massa)
+  const allExpanded = filteredChannels.length > 0 && filteredChannels.every(c => expandedChannels.has(c.id));
+  const toggleExpandAll = () => {
+    setExpandedChannels(allExpanded ? new Set() : new Set(filteredChannels.map(c => c.id)));
+  };
 
   // Contadores
   const stats = useMemo(() => {
@@ -471,6 +492,31 @@ export function AdminLiveChannels() {
               </>
             )}
           </button>
+
+          {/* Botão Central: Expandir/Recolher TODOS os servidores de uma vez
+              (junto com os demais botoes de acao). Default: recolhido (so 3
+              primeiros). Clique = expande todos os cards pra mostrar TODOS os
+              servidores + fontes externas, numerados de 1 a N pelo CSS counter. */}
+          {filteredChannels.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleExpandAll}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shrink-0 cursor-pointer min-h-[44px] border ${
+                allExpanded
+                  ? 'bg-orange-600 text-white border-orange-500 shadow-md shadow-orange-600/20'
+                  : 'bg-orange-600/15 hover:bg-orange-600/25 text-orange-300 hover:text-orange-200 border-orange-500/30'
+              }`}
+              title={allExpanded
+                ? 'Recolher todos os cards (mostrar só os 3 primeiros servidores)'
+                : `Expandir todos os ${filteredChannels.length} cards de uma vez (mostrar TODOS os servidores + fontes)`}
+              aria-expanded={allExpanded}
+            >
+              <Layers className="w-4 h-4 shrink-0" />
+              <span className="hidden sm:inline">{allExpanded ? 'Recolher Todos' : 'Expandir Todos'}</span>
+              <span className="sm:hidden">{allExpanded ? 'Recolher' : 'Expandir'}</span>
+              <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${allExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          )}
         </div>
 
         {/* Filtros em Chips */}
@@ -644,62 +690,116 @@ export function AdminLiveChannels() {
                   </div>
                 </div>
 
-                {/* Linha dos Servidores Atuais com Teste Rápido */}
+                {/* Linha dos Servidores Atuais com Teste Rápido
+                    Setinha (chevron) expande/recolhe: default = recolhido,
+                    mostra so os 3 primeiros servidores; expandido = mostra
+                    TODOS os servidores + fontes externas, numerados de 1 a N
+                    pelo CSS counter (server-counter-list). */}
                 <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
-                  <div className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Servidores:
-                  </div>
-                  <div className="server-counter-list space-y-1">
-                    {channel.servers
-                      .filter(srv => !srv.url.startsWith('/api/external-channel?'))
-                      .slice(0, 3)
-                      .map((srv, sIdx) => {
-                        const probe = probeResults[srv.url];
-                        return (
-                          <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
-                            <span className="server-name text-white/80 truncate font-medium flex-1" />
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {probe && (
-                                probe.probing ? (
-                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
-                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                    <span>...</span>
-                                  </span>
-                                ) : (
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                                  }`}>
-                                    {probe.online ? '200 OK' : `OFF (${probe.status})`}
-                                  </span>
-                                )
-                              )}
-                              <button
-                                type="button"
-                                disabled={probe?.probing}
-                                onClick={() => probeSingleServer(srv.url)}
-                                title="Testar sinal deste servidor"
-                                className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
-                              >
-                                {probe?.probing ? '...' : 'Testar'}
-                              </button>
+                  {(() => {
+                    const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+                    const externalNames = [...new Set(channel.servers
+                      .filter(s => s.url.startsWith('/api/external-channel?'))
+                      .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'))
+                    )].filter((name): name is string => !!name);
+                    const totalCount = directServers.length + externalNames.length;
+                    const isExpanded = expandedChannels.has(channel.id);
+                    const visibleCount = isExpanded ? totalCount : Math.min(3, directServers.length);
+                    return (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => toggleChannelExpanded(channel.id)}
+                          className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
+                            isExpanded
+                              ? 'bg-orange-600/15 border-orange-500/30 text-orange-200'
+                              : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
+                          }`}
+                          aria-expanded={isExpanded}
+                          title={isExpanded
+                            ? 'Recolher lista de servidores (mostrar só os 3 primeiros)'
+                            : `Expandir lista (mostrar todos os ${totalCount} servidores + fontes)`}
+                        >
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <Radio className={`w-3 h-3 shrink-0 ${isExpanded ? 'text-orange-400' : 'text-white/40'}`} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+                              Servidores
+                            </span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums shrink-0 ${
+                              isExpanded
+                                ? 'bg-orange-500/30 text-orange-100'
+                                : 'bg-white/10 text-white/60'
+                            }`}>
+                              {totalCount}
+                            </span>
+                          </span>
+                          <span className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium">
+                            <span className="text-white/40 tabular-nums hidden sm:inline">
+                              {isExpanded ? 'todos visíveis' : `${visibleCount}/${totalCount}`}
+                            </span>
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-400' : 'text-white/40'}`} />
+                          </span>
+                        </button>
+                        <div className="server-counter-list space-y-1">
+                          {directServers
+                            .slice(0, isExpanded ? undefined : 3)
+                            .map((srv, sIdx) => {
+                              const probe = probeResults[srv.url];
+                              return (
+                                <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
+                                  <span className="server-name text-white/80 truncate font-medium flex-1" />
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {probe && (
+                                      probe.probing ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                          <span>...</span>
+                                        </span>
+                                      ) : (
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                        }`}>
+                                          {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                                        </span>
+                                      )
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={probe?.probing}
+                                      onClick={() => probeSingleServer(srv.url)}
+                                      title="Testar sinal deste servidor"
+                                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                                    >
+                                      {probe?.probing ? '...' : 'Testar'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          {!isExpanded && directServers.length > 3 && (
+                            <div className="text-[10px] text-white/40 italic pl-1">
+                              + {directServers.length - 3} outros servidores de backup
                             </div>
-                          </div>
-                        );
-                      })}
-                    {channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?')).length > 3 && (
-                      <div className="text-[10px] text-white/40 italic pl-1">
-                        + {channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?')).length - 3} outros servidores de backup
-                      </div>
-                    )}
+                          )}
+                          {isExpanded && directServers.length > 3 && (
+                            <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
+                              ▼ Mostrando todos os {directServers.length} servidores diretos
+                              {externalNames.length > 0 && ` + ${externalNames.length} fontes do provedor`}
+                            </div>
+                          )}
 
-                    {/* Fontes do provedor externo: entram na mesma numeração contínua
-                        (o ponteiro virtual /api/external-channel não é listado acima —
-                        as fontes abaixo já o representam em detalhe). */}
-                    {[...new Set(channel.servers.filter(s => s.url.startsWith('/api/external-channel?'))
-                      .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name')))]
-                      .filter((name): name is string => !!name)
-                      .map(name => <ExternalChannelSources key={name} name={name} />)}
-                  </div>
+                          {/* Fontes do provedor externo: entram na mesma numeração contínua
+                              (o ponteiro virtual /api/external-channel não é listado acima —
+                              as fontes abaixo já o representam em detalhe).
+                              Quando recolhido, ocultamos as fontes externas tb (so mostramos
+                              os 3 primeiros diretos). Quando expandido, mostramos todas. */}
+                          {isExpanded && externalNames.map(name => (
+                            <ExternalChannelSources key={name} name={name} />
+                          ))}
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 {/* Botões de Ação */}
