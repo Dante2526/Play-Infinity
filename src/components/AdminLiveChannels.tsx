@@ -655,7 +655,7 @@ export function AdminLiveChannels() {
                       return (
                         <div key={sIdx} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
                           <span className="text-white/80 truncate font-medium flex-1">
-                            {sIdx + 1}. {srv.name}
+                            {srv.name}
                           </span>
                           <div className="flex items-center gap-1.5 shrink-0">
                             {probe && (
