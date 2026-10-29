@@ -20,17 +20,24 @@
  *
  * Schema: ver scripts/build_vizer_sqlite.py (schema_version=1).
  */
-import path from "node:path";
-import fs from "node:fs";
+import path from "path";
+import fs from "fs";
+import { createRequire } from "node:module";
 
 // ---- Detecção de node:sqlite (Node >= 22.5; estável no 24+) ----
+// Padrão dual-contexto (mesmo do firebaseAdmin.ts / requireAdminAuth.ts):
+//   - ESM (npx tsx dev server): `require` não existe → createRequire(import.meta.url)
+//   - Bundle CJS (esbuild --format=cjs, produção): `require` nativo existe → direto.
+// Antes usava require() cru, que lança ReferenceError em ESM (dev server) e
+// derrubava silenciosamente pro fallback JSON (bug: SQLite morto no dev).
+const _moduleRequire: NodeRequire =
+  typeof require !== "undefined"
+    ? require
+    : createRequire(import.meta.url);
 let _DatabaseSync: any = null;
 let _sqliteOk = false;
 try {
-  // require() em vez de import para permitir try/catch (esbuild --packages=external
-  // mantém este builtin externo; Node 24+ resolve em runtime).
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const mod = require("node:sqlite");
+  const mod = _moduleRequire("node:sqlite");
   if (mod && typeof mod.DatabaseSync === "function") {
     _DatabaseSync = mod.DatabaseSync;
     _sqliteOk = true;

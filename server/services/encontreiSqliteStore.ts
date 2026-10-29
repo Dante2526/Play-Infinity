@@ -27,8 +27,8 @@
  *
  * Schema: ver scripts/build_encontrei_sqlite.py (schema_version=1, idêntico ao vizer).
  */
-import path from "node:path";
-import fs from "node:fs";
+import path from "path";
+import fs from "fs";
 import { createRequire } from "node:module";
 import {
   SqliteMovieIndex,
@@ -37,10 +37,16 @@ import {
 } from "./vizerSqliteStore";
 
 // ---- Detecção de node:sqlite (Node >= 22.5; estável no 24+) ----
-// createRequire(import.meta.url) permite require() em ESM (npx tsx + "type":"module").
-// No bundle CJS de produção (esbuild --format=cjs), import.meta.url é shimmed,
-// então este caminho funciona nos dois contextos.
-const _moduleRequire = createRequire(import.meta.url);
+// Padrão dual-contexto (mesmo do firebaseAdmin.ts / requireAdminAuth.ts):
+//   - ESM (npx tsx dev server): `require` não existe → createRequire(import.meta.url)
+//   - Bundle CJS (esbuild --format=cjs, produção e testes virtuais): `require`
+//     nativo existe → usa direto. NÃO usar createRequire(import.meta.url) cru
+//     em CJS — o esbuild substitui import.meta por {} e createRequire(undefined)
+//     lança TypeError no carregamento do módulo (bug real, pego pelo CI).
+const _moduleRequire: NodeRequire =
+  typeof require !== "undefined"
+    ? require
+    : createRequire(import.meta.url);
 let _DatabaseSync: any = null;
 let _sqliteOk = false;
 let _loadError: string | null = null;
