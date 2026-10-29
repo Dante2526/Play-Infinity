@@ -144,13 +144,8 @@ export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
               <span className="text-white/80 truncate font-medium">
-                Fonte {source.index + 1}: {source.host || 'Direta'}
+                Servidor {source.index + 1}
               </span>
-              {source.quality && (
-                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/10 text-white/70 shrink-0">
-                  {source.quality}
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
