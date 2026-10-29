@@ -26,3 +26,11 @@ data/byse-proxy.key
 # CDNs privados): NUNCA commitar.
 data/external-bases.txt
 data/external-channels.txt
+
+# Catálogos SQLite (.db) — build artifacts gerados a partir dos JSONs pela
+# pipeline scripts/build_*_sqlite.py. Commitar os JSONs (source-of-truth do
+# scrape) mas NUNCA os .db (regenerados em cada ambiente: dev local e VPS).
+data/encontrei-catalog.db
+data/vizer-catalog.db
+public/data/encontrei-catalog.db
+public/data/vizer-catalog.db

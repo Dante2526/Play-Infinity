@@ -35,6 +35,12 @@ import {
   SqliteSeriesSeasonsIndex,
   type VizerSqliteStore,
 } from "../services/vizerSqliteStore";
+import {
+  isEncontreiSqliteAvailable,
+  findEncontreiDb,
+  openEncontreiSqlite,
+  type EncontreiSqliteStore,
+} from "../services/encontreiSqliteStore";
 
 const router = Router();
 
@@ -1126,12 +1132,15 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
   });
 }
 
-// Catálogo encontrei (fallback, mais filmes)
+// Catálogo encontrei (FALLBACK, mais filmes)
+// Quando SQLite disponível (Node 24+), os 3 índices abaixo viram adaptadores
+// que consultam encontrei-catalog.db (READ-ONLY) — ver tryLoadEncontreiSqlite().
 let _encontreiCatalog: any = null;
-let _encontreiMovieIndex: Map<number, any> = new Map();
-let _encontreiEpisodeIndex: Map<string, any> = new Map(); // key: "tmdbId:season:episode"
-let _encontreiSeriesSeasonsIndex: Map<number, number[]> = new Map();
+let _encontreiMovieIndex: Map<number, any> | SqliteMovieIndex = new Map();
+let _encontreiEpisodeIndex: Map<string, any> | SqliteEpisodeIndex = new Map(); // key: "tmdbId:season:episode"
+let _encontreiSeriesSeasonsIndex: Map<number, number[]> | SqliteSeriesSeasonsIndex = new Map();
 let _encontreiLastMtime = 0;
+let _encontreiSqliteStore: EncontreiSqliteStore | null = null;
 
 // Catálogo vizer (PRIMÁRIO, mais episódios)
 // Quando SQLite disponível (Node 24+), os 3 índices abaixo viram adaptadores
@@ -1236,8 +1245,8 @@ function loadCatalogs() {
   // Vizer: tenta SQLite primeiro (Node 24+, sem custo de RAM); se indisponível,
   // cai no JSON existente. Se antes estava em SQLite e o .db sumiu/quebrou,
   // reseta os índices pra Map fresco antes do caminho JSON.
-  const sqliteOk = tryLoadVizerSqlite();
-  if (!sqliteOk) {
+  const vizerSqliteOk = tryLoadVizerSqlite();
+  if (!vizerSqliteOk) {
     if (!(_vizerMovieIndex instanceof Map)) {
       _vizerMovieIndex = new Map();
       _vizerEpisodeIndex = new Map();
@@ -1253,16 +1262,26 @@ function loadCatalogs() {
       "vizer-lookup",
     );
   }
-  // Carrega encontrei (fallback) segundo
-  tryLoadCatalog(
-    "encontrei-catalog.json",
-    { get value() { return _encontreiCatalog; }, set value(v) { _encontreiCatalog = v; } },
-    _encontreiMovieIndex,
-    _encontreiEpisodeIndex,
-    _encontreiSeriesSeasonsIndex,
-    { get value() { return _encontreiLastMtime; }, set value(v) { _encontreiLastMtime = v; } },
-    "encontrei-lookup",
-  );
+  // Encontrei: mesma mecânica — SQLite primeiro (Node 24+, sem custo de RAM),
+  // fallback JSON. Se antes estava em SQLite e o .db sumiu/quebrou, reseta os
+  // índices pra Map fresco antes do caminho JSON.
+  const encontreiSqliteOk = tryLoadEncontreiSqlite();
+  if (!encontreiSqliteOk) {
+    if (!(_encontreiMovieIndex instanceof Map)) {
+      _encontreiMovieIndex = new Map();
+      _encontreiEpisodeIndex = new Map();
+      _encontreiSeriesSeasonsIndex = new Map();
+    }
+    tryLoadCatalog(
+      "encontrei-catalog.json",
+      { get value() { return _encontreiCatalog; }, set value(v) { _encontreiCatalog = v; } },
+      _encontreiMovieIndex as Map<number, any>,
+      _encontreiEpisodeIndex as Map<string, any>,
+      _encontreiSeriesSeasonsIndex as Map<number, number[]>,
+      { get value() { return _encontreiLastMtime; }, set value(v) { _encontreiLastMtime = v; } },
+      "encontrei-lookup",
+    );
+  }
 
   // Aplica patches de catálogo (conteúdo novo demais para esperar o snapshot)
   applyCatalogPatches();
@@ -1321,6 +1340,64 @@ function tryLoadVizerSqlite(): boolean {
   console.log(
     `[vizer-lookup] Catálogo via SQLite (content_version=${cv}, db=${path.basename(dbPath)}): ` +
       `${_vizerMovieIndex.size} filmes, ${_vizerEpisodeIndex.size} episódios, ${_vizerSeriesSeasonsIndex.size} séries`,
+  );
+  return true;
+}
+
+/**
+ * Carrega o catálogo Encontrei via SQLite (encontrei-catalog.db), aberto READ-ONLY.
+ * Substitui os 3 Maps por adaptadores que consultam o DB; mutações em runtime
+ * ficam em overrides/tombstones em memória (mesma semântica dos Maps: perdem-se
+ * no restart). Recarrega quando o mtime do .db muda (regeneração via pipeline).
+ *
+ * Retorna true se o catálogo está ativo via SQLite, false se deve cair pro JSON.
+ */
+function tryLoadEncontreiSqlite(): boolean {
+  if (!isEncontreiSqliteAvailable()) return false;
+  const dbPath = findEncontreiDb();
+  if (!dbPath) return false;
+
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(dbPath);
+  } catch {
+    return false;
+  }
+  const currentMtime = stat.mtimeMs;
+
+  // Já carregado e mesmo mtime: mantém (idempotente, igual ao caminho JSON)
+  if (_encontreiSqliteStore && currentMtime <= _encontreiLastMtime) {
+    return true;
+  }
+
+  // (Re)abre: fecha o anterior, instancia novos adaptadores
+  if (_encontreiSqliteStore) {
+    _encontreiSqliteStore.close();
+    _encontreiSqliteStore = null;
+  }
+
+  const store = openEncontreiSqlite(dbPath);
+  if (!store) return false;
+
+  _encontreiSqliteStore = store;
+  _encontreiMovieIndex = store.movieIndex;
+  _encontreiEpisodeIndex = store.episodeIndex;
+  _encontreiSeriesSeasonsIndex = store.seriesSeasonsIndex;
+  _encontreiLastMtime = currentMtime;
+  _encontreiCatalog = null; // Sem catálogo bruto em memória (RAM poupada)
+
+  // Hidrata o _tmdbToSerieIdMap compartilhado (NÃO sobrescreve o que vizer já
+  // populou — mesma semântica do tryLoadCatalog, que faz `if (!has)` antes de setar)
+  store.hydrateSerieIds(_tmdbToSerieIdMap);
+
+  // Invalida cache de temporadas verificadas (catálogo mudou)
+  _verifiedSeasonsCache.clear();
+
+  const src = store.meta("source") || "?";
+  const sa = store.meta("scraped_at") || "?";
+  console.log(
+    `[encontrei-lookup] Catálogo via SQLite (source=${src}, scraped_at=${sa}, db=${path.basename(dbPath)}): ` +
+      `${_encontreiMovieIndex.size} filmes, ${_encontreiEpisodeIndex.size} episódios, ${_encontreiSeriesSeasonsIndex.size} séries`,
   );
   return true;
 }
@@ -1398,9 +1475,15 @@ function applyCatalogPatches() {
  */
 export function getEncontreiSeasonEpisodes(tmdbId: number, season: number): number[] {
   loadCatalogs();
+  // Caminho SQLite: SELECT WHERE tmdb_id=? AND season=? ORDER BY episode
+  // (inclui overrides desta temporada — patches Carrie, etc.)
+  if (_encontreiEpisodeIndex instanceof SqliteEpisodeIndex) {
+    return _encontreiEpisodeIndex.seasonEpisodes(tmdbId, season);
+  }
+  // Caminho JSON: itera o Map com prefix match
   const prefix = `${tmdbId}:${season}:`;
   const eps: number[] = [];
-  for (const [key, ep] of _encontreiEpisodeIndex) {
+  for (const [key, ep] of _encontreiEpisodeIndex as Map<string, any>) {
     if (key.startsWith(prefix) && typeof ep.episode === "number") {
       eps.push(ep.episode);
     }

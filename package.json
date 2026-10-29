@@ -12,7 +12,8 @@
     "start": "node --max-old-space-size=384 dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "build:sqlite": "python3 scripts/build_encontrei_sqlite.py"
   },
   "dependencies": {
     "@capacitor-firebase/messaging": "^8.5.2",
