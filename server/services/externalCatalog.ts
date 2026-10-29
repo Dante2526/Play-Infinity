@@ -37,6 +37,7 @@ import fs from "fs";
 import path from "path";
 import { isPrivateOrLocalHost } from "../utils/helpers";
 import { INITIAL_LIVE_CHANNELS, type LiveChannel } from '../../src/data/liveChannels';
+import { BLOCKED_EXTERNAL_CHANNELS } from './blockedLiveChannels';
 
 // ---------------------------------------------------------------------------
 // Caminhos — EXTERNAL_CATALOG_DIR na VPS aponta para o deploy real; em dev o
@@ -742,6 +743,10 @@ export function getPublicLiveChannels(): LiveChannel[] {
   for (const channel of loadExternalChannels()) {
     if (!validateExternalChannelName(channel.name).ok) continue;
     const normalized = normalizeChannelName(channel.name);
+    // Canais bloqueados por ausência de fonte viva (probe 2 rodadas — ver
+    // blockedLiveChannels.ts). O catálogo bruto permanece na VPS; apagar a
+    // linha da blocklist restaura o canal.
+    if (BLOCKED_EXTERNAL_CHANNELS.has(normalized)) continue;
     if (represented.has(normalized)) continue;
     represented.add(normalized);
     // Preserve the existing product restriction on adult channels.

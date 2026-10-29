@@ -257,48 +257,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     ]
   },
   {
-    id: 'n-sports',
-    name: 'N Sports',
-    category: 'Esportes',
-    logo: 'https://i.imgur.com/7QnJojr.png',
-    currentProgram: 'Vôlei, Futsal, Basquete e Ligas Nacionais',
-    quality: '720p',
-    description: 'Canal focado no esporte olímpico e universitário brasileiro.',
-    servers: [
-      {
-        name: 'Servidor 1',
-        url: '/api/external-channel?name=N%20SPORTS',
-        isProxy: false
-      }
-    ]
-  },
-  {
-    id: 'red-bull-tv',
-    name: 'Red Bull TV Esportes',
-    category: 'Esportes',
-    logo: 'https://images.pluto.tv/channels/5e7cb84a172a0f0007da69e4/colorLogoPNG.png',
-    currentProgram: 'Esportes Radicais, Automobilismo e Aventura',
-    quality: '720p',
-    description: 'Adrenalina pura, eventos ao vivo de BMX, skate, Fórmula 1 e surfe.',
-    servers: [
-      {
-        name: 'Servidor 1',
-        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 2',
-        url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3',
-        url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
-        isProxy: true
-      }
-    ]
-  },
-  {
     id: 'pluto-esportes',
     name: 'Pluto TV Esportes',
     category: 'Esportes',
