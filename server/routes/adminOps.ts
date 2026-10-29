@@ -977,11 +977,17 @@ adminOpsRouter.get("/sentinel/status", (_req: Request, res: Response) => {
 /**
  * POST /api/admin/sentinel/check-now
  * Força uma verificação imediata de todos os canais, bugs e serviços.
+ * Checagem MANUAL ("Testar Agora" do painel): atualiza o painel na hora, mas
+ * NÃO conta como rodada para o ciclo de 20 min (a dupla verificação só vale
+ * entre baterias automáticas) e NÃO dispara push — abrir ou recarregar a
+ * página do painel nunca gera verificação nenhuma, apenas leitura de status.
  */
 adminOpsRouter.post("/sentinel/check-now", async (req: Request, res: Response) => {
   try {
     const forcePush = req.body?.forcePush === true;
-    const status = await runSentinelCheck(forcePush);
+    // manual=true: painel fresco sem interferir no ciclo; push só com
+    // forcePush explícito (uso programático via API, nunca pela UI).
+    const status = await runSentinelCheck(forcePush, !forcePush, true);
     res.json({ success: true, status });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || String(err) });

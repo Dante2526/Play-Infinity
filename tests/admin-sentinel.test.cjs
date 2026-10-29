@@ -57,7 +57,7 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
 
     const t0 = 1000000;
     assert.strictEqual(shouldNotify("channel:premiere-1", t0), true, "Primeira notificação deve disparar");
-    assert.strictEqual(shouldNotify("channel:premiere-1", t0 + 1000 * 60 * 15), false, "Após 15 min deve bloquear anti-spam");
+    assert.strictEqual(shouldNotify("channel:premiere-1", t0 + 1000 * 60 * 20), false, "Após 20 min (próxima bateria) deve bloquear anti-spam");
     assert.strictEqual(shouldNotify("channel:premiere-1", t0 + 1000 * 60 * 60), false, "Após 1h deve bloquear anti-spam");
     assert.strictEqual(shouldNotify("channel:premiere-1", t0 + 1000 * 60 * 121 * 1000), true, "Após 2h1min deve liberar novo push");
     assert.strictEqual(shouldNotify("channel:premiere-1", t0 + 1000 * 60 * 122 * 1000, true), true, "Com forcePush deve liberar imediatamente");
@@ -158,5 +158,73 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     const content = fs.readFileSync(path.join(__dirname, "..", "server", "services", "adminSentinel.ts"), "utf-8");
     assert.match(content, /channelAlerts.length > 3/, "Deve detectar queda em massa");
     assert.match(content, /mass_outage/, "Deve criar notificação resumo");
+  });
+
+  test("14. Bateria de verificação a cada 20 minutos (aumentado de 15)", () => {
+    const content = fs.readFileSync(path.join(__dirname, "..", "server", "services", "adminSentinel.ts"), "utf-8");
+    assert.match(content, /CHECK_INTERVAL_MS = 20 \* 60 \* 1000/, "Intervalo entre baterias deve ser de 20 minutos");
+    assert.strictEqual(/CHECK_INTERVAL_MS = 15/.test(content), false, "Intervalo antigo de 15 minutos deve ter sido removido");
+    // A dupla verificação continua exigindo 2 baterias com erro (20 min entre elas)
+    assert.match(content, /CHANNEL_FAILS_BEFORE_PUSH = 2/, "Confirmação de queda continua exigindo 2 rodadas seguidas");
+  });
+
+  test("15. Abrir/recarregar/fechar o painel NÃO dispara verificação e NÃO reseta o ciclo", () => {
+    const opsFile = path.join(__dirname, "..", "server", "routes", "adminOps.ts");
+    const ops = fs.readFileSync(opsFile, "utf-8");
+
+    // Handler da rota de status é SOMENTE LEITURA: nunca chama runSentinelCheck
+    const statusBlock = ops.slice(ops.indexOf('"/sentinel/status"'), ops.indexOf('"/sentinel/check-now"'));
+    assert.match(statusBlock, /getSentinelStatus/, "GET /sentinel/status deve ler o status");
+    assert.strictEqual(
+      statusBlock.includes("runSentinelCheck"),
+      false,
+      "GET /sentinel/status deve ser leitura pura (sem rodar bateria)"
+    );
+
+    // Widget: no mount e no polling de 30s consulta apenas o status; check-now
+    // só existe no handler do botão manual "Testar Agora"
+    const widgetFile = path.join(__dirname, "..", "src", "components", "AdminMascotWidget.tsx");
+    const widget = fs.readFileSync(widgetFile, "utf-8");
+    // Bloco do useEffect de mount/polling (o que contém o interval de 30s)
+    const pollStart = widget.lastIndexOf("useEffect(() => {", widget.indexOf("30000"));
+    const mountBlock = widget.slice(pollStart, widget.indexOf("30000"));
+    assert.strictEqual(
+      mountBlock.includes("check-now"),
+      false,
+      "Carregar a página NÃO deve chamar check-now (nenhuma verificação no load)"
+    );
+    assert.match(mountBlock, /fetchStatus/, "Mount/polling deve apenas ler o status (leitura pura)");
+    const checkNowCalls = (widget.match(/check-now/g) || []).length;
+    assert.strictEqual(checkNowCalls, 1, "check-now deve existir apenas no botão manual Testar Agora");
+    // A única ocorrência de check-now está dentro do handler do botão manual
+    const hIdx = widget.indexOf("const handleCheckNow");
+    const cnIdx = widget.indexOf("check-now");
+    assert.ok(
+      hIdx > -1 && cnIdx > hIdx && cnIdx < hIdx + 1500,
+      "check-now deve estar dentro de handleCheckNow (botão manual), não no load"
+    );
+
+    // A checagem manual é silenciosa: não conta rodada nem dispara push
+    assert.match(ops, /runSentinelCheck\(forcePush,\s*!forcePush,\s*true\)/, "check-now deve rodar em modo manual sem push");
+    const sentinel = fs.readFileSync(path.join(__dirname, "..", "server", "services", "adminSentinel.ts"), "utf-8");
+    assert.match(sentinel, /manual[^]{0,600}não conta para o ciclo de 20 min/s, "Bateria manual não deve contar para o ciclo");
+  });
+
+  test("16. Ciclo persistido no Firestore: sobrevive a restarts e mantém cluster coerente", () => {
+    const sentinelFile = path.join(__dirname, "..", "server", "services", "adminSentinel.ts");
+    const content = fs.readFileSync(sentinelFile, "utf-8");
+
+    assert.match(content, /async function persistCycleState/, "Deve exportar persistência do ciclo");
+    assert.match(content, /async function restoreCycleState/, "Deve exportar restauração do ciclo");
+    assert.match(content, /sentinel_cycle/, "Deve usar o doc system_settings/sentinel_cycle");
+
+    // Restaura no início da bateria (antes de qualquer decisão de push)
+    assert.match(content, /await restoreCycleState\(\)/, "Toda bateria deve restaurar o ciclo antes de decidir push");
+    // Persiste no fim (fire-and-forget, sem derrubar a bateria em caso de falha)
+    assert.match(content, /persistCycleState\(\)\.catch/, "Fim da bateria deve persistir o ciclo em fire-and-forget");
+    // Mescla conservadora entre instâncias/restarts: maior streak e anti-spam mais recente
+    assert.match(content, /channelFails/, "Streaks de falha devem ser persistidos");
+    assert.match(content, /notifiedAt/, "Histórico anti-spam deve ser persistido");
+    assert.match(content, /lastBatteryAt/, "Hora da última bateria deve ser persistida");
   });
 });
