@@ -15,10 +15,8 @@ import { Cast,
   Tv, 
   ChevronLeft, 
   ChevronRight, 
-  ChevronDown, 
   Settings, 
   Radio, 
-  Layers,
   ListFilter,
   AlertCircle
 } from 'lucide-react';
@@ -1169,20 +1167,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Se o painel de servidores estiver aberto, fecha ele primeiro (não fecha o player)
-        if (showServerMenu) {
-          e.stopPropagation();
-          setShowServerMenu(false);
-          return;
-        }
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
         } else {
           onClose();
         }
       } else if (e.key === ' ' || e.key === 'k') {
-        // Não pausa o vídeo se o painel de servidores estiver aberto (estamos navegando)
-        if (showServerMenu) return;
         e.preventDefault();
         togglePlay();
       } else if (e.key === 'm') {
@@ -1203,7 +1193,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentIndex, allChannels, isPlaying, isMuted, volume, showServerMenu]);
+  }, [currentIndex, allChannels, isPlaying, isMuted, volume]);
 
   // Esconder controles após inatividade
   const handleMouseMove = () => {
@@ -1633,7 +1623,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               <RotateCcw className="w-4 h-4" />
             </button>
 
-            {/* Seletor Manual de Servidores - compacto com setinha expansível */}
+            {/* Seletor Manual de Servidores */}
             {channel.servers && channel.servers.length > 1 && (
               <div className="relative shrink-0">
                 <button
@@ -1643,41 +1633,39 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                     showServerMenu ? 'bg-orange-600 text-white border-orange-500' : 'bg-white/5 hover:bg-white/10 text-neutral-300 border-white/5'
                   }`}
                   title="Escolher Servidor de Transmissão"
-                  aria-expanded={showServerMenu}
-                  aria-haspopup="listbox"
                 >
                   <Radio className="w-3.5 h-3.5 text-orange-400 shrink-0" />
-                  <span className="hidden md:inline">Servidor</span>
-                  <span className="text-orange-400 tabular-nums">{selectedServerIndex + 1}</span>
-                  <span className="text-neutral-500 tabular-nums">/{channel.servers.length}</span>
-                  <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${showServerMenu ? 'rotate-180 text-white' : 'text-neutral-400'}`} />
+                  <span className="hidden md:inline">Servidor: </span>
+                  <span className="text-orange-400 max-w-[70px] sm:max-w-[110px] truncate">{currentServer?.name || `S${selectedServerIndex + 1}`}</span>
                 </button>
+                {showServerMenu && (
+                  <div className="absolute bottom-11 left-0 z-50 w-56 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1 border-b border-white/10">
+                      Opções de Servidor
+                    </div>
+                    {channel.servers.map((s, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          setSelectedServerIndex(idx);
+                          setShowServerMenu(false);
+                        }}
+                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                          selectedServerIndex === idx
+                            ? 'bg-orange-600 text-white'
+                            : 'hover:bg-white/10 text-neutral-300 hover:text-white'
+                        }`}
+                      >
+                        <span className="truncate">{s.name || `Servidor ${idx + 1}`}</span>
+                        {selectedServerIndex === idx && <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-1.5" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
-
-          {/* Botão Central: Expandir TODOS os servidores de uma vez (junto com os demais) */}
-          {channel.servers && channel.servers.length > 1 && (
-            <button
-              type="button"
-              onClick={() => setShowServerMenu(prev => !prev)}
-              className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer border shrink-0 ${
-                showServerMenu
-                  ? 'bg-orange-600 text-white border-orange-500 shadow-lg shadow-orange-600/30'
-                  : 'bg-orange-600/15 hover:bg-orange-600/25 text-orange-300 hover:text-orange-200 border-orange-500/30'
-              }`}
-              title={`Ver todos os ${channel.servers.length} servidores disponíveis de uma vez`}
-              aria-expanded={showServerMenu}
-              aria-haspopup="listbox"
-            >
-              <Layers className="w-4 h-4 shrink-0" />
-              <span className="hidden sm:inline">Ver Servidores</span>
-              <span className="px-1.5 py-0.5 rounded-full bg-orange-500/30 text-orange-100 text-[10px] font-black tabular-nums shrink-0">
-                {channel.servers.length}
-              </span>
-              <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${showServerMenu ? 'rotate-180' : ''}`} />
-            </button>
-          )}
 
           {/* Lado Direito: PiP, Fullscreen */}
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
@@ -1708,120 +1696,6 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           </div>
         </div>
       </div>
-      )}
-      {/* PAINEL EXPANSÍVEL DE SERVIDORES - mostra TODOS de uma vez em grade responsiva */}
-      {!isMiniPlayer && !isNativePiP && showServerMenu && channel.servers && channel.servers.length > 1 && (
-        <div
-          className="absolute inset-0 z-40 flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto p-3 sm:p-4 animate-in fade-in duration-200"
-          onClick={() => setShowServerMenu(false)}
-        >
-          <div
-            role="listbox"
-            aria-label="Lista de servidores disponíveis"
-            className="bg-neutral-900/95 border border-orange-500/30 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Cabeçalho do Painel */}
-            <div className="flex items-center justify-between gap-3 px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/10 bg-black/40 shrink-0">
-              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
-                <div className="p-1.5 rounded-lg bg-orange-600/20 border border-orange-500/30 shrink-0">
-                  <Layers className="w-4 h-4 text-orange-500" />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-white font-bold text-sm sm:text-base leading-tight truncate">
-                    Servidores Disponíveis
-                  </h3>
-                  <p className="text-[10px] sm:text-[11px] text-neutral-400 leading-tight mt-0.5">
-                    <span className="text-orange-400 font-bold tabular-nums">{channel.servers.length}</span>
-                    {' '}servidores • clique para trocar de fonte
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowServerMenu(false)}
-                className="p-2 rounded-lg hover:bg-white/10 text-neutral-400 hover:text-white transition-all min-w-[36px] min-h-[36px] flex items-center justify-center shrink-0"
-                title="Fechar lista de servidores"
-                aria-label="Fechar lista de servidores"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </button>
-            </div>
-
-            {/* Grade responsiva: mostra TODOS os servidores de uma vez, sem rolagem excessiva */}
-            <div className="overflow-y-auto p-2.5 sm:p-3 flex-1 custom-scrollbar">
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 sm:gap-2.5">
-                {channel.servers.map((s, idx) => {
-                  const isCurrent = selectedServerIndex === idx;
-                  const hasFailed = failedServersRef.current.has(idx);
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      role="option"
-                      aria-selected={isCurrent}
-                      onClick={() => {
-                        setSelectedServerIndex(idx);
-                        setShowServerMenu(false);
-                      }}
-                      className={`relative flex items-center gap-2 p-2 sm:p-2.5 rounded-xl text-left transition-all cursor-pointer border ${
-                        isCurrent
-                          ? 'bg-orange-600 border-orange-500 text-white shadow-lg shadow-orange-600/30'
-                          : hasFailed
-                          ? 'bg-red-500/5 border-red-500/25 text-neutral-500 hover:bg-red-500/10 hover:border-red-500/40'
-                          : 'bg-white/5 border-white/10 text-neutral-300 hover:bg-white/10 hover:border-white/25'
-                      }`}
-                      title={s.name || `Servidor ${idx + 1}`}
-                    >
-                      {/* Badge de Numeração (1, 2, 3... até 22+) — facilita contar todos de uma vez */}
-                      <span
-                        className={`shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center text-[10px] sm:text-[11px] font-black tabular-nums ${
-                          isCurrent
-                            ? 'bg-white/25 text-white'
-                            : hasFailed
-                            ? 'bg-red-500/15 text-red-400 border border-red-500/20'
-                            : 'bg-black/50 text-orange-400 border border-white/10'
-                        }`}
-                      >
-                        {idx + 1}
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-[11px] sm:text-xs font-semibold truncate leading-tight">
-                          {s.name || `Servidor ${idx + 1}`}
-                        </span>
-                        {isCurrent ? (
-                          <span className="block text-[9px] sm:text-[10px] text-orange-100 leading-tight mt-0.5 font-medium">
-                            ● Ativo agora
-                          </span>
-                        ) : hasFailed ? (
-                          <span className="block text-[9px] sm:text-[10px] text-red-400 leading-tight mt-0.5 font-medium">
-                            ✕ Falhou nesta sessão
-                          </span>
-                        ) : (
-                          <span className="block text-[9px] sm:text-[10px] text-neutral-500 leading-tight mt-0.5">
-                            Toque para ativar
-                          </span>
-                        )}
-                      </span>
-                      {isCurrent && (
-                        <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-white animate-pulse shrink-0" />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Rodapé informativo */}
-            <div className="px-3 sm:px-4 py-2 border-t border-white/10 bg-black/40 text-[10px] sm:text-[11px] text-neutral-400 flex items-center justify-between gap-2 shrink-0">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-orange-500 shrink-0" />
-                Servidor atual: <span className="text-orange-400 font-semibold truncate max-w-[160px] sm:max-w-none">{currentServer?.name || `Servidor ${selectedServerIndex + 1}`}</span>
-              </span>
-              <span className="hidden sm:inline text-neutral-500">Esc fecha • clique fora para fechar</span>
-            </div>
-          </div>
-        </div>
       )}
       {showCastModal && !isEmbedStream && !isDashStream && (
         <CastModal onClose={() => setShowCastModal(false)} title={channel.name}
