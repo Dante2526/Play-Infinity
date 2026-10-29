@@ -7,6 +7,9 @@ import {
   parseTrialTimestamp,
   NO_TRIAL,
   TRIAL_DURATION_MS,
+  readCachedSubscription,
+  writeCachedSubscription,
+  clearCachedSubscription,
   type TrialStatus,
 } from "../utils/subscriptionStatus";
 
@@ -41,20 +44,32 @@ export async function startTrial(): Promise<boolean> {
 
 export function useSubscription() {
   const isDev = isAiStudioOrDevEnvironment();
-  const [isPremium, setIsPremium] = useState<boolean>(isDev);
+  // Anti-flash de cobrança: lê o cache síncrono do localStorage ANTES do
+  // primeiro render. Se o usuário era Premium/Vitalício na sessão anterior,
+  // isPremium já nasce true — o paywall nunca pisca enquanto o Auth/Firestore
+  // resolvem a sessão (loading=true). O onSnapshot corrige em segundos.
+  const initialCache = readCachedSubscription();
+  const [isPremium, setIsPremium] = useState<boolean>(isDev || (initialCache?.isPremium ?? false));
   const [trial, setTrial] = useState<TrialStatus>(NO_TRIAL);
-  const [isPlus, setIsPlus] = useState<boolean>(false);
-  const [isVitalicio, setIsVitalicio] = useState<boolean>(false);
+  const [isPlus, setIsPlus] = useState<boolean>(initialCache?.isPlus ?? false);
+  const [isVitalicio, setIsVitalicio] = useState<boolean>(initialCache?.isVitalicio ?? false);
   const [loading, setLoading] = useState<boolean>(!isDev);
 
   useEffect(() => {
     const expiryTimerRef: { current: number | null } = { current: null };
     const dataRef: { current: any | null } = { current: null };
+    // E-mail do usuário logado (para o bypass administrativo no deriveStatus).
+    // Ref em vez de estado: applyStatus roda dentro de callbacks/timers.
+    const emailRef: { current: string | null } = { current: null };
     let disposed = false;
     // Invalida retries pendentes quando a autenticação muda (logout/login rápido):
     // sem isso, um retry atrasado de um usuário podia sobrescrever o status premium
     // recém-carregado de outro.
     let authGeneration = 0;
+    // Se já vimos um usuário nesta vida da página: distingue signout REAL do
+    // estado inicial null do onAuthStateChanged (que dispara antes da sessão
+    // persistida restaurar). O cache só é limpo no primeiro caso.
+    let sawSignedInUser = false;
 
     const clearExpiryTimer = () => {
       if (expiryTimerRef.current !== null) {
@@ -97,11 +112,20 @@ export function useSubscription() {
     const applyStatus = (data: any) => {
       if (disposed) return;
       dataRef.current = data;
-      const status = deriveStatus(data);
+      // Passa o e-mail: administradores recebem isPremium/isVitalicio direto,
+      // sem verificação de expiração (prioridade absoluta anti-cobrança-fantasma).
+      const status = deriveStatus(data, emailRef.current);
       setIsPremium(status.isPremium);
       setTrial(status.trial);
       setIsPlus(status.isPlus);
       setIsVitalicio(status.isVitalicio);
+      // Espelha o status confirmado pelo Firestore no cache local: é isso que
+      // faz o próximo reload nascer com isPremium correto (sem flash).
+      writeCachedSubscription({
+        isPremium: status.isPremium,
+        isPlus: status.isPlus,
+        isVitalicio: status.isVitalicio,
+      });
       scheduleExpiryCheck(data);
     };
 
@@ -109,6 +133,8 @@ export function useSubscription() {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       const gen = ++authGeneration;
       if (user) {
+        sawSignedInUser = true;
+        emailRef.current = user.email || null;
         let activeUnsubscribeSnap: (() => void) | null = null;
 
         const attachUserSubscriptionListener = (targetUser: any, retryAttempt = 0) => {
@@ -233,6 +259,15 @@ export function useSubscription() {
           }
         };
       } else {
+        // Só limpa o cache quando um usuário REALMENTE saiu (vimos um logado
+        // antes nesta página). O callback null inicial do boot não limpa —
+        // senão o cache anti-flash seria apagado em todo reload antes da
+        // sessão persistida do Firebase Auth restaurar, anulando o fix.
+        if (sawSignedInUser) {
+          clearCachedSubscription();
+        }
+        emailRef.current = null;
+        sawSignedInUser = false;
         clearExpiryTimer();
         setIsPremium(isDev);
         setTrial(NO_TRIAL);

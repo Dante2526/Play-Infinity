@@ -78,6 +78,7 @@ export function clearLocalUserData() {
   // deletado filtrando o histórico baixado da nuvem da conta nova).
   const keysToRemove = [
     "playinfinity_logged_in",
+    "playinfinity_cached_subscription",
     "playinfinity_playback_history",
     "playinfinity_deleted_history",
     "playinfinity_favorites",

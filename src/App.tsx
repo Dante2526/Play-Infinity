@@ -630,10 +630,15 @@ export default function App() {
     isAnime?: boolean,
     serverKey?: string
   ) => {
-    if (!isPremium && !isTrialActive && !isDevEnvironment) {
+    if (!subscriptionLoading && !isPremium && !isTrialActive && !isDevEnvironment) {
       setIsPaywallOpen(true);
       return;
     }
+    // Enquanto subscriptionLoading===true (Auth/Firestore ainda resolvendo a
+    // sessão após reload/deploy) a reprodução segue otimista: quem é Premium
+    // (cache local ou bypass admin/vitalício) nunca vê a cobrança fantasma.
+    // Se o usuário NÃO for premium de fato, o useEffect de expiração acima
+    // fecha o player e abre o paywall assim que loading termina.
 
     // Quando autoFullscreen for solicitado (ex: ao clicar em Continue Assistindo),
     // aciona a tela cheia nativa imediatamente no clique do usuário para ocultar as barras do navegador

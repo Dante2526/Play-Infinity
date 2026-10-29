@@ -38,15 +38,19 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     ccv: ''
   });
 
-  const { isPremium, trial } = useSubscription();
+  const { isPremium, trial, loading: subscriptionLoading } = useSubscription();
   const canUseTrial = trial.canUseTrial && !!auth.currentUser;
 
+  // Anti "cobrança fantasma": só confirma/re-carrega quando o status saiu do
+  // loading (Firestore já respondeu). Se o modal abrir durante o boot da
+  // sessão (loading=true) com isPremium ainda falso, NADA acontece aqui —
+  // evita o alert + reload disparando em falso para clientes em dia.
   useEffect(() => {
-    if (isOpen && isPremium) {
+    if (isOpen && !subscriptionLoading && isPremium) {
       alert("Pagamento reconhecido automaticamente pelo sistema! Seu Premium foi liberado.");
       window.location.reload();
     }
-  }, [isOpen, isPremium]);
+  }, [isOpen, isPremium, subscriptionLoading]);
 
   useEffect(() => {
     if (isOpen && auth.currentUser) {
