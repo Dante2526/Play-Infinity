@@ -298,7 +298,7 @@ export function AdminLiveChannels() {
   // Definir como Servidor Titular (Substitui o Servidor 1 em 1 clique)
   const handleSetPrimaryStream = (stream: StreamSearchResult) => {
     const newServer: LiveChannelServer = {
-      name: `Servidor 1 (${stream.name})`,
+      name: 'Servidor 1',
       url: `/api/iptv/${stream.streamId}`,
       isProxy: false
     };
@@ -315,7 +315,7 @@ export function AdminLiveChannels() {
   // Adicionar stream do provedor como Servidor de Backup
   const handleAddStreamFromServer = (stream: StreamSearchResult) => {
     const newServer: LiveChannelServer = {
-      name: `Servidor Backup (${stream.name})`,
+      name: `Servidor ${editServers.length + 1}`,
       url: `/api/iptv/${stream.streamId}`,
       isProxy: false
     };
@@ -900,7 +900,7 @@ export function AdminLiveChannels() {
                     onClick={() => {
                       setEditServers(prev => [
                         ...prev,
-                        { name: `Servidor ${prev.length + 1} (Custom)`, url: '', isProxy: false }
+                        { name: `Servidor ${prev.length + 1}`, url: '', isProxy: false }
                       ]);
                     }}
                     className="text-[10px] text-orange-400 hover:text-orange-300 font-bold flex items-center gap-1 cursor-pointer"
@@ -917,7 +917,7 @@ export function AdminLiveChannels() {
                       <div key={idx} className="p-2.5 rounded-xl bg-white/5 border border-white/5 space-y-2">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
-                            {idx === 0 ? '★ Servidor 1 (Titular / Primário)' : `Servidor ${idx + 1} (Backup)`}
+                            {idx === 0 ? '★ Servidor 1' : `Servidor ${idx + 1}`}
                           </span>
                           <div className="flex items-center gap-1">
                             {idx > 0 && (

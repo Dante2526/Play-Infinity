@@ -27,7 +27,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões completas e exclusivas dos jogos do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%20Clubes',
         isProxy: false
       }
@@ -43,7 +43,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal secundário Premiere para rodadas simultâneas de jogos.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%202',
         isProxy: false
       }
@@ -59,7 +59,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Cobertura de todos os lances e partidas dos campeonatos estaduais e nacionais.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%203',
         isProxy: false
       }
@@ -75,7 +75,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal complementar Premiere com cobertura de futebol 100% brasileira.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%204',
         isProxy: false
       }
@@ -91,7 +91,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal Premiere 5 com cobertura de jogos ao vivo do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%205',
         isProxy: false
       }
@@ -107,7 +107,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal Premiere 6 com cobertura de jogos ao vivo do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%206',
         isProxy: false
       }
@@ -123,7 +123,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal Premiere 7 com cobertura de jogos ao vivo do futebol nacional.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Premiere%207',
         isProxy: false
       }
@@ -139,7 +139,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal campeão com debates, cobertura ao vivo, vôlei, basquete e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=SporTV',
         isProxy: false
       }
@@ -155,7 +155,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=SporTV%202',
         isProxy: false
       }
@@ -171,7 +171,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=SporTV%203',
         isProxy: false
       }
@@ -187,7 +187,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O líder mundial em esportes com Premier League, LaLiga, NFL, NBA e debates.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=ESPN',
         isProxy: false
       }
@@ -203,12 +203,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O fenômeno do YouTube e transmissões ao vivo de grandes eventos do esporte.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=CazeTV%201',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (FIFA+ Ao Vivo HD)',
+        name: 'Servidor 2',
         url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
         isProxy: true
       }
@@ -224,12 +224,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal oficial do Globo Esporte com notícias, análises e melhores momentos 24h.',
     servers: [
       {
-        name: 'Servidor Oficial Direto',
+        name: 'Servidor 1',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor Proxy Play Infinity',
+        name: 'Servidor 2',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
@@ -245,12 +245,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Transmissões oficiais da entidade máxima do futebol mundial em português.',
     servers: [
       {
-        name: 'Servidor Oficial Direto',
+        name: 'Servidor 1',
         url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
         isProxy: false
       },
       {
-        name: 'Servidor Proxy Play Infinity',
+        name: 'Servidor 2',
         url: 'https://e3be9ac5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/TEctYnJfRklGQVBsdXNQb3J0dWd1ZXNlX0hMUw/playlist.m3u8',
         isProxy: true
       }
@@ -266,7 +266,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal focado no esporte olímpico e universitário brasileiro.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=N%20SPORTS',
         isProxy: false
       }
@@ -282,17 +282,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Adrenalina pura, eventos ao vivo de BMX, skate, Fórmula 1 e surfe.',
     servers: [
       {
-        name: 'Servidor Oficial (Pluto HLS 720p)',
+        name: 'Servidor 1',
         url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor Proxy Play Infinity',
+        name: 'Servidor 2',
         url: 'https://jmp2.uk/plu-5e7cb84a172a0f0007da69e4.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor Backup (N Sports)',
+        name: 'Servidor 3',
         url: 'https://ogc-nsprt-tcl-roku-syndication.otteravision.com/ogc/nsprt/nsprt.m3u8',
         isProxy: true
       }
@@ -308,12 +308,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal gratuito com os melhores momentos, clássicos e competições de esportes.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=GE%20TV',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (GE TV Fast)',
+        name: 'Servidor 2',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
@@ -331,12 +331,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'A maior emissora do país com jornalismo, novelas consagradas e futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Oficial HLS Direto)',
+        name: 'Servidor 1',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Proxy Play Infinity)',
+        name: 'Servidor 2',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
@@ -352,12 +352,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'A TV mais querida do Brasil com auditório, novelas e grandes torneios esportivos.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=SBT',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Oficial HLS)',
+        name: 'Servidor 2',
         url: 'https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8',
         isProxy: false
       }
@@ -373,17 +373,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Jornalismo de credibilidade, reality shows e os maiores campeonatos de futebol.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Record',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Record News 720p)',
+        name: 'Servidor 2',
         url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (Record Transmissão BR)',
+        name: 'Servidor 3',
         url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
         isProxy: true
       }
@@ -399,12 +399,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal do esporte com o Craque Neto, Renata Fan e as melhores coberturas.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Band',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (ge Fast Esportes)',
+        name: 'Servidor 2',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
@@ -422,17 +422,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'A primeira TV de notícias em canal aberto do Brasil com cobertura 24 horas.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Record%20News',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Record News HD 720p)',
+        name: 'Servidor 2',
         url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
         isProxy: true
       },
       {
-        name: 'Servidor 3 (Transmissão Ao Vivo)',
+        name: 'Servidor 3',
         url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
         isProxy: true
       }
@@ -448,7 +448,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal especializado em finanças, cotações da bolsa, dólar e investimentos.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=CNN%20Brasil%20Money',
         isProxy: false
       }
@@ -466,7 +466,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Grandes sucessos do cinema de ação internacional sem pausas.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Telecine%20Action',
         isProxy: false
       }
@@ -482,7 +482,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'As produções mais instigantes do cinema de mistério e investigação criminal.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Cinemax',
         isProxy: false
       }
@@ -498,7 +498,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O melhor canal de comédia do mundo com animações e shows de humor.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Telecine%20Fun',
         isProxy: false
       }
@@ -516,7 +516,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Canal 100% focado em animes japoneses de sucesso dublados em português.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Cartoon%20Network',
         isProxy: false
       }
@@ -532,7 +532,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Programação segura e educativa para crianças e toda a família.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Discovery%20Kids',
         isProxy: false
       }
@@ -548,7 +548,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Mais opções esportivas, basquete, beisebol, futebol e debates.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=ESPN%205',
         isProxy: false
       }
@@ -564,7 +564,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'ESPN 2 com transmissões de esportes americanos e internacionais.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=ESPN%202',
         isProxy: false
       }
@@ -580,7 +580,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'ESPN 3 com transmissões de futebol internacional, tênis e mais.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=ESPN%203',
         isProxy: false
       }
@@ -596,12 +596,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'ESPN 4 com cobertura dos principais campeonatos americanos.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=ESPN%204',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Backup BR)',
+        name: 'Servidor 2',
         url: 'http://181.78.197.59:8000/play/a07n/index.m3u8',
         isProxy: true
       }
@@ -617,7 +617,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'Fox Sports com transmissões de futebol sul-americano e esportes radicais.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         // Fox Sports virou ESPN 4 no Brasil (2022) — fonte equivalente no catálogo externo
         url: '/api/external-channel?name=ESPN%204',
         isProxy: false
@@ -634,7 +634,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'TNT Sports com transmissões de NBA, Champions League e Premier League.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         // TNT Sports não existe no catálogo externo — ESPN 2 cobre NBA/ligas (conteúdo mais próximo)
         url: '/api/external-channel?name=ESPN%202',
         isProxy: false
@@ -651,12 +651,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O canal de esportes do Grupo Bandeirantes.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=BAND%20SPORTS%20HD',
         isProxy: false
       },
       {
-        name: 'Servidor 2 (Esportes Fast)',
+        name: 'Servidor 2',
         url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
         isProxy: true
       }
@@ -672,7 +672,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     description: 'O maior canal de lutas e artes marciais do Brasil.',
     servers: [
       {
-        name: 'Servidor 1 (Multi-Fonte HD)',
+        name: 'Servidor 1',
         url: '/api/external-channel?name=Combate',
         isProxy: false
       }
@@ -687,8 +687,8 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'O canal pioneiro em documentários sobre ciência, tecnologia, história e natureza.',
     servers: [
-      { name: 'Servidor 1 (Multi-Fonte HD)', url: '/api/external-channel?name=Discovery%20Channel', isProxy: false },
-      { name: 'Servidor 2 (Multi-Fonte Alternativa)', url: '/api/external-channel?name=Discovery%20World', isProxy: false }
+      { name: 'Servidor 1', url: '/api/external-channel?name=Discovery%20Channel', isProxy: false },
+      { name: 'Servidor 2', url: '/api/external-channel?name=Discovery%20World', isProxy: false }
     ]
   },
   {
@@ -700,8 +700,8 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'A história do mundo, grandes eventos e teorias fascinantes.',
     servers: [
-      { name: 'Servidor 1 (Multi-Fonte HD)', url: '/api/external-channel?name=History', isProxy: false },
-      { name: 'Servidor 2 (Multi-Fonte Alternativa)', url: '/api/external-channel?name=History%202', isProxy: false }
+      { name: 'Servidor 1', url: '/api/external-channel?name=History', isProxy: false },
+      { name: 'Servidor 2', url: '/api/external-channel?name=History%202', isProxy: false }
     ]
   },
   {
@@ -713,7 +713,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'Programas focados na relação entre humanos e animais e na vida selvagem.',
     servers: [
-      { name: 'Servidor 1 (Multi-Fonte HD)', url: '/api/external-channel?name=Animal%20Planet', isProxy: false }
+      { name: 'Servidor 1', url: '/api/external-channel?name=Animal%20Planet', isProxy: false }
     ]
   },
   {
@@ -725,7 +725,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     quality: '720p',
     description: 'Mistérios da vida real, crimes chocantes e grandes investigações forenses.',
     servers: [
-      { name: 'Servidor 1 (Multi-Fonte HD)', url: '/api/external-channel?name=Discovery%20ID', isProxy: false }
+      { name: 'Servidor 1', url: '/api/external-channel?name=Discovery%20ID', isProxy: false }
     ]
   }
 ];
