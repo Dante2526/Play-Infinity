@@ -140,12 +140,11 @@ export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
         return (
           <div
             key={source.index}
-            className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]"
+            className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]"
           >
             <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <span className="text-white/80 truncate font-medium">
-                Servidor {source.index + 1}
-              </span>
+              {/* Nome "Servidor N" vem do CSS counter do card (numeração contínua) */}
+              <span className="server-name text-white/80 truncate font-medium" />
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">

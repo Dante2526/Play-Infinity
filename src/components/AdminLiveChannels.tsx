@@ -647,51 +647,54 @@ export function AdminLiveChannels() {
                 {/* Linha dos Servidores Atuais com Teste Rápido */}
                 <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
                   <div className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
-                    Servidores Configurados:
+                    Servidores:
                   </div>
-                  <div className="space-y-1">
-                    {channel.servers.slice(0, 3).map((srv, sIdx) => {
-                      const probe = probeResults[srv.url];
-                      return (
-                        <div key={sIdx} className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
-                          <span className="text-white/80 truncate font-medium flex-1">
-                            {srv.name}
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {probe && (
-                              probe.probing ? (
-                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
-                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                  <span>...</span>
-                                </span>
-                              ) : (
-                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                                }`}>
-                                  {probe.online ? '200 OK' : `OFF (${probe.status})`}
-                                </span>
-                              )
-                            )}
-                            <button
-                              type="button"
-                              disabled={probe?.probing}
-                              onClick={() => probeSingleServer(srv.url)}
-                              title="Testar sinal deste servidor"
-                              className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
-                            >
-                              {probe?.probing ? '...' : 'Testar'}
-                            </button>
+                  <div className="server-counter-list space-y-1">
+                    {channel.servers
+                      .filter(srv => !srv.url.startsWith('/api/external-channel?'))
+                      .slice(0, 3)
+                      .map((srv, sIdx) => {
+                        const probe = probeResults[srv.url];
+                        return (
+                          <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
+                            <span className="server-name text-white/80 truncate font-medium flex-1" />
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {probe && (
+                                probe.probing ? (
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                    <span>...</span>
+                                  </span>
+                                ) : (
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                  }`}>
+                                    {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                                  </span>
+                                )
+                              )}
+                              <button
+                                type="button"
+                                disabled={probe?.probing}
+                                onClick={() => probeSingleServer(srv.url)}
+                                title="Testar sinal deste servidor"
+                                className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                              >
+                                {probe?.probing ? '...' : 'Testar'}
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                    {channel.servers.length > 3 && (
+                        );
+                      })}
+                    {channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?')).length > 3 && (
                       <div className="text-[10px] text-white/40 italic pl-1">
-                        + {channel.servers.length - 3} outros servidores de backup
+                        + {channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?')).length - 3} outros servidores de backup
                       </div>
                     )}
 
-                    {/* Fontes Individuais no mesmo padrao visual de servidor */}
+                    {/* Fontes do provedor externo: entram na mesma numeração contínua
+                        (o ponteiro virtual /api/external-channel não é listado acima —
+                        as fontes abaixo já o representam em detalhe). */}
                     {[...new Set(channel.servers.filter(s => s.url.startsWith('/api/external-channel?'))
                       .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name')))]
                       .filter((name): name is string => !!name)

@@ -104,6 +104,22 @@ input[type="number"] {
   width: 4px;
 }
 
+/* Numeração contínua de servidores no card do admin de TV ao vivo.
+   Conta TODAS as linhas .server-row (servidores diretos + fontes do provedor)
+   na ordem do DOM, garantindo sequência única "Servidor 1, 2, 3..." sem
+   duplicar número mesmo com listas carregando de forma assíncrona. */
+.server-counter-list {
+  counter-reset: servidor-counter;
+}
+
+.server-counter-list .server-row {
+  counter-increment: servidor-counter;
+}
+
+.server-counter-list .server-row .server-name::before {
+  content: "Servidor " counter(servidor-counter);
+}
+
 .custom-scrollbar::-webkit-scrollbar-button {
   display: none !important;
 }
