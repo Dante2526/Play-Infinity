@@ -499,6 +499,7 @@ export function DetailsPage({
       .then(data => {
         if (isMounted && data && !('status_code' in (data as any))) {
           setSeasonData(data);
+          if (data.catalogEpisodes) return;
           const totalCount = data.episodes?.length || 24;
           getAvailableEpisodes(Number(effectiveTmdbId), selectedSeason, totalCount)
             .then(info => {
@@ -523,6 +524,7 @@ export function DetailsPage({
 
   // Lista dinâmica de episódios formatados da temporada atual com streaming comprovado
   const currentEpisodes = React.useMemo(() => {
+    if (seasonData?.catalogEpisodes && !seasonData.episodes?.length) return [];
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
       let eps = seasonData.episodes;
       // Só oculta episódios quando a resposta é DEFINITIVA (vinda do catálogo local).
@@ -1026,6 +1028,11 @@ export function DetailsPage({
                   <Loader2 className="w-4 h-4 animate-spin" />
                   <span>Carregando episódios da Temporada {selectedSeason}...</span>
                 </div>
+              )}
+              {!loadingSeason && seasonData?.catalogEpisodes && currentEpisodes.length === 0 && (
+                <p className="py-4 text-sm text-neutral-400" role="status">
+                  Não foi possível confirmar a lista de episódios desta temporada. Tente novamente em instantes.
+                </p>
               )}
 
               <div className="space-y-3">

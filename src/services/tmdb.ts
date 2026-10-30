@@ -47,6 +47,8 @@ export interface Episode {
 }
 
 export interface Season {
+  // Source episode numbering, independent of TMDB grouping; not a media probe.
+  catalogEpisodes?: boolean;
   id: number;
   name: string;
   season_number: number;
@@ -196,9 +198,9 @@ const CLIENT_TMDB_CACHE_TTL = 10 * 60 * 1000; // 10 minutos
  */
 const getTmdbApiBase = getApiBaseUrl;
 
-async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean }): Promise<TmdbFetchOutcome<T>> {
+async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean; cache?: boolean }): Promise<TmdbFetchOutcome<T>> {
   const now = Date.now();
-  const cached = _clientTmdbCache.get(url);
+  const cached = opts?.cache === false ? undefined : _clientTmdbCache.get(url);
   if (cached && now < cached.expiresAt) {
     return cached.outcome as TmdbFetchOutcome<T>;
   }
@@ -244,7 +246,7 @@ async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean }): Promis
             const firstKey = _clientTmdbCache.keys().next().value;
             if (firstKey) _clientTmdbCache.delete(firstKey);
           }
-          _clientTmdbCache.set(url, { outcome, expiresAt: Date.now() + CLIENT_TMDB_CACHE_TTL });
+          if (opts?.cache !== false) _clientTmdbCache.set(url, { outcome, expiresAt: Date.now() + CLIENT_TMDB_CACHE_TTL });
           return outcome;
         }
       }
@@ -533,6 +535,9 @@ const _seasonRemapCache = new Map<string, number>();
 
 export const resolveTmdbSeasonNumber = async (seriesId: number, seasonNumber: number): Promise<number> => {
   if (!seriesId || !seasonNumber || seasonNumber <= 0) return seasonNumber;
+  // Black Clover's catalogue splits the original run into parts. The last
+  // TMDB season is a different run, not a substitute for missing source parts.
+  if (seriesId === 73223) return seasonNumber;
   const memoKey = `${seriesId}:${seasonNumber}`;
   const memo = _seasonRemapCache.get(memoKey);
   if (memo !== undefined) return memo;
@@ -554,6 +559,19 @@ export const resolveTmdbSeasonNumber = async (seriesId: number, seasonNumber: nu
 };
 
 export const getSeasonDetails = async (seriesId: number, seasonNumber: number): Promise<Season> => {
+  if (seriesId === 73223) {
+    const listing = await fetchTmdbRaw<{ episodes: number[] }>(`${getApiBaseUrl()}/api/catalog-season?tmdb_id=${seriesId}&season=${seasonNumber}`, { silent: true, cache: false });
+    const numbers = listing.ok && Array.isArray(listing.data?.episodes)
+      ? [...new Set(listing.data.episodes.filter(n => Number.isInteger(n) && n > 0 && n <= 9999))].sort((a, b) => a - b)
+      : [];
+    // Do not replace an unavailable listing with the 170-episode TMDB grouping.
+    return {
+      ...DEFAULT_SEASON, season_number: seasonNumber, name: `Temporada ${seasonNumber}`,
+      catalogEpisodes: true, episode_count: numbers.length,
+      episodes: numbers.map(n => ({ id: 0, name: `Episódio ${n}`, episode_number: n,
+        season_number: seasonNumber, overview: '', still_path: '', air_date: '' })),
+    };
+  }
   // Tentativa direta (silenciosa no !ok porque ainda há remapeamento a tentar).
   const direct = await fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, { silent: true });
   if (direct.ok && direct.data) return direct.data;

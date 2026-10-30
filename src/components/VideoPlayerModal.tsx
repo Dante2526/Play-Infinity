@@ -1087,6 +1087,10 @@ export function VideoPlayerModal({
       .then(data => {
         if (isMounted && data) {
           setSeasonData(data);
+          if (data.catalogEpisodes) {
+            setIsCheckingEpisodes(false);
+            return;
+          }
           const totalEpCount = data.episodes?.length || 24;
 
           // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
@@ -1132,6 +1136,7 @@ export function VideoPlayerModal({
 
   // Total de episódios da temporada selecionada com streaming comprovado
   const totalSeasonEpisodes = useMemo(() => {
+    if (seasonData?.catalogEpisodes) return seasonData.episodes?.length || 0;
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.length;
     }
@@ -1150,6 +1155,7 @@ export function VideoPlayerModal({
 
   // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
   const episodeNumbers = useMemo(() => {
+    if (seasonData?.catalogEpisodes) return seasonData.episodes?.map(e => e.episode_number) || [];
     // NOVO: PRIORIDADE MÁXIMA — se Nixplay tem mais episódios que qualquer outra fonte,
     // mostra todos do Nixplay. Isso precisa vir ANTES do filteredSeasonEpisodes porque
     // a verificação do catálogo (verifiedFromCatalog) só conhece eps do TMDB (62),
