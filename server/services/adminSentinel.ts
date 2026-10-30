@@ -572,7 +572,6 @@ export async function runSentinelCheck(forcePush = false, skipPush = false, manu
             }
 
             if (!finalProbeRes.online) {
-              downCount++;
               const alertObj: SentinelAlert = {
                 id: alertId,
                 category: "tv",
@@ -584,13 +583,15 @@ export async function runSentinelCheck(forcePush = false, skipPush = false, manu
                 detectedAt: now,
                 metadata: { channelId: ch.id, channelName: ch.name, statusCode: finalProbeRes.statusCode },
               };
-              activeAlerts.set(alertId, alertObj);
 
               if (manual) {
-                // Checagem manual ("Testar Agora" do painel): atualiza o painel,
-                // mas NÃO conta como rodada do ciclo — a dupla verificação só
-                // vale entre baterias automáticas espaçadas de 20 min — e nunca
-                // dispara push (skipPush do modo manual).
+                // Checagem manual ("Testar Agora" do painel): atualiza o painel
+                // imediatamente para o admin ver o resultado do teste que ele
+                // disparou, mas NÃO conta como rodada do ciclo — a dupla
+                // verificação só vale entre baterias automáticas espaçadas de
+                // 20 min — e nunca dispara push (skipPush do modo manual).
+                downCount++;
+                activeAlerts.set(alertId, alertObj);
                 console.log(`[AdminSentinel] Canal ${ch.name} fora do ar na checagem manual (não conta para o ciclo de 20 min).`);
               } else {
                 // Verifica se deve notificar via push (anti-spam 2h)
@@ -599,11 +600,19 @@ export async function runSentinelCheck(forcePush = false, skipPush = false, manu
                 channelConsecutiveFails.set(alertId, failStreak);
                 const confirmedDown = forcePush || failStreak >= CHANNEL_FAILS_BEFORE_PUSH;
                 if (!confirmedDown) {
-                  console.log(`[AdminSentinel] Canal ${ch.name} falhou (${failStreak}/${CHANNEL_FAILS_BEFORE_PUSH}). Aguardando próxima rodada antes de notificar.`);
-                }
-                if (!skipPush && confirmedDown && (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
-                  alertsToNotify.push(alertObj);
-                  notifiedHistory.set(alertId, now);
+                  // 1ª falha (1/2): NÃO exibe alerta no painel nem conta no
+                  // downCount — segue a mesma lógica do push. Só aparece após
+                  // 2 falhas consecutivas (ciclos A e B ambos off).
+                  console.log(`[AdminSentinel] Canal ${ch.name} falhou (${failStreak}/${CHANNEL_FAILS_BEFORE_PUSH}). Aguardando próxima rodada antes de exibir alerta.`);
+                } else {
+                  // Confirmado: 2 falhas consecutivas (ou forcePush). Agora
+                  // exibe o alerta no painel e dispara push (com cooldown 2h).
+                  downCount++;
+                  activeAlerts.set(alertId, alertObj);
+                  if (!skipPush && (forcePush || !notifiedHistory.has(alertId) || now - lastNotified > PUSH_COOLDOWN_MS)) {
+                    alertsToNotify.push(alertObj);
+                    notifiedHistory.set(alertId, now);
+                  }
                 }
               }
             } else {
