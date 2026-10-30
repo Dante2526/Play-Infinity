@@ -27,14 +27,14 @@ test('health and resolver share the current configured domain order', async () =
   const calls = [];
   global.fetch = async raw => { calls.push(raw); return new Response(listing); };
   const result = await api.checkVizerHealth();
-  assert.equal(calls[0], 'https://www.vizer.press/series/online/');
+  assert.equal(calls[0], 'https://www.vizer.host/series/online/');
   assert.equal(result.url, api.VIZER_DOMAINS[0]); assert.equal(result.status, 'ONLINE');
   assert.equal(api.getVizerWorkingDomain(), result.url);
 });
 test('a failed primary falls back and the working domain becomes preferred by later resolver calls', async () => {
-  global.fetch = async raw => raw.includes('.press/') ? new Response('', { status: 503 }) : new Response(listing);
+  global.fetch = async raw => raw.includes('.host/') ? new Response('', { status: 503 }) : new Response(listing);
   const result = await api.checkVizerHealth();
-  assert.equal(result.status, 'ONLINE'); assert.equal(result.url, 'https://www.vizer.uno');
+  assert.equal(result.status, 'ONLINE'); assert.equal(result.url, 'https://www.vizer.press');
   assert.equal(api.getVizerDomainOrder()[0], result.url);
 });
 test('migration redirects report the actual validated domain rather than the old configured URL', async () => {

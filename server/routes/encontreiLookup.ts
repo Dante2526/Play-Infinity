@@ -254,7 +254,7 @@ function loadVizerMovieIds() {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// DOMÍNIOS DO VIZER (histórico de migração: vizer.beauty → vizer.website → vizer.reisen)
+// DOMÍNIOS DO VIZER (histórico de migração: vizer.beauty → vizer.website → vizer.reisen → vizer.host)
 //
 // O vizer.website atualmente responde os endpoints AJAX com HTTP 200 + JSON
 // {"redirect": "https://www.vizer.reisen/..."} (redirect em nível de aplicação)
