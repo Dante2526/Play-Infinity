@@ -865,7 +865,7 @@ export function AdminDeployMonitor() {
                 const commitInfo = parseCommitMessage(latestRun.commit.message);
                 return (
                   <div className="mt-4 p-4 bg-black/35 rounded-2xl border border-white/5 space-y-2.5">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex items-start gap-2.5 min-w-0">
                         <div className="p-1.5 bg-orange-500/20 text-orange-400 rounded-lg shrink-0 mt-0.5">
                           <GitCommit className="w-4 h-4" />
@@ -884,7 +884,7 @@ export function AdminDeployMonitor() {
                         <button
                           type="button"
                           onClick={() => setExpandCommitDetails(!expandCommitDetails)}
-                          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                          className="shrink-0 self-start flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 text-white/80 hover:text-white rounded-xl text-xs font-semibold transition-colors cursor-pointer"
                         >
                           {expandCommitDetails ? (
                             <>
