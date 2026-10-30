@@ -170,7 +170,7 @@ export function AdminBugReports() {
       <div className="relative z-50 bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 sm:p-8 shadow-xl">
         <h2 className="text-2xl font-black text-white flex items-center gap-3 mb-6">
           <ShieldAlert className="w-7 h-7 text-red-500" />
-          Bugs Pendentes ({pending.length})
+          Bugs Pendentes
         </h2>
 
         {pending.length === 0 ? (
