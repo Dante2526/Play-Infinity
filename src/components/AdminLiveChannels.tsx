@@ -193,12 +193,15 @@ export function AdminLiveChannels() {
     setExpandedChannels(allExpanded ? new Set() : new Set(filteredChannels.map(c => c.id)));
   };
 
-  // Contadores
+  // Contadores — só contam IDs que realmente existem no catálogo atual.
+  // Evita o bug "Ocultados (1) / Customizados (1)" com lista vazia quando o
+  // canal foi removido do catálogo mas o ID órfão permanece no Firestore.
   const stats = useMemo(() => {
+    const catalogIds = new Set(allChannels.map(c => c.id));
+    const hidden = settings.blockedChannelIds.filter(id => catalogIds.has(id)).length;
+    const custom = Object.keys(settings.customServers).filter(id => catalogIds.has(id) && Boolean(settings.customServers[id]?.length)).length;
     const total = allChannels.length;
-    const hidden = settings.blockedChannelIds.length;
     const visible = Math.max(0, total - hidden);
-    const custom = Object.keys(settings.customServers).length;
     return { total, visible, hidden, custom };
   }, [allChannels, settings]);
 
