@@ -24,6 +24,7 @@
 import { Router } from "express";
 import fs from "fs";
 import path from "path";
+import { readHealthPrefix } from '../services/playbackHealth';
 import { checkVidsrcSeason } from "./vidsrcRoutes";
 import { getVizerDomainOrder, rememberVizerDomain } from "../services/vizerDomains";
 import {
@@ -1497,6 +1498,64 @@ export function getEncontreiSeasonEpisodes(tmdbId: number, season: number): numb
 // são sempre derivadas live do índice em memória — nunca cached.
 const _verifiedSeasonsCache = new Map<string, { timestamp: number; seasons: number[] }>();
 const VERIFIED_SEASONS_CACHE_TTL = 5 * 60 * 1000; // 5min (reduzido de 20min)
+
+// Source numbering is authoritative for shows whose TMDB season grouping differs.
+// This is a listing, not a guarantee that every provider file is currently playable.
+const seasonListingCache = new Map<string, { expires: number; episodes: number[] }>();
+router.get('/api/catalog-season', async (req, res) => {
+  const id = Number(req.query.tmdb_id), season = Number(req.query.season);
+  if (!Number.isSafeInteger(id) || id < 1 || !Number.isInteger(season) || season < 1 || season > 999) {
+    return res.status(400).json({ error: 'Conteúdo inválido' });
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  try {
+    loadCatalogs();
+    const key = `${id}:${season}`;
+    const cached = seasonListingCache.get(key);
+    if (cached && cached.expires > Date.now()) {
+      return res.json({ season, episodes: cached.episodes, source: 'encontrei-live' });
+    }
+    const serieId = _tmdbToSerieIdMap.get(id);
+    const cookie = (process.env.ENCONTREI_COOKIE || '').trim();
+    if (serieId && cookie && Date.now() >= _encCookieDownUntil) {
+      const episodes = await once(`season-list:${key}`, async () => {
+        const url = `${ENC_BASE}/index.php?app=videobox&module=video&controller=view&do=episodesList&id=${serieId}&season=${season}&audio=Dublado`;
+        try {
+          const response = await fetch(url, {
+            headers: { 'User-Agent': ENC_UA, Cookie: cookie, Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            redirect: 'manual', signal: AbortSignal.timeout(4000),
+          });
+          if (!response.ok) { await response.body?.cancel(); return null; }
+          const json = JSON.parse(new TextDecoder().decode(await readHealthPrefix(response, 512 * 1024)));
+          const rows = Array.isArray(json?.episodes) ? json.episodes : Array.isArray(json) ? json : json?.[season];
+          if (!Array.isArray(rows)) return null;
+          const numbers: number[] = rows.map((ep: any) => Number(ep.number));
+          const valid = [...new Set(numbers.filter(n => Number.isInteger(n) && n > 0 && n <= 9999))].sort((a, b) => a - b);
+          return valid.length ? valid : null;
+        } catch { return null; }
+      });
+      if (episodes) {
+        if (seasonListingCache.size >= 100) seasonListingCache.delete(seasonListingCache.keys().next().value!);
+        seasonListingCache.set(key, { expires: Date.now() + 5 * 60 * 1000, episodes });
+        return res.json({ season, episodes, source: 'encontrei-live' });
+      }
+    }
+    // A partial local snapshot must not be padded to the TMDB episode count.
+    const fallbackNumbers = getEncontreiSeasonEpisodes(id, season);
+    if (_vizerEpisodeIndex instanceof SqliteEpisodeIndex) {
+      fallbackNumbers.push(..._vizerEpisodeIndex.seasonEpisodes(id, season));
+    } else {
+      const prefix = `${id}:${season}:`;
+      for (const [key, ep] of _vizerEpisodeIndex as Map<string, any>) {
+        if (key.startsWith(prefix) && Number.isInteger(ep.episode) && ep.episode > 0) fallbackNumbers.push(ep.episode);
+      }
+    }
+    const episodes = [...new Set(fallbackNumbers)].sort((a, b) => a - b);
+    return res.json({ season, episodes, source: 'snapshot' });
+  } catch {
+    return res.status(503).json({ error: 'Lista de episódios temporariamente indisponível' });
+  }
+});
 
 router.get("/api/series-seasons-available", async (req, res) => {
   try {

@@ -40,10 +40,28 @@ const SEASON_2 = {
   episodes: [],
 };
 
-function makeEnv() {
+function makeEnv(catalogEpisodes) {
   const calls = [];
   const fetchMock = async (url) => {
     calls.push(String(url));
+    if (url.includes('/api/catalog-season?') && catalogEpisodes) {
+      return { ok: true, status: 200, json: async () => ({ episodes: [...catalogEpisodes], source: 'encontrei-live' }) };
+    }
+    // Production snapshot: TMDB groups the original 170 episodes in T1,
+    // while the content catalogue advertises five separate seasons.
+    if (url.includes('/tv/73223?')) {
+      return { ok: true, status: 200, json: async () => ({
+        id: 73223, name: 'Black Clover', seasons: [
+          { season_number: 1, episode_count: 170 },
+          { season_number: 2, episode_count: 26 },
+        ],
+      }) };
+    }
+    if (url.includes('/tv/73223/season/2')) {
+      return { ok: true, status: 200, json: async () => ({
+        season_number: 2, episodes: [{ episode_number: 1, name: 'Different run' }],
+      }) };
+    }
     if (url.includes('/tv/96677/season/4')) {
       return {
         ok: false,
@@ -98,6 +116,53 @@ async function buildService() {
 }
 
 const BUNDLE_PROMISE = buildService();
+
+test('Black Clover uses source episode numbers instead of the differently divided TMDB season', async () => {
+  const { calls, mod, ctx } = makeEnv([1, 2, 52]);
+  vm.runInNewContext(await BUNDLE_PROMISE, ctx);
+  const season = await mod.exports.getSeasonDetails(73223, 2);
+  assert.deepEqual(Array.from(season.episodes, ep => ep.episode_number), [1, 2, 52]);
+  assert.equal(season.season_number, 2);
+  assert.equal(season.catalogEpisodes, true);
+  assert.ok(!calls.some(url => url.includes('/tv/73223/season/2')));
+});
+
+test('Black Clover T5 with one episode never creates extra playable entries', async () => {
+  const { mod, ctx } = makeEnv([1]);
+  vm.runInNewContext(await BUNDLE_PROMISE, ctx);
+  const season = await mod.exports.getSeasonDetails(73223, 5);
+  assert.equal(season.episodes.length, 1);
+  assert.equal(season.episodes[0].season_number, 5);
+});
+
+test('an unavailable Black Clover listing does not fabricate TMDB episodes', async () => {
+  const { calls, mod, ctx } = makeEnv();
+  vm.runInNewContext(await BUNDLE_PROMISE, ctx);
+  const season = await mod.exports.getSeasonDetails(73223, 2);
+  assert.equal(season.episodes.length, 0);
+  assert.equal(season.season_number, 2);
+  assert.ok(!calls.some(url => url.includes('/tv/73223/season/2')));
+});
+
+test('an empty catalogue response can recover on the next season load', async () => {
+  const episodes = [];
+  const { mod, ctx } = makeEnv(episodes);
+  vm.runInNewContext(await BUNDLE_PROMISE, ctx);
+  assert.equal((await mod.exports.getSeasonDetails(73223, 5)).episodes.length, 0);
+  episodes.push(1);
+  assert.equal((await mod.exports.getSeasonDetails(73223, 5)).episodes.length, 1);
+});
+
+test('Black Clover never substitutes the sequel metadata for source parts 3–5', async () => {
+  const { calls, mod, ctx } = makeEnv();
+  vm.runInNewContext(await BUNDLE_PROMISE, ctx);
+  for (const n of [3, 4, 5]) {
+    assert.equal(await mod.exports.resolveTmdbSeasonNumber(73223, n), n);
+    await mod.exports.getSeasonDetails(73223, n);
+    await mod.exports.getTimelinePreviewImages(73223, 'tv', n, 1);
+  }
+  assert.ok(!calls.some(url => url.includes('/tv/73223/season/2')));
+});
 
 test('getSeasonDetails remapeia temporada inexistente (Lupin fonte S4 → TMDB T3) e devolve episódios reais', async () => {
   const bundle = await BUNDLE_PROMISE;
