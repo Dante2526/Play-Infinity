@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "341774996820",
+    "project_id": "play-infinity-63eaa",
+    "storage_bucket": "play-infinity-63eaa.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:341774996820:android:63194eeee5c402956ce4c1",
+        "android_client_info": {
+          "package_name": "com.playinfinity.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "341774996820-um0a8quloku19tdoa618fbg7aa7t0808.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCwbb6j-hi_0hKeXXuEC4OLtJSmOoEiFXE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "341774996820-um0a8quloku19tdoa618fbg7aa7t0808.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

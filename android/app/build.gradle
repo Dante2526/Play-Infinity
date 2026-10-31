@@ -7,8 +7,8 @@ android {
         applicationId "com.playinfinity.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 71
-        versionName "1.4.39"
+        versionCode 72
+        versionName "1.4.40"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -58,13 +58,7 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
-// NOTA (push nativo/FCM): o bloco try/catch abaixo já aplica o plugin
-// google-services quando android/app/google-services.json existir. O arquivo
-// NÃO está no repo — baixar do Firebase Console (projeto play-infinity-63eaa →
-// Configurações do projeto → app Android com.playinfinity.app) e commitar em
-// android/app/. Sem ele, FirebaseMessaging.getToken() falha no APK e o botão
-// "Ativar notificações" do app nativo nunca registra (bug presente em todos
-// os APKs gerados até 71/1.4.39).
+// NOTA (push nativo/FCM): google-services.json configurado e sincronizado com o projeto play-infinity-63eaa.
 
 try {
     def servicesJSON = file('google-services.json')

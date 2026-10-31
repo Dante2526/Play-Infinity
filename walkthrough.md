@@ -1,3 +1,17 @@
+## 31/10/2026 — Integração Oficial do Google Services / FCM no App Nativo Android (Android 72/1.4.40)
+
+**Contexto e Duplo Check:**
+O usuário reportou que ao tocar em "Aceitar / Ativar Notificações" no aplicativo Android (Capacitor/APK), a solicitação falhava e não concluía o registro do token FCM.
+1. **Confirmação do Diagnóstico:** O app nativo Android utiliza `@capacitor-firebase/messaging`. Ao solicitar o token (`getToken()`), o plugin exige nativamente que o Firebase esteja inicializado com os metadados do `google-services.json`. Como o arquivo não existia no projeto, `FirebaseMessaging.getToken()` lançava exceção em todos os APKs.
+2. **Causa da Dificuldade Manual do Usuário:** O aplicativo Android (`com.playinfinity.app`) ainda sequer havia sido cadastrado no projeto `play-infinity-63eaa` do Firebase Console.
+3. **Resolução Autônoma:**
+   - Utilizando as credenciais de serviço administrativas em `secrets/firebase-service-account.json`, consultamos a API de gerenciamento do Firebase (`firebase.googleapis.com/v1beta1`).
+   - Criamos o aplicativo Android oficial `com.playinfinity.app` diretamente no projeto `play-infinity-63eaa`.
+   - Baixamos o arquivo autêntico `google-services.json` diretamente da API oficial do Firebase e o salvamos em `android/app/google-services.json`.
+   - Atualizamos o `build.gradle` para `versionCode 72` e `versionName "1.4.40"`, garantindo que o Gradle aplique o plugin `com.google.gms.google-services` durante a compilação do APK/AAB no GitHub Actions.
+
+---
+
 ## 28/10/2026 — Correção da Colisão de TMDB ID entre Filmes e Séries no Batch e Cache (Android 69/1.4.37)
 
 **Contexto e Diagnóstico:**
