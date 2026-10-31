@@ -76,7 +76,7 @@ import { safeSessionStorage, safeLocalStorage, clearLocalUserData } from "./util
 import { useSmartTV } from "./hooks/useSmartTV";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "./utils/statusBar";
-import { registerFcmToken, setupFcmTokenRefreshListener } from "./services/pushNotifications";
+import { setupFcmTokenRefreshListener } from "./services/pushNotifications";
 import { captureReferralFromUrl } from "./services/referralService";
 
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
@@ -87,6 +87,7 @@ const LivePlayerModal = lazyWithRetry(() => import("./components/LivePlayerModal
 const NotificationModal = lazyWithRetry(() => import("./components/NotificationModal"));
 import { VirtualRemote } from "./components/VirtualRemote";
 import { BugFeedbackListener } from "./components/BugFeedbackListener";
+import { NotificationPermissionGate } from "./components/NotificationPermissionGate";
 import {
   getFavoriteIds,
   toggleFavorite,
@@ -308,7 +309,9 @@ export default function App() {
       setIsAuthInitialized(true);
       if (user) {
         localStorage.setItem("playinfinity_logged_in", "true");
-        registerFcmToken(user.uid);
+        // O registro de push agora é coordenado pelo NotificationPermissionGate
+        // (modal educativo que respeita quem recusou). O prompt direto do
+        // navegador aqui no login era invasivo e não explicava o valor.
         if (user.email) {
           localStorage.setItem("playinfinity_last_email", user.email);
         }
@@ -1191,6 +1194,15 @@ export default function App() {
         </AnimatePresence></React.Suspense>
         
         <BugFeedbackListener />
+
+        {/* Gate global de permissão de push: modal educativo na primeira visita
+            (logado), respeita quem recusou — nunca re-pergunta. Oculto no painel
+            admin (registro próprio pelo mascote) e em Smart TVs. */}
+        <NotificationPermissionGate
+          currentUser={currentUser}
+          isAuthInitialized={isAuthInitialized}
+          enabled={!isSmartTV && viewState.type !== 'admin'}
+        />
       </>
 
       {/* CSS Utility for hiding scrollbar while keeping functionality */}

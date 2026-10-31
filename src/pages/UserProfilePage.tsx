@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
-import { removeFcmTokenFromCloud } from "../services/pushNotifications";
+import { removeFcmTokenFromCloud, registerFcmToken, saveNotifPermission, setNotifLocallyDeclined } from "../services/pushNotifications";
 import { clearLocalUserData } from "../utils/safeStorage";
 import {
   Play,
@@ -184,6 +184,38 @@ export function UserProfilePage({
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
+
+  // ===== Notificações Push (toggle manual — único caminho de reativação
+  // para quem recusou o modal educativo) =====
+  const [pushEnabled, setPushEnabled] = useState<boolean>(
+    () => typeof Notification !== "undefined" && Notification.permission === "granted" && !!localStorage.getItem("playinfinity_fcm_token")
+  );
+  const [pushBusy, setPushBusy] = useState(false);
+
+  const handlePushToggle = async () => {
+    const user = auth.currentUser;
+    if (!user || pushBusy) return;
+    setPushBusy(true);
+    try {
+      if (pushEnabled) {
+        // Desativa: remove o token deste aparelho e marca 'denied'.
+        await removeFcmTokenFromCloud();
+        await saveNotifPermission(user.uid, "denied");
+        setNotifLocallyDeclined(true);
+        setPushEnabled(false);
+      } else {
+        // Ativa: pede permissão (nativa) e registra o token.
+        const ok = await registerFcmToken(user.uid);
+        if (ok) {
+          await saveNotifPermission(user.uid, "granted");
+          setNotifLocallyDeclined(false);
+          setPushEnabled(true);
+        }
+      }
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -724,8 +756,42 @@ export function UserProfilePage({
             </div>
           ))}
 
+          {/* Notificações Push — ativar/desativar manualmente (único caminho
+              de reativação para quem recusou o modal educativo) */}
+          <div className="bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl p-4 sm:p-5 flex items-center justify-between transition-colors group mt-8">
+            <div className="flex items-center gap-4">
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/5 shrink-0">
+                <Bell className={`w-5 h-5 ${pushEnabled ? "text-orange-500" : "text-neutral-500"}`} />
+              </div>
+              <div>
+                <span className="font-semibold text-neutral-200 group-hover:text-white transition-colors block text-sm sm:text-base">
+                  Notificações Push
+                </span>
+                <span className="text-xs text-neutral-400 block mt-0.5">
+                  {pushEnabled ? "Ativadas neste aparelho — filmes, séries e novidades" : "Desativadas — ative para receber lançamentos"}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handlePushToggle}
+              disabled={pushBusy}
+              className={`relative w-12 h-7 rounded-full transition-colors shrink-0 cursor-pointer disabled:opacity-50 ${pushEnabled ? "bg-orange-600" : "bg-neutral-700"}`}
+              aria-label={pushEnabled ? "Desativar notificações" : "Ativar notificações"}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${pushEnabled ? "translate-x-5" : "translate-x-0"}`}
+              />
+              {pushBusy && (
+                <span className="absolute inset-0 flex items-center justify-center">
+                  <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+                </span>
+              )}
+            </button>
+          </div>
+
           <button 
-            type="button"
+            type="button" 
             onClick={() => {
               setPasswordError("");
               setPasswordSuccess("");

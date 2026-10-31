@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown } from "lucide-react";
+import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown, BellRing, BellOff, Smartphone, HeartHandshake } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../services/firebase";
 import { adminFetch } from "../services/adminApi";
@@ -11,6 +11,25 @@ const TEMPLATES = [
   { label: "Aviso/Manutenção", title: "Aviso de Manutenção ⚠️", body: "Nossos servidores passarão por uma breve manutenção. Voltamos em breve." }
 ];
 
+interface NotifUserRow {
+  email: string | null;
+  name: string;
+  status: "granted" | "denied" | "not_asked";
+  devices: number;
+  lastDunningPushAt: number | null;
+  isAdminDevice: boolean;
+}
+
+interface NotifStats {
+  total: number;
+  granted: number;
+  grantedWithToken: number;
+  denied: number;
+  notAsked: number;
+  totalTokens: number;
+  delinquent: number;
+}
+
 export function AdminPushNotifications() {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -21,8 +40,33 @@ export function AdminPushNotifications() {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
+  // Stats de notificações (quem ativou / recusou / ainda não perguntado)
+  const [notifStats, setNotifStats] = useState<NotifStats | null>(null);
+  const [notifUsers, setNotifUsers] = useState<NotifUserRow[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [showAllUsers, setShowAllUsers] = useState(false);
+
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedTemplateIdx, setSelectedTemplateIdx] = useState(0);
+
+  const fetchNotifStats = async () => {
+    try {
+      const res = await adminFetch("/api/admin/notif-stats");
+      const data = await res.json();
+      if (data.success) {
+        setNotifStats(data.stats);
+        setNotifUsers(data.users || []);
+      }
+    } catch (e) {
+      console.error("Erro ao carregar stats de notificações:", e);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchNotifStats();
+  }, []);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -107,14 +151,137 @@ export function AdminPushNotifications() {
           <Bell className="w-8 h-8" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-white">Disparar Notificações (Push)</h2>
+          <h2 className="text-2xl font-bold text-white">Notificações</h2>
           <p className="text-white/50 text-sm mt-2 max-w-md">
-            Envie mensagens instantâneas para todos os usuários ou para contas específicas.
+            Acompanhe quem ativou as notificações push e dispare mensagens manuais.
           </p>
         </div>
       </div>
 
+      {/* ===== Status das notificações dos usuários ===== */}
+      <div className="w-full max-w-4xl mb-10">
+        {statsLoading ? (
+          <div className="flex flex-col items-center justify-center p-10 text-white/40 gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+            <span className="text-sm font-medium">Carregando status das notificações...</span>
+          </div>
+        ) : notifStats ? (
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Ativadas</span>
+                  <BellRing className="w-3.5 h-3.5 text-emerald-400" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400">{notifStats.grantedWithToken}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">{notifStats.granted} aceitaram</div>
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Desativadas</span>
+                  <BellOff className="w-3.5 h-3.5 text-red-400" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-red-400">{notifStats.denied}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">recusaram — não serão perguntadas de novo</div>
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Não Perguntados</span>
+                  <Users className="w-3.5 h-3.5 text-white/50" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-white/70">{notifStats.notAsked}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">verão o pedido na próxima visita</div>
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Dispositivos</span>
+                  <Smartphone className="w-3.5 h-3.5 text-purple-400" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-purple-400">{notifStats.totalTokens}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">aparelhos com push registrado</div>
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4 col-span-2 sm:col-span-1">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Inadimplentes</span>
+                  <HeartHandshake className="w-3.5 h-3.5 text-orange-400" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-orange-400">{notifStats.delinquent}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">recebem saudação a cada 3 dias</div>
+              </div>
+            </div>
+
+            {/* Lista de usuários por status */}
+            <div className="bg-black/30 border border-white/5 rounded-[20px] overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/5">
+                <span className="text-white/60 text-xs font-bold uppercase tracking-wider">
+                  Usuários · Status de Notificação
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowAllUsers(!showAllUsers)}
+                  className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors cursor-pointer"
+                >
+                  {showAllUsers ? "Mostrar menos" : `Ver todos (${notifUsers.length})`}
+                </button>
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {(showAllUsers ? notifUsers : notifUsers.slice(0, 8)).map((u, i) => (
+                  <div key={i} className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-white/5 last:border-0 hover:bg-white/5 transition-colors">
+                    <div className="min-w-0">
+                      <span className="text-sm font-semibold text-white block truncate">
+                        {u.name}{u.isAdminDevice && <span className="ml-1.5 text-[10px] font-bold text-cyan-400/70 uppercase">admin</span>}
+                      </span>
+                      <span className="text-xs text-white/40 truncate block">{u.email || "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      {u.devices > 0 && (
+                        <span className="text-[10px] text-white/35 font-medium flex items-center gap-1">
+                          <Smartphone className="w-3 h-3" /> {u.devices}
+                        </span>
+                      )}
+                      {u.status === "granted" && (
+                        <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+                          Ativada
+                        </span>
+                      )}
+                      {u.status === "denied" && (
+                        <span className="px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/25 text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                          Desativada
+                        </span>
+                      )}
+                      {u.status === "not_asked" && (
+                        <span className="px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-white/50 text-[10px] font-bold uppercase tracking-wider">
+                          Não perguntado
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {!showAllUsers && notifUsers.length === 0 && (
+                  <div className="px-4 py-8 text-center text-white/40 text-sm">Nenhum usuário registrado ainda.</div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-white/30 text-[11px] text-center mt-3 leading-relaxed">
+              Lançamentos de filmes/séries disparam push automático (a cada 1h, mínimo 3h entre pushes) para todos com notificação ativada.
+              Ex-assinantes vencidos recebem a saudação de reativação a cada 3 dias.
+            </p>
+          </>
+        ) : (
+          <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-[20px] text-red-400 text-sm text-center">
+            Não foi possível carregar o status das notificações.
+          </div>
+        )}
+      </div>
+
       <div className="w-full max-w-xl">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="h-px bg-white/10 flex-1"></div>
+          <span className="text-white/50 text-xs font-bold uppercase tracking-wider">Disparo Manual</span>
+          <div className="h-px bg-white/10 flex-1"></div>
+        </div>
+
         {success && (
           <div className="mb-6 p-4 bg-green-500/10 border border-green-500/20 rounded-[20px] text-green-400 text-sm font-medium text-center">
             ✅ {success}

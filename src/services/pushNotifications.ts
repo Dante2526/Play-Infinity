@@ -5,8 +5,43 @@ import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { auth, db, app } from "./firebase";
 
 const FCM_LOCAL_TOKEN_KEY = "playinfinity_fcm_token";
+/** Flag local: usuário recusou o pedido de notificações — nunca mais perguntar. */
+const NOTIF_DECLINED_LOCAL_KEY = "playinfinity_notif_declined";
 
 let registerInFlight = false;
+
+export function isNotifLocallyDeclined(): boolean {
+  try {
+    return localStorage.getItem(NOTIF_DECLINED_LOCAL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setNotifLocallyDeclined(declined: boolean): void {
+  try {
+    if (declined) localStorage.setItem(NOTIF_DECLINED_LOCAL_KEY, "1");
+    else localStorage.removeItem(NOTIF_DECLINED_LOCAL_KEY);
+  } catch { /* storage indisponível */ }
+}
+
+/**
+ * Persiste a decisão do usuário sobre notificações push no Firestore.
+ * - 'granted': aceitou — passa a receber pushes de lançamentos/dunning.
+ * - 'denied':  recusou (botão "Agora não" OU negação do navegador) — o app
+ *   nunca mais solicita a permissão; o usuário só reativa manualmente pelo
+ *   perfil. Consultado pelo watcher de lançamentos (filtro notifPermission == 'granted').
+ */
+export async function saveNotifPermission(userId: string, status: "granted" | "denied"): Promise<void> {
+  try {
+    await updateDoc(doc(db, "usuarios", userId), {
+      notifPermission: status,
+      notifPermissionUpdatedAt: Date.now()
+    });
+  } catch (error) {
+    console.warn("[Push] Falha ao salvar decisão de notificações:", error);
+  }
+}
 
 /**
  * Salva/atualiza o token FCM do dispositivo no Firestore.
@@ -31,9 +66,10 @@ async function saveFcmTokenToCloud(userId: string, token: string): Promise<void>
  * - App nativo (Capacitor/Android): plugin @capacitor-firebase/messaging.
  * - Web: Firebase JS SDK + service worker (public/firebase-messaging-sw.js)
  *   + VAPID key (VITE_FIREBASE_VAPID_KEY no .env, gerada no Firebase Console).
+ * Retorna true quando o token foi obtido e salvo no Firestore.
  */
-export async function registerFcmToken(userId: string): Promise<void> {
-  if (registerInFlight) return;
+export async function registerFcmToken(userId: string): Promise<boolean> {
+  if (registerInFlight) return false;
   registerInFlight = true;
   try {
     if (Capacitor.isNativePlatform()) {
@@ -44,25 +80,26 @@ export async function registerFcmToken(userId: string): Promise<void> {
         if (token) {
           localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
           await saveFcmTokenToCloud(userId, token);
+          return true;
         }
       }
-      return;
+      return false;
     }
 
     // --- Web (navegador) ---
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
     if (!vapidKey) {
       console.info("[Push] Push web desativado: configure VITE_FIREBASE_VAPID_KEY (chave de par Web Push no Firebase Console).");
-      return;
+      return false;
     }
     if (typeof Notification === "undefined" || typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
-      return;
+      return false;
     }
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return;
+    if (permission !== "granted") return false;
 
     const { getMessaging, getToken, isSupported } = await import("firebase/messaging");
-    if (!(await isSupported())) return;
+    if (!(await isSupported())) return false;
 
     const swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
     const messaging = getMessaging(app);
@@ -73,9 +110,12 @@ export async function registerFcmToken(userId: string): Promise<void> {
     if (token) {
       localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
       await saveFcmTokenToCloud(userId, token);
+      return true;
     }
+    return false;
   } catch (error) {
     console.warn("[Push] FCM bloqueado ou erro ao registrar:", error);
+    return false;
   } finally {
     registerInFlight = false;
   }

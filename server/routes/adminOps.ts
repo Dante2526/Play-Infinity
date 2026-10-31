@@ -8,6 +8,7 @@ import { Client as SshClient } from "ssh2";
 import { getEncontreiResolverStatus, getVizerCatalogStatus, getEncontreiCatalogStatus } from "./encontreiLookup";
 import { checkVizerHealth } from "../services/vizerDomains";
 import { getSentinelStatus, runSentinelCheck, registerAdminPushToken, sendPushToAdmins } from "../services/adminSentinel";
+import { isDelinquentUser } from "../services/dunningWatcher";
 
 export const adminOpsRouter = Router();
 
@@ -838,6 +839,88 @@ adminOpsRouter.post("/delete-bug-image", (req: Request, res: Response) => {
     res.json({ success: true });
   } catch (error: any) {
     console.error("[adminOps] Erro ao deletar imagem de bug:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/notif-stats
+ * Estatísticas de notificações push dos usuários (aba Notificações do painel):
+ *  - Contadores: total, ativadas (granted com token), desativadas (denied),
+ *    não perguntados, dispositivos (tokens únicos) e inadimplentes elegíveis.
+ *  - Lista por usuário: e-mail, nome, status, nº de dispositivos e último
+ *    push de retenção recebido (ordenado: ativadas → desativadas → restantes).
+ */
+adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
+  try {
+    const db = getAdminDb();
+    if (!db) {
+      return res.status(500).json({ success: false, error: "Firebase Firestore não inicializado" });
+    }
+
+    const snapshot = await db.collection("usuarios").get();
+    const now = Date.now();
+
+    let granted = 0;          // notifPermission === 'granted' (decisão aceita)
+    let grantedWithToken = 0; // granted E com ≥1 token FCM (realmente recebem push)
+    let denied = 0;           // recusou — nunca mais é perguntado
+    let notAsked = 0;         // sem decisão registrada
+    let totalTokens = 0;      // dispositivos únicos somados
+    let delinquent = 0;       // ex-assinantes vencidos (público do push de retenção)
+
+    const users: Array<{
+      email: string | null; name: string; status: "granted" | "denied" | "not_asked";
+      devices: number; lastDunningPushAt: number | null; isAdminDevice: boolean;
+    }> = [];
+
+    snapshot.forEach((docSnap: any) => {
+      const data = docSnap.data() || {};
+      const tokens = new Set<string>();
+      if (typeof data.fcmToken === "string" && data.fcmToken.trim()) tokens.add(data.fcmToken.trim());
+      if (Array.isArray(data.fcmTokens)) {
+        for (const t of data.fcmTokens) {
+          if (typeof t === "string" && t.trim()) tokens.add(t.trim());
+        }
+      }
+      const devices = tokens.size;
+
+      let status: "granted" | "denied" | "not_asked" = "not_asked";
+      if (data.notifPermission === "granted") { status = "granted"; granted++; if (devices > 0) grantedWithToken++; }
+      else if (data.notifPermission === "denied") { status = "denied"; denied++; }
+      else notAsked++;
+
+      totalTokens += devices;
+      if (status === "granted" && isDelinquentUser(data, now)) delinquent++;
+
+      users.push({
+        email: typeof data.email === "string" ? data.email : null,
+        name: String(data.nome || data.name || (data.email ? String(data.email).split("@")[0] : "Usuário")),
+        status,
+        devices,
+        lastDunningPushAt: Number(data.lastDunningPushAt) || null,
+        isAdminDevice: Boolean(data.isAdminDevice),
+      });
+    });
+
+    // Ordena: ativadas primeiro, depois desativadas, depois não perguntados.
+    const order = { granted: 0, denied: 1, not_asked: 2 } as const;
+    users.sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
+
+    res.json({
+      success: true,
+      stats: {
+        total: snapshot.size,
+        granted,
+        grantedWithToken,
+        denied,
+        notAsked,
+        totalTokens,
+        delinquent,
+      },
+      users: users.slice(0, 400), // topo ordenado; base de usuários atual é pequena
+    });
+  } catch (error: any) {
+    console.error("[adminOps] Erro ao coletar stats de notificações:", error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
