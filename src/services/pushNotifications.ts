@@ -129,6 +129,61 @@ export {
   type BrowserPermission,
 } from "./notifGateLogic";
 
+// ---------------------------------------------------------------------------
+// Nativos (Capacitor/Android): estado real da permissão no nível do SO.
+//
+// O WebView do Android NÃO expõe Notification.permission (typeof Notification
+// === 'undefined'), então decidir o fluxo do gate no app exige consultar o
+// plugin nativo. checkPermissions() reflete o estado do SO:
+//  - 'granted' → notificações permitidas (ou Android <13, sem runtime perm).
+//  - 'denied'  → BLOQUEADO no sistema (dialog nativo suprimido — só reativa
+//                manualmente nas configurações do app).
+//  - 'prompt'  → ainda não decidido → o diálogo nativo PODE ser exibido.
+// Mapeamos 'prompt' → 'default' para reaproveitar a mesma decideNotifGate.
+// ---------------------------------------------------------------------------
+
+/** Estado da permissão nativa, nos mesmos valores de Notification.permission. */
+export type NativeNotifPermission = "granted" | "denied" | "default";
+
+/**
+ * Consulta o estado da permissão de notificação no SO (app nativo).
+ * Retorna null quando não é app nativo ou o plugin falhou — o caller deve
+ * usar o fallback 'native' (comportamento conservador antigo).
+ */
+export async function getNativeNotifPermission(): Promise<NativeNotifPermission | null> {
+  if (!Capacitor.isNativePlatform()) return null;
+  try {
+    const status = await FirebaseMessaging.checkPermissions();
+    const receive = String((status as any)?.receive || "");
+    if (receive === "granted") return "granted";
+    if (receive === "denied") return "denied";
+    return "default"; // 'prompt' (dialog nativo ainda pode aparecer) ou desconhecido
+  } catch {
+    return null; // plugin indisponível (APK muito antigo) — caller usa fallback
+  }
+}
+
+/**
+ * Abre a tela de notificações do app nas configurações do Android
+ * (Ajustes → Aplicativos → Play Infinity → Notificações). Único caminho
+ * para quem BLOQUEOU no nível do SO — o diálogo nativo é suprimido.
+ * Retorna false quando indisponível (navegador ou APK antigo sem o plugin
+ * OpenNotificationSettings, que entrou no APK 71/1.4.39).
+ */
+export async function openNativeNotificationSettings(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const cap = Capacitor as any;
+    if (typeof cap.isPluginAvailable !== "function" || !cap.isPluginAvailable("OpenNotificationSettings")) {
+      return false;
+    }
+    await cap.Plugins.OpenNotificationSettings.open();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Salva/atualiza o token FCM do dispositivo no Firestore.
  * Usa arrayUnion no campo `fcmTokens` para suportar múltiplos dispositivos

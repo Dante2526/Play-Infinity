@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
-import { removeFcmTokenFromCloud, registerFcmToken, markNotifGranted, markNotifDismissed, markNotifDenied } from "../services/pushNotifications";
+import { Capacitor } from "@capacitor/core";
+import { removeFcmTokenFromCloud, registerFcmToken, markNotifGranted, markNotifDismissed, markNotifDenied, getNativeNotifPermission } from "../services/pushNotifications";
 import { clearLocalUserData } from "../utils/safeStorage";
 import {
   Play,
@@ -187,9 +188,12 @@ export function UserProfilePage({
 
   // ===== Notifições Push (toggle manual — caminho de reativação para quem
   // recusou o modal educativo ou bloqueou no navegador) =====
-  const [pushEnabled, setPushEnabled] = useState<boolean>(
-    () => typeof Notification !== "undefined" && Notification.permission === "granted" && !!localStorage.getItem("playinfinity_fcm_token")
-  );
+  const [pushEnabled, setPushEnabled] = useState<boolean>(() => {
+    // App nativo: o WebView não expõe Notification.permission — usa a
+    // existência do token FCM local como fonte da verdade.
+    if (Capacitor.isNativePlatform()) return !!localStorage.getItem("playinfinity_fcm_token");
+    return typeof Notification !== "undefined" && Notification.permission === "granted" && !!localStorage.getItem("playinfinity_fcm_token");
+  });
   const [pushBusy, setPushBusy] = useState(false);
   // Mensagem de aviso exibida quando o navegador bloqueou as notificações
   // (não dá pra re-promptar nativo — usuário precisa desbloquear nas settings).
@@ -209,14 +213,25 @@ export function UserProfilePage({
         await markNotifDenied(user.uid);
         setPushEnabled(false);
       } else {
-        // Ativa: precisa que o navegador NÃO tenha bloqueado o site.
-        const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
-        if (browserPerm === "denied") {
+        // Ativa: precisa que o sistema NÃO tenha bloqueado as notificações.
+        if (Capacitor.isNativePlatform()) {
+          // App nativo: consulta o estado real no SO (o WebView não expõe
+          // Notification.permission).
+          const osPerm = await getNativeNotifPermission();
+          if (osPerm === "denied") {
+            // Bloqueado no Android — o diálogo nativo é suprimido; só reativa
+            // manualmente nos Ajustes do aparelho.
+            setPushBlockedMessage(
+              "As notificações do app estão desativadas no Android. Abra Ajustes → Aplicativos → Play Infinity → Notificações e ative \"Mostrar notificações\". Depois volte aqui e ative o interruptor novamente."
+            );
+            await markNotifDenied(user.uid);
+            return;
+          }
+        } else if (typeof Notification !== "undefined" && Notification.permission === "denied") {
           // Navegador bloqueou — não dá pra re-promptar nativo.
           setPushBlockedMessage(
             "O navegador bloqueou as notificações deste site. Para reativar, abra as configurações do navegador → Permissões do site → Notificações → Permitir, e recarregue a página."
           );
-          // Marca denied (inicia cooldown de 30d para o gate reexibir instruções).
           await markNotifDenied(user.uid);
           return;
         }
@@ -225,9 +240,14 @@ export function UserProfilePage({
           await markNotifGranted(user.uid);
           setPushEnabled(true);
         } else {
-          // Provável: usuário dispensou o prompt nativo sem decidir.
+          // Falha no registro: no app nativo com permissão OK no SO, a causa
+          // quase certa é APK antigo SEM config do Firebase (google-services.json
+          // faltava nos builds até 71/1.4.39). No browser, usuário dispensou o
+          // prompt nativo sem decidir.
           setPushBlockedMessage(
-            "Não foi possível ativar — você fechou o pedido do navegador sem decidir? Tente novamente em alguns instantes."
+            Capacitor.isNativePlatform()
+              ? "Não foi possível registrar as notificações — o app instalado parece estar numa versão antiga. Atualize o aplicativo para a versão mais recente e tente de novo."
+              : "Não foi possível ativar — você fechou o pedido do navegador sem decidir? Tente novamente em alguns instantes."
           );
           await markNotifDismissed(user.uid);
         }

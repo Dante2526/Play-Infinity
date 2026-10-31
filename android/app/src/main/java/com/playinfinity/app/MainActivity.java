@@ -29,6 +29,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(RokuDiscoveryPlugin.class);
         registerPlugin(PiPPlugin.class);
         registerPlugin(StatusBarPlugin.class);
+        registerPlugin(OpenNotificationSettingsPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Ajusta insets no container de conteúdo para evitar sobreposição da UI

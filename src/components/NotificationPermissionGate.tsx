@@ -23,6 +23,8 @@ import {
   markNotifDenied,
   decideNotifGate,
   wasSessionDismissedRecently,
+  getNativeNotifPermission,
+  openNativeNotificationSettings,
 } from "../services/pushNotifications";
 
 /**
@@ -32,13 +34,15 @@ import {
  *  - 'granted'   → usuário aceitou (em qualquer dispositivo).
  *  - 'dismissed' → dispensou o modal educativo sem decidir. Re-promptamos o
  *                  modal após cooldown crescente (7 → 14 → 30 dias).
- *  - 'denied'    → navegador/app BLOQUEOU no nível do sistema. Não dá pra
+ *  - 'denied'    → navegador/SO BLOQUEOU no nível do sistema. Não dá pra
  *                  re-promptar nativo — mostramos um modal de instruções
- *                  (como desbloquear nas settings do navegador) periodicamente
- *                  (30 dias).
+ *                  (como desbloquear nas settings do navegador/Ajustes)
+ *                  periodicamente (30 dias).
  *
  * Fluxo ao montar (logado, não-admin, não-SmartTV):
- *  1. Pega Notification.permission (ou 'native' se Capacitor).
+ *  1. Pega a permissão: navegador → Notification.permission; app nativo →
+ *     FirebaseMessaging.checkPermissions() via getNativeNotifPermission()
+ *     (o WebView do Android não expõe Notification — precisamos consultar o SO).
  *  2. Lê o doc do usuário no Firestore (notifPermission/notifDecidedAt/notifPromptCount).
  *  3. decideNotifGate() retorna: 'hidden' | 'prompt' | 'instructions' | 'register-silent'.
  *  4. Executa a ação correspondente.
@@ -58,11 +62,14 @@ export function NotificationPermissionGate({
   // phase: estado da UI do modal.
   //  - 'hidden'         → nada renderiza.
   //  - 'prompt'         → modal educativo (botão "Ativar" → prompt nativo).
-  //  - 'instructions'   → modal explicando como desbloquear nas settings do navegador.
+  //  - 'instructions'   → modal explicando como desbloquear nas settings do
+  //                       navegador (web) ou nos Ajustes do Android (app nativo).
   //  - 'working'        → registrando token (spinner).
   //  - 'success'        → registrado com sucesso (fecha em 1.8s).
-  //  - 'fail-dismissed' → usuário dispensou o prompt nativo sem decidir (fecha em 1.5s).
-  //  - 'fail-denied'    → navegador bloqueou (transição para 'instructions').
+  //  - 'fail-dismissed' → usuário dispensou o prompt nativo sem decidir (fecha em 1.8s).
+  //  - 'fail-denied'    → navegador/SO bloqueou (transição para 'instructions').
+  //  - 'fail-native-update' → app nativo: permissão OK no SO mas registro falhou
+  //                       (APK antigo sem config do Firebase — atualizar o app resolve).
   const [phase, setPhase] = useState<
     | "hidden"
     | "prompt"
@@ -71,6 +78,7 @@ export function NotificationPermissionGate({
     | "success"
     | "fail-dismissed"
     | "fail-denied"
+    | "fail-native-update"
   >("hidden");
   const evaluatedRef = useRef(false);
 
@@ -90,10 +98,13 @@ export function NotificationPermissionGate({
       // Sessão: dispensou há pouco — não reabre.
       if (wasSessionDismissedRecently()) return;
 
-      // Determina a permissão do navegador/app.
+      // Determina a permissão do ambiente.
+      // App nativo: consulta o estado real no SO (checkPermissions) — o WebView
+      // do Android não expõe Notification.permission. Fallback 'native' se o
+      // plugin falhar (APK muito antigo).
       let browserPerm: "native" | NotificationPermission;
       if (Capacitor.isNativePlatform()) {
-        browserPerm = "native";
+        browserPerm = (await getNativeNotifPermission()) ?? "native";
       } else if (typeof Notification === "undefined") {
         // Browser sem API Notification (raro hoje) — silêncio.
         return;
@@ -115,10 +126,15 @@ export function NotificationPermissionGate({
         case "hidden":
           return;
         case "register-silent":
-          // Browser já concedeu neste aparelho — registra token em background
-          // e garante 'granted' no Firestore (consistência entre devices).
-          await registerFcmToken(uid);
-          await markNotifGranted(uid).catch(() => undefined);
+          // Ambiente já concedeu neste aparelho — registra token em background.
+          // Só marca 'granted' no Firestore se o registro DEU certo (em APKs
+          // antigos sem config do Firebase o getToken falha — sem token não
+          // há push, então não marcamos para não poluir as stats do admin;
+          // a próxima visita tenta registrar de novo).
+          {
+            const okSilent = await registerFcmToken(uid);
+            if (okSilent) await markNotifGranted(uid).catch(() => undefined);
+          }
           return;
         case "prompt":
           setPhase("prompt");
@@ -145,6 +161,30 @@ export function NotificationPermissionGate({
       setTimeout(() => setPhase("hidden"), 1800);
       return;
     }
+
+    // --- App nativo (Capacitor/Android) ---
+    if (Capacitor.isNativePlatform()) {
+      const osPerm = await getNativeNotifPermission();
+      if (osPerm === "denied") {
+        // Bloqueado no nível do SO — o Android suprime o diálogo nativo. Só
+        // reativa manualmente: marca 'denied' (cooldown 30d p/ reexibir as
+        // instruções) e vai pro modal com passos + botão "Abrir configurações".
+        await markNotifDenied(currentUser.uid).catch(() => undefined);
+        setPhase("fail-denied");
+        setTimeout(() => setPhase("instructions"), 1500);
+      } else {
+        // SO concedeu (ou permitiria o diálogo) mas o registro falhou →
+        // quase certamente APK antigo SEM config do Firebase (google-services.json
+        // faltava em todos os APKs até 71/1.4.39). Mensagem honesta + re-tentativa
+        // por cooldown normal ('dismissed').
+        await markNotifDismissed(currentUser.uid).catch(() => undefined);
+        setPhase("fail-native-update");
+        setTimeout(() => setPhase("hidden"), 6000);
+      }
+      return;
+    }
+
+    // --- Web ---
     // Falha: distingue dismissed (ainda default) de denied (bloqueou).
     const perm = typeof Notification !== "undefined" ? Notification.permission : "default";
     if (perm === "denied") {
@@ -175,9 +215,9 @@ export function NotificationPermissionGate({
 
   const handleInstructionsClose = async () => {
     // Marca 'denied' (atualiza timestamp) para iniciar cooldown de 30 dias
-    // até reexibir as instruções. Se o usuário desbloquear nas settings do
-    // navegador e voltar, na próxima avaliação decideNotifGate retorna
-    // 'register-silent' (perm='granted') e registramos o token.
+    // até reexibir as instruções. Se o usuário desbloquear nas settings /
+    // Ajustes do Android e voltar, na próxima avaliação decideNotifGate
+    // retorna 'register-silent' (perm='granted') e registramos o token.
     if (currentUser) {
       await markNotifDenied(currentUser.uid).catch(() => undefined);
     }
@@ -185,8 +225,10 @@ export function NotificationPermissionGate({
   };
 
   const handleRetryNativePrompt = async () => {
-    // Alguns browsers re-exibem o prompt nativo se invocado via gesture do
-    // usuário (clique em botão da página). Tenta de novo.
+    // Web: alguns browsers re-exibem o prompt nativo se invocado via gesture
+    // do usuário (clique em botão da página). App nativo: re-executa o fluxo
+    // do plugin (se o usuário acabou de habilitar nos Ajustes, o registro
+    // funciona de imediato). Tenta de novo em ambos.
     if (!currentUser) return;
     setPhase("working");
     const ok = await registerFcmToken(currentUser.uid);
@@ -194,6 +236,12 @@ export function NotificationPermissionGate({
       await markNotifGranted(currentUser.uid).catch(() => undefined);
       setPhase("success");
       setTimeout(() => setPhase("hidden"), 1800);
+    } else if (Capacitor.isNativePlatform() && (await getNativeNotifPermission()) !== "denied") {
+      // App nativo com SO OK mas registro falhando (APK antigo sem Firebase) —
+      // avisa sobre atualizar em vez de ficar preso no modal de instruções.
+      await markNotifDismissed(currentUser.uid).catch(() => undefined);
+      setPhase("fail-native-update");
+      setTimeout(() => setPhase("hidden"), 6000);
     } else {
       // Continua bloqueado — volta pro modal de instruções.
       await markNotifDenied(currentUser.uid).catch(() => undefined);
@@ -226,11 +274,12 @@ export function NotificationPermissionGate({
             />
           )}
 
-          {/* ===== Modal INSTRUCTIONS (browser bloqueou — como desbloquear) ===== */}
+          {/* ===== Modal INSTRUCTIONS (sistema bloqueou — como desbloquear) ===== */}
           {phase === "instructions" && (
             <InstructionsContent
               onClose={handleInstructionsClose}
               onRetry={handleRetryNativePrompt}
+              isNative={Capacitor.isNativePlatform()}
             />
           )}
 
@@ -260,7 +309,15 @@ export function NotificationPermissionGate({
 
           {phase === "fail-denied" && (
             <div className="w-full mt-1 p-4 bg-amber-500/10 border border-amber-500/25 rounded-[20px] text-amber-400 text-xs leading-relaxed text-center">
-              Você bloqueou as notificações no navegador. Vamos te mostrar como reativar...
+              As notificações deste aplicativo foram bloqueadas no aparelho. Vamos te mostrar como reativar...
+            </div>
+          )}
+
+          {phase === "fail-native-update" && (
+            <div className="w-full mt-1 p-4 bg-amber-500/10 border border-amber-500/25 rounded-[20px] text-amber-300 text-xs leading-relaxed text-center">
+              Não conseguimos registrar as notificações neste aparelho — o app instalado está
+              numa versão antiga. <span className="text-white/70 font-semibold">Atualize o aplicativo
+              para a versão mais recente</span> e tente novamente pelo seu perfil.
             </div>
           )}
         </div>
@@ -433,10 +490,93 @@ function browserInstructions(browser: BrowserKind): { steps: string[]; browserNa
 function InstructionsContent({
   onClose,
   onRetry,
+  isNative,
 }: {
   onClose: () => void;
   onRetry: () => void;
+  isNative: boolean;
 }) {
+  const [openedSettings, setOpenedSettings] = useState(false);
+
+  const handleOpenSettings = async () => {
+    // APK >= 71 (1.4.39): abre direto na tela de Notificações do app.
+    // Em APKs antigos o plugin não existe → retornamos false e o usuário
+    // segue os passos manualmente.
+    const ok = await openNativeNotificationSettings();
+    setOpenedSettings(ok);
+  };
+
+  // Variante APP NATIVO (Android): passos dos Ajustes do sistema.
+  if (isNative) {
+    const steps = openedSettings
+      ? [
+          "Na tela que abrimos, ative \"Mostrar notificações\"",
+          "Volte para o Play Infinity",
+          "Toque em \"Já ativei — tentar de novo\" abaixo",
+        ]
+      : [
+          "Abra os Ajustes do Android → Aplicativos",
+          "Encontre o Play Infinity e toque em Notificações",
+          "Ative \"Mostrar notificações\"",
+          "Volte ao app e toque em \"Já ativei — tentar de novo\"",
+        ];
+
+    return (
+      <>
+        <div className="p-4 bg-gradient-to-br from-amber-500/25 to-orange-600/25 text-amber-400 rounded-2xl border border-white/10">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+
+        <div>
+          <h3 className="text-xl font-black text-white">Notificações bloqueadas</h3>
+          <p className="text-white/50 text-sm mt-1.5 leading-relaxed">
+            As notificações do Play Infinity estão desativadas no Android. Para reativar:
+          </p>
+        </div>
+
+        <div className="w-full text-left bg-white/5 border border-white/5 rounded-2xl p-4">
+          <ol className="space-y-2.5">
+            {steps.map((step, i) => (
+              <li key={i} className="flex gap-3 items-start">
+                <div className="shrink-0 w-6 h-6 rounded-full bg-orange-600/20 border border-orange-500/30 text-orange-400 text-xs font-bold flex items-center justify-center">
+                  {i + 1}
+                </div>
+                <span className="text-sm text-white/85 leading-snug pt-0.5">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="w-full flex flex-col gap-2.5 mt-1">
+          <button
+            type="button"
+            onClick={handleOpenSettings}
+            className="w-full px-6 py-3 bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-sm rounded-[20px] transition-all shadow-[0_4px_14px_rgba(234,88,12,0.4)] flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Settings2 className="w-4 h-4" />
+            Abrir configurações
+          </button>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="w-full px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white/90 hover:text-white font-bold text-sm rounded-[20px] transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <BellRing className="w-4 h-4" />
+            Já ativei — tentar de novo
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full px-6 py-2 text-white/45 hover:text-white/75 font-medium text-sm rounded-[20px] transition-colors cursor-pointer"
+          >
+            Lembrar depois
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  // Variante WEB (navegador): passos específicos por browser.
   const browser = detectBrowser();
   const { steps, browserName } = browserInstructions(browser);
 
