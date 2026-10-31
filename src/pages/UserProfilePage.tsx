@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AnimatePresence } from "motion/react";
-import { removeFcmTokenFromCloud, registerFcmToken, saveNotifPermission, setNotifLocallyDeclined } from "../services/pushNotifications";
+import { removeFcmTokenFromCloud, registerFcmToken, markNotifGranted, markNotifDismissed, markNotifDenied } from "../services/pushNotifications";
 import { clearLocalUserData } from "../utils/safeStorage";
 import {
   Play,
@@ -185,31 +185,51 @@ export function UserProfilePage({
   const [passwordError, setPasswordError] = useState("");
   const [passwordSuccess, setPasswordSuccess] = useState("");
 
-  // ===== Notificações Push (toggle manual — único caminho de reativação
-  // para quem recusou o modal educativo) =====
+  // ===== Notifições Push (toggle manual — caminho de reativação para quem
+  // recusou o modal educativo ou bloqueou no navegador) =====
   const [pushEnabled, setPushEnabled] = useState<boolean>(
     () => typeof Notification !== "undefined" && Notification.permission === "granted" && !!localStorage.getItem("playinfinity_fcm_token")
   );
   const [pushBusy, setPushBusy] = useState(false);
+  // Mensagem de aviso exibida quando o navegador bloqueou as notificações
+  // (não dá pra re-promptar nativo — usuário precisa desbloquear nas settings).
+  const [pushBlockedMessage, setPushBlockedMessage] = useState<string | null>(null);
 
   const handlePushToggle = async () => {
     const user = auth.currentUser;
     if (!user || pushBusy) return;
     setPushBusy(true);
+    setPushBlockedMessage(null);
     try {
       if (pushEnabled) {
-        // Desativa: remove o token deste aparelho e marca 'denied'.
+        // Desativa: remove o token deste aparelho e marca decisão 'denied'.
+        // decideNotifGate respeita isto (retorna 'hidden' mesmo se browser
+        // perm='granted') — não reativa sozinho, só via toggle.
         await removeFcmTokenFromCloud();
-        await saveNotifPermission(user.uid, "denied");
-        setNotifLocallyDeclined(true);
+        await markNotifDenied(user.uid);
         setPushEnabled(false);
       } else {
-        // Ativa: pede permissão (nativa) e registra o token.
+        // Ativa: precisa que o navegador NÃO tenha bloqueado o site.
+        const browserPerm = typeof Notification !== "undefined" ? Notification.permission : "default";
+        if (browserPerm === "denied") {
+          // Navegador bloqueou — não dá pra re-promptar nativo.
+          setPushBlockedMessage(
+            "O navegador bloqueou as notificações deste site. Para reativar, abra as configurações do navegador → Permissões do site → Notificações → Permitir, e recarregue a página."
+          );
+          // Marca denied (inicia cooldown de 30d para o gate reexibir instruções).
+          await markNotifDenied(user.uid);
+          return;
+        }
         const ok = await registerFcmToken(user.uid);
         if (ok) {
-          await saveNotifPermission(user.uid, "granted");
-          setNotifLocallyDeclined(false);
+          await markNotifGranted(user.uid);
           setPushEnabled(true);
+        } else {
+          // Provável: usuário dispensou o prompt nativo sem decidir.
+          setPushBlockedMessage(
+            "Não foi possível ativar — você fechou o pedido do navegador sem decidir? Tente novamente em alguns instantes."
+          );
+          await markNotifDismissed(user.uid);
         }
       }
     } finally {
@@ -789,6 +809,13 @@ export function UserProfilePage({
               )}
             </button>
           </div>
+
+          {pushBlockedMessage && (
+            <div className="mt-2 mb-1 p-3 bg-amber-500/10 border border-amber-500/25 rounded-xl text-amber-300 text-xs leading-relaxed flex gap-2 items-start">
+              <span className="shrink-0 mt-0.5">⚠️</span>
+              <span>{pushBlockedMessage}</span>
+            </div>
+          )}
 
           <button 
             type="button" 

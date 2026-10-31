@@ -1,47 +1,133 @@
 /// <reference types="vite/client" />
 import { Capacitor } from "@capacitor/core";
 import { FirebaseMessaging } from "@capacitor-firebase/messaging";
-import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, updateDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { auth, db, app } from "./firebase";
 
 const FCM_LOCAL_TOKEN_KEY = "playinfinity_fcm_token";
-/** Flag local: usuário recusou o pedido de notificações — nunca mais perguntar. */
-const NOTIF_DECLINED_LOCAL_KEY = "playinfinity_notif_declined";
 
 let registerInFlight = false;
 
-export function isNotifLocallyDeclined(): boolean {
-  try {
-    return localStorage.getItem(NOTIF_DECLINED_LOCAL_KEY) === "1";
-  } catch {
-    return false;
-  }
+// ---------------------------------------------------------------------------
+// Modelagem de 3 estados da decisão de notificações (antes era binária).
+//
+// notifPermission no Firestore (usuarios/{uid}):
+//  - 'granted'   → aceitou — passa a receber pushes de lançamentos/dunning.
+//  - 'dismissed' → dispensou o modal educativo ("Agora não" / X) sem decidir
+//                  no nível do navegador — pode ser re-promptado nativo após
+//                  cooldown crescente (7 → 14 → 30 dias por repeat).
+//  - 'denied'    → navegador/app BLOQUEOU no nível do sistema. O navegador
+//                  não permite re-promptar nativo — só mostrando um modal de
+//                  instruções (como desbloquear nas settings do navegador).
+//                  Reexibido a cada 30 dias.
+//
+// Extras:
+//  - notifDecidedAt: timestamp da última decisão (para calcular cooldown).
+//  - notifPromptCount: quantas vezes o modal foi exibido (backoff do dismiss).
+//  - notifPermissionUpdatedAt: compat com leituras legadas.
+//
+// Sessão atual (in-memory, NÃO persiste entre abas/recarregamentos):
+//  - setSessionDismissed() marca que o usuário acabou de dispensar o modal
+//    nesta sessão. Evita reabrir o modal imediatamente em navegação SPA.
+// ---------------------------------------------------------------------------
+
+const SESSION_DISMISS_COOLDOWN_MS = 60 * 60 * 1000; // 1h na mesma sessão
+let sessionDismissedAt = 0;
+
+/** Chamado quando o usuário dispensa o modal nesta sessão. */
+export function setSessionDismissed(): void {
+  sessionDismissedAt = Date.now();
 }
 
+/** True se o usuário dispensou o modal nesta sessão há menos de 1h. */
+export function wasSessionDismissedRecently(): boolean {
+  return sessionDismissedAt > 0 && Date.now() - sessionDismissedAt < SESSION_DISMISS_COOLDOWN_MS;
+}
+
+// Backward-compat: legado callers usavam isNotifLocallyDeclined/setNotifLocallyDeclined
+// como "recusou definitivo". Mantemos as funções com semântica compatível mas
+// preferimos usar markNotifGranted / markNotifDismissed / markNotifDenied nos
+// novos callers.
+const NOTIF_DECLINED_LOCAL_KEY = "playinfinity_notif_declined";
+
+/** @deprecated usar wasSessionDismissedRecently() / markNotifDismissed(). */
+export function isNotifLocallyDeclined(): boolean {
+  // Limpa flag legada se presente — não usamos mais localStorage pra isto.
+  try { localStorage.removeItem(NOTIF_DECLINED_LOCAL_KEY); } catch { /* noop */ }
+  return wasSessionDismissedRecently();
+}
+
+/** @deprecated usar setSessionDismissed() / markNotif*(). */
 export function setNotifLocallyDeclined(declined: boolean): void {
-  try {
-    if (declined) localStorage.setItem(NOTIF_DECLINED_LOCAL_KEY, "1");
-    else localStorage.removeItem(NOTIF_DECLINED_LOCAL_KEY);
-  } catch { /* storage indisponível */ }
+  try { localStorage.removeItem(NOTIF_DECLINED_LOCAL_KEY); } catch { /* noop */ }
+  if (declined) setSessionDismissed();
 }
 
 /**
  * Persiste a decisão do usuário sobre notificações push no Firestore.
- * - 'granted': aceitou — passa a receber pushes de lançamentos/dunning.
- * - 'denied':  recusou (botão "Agora não" OU negação do navegador) — o app
- *   nunca mais solicita a permissão; o usuário só reativa manualmente pelo
- *   perfil. Consultado pelo watcher de lançamentos (filtro notifPermission == 'granted').
+ * Status: 'granted' | 'dismissed' | 'denied' (era 'granted' | 'denied').
+ * Atualiza notifDecidedAt (cooldown) e notifPermissionUpdatedAt (compat).
  */
-export async function saveNotifPermission(userId: string, status: "granted" | "denied"): Promise<void> {
+export async function saveNotifPermission(
+  userId: string,
+  status: "granted" | "dismissed" | "denied"
+): Promise<void> {
   try {
-    await updateDoc(doc(db, "usuarios", userId), {
+    const ref = doc(db, "usuarios", userId);
+    // Se for 'dismissed', incrementa notifPromptCount (conta quantas vezes
+    // o modal foi exibido — usado pelo backoff 7→14→30 dias).
+    if (status === "dismissed") {
+      const snap = await getDoc(ref);
+      const current = snap.exists() ? Number(snap.data()?.notifPromptCount) || 0 : 0;
+      await updateDoc(ref, {
+        notifPermission: "dismissed",
+        notifDecidedAt: Date.now(),
+        notifPermissionUpdatedAt: Date.now(),
+        notifPromptCount: current + 1,
+      });
+      return;
+    }
+    await updateDoc(ref, {
       notifPermission: status,
-      notifPermissionUpdatedAt: Date.now()
+      notifDecidedAt: Date.now(),
+      notifPermissionUpdatedAt: Date.now(),
     });
   } catch (error) {
     console.warn("[Push] Falha ao salvar decisão de notificações:", error);
   }
 }
+
+/** Marca que o usuário ACEITOU notificações (atalho para saveNotifPermission 'granted'). */
+export async function markNotifGranted(userId: string): Promise<void> {
+  await saveNotifPermission(userId, "granted");
+}
+
+/** Marca que o usuário DISPENSOU o modal educativo (re-promptará após cooldown). */
+export async function markNotifDismissed(userId: string): Promise<void> {
+  await saveNotifPermission(userId, "dismissed");
+  setSessionDismissed();
+}
+
+/**
+ * Marca que o usuário BLOQUEOU no navegador/app (permission='denied').
+ * Não incrementa notifPromptCount — decisão final até o usuário desbloquear
+ * manualmente nas settings do navegador.
+ */
+export async function markNotifDenied(userId: string): Promise<void> {
+  await saveNotifPermission(userId, "denied");
+}
+
+// ---------------------------------------------------------------------------
+// Lógica de decisão do gate — função PURA (testável sem Firebase/DOM).
+// Extraída em src/services/notifGateLogic.ts para permitir teste isolado.
+// ---------------------------------------------------------------------------
+
+export {
+  decideNotifGate,
+  dismissedCooldownMs,
+  type NotifGateAction,
+  type BrowserPermission,
+} from "./notifGateLogic";
 
 /**
  * Salva/atualiza o token FCM do dispositivo no Firestore.

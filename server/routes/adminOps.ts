@@ -845,11 +845,20 @@ adminOpsRouter.post("/delete-bug-image", (req: Request, res: Response) => {
 
 /**
  * GET /api/admin/notif-stats
- * Estatísticas de notificações push dos usuários (aba Notificações do painel):
- *  - Contadores: total, ativadas (granted com token), desativadas (denied),
- *    não perguntados, dispositivos (tokens únicos) e inadimplentes elegíveis.
- *  - Lista por usuário: e-mail, nome, status, nº de dispositivos e último
- *    push de retenção recebido (ordenado: ativadas → desativadas → restantes).
+ * Estatísticas de notificações push dos usuários (aba Notificações do painel).
+ *
+ * Modelagem de 3 estados no Firestore (notifPermission):
+ *  - 'granted'   → aceitou (em qualquer dispositivo).
+ *  - 'dismissed' → dispensou o modal educativo ("Agora não" / X) — será
+ *                  re-promptado nativo após cooldown crescente (7→14→30 dias).
+ *  - 'denied'    → navegador/app BLOQUEOU no nível do sistema. Não dá pra
+ *                  re-promptar nativo — só modal de instruções (a cada 30d).
+ *
+ * Stats retornadas:
+ *  - total, granted, grantedWithToken (realmente recebem push), dismissed,
+ *    denied, notAsked, totalTokens, delinquent.
+ *  - Lista por usuário: email, nome, status (4 valores), devices,
+ *    lastDunningPushAt, isAdminDevice, notifPromptCount, notifDecidedAt.
  */
 adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
   try {
@@ -863,14 +872,17 @@ adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
 
     let granted = 0;          // notifPermission === 'granted' (decisão aceita)
     let grantedWithToken = 0; // granted E com ≥1 token FCM (realmente recebem push)
-    let denied = 0;           // recusou — nunca mais é perguntado
+    let dismissed = 0;        // dispensou o modal — re-prompt pendente (cooldown)
+    let denied = 0;           // navegador bloqueou — só reativa via settings manuais
     let notAsked = 0;         // sem decisão registrada
     let totalTokens = 0;      // dispositivos únicos somados
     let delinquent = 0;       // ex-assinantes vencidos (público do push de retenção)
 
     const users: Array<{
-      email: string | null; name: string; status: "granted" | "denied" | "not_asked";
+      email: string | null; name: string;
+      status: "granted" | "dismissed" | "denied" | "not_asked";
       devices: number; lastDunningPushAt: number | null; isAdminDevice: boolean;
+      notifPromptCount: number; notifDecidedAt: number | null;
     }> = [];
 
     snapshot.forEach((docSnap: any) => {
@@ -884,8 +896,9 @@ adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
       }
       const devices = tokens.size;
 
-      let status: "granted" | "denied" | "not_asked" = "not_asked";
+      let status: "granted" | "dismissed" | "denied" | "not_asked" = "not_asked";
       if (data.notifPermission === "granted") { status = "granted"; granted++; if (devices > 0) grantedWithToken++; }
+      else if (data.notifPermission === "dismissed") { status = "dismissed"; dismissed++; }
       else if (data.notifPermission === "denied") { status = "denied"; denied++; }
       else notAsked++;
 
@@ -899,11 +912,13 @@ adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
         devices,
         lastDunningPushAt: Number(data.lastDunningPushAt) || null,
         isAdminDevice: Boolean(data.isAdminDevice),
+        notifPromptCount: Number(data.notifPromptCount) || 0,
+        notifDecidedAt: Number(data.notifDecidedAt) || null,
       });
     });
 
-    // Ordena: ativadas primeiro, depois desativadas, depois não perguntados.
-    const order = { granted: 0, denied: 1, not_asked: 2 } as const;
+    // Ordena: ativadas → dispensaram (re-prompt pendente) → bloquearam → não perguntados.
+    const order = { granted: 0, dismissed: 1, denied: 2, not_asked: 3 } as const;
     users.sort((a, b) => order[a.status] - order[b.status] || a.name.localeCompare(b.name));
 
     res.json({
@@ -912,6 +927,7 @@ adminOpsRouter.get("/notif-stats", async (_req: Request, res: Response) => {
         total: snapshot.size,
         granted,
         grantedWithToken,
+        dismissed,
         denied,
         notAsked,
         totalTokens,

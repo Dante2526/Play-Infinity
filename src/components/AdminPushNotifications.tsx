@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown, BellRing, BellOff, Smartphone, HeartHandshake } from "lucide-react";
+import { Send, Bell, Users, Loader2, MessageSquare, ChevronDown, BellRing, BellOff, Smartphone, HeartHandshake, Clock } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../services/firebase";
 import { adminFetch } from "../services/adminApi";
@@ -14,16 +14,19 @@ const TEMPLATES = [
 interface NotifUserRow {
   email: string | null;
   name: string;
-  status: "granted" | "denied" | "not_asked";
+  status: "granted" | "dismissed" | "denied" | "not_asked";
   devices: number;
   lastDunningPushAt: number | null;
   isAdminDevice: boolean;
+  notifPromptCount: number;
+  notifDecidedAt: number | null;
 }
 
 interface NotifStats {
   total: number;
   granted: number;
   grantedWithToken: number;
+  dismissed: number;
   denied: number;
   notAsked: number;
   totalTokens: number;
@@ -167,7 +170,7 @@ export function AdminPushNotifications() {
           </div>
         ) : notifStats ? (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
               <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
                 <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
                   <span>Ativadas</span>
@@ -178,11 +181,19 @@ export function AdminPushNotifications() {
               </div>
               <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
                 <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
-                  <span>Desativadas</span>
+                  <span>Dispensaram</span>
+                  <Clock className="w-3.5 h-3.5 text-amber-400" />
+                </div>
+                <div className="text-xl sm:text-2xl font-black text-amber-400">{notifStats.dismissed}</div>
+                <div className="text-[10px] text-white/35 mt-0.5">re-prompt pendente (7-30d)</div>
+              </div>
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
+                <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
+                  <span>Bloquearam</span>
                   <BellOff className="w-3.5 h-3.5 text-red-400" />
                 </div>
                 <div className="text-xl sm:text-2xl font-black text-red-400">{notifStats.denied}</div>
-                <div className="text-[10px] text-white/35 mt-0.5">recusaram — não serão perguntadas de novo</div>
+                <div className="text-[10px] text-white/35 mt-0.5">navegador bloqueou — só via settings</div>
               </div>
               <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
                 <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
@@ -200,7 +211,7 @@ export function AdminPushNotifications() {
                 <div className="text-xl sm:text-2xl font-black text-purple-400">{notifStats.totalTokens}</div>
                 <div className="text-[10px] text-white/35 mt-0.5">aparelhos com push registrado</div>
               </div>
-              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4 col-span-2 sm:col-span-1">
+              <div className="bg-black/40 border border-white/10 rounded-2xl p-3 sm:p-4">
                 <div className="flex items-center justify-between text-white/50 text-[11px] font-bold uppercase tracking-wider mb-1">
                   <span>Inadimplentes</span>
                   <HeartHandshake className="w-3.5 h-3.5 text-orange-400" />
@@ -244,9 +255,14 @@ export function AdminPushNotifications() {
                           Ativada
                         </span>
                       )}
+                      {u.status === "dismissed" && (
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/25 text-amber-400 text-[10px] font-bold uppercase tracking-wider" title={`Re-prompt pendente — ${u.notifPromptCount}x dispensado${u.notifDecidedAt ? ` em ${new Date(u.notifDecidedAt).toLocaleDateString("pt-BR")}` : ""}`}>
+                          Dispensou · {u.notifPromptCount}x
+                        </span>
+                      )}
                       {u.status === "denied" && (
-                        <span className="px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/25 text-red-400 text-[10px] font-bold uppercase tracking-wider">
-                          Desativada
+                        <span className="px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/25 text-red-400 text-[10px] font-bold uppercase tracking-wider" title="Navegador bloqueou — só reativa via settings manuais">
+                          Bloqueou
                         </span>
                       )}
                       {u.status === "not_asked" && (
@@ -266,6 +282,7 @@ export function AdminPushNotifications() {
             <p className="text-white/30 text-[11px] text-center mt-3 leading-relaxed">
               Lançamentos de filmes/séries disparam push automático (a cada 1h, mínimo 3h entre pushes) para todos com notificação ativada.
               Ex-assinantes vencidos recebem a saudação de reativação a cada 3 dias.
+              <span className="block mt-1">Quem <span className="text-amber-400/70">dispensou</span> o modal educativo volta a ser perguntado após 7/14/30 dias (backoff crescente). Quem <span className="text-red-400/70">bloqueou</span> no navegador recebe um modal de instruções a cada 30 dias.</span>
             </p>
           </>
         ) : (
