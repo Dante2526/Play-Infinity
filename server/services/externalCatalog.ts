@@ -789,7 +789,7 @@ export function getPublicLiveChannels(): LiveChannel[] {
   // de embed deles como servidores adicionais (isEmbed). Copia o canal —
   // nunca muta INITIAL_LIVE_CHANNELS.
   const withMinhaTela = channels.map((ch) => {
-    const extra = getMinhaTelaServersFor(ch.id, ch.name);
+    const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
     if (extra.length === 0) return ch;
     return { ...ch, servers: [...ch.servers, ...extra] };
   });

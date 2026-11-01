@@ -16,6 +16,9 @@
  *     se o canal só tem o servidor AC-3) — avisa e segue mudo
  *  6. Aviso transitório (pill) renderizado no player + cleanup do timer
  *  7. Veredito único por fonte (flags manifest/demux não reagem duas vezes)
+ *  8. Detecção de vídeo sem track de áudio no demux (áudio AC-3 descartado pelo TSDemuxer)
+ *  9. Fallback em runtime no timeupdate (webkitAudioDecodedByteCount e mozHasAudio)
+ * 10. switchToNextServer prioriza servidores não 'dead'
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -47,6 +50,51 @@ test('guard: veredito de codec no BUFFER_CODECS (demux — master do Saimo sem C
   assert.ok(demuxBlock.includes('audioTrack.codec'), 'lê codec descoberto no demux');
   assert.ok(demuxBlock.includes('levelCodec'), 'também considera levelCodec declarado');
   assert.ok(demuxBlock.includes('audioVerdict.demux'), 'veredito único (não repete por fragmento)');
+});
+
+test('guard: detecção de vídeo sem track de áudio no BUFFER_CODECS (áudio descartado pelo TSDemuxer)', () => {
+  const demuxBlock = src.slice(
+    src.indexOf('Codec descoberto no DEMUX'),
+    src.indexOf("hls.on(Hls.Events.MANIFEST_PARSED")
+  );
+  assert.ok(
+    demuxBlock.includes('videoTrack && !audioTrack && !audiovideoTrack'),
+    'detecta vídeo inicializado sem nenhuma track de áudio decodificada'
+  );
+  assert.ok(
+    demuxBlock.includes("checkAudioCodecSupport(['ac-3'], 'demux (áudio descartado/sem suporte)')"),
+    'dispara veredito com codec ac-3'
+  );
+});
+
+test('guard: fallback de segurança em runtime no timeupdate (zero bytes decodificados)', () => {
+  const timeUpdateBlock = src.slice(
+    src.indexOf('const handleTimeUpdate = () => {'),
+    src.indexOf('const handleCanPlay = () => {')
+  );
+  assert.ok(
+    timeUpdateBlock.includes('webkitAudioDecodedByteCount === 0'),
+    'checa webkitAudioDecodedByteCount após reprodução'
+  );
+  assert.ok(
+    timeUpdateBlock.includes('mozHasAudio === false'),
+    'checa mozHasAudio para compatibilidade Firefox'
+  );
+  assert.ok(
+    timeUpdateBlock.includes('switchToNextServer'),
+    'troca de servidor se som for detectado ausente em runtime'
+  );
+});
+
+test('guard: switchToNextServer prioriza fontes com sinal online (não dead)', () => {
+  const switchBlock = src.slice(
+    src.indexOf('const switchToNextServer = useCallback'),
+    src.indexOf('// Recuperação automática em caso de queda')
+  );
+  assert.ok(
+    switchBlock.includes("embedStatus[candidate] !== 'dead'"),
+    'pula servidores sabidamente sem sinal ao alternar'
+  );
 });
 
 test('guard: suporte testado dinamicamente via MediaSource.isTypeSupported', () => {

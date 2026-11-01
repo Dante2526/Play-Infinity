@@ -321,19 +321,30 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       return;
     }
 
-    // Busca próximo servidor que ainda não falhou
+    // Busca próximo servidor que ainda não falhou (prioriza fontes online que não estejam 'dead')
     let nextIdx = (selectedServerIndex + 1) % channel.servers.length;
+    let foundHealthy = false;
     for (let i = 0; i < channel.servers.length; i++) {
       const candidate = (selectedServerIndex + 1 + i) % channel.servers.length;
-      if (!failedServersRef.current.has(candidate)) {
+      if (!failedServersRef.current.has(candidate) && embedStatus[candidate] !== 'dead') {
         nextIdx = candidate;
+        foundHealthy = true;
         break;
+      }
+    }
+    if (!foundHealthy) {
+      for (let i = 0; i < channel.servers.length; i++) {
+        const candidate = (selectedServerIndex + 1 + i) % channel.servers.length;
+        if (!failedServersRef.current.has(candidate)) {
+          nextIdx = candidate;
+          break;
+        }
       }
     }
 
     console.log(`[LivePlayer] Alternando automaticamente de servidor (${channel.servers[selectedServerIndex]?.name} -> ${channel.servers[nextIdx]?.name}). Motivo: ${reason || 'queda ou erro'}`);
     setSelectedServerIndex(nextIdx);
-  }, [channel.servers, selectedServerIndex]);
+  }, [channel.servers, selectedServerIndex, embedStatus]);
 
   // Recuperação automática em caso de queda e retorno de conexão com a internet
   useEffect(() => {
@@ -632,7 +643,11 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         // o buffer é inicializado com o codec real da track de áudio).
         hls.on(Hls.Events.BUFFER_CODECS, (_event, data) => {
           if (!isMounted || audioVerdict.demux) return;
-          const audioTrack = (data as any)?.tracks?.audio;
+          const tracks = (data as any)?.tracks || (data as any) || {};
+          const audioTrack = tracks?.audio;
+          const videoTrack = tracks.video;
+          const audiovideoTrack = tracks.audiovideo;
+
           const sniffed = new Set<string>();
           if (typeof audioTrack?.codec === 'string' && audioTrack.codec) sniffed.add(audioTrack.codec);
           if (typeof audioTrack?.levelCodec === 'string') {
@@ -640,9 +655,22 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
               if (c && c.trim()) sniffed.add(c.trim());
             }
           }
-          if (sniffed.size === 0) return;
-          audioVerdict.demux = true;
-          checkAudioCodecSupport(sniffed, 'demux');
+
+          if (sniffed.size > 0) {
+            audioVerdict.demux = true;
+            checkAudioCodecSupport(sniffed, 'demux');
+            return;
+          }
+
+          // Se o segmento inicializou vídeo mas nenhuma track de áudio decodificável:
+          // Fontes Saimo (ex.: Servidor 1 do SporTV/Premiere) usam áudio AC-3.
+          // Quando !typeSupported.ac3, o TSDemuxer do hls.js descarta o áudio (audioPid=-1)
+          // e o remuxer gera APENAS videoTrack, sem tracks.audio e sem audiovideo.
+          if (videoTrack && !audioTrack && !audiovideoTrack && (hls.audioTracks?.length ?? 0) === 0) {
+            audioVerdict.demux = true;
+            console.warn('[LivePlayer] BUFFER_CODECS contém vídeo mas nenhuma track de áudio decodificável (áudio AC-3 descartado pelo TSDemuxer).');
+            checkAudioCodecSupport(['ac-3'], 'demux (áudio descartado/sem suporte)');
+          }
         });
 
         hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
@@ -959,6 +987,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     };
 
     // Ao avançar o tempo de reprodução, cancela qualquer aviso de buffering pendente imediatamente
+    let audioDecodedCheckPassed = false;
     const handleTimeUpdate = () => {
       if (bufferingDebounceTimer) {
         clearTimeout(bufferingDebounceTimer);
@@ -968,6 +997,38 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       setIsBuffering(false);
       setIsPlaying(true);
       setStreamHealth('online');
+
+      // Guarda de segurança em runtime: se o vídeo tocar por >1.5s mas o browser
+      // acusar 0 bytes decodificados de áudio (ou mozHasAudio=false), força troca
+      if (!audioDecodedCheckPassed && !isEmbedStream && video.currentTime >= 1.5 && !video.paused && !video.muted && video.volume > 0) {
+        const webkitBytes = (video as any).webkitAudioDecodedByteCount;
+        const mozHasAudio = (video as any).mozHasAudio;
+        if (typeof webkitBytes === 'number' && webkitBytes === 0) {
+          audioDecodedCheckPassed = true;
+          console.warn('[LivePlayer] webkitAudioDecodedByteCount === 0 após 1.5s — stream sem áudio decodificável.');
+          if (channel.servers.length > 1) {
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — mudando de servidor...');
+            setTimeout(() => {
+              if (isMounted) switchToNextServer('áudio mudo no player (webkitAudioDecodedByteCount=0)');
+            }, 500);
+          } else {
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — transmissão sem som.', 15000);
+          }
+        } else if (typeof mozHasAudio === 'boolean' && mozHasAudio === false) {
+          audioDecodedCheckPassed = true;
+          console.warn('[LivePlayer] mozHasAudio === false após 1.5s — stream sem áudio.');
+          if (channel.servers.length > 1) {
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — mudando de servidor...');
+            setTimeout(() => {
+              if (isMounted) switchToNextServer('áudio mudo no player (mozHasAudio=false)');
+            }, 500);
+          } else {
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — transmissão sem som.', 15000);
+          }
+        } else if (typeof webkitBytes === 'number' && webkitBytes > 0) {
+          audioDecodedCheckPassed = true;
+        }
+      }
     };
 
     const handleCanPlay = () => {

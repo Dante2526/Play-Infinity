@@ -357,6 +357,8 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
   const embeds = premiere.servers.filter(s => s.isEmbed);
   assert.equal(embeds.length, 3);
   assert.equal(premiere.servers[0]?.url.startsWith('/api/external-channel?'), true); // Saimo continua primeiro
+  // Nomes sequenciais sem duplicar 'Servidor 1'
+  assert.deepEqual(premiere.servers.map(s => s.name), ['Servidor 1', 'Servidor 2', 'Servidor 3', 'Servidor 4']);
 
   // SporTV HD também
   const sportv = channels.find(c => c.id === 'sportv');

@@ -186,14 +186,14 @@ function isSafeEmbedUrl(raw: string): boolean {
 }
 
 /** Converte as fontes MinhaTela em servidores embed do catálogo Play Infinity. */
-function streamsToEmbedServers(streams: MinhaTelaStream[]): EmbedServer[] {
+function streamsToEmbedServers(streams: MinhaTelaStream[], startIndex = 0): EmbedServer[] {
   const seen = new Set<string>();
   const out: EmbedServer[] = [];
   for (const s of streams || []) {
     if (!s || !s.url || !isSafeEmbedUrl(s.url)) continue;
     if (seen.has(s.url)) continue;
     seen.add(s.url);
-    out.push({ name: `Servidor ${out.length + 1}`, url: s.url, isEmbed: true });
+    out.push({ name: `Servidor ${startIndex + out.length + 1}`, url: s.url, isEmbed: true });
     if (out.length >= MAX_SERVERS_PER_CHANNEL) break;
   }
   return out;
@@ -299,11 +299,12 @@ export function findMinhaTelaChannel(
  */
 export function getMinhaTelaServersFor(
   playInfinityId: string,
-  playInfinityName: string
+  playInfinityName: string,
+  startIndex = 0
 ): EmbedServer[] {
   const mt = findMinhaTelaChannel(playInfinityId, playInfinityName);
   if (!mt) return [];
-  return streamsToEmbedServers(mt.streams || []);
+  return streamsToEmbedServers(mt.streams || [], startIndex);
 }
 
 /** Melhor qualidade das fontes do canal (para o badge do card). */

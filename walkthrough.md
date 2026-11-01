@@ -1,3 +1,32 @@
+## 01/11/2026 — Correção do Áudio no Servidor 1 (Dolby AC-3) e Numeração Sequencial de Servidores
+
+**Contexto e Diagnóstico:**
+1. **Áudio Mudo no Servidor 1 (Saimo):** Fontes Saimo (ex.: SporTV 3 HD, Premiere) usam áudio Dolby AC-3 (5.1 a 384kbps). Como navegadores comuns (Chrome, Edge, Android WebView) não decodificam AC-3 via Media Source Extensions (MSE), o `TSDemuxer` do `hls.js` descarta o PID de áudio no `parsePMT` (`audioPid = -1`) e monta o buffer contendo apenas `videoTrack`, sem criar `tracks.audio`. A checagem anterior lia `data.tracks.audio` (que vinha undefined), fazendo com que o player continuasse tocando o vídeo totalmente sem som.
+2. **Duplicidade de 'Servidor 1' no Menu:** Os servidores embed do MinhaTela eram anexados ao canal a partir do índice 1, fazendo com que canais com fonte direta (Saimo) exibissem dois itens chamados 'Servidor 1' no seletor de servidores.
+
+**Modificações Realizadas:**
+1. **Detecção no `BUFFER_CODECS` (`src/components/LivePlayerModal.tsx`):**
+   - Leitura unificada de tracks compatível com `data.tracks.*` e `data.*`.
+   - Detecção imediata de vídeo inicializado sem áudio decodificado (`videoTrack && !audioTrack && !audiovideoTrack && hls.audioTracks.length === 0`), disparando a troca automática de servidor com aviso visual de 8s no player.
+2. **Watchdog de Runtime no `handleTimeUpdate` (`src/components/LivePlayerModal.tsx`):**
+   - Rede de segurança em runtime: se o vídeo tocar por >1.5s contínuos com volume ativo e o browser reportar `webkitAudioDecodedByteCount === 0` ou `mozHasAudio === false`, força a alternância de servidor.
+3. **Seleção Inteligente no `switchToNextServer` (`src/components/LivePlayerModal.tsx`):**
+   - Prioriza servidores candidatos que não estejam marcados como `'dead'` pelo probe em background de embeds.
+4. **Numeração Sequencial de Servidores (`minhatelaCatalog.ts` e `externalCatalog.ts`):**
+   - Adicionado parâmetro `startIndex` em `streamsToEmbedServers` e `getMinhaTelaServersFor`.
+   - Ao anexar fontes aos canais estáticos/Saimo, passa `ch.servers.length`, garantindo numeração contínua sem repetição (`Servidor 1`, `Servidor 2`, `Servidor 3`, etc.).
+5. **Cobertura de Testes Automatizados:**
+   - Adicionados testes em `tests/live-ac3-audio-guard.test.cjs` e `tests/minhatela-catalog.test.cjs` cobrindo o descarte no demuxer, fallback no timeupdate, salto inteligente e numeração contínua.
+
+**Validação Realizada:**
+- `tests/live-ac3-audio-guard.test.cjs`: 9/9 testes aprovados.
+- `tests/minhatela-catalog.test.cjs`: 13/13 testes aprovados.
+- `npx tsc --noEmit`: 0 erros (código de saída 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: **APPROVED ✅** sem ressalvas.
+
+---
+
 ## 01/11/2026 — Otimização de Performance com React.memo e Remoção da Auto-Expansão Forçada
 
 **Contexto e Diagnóstico:**
