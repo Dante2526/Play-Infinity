@@ -1,3 +1,43 @@
+## 01/11/2026 — Varredura Profunda de Servidores de TV, Expurgo de Hosts Mortos e Promoção de Áudio AAC
+
+**Contexto e Diagnóstico:**
+1. **Proliferação de Servidores Fantasmas e Mortos:** Ao abrir canais como SporTV 3 HD e Premiere 1 HD, o seletor exibia até 12 opções de servidores, sendo que a grande maioria estava inoperante:
+   - Servidor 3 (`meuplayeronlinehd.com`): Redirecionava para `localhost70.xyz` gerando tela branca cheia de anúncios do Google Tag Manager.
+   - Servidores 4 e 8 (`sporturbo.link` e `nossoplayeronlinehd.ink`): Servidores upstream totalmente fora do ar (DNS offline).
+   - Servidores 9 e 10 (`rdcanais.net` / `dadinhodetapioca.fun`): Bloqueados com HTTP 403 Forbidden pelo Cloudflare ou gerando timeout.
+2. **Áudio Mudo no Servidor 1 (Saimo):** Transmissões esportivas diretas do Saimo utilizam exclusivamente Dolby AC-3 (5.1 a 384kbps). Como navegadores desktop e móveis (Chrome, Edge, WebView) descartam o codec AC-3 no Media Source Extensions (MSE), o canal abria sem som.
+3. **Falso Positivo de Servidor Online no Player:** O bloco `.catch()` da sondagem assíncrona em `LivePlayerModal.tsx` marcava requisições caídas como `'alive'`, exibindo bolinhas verdes em servidores que na realidade estavam mortos.
+
+**Modificações Realizadas:**
+1. **Auditoria Profunda de Mídia e Codecs (`scripts/audit-live-servers-deep.cjs`):**
+   - Implementado demuxer MPEG-TS puro em Node.js (analisador de PAT/PMT em blocos de 188 bytes) para inspecionar Elementary Streams reais.
+   - Detecta vídeo (H.264/AVC `0x1B`, H.265/HEVC `0x24`) e classifica codecs de áudio:
+     - `AAC (0x0F, 0x11)`: Totalmente funcional e audível na web.
+     - `Dolby AC-3 (0x81)`: Incompatível com reprodutores HTML5/MSE sem transcodificação.
+   - No SporTV 3 HD, a varredura identificou 10 servidores mortos/bloqueados e 2 sobreviventes (`embedcanaisdetv.xyz` com AAC e Saimo).
+2. **Expurgo de Hosts Mortos e Telas Brancas (`server/services/embedPlayerProxy.ts`):**
+   - Definida lista oficial `DEAD_OR_BROKEN_EMBED_HOSTS` (`sporturbo.link`, `nossoplayeronlinehd.ink`, `dadinhodetapioca.fun`, `localhost70.xyz`, `rdembed.sbs`, etc.).
+   - Implementada detecção de telas de erro e ad-walls via `isBrokenTarget` em `probeEmbedPlayer`, marcando alvos quebrados imediatamente como `alive: false`.
+   - Bloqueio estrito de hosts mortos no `isAllowedEmbedUrl` e no `recordDiscoveredEmbedHost`.
+3. **Promoção de Fontes com Som Imediato (`server/services/externalCatalog.ts`):**
+   - Fontes com áudio AAC direto (`embedcanaisdetv.xyz`) são promovidas a **Servidor 1** em canais esportivos/PPV com Saimo em AC-3 (`isAc3LikelyChannel`), fazendo com que o canal abra com som no primeiro segundo.
+   - A fonte direta do Saimo torna-se Servidor 2 como contingência.
+   - Canais abertos e infantis com Saimo nativo em AAC permanecem com a fonte direta como Servidor 1 em 1080p.
+   - Renumeração sequencial ininterrupta mantida (`Servidor 1`, `Servidor 2`, etc.).
+4. **Higienização Visual do Player (`src/components/LivePlayerModal.tsx`):**
+   - Corrigido o catch do probe para registrar status `'dead'` em falhas de rede/timeout.
+   - Servidores mortos são filtrados e removidos da interface de seleção (`embedStatus[idx] !== 'dead' || selectedServerIndex === idx`), sumindo opções que não funcionam.
+5. **Cobertura de Testes Automatizados (`tests/live-server-sweep-guard.test.cjs`):**
+   - 6 testes unitários validando demux MPEG-TS, classificação AAC vs AC-3, filtros anti-alvo quebrado e ordenação no catálogo.
+
+**Validação Realizada:**
+- `node --test tests/embed-player-proxy.test.cjs tests/embed-probe-guard.test.cjs tests/live-ac3-audio-guard.test.cjs tests/minhatela-catalog.test.cjs tests/live-server-sweep-guard.test.cjs`: **58/58 testes aprovados (100%)**.
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: **APPROVED ✅**.
+
+---
+
 ## 01/11/2026 — Correção do Bloqueio de Sandbox nos Servidores Embed (MinhaTela.xyz)
 
 **Contexto e Diagnóstico:**

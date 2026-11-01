@@ -169,6 +169,7 @@ async function rpcCall<T>(method: string, input: unknown): Promise<T> {
   }
 }
 
+
 /** Hosts privados/loopback nunca viram servidor embed (defesa anti-SSRF barata). */
 function isSafeEmbedUrl(raw: string): boolean {
   try {
@@ -188,11 +189,26 @@ function isSafeEmbedUrl(raw: string): boolean {
 /** Converte as fontes MinhaTela em servidores embed do catálogo Play Infinity. */
 function streamsToEmbedServers(streams: MinhaTelaStream[], startIndex = 0): EmbedServer[] {
   const seen = new Set<string>();
-  const out: EmbedServer[] = [];
+  const valid: MinhaTelaStream[] = [];
   for (const s of streams || []) {
     if (!s || !s.url || !isSafeEmbedUrl(s.url)) continue;
     if (seen.has(s.url)) continue;
     seen.add(s.url);
+    valid.push(s);
+  }
+
+  // Priorização de Áudio AAC: fontes com stream direto verificado (ex.: embedcanaisdetv.xyz)
+  // tocam nativamente com som no navegador e são ordenadas no topo da lista MinhaTela.
+  valid.sort((a, b) => {
+    const aAac = /embedcanaisdetv\.xyz/i.test(a.url);
+    const bAac = /embedcanaisdetv\.xyz/i.test(b.url);
+    if (aAac && !bAac) return -1;
+    if (!aAac && bAac) return 1;
+    return 0;
+  });
+
+  const out: EmbedServer[] = [];
+  for (const s of valid) {
     out.push({ name: `Servidor ${startIndex + out.length + 1}`, url: s.url, isEmbed: true });
     if (out.length >= MAX_SERVERS_PER_CHANNEL) break;
   }

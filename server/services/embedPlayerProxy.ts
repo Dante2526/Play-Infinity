@@ -2,6 +2,22 @@ import type { Request, Response } from "express";
 import { getMinhaTelaEmbedHosts } from "./minhatelaCatalog";
 
 /**
+ * Hosts mortos, que retornam erro (403/404/502), caem em telas brancas com anúncio
+ * ou bloqueiam conexões. Usado pelo probe para marcar e expurgar do player.
+ */
+export const DEAD_OR_BROKEN_EMBED_HOSTS = new Set<string>([
+  "sporturbo.link",
+  "nossoplayeronlinehd.ink",
+  "dadinhodetapioca.fun",
+  "localhost70.xyz",
+  "rdembed.sbs",
+  "vaiagora.vip",
+  "vivlar.me",
+  "s13-s1001604.lat",
+  "s25-cloudfront-net.lat",
+]);
+
+/**
  * Proxy sanitizador de páginas embed de TV ao vivo (fontes MinhaTela:
  * rdcanais, embedtv, meuplayeronlinehd, sporturbo, redecanaistv...).
  *
@@ -84,8 +100,8 @@ function extraHosts(): string[] {
 
 // Hosts conhecidos e provedores internos de iframes MinhaTela
 const KNOWN_EMBED_HOSTS = new Set([
+  "embedcanaisdetv.xyz",
   "rdcanais.org",
-  "dadinhodetapioca.fun",
   "embedtv.lat",
   "ww5.embedtv.lat",
   "embedtv.cc",
@@ -101,8 +117,17 @@ const discoveredHosts = new Set<string>();
 export function recordDiscoveredEmbedHost(rawUrl: string): void {
   try {
     const u = new URL(rawUrl);
+    const host = u.hostname.toLowerCase();
+    if (DEAD_OR_BROKEN_EMBED_HOSTS.has(host)) return;
+    for (const dead of DEAD_OR_BROKEN_EMBED_HOSTS) {
+      if (host === dead || host.endsWith("." + dead)) return;
+    }
     if (u.protocol === "https:" && isSafePublicHttpsUrl(u.href)) {
-      discoveredHosts.add(u.hostname.toLowerCase());
+      if (discoveredHosts.size >= 500) {
+        const first = discoveredHosts.values().next().value;
+        if (first) discoveredHosts.delete(first);
+      }
+      discoveredHosts.add(host);
     }
   } catch {}
 }
@@ -110,12 +135,16 @@ export function recordDiscoveredEmbedHost(rawUrl: string): void {
 /**
  * Entry URL válida? Precisa ser https pública E o host precisa estar no
  * allowlist (catálogo MinhaTela vivo). Impede o uso como proxy aberto de
- * HTML arbitrário (phishing etc.).
+ * HTML arbitrário (phishing etc.). Hosts na blocklist são sempre rejeitados.
  */
 export function isAllowedEmbedUrl(raw: string): boolean {
   if (!isSafePublicHttpsUrl(raw)) return false;
   try {
     const host = new URL(raw).hostname.toLowerCase();
+    if (DEAD_OR_BROKEN_EMBED_HOSTS.has(host)) return false;
+    for (const dead of DEAD_OR_BROKEN_EMBED_HOSTS) {
+      if (host === dead || host.endsWith("." + dead)) return false;
+    }
     if (getMinhaTelaEmbedHosts().has(host)) return true;
     if (KNOWN_EMBED_HOSTS.has(host)) return true;
     if (discoveredHosts.has(host)) return true;
@@ -704,11 +733,13 @@ export async function probeEmbedPlayer(url: string): Promise<EmbedProbeResult> {
   // ~5KB de JS que contém nomes de libs (bitmovin, shaka...) no próprio
   // regex dele, o que causaria falso positivo.
   const probeHtml = rawHtml ?? html;
-  const hasPlayer = PLAYER_RE.test(probeHtml);
+  // Detecção de alvos quebrados / telas brancas de anúncio embutidas em iframes
+  const isBrokenTarget = /dadinhodetapioca\.fun|localhost70\.xyz|s25-cloudfront-net\.lat\/stream\/[^\s"'<>]+\/error\.txt/i.test(probeHtml);
+  const hasPlayer = !isBrokenTarget && PLAYER_RE.test(probeHtml);
   const probeBytes = Buffer.byteLength(probeHtml, "utf-8");
-  // vivo: NÃO caiu no stub de fallback E (tem player OU HTML cru grande
+  // vivo: NÃO caiu no stub de fallback E NÃO é alvo quebrado E (tem player OU HTML cru grande
   // o suficiente pra ser uma página real).
-  const alive = !fellBack && (hasPlayer || probeBytes >= 4000);
+  const alive = !fellBack && !isBrokenTarget && (hasPlayer || probeBytes >= 4000);
   const sizeBytes = Buffer.byteLength(html, "utf-8");
   return {
     url,

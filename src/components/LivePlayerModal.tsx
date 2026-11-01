@@ -408,9 +408,8 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         })
         .catch(() => {
           if (cancelled) return;
-          // Probe falhou (rede/offline) — não marca como morto (pode ser
-          // problema nosso, não do servidor). Conserva como vivo.
-          setEmbedStatus((prev) => ({ ...prev, [idx]: 'alive' }));
+          // Probe falhou (rede/offline/timeout) — marca como morto para deletar/não enganar o usuário
+          setEmbedStatus((prev) => ({ ...prev, [idx]: 'dead' }));
         });
     });
 
@@ -1889,31 +1888,34 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                       <span>Opções de Servidor</span>
                       <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">verde = online</span>
                     </div>
-                    {channel.servers.map((s, idx) => {
-                      const status = embedStatus[idx];
-                      const isDead = status === 'dead';
-                      const isAlive = status === 'alive';
-                      const isProbing = status === 'probing';
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            setSelectedServerIndex(idx);
-                            setShowServerMenu(false);
-                            if (isDead) {
-                              showServerNotice(`Servidor ${idx + 1} sem sinal — tentando mesmo assim...`, 6000);
-                            }
-                          }}
-                          className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
-                            selectedServerIndex === idx
-                              ? 'bg-orange-600 text-white'
-                              : isDead
-                                ? 'hover:bg-white/5 text-neutral-500 hover:text-neutral-400'
-                                : 'hover:bg-white/10 text-neutral-300 hover:text-white'
-                          }`}
-                          title={isDead ? 'Sem sinal no momento' : isAlive ? 'Online' : isProbing ? 'Verificando...' : ''}
-                        >
+                    {channel.servers
+                      .map((s, idx) => ({ s, idx }))
+                      .filter(({ idx }) => embedStatus[idx] !== 'dead' || selectedServerIndex === idx)
+                      .map(({ s, idx }) => {
+                        const status = embedStatus[idx];
+                        const isDead = status === 'dead';
+                        const isAlive = status === 'alive';
+                        const isProbing = status === 'probing';
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => {
+                              setSelectedServerIndex(idx);
+                              setShowServerMenu(false);
+                              if (isDead) {
+                                showServerNotice(`Servidor ${idx + 1} sem sinal — tentando mesmo assim...`, 6000);
+                              }
+                            }}
+                            className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                              selectedServerIndex === idx
+                                ? 'bg-orange-600 text-white'
+                                : isDead
+                                  ? 'hover:bg-white/5 text-neutral-500 hover:text-neutral-400'
+                                  : 'hover:bg-white/10 text-neutral-300 hover:text-white'
+                            }`}
+                            title={isDead ? 'Sem sinal no momento' : isAlive ? 'Online' : isProbing ? 'Verificando...' : ''}
+                          >
                           <span className={`truncate ${isDead && selectedServerIndex !== idx ? 'line-through opacity-60' : ''}`}>
                             {s.name || `Servidor ${idx + 1}`}
                           </span>

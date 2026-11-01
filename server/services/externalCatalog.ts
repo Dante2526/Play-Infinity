@@ -791,6 +791,26 @@ export function getPublicLiveChannels(): LiveChannel[] {
   const withMinhaTela = channels.map((ch) => {
     const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
     if (extra.length === 0) return ch;
+
+    // Priorização de Áudio AAC: fontes embed verificadas com som funcional imediato
+    // (ex.: embedcanaisdetv.xyz) são promovidas a Servidor 1 quando a fonte Saimo
+    // utiliza áudio Dolby AC-3 (incompatível com navegadores web padrão em canais esportivos/PPV).
+    const aacIdx = extra.findIndex((s) => /embedcanaisdetv\.xyz/i.test(s.url));
+    const firstIsSaimo = ch.servers[0] && ch.servers[0].url.startsWith("/api/external-channel");
+    const isAc3LikelyChannel =
+      ch.category === "Esportes" ||
+      /\b(sportv|premiere|combate|espn|bandsports|conmebol|fox sports)\b/i.test(ch.name);
+
+    if (aacIdx >= 0 && firstIsSaimo && isAc3LikelyChannel) {
+      const aacServer = extra[aacIdx];
+      const remainingExtra = extra.filter((_, i) => i !== aacIdx);
+      const reordered = [aacServer, ...ch.servers, ...remainingExtra];
+      return {
+        ...ch,
+        servers: reordered.map((s, idx) => ({ ...s, name: `Servidor ${idx + 1}` })),
+      };
+    }
+
     return { ...ch, servers: [...ch.servers, ...extra] };
   });
   // Canais EXCLUSIVOS do MinhaTela (Paramount+, Disney+, HBO Max, Prime
