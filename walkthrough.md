@@ -1,3 +1,22 @@
+## 01/11/2026 — Correção de Espaço Excessivo (Vácuo Preto) nos Cards de Canais no Painel Admin
+
+**Contexto e Diagnóstico:**
+No commit recente (`c13ac83`), canais com fontes externas do Saimo passaram a ser auto-expandidos na primeira carga. Como o container de cada card em `src/components/AdminLiveChannels.tsx` utilizava `flex flex-col justify-between gap-3` e a grade usava `grid grid-cols-1 md:grid-cols-2 gap-3` sem `items-start`, o CSS Grid forçava todos os cards da mesma linha a esticarem até a altura do card mais alto (ex.: SporTV com 10 fontes atingia ~450px).
+Em canais com apenas 1 servidor (ex.: `ESPN 3 HD`), a altura do card esticava artificialmente e a propriedade `justify-between` separava o Cabeçalho (Logo/Nome), a Lista de Servidores e os Botões de Ação com um vazio preto desproporcional de mais de 130px de altura.
+
+**Modificações Realizadas (`src/components/AdminLiveChannels.tsx`):**
+1. **Grade com Alinhamento Natural:** Adicionada a classe `items-start` no grid (`<div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">`), impedindo que cards menores estiquem para a altura de cards expandidos vizinhos.
+2. **Eliminação do `justify-between`:** O container do card passou a usar `flex flex-col gap-3`, eliminando a distribuição forçada de espaço vertical entre filhos.
+3. **Agrupamento Inseparável:** O Cabeçalho do Canal e a Lista de Servidores foram encapsulados dentro de um wrapper `<div className="space-y-3">`, garantindo proximidade visual consistente em qualquer resolução.
+4. **Alinhamento do Rodapé:** Os Botões de Ação receberam `mt-auto`, garantindo que fiquem no rodapé se houver altura extra, mantendo `min-h-[44px]` para toque mobile.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- Compilação de produção (`npm run build`): Vite + esbuild aprovados com 100% de sucesso.
+- Code Review formal: Aprovado sem ressalvas (dupla proteção no grid e no componente).
+
+---
+
 ## 31/10/2026 — Correção no Continue Assistindo: Título Congelado e Reset para T1:E1 (Android 73/1.4.41)
 
 **Contexto e Diagnóstico dos Dois Bugs (Captura enviada com Lupin S4:E3):**

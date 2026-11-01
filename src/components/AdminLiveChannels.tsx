@@ -689,7 +689,7 @@ export function AdminLiveChannels() {
           Nenhum canal encontrado com os filtros selecionados.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
           {filteredChannels.map(channel => {
             const isBlocked = settings.blockedChannelIds.includes(channel.id);
             const isCustom = Boolean(settings.customServers[channel.id]?.length);
@@ -713,13 +713,14 @@ export function AdminLiveChannels() {
             return (
               <div
                 key={channel.id}
-                className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col justify-between gap-3 ${
+                className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
                   isBlocked
                     ? 'bg-red-950/15 border-red-500/20 hover:border-red-500/40 opacity-75'
                     : 'bg-black/50 border-white/10 hover:border-white/20'
                 }`}
               >
-                {/* Linha Superior: Logo, Nome, Badges */}
+                <div className="space-y-3">
+                  {/* Linha Superior: Logo, Nome, Badges */}
                 <div className="flex items-start justify-between gap-2.5 min-w-0">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-12 h-12 rounded-xl bg-black/60 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
@@ -912,8 +913,10 @@ export function AdminLiveChannels() {
                   })()}
                 </div>
 
+                </div>
+
                 {/* Botões de Ação */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5">
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-auto">
                   <button
                     type="button"
                     onClick={() => handleToggleBlock(channel.id)}
