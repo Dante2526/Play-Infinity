@@ -688,12 +688,6 @@ export function AdminLiveChannels() {
                               + {totalCount - visibleCount} outros servidores
                             </div>
                           )}
-                          {isExpanded && totalCount > 3 && (
-                            <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
-                              ▼ Mostrando todos os {directServers.length} servidor(es) direto(s)
-                              {externalSources.length > 0 && ` + ${externalSources.length} fonte(s) do provedor`}
-                            </div>
-                          )}
 
                           {externalNames.map(name => (
                             <ExternalChannelSources

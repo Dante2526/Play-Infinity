@@ -1,3 +1,18 @@
+## 01/11/2026 — Remoção da Mensagem Divisória de Servidores nos Cards de Canais
+
+**Contexto e Diagnóstico:**
+Ao expandir a lista de servidores em canais com fontes diretas e externas (ex.: ESPN Brasil com 13 servidores), era exibido um banner em itálico laranja no meio da lista (`▼ Mostrando todos os X servidor(es) direto(s) + Y fonte(s) do provedor`). O usuário solicitou a remoção dessa mensagem para manter a lista de servidores 100% contínua e limpa.
+
+**Modificações Realizadas (`src/components/AdminLiveChannels.tsx`):**
+- Removido o elemento informativo condicional `{isExpanded && totalCount > 3 && ...}`.
+- A lista de servidores agora flui de forma direta e ininterrupta do Servidor 1 até o Servidor N.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+
+---
+
 ## 01/11/2026 — Layout Masonry de 2 Colunas Independentes nos Cards de Canais no Painel Admin
 
 **Contexto e Diagnóstico:**
