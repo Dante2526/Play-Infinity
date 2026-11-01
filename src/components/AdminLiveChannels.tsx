@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { adminFetch } from "../services/adminApi";
 import { 
   Tv, 
@@ -138,6 +138,273 @@ function useIsDesktop(minWidth = 768): boolean {
   return isDesktop;
 }
 
+
+interface AdminChannelCardProps {
+  channel: LiveChannel;
+  isBlocked: boolean;
+  isCustom: boolean;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+  onToggleBlock: (id: string) => void;
+  onOpenEdit: (channel: LiveChannel) => void;
+  probeResults: Record<string, { online: boolean; status: number | string; probing?: boolean }>;
+  allSourcesMap: Record<string, ExternalSource[]>;
+  onProbeServer: (url: string) => void;
+}
+
+const AdminChannelCard = React.memo(function AdminChannelCard({
+  channel,
+  isBlocked,
+  isCustom,
+  isExpanded,
+  onToggleExpanded,
+  onToggleBlock,
+  onOpenEdit,
+  probeResults,
+  allSourcesMap,
+  onProbeServer,
+}: AdminChannelCardProps) {
+  const primaryServer = channel.servers[0];
+  const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
+  const externalSources = getChannelExternalSources(channel, allSourcesMap);
+  const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+  const totalDisplayServers = directServers.length + externalSources.length;
+  const probedDirect = directServers.map(s => probeResults[s.url]).filter(Boolean);
+  const testedExternal = externalSources.filter(s => s.state && s.state !== 'untested');
+  const onlineExternal = externalSources.filter(s => s.state === 'available').length;
+  const anyProbing = probedDirect.some(p => p.probing);
+  const onlineCount = probedDirect.filter(p => p.online).length + onlineExternal;
+  const hasTestedServers = probedDirect.length > 0 || testedExternal.length > 0;
+
+  const externalNames = [...new Set(channel.servers
+    .filter(s => s.url.startsWith('/api/external-channel?'))
+    .map(s => {
+      try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
+      catch { return null; }
+    })
+  )].filter((name): name is string => !!name);
+
+  const totalCount = totalDisplayServers;
+  const visibleCount = isExpanded ? totalCount : Math.min(3, totalCount);
+  const directToShow = isExpanded ? directServers.length : Math.min(directServers.length, visibleCount);
+  const externalToShow = isExpanded ? undefined : Math.max(0, visibleCount - directToShow);
+
+  return (
+    <div
+      className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
+        isBlocked
+          ? 'bg-red-950/15 border-red-500/20 hover:border-red-500/40 opacity-75'
+          : 'bg-black/50 border-white/10 hover:border-white/20'
+      }`}
+    >
+      <div className="space-y-3">
+        {/* Linha Superior: Logo, Nome, Badges */}
+        <div className="flex items-start justify-between gap-2.5 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-12 h-12 rounded-xl bg-black/60 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+              <ChannelLogo channel={channel} className="w-full h-full object-contain" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h4 className="font-bold text-white text-sm sm:text-base leading-tight truncate">
+                  {channel.name}
+                </h4>
+                {isBlocked ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
+                    OCULTO NO APP
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                    VISÍVEL
+                  </span>
+                )}
+                {isCustom && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0" title="Servidores customizados salvos pelo admin">
+                    CUSTOM
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1">
+                <span>{channel.category}</span>
+                <span>•</span>
+                <span>{totalDisplayServers} {totalDisplayServers === 1 ? 'servidor' : 'servidores'}</span>
+                {hasTestedServers && (
+                  <>
+                    <span>•</span>
+                    {anyProbing ? (
+                      <span className="text-orange-400 font-bold animate-pulse inline-flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Verificando...</span>
+                      </span>
+                    ) : onlineCount > 0 ? (
+                      <span className="text-emerald-400 font-bold">
+                        {onlineCount === totalDisplayServers
+                          ? '● Online (200 OK)'
+                          : `● Online (${onlineCount}/${totalDisplayServers} ativos)`}
+                      </span>
+                    ) : (
+                      <span className="text-red-400 font-bold">
+                        ● Fora do Ar
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Linha dos Servidores Atuais com Teste Rápido */}
+        <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
+          <button
+            type="button"
+            onClick={onToggleExpanded}
+            className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
+              isExpanded
+                ? 'bg-orange-600/15 border-orange-500/30 text-orange-200'
+                : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
+            }`}
+            aria-expanded={isExpanded}
+            title={isExpanded
+              ? 'Recolher lista de servidores (mostrar só os 3 primeiros)'
+              : `Expandir lista (mostrar todos os ${totalCount} servidores + fontes)`}
+          >
+            <span className="flex items-center gap-1.5 min-w-0">
+              <Radio className={`w-3 h-3 shrink-0 ${isExpanded ? 'text-orange-400' : 'text-white/40'}`} />
+              <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+                Servidores
+              </span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums shrink-0 ${
+                isExpanded
+                  ? 'bg-orange-500/30 text-orange-100'
+                  : 'bg-white/10 text-white/60'
+              }`}>
+                {totalCount}
+              </span>
+            </span>
+            <span className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium">
+              <span className="text-white/40 tabular-nums hidden sm:inline">
+                {isExpanded ? 'todos visíveis' : `${visibleCount}/${totalCount}`}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-400' : 'text-white/40'}`} />
+            </span>
+          </button>
+          <div className="server-counter-list space-y-1">
+            {directServers
+              .slice(0, directToShow)
+              .map((srv, sIdx) => {
+                const probe = probeResults[srv.url];
+                return (
+                  <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
+                    <span className="server-name text-white/80 truncate font-medium flex-1" />
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {probe && (
+                        probe.probing ? (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                            <span>...</span>
+                          </span>
+                        ) : (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                          }`}>
+                            {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                          </span>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        disabled={probe?.probing}
+                        onClick={() => onProbeServer(srv.url)}
+                        title="Testar sinal deste servidor"
+                        className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                      >
+                        {probe?.probing ? '...' : 'Testar'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+            {/* Fontes externas com limite cumulativo entre provedores/nomes */}
+            {(() => {
+              let remaining = externalToShow;
+              return externalNames.map(name => {
+                if (remaining !== undefined && remaining <= 0) return null;
+                const nameSources = allSourcesMap[name] || allSourcesMap[normalizeExternalSourceName(name)] || [];
+                const countForThis = remaining === undefined ? undefined : Math.min(remaining, nameSources.length);
+                if (remaining !== undefined) {
+                  remaining = Math.max(0, remaining - (countForThis ?? 0));
+                }
+                return (
+                  <ExternalChannelSources
+                    key={name}
+                    name={name}
+                    maxItems={countForThis}
+                  />
+                );
+              });
+            })()}
+
+            {/* Mensagem de servidores restantes sempre no rodapé */}
+            {!isExpanded && totalCount > visibleCount && (
+              <div className="text-[10px] text-white/40 italic pl-1 pt-0.5">
+                + {totalCount - visibleCount} outros servidores
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Botões de Ação */}
+      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-auto">
+        <button
+          type="button"
+          onClick={() => onToggleBlock(channel.id)}
+          className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
+            isBlocked
+              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
+              : 'bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30'
+          }`}
+        >
+          {isBlocked ? (
+            <>
+              <Eye className="w-3.5 h-3.5" />
+              <span>Reativar no App</span>
+            </>
+          ) : (
+            <>
+              <EyeOff className="w-3.5 h-3.5" />
+              <span>Ocultar do App</span>
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onOpenEdit(channel)}
+          className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px]"
+        >
+          <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
+          <span>Gerenciar Sinais</span>
+        </button>
+      </div>
+    </div>
+  );
+}, (prev, next) => {
+  if (prev.channel.id !== next.channel.id) return false;
+  if (prev.channel !== next.channel) return false;
+  if (prev.isBlocked !== next.isBlocked) return false;
+  if (prev.isCustom !== next.isCustom) return false;
+  if (prev.isExpanded !== next.isExpanded) return false;
+  if (prev.allSourcesMap !== next.allSourcesMap) return false;
+  const servers = next.channel.servers || [];
+  for (const s of servers) {
+    if (prev.probeResults[s.url] !== next.probeResults[s.url]) return false;
+  }
+  return true;
+});
+
 export function AdminLiveChannels() {
   const [catalogue, setCatalogue] = useState<LiveChannel[]>(getLiveCatalogue);
   const [catalogueError, setCatalogueError] = useState('');
@@ -174,26 +441,7 @@ export function AdminLiveChannels() {
     };
   }, []);
 
-  // Auto-expandir (uma única vez, quando o mapa de fontes carrega) os canais
-  // que SÓ têm proxies Saimo (sem servidores diretos). Antes dessa mudança,
-  // esses canais apareciam com lista vazia quando recolhidos — o admin tinha
-  // que clicar pra descobrir as fontes. Agora já nascem expandidos pra esses.
-  // Não sobrescreve escolha manual do admin (se expandedChannels já foi tocado).
-  const [autoExpandedOnce, setAutoExpandedOnce] = useState(false);
-  useEffect(() => {
-    if (autoExpandedOnce || Object.keys(allSourcesMap).length === 0) return;
-    setAutoExpandedOnce(true);
-    setExpandedChannels(prev => {
-      if (prev.size > 0) return prev;
-      const auto = new Set<string>();
-      filteredChannels.forEach(c => {
-        const direct = c.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
-        if (direct.length === 0) auto.add(c.id);
-      });
-      return auto;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allSourcesMap, autoExpandedOnce]);
+
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -509,252 +757,33 @@ export function AdminLiveChannels() {
     return [left, right];
   }, [filteredChannels]);
 
-  const renderChannelCard = (channel: LiveChannel) => {
-    const isBlocked = settings.blockedChannelIds.includes(channel.id);
-    const isCustom = Boolean(settings.customServers[channel.id]?.length);
-    const primaryServer = channel.servers[0];
-    const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
-    const externalSources = getChannelExternalSources(channel, allSourcesMap);
-    const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
-    const totalDisplayServers = directServers.length + externalSources.length;
-    const probedDirect = directServers.map(s => probeResults[s.url]).filter(Boolean);
-    const testedExternal = externalSources.filter(s => s.state && s.state !== 'untested');
-    const onlineExternal = externalSources.filter(s => s.state === 'available').length;
-    const anyProbing = probedDirect.some(p => p.probing);
-    const onlineCount = probedDirect.filter(p => p.online).length + onlineExternal;
-    const hasTestedServers = probedDirect.length > 0 || testedExternal.length > 0;
+  const handleToggleBlockCallback = useCallback((channelId: string) => {
+    handleToggleBlock(channelId);
+  }, [settings.blockedChannelIds]);
 
-    return (
-      <div
-        key={channel.id}
-        className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
-          isBlocked
-            ? 'bg-red-950/15 border-red-500/20 hover:border-red-500/40 opacity-75'
-            : 'bg-black/50 border-white/10 hover:border-white/20'
-        }`}
-      >
-        <div className="space-y-3">
-          {/* Linha Superior: Logo, Nome, Badges */}
-          <div className="flex items-start justify-between gap-2.5 min-w-0">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-12 h-12 rounded-xl bg-black/60 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                <ChannelLogo channel={channel} className="w-full h-full object-contain" />
-              </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <h4 className="font-bold text-white text-sm sm:text-base leading-tight truncate">
-                    {channel.name}
-                  </h4>
-                  {isBlocked ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
-                      OCULTO NO APP
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
-                      VISÍVEL
-                    </span>
-                  )}
-                  {isCustom && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0" title="Servidores customizados salvos pelo admin">
-                      CUSTOM
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1">
-                  <span>{channel.category}</span>
-                  <span>•</span>
-                  <span>{totalDisplayServers} {totalDisplayServers === 1 ? 'servidor' : 'servidores'}</span>
-                  {hasTestedServers && (
-                    <>
-                      <span>•</span>
-                      {anyProbing ? (
-                        <span className="text-orange-400 font-bold animate-pulse inline-flex items-center gap-1">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>Verificando...</span>
-                        </span>
-                      ) : onlineCount > 0 ? (
-                        <span className="text-emerald-400 font-bold">
-                          {onlineCount === totalDisplayServers
-                            ? '● Online (200 OK)'
-                            : `● Online (${onlineCount}/${totalDisplayServers} ativos)`}
-                        </span>
-                      ) : (
-                        <span className="text-red-400 font-bold">
-                          ● Fora do Ar
-                        </span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+  const handleOpenEditCallback = useCallback((channel: LiveChannel) => {
+    handleOpenEdit(channel);
+  }, []);
 
-          {/* Linha dos Servidores Atuais com Teste Rápido */}
-          <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
-            {(() => {
-              const externalNames = [...new Set(channel.servers
-                .filter(s => s.url.startsWith('/api/external-channel?'))
-                .map(s => {
-                  try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
-                  catch { return null; }
-                })
-              )].filter((name): name is string => !!name);
-              const totalCount = totalDisplayServers;
-              const isExpanded = expandedChannels.has(channel.id);
-              const visibleCount = isExpanded ? totalCount : Math.min(3, totalCount);
-              return (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => toggleChannelExpanded(channel.id)}
-                    className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
-                      isExpanded
-                        ? 'bg-orange-600/15 border-orange-500/30 text-orange-200'
-                        : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
-                    }`}
-                    aria-expanded={isExpanded}
-                    title={isExpanded
-                      ? 'Recolher lista de servidores (mostrar só os 3 primeiros)'
-                      : `Expandir lista (mostrar todos os ${totalCount} servidores + fontes)`}
-                  >
-                    <span className="flex items-center gap-1.5 min-w-0">
-                      <Radio className={`w-3 h-3 shrink-0 ${isExpanded ? 'text-orange-400' : 'text-white/40'}`} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider truncate">
-                        Servidores
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums shrink-0 ${
-                        isExpanded
-                          ? 'bg-orange-500/30 text-orange-100'
-                          : 'bg-white/10 text-white/60'
-                      }`}>
-                        {totalCount}
-                      </span>
-                    </span>
-                    <span className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium">
-                      <span className="text-white/40 tabular-nums hidden sm:inline">
-                        {isExpanded ? 'todos visíveis' : `${visibleCount}/${totalCount}`}
-                      </span>
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-400' : 'text-white/40'}`} />
-                    </span>
-                  </button>
-                  <div className="server-counter-list space-y-1">
-                    {(() => {
-                      const directToShow = isExpanded
-                        ? directServers.length
-                        : Math.min(directServers.length, visibleCount);
-                      const externalToShow = isExpanded
-                        ? undefined
-                        : Math.max(0, visibleCount - directToShow);
-                      return (
-                        <>
-                          {directServers
-                            .slice(0, directToShow)
-                            .map((srv, sIdx) => {
-                              const probe = probeResults[srv.url];
-                              return (
-                                <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
-                                  <span className="server-name text-white/80 truncate font-medium flex-1" />
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {probe && (
-                                      probe.probing ? (
-                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
-                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                          <span>...</span>
-                                        </span>
-                                      ) : (
-                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                          probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                                        }`}>
-                                          {probe.online ? '200 OK' : `OFF (${probe.status})`}
-                                        </span>
-                                      )
-                                    )}
-                                    <button
-                                      type="button"
-                                      disabled={probe?.probing}
-                                      onClick={() => probeSingleServer(srv.url)}
-                                      title="Testar sinal deste servidor"
-                                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
-                                    >
-                                      {probe?.probing ? '...' : 'Testar'}
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          {/* Fontes externas com limite cumulativo entre provedores/nomes */}
-                          {(() => {
-                            let remaining = externalToShow;
-                            return externalNames.map(name => {
-                              if (remaining !== undefined && remaining <= 0) return null;
-                              const nameSources = allSourcesMap[name] || allSourcesMap[normalizeExternalSourceName(name)] || [];
-                              const countForThis = remaining === undefined ? undefined : Math.min(remaining, nameSources.length);
-                              if (remaining !== undefined) {
-                                remaining = Math.max(0, remaining - (countForThis ?? 0));
-                              }
-                              return (
-                                <ExternalChannelSources
-                                  key={name}
-                                  name={name}
-                                  maxItems={countForThis}
-                                />
-                              );
-                            });
-                          })()}
+  const handleProbeServerCallback = useCallback((url: string) => {
+    probeSingleServer(url);
+  }, []);
 
-                          {/* Mensagem de servidores restantes sempre no rodapé */}
-                          {!isExpanded && totalCount > visibleCount && (
-                            <div className="text-[10px] text-white/40 italic pl-1 pt-0.5">
-                              + {totalCount - visibleCount} outros servidores
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </>
-              );
-            })()}
-          </div>
-        </div>
-
-        {/* Botões de Ação */}
-        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-auto">
-          <button
-            type="button"
-            onClick={() => handleToggleBlock(channel.id)}
-            className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
-              isBlocked
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
-                : 'bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30'
-            }`}
-          >
-            {isBlocked ? (
-              <>
-                <Eye className="w-3.5 h-3.5" />
-                <span>Reativar no App</span>
-              </>
-            ) : (
-              <>
-                <EyeOff className="w-3.5 h-3.5" />
-                <span>Ocultar do App</span>
-              </>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => handleOpenEdit(channel)}
-            className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px]"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
-            <span>Gerenciar Sinais</span>
-          </button>
-        </div>
-      </div>
-    );
-  };
+  const renderChannelCard = (channel: LiveChannel) => (
+    <AdminChannelCard
+      key={channel.id}
+      channel={channel}
+      isBlocked={settings.blockedChannelIds.includes(channel.id)}
+      isCustom={Boolean(settings.customServers[channel.id]?.length)}
+      isExpanded={expandedChannels.has(channel.id)}
+      onToggleExpanded={() => toggleChannelExpanded(channel.id)}
+      onToggleBlock={handleToggleBlockCallback}
+      onOpenEdit={handleOpenEditCallback}
+      probeResults={probeResults}
+      allSourcesMap={allSourcesMap}
+      onProbeServer={handleProbeServerCallback}
+    />
+  );
 
   return (
     <div className="space-y-4">

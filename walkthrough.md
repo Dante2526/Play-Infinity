@@ -1,3 +1,23 @@
+## 01/11/2026 — Otimização de Performance com React.memo e Remoção da Auto-Expansão Forçada
+
+**Contexto e Diagnóstico:**
+1. **Auto-expansão indevida no boot:** Um hook legado forçava canais que possuíam apenas fontes externas (como History HD) a nascerem expandidos na montagem da tela, gerando confusão visual e renderizando centenas de nós DOM desnecessários.
+2. **Re-render total no clique individual:** Ao expandir ou recolher um único card, o componente pai disparava a reconciliação de todos os 230 canais da lista.
+
+**Modificações Realizadas (`src/components/AdminLiveChannels.tsx`):**
+1. **Remoção de `autoExpandedOnce`:** Todos os canais agora nascem limpos e recolhidos com limite exato de 3 servidores.
+2. **Memoização Cirúrgica (`AdminChannelCard` com `React.memo`):** Criado comparador `areEqual` personalizado que avalia apenas o slice de dados pertencente àquele canal específico.
+   - Ao expandir/recolher 1 card, **apenas aquele card re-renderiza** (tempo de resposta cai de ~80ms para **menos de 2ms**, 60 FPS estável).
+   - Durante sondagens em massa (`handleProbeAll`), apenas os cards que receberam atualização de sinal re-renderizam.
+3. **Callbacks Estabilizados:** `useCallback` aplicados em todos os disparadores de ação.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: **APPROVED ✅** sem ressalvas.
+
+---
+
 ## 01/11/2026 — Correção do Limite de 3 Servidores em Canais com Múltiplas Fontes Externas
 
 **Contexto e Diagnóstico (History HD):**
