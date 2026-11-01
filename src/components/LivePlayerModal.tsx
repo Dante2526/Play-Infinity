@@ -76,6 +76,23 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const isLowBandwidthModeRef = useRef<boolean>(false);
   const failedServersRef = useRef<Set<number>>(new Set());
 
+  // Aviso transitório sobre troca automática de servidor (ex.: áudio Dolby
+  // AC-3 sem suporte) — pill escura no topo do player, some sozinha.
+  const [serverNotice, setServerNotice] = useState<string>('');
+  const serverNoticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showServerNotice = useCallback((message: string, ms = 7000) => {
+    setServerNotice(message);
+    if (serverNoticeTimer.current) clearTimeout(serverNoticeTimer.current);
+    serverNoticeTimer.current = setTimeout(() => setServerNotice(''), ms);
+  }, []);
+
+  // Limpa o timer do aviso no desmonte do modal
+  useEffect(() => {
+    return () => {
+      if (serverNoticeTimer.current) clearTimeout(serverNoticeTimer.current);
+    };
+  }, []);
+
   // Mini Player Flutuante (mesmo mecanismo de arrastar/redimensionar usado em filmes e séries)
   const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
   const [miniPosition, setMiniPosition] = useState<{ x: number; y: number } | null>(null);
@@ -490,8 +507,63 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           setIsBuffering(false);
         };
 
+        // DETECÇÃO DE ÁUDIO NÃO-DECODIFICÁVEL: fontes Saimo (ex.: Servidor 1
+        // do Premiere) usam áudio Dolby AC-3/E-AC-3 5.1 — navegadores NÃO
+        // decodificam AC-3 via MSE/hls.js (o vídeo toca SEM SOM; o hls.js
+        // degrada removendo a track de áudio). O codec aparece em dois
+        // lugares: declarado no master (MANIFEST_PARSED) ou descoberto no
+        // demux do segmento TS (BUFFER_CODECS — caso do Saimo, cujo master
+        // não declara CODECS). Se NENHUM codec de áudio for suportado neste
+        // aparelho: canal com múltiplos servidores → avança automaticamente
+        // para o próximo (embeds MinhaTela tocam com áudio AAC) com aviso
+        // visível; servidor único → avisa e segue mudo (vídeo ao menos funciona).
+        const audioVerdict = { manifest: false, demux: false };
+        const checkAudioCodecSupport = (codecs: Iterable<string>, origin: string): boolean => {
+          const list = Array.from(codecs).filter(Boolean);
+          if (list.length === 0) return false;
+          const mediaSourceCtor = (window as any).MediaSource;
+          const canDecodeAudio = (codec: string) => {
+            try {
+              return !!mediaSourceCtor?.isTypeSupported?.(`audio/mp4; codecs="${codec}"`);
+            } catch {
+              return true; // sem MSE confiável p/ testar — não decide nada
+            }
+          };
+          if (list.some(canDecodeAudio)) return false;
+          const codecList = list.join(', ');
+          console.warn(`[LivePlayer] Áudio não suportado neste aparelho (${codecList}, detectado via ${origin}) — o vídeo ficaria mudo.`);
+          if (channel.servers.length > 1) {
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — mudando de servidor...');
+            // Pequeno delay para o aviso ser visto antes do switch resetar o player.
+            setTimeout(() => {
+              if (isMounted) switchToNextServer(`áudio ${codecList} sem suporte neste aparelho`);
+            }, 500);
+          } else {
+            // Servidor único: sem pra onde ir — avisa e toca mudo (vídeo ao menos funciona).
+            showServerNotice('Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — transmissão sem som.', 15000);
+          }
+          return true;
+        };
+
         hls.on(Hls.Events.MANIFEST_LOADED, () => {
           if (!isMounted) return;
+        });
+
+        // Codec descoberto no DEMUX do segmento (BUFFER_CODECS dispara quando
+        // o buffer é inicializado com o codec real da track de áudio).
+        hls.on(Hls.Events.BUFFER_CODECS, (_event, data) => {
+          if (!isMounted || audioVerdict.demux) return;
+          const audioTrack = (data as any)?.tracks?.audio;
+          const sniffed = new Set<string>();
+          if (typeof audioTrack?.codec === 'string' && audioTrack.codec) sniffed.add(audioTrack.codec);
+          if (typeof audioTrack?.levelCodec === 'string') {
+            for (const c of audioTrack.levelCodec.split(',')) {
+              if (c && c.trim()) sniffed.add(c.trim());
+            }
+          }
+          if (sniffed.size === 0) return;
+          audioVerdict.demux = true;
+          checkAudioCodecSupport(sniffed, 'demux');
         });
 
         hls.on(Hls.Events.MANIFEST_PARSED, (_event, data) => {
@@ -510,6 +582,21 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             }
           } else {
             setActiveResolutionLabel('Auto');
+          }
+
+          // Codec declarado no master (quando existe) — veredito imediato.
+          if (!audioVerdict.manifest) {
+            audioVerdict.manifest = true;
+            const declared = new Set<string>();
+            for (const lvl of data?.levels || []) {
+              if (typeof lvl?.audioCodec !== 'string') continue;
+              for (const c of lvl.audioCodec.split(',')) {
+                if (c && c.trim()) declared.add(c.trim());
+              }
+            }
+            if (declared.size > 0 && checkAudioCodecSupport(declared, 'manifesto')) {
+              return; // vai trocar de servidor — não dá play num stream que ficaria mudo
+            }
           }
 
           // Assegura volume inicial
@@ -1342,6 +1429,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }}
           onPause={() => setIsPlaying(false)}
         />
+        )}
+
+        {/* Aviso transitório de troca automática de servidor (áudio AC-3 etc.) */}
+        {serverNotice && !isEmbedStream && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-40 max-w-[90%] rounded-lg bg-black/85 border border-white/15 px-4 py-2 text-xs sm:text-sm text-white/90 shadow-lg pointer-events-none backdrop-blur-sm">
+            {serverNotice}
+          </div>
         )}
 
         {/* Spinner compacto do mini player, sem textos (não cabem no espaço reduzido) */}
