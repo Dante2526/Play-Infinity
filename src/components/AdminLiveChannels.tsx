@@ -116,6 +116,28 @@ function getSmartSearchTerm(channel: LiveChannel): { term: string; chips: string
   return { term: cleaned, chips: [cleaned] };
 }
 
+function useIsDesktop(minWidth = 768): boolean {
+  const [isDesktop, setIsDesktop] = useState(() => 
+    typeof window !== 'undefined' ? window.innerWidth >= minWidth : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia(`(min-width: ${minWidth}px)`);
+    const update = (e: MediaQueryListEvent | MediaQueryList) => setIsDesktop(e.matches);
+    update(mq);
+    if (mq.addEventListener) {
+      mq.addEventListener('change', update);
+      return () => mq.removeEventListener('change', update);
+    }
+    (mq as any).addListener?.(update);
+    return () => (mq as any).removeListener?.(update);
+
+  }, [minWidth]);
+
+  return isDesktop;
+}
+
 export function AdminLiveChannels() {
   const [catalogue, setCatalogue] = useState<LiveChannel[]>(getLiveCatalogue);
   const [catalogueError, setCatalogueError] = useState('');
@@ -471,6 +493,262 @@ export function AdminLiveChannels() {
     }
   };
 
+
+  const isDesktop = useIsDesktop(768);
+
+  const [colLeft, colRight] = useMemo(() => {
+    const left: LiveChannel[] = [];
+    const right: LiveChannel[] = [];
+    filteredChannels.forEach((channel, index) => {
+      if (index % 2 === 0) {
+        left.push(channel);
+      } else {
+        right.push(channel);
+      }
+    });
+    return [left, right];
+  }, [filteredChannels]);
+
+  const renderChannelCard = (channel: LiveChannel) => {
+    const isBlocked = settings.blockedChannelIds.includes(channel.id);
+    const isCustom = Boolean(settings.customServers[channel.id]?.length);
+    const primaryServer = channel.servers[0];
+    const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
+    const externalSources = getChannelExternalSources(channel, allSourcesMap);
+    const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+    const totalDisplayServers = directServers.length + externalSources.length;
+    const probedDirect = directServers.map(s => probeResults[s.url]).filter(Boolean);
+    const testedExternal = externalSources.filter(s => s.state && s.state !== 'untested');
+    const onlineExternal = externalSources.filter(s => s.state === 'available').length;
+    const anyProbing = probedDirect.some(p => p.probing);
+    const onlineCount = probedDirect.filter(p => p.online).length + onlineExternal;
+    const hasTestedServers = probedDirect.length > 0 || testedExternal.length > 0;
+
+    return (
+      <div
+        key={channel.id}
+        className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
+          isBlocked
+            ? 'bg-red-950/15 border-red-500/20 hover:border-red-500/40 opacity-75'
+            : 'bg-black/50 border-white/10 hover:border-white/20'
+        }`}
+      >
+        <div className="space-y-3">
+          {/* Linha Superior: Logo, Nome, Badges */}
+          <div className="flex items-start justify-between gap-2.5 min-w-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-12 h-12 rounded-xl bg-black/60 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                <ChannelLogo channel={channel} className="w-full h-full object-contain" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <h4 className="font-bold text-white text-sm sm:text-base leading-tight truncate">
+                    {channel.name}
+                  </h4>
+                  {isBlocked ? (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
+                      OCULTO NO APP
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+                      VISÍVEL
+                    </span>
+                  )}
+                  {isCustom && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0" title="Servidores customizados salvos pelo admin">
+                      CUSTOM
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1">
+                  <span>{channel.category}</span>
+                  <span>•</span>
+                  <span>{totalDisplayServers} {totalDisplayServers === 1 ? 'servidor' : 'servidores'}</span>
+                  {hasTestedServers && (
+                    <>
+                      <span>•</span>
+                      {anyProbing ? (
+                        <span className="text-orange-400 font-bold animate-pulse inline-flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Verificando...</span>
+                        </span>
+                      ) : onlineCount > 0 ? (
+                        <span className="text-emerald-400 font-bold">
+                          {onlineCount === totalDisplayServers
+                            ? '● Online (200 OK)'
+                            : `● Online (${onlineCount}/${totalDisplayServers} ativos)`}
+                        </span>
+                      ) : (
+                        <span className="text-red-400 font-bold">
+                          ● Fora do Ar
+                        </span>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Linha dos Servidores Atuais com Teste Rápido */}
+          <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
+            {(() => {
+              const externalNames = [...new Set(channel.servers
+                .filter(s => s.url.startsWith('/api/external-channel?'))
+                .map(s => {
+                  try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
+                  catch { return null; }
+                })
+              )].filter((name): name is string => !!name);
+              const totalCount = totalDisplayServers;
+              const isExpanded = expandedChannels.has(channel.id);
+              const visibleCount = isExpanded ? totalCount : Math.min(3, totalCount);
+              return (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => toggleChannelExpanded(channel.id)}
+                    className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
+                      isExpanded
+                        ? 'bg-orange-600/15 border-orange-500/30 text-orange-200'
+                        : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
+                    }`}
+                    aria-expanded={isExpanded}
+                    title={isExpanded
+                      ? 'Recolher lista de servidores (mostrar só os 3 primeiros)'
+                      : `Expandir lista (mostrar todos os ${totalCount} servidores + fontes)`}
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <Radio className={`w-3 h-3 shrink-0 ${isExpanded ? 'text-orange-400' : 'text-white/40'}`} />
+                      <span className="text-[10px] font-bold uppercase tracking-wider truncate">
+                        Servidores
+                      </span>
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums shrink-0 ${
+                        isExpanded
+                          ? 'bg-orange-500/30 text-orange-100'
+                          : 'bg-white/10 text-white/60'
+                      }`}>
+                        {totalCount}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium">
+                      <span className="text-white/40 tabular-nums hidden sm:inline">
+                        {isExpanded ? 'todos visíveis' : `${visibleCount}/${totalCount}`}
+                      </span>
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-400' : 'text-white/40'}`} />
+                    </span>
+                  </button>
+                  <div className="server-counter-list space-y-1">
+                    {(() => {
+                      const directToShow = isExpanded
+                        ? directServers.length
+                        : Math.min(directServers.length, visibleCount);
+                      const externalToShow = isExpanded
+                        ? undefined
+                        : Math.max(0, visibleCount - directToShow);
+                      return (
+                        <>
+                          {directServers
+                            .slice(0, directToShow)
+                            .map((srv, sIdx) => {
+                              const probe = probeResults[srv.url];
+                              return (
+                                <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
+                                  <span className="server-name text-white/80 truncate font-medium flex-1" />
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {probe && (
+                                      probe.probing ? (
+                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                          <span>...</span>
+                                        </span>
+                                      ) : (
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                          probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                        }`}>
+                                          {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                                        </span>
+                                      )
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={probe?.probing}
+                                      onClick={() => probeSingleServer(srv.url)}
+                                      title="Testar sinal deste servidor"
+                                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                                    >
+                                      {probe?.probing ? '...' : 'Testar'}
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          {!isExpanded && totalCount > visibleCount && (
+                            <div className="text-[10px] text-white/40 italic pl-1">
+                              + {totalCount - visibleCount} outros servidores
+                            </div>
+                          )}
+                          {isExpanded && totalCount > 3 && (
+                            <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
+                              ▼ Mostrando todos os {directServers.length} servidor(es) direto(s)
+                              {externalSources.length > 0 && ` + ${externalSources.length} fonte(s) do provedor`}
+                            </div>
+                          )}
+
+                          {externalNames.map(name => (
+                            <ExternalChannelSources
+                              key={name}
+                              name={name}
+                              maxItems={externalToShow}
+                            />
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-auto">
+          <button
+            type="button"
+            onClick={() => handleToggleBlock(channel.id)}
+            className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
+              isBlocked
+                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
+                : 'bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30'
+            }`}
+          >
+            {isBlocked ? (
+              <>
+                <Eye className="w-3.5 h-3.5" />
+                <span>Reativar no App</span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3.5 h-3.5" />
+                <span>Ocultar do App</span>
+              </>
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleOpenEdit(channel)}
+            className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px]"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
+            <span>Gerenciar Sinais</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4">
       {catalogueError && <p role="alert" className="text-amber-300 text-sm">{catalogueError}</p>}
@@ -688,269 +966,18 @@ export function AdminLiveChannels() {
         <div className="p-8 text-center border border-dashed border-white/10 rounded-2xl bg-white/[0.02] text-white/40 text-sm">
           Nenhum canal encontrado com os filtros selecionados.
         </div>
+      ) : !isDesktop ? (
+        <div className="space-y-3">
+          {filteredChannels.map(channel => renderChannelCard(channel))}
+        </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
-          {filteredChannels.map(channel => {
-            const isBlocked = settings.blockedChannelIds.includes(channel.id);
-            const isCustom = Boolean(settings.customServers[channel.id]?.length);
-            const primaryServer = channel.servers[0];
-            const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
-            // Fontes individuais do provedor Saimo associadas ao canal —
-            // cada uma conta como 1 servidor visível no painel admin (antes
-            // eram escondidas atrás de 1 "Servidor Multi-Fonte" no catálogo).
-            const externalSources = getChannelExternalSources(channel, allSourcesMap);
-            const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
-            const totalDisplayServers = directServers.length + externalSources.length;
-            // Status de sondagem combina servidores diretos + fontes externas
-            // (externalSources.state é 'available'/'failed'/'unsupported'/'untested').
-            const probedDirect = directServers.map(s => probeResults[s.url]).filter(Boolean);
-            const testedExternal = externalSources.filter(s => s.state && s.state !== 'untested');
-            const onlineExternal = externalSources.filter(s => s.state === 'available').length;
-            const anyProbing = probedDirect.some(p => p.probing);
-            const onlineCount = probedDirect.filter(p => p.online).length + onlineExternal;
-            const hasTestedServers = probedDirect.length > 0 || testedExternal.length > 0;
-
-            return (
-              <div
-                key={channel.id}
-                className={`p-3.5 sm:p-4 rounded-2xl border transition-all flex flex-col gap-3 ${
-                  isBlocked
-                    ? 'bg-red-950/15 border-red-500/20 hover:border-red-500/40 opacity-75'
-                    : 'bg-black/50 border-white/10 hover:border-white/20'
-                }`}
-              >
-                <div className="space-y-3">
-                  {/* Linha Superior: Logo, Nome, Badges */}
-                <div className="flex items-start justify-between gap-2.5 min-w-0">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-12 h-12 rounded-xl bg-black/60 border border-white/10 p-1 flex items-center justify-center shrink-0 overflow-hidden">
-                      <ChannelLogo channel={channel} className="w-full h-full object-contain" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <h4 className="font-bold text-white text-sm sm:text-base leading-tight truncate">
-                          {channel.name}
-                        </h4>
-                        {isBlocked ? (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-red-500/20 text-red-400 border border-red-500/30 shrink-0">
-                            OCULTO NO APP
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
-                            VISÍVEL
-                          </span>
-                        )}
-                        {isCustom && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 shrink-0" title="Servidores customizados salvos pelo admin">
-                            CUSTOM
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1">
-                        <span>{channel.category}</span>
-                        <span>•</span>
-                        <span>{totalDisplayServers} {totalDisplayServers === 1 ? 'servidor' : 'servidores'}</span>
-                        {hasTestedServers && (
-                          <>
-                            <span>•</span>
-                            {anyProbing ? (
-                              <span className="text-orange-400 font-bold animate-pulse inline-flex items-center gap-1">
-                                <Loader2 className="w-3 h-3 animate-spin" />
-                                <span>Verificando...</span>
-                              </span>
-                            ) : onlineCount > 0 ? (
-                              <span className="text-emerald-400 font-bold">
-                                {onlineCount === totalDisplayServers
-                                  ? '● Online (200 OK)'
-                                  : `● Online (${onlineCount}/${totalDisplayServers} ativos)`}
-                              </span>
-                            ) : (
-                              <span className="text-red-400 font-bold">
-                                ● Fora do Ar
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Linha dos Servidores Atuais com Teste Rápido
-                    Setinha (chevron) expande/recolhe: default = recolhido,
-                    mostra so os 3 primeiros servidores; expandido = mostra
-                    TODOS os servidores + fontes externas, numerados de 1 a N
-                    pelo CSS counter (server-counter-list). */}
-                <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
-                  {(() => {
-                    // directServers e externalSources já calculados no escopo
-                    // externo do .map(channel => ...). Reutilizamos via closure.
-                    const externalNames = [...new Set(channel.servers
-                      .filter(s => s.url.startsWith('/api/external-channel?'))
-                      .map(s => {
-                        try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
-                        catch { return null; }
-                      })
-                    )].filter((name): name is string => !!name);
-                    const totalCount = totalDisplayServers; // diretos + fontes individuais
-                    const isExpanded = expandedChannels.has(channel.id);
-                    // Recolhido: mostra até 3 itens combinados (diretos primeiro).
-                    // Expandido: mostra todos os diretos + todas as fontes externas.
-                    const visibleCount = isExpanded ? totalCount : Math.min(3, totalCount);
-                    return (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => toggleChannelExpanded(channel.id)}
-                          className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg transition-all cursor-pointer border ${
-                            isExpanded
-                              ? 'bg-orange-600/15 border-orange-500/30 text-orange-200'
-                              : 'bg-white/5 hover:bg-white/10 border-white/5 text-white/70 hover:text-white'
-                          }`}
-                          aria-expanded={isExpanded}
-                          title={isExpanded
-                            ? 'Recolher lista de servidores (mostrar só os 3 primeiros)'
-                            : `Expandir lista (mostrar todos os ${totalCount} servidores + fontes)`}
-                        >
-                          <span className="flex items-center gap-1.5 min-w-0">
-                            <Radio className={`w-3 h-3 shrink-0 ${isExpanded ? 'text-orange-400' : 'text-white/40'}`} />
-                            <span className="text-[10px] font-bold uppercase tracking-wider truncate">
-                              Servidores
-                            </span>
-                            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black tabular-nums shrink-0 ${
-                              isExpanded
-                                ? 'bg-orange-500/30 text-orange-100'
-                                : 'bg-white/10 text-white/60'
-                            }`}>
-                              {totalCount}
-                            </span>
-                          </span>
-                          <span className="flex items-center gap-1.5 shrink-0 text-[9px] font-medium">
-                            <span className="text-white/40 tabular-nums hidden sm:inline">
-                              {isExpanded ? 'todos visíveis' : `${visibleCount}/${totalCount}`}
-                            </span>
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-orange-400' : 'text-white/40'}`} />
-                          </span>
-                        </button>
-                        <div className="server-counter-list space-y-1">
-                          {/* Renderiza diretos + fontes externas combinados, respeitando
-                              visibleCount (recolhido = 3 primeiros itens combinados,
-                              expandido = todos). */}
-                          {(() => {
-                            const directToShow = isExpanded
-                              ? directServers.length
-                              : Math.min(directServers.length, visibleCount);
-                            const externalToShow = isExpanded
-                              ? undefined
-                              : Math.max(0, visibleCount - directToShow);
-                            return (
-                              <>
-                                {directServers
-                                  .slice(0, directToShow)
-                                  .map((srv, sIdx) => {
-                                    const probe = probeResults[srv.url];
-                                    return (
-                                      <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
-                                        <span className="server-name text-white/80 truncate font-medium flex-1" />
-                                        <div className="flex items-center gap-1.5 shrink-0">
-                                          {probe && (
-                                            probe.probing ? (
-                                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
-                                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                                <span>...</span>
-                                              </span>
-                                            ) : (
-                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                                probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                                              }`}>
-                                                {probe.online ? '200 OK' : `OFF (${probe.status})`}
-                                              </span>
-                                            )
-                                          )}
-                                          <button
-                                            type="button"
-                                            disabled={probe?.probing}
-                                            onClick={() => probeSingleServer(srv.url)}
-                                            title="Testar sinal deste servidor"
-                                            className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
-                                          >
-                                            {probe?.probing ? '...' : 'Testar'}
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                {!isExpanded && totalCount > visibleCount && (
-                                  <div className="text-[10px] text-white/40 italic pl-1">
-                                    + {totalCount - visibleCount} outros servidores
-                                  </div>
-                                )}
-                                {isExpanded && totalCount > 3 && (
-                                  <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
-                                    ▼ Mostrando todos os {directServers.length} servidor(es) direto(s)
-                                    {externalSources.length > 0 && ` + ${externalSources.length} fonte(s) do provedor`}
-                                  </div>
-                                )}
-
-                                {/* Fontes do provedor externo: entram na mesma numeração contínua
-                                    (o ponteiro virtual /api/external-channel não é listado acima —
-                                    as fontes abaixo já o representam em detalhe).
-                                    Recolhido: maxItems = externalToShow (preenche o resto dos 3 slots).
-                                    Expandido: mostra todas as fontes. */}
-                                {externalNames.map(name => (
-                                  <ExternalChannelSources
-                                    key={name}
-                                    name={name}
-                                    maxItems={externalToShow}
-                                  />
-                                ))}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-
-                </div>
-
-                {/* Botões de Ação */}
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 mt-auto">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleBlock(channel.id)}
-                    className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px] ${
-                      isBlocked
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-600/20'
-                        : 'bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30'
-                    }`}
-                  >
-                    {isBlocked ? (
-                      <>
-                        <Eye className="w-3.5 h-3.5" />
-                        <span>Reativar no App</span>
-                      </>
-                    ) : (
-                      <>
-                        <EyeOff className="w-3.5 h-3.5" />
-                        <span>Ocultar do App</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(channel)}
-                    className="py-2 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer min-h-[44px]"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-orange-400" />
-                    <span>Gerenciar Sinais</span>
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-2 gap-3 items-start">
+          <div className="space-y-3">
+            {colLeft.map(channel => renderChannelCard(channel))}
+          </div>
+          <div className="space-y-3">
+            {colRight.map(channel => renderChannelCard(channel))}
+          </div>
         </div>
       )}
 

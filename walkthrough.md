@@ -1,3 +1,24 @@
+## 01/11/2026 — Layout Masonry de 2 Colunas Independentes nos Cards de Canais no Painel Admin
+
+**Contexto e Diagnóstico:**
+Após a correção do esticamento interno dos cards, a grade padrão do CSS Grid ainda mantinha linhas rígidas horizontais. Quando um canal em uma coluna era mais alto que o canal vizinho (ex.: Record com 3 servidores ao lado do SBT com 2 servidores, ou canais com lista expandida), a linha inteira mantinha a altura do mais alto, deixando um espaço vazio entre o card menor e o card logo abaixo dele.
+O usuário optou pela Opção 1: **Colunas independentes (Estilo Masonry / Pinterest)**, onde os cartões da coluna sobem e encostam imediatamente no de cima, eliminando todo e qualquer espaço vertical vazio.
+
+**Modificações Realizadas (`src/components/AdminLiveChannels.tsx`):**
+1. **Hook Responsivo `useIsDesktop`:** Criado listener otimizado via `window.matchMedia('(min-width: 768px)')` com cleanup e suporte retrocompatível a webviews legadas (`addEventListener` com fallback para `addListener`).
+2. **Particionamento Sequencial Intercalado (`useMemo`):** Os canais filtrados são distribuídos alternadamente entre `colLeft` (índices pares) e `colRight` (índices ímpares), preservando a ordem natural de leitura da esquerda para a direita.
+3. **Modularização via `renderChannelCard`:** Extraída a renderização do card individual para método limpo, mantendo `key={channel.id}`, touch targets ergonômicos e acessibilidade.
+4. **Layout Adaptativo Mobile-First:**
+   - **No Mobile (< 768px):** Renderiza uma lista de coluna única contínua (`space-y-3`), garantindo fluxo linear perfeito sem overflow.
+   - **No Desktop (≥ 768px):** Renderiza duas colunas verticais totalmente independentes (`grid grid-cols-2 gap-3 items-start`), cada uma com seu container `space-y-3`. Cartões menores sobem imediatamente, com zero espaço vazio.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: **APPROVED ✅** sem ressalvas.
+
+---
+
 ## 01/11/2026 — Correção de Espaço Excessivo (Vácuo Preto) nos Cards de Canais no Painel Admin
 
 **Contexto e Diagnóstico:**
