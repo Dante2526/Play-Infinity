@@ -1,3 +1,42 @@
+## 31/10/2026 — Correção no Continue Assistindo: Título Congelado e Reset para T1:E1 (Android 73/1.4.41)
+
+**Contexto e Diagnóstico dos Dois Bugs (Captura enviada com Lupin S4:E3):**
+1. **Título Congelado em Ep Inicial (`Lupin - T4:E1 Capítulo 1`):**
+   - Ao iniciar a reprodução a partir de `DetailsPage.tsx` pelo botão lateral de Play do episódio, a prop `title` enviada ao player concatenava `${item.title} - ${fullEpTitle}`.
+   - Quando o usuário avançava para os episódios 2 e 3 dentro do reprodutor, o estado numérico de `season` e `episode` atualizava para `4` e `3`, mas a string `title` permanecia congelada como `"Lupin - T4:E1 Capítulo 1"`, sendo gravada com esse sufixo obsoleto no histórico de reprodução.
+2. **Reset para Temporada 1 Episódio 1 (`T1:E1`):**
+   - Ao clicar no card de retorno no carrossel "Continue Assistindo" (`T4:E3 - Continuar`), o `VideoPlayerModal` abria com `initialSeason = 4`.
+   - Contudo, a consulta inicial ao TMDB retornava apenas as temporadas `[1, 2, 3]` (já que a Parte 4 de Lupin foi mapeada no TMDB dentro da S3). Enquanto o catálogo local (`getAvailableSeasonsForSeries` → `[1, 2, 3, 4]`) resolvia em segundo plano, `availableSeasons` calculava temporariamente `[1, 2, 3]`.
+   - Um `useEffect` no modal detectava que `season` (4) não constava em `availableSeasons` e forçava imediatamente `setSeason(availableSeasons[0])` (`1`), redefinindo a temporada ativa para a Temporada 1 antes da resposta do catálogo.
+   - Paralelamente, `formatHistoryItem` em `HomePage.tsx` herdava a URL estática `catalogItem?.playerUrl` (`.../1/1`) em vez de construir a URL direcionada com a temporada e o episódio salvos.
+
+**Modificações Realizadas (5 arquivos de código + testes):**
+1. **`src/services/playbackHistory.ts`:**
+   - Adicionada a função exportada `stripSeriesEpisodeSuffix(title?: string): string` com regex para remover rótulos como ` - T4:E1...`, ` - S4:E1...`, ` - Temporada 4...`, ` - Season 4...`, ` - Ep 1...`.
+   - Sanitização automática em `savePlaybackProgress` para títulos do tipo `'series'`, mantendo apenas o nome limpo da série.
+   - Mecanismo de auto-cura (self-healing) em `getPlaybackHistory()`, limpando registros legados já gravados no `localStorage` e Firestore.
+   - Sanitização de `playerUrl` no histórico para apontar para `https://v1.watchplay.shop/tvshow/{tmdbId}/{season}/{episode}`.
+2. **`src/pages/DetailsPage.tsx`:**
+   - No botão de Play lateral da listagem de episódios (linha 1221), passa exclusivamente `item.title` limpo para o player, evitando injetar títulos de episódios no estado do modal.
+3. **`src/pages/HomePage.tsx`:**
+   - Em `formatHistoryItem`, aplica `stripSeriesEpisodeSuffix` no título de séries e gera o `playerUrl` dinâmico com a temporada e episódio reais do progresso salvo.
+4. **`src/components/VideoPlayerModal.tsx`:**
+   - Inclui `initialSeason` e a temporada atual como candidatos válidos em `availableSeasons` e na chamada a `getAvailableSeasonsForSeries`, impedindo descarte prematuro de temporadas extras do catálogo.
+   - Adicionado guard `catalogSeasons === null` no `useEffect` de ajuste de temporada, impedindo downgrades falsos para T1 enquanto o catálogo assíncrono ainda estiver carregando.
+   - Reseta `catalogSeasons` para `null` ao fechar o modal ou trocar de título.
+5. **`tests/continue-watching-resume.test.cjs` (Novo):**
+   - 3 testes unitários automatizados validando a remoção de sufixos de títulos, a proteção contra reset prematuro de temporadas e a formatação de itens no "Continue Assistindo".
+6. **`android/app/build.gradle`:**
+   - Incrementado `versionCode` para 73 e `versionName` para "1.4.41".
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- Suíte completa de testes: 21/21 testes aprovados (100% de sucesso).
+- Compilação de produção (`npm run build`): Vite e `dist/server.cjs` gerados com sucesso.
+- Code Review especialista (etapa 3.2): **Aprovado sem ressalvas bloqueantes**.
+
+---
+
 ## 31/10/2026 — Integração Oficial do Google Services / FCM no App Nativo Android (Android 72/1.4.40)
 
 **Contexto e Duplo Check:**

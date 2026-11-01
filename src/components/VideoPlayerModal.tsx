@@ -973,6 +973,11 @@ export function VideoPlayerModal({
 
   const [catalogSeasons, setCatalogSeasons] = useState<number[] | null>(null);
 
+  // Reseta catálogo verificado ao fechar modal ou trocar de conteúdo
+  useEffect(() => {
+    setCatalogSeasons(null);
+  }, [isOpen, tmdbId, resolvedId]);
+
   // Consulta se a série possui temporadas verificadas no servidor
   useEffect(() => {
     if (!isOpen || !isSeries) return;
@@ -980,9 +985,11 @@ export function VideoPlayerModal({
     if (!numericId) return;
 
     let isMounted = true;
-    const candidates = (seriesDetails?.seasons || [])
-      .filter(s => s.season_number > 0 && s.episode_count > 0)
-      .map(s => s.season_number);
+    const candidates = Array.from(new Set([
+      ...(seriesDetails?.seasons || []).filter(s => s.season_number > 0 && s.episode_count > 0).map(s => s.season_number),
+      ...(initialSeason && initialSeason > 0 ? [initialSeason] : []),
+      ...(season && season > 0 ? [season] : [])
+    ]));
 
     getAvailableSeasonsForSeries(numericId, candidates.length > 0 ? candidates : undefined).then((seasons) => {
       if (isMounted && seasons && seasons.length > 0) {
@@ -992,7 +999,7 @@ export function VideoPlayerModal({
     return () => {
       isMounted = false;
     };
-  }, [isOpen, isSeries, tmdbId, resolvedId, seriesDetails]);
+  }, [isOpen, isSeries, tmdbId, resolvedId, seriesDetails, initialSeason, season]);
 
   // Lista de temporadas válidas da série (apenas as temporadas com episódios verificados e reproduzíveis)
   // Garante que o fundo da página inteira seja preto enquanto o modal estiver aberto (evita flashes brancos)
@@ -1050,25 +1057,37 @@ export function VideoPlayerModal({
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
 
+    // Se o usuário abriu uma temporada específica (ex: T4 do Continue Assistindo ou da DetailsPage),
+    // ela deve ser mantida como candidata legítima para evitar reset prematuro para T1
+    const requestedSeasons = [
+      ...(initialSeason && initialSeason > 0 ? [initialSeason] : []),
+      ...(season && season > 0 ? [season] : [])
+    ];
+
     if (catalogSeasons && catalogSeasons.length > 0) {
-      // Une as temporadas verificadas com o catálogo TMDB para nunca sumir temporadas reais
-      const combined = Array.from(new Set([...catalogSeasons, ...tmdbList])).sort((a, b) => a - b);
+      // Une as temporadas verificadas com o catálogo TMDB e as solicitadas para nunca sumir temporadas reais
+      const combined = Array.from(new Set([...catalogSeasons, ...tmdbList, ...requestedSeasons])).sort((a, b) => a - b);
       return combined.length > 0 ? combined : [1];
     }
 
-    return tmdbList.length > 0 ? tmdbList : [1];
-  }, [catalogSeasons, seriesDetails]);
+    const baseList = Array.from(new Set([...tmdbList, ...requestedSeasons])).sort((a, b) => a - b);
+    return baseList.length > 0 ? baseList : [1];
+  }, [catalogSeasons, seriesDetails, initialSeason, season]);
 
   // Ajusta a temporada selecionada caso não exista na lista de temporadas reais
   useEffect(() => {
-    if (isSeries && availableSeasons.length > 0 && !availableSeasons.includes(season)) {
+    // Não força downgrade enquanto o catálogo ainda estiver consultando (catalogSeasons === null)
+    // para evitar reset falso de temporadas (como T4) que existem no catálogo mas não no TMDB
+    if (!isOpen || !isSeries || catalogSeasons === null) return;
+
+    if (availableSeasons.length > 0 && !availableSeasons.includes(season)) {
       if (initialSeason && availableSeasons.includes(initialSeason)) {
         setSeason(initialSeason);
       } else {
         setSeason(availableSeasons[0]);
       }
     }
-  }, [availableSeasons, isSeries, initialSeason, season]);
+  }, [availableSeasons, isSeries, initialSeason, season, catalogSeasons, isOpen]);
 
   // Busca episódios da temporada ativa e valida disponibilidade real nos servidores homologados
   useEffect(() => {

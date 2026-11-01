@@ -126,7 +126,7 @@ import {
   isSeasonFullyWatched,
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
-import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "../services/playbackHistory";
+import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem, stripSeriesEpisodeSuffix } from "../services/playbackHistory";
 import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "../services/comments";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
@@ -292,19 +292,30 @@ export function HomePage({
     const resolvedPoster = !isChair(item.imageUrl) ? item.imageUrl : (!isChair(item.posterUrl) ? item.posterUrl : (!isChair(catalogItem?.imageUrl) ? catalogItem?.imageUrl : catalogItem?.posterUrl));
     const finalImage = resolvedBackdrop || resolvedPoster || catalogItem?.backdropUrl || catalogItem?.imageUrl || FALLBACK_BACKDROP;
 
+    const isSeriesItem = (item.mediaType || item.type || catalogItem?.type) === 'series';
+    const cleanTitle = isSeriesItem
+      ? (stripSeriesEpisodeSuffix(item.title || catalogItem?.title || '') || item.title || catalogItem?.title || '')
+      : (item.title || catalogItem?.title || '');
+
+    const effectiveSeason = item.season;
+    const effectiveEpisode = item.episode;
+    const resolvedPlayerUrl = isSeriesItem && (item.tmdbId || item.id) && effectiveSeason && effectiveEpisode
+      ? `https://v1.watchplay.shop/tvshow/${item.tmdbId || item.id}/${effectiveSeason}/${effectiveEpisode}`
+      : (item.playerUrl || catalogItem?.playerUrl);
+
     return {
       id: item.id,
       tmdbId: item.tmdbId || catalogItem?.tmdbId,
       imdbId: item.imdbId || catalogItem?.imdbId,
-      title: item.title,
-      episode: item.mediaType === 'series' && item.season && item.episode 
-        ? `T${item.season}:E${item.episode} - Continuar`
+      title: cleanTitle,
+      episode: isSeriesItem && effectiveSeason && effectiveEpisode 
+        ? `T${effectiveSeason}:E${effectiveEpisode} - Continuar`
         : `Continuar do min ${Math.floor(item.currentTime / 60)}`,
       progress: Math.min(100, Math.max(1, Math.round((item.currentTime / (item.duration || 1)) * 100))),
       imageUrl: finalImage,
       backdropUrl: resolvedBackdrop || catalogItem?.backdropUrl,
       posterUrl: resolvedPoster || catalogItem?.posterUrl,
-      playerUrl: item.playerUrl || catalogItem?.playerUrl,
+      playerUrl: resolvedPlayerUrl,
       currentTime: item.currentTime,
       duration: item.duration,
       mediaType: item.mediaType || catalogItem?.type || 'movie',

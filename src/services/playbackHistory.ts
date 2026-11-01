@@ -4,6 +4,17 @@ import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 const CHAIR_PHOTO_ID = "photo-1489599849927-2ee91cede3ba";
 
+/**
+ * Remove sufixos de episódios/temporadas que tenham sido concatenados acidentalmente ao título da série.
+ * Exemplo: "Lupin - T4:E1 Capítulo 1" -> "Lupin"
+ */
+export function stripSeriesEpisodeSuffix(title?: string): string {
+  if (!title || typeof title !== "string") return "";
+  return title
+    .replace(/\s*-\s*(?:T\d+|S\d+|Temporada\s*\d+|Season\s*\d+|\d+ª\s*Temp(?:orada)?|Epis[óo]dio\s*\d+|Ep\.?\s*\d+).*$/i, "")
+    .trim();
+}
+
 export function isInvalidOrChairPhoto(url?: string): boolean {
   if (!url || typeof url !== "string") return true;
   return url.includes(CHAIR_PHOTO_ID);
@@ -488,10 +499,11 @@ export function savePlaybackProgress(item: {
 
   unmarkAsDeletedLocally(item.id);
   const existing = store[key];
+  const cleanTitle = effectiveType === 'series' ? (stripSeriesEpisodeSuffix(item.title) || item.title) : item.title;
   const resolvedCovers = resolveMediaCovers({
     id: item.id,
     tmdbId: item.tmdbId ?? existing?.tmdbId,
-    title: item.title,
+    title: cleanTitle,
     imageUrl: item.imageUrl || existing?.imageUrl,
     backdropUrl: item.backdropUrl || existing?.backdropUrl,
     posterUrl: item.posterUrl || existing?.posterUrl,
@@ -501,7 +513,7 @@ export function savePlaybackProgress(item: {
     id: item.id,
     tmdbId: item.tmdbId ?? existing?.tmdbId,
     imdbId: item.imdbId ?? existing?.imdbId,
-    title: item.title,
+    title: cleanTitle,
     type: effectiveType,
     mediaType: effectiveType,
     season: item.season,
@@ -512,7 +524,9 @@ export function savePlaybackProgress(item: {
     imageUrl: resolvedCovers.imageUrl || existing?.imageUrl,
     backdropUrl: resolvedCovers.backdropUrl || existing?.backdropUrl,
     posterUrl: resolvedCovers.posterUrl || existing?.posterUrl,
-    playerUrl: item.playerUrl || existing?.playerUrl,
+    playerUrl: (effectiveType === 'series' && (item.tmdbId || item.id) && item.season && item.episode)
+      ? `https://v1.watchplay.shop/tvshow/${item.tmdbId || item.id}/${item.season}/${item.episode}`
+      : (item.playerUrl || existing?.playerUrl),
     quality: item.quality || existing?.quality,
     isCam: item.isCam ?? existing?.isCam,
     serverKey: item.serverKey || existing?.serverKey,
@@ -542,6 +556,14 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
   let updated = false;
 
   const rawItems = Object.values(store).map(item => {
+    if (item.type === 'series' || item.mediaType === 'series') {
+      const cleaned = stripSeriesEpisodeSuffix(item.title);
+      if (cleaned && cleaned !== item.title) {
+        item.title = cleaned;
+        store[makeHistoryKey(item.id, item.type, item.season, item.episode)] = item;
+        updated = true;
+      }
+    }
     if (isInvalidOrChairPhoto(item.imageUrl) || isInvalidOrChairPhoto(item.backdropUrl) || !item.imageUrl) {
       const fixed = resolveMediaCovers(item);
       if (fixed.imageUrl && fixed.imageUrl !== item.imageUrl) {

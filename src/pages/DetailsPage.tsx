@@ -1218,7 +1218,7 @@ export function DetailsPage({
                               ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
                               : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
                             onPlay?.(
-                              `${item.title} - ${fullEpTitle}`, 
+                              item.title, 
                               epUrl, 
                               'series', 
                               Number(effectiveTmdbId), 
