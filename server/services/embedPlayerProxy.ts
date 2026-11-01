@@ -82,6 +82,31 @@ function extraHosts(): string[] {
     .filter(Boolean);
 }
 
+// Hosts conhecidos e provedores internos de iframes MinhaTela
+const KNOWN_EMBED_HOSTS = new Set([
+  "rdcanais.org",
+  "dadinhodetapioca.fun",
+  "embedtv.lat",
+  "ww5.embedtv.lat",
+  "embedtv.cc",
+  "ww5.embedtv.cc",
+  "redecanaistv.by",
+  "redecanaistv.pk",
+  "meuplayeronlinehd.com",
+]);
+
+const discoveredHosts = new Set<string>();
+
+/** Registra host descoberto de iframes/redirects de fontes autorizadas */
+export function recordDiscoveredEmbedHost(rawUrl: string): void {
+  try {
+    const u = new URL(rawUrl);
+    if (u.protocol === "https:" && isSafePublicHttpsUrl(u.href)) {
+      discoveredHosts.add(u.hostname.toLowerCase());
+    }
+  } catch {}
+}
+
 /**
  * Entry URL válida? Precisa ser https pública E o host precisa estar no
  * allowlist (catálogo MinhaTela vivo). Impede o uso como proxy aberto de
@@ -92,6 +117,8 @@ export function isAllowedEmbedUrl(raw: string): boolean {
   try {
     const host = new URL(raw).hostname.toLowerCase();
     if (getMinhaTelaEmbedHosts().has(host)) return true;
+    if (KNOWN_EMBED_HOSTS.has(host)) return true;
+    if (discoveredHosts.has(host)) return true;
     return extraHosts().includes(host);
   } catch {
     return false;
@@ -166,7 +193,82 @@ const SANITIZER_JS = [
 "    } catch (e2) {}",
 "  }",
 "",
-"  /* 3) Âncoras e forms não navegam (popunder de primeiro clique) */",
+"    /* 3) Anti-sandbox detector shims */",
+  "  try {",
+  "    var realDom = '';",
+  "    try { realDom = document['domain'] || ''; } catch (_) {}",
+  "    Object.defineProperty(document, 'domain', {",
+  "      configurable: true, enumerable: true,",
+  "      get: function () { return realDom; },",
+  "      set: function () { /* no-op: previne SecurityError em sandbox */ }",
+  "    });",
+  "  } catch (_) {}",
+  "  try {",
+  "    Object.defineProperty(window, 'frame' + 'Element', {",
+  "      configurable: true, enumerable: true,",
+  "      get: function () { return null; }",
+  "    });",
+  "  } catch (_) {}",
+  "  try {",
+  "    var sbSt = document.createElement('style');",
+  "    sbSt.textContent = '#sb-message, [id*=\"sb-message\"], .sb-message { display: none !important; visibility: hidden !important; pointer-events: none !important; }';",
+  "    (document.head || document.documentElement).appendChild(sbSt);",
+  "  } catch (_) {}",
+  "",
+  "  /* 4) Shims de search / URLSearchParams para players que leem parâmetros (?id=...) */",
+  "  try {",
+  "    var origS = window.__EMBED_SEARCH__ || '';",
+  "    if (origS && typeof window.URLSearchParams !== 'undefined') {",
+  "      var RealUSP = window.URLSearchParams;",
+  "      window.URLSearchParams = function (init) {",
+  "        if (!init || init === window.location.search || init === window.location.href) {",
+  "          init = origS;",
+  "        } else if (typeof init === 'string') {",
+  "          if (init.indexOf('url=') >= 0 && init.indexOf('id=') < 0) {",
+  "            try {",
+  "              var p = new RealUSP(init);",
+  "              var innerU = p.get('url');",
+  "              if (innerU) {",
+  "                var u = new URL(innerU);",
+  "                if (u.search) init = u.search;",
+  "              }",
+  "            } catch (_) {}",
+  "          }",
+  "        }",
+  "        return new RealUSP(init);",
+  "      };",
+  "      window.URLSearchParams.prototype = RealUSP.prototype;",
+  "    }",
+  "  } catch (_) {}",
+  "",
+  "  /* 5) Interceptador dinâmico de iframes: roteia filhos para /api/embed-player */",
+  "  try {",
+  "    var origSetAttr = HTMLIFrameElement.prototype.setAttribute;",
+  "    HTMLIFrameElement.prototype.setAttribute = function (n, v) {",
+  "      if (String(n).toLowerCase() === 'src' && typeof v === 'string' && /^https?:\\/\\//i.test(v)) {",
+  "        if (v.indexOf('/api/embed-player') < 0) {",
+  "          v = '/api/embed-player?url=' + encodeURIComponent(v);",
+  "        }",
+  "      }",
+  "      return origSetAttr.call(this, n, v);",
+  "    };",
+  "    var srcDesc = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'src');",
+  "    if (srcDesc && srcDesc.set) {",
+  "      var origSrcSet = srcDesc.set;",
+  "      Object.defineProperty(HTMLIFrameElement.prototype, 'src', {",
+  "        configurable: true, enumerable: true,",
+  "        get: srcDesc.get,",
+  "        set: function (v) {",
+  "          if (typeof v === 'string' && /^https?:\\/\\//i.test(v) && v.indexOf('/api/embed-player') < 0) {",
+  "            v = '/api/embed-player?url=' + encodeURIComponent(v);",
+  "          }",
+  "          return origSrcSet.call(this, v);",
+  "        }",
+  "      });",
+  "    }",
+  "  } catch (_) {}",
+  "",
+  "  /* 6) Âncoras e forms não navegam (popunder de primeiro clique) */",
 "  document.addEventListener('click', function (e) {",
 "    try {",
 "      var t = e.target;",
@@ -268,29 +370,76 @@ const SANITIZER_JS = [
  * frame-busting (top.location = / parent.location =).
  */
 function stripAdversarialScripts(html: string): string {
-  return html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole: string, _attrs: string, body: string) => {
+  let cleaned = html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (whole: string, attrs: string, body: string) => {
     const sandboxDetect =
       /hasAttribute\s*\(\s*['"]sandbox/i.test(body) ||
-      (/document\s*\.\s*domain/.test(body) && /frameElement/.test(body));
+      /sbChecker/i.test(body) ||
+      /disable-devtool/i.test(attrs) ||
+      (/document\s*\.\s*domain/.test(body) && /frameElement/.test(body)) ||
+      /MOiB|sb-message|acesso\s+bloqueado/i.test(body);
     const frameBust =
       /(top|parent)\s*\.\s*location\s*(=|\.href\s*=|\.replace\s*\(|\.assign\s*\()/.test(body);
     return sandboxDetect || frameBust ? "" : whole;
   });
+  cleaned = cleaned.replace(/<div\b[^>]*id=['"]sb-message['"][^>]*>[\s\S]*?<\/div>/gi, "");
+  return cleaned;
+}
+
+/** Reescreve tags <iframe> estáticas no HTML para passarem pelo /api/embed-player */
+export function rewriteChildIframes(html: string): string {
+  return html.replace(/(<iframe\b[^>]*?\s)src=['"]([^'"]+)['"]([^>]*)>/gi, (whole, before, src, after) => {
+    if (/^https?:\/\//i.test(src) && !src.includes("/api/embed-player")) {
+      recordDiscoveredEmbedHost(src);
+      const safeUrl = src.replace(/&amp;/g, "&").replace(/[&]/g, "%26").replace(/#/g, "%23");
+      return `${before}src="/api/embed-player?url=${safeUrl}"${after}>`;
+    }
+    return whole;
+  });
+}
+
+/** Desempacota URLs de wrappers conhecidos para o player direto */
+export function unwrapKnownEmbedUrl(rawUrl: string): string {
+  try {
+    const u = new URL(rawUrl);
+    if (u.hostname.toLowerCase() === "meuplayeronlinehd.com" && u.pathname.includes("/watch.html")) {
+      u.pathname = u.pathname.replace("/watch.html", "/watch2.html");
+      return u.href;
+    }
+  } catch {}
+  return rawUrl;
 }
 
 /** Injeta <base> + sanitizador o mais cedo possível no <head>. */
 export function sanitizeEmbedHtml(html: string, baseUrl: string): string {
   let out = stripAdversarialScripts(html);
+  out = rewriteChildIframes(out);
+
+  let origSearch = "";
+  let origHref = baseUrl;
+  try {
+    const u = new URL(baseUrl);
+    origSearch = u.search || "";
+    origHref = u.href;
+  } catch {}
+
+  if (origSearch) {
+    out = out.replace(/(?:window\.)?location\.search/g, "(window.__EMBED_SEARCH__ || location.search)");
+  }
+
   let baseTag = "";
   if (!/<base\s/i.test(out)) {
     try {
       const u = new URL(baseUrl);
-      if (u.protocol === "https:") baseTag = `<base href="${u.origin}/">`;
+      if (u.protocol === "https:") {
+        baseTag = `<base href="${u.origin}/">`;
+      }
     } catch {
       /* sem base — página com URLs absolutas */
     }
   }
-  const inject = `${baseTag}<script>${SANITIZER_JS}</script>`;
+
+  const searchInitJs = `window.__EMBED_SEARCH__ = ${JSON.stringify(origSearch)}; window.__EMBED_HREF__ = ${JSON.stringify(origHref)};`;
+  const inject = `${baseTag}<script>${searchInitJs}\n${SANITIZER_JS}</script>`;
   if (/<head[^>]*>/i.test(out)) {
     out = out.replace(/<head[^>]*>/i, (m) => m + inject);
   } else if (/<html[^>]*>/i.test(out)) {
@@ -312,8 +461,17 @@ export function sanitizeEmbedHtml(html: string, baseUrl: string): string {
  * decodificando escapes hex (%72%65..., \\x3d). Só considera páginas
  * pequenas — página grande com meta refresh não é stub.
  */
-export function extractRedirectUrl(html: string): string | null {
-  if (!html || html.length > 4096) return null;
+export function extractRedirectUrl(html: string, currentUrl?: string): string | null {
+  if (!html) return null;
+  if (/<video\b/i.test(html)) return null;
+  if (currentUrl && /meuplayeronlinehd\.com\/myplay\/watch\.html/i.test(currentUrl) && (html.includes("watch2.html") || /id\s*=\s*getParameterByName/i.test(html))) {
+    try {
+      const u = new URL(currentUrl);
+      u.pathname = u.pathname.replace("/watch.html", "/watch2.html");
+      return u.href;
+    } catch {}
+  }
+  if (html.length > 4096) return null;
   let raw: string | undefined;
   const meta = html.match(/<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["']?[^"']*url=([^"'>\s]+)/i);
   if (meta) raw = meta[1];
@@ -337,7 +495,7 @@ export function extractRedirectUrl(html: string): string | null {
 // Fetch + ressanitização da cadeia
 // ---------------------------------------------------------------------------
 
-async function fetchHtml(url: string): Promise<string | null> {
+async function fetchHtml(url: string, referer?: string): Promise<string | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -348,7 +506,7 @@ async function fetchHtml(url: string): Promise<string | null> {
         "user-agent": BROWSER_UA,
         accept: "text/html,application/xhtml+xml",
         "accept-language": "pt-BR,pt;q=0.9,en;q=0.8",
-        referer: url,
+        referer: referer || url,
       },
     });
     if (!res.ok) return null;
@@ -417,18 +575,22 @@ export async function resolveEmbedPlayerHtmlWithMeta(url: string): Promise<{ htm
     return { html: cached, fellBack: false, rawHtml: null };
   }
 
-  let current = url;
+  let current = unwrapKnownEmbedUrl(url);
+  recordDiscoveredEmbedHost(current);
   let html: string | null = null;
+  let lastHopUrl = current;
   for (let hop = 0; hop < REDIRECT_HOPS; hop++) {
-    const page = await fetchHtml(current);
+    const page = await fetchHtml(current, hop > 0 ? lastHopUrl : undefined);
     if (page == null) {
       html = null;
       break;
     }
     html = page;
-    const next = extractRedirectUrl(page);
+    lastHopUrl = current;
+    const next = extractRedirectUrl(page, current);
     if (next && next !== current && isSafePublicHttpsUrl(next)) {
-      current = next;
+      current = unwrapKnownEmbedUrl(next);
+      recordDiscoveredEmbedHost(current);
       continue;
     }
     break;

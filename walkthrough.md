@@ -1,3 +1,41 @@
+## 01/11/2026 — Correção do Bloqueio de Sandbox nos Servidores Embed (MinhaTela.xyz)
+
+**Contexto e Diagnóstico:**
+1. **Bloqueio de Sandbox nos Servidores Embed:** Ao alternar para servidores embed (ex.: Servidor 2 e 3 em Premiere 1 HD, canais MeuPlayerOnlineHD e RDCanais), o player exibia a mensagem bloqueadora: *"Atenção: Acesso Bloqueado — O iframe está usando o script 'sandbox', que bloqueia a exibição de anúncios e impede o player de funcionar corretamente. ... MinhaTela.xyz"*.
+2. **Causa Raiz 1 (DOMException: SecurityError em `document.domain`):** O script `sbChecker` dos provedores executa `document.domain = document.domain` em um `try/catch`. Em um `<iframe>` com atributo `sandbox`, essa atribuição lança exceção de segurança de documento isolado. O bloco `catch` detectava o erro e substituía o DOM pelo aviso `#sb-message`.
+3. **Causa Raiz 2 (Script JScrambler ofuscado):** Em `meuplayeronlinehd.com`, o `sbChecker` roda ofuscado com JScrambler dentro de `eval(...)`, não sendo capturado por regex estático simples.
+4. **Causa Raiz 3 (Iframes aninhados sem sanitização):** Wrappers de provedores (`rdcanais.net` -> `rdcanais.org` -> `dadinhodetapioca.fun`) carregavam iframes filhos diretamente da internet. Esses filhos herdavam a sandbox do iframe pai sem receber o script sanitizador.
+5. **Causa Raiz 4 (Parâmetros de URL perdidos):** Ao carregar sob `/api/embed-player?url=...`, `window.location.search` perdia o parâmetro `?id=premiere`, quebrando a inicialização do player real (`watch2.html`).
+
+**Modificações Realizadas (`server/services/embedPlayerProxy.ts` e `tests/embed-player-proxy.test.cjs`):**
+1. **Shims Anti-Sandbox no `SANITIZER_JS`:**
+   - Implementado getter/setter seguro para `document.domain` (com setter no-op) que impede o lançamento de `SecurityError` em iframes sandboxed.
+   - Definido `window.frameElement` retornando `null` para anular a verificação `f.hasAttribute('sandbox')`.
+   - Injetado CSS global com `!important` ocultando elementos com id `#sb-message`, `[id*="sb-message"]` e `.sb-message`.
+2. **Preservação de Parâmetros e Query String:**
+   - Injetado `window.__EMBED_SEARCH__` com a query string real do player original (`?id=premiere`).
+   - Implementado shim de `window.URLSearchParams` e reescrita de `(window.)?location.search` para que o JWPlayer/Bitmovin inicializem os canais normalmente.
+3. **Desempacotamento de Wrappers Conhecidos:**
+   - Criada função `unwrapKnownEmbedUrl` que converte páginas de gate/anúncios (`watch.html?id=X`) diretamente para o player oficial (`watch2.html?id=X`) com cache e allowlist automático.
+4. **Interceptação Dupla de Iframes Aninhados:**
+   - Reescrita estática de tags `<iframe src="...">` em `rewriteChildIframes` com proteção contra falsos positivos de atributos prefixados (ex.: `data-src`).
+   - Interceptação dinâmica de `HTMLIFrameElement.prototype.src` e `setAttribute('src', ...)` no `SANITIZER_JS`, garantindo que qualquer iframe dinâmico passe pelo proxy sanitizador e receba os shims.
+   - Gerenciamento de capacidade com limite de 500 entradas FIFO em `discoveredHosts`.
+5. **Cobertura de Testes Automatizados:**
+   - 6 novos testes em `tests/embed-player-proxy.test.cjs` cobrindo shims anti-sandbox, integridade sintática do script (`new Function`), preservação de query search, reescrita de iframes aninhados e proteção de `data-src`.
+
+**Validação Realizada:**
+- `tests/embed-player-proxy.test.cjs`: 22/22 testes aprovados.
+- `tests/embed-probe-guard.test.cjs`: 8/8 testes aprovados.
+- `tests/live-ac3-audio-guard.test.cjs`: 9/9 testes aprovados.
+- `tests/minhatela-catalog.test.cjs`: 13/13 testes aprovados.
+- Total: 52/52 testes unitários e de integração aprovados.
+- `npx tsc --noEmit`: 0 erros (código de saída 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: Corrigido SyntaxError apontado na linha 271, testado e aprovado.
+
+---
+
 ## 01/11/2026 — Correção do Áudio no Servidor 1 (Dolby AC-3) e Numeração Sequencial de Servidores
 
 **Contexto e Diagnóstico:**

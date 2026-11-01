@@ -78,7 +78,7 @@ test.before(async () => {
   // (a chave é o spec relativo exatamente como escrito no import do serviço).
   SHARED['./minhatelaCatalog'] = mt;
   proxy = await loadModule(
-    '{sanitizeEmbedHtml, extractRedirectUrl, isAllowedEmbedUrl, isSafePublicHttpsUrl, buildEmbedFallbackHtml, resolveEmbedPlayerHtml, handleEmbedPlayerRequest, __clearEmbedCacheForTests}',
+    '{sanitizeEmbedHtml, extractRedirectUrl, isAllowedEmbedUrl, isSafePublicHttpsUrl, buildEmbedFallbackHtml, resolveEmbedPlayerHtml, handleEmbedPlayerRequest, unwrapKnownEmbedUrl, rewriteChildIframes, __clearEmbedCacheForTests}',
     './server/services/embedPlayerProxy',
     { './minhatelaCatalog': true }
   );
@@ -422,4 +422,55 @@ test('handleEmbedPlayerRequest: sucesso → 200 text/html com sanitizador', asyn
   } finally {
     globalThis.fetch = origFetch;
   }
+});
+
+// ---------------------------------------------------------------------------
+// 6. Anti-sandbox shims, iframes aninhados e desempacotamento
+// ---------------------------------------------------------------------------
+
+test('sanitizeEmbedHtml: injeta shims anti-sandbox e interceptador de iframes', () => {
+  const out = proxy.sanitizeEmbedHtml('<html><head></head><body><video></video></body></html>', 'https://rdcanais.net/premiere');
+  assert.ok(out.includes('#sb-message, [id*="sb-message"]'), 'css contra aviso #sb-message injetado');
+  assert.ok(out.includes("document['domain']"), 'getter/setter de document.domain injetado');
+  assert.ok(out.includes("window, 'frame' + 'Element'"), 'shim de window.frameElement injetado');
+  assert.ok(out.includes('/api/embed-player?url='), 'interceptor de iframe injetado');
+});
+
+test('sanitizeEmbedHtml: preserva search e parâmetros de URL (?id=premiere)', () => {
+  const pageWithSearch = '<html><head></head><body><script>const id = new URLSearchParams(window.location.search).get("id");</script></body></html>';
+  const out = proxy.sanitizeEmbedHtml(pageWithSearch, 'https://meuplayeronlinehd.com/myplay/watch2.html?id=premiere');
+  assert.ok(out.includes('window.__EMBED_SEARCH__ = "?id=premiere"'), 'search original injetado');
+  assert.ok(out.includes('RealUSP'), 'shim de URLSearchParams injetado');
+  assert.ok(out.includes('(window.__EMBED_SEARCH__ || location.search)'), 'acesso a location.search protegido');
+});
+
+test('rewriteChildIframes: roteia iframes aninhados pelo /api/embed-player', () => {
+  const html = '<iframe src="https://rdcanais.org/premiere" width="100%"></iframe>';
+  const rewritten = proxy.rewriteChildIframes(html);
+  assert.ok(rewritten.includes('src="/api/embed-player?url=https://rdcanais.org/premiere"'), 'iframe reescrito para o proxy');
+  assert.ok(proxy.isAllowedEmbedUrl('https://rdcanais.org/premiere'), 'host do iframe filho autorizado no allowlist');
+});
+
+test('unwrapKnownEmbedUrl e extractRedirectUrl: desempacotam watch.html para watch2.html', () => {
+  const unwrapped = proxy.unwrapKnownEmbedUrl('https://meuplayeronlinehd.com/myplay/watch.html?id=combate');
+  assert.equal(unwrapped, 'https://meuplayeronlinehd.com/myplay/watch2.html?id=combate');
+
+  const wrapperHtml = '<html><body><script>var baseURL="watch2.html?id={id}"; var id = getParameterByName("id");</script></body></html>';
+  const next = proxy.extractRedirectUrl(wrapperHtml, 'https://meuplayeronlinehd.com/myplay/watch.html?id=combate');
+  assert.equal(next, 'https://meuplayeronlinehd.com/myplay/watch2.html?id=combate');
+});
+
+test('sanitizeEmbedHtml: o script injetado possui sintaxe JavaScript 100% válida', () => {
+  const out = proxy.sanitizeEmbedHtml('<html><head></head><body><video></video></body></html>', 'https://meuplayeronlinehd.com/myplay/watch2.html?id=premiere');
+  const match = out.match(/<script>([\s\S]*?)<\/script>/i);
+  assert.ok(match, 'bloco <script> injetado encontrado');
+  assert.doesNotThrow(() => {
+    new Function(match[1]);
+  }, 'o script injetado compila sem nenhum SyntaxError');
+});
+
+test('rewriteChildIframes: não confunde data-src com src', () => {
+  const html = '<iframe data-src="https://rdcanais.org/lazy" class="player"></iframe>';
+  const notRewritten = proxy.rewriteChildIframes(html);
+  assert.ok(notRewritten.includes('data-src="https://rdcanais.org/lazy"'), 'data-src mantido sem corrupção');
 });
