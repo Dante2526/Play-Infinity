@@ -683,19 +683,32 @@ export function AdminLiveChannels() {
                                 </div>
                               );
                             })}
+                          {/* Fontes externas com limite cumulativo entre provedores/nomes */}
+                          {(() => {
+                            let remaining = externalToShow;
+                            return externalNames.map(name => {
+                              if (remaining !== undefined && remaining <= 0) return null;
+                              const nameSources = allSourcesMap[name] || allSourcesMap[normalizeExternalSourceName(name)] || [];
+                              const countForThis = remaining === undefined ? undefined : Math.min(remaining, nameSources.length);
+                              if (remaining !== undefined) {
+                                remaining = Math.max(0, remaining - (countForThis ?? 0));
+                              }
+                              return (
+                                <ExternalChannelSources
+                                  key={name}
+                                  name={name}
+                                  maxItems={countForThis}
+                                />
+                              );
+                            });
+                          })()}
+
+                          {/* Mensagem de servidores restantes sempre no rodapé */}
                           {!isExpanded && totalCount > visibleCount && (
-                            <div className="text-[10px] text-white/40 italic pl-1">
+                            <div className="text-[10px] text-white/40 italic pl-1 pt-0.5">
                               + {totalCount - visibleCount} outros servidores
                             </div>
                           )}
-
-                          {externalNames.map(name => (
-                            <ExternalChannelSources
-                              key={name}
-                              name={name}
-                              maxItems={externalToShow}
-                            />
-                          ))}
                         </>
                       );
                     })()}

@@ -1,3 +1,22 @@
+## 01/11/2026 — Correção do Limite de 3 Servidores em Canais com Múltiplas Fontes Externas
+
+**Contexto e Diagnóstico (History HD):**
+O canal `History HD` possui 4 fontes externas divididas entre dois nomes upstream (`History` com 2 fontes e `History 2` com 2 fontes).
+1. **Limite não-cumulativo:** O componente `AdminLiveChannels` repassava `maxItems={3}` para cada nome de forma isolada (`externalNames.map`), fazendo com que `History` exibisse 2 fontes e `History 2` exibisse mais 2 fontes (totalizando 4 fontes renderizadas mesmo com o card recolhido).
+2. **Posição incorreta do texto "+ 1 outros servidores":** O elemento era renderizado antes das fontes externas, fazendo com que aparecesse no topo do card, acima do Servidor 1.
+
+**Modificações Realizadas (`src/components/AdminLiveChannels.tsx`):**
+- Implementado controle cumulativo com `remaining = externalToShow`: cada nome externo abate as fontes já exibidas do limite de 3 itens.
+- Quando recolhido, o History HD agora exibe com exatidão os **3 primeiros servidores** (2 do History + 1 do History 2).
+- Ao expandir, o card abre e exibe todas as 4 fontes normalmente.
+- O aviso de contagem restante (`+ N outros servidores`) foi movido para o rodapé da lista, abaixo do último servidor visível.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+
+---
+
 ## 01/11/2026 — Remoção da Mensagem Divisória de Servidores nos Cards de Canais
 
 **Contexto e Diagnóstico:**
