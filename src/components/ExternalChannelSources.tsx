@@ -56,9 +56,15 @@ export async function fetchAllExternalSources(): Promise<Record<string, External
 export interface ExternalChannelSourcesProps {
   name: string;
   key?: React.Key;
+  /**
+   * Se definido, mostra apenas os primeiros `maxItems` itens (útil quando o
+   * card do admin está recolhido e precisa limitar quantas fontes exibir).
+   * Default = undefined (mostra todas).
+   */
+  maxItems?: number;
 }
 
-export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
+export function ExternalChannelSources({ name, maxItems }: ExternalChannelSourcesProps) {
   const [sources, setSources] = useState<ExternalSource[] | null>(() => {
     if (allSourcesCache) {
       return allSourcesCache[name] || allSourcesCache[normalizeExternalSourceName(name)] || null;
@@ -131,9 +137,11 @@ export function ExternalChannelSources({ name }: ExternalChannelSourcesProps) {
 
   if (!sources || sources.length === 0) return null;
 
+  const displaySources = typeof maxItems === 'number' ? sources.slice(0, Math.max(0, maxItems)) : sources;
+
   return (
     <>
-      {sources.map(source => {
+      {displaySources.map(source => {
         const isTesting = testing === source.index;
         const isDisabled = isTesting || ['unsupported', 'unavailable'].includes(source.state);
 

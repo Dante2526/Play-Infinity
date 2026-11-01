@@ -37,8 +37,41 @@ import {
 } from '../services/liveChannelService';
 import { ChannelLogo } from './ChannelLogo';
 import { ConfirmModal } from './ConfirmModal';
-import { ExternalChannelSources, invalidateExternalSourcesCache } from './ExternalChannelSources';
+import { 
+  ExternalChannelSources, 
+  invalidateExternalSourcesCache,
+  fetchAllExternalSources,
+  normalizeExternalSourceName,
+  type ExternalSource
+} from './ExternalChannelSources';
 import { fetchLiveCatalogue, getLiveCatalogue } from '../services/liveCatalogue';
+
+/**
+ * Retorna todas as fontes individuais Saimo associadas a um canal,
+ * combinando os proxies /api/external-channel?name=X do catálogo estático
+ * com o mapa de fontes externas carregado do backend. Cada fonte vira um
+ * "servidor" individual no painel admin (em vez de 1 "Servidor Multi-Fonte").
+ * Permite que o header do card mostre o número REAL de servidores visíveis
+ * (diretos + fontes individuais do provedor).
+ */
+function getChannelExternalSources(
+  channel: LiveChannel,
+  map: Record<string, ExternalSource[]>
+): ExternalSource[] {
+  const externalNames = [...new Set(channel.servers
+    .filter(s => s.url.startsWith('/api/external-channel?'))
+    .map(s => {
+      try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
+      catch { return null; }
+    })
+  )].filter((n): n is string => !!n);
+  const out: ExternalSource[] = [];
+  for (const name of externalNames) {
+    const sources = map[name] || map[normalizeExternalSourceName(name)];
+    if (sources && sources.length > 0) out.push(...sources);
+  }
+  return out;
+}
 
 interface StreamSearchResult {
   streamId: string;
@@ -100,6 +133,45 @@ export function AdminLiveChannels() {
     customServers: {}
   });
   const [loadingSettings, setLoadingSettings] = useState(true);
+
+  // Mapa de fontes individuais do provedor externo (Saimo), carregado uma vez
+  // do endpoint /api/admin/external-sources?all=1. Permite que o header do
+  // card mostre o número REAL de servidores (diretos + fontes individuais),
+  // em vez de "1 servidor" quando o canal só tem um proxy multi-fonte Saimo.
+  // Atualizado quando o cache de fontes é invalidado (evento custom).
+  const [allSourcesMap, setAllSourcesMap] = useState<Record<string, ExternalSource[]>>({});
+  useEffect(() => {
+    let mounted = true;
+    const load = () => { void fetchAllExternalSources().then(map => { if (mounted) setAllSourcesMap(map); }); };
+    load();
+    const handler = () => load();
+    window.addEventListener('external-sources-updated', handler);
+    return () => {
+      mounted = false;
+      window.removeEventListener('external-sources-updated', handler);
+    };
+  }, []);
+
+  // Auto-expandir (uma única vez, quando o mapa de fontes carrega) os canais
+  // que SÓ têm proxies Saimo (sem servidores diretos). Antes dessa mudança,
+  // esses canais apareciam com lista vazia quando recolhidos — o admin tinha
+  // que clicar pra descobrir as fontes. Agora já nascem expandidos pra esses.
+  // Não sobrescreve escolha manual do admin (se expandedChannels já foi tocado).
+  const [autoExpandedOnce, setAutoExpandedOnce] = useState(false);
+  useEffect(() => {
+    if (autoExpandedOnce || Object.keys(allSourcesMap).length === 0) return;
+    setAutoExpandedOnce(true);
+    setExpandedChannels(prev => {
+      if (prev.size > 0) return prev;
+      const auto = new Set<string>();
+      filteredChannels.forEach(c => {
+        const direct = c.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+        if (direct.length === 0) auto.add(c.id);
+      });
+      return auto;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSourcesMap, autoExpandedOnce]);
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState('');
@@ -623,10 +695,20 @@ export function AdminLiveChannels() {
             const isCustom = Boolean(settings.customServers[channel.id]?.length);
             const primaryServer = channel.servers[0];
             const primaryProbe = primaryServer ? probeResults[primaryServer.url] : null;
-            const probedServers = channel.servers.map(s => probeResults[s.url]).filter(Boolean);
-            const anyProbing = probedServers.some(p => p.probing);
-            const onlineCount = probedServers.filter(p => p.online).length;
-            const hasTestedServers = probedServers.length > 0;
+            // Fontes individuais do provedor Saimo associadas ao canal —
+            // cada uma conta como 1 servidor visível no painel admin (antes
+            // eram escondidas atrás de 1 "Servidor Multi-Fonte" no catálogo).
+            const externalSources = getChannelExternalSources(channel, allSourcesMap);
+            const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+            const totalDisplayServers = directServers.length + externalSources.length;
+            // Status de sondagem combina servidores diretos + fontes externas
+            // (externalSources.state é 'available'/'failed'/'unsupported'/'untested').
+            const probedDirect = directServers.map(s => probeResults[s.url]).filter(Boolean);
+            const testedExternal = externalSources.filter(s => s.state && s.state !== 'untested');
+            const onlineExternal = externalSources.filter(s => s.state === 'available').length;
+            const anyProbing = probedDirect.some(p => p.probing);
+            const onlineCount = probedDirect.filter(p => p.online).length + onlineExternal;
+            const hasTestedServers = probedDirect.length > 0 || testedExternal.length > 0;
 
             return (
               <div
@@ -666,7 +748,7 @@ export function AdminLiveChannels() {
                       <div className="flex items-center gap-2 text-[11px] text-white/50 mt-1">
                         <span>{channel.category}</span>
                         <span>•</span>
-                        <span>{channel.servers.length} {channel.servers.length === 1 ? 'servidor' : 'servidores'}</span>
+                        <span>{totalDisplayServers} {totalDisplayServers === 1 ? 'servidor' : 'servidores'}</span>
                         {hasTestedServers && (
                           <>
                             <span>•</span>
@@ -677,9 +759,9 @@ export function AdminLiveChannels() {
                               </span>
                             ) : onlineCount > 0 ? (
                               <span className="text-emerald-400 font-bold">
-                                {onlineCount === channel.servers.length
+                                {onlineCount === totalDisplayServers
                                   ? '● Online (200 OK)'
-                                  : `● Online (${onlineCount}/${channel.servers.length} ativos)`}
+                                  : `● Online (${onlineCount}/${totalDisplayServers} ativos)`}
                               </span>
                             ) : (
                               <span className="text-red-400 font-bold">
@@ -700,14 +782,20 @@ export function AdminLiveChannels() {
                     pelo CSS counter (server-counter-list). */}
                 <div className="space-y-1.5 pt-2 border-t border-white/5 text-xs">
                   {(() => {
-                    const directServers = channel.servers.filter(srv => !srv.url.startsWith('/api/external-channel?'));
+                    // directServers e externalSources já calculados no escopo
+                    // externo do .map(channel => ...). Reutilizamos via closure.
                     const externalNames = [...new Set(channel.servers
                       .filter(s => s.url.startsWith('/api/external-channel?'))
-                      .map(s => new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'))
+                      .map(s => {
+                        try { return new URL(s.url, 'https://play-infinity.stream').searchParams.get('name'); }
+                        catch { return null; }
+                      })
                     )].filter((name): name is string => !!name);
-                    const totalCount = directServers.length + externalNames.length;
+                    const totalCount = totalDisplayServers; // diretos + fontes individuais
                     const isExpanded = expandedChannels.has(channel.id);
-                    const visibleCount = isExpanded ? totalCount : Math.min(3, directServers.length);
+                    // Recolhido: mostra até 3 itens combinados (diretos primeiro).
+                    // Expandido: mostra todos os diretos + todas as fontes externas.
+                    const visibleCount = isExpanded ? totalCount : Math.min(3, totalCount);
                     return (
                       <>
                         <button
@@ -744,61 +832,80 @@ export function AdminLiveChannels() {
                           </span>
                         </button>
                         <div className="server-counter-list space-y-1">
-                          {directServers
-                            .slice(0, isExpanded ? undefined : 3)
-                            .map((srv, sIdx) => {
-                              const probe = probeResults[srv.url];
-                              return (
-                                <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
-                                  <span className="server-name text-white/80 truncate font-medium flex-1" />
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {probe && (
-                                      probe.probing ? (
-                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
-                                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                          <span>...</span>
-                                        </span>
-                                      ) : (
-                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                          probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
-                                        }`}>
-                                          {probe.online ? '200 OK' : `OFF (${probe.status})`}
-                                        </span>
-                                      )
-                                    )}
-                                    <button
-                                      type="button"
-                                      disabled={probe?.probing}
-                                      onClick={() => probeSingleServer(srv.url)}
-                                      title="Testar sinal deste servidor"
-                                      className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
-                                    >
-                                      {probe?.probing ? '...' : 'Testar'}
-                                    </button>
+                          {/* Renderiza diretos + fontes externas combinados, respeitando
+                              visibleCount (recolhido = 3 primeiros itens combinados,
+                              expandido = todos). */}
+                          {(() => {
+                            const directToShow = isExpanded
+                              ? directServers.length
+                              : Math.min(directServers.length, visibleCount);
+                            const externalToShow = isExpanded
+                              ? undefined
+                              : Math.max(0, visibleCount - directToShow);
+                            return (
+                              <>
+                                {directServers
+                                  .slice(0, directToShow)
+                                  .map((srv, sIdx) => {
+                                    const probe = probeResults[srv.url];
+                                    return (
+                                      <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
+                                        <span className="server-name text-white/80 truncate font-medium flex-1" />
+                                        <div className="flex items-center gap-1.5 shrink-0">
+                                          {probe && (
+                                            probe.probing ? (
+                                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-orange-500/20 text-orange-400 animate-pulse inline-flex items-center gap-1">
+                                                <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                                <span>...</span>
+                                              </span>
+                                            ) : (
+                                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                                probe.online ? 'bg-emerald-500/20 text-emerald-300' : 'bg-red-500/20 text-red-300'
+                                              }`}>
+                                                {probe.online ? '200 OK' : `OFF (${probe.status})`}
+                                              </span>
+                                            )
+                                          )}
+                                          <button
+                                            type="button"
+                                            disabled={probe?.probing}
+                                            onClick={() => probeSingleServer(srv.url)}
+                                            title="Testar sinal deste servidor"
+                                            className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 disabled:opacity-40 text-white/70 hover:text-white text-[10px] font-bold cursor-pointer transition-colors"
+                                          >
+                                            {probe?.probing ? '...' : 'Testar'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                {!isExpanded && totalCount > visibleCount && (
+                                  <div className="text-[10px] text-white/40 italic pl-1">
+                                    + {totalCount - visibleCount} outros servidores
                                   </div>
-                                </div>
-                              );
-                            })}
-                          {!isExpanded && directServers.length > 3 && (
-                            <div className="text-[10px] text-white/40 italic pl-1">
-                              + {directServers.length - 3} outros servidores de backup
-                            </div>
-                          )}
-                          {isExpanded && directServers.length > 3 && (
-                            <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
-                              ▼ Mostrando todos os {directServers.length} servidores diretos
-                              {externalNames.length > 0 && ` + ${externalNames.length} fontes do provedor`}
-                            </div>
-                          )}
+                                )}
+                                {isExpanded && totalCount > 3 && (
+                                  <div className="text-[10px] text-orange-400/70 italic pl-1 font-medium">
+                                    ▼ Mostrando todos os {directServers.length} servidor(es) direto(s)
+                                    {externalSources.length > 0 && ` + ${externalSources.length} fonte(s) do provedor`}
+                                  </div>
+                                )}
 
-                          {/* Fontes do provedor externo: entram na mesma numeração contínua
-                              (o ponteiro virtual /api/external-channel não é listado acima —
-                              as fontes abaixo já o representam em detalhe).
-                              Quando recolhido, ocultamos as fontes externas tb (so mostramos
-                              os 3 primeiros diretos). Quando expandido, mostramos todas. */}
-                          {isExpanded && externalNames.map(name => (
-                            <ExternalChannelSources key={name} name={name} />
-                          ))}
+                                {/* Fontes do provedor externo: entram na mesma numeração contínua
+                                    (o ponteiro virtual /api/external-channel não é listado acima —
+                                    as fontes abaixo já o representam em detalhe).
+                                    Recolhido: maxItems = externalToShow (preenche o resto dos 3 slots).
+                                    Expandido: mostra todas as fontes. */}
+                                {externalNames.map(name => (
+                                  <ExternalChannelSources
+                                    key={name}
+                                    name={name}
+                                    maxItems={externalToShow}
+                                  />
+                                ))}
+                              </>
+                            );
+                          })()}
                         </div>
                       </>
                     );
