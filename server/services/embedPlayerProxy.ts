@@ -398,6 +398,24 @@ function cacheSet(url: string, value: string): void {
 export async function resolveEmbedPlayerHtml(url: string): Promise<string> {
   const cached = cacheGet(url);
   if (cached) return cached;
+  const { html, fellBack } = await resolveEmbedPlayerHtmlWithMeta(url);
+  cacheSet(url, html);
+  return html;
+}
+
+/**
+ * Variante que devolve metadata sobre o resultado — usada pelo probe
+ * /api/embed-probe para saber se o HTML veio do stub de fallback (fetch
+ * falhou) ou de uma página real sanitizada.
+ */
+export async function resolveEmbedPlayerHtmlWithMeta(url: string): Promise<{ html: string; fellBack: boolean; rawHtml: string | null }> {
+  const cached = cacheGet(url);
+  if (cached) {
+    // Não dá pra saber se o cache veio de fallback ou não sem guardar —
+    //assume sanitized (o caller do probe só quer saber de vida, e o cache
+    // só dura 5min, então se voltou no cache é porque alguem probeou antes).
+    return { html: cached, fellBack: false, rawHtml: null };
+  }
 
   let current = url;
   let html: string | null = null;
@@ -409,7 +427,6 @@ export async function resolveEmbedPlayerHtml(url: string): Promise<string> {
     }
     html = page;
     const next = extractRedirectUrl(page);
-    // Salto interno: qualquer https público serve (o browser faria o mesmo).
     if (next && next !== current && isSafePublicHttpsUrl(next)) {
       current = next;
       continue;
@@ -417,12 +434,10 @@ export async function resolveEmbedPlayerHtml(url: string): Promise<string> {
     break;
   }
 
-  const value =
-    html != null
-      ? sanitizeEmbedHtml(html, current)
-      : buildEmbedFallbackHtml(url);
-  cacheSet(url, value);
-  return value;
+  if (html != null) {
+    return { html: sanitizeEmbedHtml(html, current), fellBack: false, rawHtml: html };
+  }
+  return { html: buildEmbedFallbackHtml(url), fellBack: true, rawHtml: null };
 }
 
 // ---------------------------------------------------------------------------
@@ -465,4 +480,81 @@ export async function handleEmbedPlayerRequest(req: Request, res: Response): Pro
 /** [TESTES] Limpa o cache em memória. */
 export function __clearEmbedCacheForTests(): void {
   htmlCache.clear();
+}
+
+// ---------------------------------------------------------------------------
+// Probe de vida (sem servir o HTML) — usado pelo LivePlayerModal para
+// saber quais servidores embed estão realmente funcionando antes de
+// setar o iframe src. Reaproveita o mesmo cache 5min/400 do proxy.
+// ---------------------------------------------------------------------------
+
+export interface EmbedProbeResult {
+  /** URL original consultada. */
+  url: string;
+  /** Resposta HTTP geral (deny/fetch_failed/ok). */
+  status: "ok" | "denied" | "fetch_failed";
+  /** true quando o proxy caiu no stub de fallback (location.replace) — página original não foi buscada. */
+  fallback: boolean;
+  /** Tamanho do HTML sanitizado servido pelo proxy (bytes UTF-8). */
+  sizeBytes: number;
+  /** HTML tem indícios de player (video tag, iframe aninhado, libs como jwplayer/videojs/clappr/hls.js...). */
+  hasPlayer: boolean;
+  /** Veredito final: o iframe provavelmente vai renderizar um player. */
+  alive: boolean;
+  /** Timestamp do probe (ms). */
+  probedAt: number;
+}
+
+const PLAYER_RE =
+  /<(?:video|iframe)\b|jwplayer|videojs|video\.js|clappr|dplayer|plyr|bitmovin|shaka(?:-player)?|flowplayer|fluidplayer|hls\.js|\.m3u8|hlsjs/i;
+
+/**
+ * Probeia uma URL embed: resolve via o mesmo pipeline do proxy (cache +
+ * redirects + sanitização) e devolve um veredito sem servir o HTML.
+ *
+ * - status "denied": host fora do allowlist (não é fonte MinhaTela).
+ * - status "fetch_failed" + fallback true: o servidor não conseguiu buscar
+ *   a página original (404, 403 Cloudflare, timeout) — caiu no stub.
+ * - status "ok" + hasPlayer true: a página tem player real → alive.
+ * - status "ok" + hasPlayer false + sizeBytes grande: página carregou mas
+ *   não encontramos player → indeterminado (conservadoramente alive).
+ * - status "ok" + sizeBytes pequeno: provável stub → !alive.
+ */
+export async function probeEmbedPlayer(url: string): Promise<EmbedProbeResult> {
+  const probedAt = Date.now();
+  if (!isAllowedEmbedUrl(url)) {
+    return { url, status: "denied", fallback: false, sizeBytes: 0, hasPlayer: false, alive: false, probedAt };
+  }
+  let html: string;
+  let rawHtml: string | null;
+  let fellBack: boolean;
+  try {
+    const meta = await resolveEmbedPlayerHtmlWithMeta(url);
+    html = meta.html;
+    rawHtml = meta.rawHtml;
+    fellBack = meta.fellBack;
+    // Guarda no cache pra o próximo probe/iframe não refetch.
+    cacheSet(url, html);
+  } catch {
+    return { url, status: "fetch_failed", fallback: true, sizeBytes: 0, hasPlayer: false, alive: false, probedAt };
+  }
+  // hasPlayer examina o HTML cru (não sanitizado) — o sanitizer injeta
+  // ~5KB de JS que contém nomes de libs (bitmovin, shaka...) no próprio
+  // regex dele, o que causaria falso positivo.
+  const probeHtml = rawHtml ?? html;
+  const hasPlayer = PLAYER_RE.test(probeHtml);
+  const probeBytes = Buffer.byteLength(probeHtml, "utf-8");
+  // vivo: NÃO caiu no stub de fallback E (tem player OU HTML cru grande
+  // o suficiente pra ser uma página real).
+  const alive = !fellBack && (hasPlayer || probeBytes >= 4000);
+  const sizeBytes = Buffer.byteLength(html, "utf-8");
+  return {
+    url,
+    status: fellBack ? "fetch_failed" : "ok",
+    fallback: fellBack,
+    sizeBytes,
+    hasPlayer,
+    alive,
+    probedAt,
+  };
 }

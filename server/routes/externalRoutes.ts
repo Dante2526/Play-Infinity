@@ -30,7 +30,7 @@
 import { Router } from "express";
 import { validateExternalChannelName, validateExternalFormatParam } from "../utils/externalValidation";
 import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, getAllExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
-import { handleEmbedPlayerRequest } from "../services/embedPlayerProxy";
+import { handleEmbedPlayerRequest, probeEmbedPlayer } from "../services/embedPlayerProxy";
 import { syncSaimoAllDeduped } from "../services/saimoCatalogScraper";
 import { signProxyUrl } from "../utils/helpers";
 
@@ -216,6 +216,32 @@ router.get('/api/live-channels', (_req, res) => {
 // player do Play Infinity (ver server/services/embedPlayerProxy.ts).
 router.get('/api/embed-player', (req, res) => {
   void handleEmbedPlayerRequest(req, res);
+});
+
+// Probe de vida de um embed (fontes MinhaTela): devolve JSON
+// { alive, hasPlayer, sizeBytes, fallback, status } sem servir o HTML.
+// Usado pelo LivePlayerModal para saber quais servidores embed realmente
+// carregam um player antes de setar o iframe src — sem isso, o user clica
+// num servidor morto e o iframe fica preto sem feedback (sandbox cross-origin
+// bloqueia acesso ao contentDocument). Reaproveita o cache 5min/400 do proxy.
+router.get('/api/embed-probe', async (req, res) => {
+  applyViewerCors(req, res);
+  const raw = typeof req.query.url === 'string' ? req.query.url : '';
+  if (!raw) {
+    res.status(400).set('Cache-Control', 'no-store').json({ error: 'missing url' });
+    return;
+  }
+  try {
+    const result = await probeEmbedPlayer(raw);
+    res.status(200)
+      .set('Cache-Control', 'public, max-age=300')
+      .json(result);
+  } catch (err) {
+    res.status(500).set('Cache-Control', 'no-store').json({
+      error: 'probe_failed',
+      message: err instanceof Error ? err.message : String(err),
+    });
+  }
 });
 router.get('/api/admin/external-sources', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');

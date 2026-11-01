@@ -86,6 +86,25 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     serverNoticeTimer.current = setTimeout(() => setServerNotice(''), ms);
   }, []);
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Probe de vida dos servidores embed (fontes MinhaTela — isEmbed=true).
+  //
+  // O iframe usa sandbox sem allow-same-origin → origem opaca → o JS do
+  // pai NÃO consegue ler o contentDocument do iframe. Ou seja: o player
+  // não tem como detectar se o embed carregou um player real ou se caiu
+  // num stub preto. A solução é um probe prévio via /api/embed-probe que
+  // roda server-side, reusa o cache 5min do proxy sanitizador e devolve
+  // { alive, hasPlayer } sem servir o HTML.
+  //
+  // Estado por servidor:
+  //   undefined → ainda não probeado (ou não é embed)
+  //   'probing' → probe em andamento
+  //   'alive'   → probe disse que tem player
+  //   'dead'    → probe disse que caiu no stub de fallback
+  // ─────────────────────────────────────────────────────────────────────────
+  type EmbedServerStatus = 'probing' | 'alive' | 'dead';
+  const [embedStatus, setEmbedStatus] = useState<Record<number, EmbedServerStatus>>({});
+
   // Limpa o timer do aviso no desmonte do modal
   useEffect(() => {
     return () => {
@@ -341,8 +360,68 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     : serverUrl;
   const isInternalApi = rawUrl.startsWith('/api/');
   const streamUrl = currentServer?.isProxy 
-    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}` 
+    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}`
     : (isInternalApi ? `${proxyBase}${rawUrl}` : rawUrl);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Probe de vida dos servidores embed — dispara em paralelo quando o canal
+  // muda. Reusa o cache 5min do proxy sanitizador server-side.
+  // ─────────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const servers = channel.servers || [];
+    if (servers.length === 0) return;
+    const embedIndices: number[] = [];
+    servers.forEach((s, idx) => { if (s.isEmbed && s.url) embedIndices.push(idx); });
+    if (embedIndices.length === 0) {
+      setEmbedStatus({});
+      return;
+    }
+
+    // Reset do mapa ao trocar de canal.
+    const initial: Record<number, EmbedServerStatus> = {};
+    embedIndices.forEach((idx) => { initial[idx] = 'probing'; });
+    setEmbedStatus(initial);
+
+    let cancelled = false;
+    embedIndices.forEach((idx) => {
+      const url = servers[idx].url as string;
+      const probeUrl = `${proxyBase}/api/embed-probe?url=${encodeURIComponent(url)}`;
+      fetch(probeUrl, { headers: { accept: 'application/json' } })
+        .then((r) => r.json())
+        .then((data: { alive?: boolean } | null) => {
+          if (cancelled || !data) return;
+          setEmbedStatus((prev) => ({
+            ...prev,
+            [idx]: data.alive ? 'alive' : 'dead',
+          }));
+        })
+        .catch(() => {
+          if (cancelled) return;
+          // Probe falhou (rede/offline) — não marca como morto (pode ser
+          // problema nosso, não do servidor). Conserva como vivo.
+          setEmbedStatus((prev) => ({ ...prev, [idx]: 'alive' }));
+        });
+    });
+
+    return () => { cancelled = true; };
+  }, [channel.id, channel.servers, proxyBase]);
+
+  // Auto-troca quando o servidor EMBED atual é marcado como morto pelo
+  // probe. Roda só quando o status muda (não a cada render) e respeita o
+  // fluxo existente de failedServersRef (não entra em loop infinito).
+  useEffect(() => {
+    if (!currentServer?.isEmbed) return;
+    const status = embedStatus[selectedServerIndex];
+    if (status !== 'dead') return;
+    if (failedServersRef.current.has(selectedServerIndex)) return;
+    if (channel.servers.length <= 1) {
+      // Servidor único: avisa e segue (não dá pra trocar).
+      showServerNotice('Este servidor não está respondendo agora — transmissão pode estar indisponível.', 12000);
+      return;
+    }
+    showServerNotice(`Servidor ${selectedServerIndex + 1} sem sinal — mudando para o próximo disponível...`, 8000);
+    switchToNextServer('embed morto (probe /api/embed-probe)');
+  }, [embedStatus, selectedServerIndex, currentServer, channel.servers, showServerNotice, switchToNextServer]);
   
   // Detecta se é stream DASH (bolodechocolate) — usa dash.js em vez de hls.js
   const isDashStream = currentServer?.url?.includes("/api/bolodechocolate") || false;
@@ -1745,27 +1824,64 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
                 </button>
                 {showServerMenu && (
                   <div className="absolute bottom-11 left-0 z-50 w-56 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1 border-b border-white/10">
-                      Opções de Servidor
+                    <div className="text-[10px] font-bold text-neutral-400 uppercase tracking-wider px-2 py-1 border-b border-white/10 flex items-center justify-between">
+                      <span>Opções de Servidor</span>
+                      <span className="text-[9px] text-neutral-500 normal-case tracking-normal font-medium">verde = online</span>
                     </div>
-                    {channel.servers.map((s, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setSelectedServerIndex(idx);
-                          setShowServerMenu(false);
-                        }}
-                        className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
-                          selectedServerIndex === idx
-                            ? 'bg-orange-600 text-white'
-                            : 'hover:bg-white/10 text-neutral-300 hover:text-white'
-                        }`}
-                      >
-                        <span className="truncate">{s.name || `Servidor ${idx + 1}`}</span>
-                        {selectedServerIndex === idx && <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0 ml-1.5" />}
-                      </button>
-                    ))}
+                    {channel.servers.map((s, idx) => {
+                      const status = embedStatus[idx];
+                      const isDead = status === 'dead';
+                      const isAlive = status === 'alive';
+                      const isProbing = status === 'probing';
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setSelectedServerIndex(idx);
+                            setShowServerMenu(false);
+                            if (isDead) {
+                              showServerNotice(`Servidor ${idx + 1} sem sinal — tentando mesmo assim...`, 6000);
+                            }
+                          }}
+                          className={`flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-semibold text-left transition-all cursor-pointer ${
+                            selectedServerIndex === idx
+                              ? 'bg-orange-600 text-white'
+                              : isDead
+                                ? 'hover:bg-white/5 text-neutral-500 hover:text-neutral-400'
+                                : 'hover:bg-white/10 text-neutral-300 hover:text-white'
+                          }`}
+                          title={isDead ? 'Sem sinal no momento' : isAlive ? 'Online' : isProbing ? 'Verificando...' : ''}
+                        >
+                          <span className={`truncate ${isDead && selectedServerIndex !== idx ? 'line-through opacity-60' : ''}`}>
+                            {s.name || `Servidor ${idx + 1}`}
+                          </span>
+                          <span className="flex items-center gap-1 ml-1.5 shrink-0">
+                            {isAlive && (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${selectedServerIndex === idx ? 'bg-white' : 'bg-emerald-500'}`}
+                                title="Online"
+                              />
+                            )}
+                            {isProbing && (
+                              <span
+                                className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"
+                                title="Verificando sinal..."
+                              />
+                            )}
+                            {isDead && (
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${selectedServerIndex === idx ? 'bg-white/60' : 'bg-red-500'}`}
+                                title="Sem sinal"
+                              />
+                            )}
+                            {selectedServerIndex === idx && !status && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                            )}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
