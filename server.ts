@@ -23,6 +23,7 @@ import { startCatalogWatcher } from "./server/services/catalogWatcher";
 import { startAdminSentinel } from "./server/services/adminSentinel";
 import { startNewReleasesWatcher } from "./server/services/newReleasesWatcher";
 import { startDunningWatcher } from "./server/services/dunningWatcher";
+import { startMinhaTelaWatcher } from "./server/services/minhatelaCatalog";
 
 // In-memory store for episodes received via webhook/endpoint
 // Interface e armazenamento dos Mais Assistidos pelos usuários
@@ -595,6 +596,10 @@ app.use(externalRouter);
         // Sync do catálogo externo de canais (Saimo) no boot + cron 6h.
         // APP_PROBE=1 pula (mesma condição dos demais services de background).
         startSaimoSyncCron();
+        // Fontes embed MinhaTela (agregador reversado): injeta fontes extras
+        // nos canais existentes + canais exclusivos (Paramount+, Disney+,
+        // HBO Max, Prime Video, A Fazenda 18...) no catálogo público de TV.
+        startMinhaTelaWatcher();
         // Push de lançamentos (filmes/séries novas) para usuários com notif ON.
         startNewReleasesWatcher();
         // Push de retenção (saudação) para ex-assinantes inadimplentes.

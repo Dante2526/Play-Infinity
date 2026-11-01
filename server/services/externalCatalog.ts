@@ -727,6 +727,12 @@ export function externalCatalogStats(): {
   };
 }
 
+import {
+  getMinhaTelaNewChannels,
+  getMinhaTelaServersFor,
+  minhaTelaKey,
+} from "./minhatelaCatalog";
+
 /** Publish catalogue metadata and internal resolver routes, never upstream credentials. */
 export function getPublicLiveChannels(): LiveChannel[] {
   const channels = [...INITIAL_LIVE_CHANNELS];
@@ -737,6 +743,19 @@ export function getPublicLiveChannels(): LiveChannel[] {
       if (server.url.startsWith('/api/external-channel?')) {
         const name = new URL(server.url, 'https://play-infinity.stream').searchParams.get('name');
         if (name) represented.add(normalizeChannelName(name));
+      }
+    }
+  }
+  // Chaves de matching MinhaTela (normalização própria) dos nomes já
+  // representados — evita canal duplicado quando o MinhaTela também tem
+  // um canal que o Saimo/estático já cobre.
+  const representedMt = new Set<string>();
+  for (const channel of channels) {
+    representedMt.add(minhaTelaKey(channel.name));
+    for (const server of channel.servers) {
+      if (server.url.startsWith('/api/external-channel?')) {
+        const name = new URL(server.url, 'https://play-infinity.stream').searchParams.get('name');
+        if (name) representedMt.add(minhaTelaKey(name));
       }
     }
   }
@@ -765,7 +784,31 @@ export function getPublicLiveChannels(): LiveChannel[] {
       servers: [{ name: 'Servidor Multi-Fonte Saimo', url: `/api/external-channel?name=${encodeURIComponent(channel.name)}`, isProxy: false }],
     });
   }
-  return channels;
+  // Fontes embed MinhaTela anexadas aos canais EXISTENTES (estáticos +
+  // Saimo): cada canal que também existe no catálogo deles ganha as fontes
+  // de embed deles como servidores adicionais (isEmbed). Copia o canal —
+  // nunca muta INITIAL_LIVE_CHANNELS.
+  const withMinhaTela = channels.map((ch) => {
+    const extra = getMinhaTelaServersFor(ch.id, ch.name);
+    if (extra.length === 0) return ch;
+    return { ...ch, servers: [...ch.servers, ...extra] };
+  });
+  // Canais EXCLUSIVOS do MinhaTela (Paramount+, Disney+, HBO Max, Prime
+  // Video, A Fazenda 18, Premiere 8, pay-TV...) viram canais novos completos,
+  // todas as fontes já resolvidas como servidores embed.
+  for (const mt of getMinhaTelaNewChannels(representedMt)) {
+    withMinhaTela.push({
+      id: mt.id,
+      name: mt.name,
+      category: mt.category,
+      logo: mt.logo,
+      quality: mt.quality,
+      currentProgram: mt.currentProgram,
+      description: mt.description,
+      servers: mt.servers,
+    });
+  }
+  return withMinhaTela;
 }
 
 const lastExternalSelections = new Map<string, { url: string; at: number }>();

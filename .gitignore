@@ -34,3 +34,6 @@ data/encontrei-catalog.db
 data/vizer-catalog.db
 public/data/encontrei-catalog.db
 public/data/vizer-catalog.db
+
+# Snapshot do catálogo MinhaTela (fontes embed) — cache dinâmico do watcher.
+data/minhatela-cache.json
