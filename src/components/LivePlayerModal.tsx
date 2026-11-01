@@ -1285,9 +1285,20 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         >
         {currentServer?.isEmbed ? (
           <iframe
-            src={currentServer.url}
-            className="w-full h-full object-contain"
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            // Embeds de terceiros (fontes MinhaTela) passam pelo proxy
+            // sanitizador do servidor: mata popunder/pop-ups, remove
+            // detectores de sandbox e adapta o layout da página deles ao
+            // nosso player. O fallback do proxy redireciona para a URL
+            // original quando o servidor não consegue buscar a página.
+            src={`${proxyBase}/api/embed-player?url=${encodeURIComponent(currentServer.url || '')}`}
+            className="w-full h-full"
+            allow="autoplay; encrypted-media; picture-in-picture"
+            // Sem allow-popups e sem allow-top-navigation: pop-ups e
+            // sequestro de aba bloqueados a nível de navegador. Sem
+            // allow-same-origin: a página roda com origem opaca e não
+            // acessa a app, cookies ou tokens do Play Infinity (o
+            // sanitizador do proxy shima storage p/ o player funcionar).
+            sandbox="allow-scripts allow-forms"
             style={{ border: 0, background: 'black' }}
             referrerPolicy="no-referrer"
           />

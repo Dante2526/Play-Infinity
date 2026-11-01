@@ -390,6 +390,27 @@ export function minhaTelaStats(): {
   };
 }
 
+/**
+ * Hosts (lowercase) das fontes embed conhecidas no snapshot — allowlist do
+ * /api/embed-player. Só entradas https públicas. Se o snapshot estiver
+ * vazio (boot frio antes do primeiro refresh), o set fica vazio — ninguém
+ * tem fontes embed no catálogo nesse momento, então ninguém chama o proxy.
+ */
+export function getMinhaTelaEmbedHosts(): Set<string> {
+  const hosts = new Set<string>();
+  for (const c of snapshot.values()) {
+    for (const s of c.streams || []) {
+      if (!s || !s.url || !isSafeEmbedUrl(s.url)) continue;
+      try {
+        hosts.add(new URL(s.url).hostname.toLowerCase());
+      } catch {
+        /* URL inválida já filtrada acima */
+      }
+    }
+  }
+  return hosts;
+}
+
 // ---------------------------------------------------------------------------
 // Hooks exclusivos de teste (não usar em produção)
 // ---------------------------------------------------------------------------

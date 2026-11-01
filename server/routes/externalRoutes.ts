@@ -30,6 +30,7 @@
 import { Router } from "express";
 import { validateExternalChannelName, validateExternalFormatParam } from "../utils/externalValidation";
 import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, getAllExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
+import { handleEmbedPlayerRequest } from "../services/embedPlayerProxy";
 import { syncSaimoAllDeduped } from "../services/saimoCatalogScraper";
 import { signProxyUrl } from "../utils/helpers";
 
@@ -209,6 +210,12 @@ let activeSourceTests = 0;
 router.get('/api/live-channels', (_req, res) => {
   res.setHeader('Cache-Control', 'public, max-age=60');
   return res.json({ success: true, channels: getPublicLiveChannels() });
+});
+// Player embed sanitizado das fontes MinhaTela: mata popunder/pop-ups,
+// remove detectores de sandbox e adapta o layout da página deles ao
+// player do Play Infinity (ver server/services/embedPlayerProxy.ts).
+router.get('/api/embed-player', (req, res) => {
+  void handleEmbedPlayerRequest(req, res);
 });
 router.get('/api/admin/external-sources', (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
