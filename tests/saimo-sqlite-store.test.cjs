@@ -17,6 +17,7 @@ async function compileStore() {
         export { openSaimoSqlite, findSaimoDb, isSaimoSqliteAvailable, getSaimoStore } from './server/services/saimoSqliteStore';
         export { saimoRouter } from './server/routes/saimoRoutes';
         export { getPlaybackCataloguePresence } from './server/routes/encontreiLookup';
+        export { isExternalIframePlayer } from './src/utils/playerIntegration';
       `,
       resolveDir: root,
       loader: 'ts',
@@ -104,3 +105,60 @@ test('getPlaybackCataloguePresence: inclui srv_saimo com prioridade dublado para
   const hintsGhost = storeMod.getPlaybackCataloguePresence(999999999);
   assert.equal(hintsGhost.srv_saimo, undefined, 'item inexistente não deve constar como listed');
 });
+
+test('isExternalIframePlayer: reconhece saimo-proxy-iframe como player integrado', async () => {
+  const storeMod = await compileStore();
+  const isExternal1 = storeMod.isExternalIframePlayer('/api/saimo-proxy-iframe?id=299939&type=tv&s=1&e=2');
+  assert.equal(isExternal1, false, '/api/saimo-proxy-iframe deve ser integrado (não externo)');
+
+  const isExternal2 = storeMod.isExternalIframePlayer('/api/saimo-stream?id=299939&type=tv');
+  assert.equal(isExternal2, false, '/api/saimo-stream deve ser integrado (não externo)');
+});
+
+test('saimoRoutes: lida com fontes 404 (Monstro: A História de Lizzie Borden) sem travar', async () => {
+  const storeMod = await compileStore();
+  const store = storeMod.getSaimoStore();
+  const ep2 = store.findEpisode(299939, 1, 2);
+  assert.ok(ep2, 'Lizzie Borden S01E02 deve existir no catálogo Saimo');
+  assert.ok(ep2.servers?.saimo_dub?.length > 0, 'deve ter URLs registradas');
+});
+
+test('saimoRoutes: trava anti-SSRF bloqueia hosts privados e locais no /api/saimo-hls-segment', async () => {
+  const storeMod = await compileStore();
+  const router = storeMod.saimoRouter;
+  
+  // Encontra o handler de /api/saimo-hls-segment
+  const layer = router.stack.find(l => l.route && l.route.path === '/api/saimo-hls-segment');
+  assert.ok(layer, 'rota /api/saimo-hls-segment deve estar registrada no router');
+
+  const handler = layer.route.stack[0].handle;
+
+  // Teste 1: host privado 127.0.0.1
+  let status1 = null;
+  let body1 = null;
+  const req1 = {
+    query: { url: 'http://127.0.0.1:8080/secret' },
+    once: () => {},
+  };
+  const res1 = {
+    status: (s) => { status1 = s; return res1; },
+    send: (b) => { body1 = b; },
+  };
+  await handler(req1, res1);
+  assert.equal(status1, 403, 'deve retornar 403 para IP privado/local');
+
+  // Teste 2: host desativado no Saimo (ex: 146.0.32.89)
+  let status2 = null;
+  let body2 = null;
+  const req2 = {
+    query: { url: 'http://146.0.32.89/playlist.m3u8' },
+    once: () => {},
+  };
+  const res2 = {
+    status: (s) => { status2 = s; return res2; },
+    send: (b) => { body2 = b; },
+  };
+  await handler(req2, res2);
+  assert.equal(status2, 403, 'deve retornar 403 para host desativado no Saimo');
+});
+

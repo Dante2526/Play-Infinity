@@ -2136,8 +2136,10 @@ export function VideoPlayerModal({
         // (providerTimeout/startupClock), que dispara o fallback sozinho.
         const msSinceTransition = Date.now() - transitionEpochRef.current;
         if (msSinceTransition < 3000) {
-          console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
-          return;
+          if (!(selectedServerKey === 'srv_saimo' && event.data?.saimoExhausted === true)) {
+            console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
+            return;
+          }
         }
         const reason = String(event.data.reason || "");
         if (selectedServerKey === 'srv_mixdrop') {
@@ -2149,7 +2151,11 @@ export function VideoPlayerModal({
           return;
         }
 
-        if ((selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) || (selectedServerKey === 'srv_byse' && event.data.byseExhausted === true)) {
+        if (
+          (selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) ||
+          (selectedServerKey === 'srv_byse' && event.data.byseExhausted === true) ||
+          (selectedServerKey === 'srv_saimo' && event.data.saimoExhausted === true)
+        ) {
           // The iframe already exhausted distinct catalogue files. Do not start
           // that same cycle again before moving to another approved provider.
           retrySameServerRef.current = true;

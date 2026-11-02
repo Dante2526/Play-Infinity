@@ -1,3 +1,34 @@
+## 02/11/2026 — Correção Saimo Play HD: HLS Seguro, Descarte de Hosts Mortos, Controles Netflix e Fallback Imediato em 404 (Android 76/1.4.44)
+
+**Contexto e Diagnóstico:**
+1. **Tela Preta com Spinner Infinito em Lizzie Borden:** Ao selecionar o servidor Saimo Play HD na série *Monstro: A História de Lizzie Borden* (TMDB `299939`, S01E02), o player exibia tela preta com a mensagem `"Carregando Episódio 2..."` eternamente.
+2. **Causa Raiz 1 (Upstream 404):** Os nós de streaming do Saimo para Lizzie Borden apontavam para `embedplayer2.xyz/.../master.txt`, que retorna HTTP 404 (página nginx de 162 bytes).
+3. **Causa Raiz 2 (Bloqueio da Janela de Transição de 3s no Frontend):** O `VideoPlayerModal.tsx` possuía uma guarda `if (msSinceTransition < 3000) return;` criada para proteger reloads do StreamTape. Essa guarda descartava a notificação de erro fatal disparada pelo Saimo logo nos primeiros milissegundos, impedindo o acionamento do fallback.
+4. **Causa Raiz 3 (Loop de Status Buffering no Iframe):** O `saimo-proxy-iframe` continuava emitindo `WATCHPLAY_STATUS` com `{ buffering: true }` a cada 300ms mesmo após o erro fatal do elemento de vídeo, mantendo o spinner ativo.
+5. **Causa Raiz 4 (Tratamento de Streams HLS .txt):** Fontes Saimo utilizam playlists HLS sob a extensão `.txt` contendo `#EXTM3U` e exigindo cabeçalho `Referer: https://embedplayer2.xyz/`. O endpoint anterior só aceitava MP4 direto.
+
+**Modificações Realizadas:**
+1. **Proxy HLS e Filtro de Hosts Mortos (`server/routes/saimoRoutes.ts`):**
+   - Catalogados 34 hosts desativados em `SAIMO_DISABLED_HOSTS` e criada rota `/api/saimo-hls-segment` com injeção do `Referer` upstream e reescrita de URIs relativas.
+   - Adicionada blindagem anti-SSRF com `isPrivateOrLocalHost` em `/api/saimo-hls-segment` e `/api/saimo-stream`.
+   - Adicionado suporte nativo a HLS via `/api/byse-hls.js` (`hls.min.js`) no `saimo-proxy-iframe`.
+   - No erro fatal, o `statusInterval` é interrompido imediatamente e despacha `{ type: "WATCHPLAY_ERROR", saimoExhausted: true }`.
+2. **Integração no Frontend (`src/components/VideoPlayerModal.tsx` & `src/utils/playerIntegration.ts`):**
+   - `isExternalIframePlayer` atualizado para tratar o Saimo como player integrado.
+   - Exceção cirúrgica na janela de transição: permite que `saimoExhausted: true` acione imediatamente o fallback para o próximo servidor homologado (BYSE, StreamTape, MixDrop) sem aguardar 15-30s de timeout e sem quebrar os guards de transição do StreamTape.
+   - Adicionado `srv_saimo` em `preparePlaybackStartup` (`src/services/playbackStartup.ts`).
+3. **Testes Automatizados:**
+   - 14/14 testes aprovados em `tests/saimo-sqlite-store.test.cjs` e `tests/player-stale-iframe-errors.test.cjs`.
+   - 55/55 testes de regressão no ecossistema de players passando.
+
+**Validação Realizada:**
+- `node --test`: 55/55 testes aprovados (100%).
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: Corrigidos os pontos críticos (anti-SSRF e guarda de transição), aprovado.
+
+---
+
 ## 01/11/2026 — Engenharia Reversa, Catálogo SQLite e Player Oficial Saimo TV VOD (Android 75/1.4.43)
 
 **Contexto e Solicitação do Usuário:**
