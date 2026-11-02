@@ -1400,6 +1400,26 @@ export function VideoPlayerModal({
 
 
     list.unshift({
+      key: 'srv_saimo', label: 'Saimo Play HD', name: 'Saimo Play', badge: 'CDN Rápida • MP4',
+      buildUrl: (id: string, s?: number, e?: number) => {
+        const params = new URLSearchParams({
+          id: String(effectiveMovieId || tmdbId || id),
+          type: isSeries ? 'tv' : 'movie',
+          cb: String(Date.now()),
+        });
+        if (isSeries) {
+          params.set('s', String(s ?? season));
+          params.set('e', String(e ?? episode));
+        }
+        if ((s === undefined || s === season) && (e === undefined || e === episode) && lastKnownTimeRef.current > 0) {
+          params.set('t', String(lastKnownTimeRef.current));
+        }
+        return `/api/saimo-proxy-iframe?${params}`;
+      },
+      isMatch: (url: string) => url.includes('/api/saimo-'),
+    });
+
+    list.unshift({
       key: 'srv_byse', label: 'BYSE HD', name: 'BYSE', badge: 'HLS • Player integrado',
       buildUrl: (id: string, s?: number, e?: number) => {
         const identity = new URLSearchParams({id:String(effectiveMovieId || tmdbId || id),name:title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim()||''});
@@ -1493,7 +1513,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     setActiveIframeUrl(null); // Dispose previous frame before asynchronous lookup.
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse");
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse" || serverKey === "srv_saimo");
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     metadataStartedRef.current = false;
@@ -2513,6 +2533,8 @@ export function VideoPlayerModal({
       cleanUrl.startsWith("/api/md-stream") ||
       cleanUrl.startsWith("/api/streamtape-proxy-iframe") ||
       cleanUrl.startsWith("/api/byse-proxy-iframe") ||
+      cleanUrl.startsWith("/api/saimo-stream") ||
+      cleanUrl.startsWith("/api/saimo-proxy-iframe") ||
       cleanUrl.startsWith("/api/vidsrc-player") ||
       cleanUrl.startsWith("/api/vidsrc-stream") ||
       cleanUrl.includes("watchplay.shop") ||
@@ -3215,7 +3237,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse' || selectedServerKey === 'srv_saimo';
 
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);

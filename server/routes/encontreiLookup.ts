@@ -43,6 +43,8 @@ import {
   type EncontreiSqliteStore,
 } from "../services/encontreiSqliteStore";
 
+import { getSaimoStore } from "../services/saimoSqliteStore";
+
 const router = Router();
 
 // Cache de temporadas verificadas no VIP Player (TTL 30 min)
@@ -2405,5 +2407,19 @@ export function getPlaybackCataloguePresence(id: number, season?: number, episod
   loadCatalogs();
   const tv=season!==undefined&&episode!==undefined,key=`${id}:${season}:${episode}`;
   const entries=[tv?_encontreiEpisodeIndex.get(key):_encontreiMovieIndex.get(id),tv?_vizerEpisodeIndex.get(key):_vizerMovieIndex.get(id)].filter(Boolean);
-  return Object.fromEntries(['byse','streamtape','mixdrop'].map(provider=>['srv_'+provider,{audioPriority:Math.min(2,...entries.filter(e=>!!e.servers?.[provider]).map(e=>/dublad|nacional|portugu|pt[-_ ]?br/i.test(e.server_audio?.[provider]||e.audio||'')?0:(e.server_audio?.[provider]||e.audio)?2:1)),listed:entries.some(e=>!!e.servers?.[provider]),fileIds:[...new Set(entries.map(e=>String(e.servers?.[provider]||'')).filter(Boolean))]}]));
+  const result: Record<string, any> = Object.fromEntries(['byse','streamtape','mixdrop'].map(provider=>['srv_'+provider,{audioPriority:Math.min(2,...entries.filter(e=>!!e.servers?.[provider]).map(e=>/dublad|nacional|portugu|pt[-_ ]?br/i.test(e.server_audio?.[provider]||e.audio||'')?0:(e.server_audio?.[provider]||e.audio)?2:1)),listed:entries.some(e=>!!e.servers?.[provider]),fileIds:[...new Set(entries.map(e=>String(e.servers?.[provider]||'')).filter(Boolean))]}]));
+  const saimoStore = getSaimoStore();
+  const saimoItem = saimoStore ? (tv ? saimoStore.findEpisode(id, season, episode) : saimoStore.findMovie(id)) : null;
+  if (saimoItem) {
+    const hasDub = Array.isArray(saimoItem.servers?.saimo_dub) && saimoItem.servers.saimo_dub.length > 0;
+    const hasLeg = Array.isArray(saimoItem.servers?.saimo_leg) && saimoItem.servers.saimo_leg.length > 0;
+    if (hasDub || hasLeg) {
+      result.srv_saimo = {
+        audioPriority: hasDub ? 0 : 1,
+        listed: true,
+        fileIds: []
+      };
+    }
+  }
+  return result;
 }

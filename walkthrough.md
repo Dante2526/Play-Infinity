@@ -1,3 +1,50 @@
+## 01/11/2026 — Engenharia Reversa, Catálogo SQLite e Player Oficial Saimo TV VOD (Android 75/1.4.43)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou transformar o site Saimo TV (`saimo-tv.pages.dev/movies`) em um catálogo SQLite idêntico aos catálogos existentes do Vizer e Encontrei.me, além de integrar o player de filmes e séries deles no aplicativo Play Infinity com prioridade estrita para conteúdos dublados PT-BR.
+
+**Engenharia Reversa da Arquitetura do Saimo TV:**
+1. **Índices de CDN Descobertos:** O Saimo TV utiliza arquivos de partição hospedados em Cloudflare Pages (`https://filmes-saimo.pages.dev/`):
+   - `indice.txt`: Lista 20 nós CDN de streaming e as letras alfabéticas indexadas.
+   - `fichas.txt`: Mapeia 66.755 filmes e 24.366 séries diretamente com seus respectivos IDs oficiais do TMDB.
+   - Partições de filmes (`filmes-0.txt` a `filmes-z.txt`) e séries (`series-0-0.txt` a `series-z-20.txt`).
+2. **Resolução de Streams e Endpoints:**
+   - Filmes e episódios apontam para streams diretos em MP4 ou via worker Cloudflare de redirecionamento (`/api/stream?tipo=movie&id={tmdbId}&versao=dub`).
+   - Todos os arquivos entregam range requests HTTP 206 para buffer rápido e seek suave.
+
+**Modificações Realizadas:**
+1. **Pipeline de Ingestão e Construção do Banco (`scripts/build_saimo_sqlite.py`):**
+   - Script em Python com download paralelo com threads, deduplicação de TMDB IDs e estruturação relacional em SQLite.
+   - Gerado `data/saimo-catalog.db` e `public/data/saimo-catalog.db` (102.30 MB) contendo:
+     - **22.508 filmes únicos** vinculados a TMDB IDs válidos.
+     - **297.119 episódios** distribuídos em **9.151 séries**.
+     - Índices B-Tree cobrindo `idx_saimo_movies_tmdb` e `idx_saimo_episodes_lookup`.
+2. **Adaptador Nativo de Alto Desempenho (`server/services/saimoSqliteStore.ts`):**
+   - Utiliza `node:sqlite` nativo (`DatabaseSync`) em modo estrito `readOnly: true`.
+   - Consulta $O(1)$ direta via `SqliteMovieIndex`, `SqliteEpisodeIndex` e `SqliteSeriesSeasonsIndex`.
+   - Cache LRU em memória de 2.000 entradas para eliminar I/O repetido em acessos concorrentes.
+3. **Rotas de API no Backend (`server/routes/saimoRoutes.ts`):**
+   - `/api/saimo-lookup`: Consulta disponibilidade de títulos e temporadas do Saimo por TMDB ID.
+   - `/api/saimo-stream`: Proxy de streaming de vídeo com repasse de Range requests (HTTP 206), AbortController com timeout de 10s, descarte de hosts na blacklist e destruição limpa de conexões em `req.on('close')`.
+   - `/api/saimo-proxy-iframe`: Player HTML com `<video>` nativo e ponte bidirecional `postMessage` (`WATCHPLAY_STATUS` a 300ms, `PLAY`, `PAUSE`, `SEEK`, `SET_VOLUME`, `SET_MUTED`), garantindo paridade total com a `NetflixPlayerSkin`.
+4. **Integração no Ecossistema de Reprodução:**
+   - `server/routes/playbackHealth.ts`: Registrado o provedor `srv_saimo` com verificação de presença real no banco antes de retornar status `available`.
+   - `server/routes/encontreiLookup.ts`: Adicionado `srv_saimo` em `getPlaybackCataloguePresence` com prioridade máxima de áudio (`audioPriority: 0` para dublagens nacionais).
+   - `src/components/VideoPlayerModal.tsx`: Adicionado `srv_saimo` ("Saimo Play HD") na lista de servidores e no fluxo de iframes.
+   - `src/components/NetflixPlayerSkin.tsx`: Servidor adicionado ao seletor de áudio e display de servidores.
+5. **Cobertura de Testes Automatizados (`tests/saimo-sqlite-store.test.cjs`):**
+   - 6 testes unitários automatizados validando o banco SQLite, consultas $O(1)$, rotas do router e presença no catálogo.
+6. **Versionamento:**
+   - Incrementado `versionCode` para 75 e `versionName` para "1.4.43" em `android/app/build.gradle`.
+
+**Validação Realizada:**
+- `node --test`: 64/64 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `npm run build`: Bundles de produção Vite e `dist/server.cjs` gerados com 100% de sucesso.
+- Code Review especialista: **APPROVED ✅**.
+
+---
+
 ## 01/11/2026 — Varredura Profunda de Servidores de TV, Expurgo de Hosts Mortos e Promoção de Áudio AAC
 
 **Contexto e Diagnóstico:**

@@ -3,9 +3,10 @@ import { getPlaybackCataloguePresence, getByseSources } from './encontreiLookup'
 import { hasWarmByseStream, getWarmByseStream } from '../services/byse/core';
 import { Router } from 'express';
 import { isServerBlacklisted } from '../../src/data/serverBlacklist';
+import { getSaimoStore } from '../services/saimoSqliteStore';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
-const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse']);
+const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo']);
 const check = createPlaybackHealthCache();
 const router = Router();
 
@@ -43,7 +44,7 @@ router.get('/api/playback-health' , async (req, res) => {
     return res.status(400).json({ error: 'Conteúdo inválido' });
   }
   const requested = [...new Set(String(req.query.servers || '').split(','))];
-  if (!requested.length || requested.length > 6 || requested.some(key => !providers.has(key) || isServerBlacklisted(key))) {
+  if (!requested.length || requested.length > providers.size || requested.some(key => !providers.has(key) || isServerBlacklisted(key))) {
     return res.status(400).json({ error: 'Servidor inválido' });
   }
   // Origin is constructed locally, never from Host or a client-supplied URL.
@@ -78,6 +79,26 @@ router.get('/api/playback-health' , async (req, res) => {
       const result=await probeHealthMedia(origin+'/api/byse-stream?ticket='+encodeURIComponent(prepared),signal);
       const iframeParams=new URLSearchParams({id,name,prepared});if(type==='tv'){iframeParams.set('s',String(season));iframeParams.set('e',String(episode));}
       return {...result,...(result.state==='available'?{iframeUrl:'/api/byse-proxy-iframe?'+iframeParams}: {})};
+    }
+    if (key === 'srv_saimo') {
+      const saimoStore = getSaimoStore();
+      const numId = Number(id);
+      const isTv = type === 'tv';
+      const item = saimoStore ? (isTv ? saimoStore.findEpisode(numId, season, episode) : saimoStore.findMovie(numId)) : null;
+      const allUrls: string[] = [
+        ...(item?.servers?.saimo_dub || []),
+        ...(item?.servers?.saimo_leg || []),
+      ].filter((u) => u && !u.includes('desativado.invalid') && !isServerBlacklisted(u));
+      if (!item || allUrls.length === 0) {
+        return { state: 'unavailable', reason: 'not_in_saimo_catalog' };
+      }
+      const saimoParams = new URLSearchParams({ id, type });
+      if (isTv) {
+        saimoParams.set('s', String(season));
+        saimoParams.set('e', String(episode));
+      }
+      const result = await probeHealthMedia(origin + '/api/saimo-stream?' + saimoParams, signal);
+      return { ...result, ...(result.state === 'available' ? { iframeUrl: `/api/saimo-proxy-iframe?${saimoParams}` } : {}) };
     }
     if (key === 'srv_mixdrop' || key === 'srv_streamtape') {
       let resolved;

@@ -6,6 +6,7 @@ import { exec as cpExec } from "child_process";
 // @ts-ignore - ssh2 é um pacote CJS sem types instalados no projeto
 import { Client as SshClient } from "ssh2";
 import { getEncontreiResolverStatus, getVizerCatalogStatus, getEncontreiCatalogStatus } from "./encontreiLookup";
+import { getSaimoCatalogStatus } from "../services/saimoSqliteStore";
 import { checkVizerHealth } from "../services/vizerDomains";
 import { getSentinelStatus, runSentinelCheck, registerAdminPushToken, sendPushToAdmins } from "../services/adminSentinel";
 import { isDelinquentUser } from "../services/dunningWatcher";
@@ -229,6 +230,41 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   // Use the resolver's domain order; a failed live check never deletes the snapshot.
   const checkVizer = async () => ({ ...(await checkVizerHealth()), catalog: getVizerCatalogStatus() });
 
+  const checkSaimo = async () => {
+    const start = Date.now();
+    try {
+      const response = await fetch("https://saimo-tv.pages.dev/movies", {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+        redirect: "follow",
+      });
+      const latency = Date.now() - start;
+      const statusCode = response.status;
+      return {
+        name: "Catálogo Saimo TV",
+        url: "https://saimo-tv.pages.dev/movies",
+        status: (statusCode >= 200 && statusCode < 400 ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE",
+        latencyMs: latency,
+        statusCode,
+        catalog: getSaimoCatalogStatus(),
+        ...(statusCode >= 400 ? { error: `HTTP ${statusCode}` } : {}),
+      };
+    } catch (error: any) {
+      return {
+        name: "Catálogo Saimo TV",
+        url: "https://saimo-tv.pages.dev/movies",
+        status: "OFFLINE" as const,
+        latencyMs: null,
+        statusCode: 0,
+        catalog: getSaimoCatalogStatus(),
+        error: error?.message || "fetch falhou",
+      };
+    }
+  };
+
+
   const staticTargets: Array<{ name: string; url: string; type: string; redirect?: RequestRedirect }> = [
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", redirect: "follow" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html", redirect: "manual" },
@@ -238,9 +274,10 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
 
   // Encontrei e Vizer usam validação dedicada (cookie de sessão e detecção de
   // migração de domínio, respectivamente); os demais alvos seguem com fetch simples.
-  const [encontreiResult, vizerResult, ...staticResults] = await Promise.all([
+  const [encontreiResult, vizerResult, saimoResult, ...staticResults] = await Promise.all([
     checkEncontrei(),
     checkVizer(),
+    checkSaimo(),
     ...staticTargets.map(async (target) => {
       try {
         const start = Date.now();
@@ -272,7 +309,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     })
   ]);
 
-  const results = [encontreiResult, vizerResult, ...staticResults];
+  const results = [encontreiResult, vizerResult, saimoResult, ...staticResults];
   res.json({ success: true, timestamp: Date.now(), results });
 });
 
