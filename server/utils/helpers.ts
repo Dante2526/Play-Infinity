@@ -3,9 +3,14 @@ import crypto from "crypto";
 import dns from "dns";
 import net from "net";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
+// ADR-0002: listas de domínios autorizados extraídas para módulo compartilhado
+// (src/data/streamingAllowlist.ts) para que a blacklist de src/data/ possa
+// aplicar a hierarquia allowlist > keys sem importar código server-only.
+import { ALLOWED_STREAMING_DOMAINS, ALLOWED_LIVE_STREAMING_DOMAINS } from "../../src/data/streamingAllowlist";
 
-// Removed definitions from here, importing them properly if needed.
-// Actually, let's just copy the block and export them.
+// ALLOWED_STREAMING_DOMAINS / ALLOWED_LIVE_STREAMING_DOMAINS agora vivem em
+// src/data/streamingAllowlist.ts (fonte única, ADR-0002) e são reexportadas
+// abaixo para compatibilidade com os importadores históricos de helpers.
 
 function sanitizeString(val: any, maxLength = 100): string {
   if (typeof val !== "string") return "";
@@ -98,114 +103,6 @@ function isSuperflixDetected(content: string, url: string = ""): boolean {
  * Bloqueia estritamente requisições a redes locais/privadas,
  * metadados de nuvem e domínios fora da allowlist autorizada.
  */
-const ALLOWED_STREAMING_DOMAINS = [
-  "watchplay.shop",
-  "v1.watchplay.shop",
-  "playerflix.ink",
-  "playerflix.biz",
-  "myembed.biz",
-  "superflixapi.top",
-  "embedder.net",
-  "warezcdn.net",
-  "warezcdn.com",
-  "encontrei.info",
-  "themoviedb.org",
-  "tmdb.org",
-  "youtube.com",
-  "youtu.be",
-  "unsplash.com",
-  "image.tmdb.org",
-  "vixsrc.to",
-  "vix-content.net",
-  "videasy.to",
-  "videasy.net",
-  "vidlink.pro",
-  "2embed.cc",
-  "autoembed.cc",
-  "player.autoembed.cc",
-  "speedracelight.com",
-  "animesonlinecc.to",
-  "blogger.com",
-  "mixdrop.co",
-  "mixdrop.to",
-  "mixdrop.ch",
-  "mixdrop.bz",
-  "mixdrop.vc",
-  "mixdrop.ag",
-  "mxdrop.to",
-  "mxdrop.top",
-  "mxcontent.net",
-  "nixplay.lat",
-  "nixplay.com",
-  "nixplay.net",
-  "streamtape.com",
-  "tapecontent.net",
-  "strtape.tech",
-  "streamtape.net",
-  "streamtape.cc",
-  "streamtape.site",
-  "tapenation.com",
-  "tape.xxx",
-  "doodstream.com",
-  "dood.to",
-  "dood.so",
-  "dood.ws",
-  "dood.pm",
-  "dood.wf",
-  "dood.la",
-  "dood.sh",
-  "doodcdn.co",
-  "doods.pro",
-  "playmogo.com",
-  "cloudatacdn.com",
-  "ds2play.com",
-  "do0od.com",
-  "dood.watch"
-];
-
-const ALLOWED_LIVE_STREAMING_DOMAINS = [
-  "up.kiwi",
-  "wurl.com",
-  "jmp2.uk",
-  "amagi.tv",
-  "otteravision.com",
-  "jmvstream.com",
-  "cdntvms.com.br",
-  "pluto.tv",
-  "bolodechocolate.fit",
-  "akamaihd.net",
-  "cloudfront.net",
-  "fastly.net",
-  "qzz.io",
-  "up.kiwi",
-  "watchplay.shop",
-  "v1.watchplay.shop",
-  "vixsrc.to",
-  "vixsrc.net",
-  "vix-content.net",
-  "embedplayer2.xyz",
-  "embedplayer.site",
-  "playerflix.ink",
-  "playerflix.biz",
-  "myembed.biz",
-  "embedder.net",
-  "warezcdn.net",
-  "warezcdn.com",
-  "186.233.184.65",
-  "186.233.118.171",
-  "198.13.16.163",
-  "186.233.118.163",
-  "195.178.110.110",
-  "170.83.16.50",
-  "45.162.64.114",
-  "170.83.49.66",
-  "181.78.197.59",
-  "190.83.2.182",
-  ...ALLOWED_STREAMING_DOMAINS
-];
-
-
-
 if (!process.env.PROXY_SECRET && process.env.NODE_ENV === "production") {
   console.error("CRITICAL ERROR: PROXY_SECRET não está definido nas variáveis de ambiente em produção. O servidor será encerrado por questões de segurança.");
   process.exit(1);

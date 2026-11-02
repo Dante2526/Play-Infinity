@@ -20,8 +20,32 @@
  * 2. NUNCA reintroduza, desfaça o bloqueio ou adicione fallbacks para qualquer
  *    dos domínios, chaves ou serviços listados nesta blacklist.
  * 3. PRIORIZAR SEMPRE fontes e fluxos com áudio em Português do Brasil (Dublado PT-BR / Nacional).
+ * 
+ * HIERARQUIA DE DECISÃO (ADR-0002 — docs/adr/0002-allowlist-vs-blacklist.md):
+ *   1. Host EXATAMENTE na allowlist compartilhada (src/data/streamingAllowlist.ts)
+ *      vence as KEYS desta blacklist — protege domínios homologados de
+ *      colisões acidentais de substring (caso histórico: a chave curta
+ *      "embedplay" bloqueava embedplayer2.xyz, o CDN FirePlayer do Saimo,
+ *      matando 95% do HLS do catálogo em 02/11/2026).
+ *   2. REGEX/patterns deliberados desta lista vencem a allowlist — banimento
+ *      explícito do dono nunca é sobrescrito (ex.: superflixapi.top segue
+ *      bloqueado pelo regex de família /superflix[a-z0-9-]*\.(top|...)/i
+ *      embora conste na allowlist VOD por legado).
+ *   Para banir um domínio que está na allowlist: adicione um REGEX de
+ *   família à entrada correspondente E remova o domínio da allowlist.
+ * 
+ * SEMÂNTICA DE CASAMENTO DE KEYS E PATTERNS STRING (fix 02/11/2026):
+ *   Casamento por FRONTEIRA DE PALAVRA, não por substring crua. A chave
+ *   "vidlink" casa "vidlink.pro" (fronteira no ".") mas NÃO casa
+ *   "vidlinker.com"; a chave "embedplay" nunca mais casará
+ *   "embedplayer2.xyz". Underscore É fronteira: composições de ID como
+ *   "srv_embedplay_hd" continuam casando "srv_embedplay". Strings com rota
+ *   ("/api/embedplay-direct") continuam casando com querystring anexada
+ *   ("?x=1" é fronteira).
  * ============================================================================
  */
+
+import { isExactAllowedStreamingDomain } from "./streamingAllowlist";
 
 export interface BlacklistedServerEntry {
   id: string;
@@ -175,22 +199,82 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
 ];
 
 /**
+ * Escapa caracteres especiais de regex em uma string literal.
+ */
+function escapeRegExpLiteral(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Casamento por FRONTEIRA DE PALAVRA (ADR-0002): a agulha precisa aparecer
+ * delimitada por caracteres que não sejam letra/dígito/underscore.
+ *
+ * Por que não substring crua (comportamento anterior, bug 02/11/2026):
+ *   includes("embedplay") casava "embedplayer2.xyz" (CDN homologado do
+ *   Saimo — 95% do HLS do catálogo morto); includes("vidlink") casaria
+ *   "vidlinker.com"; includes("superflix") casa "superflixapi.top".
+ *
+ * O que continua casando (intenção original preservada):
+ *   - igualdade exata: "srv_embedplay" === "srv_embedplay"
+ *   - fronteira em pontuação de URL: "vidlink" casa "vidlink.pro",
+ *     "autoembed" casa "player.autoembed.cc" e "autoembed.cc"
+ *   - fronteira em separadores: "consumet" casa "provider=consumet",
+ *     "pomfy" casa "/api/pomfy-stream"
+ */
+function matchesOnWordBoundary(target: string, needle: string): boolean {
+  const n = String(needle || "").toLowerCase().trim();
+  if (!n) return false;
+  if (target === n) return true;
+  // Fronteira = qualquer caractere NÃO alfanumérico. Underscore É fronteira
+  // (IDs de servidor são vocabulário controlado do app: "srv_embedplay_hd"
+  // continua casando a key "srv_embedplay", como na semântica antiga). O que
+  // a fronteira mata é a continuação alfanumérica — a classe exata do bug
+  // histórico: "embedplay" dentro de "embedplayer2.xyz".
+  const re = new RegExp(`(^|[^a-z0-9])${escapeRegExpLiteral(n)}([^a-z0-9]|$)`);
+  return re.test(target);
+}
+
+/**
+ * Extrai o hostname de um alvo com forma de URL absoluta (scheme://...).
+ * Devolve null para chaves de servidor, rotas relativas e nomes — nesses
+ * casos o override da allowlist não se aplica (não são domínios).
+ */
+function extractHostnameFromTarget(target: string): string | null {
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(target) && !target.startsWith("//")) return null;
+  try {
+    return new URL(target).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Verifica de forma exaustiva se uma URL, chave ou nome de servidor está na lista negra.
+ *
+ * Hierarquia (ADR-0002):
+ *   - hostname EXATAMENTE na allowlist compartilhada → KEYS não bloqueiam
+ *     (colisões acidentais); REGEX/patterns deliberados continuam valendo.
  */
 export function isServerBlacklisted(urlOrKey: string): boolean {
   if (!urlOrKey) return false;
   const target = String(urlOrKey).trim().toLowerCase();
 
+  const hostname = extractHostnameFromTarget(target);
+  const exactlyAllowedHost = hostname !== null && isExactAllowedStreamingDomain(hostname);
+
   for (const entry of SERVER_BLACKLIST) {
-    // 1. Checa correspondência por chaves registradas
-    if (entry.keys.some(k => target === k.toLowerCase() || target.includes(k.toLowerCase()))) {
+    // 1. Checa correspondência por chaves registradas (fronteira de palavra).
+    //    Host homologado exatamente na allowlist é imune a keys — a chave é
+    //    um atalho grosseiro demais para derrubar uma homologação deliberada.
+    if (!exactlyAllowedHost && entry.keys.some(k => matchesOnWordBoundary(target, k))) {
       return true;
     }
 
-    // 2. Checa correspondência por padrões de string ou expressões regulares
+    // 2. Checa correspondência por padrões de string (fronteira de palavra)
+    //    ou expressões regulares (deliberadas — vencem a allowlist).
     for (const pattern of entry.patterns) {
       if (typeof pattern === "string") {
-        if (target.includes(pattern.toLowerCase())) {
+        if (matchesOnWordBoundary(target, pattern)) {
           return true;
         }
       } else if (pattern instanceof RegExp) {
