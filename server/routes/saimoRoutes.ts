@@ -59,6 +59,16 @@ function isSaimoUrlAllowed(url: string): boolean {
 }
 
 /**
+ * Fonte HLS do catálogo Saimo: master.txt (FirePlayer — embedplayer2.xyz)
+ * ou .m3u8. Tudo o mais é tratado como progressivo (MP4 direto).
+ * Os manifestos FirePlayer declaram múltiplos níveis de qualidade
+ * (360p/720p — ABR) e faixas de áudio/legenda por idioma.
+ */
+function isHlsSourceUrl(u: string): boolean {
+  return /(\.m3u8|\.txt)(\?|$)/i.test(u) || u.includes("embedplayer2.xyz");
+}
+
+/**
  * GET /api/saimo-lookup
  * Consulta disponibilidade de título no Saimo TV VOD SQLite.
  */
@@ -209,8 +219,14 @@ saimoRouter.get("/api/saimo-hls-segment", async (req: Request, res: Response) =>
 /**
  * GET /api/saimo-proxy-iframe
  * HTML wrapper com suporte a <video> nativo e hls.js com protocolo postMessage WATCHPLAY_STATUS para a NetflixPlayerSkin.
+ *
+ * ?prefer=hls (default) — usa hls.js quando o título tem fontes HLS no
+ *   catálogo: ABR (troca de qualidade sozinho quando a rede oscila),
+ *   multi-áudio e legendas embutidas dos manifestos FirePlayer.
+ * ?prefer=mp4 — MP4 progressivo direto (início rápido, seek instantâneo);
+ *   HLS só quando o título não tem nenhuma fonte MP4.
  */
-saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
+export function handleSaimoProxyIframe(req: Request, res: Response): void | Response {
   const rawId = req.query.id;
   const type = String(req.query.type || "movie");
   const season = req.query.s !== undefined ? Number(req.query.s) : undefined;
@@ -271,10 +287,22 @@ saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
     `);
   }
 
-  // Detecta se a fonte primária é HLS (ex: master.txt ou m3u8)
-  const isHlsCandidate = allowed.some(u => /\.txt(\?|$)/i.test(u) || /\.m3u8(\?|$)/i.test(u) || u.includes("embedplayer2.xyz")) && !allowed.some(u => /\.mp4(\?|$)/i.test(u));
+  // ── Protocolo do playback ──
+  // (a) HLS é o DEFAULT: manifestos FirePlayer do Saimo têm ABR (360p/720p
+  //     escolhidos pela banda do aparelho), faixas de áudio por idioma e
+  //     legendas embutidas — o MP4 progressivo não tem nada disso.
+  // (b) prefer=mp4: o usuário escolheu início rápido — MP4 direto, HLS só
+  //     se o título não tem NENHUMA fonte MP4.
+  // A decisão aqui precisa ser consistente com a ordenação do
+  // /api/saimo-stream (mesmo critério isHlsSourceUrl), e o prefer é
+  // repassado na URL do stream para alinhar os dois lados.
+  const preferParam = String(req.query.prefer || "hls").toLowerCase() === "mp4" ? "mp4" : "hls";
+  const hlsSources = allowed.filter(isHlsSourceUrl);
+  const mp4Sources = allowed.filter(u => !isHlsSourceUrl(u));
+  const useHls = preferParam === "mp4" ? mp4Sources.length === 0 : hlsSources.length > 0;
+  const isHlsCandidate = useHls;
 
-  const streamParams = new URLSearchParams({ id: String(id), type, audio });
+  const streamParams = new URLSearchParams({ id: String(id), type, audio, prefer: useHls ? "hls" : "mp4" });
   if (isTv) {
     streamParams.set("s", String(season));
     streamParams.set("e", String(episode));
@@ -301,8 +329,15 @@ saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
     (function() {
       var v = document.getElementById("video");
       var streamUrl = "${streamUrl}";
+      var audioParam = "${audio}";
       var initialSeek = ${initialTime};
       var isHls = ${isHlsCandidate ? "true" : "false"};
+      /* Escada de retry: cada modo (hls.js / <video> nativo) é tentado uma
+         vez. O /api/saimo-stream ordena as fontes pelo prefer, mas pode
+         cair na outra família se as preferidas morrerem — os retries
+         abaixo trocam o protocolo UMA vez antes de reportar fatal. */
+      var triedHls = isHls;
+      var triedNative = !isHls;
       var fatalReported = false;
       var statusInterval = null;
       var hls = null;
@@ -322,6 +357,95 @@ saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
             reason: reason || "Saimo Play: erro fatal na reprodução"
           }, "*");
         } catch(e) {}
+      }
+
+      function autoPlay() {
+        var p = v.play();
+        if (p !== undefined) {
+          p.catch(function() {
+            v.muted = true;
+            v.play().catch(function() {});
+          });
+        }
+      }
+
+      /* Faixas de áudio/legenda por idioma: os manifestos FirePlayer do
+         Saimo declaram audio eng/por (+ legendas por). dub → áudio
+         português; leg → áudio original + legenda PT. */
+      function pickTracks() {
+        if (!hls) return;
+        try {
+          var wantAudio = audioParam === "leg" ? "en" : "pt";
+          var at = hls.audioTracks || [];
+          if (at.length > 1) {
+            for (var i = 0; i < at.length; i++) {
+              var l = String(at[i].lang || "").toLowerCase();
+              if (l === wantAudio || l.indexOf(wantAudio) === 0) {
+                if (hls.audioTrack !== i) hls.audioTrack = i;
+                break;
+              }
+            }
+          }
+          if (audioParam === "leg") {
+            var st = hls.subtitleTracks || [];
+            for (var j = 0; j < st.length; j++) {
+              var sl = String(st[j].lang || "").toLowerCase();
+              if (sl === "pt" || sl.indexOf("pt") === 0) {
+                hls.subtitleTrack = j;
+                break;
+              }
+            }
+          }
+        } catch(e) {}
+      }
+
+      function swapPrefer(url, want) {
+        return url.replace(/([?&]prefer=)(hls|mp4)/i, "$1" + want);
+      }
+
+      function startHls() {
+        if (hls) return;
+        hls = new window.Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          manifestLoadingTimeOut: 8000,
+          levelLoadingTimeOut: 8000,
+          fragLoadingTimeOut: 12000
+        });
+        hls.loadSource(streamUrl);
+        hls.attachMedia(v);
+        hls.on(window.Hls.Events.MANIFEST_PARSED, function() {
+          pickTracks();
+          autoPlay();
+        });
+        hls.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, function() { pickTracks(); });
+        hls.on(window.Hls.Events.ERROR, function(event, data) {
+          if (!data || !data.fatal) return;
+          var details = data.details || "";
+          /* Manifesto inválido/MP4 entregue: o servidor caiu numa fonte MP4
+             (HLS morto) — hls.js não parseia MP4. Tenta o modo nativo com
+             prefer=mp4 UMA vez antes de desistir. */
+          if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && /manifest/i.test(details) && !triedNative) {
+            triedNative = true;
+            try { hls.destroy(); } catch(e) {} hls = null;
+            streamUrl = swapPrefer(streamUrl, "mp4");
+            v.src = streamUrl;
+            v.load();
+            autoPlay();
+            return;
+          }
+          switch (data.type) {
+            case window.Hls.ErrorTypes.NETWORK_ERROR:
+              reportFatal("HLS rede: " + details);
+              break;
+            case window.Hls.ErrorTypes.MEDIA_ERROR:
+              try { hls.recoverMediaError(); } catch(e) { reportFatal("HLS mídia fatal: " + details); }
+              break;
+            default:
+              reportFatal("HLS fatal: " + details);
+              break;
+          }
+        });
       }
 
       if (initialSeek > 0) {
@@ -373,59 +497,37 @@ saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_ENDED" }, "*"); } catch(e) {}
       });
       v.addEventListener("error", function() {
+        /* Reset programático (removeAttribute+load) não é erro real de rede */
+        if (!v.currentSrc) return;
+        /* Erros de mídia com hls.js/MSE acoplado são tratados pelo
+           recoverMediaError do hls.js — não derruba o playback aqui. */
+        if (hls) return;
+        /* Fonte direta falhou: o servidor pode ter caído num HLS (todas as
+           MP4 mortas — o <video> nativo não toca m3u8 fora do Safari).
+           Tenta hls.js com prefer=hls UMA vez antes de reportar fatal. */
+        if (!triedHls && window.Hls && window.Hls.isSupported()) {
+          triedHls = true;
+          try { v.removeAttribute("src"); v.load(); } catch(e) {}
+          streamUrl = swapPrefer(streamUrl, "hls");
+          startHls();
+          return;
+        }
         reportFatal("Erro no elemento <video>");
       });
 
       // Inicialização: HLS com hls.js ou MP4 direto com video.src
       if (isHls && window.Hls && window.Hls.isSupported()) {
         try {
-          hls = new window.Hls({
-            enableWorker: true,
-            lowLatencyMode: true,
-            manifestLoadingTimeOut: 8000,
-            levelLoadingTimeOut: 8000,
-            fragLoadingTimeOut: 12000
-          });
-          hls.loadSource(streamUrl);
-          hls.attachMedia(v);
-          hls.on(window.Hls.Events.MANIFEST_PARSED, function() {
-            var p = v.play();
-            if (p !== undefined) {
-              p.catch(function() {
-                v.muted = true;
-                v.play().catch(function() {});
-              });
-            }
-          });
-          hls.on(window.Hls.Events.ERROR, function(event, data) {
-            if (data && data.fatal) {
-              switch (data.type) {
-                case window.Hls.ErrorTypes.NETWORK_ERROR:
-                  reportFatal("HLS rede: " + data.details);
-                  break;
-                case window.Hls.ErrorTypes.MEDIA_ERROR:
-                  try { hls.recoverMediaError(); } catch(e) { reportFatal("HLS mídia fatal: " + data.details); }
-                  break;
-                default:
-                  reportFatal("HLS fatal: " + data.details);
-                  break;
-              }
-            }
-          });
+          startHls();
         } catch(err) {
           v.src = streamUrl;
           v.load();
+          autoPlay();
         }
       } else {
         v.src = streamUrl;
         v.load();
-        var playPromise = v.play();
-        if (playPromise !== undefined) {
-          playPromise.catch(function() {
-            v.muted = true;
-            v.play().catch(function() {});
-          });
-        }
+        autoPlay();
       }
 
       window.addEventListener("message", function(event) {
@@ -482,13 +584,23 @@ saimoRouter.get("/api/saimo-proxy-iframe", (req: Request, res: Response) => {
 
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
-});
+}
+saimoRouter.get("/api/saimo-proxy-iframe", handleSaimoProxyIframe);
 
 /**
  * GET /api/saimo-stream
  * Proxy de streaming do Saimo TV com suporte a Range requests (206 Partial Content) para MP4 e reescrita de playlists HLS.
+ *
+ * ?prefer=hls (default) — fontes HLS primeiro: os manifestos FirePlayer
+ *   trazem ABR (a qualidade troca sozinha quando a rede oscila),
+ *   multi-áudio e legendas embutidas.
+ * ?prefer=mp4 — MP4 progressivo primeiro (início rápido, seek instantâneo).
+ * Sem prefer — HLS primeiro (mesmo default do iframe).
+ * A ordenação é só de PRIORIDADE: se as fontes preferidas morrerem, o loop
+ * cai naturalmente na outra família (o iframe tem a escada de retry que
+ * troca o protocolo do lado do player quando isso acontece).
  */
-saimoRouter.get("/api/saimo-stream", async (req: Request, res: Response) => {
+export async function handleSaimoStream(req: Request, res: Response): Promise<void | Response> {
   const rawId = req.query.id;
   const type = String(req.query.type || "movie");
   const season = req.query.s !== undefined ? Number(req.query.s) : undefined;
@@ -527,12 +639,14 @@ saimoRouter.get("/api/saimo-stream", async (req: Request, res: Response) => {
     return res.status(404).send("No stream sources available");
   }
 
-  // Priorização: URLs MP4 diretas antes de HLS
-  const finalCandidates = [...allowedCandidates].sort((a, b) => {
-    const aDirect = /\.mp4(\?|$)/i.test(a) ? 0 : 1;
-    const bDirect = /\.mp4(\?|$)/i.test(b) ? 0 : 1;
-    return aDirect - bDirect;
-  });
+  // (a) HLS antes de MP4 por padrão: ABR + multi-áudio + legendas dos
+  // manifestos FirePlayer. prefer=mp4 inverte (início rápido / seek direto).
+  const prefer = String(req.query.prefer || "").toLowerCase() === "mp4" ? "mp4" : "hls";
+  const protoScore = (u: string): number => {
+    const isHls = isHlsSourceUrl(u);
+    return isHls ? (prefer === "mp4" ? 1 : 0) : (prefer === "mp4" ? 0 : 1);
+  };
+  const finalCandidates = [...allowedCandidates].sort((a, b) => protoScore(a) - protoScore(b));
 
   const clientAborted = new AbortController();
   req.once("close", () => {
@@ -585,7 +699,7 @@ saimoRouter.get("/api/saimo-stream", async (req: Request, res: Response) => {
       const contentType = upstreamRes.headers.get("content-type") || "";
 
       // Verifica se é manifesto HLS (.m3u8 ou .txt começando com #EXTM3U)
-      const isHlsUrl = /\.m3u8(\?|$)/i.test(streamUrl) || /\.txt(\?|$)/i.test(streamUrl);
+      const isHlsUrl = isHlsSourceUrl(streamUrl);
       if (isHlsUrl || contentType.includes("mpegurl") || contentType.includes("text/plain")) {
         const text = await upstreamRes.text();
         const trimmed = text.trimStart();
@@ -672,4 +786,5 @@ saimoRouter.get("/api/saimo-stream", async (req: Request, res: Response) => {
   if (!res.headersSent) {
     res.status(502).send("Unable to play stream from Saimo servers");
   }
-});
+}
+saimoRouter.get("/api/saimo-stream", handleSaimoStream);

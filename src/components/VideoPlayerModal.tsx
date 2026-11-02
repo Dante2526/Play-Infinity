@@ -36,6 +36,11 @@ import { StatusBar } from '../utils/statusBar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { Chromecast } from '@caprockapps/capacitor-chromecast';
 
+// Saimo TV VOD tem duas variantes de servidor (srv_saimo_hls = ABR +
+// multi-áudio, srv_saimo_mp4 = início rápido). A chave legada srv_saimo
+// (APKs antigos / URLs salvas) é tratada por todas as verificações.
+const isSaimoServerKey = (key: string | null | undefined): boolean =>
+  key === 'srv_saimo' || key === 'srv_saimo_hls' || key === 'srv_saimo_mp4';
 
 interface VideoPlayerModalProps {
   isOpen: boolean;
@@ -1399,25 +1404,53 @@ export function VideoPlayerModal({
     }
 
 
-    list.unshift({
-      key: 'srv_saimo', label: 'Saimo Play HD', name: 'Saimo Play', badge: 'CDN Rápida • MP4',
-      buildUrl: (id: string, s?: number, e?: number) => {
-        const params = new URLSearchParams({
-          id: String(effectiveMovieId || tmdbId || id),
-          type: isSeries ? 'tv' : 'movie',
-          cb: String(Date.now()),
-        });
-        if (isSeries) {
-          params.set('s', String(s ?? season));
-          params.set('e', String(e ?? episode));
-        }
-        if ((s === undefined || s === season) && (e === undefined || e === episode) && lastKnownTimeRef.current > 0) {
-          params.set('t', String(lastKnownTimeRef.current));
-        }
-        return `/api/saimo-proxy-iframe?${params}`;
-      },
-      isMatch: (url: string) => url.includes('/api/saimo-'),
-    });
+    // ── Saimo TV VOD: duas variantes de servidor ──
+    // (a) HLS é o padrão do backend: os manifestos FirePlayer do Saimo têm
+    //     ABR (360p/720p trocam sozinhos quando a rede oscila), faixas de
+    //     áudio por idioma e legendas embutidas — nada disso existe no MP4.
+    // (b) MP4 fica como botão separado "Turbo": início rápido e seek
+    //     instantâneo (Range direto no arquivo).
+    // (c) A ordem AUTO segue a rede do aparelho (Network Information API):
+    //     4G estável (≥5Mbps, sem saveData) → MP4 primeiro; fraca, com
+    //     saveData ou API ausente (iOS/Safari/Firefox) → HLS, porque o ABR
+    //     segura o playback quando a banda oscila.
+    const saimoBuildUrl = (id: string, s?: number, e?: number, prefer: 'hls' | 'mp4' = 'hls') => {
+      const params = new URLSearchParams({
+        id: String(effectiveMovieId || tmdbId || id),
+        type: isSeries ? 'tv' : 'movie',
+        prefer,
+        cb: String(Date.now()),
+      });
+      if (isSeries) {
+        params.set('s', String(s ?? season));
+        params.set('e', String(e ?? episode));
+      }
+      if ((s === undefined || s === season) && (e === undefined || e === episode) && lastKnownTimeRef.current > 0) {
+        params.set('t', String(lastKnownTimeRef.current));
+      }
+      return `/api/saimo-proxy-iframe?${params}`;
+    };
+    const saimoHlsEntry = {
+      key: 'srv_saimo_hls', label: 'Saimo Play HD', name: 'Saimo Play', badge: 'Auto-qualidade • Multi-áudio',
+      buildUrl: (id: string, s?: number, e?: number) => saimoBuildUrl(id, s, e, 'hls'),
+      isMatch: (u: string) => u.includes('/api/saimo-proxy-iframe') && /prefer=hls/.test(u),
+    };
+    const saimoMp4Entry = {
+      key: 'srv_saimo_mp4', label: 'Saimo Turbo', name: 'Saimo MP4', badge: 'Início rápido • MP4',
+      buildUrl: (id: string, s?: number, e?: number) => saimoBuildUrl(id, s, e, 'mp4'),
+      isMatch: (u: string) => u.includes('/api/saimo-proxy-iframe') && /prefer=mp4/.test(u),
+    };
+    const navConn = (typeof navigator !== 'undefined' && (navigator as any).connection) || null;
+    const saimoStrongNet = !!navConn && navConn.saveData !== true &&
+      String(navConn.effectiveType || '') === '4g' &&
+      (typeof navConn.downlink !== 'number' || navConn.downlink >= 5);
+    if (saimoStrongNet) {
+      list.unshift(saimoHlsEntry);
+      list.unshift(saimoMp4Entry);
+    } else {
+      list.unshift(saimoMp4Entry);
+      list.unshift(saimoHlsEntry);
+    }
 
     list.unshift({
       key: 'srv_byse', label: 'BYSE HD', name: 'BYSE', badge: 'HLS • Player integrado',
@@ -1513,7 +1546,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     setActiveIframeUrl(null); // Dispose previous frame before asynchronous lookup.
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse" || serverKey === "srv_saimo");
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse" || isSaimoServerKey(serverKey));
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     metadataStartedRef.current = false;
@@ -2136,7 +2169,7 @@ export function VideoPlayerModal({
         // (providerTimeout/startupClock), que dispara o fallback sozinho.
         const msSinceTransition = Date.now() - transitionEpochRef.current;
         if (msSinceTransition < 3000) {
-          if (!(selectedServerKey === 'srv_saimo' && event.data?.saimoExhausted === true)) {
+          if (!(isSaimoServerKey(selectedServerKey) && event.data?.saimoExhausted === true)) {
             console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
             return;
           }
@@ -2154,7 +2187,7 @@ export function VideoPlayerModal({
         if (
           (selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) ||
           (selectedServerKey === 'srv_byse' && event.data.byseExhausted === true) ||
-          (selectedServerKey === 'srv_saimo' && event.data.saimoExhausted === true)
+          (isSaimoServerKey(selectedServerKey) && event.data.saimoExhausted === true)
         ) {
           // The iframe already exhausted distinct catalogue files. Do not start
           // that same cycle again before moving to another approved provider.
@@ -3243,7 +3276,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse' || selectedServerKey === 'srv_saimo';
+                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse' || isSaimoServerKey(selectedServerKey);
 
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);

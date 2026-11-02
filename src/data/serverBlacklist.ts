@@ -48,7 +48,18 @@ export const SERVER_BLACKLIST: BlacklistedServerEntry[] = [
   {
     id: "embedplay",
     name: "EmbedPlay",
-    keys: ["srv_embedplay", "embedplay"],
+    // NOTA (fix 02/11/2026): a chave curta "embedplay" foi REMOVIDA das keys.
+    // O casamento por substring (target.includes(k)) pegava "embedplay"
+    // embutido em "embedplayer2.xyz" — o CDN FirePlayer do catálogo HLS do
+    // Saimo TV (2.611 fontes HLS), que é servidor HOMOLOGADO em três outros
+    // lugares do código: allowlist ALLOWED_LIVE_STREAMING_DOMAINS e o regex
+    // /embedplayer[a-z0-9-]*\.(xyz|...)/i de isAllowedLiveStreamingDomain
+    // (server/utils/helpers.ts), e o tratamento de Referer/Origin dedicado
+    // em server/routes/saimoRoutes.ts. O bloqueio do provedor EmbedPlay
+    // permanece ÍNTEGRO pelo padrão /embedplay(?!er)/i — que casa
+    // "embedplay" NÃO seguido de "er" (embedplay.cc, embedplay.xyz...) —
+    // e pela chave exata srv_embedplay + /api/embedplay-direct.
+    keys: ["srv_embedplay"],
     patterns: [
       /embedplay(?!er)/i,
       "/api/embedplay-direct"

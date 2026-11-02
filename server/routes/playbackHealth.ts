@@ -6,7 +6,7 @@ import { isServerBlacklisted } from '../../src/data/serverBlacklist';
 import { getSaimoStore } from '../services/saimoSqliteStore';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
-const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo']);
+const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4']);
 const check = createPlaybackHealthCache();
 const router = Router();
 
@@ -80,7 +80,12 @@ router.get('/api/playback-health' , async (req, res) => {
       const iframeParams=new URLSearchParams({id,name,prepared});if(type==='tv'){iframeParams.set('s',String(season));iframeParams.set('e',String(episode));}
       return {...result,...(result.state==='available'?{iframeUrl:'/api/byse-proxy-iframe?'+iframeParams}: {})};
     }
-    if (key === 'srv_saimo') {
+    if (key === 'srv_saimo' || key === 'srv_saimo_hls' || key === 'srv_saimo_mp4') {
+      // Saimo TV VOD em duas variantes: HLS (ABR + multi-áudio, default) e
+      // MP4 (início rápido). O prefer alinha o health-probe e o iframeUrl
+      // com a mesma ordenação do /api/saimo-stream. A chave legada
+      // srv_saimo (APKs antigos) fica sem prefer → default HLS do servidor.
+      const saimoPrefer = key === 'srv_saimo_hls' ? 'hls' : key === 'srv_saimo_mp4' ? 'mp4' : undefined;
       const saimoStore = getSaimoStore();
       const numId = Number(id);
       const isTv = type === 'tv';
@@ -97,6 +102,7 @@ router.get('/api/playback-health' , async (req, res) => {
         saimoParams.set('s', String(season));
         saimoParams.set('e', String(episode));
       }
+      if (saimoPrefer) saimoParams.set('prefer', saimoPrefer);
       const result = await probeHealthMedia(origin + '/api/saimo-stream?' + saimoParams, signal);
       return { ...result, ...(result.state === 'available' ? { iframeUrl: `/api/saimo-proxy-iframe?${saimoParams}` } : {}) };
     }

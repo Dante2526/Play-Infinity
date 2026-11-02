@@ -2414,11 +2414,28 @@ export function getPlaybackCataloguePresence(id: number, season?: number, episod
     const hasDub = Array.isArray(saimoItem.servers?.saimo_dub) && saimoItem.servers.saimo_dub.length > 0;
     const hasLeg = Array.isArray(saimoItem.servers?.saimo_leg) && saimoItem.servers.saimo_leg.length > 0;
     if (hasDub || hasLeg) {
+      // Saimo em duas variantes de servidor: HLS (ABR + multi-áudio, default
+      // do /api/saimo-stream) e MP4 (início rápido). Cada variante só fica
+      // "listed" quando o título tem fonte daquele protocolo — o startup
+      // sonda apenas as variantes que existem de verdade.
+      const allSaimoUrls = [
+        ...(saimoItem.servers?.saimo_dub || []),
+        ...(saimoItem.servers?.saimo_leg || []),
+      ].filter((u: string) => u && !u.includes('desativado.invalid'));
+      const isHlsUrl = (u: string) => /(\.m3u8|\.txt)(\?|$)/i.test(u) || u.includes('embedplayer2.xyz');
+      const hasHls = allSaimoUrls.some(isHlsUrl);
+      const hasMp4 = allSaimoUrls.some((u: string) => !isHlsUrl(u));
       result.srv_saimo = {
         audioPriority: hasDub ? 0 : 1,
         listed: true,
         fileIds: []
       };
+      if (hasHls) {
+        result.srv_saimo_hls = { audioPriority: hasDub ? 0 : 1, listed: true, fileIds: [] };
+      }
+      if (hasMp4) {
+        result.srv_saimo_mp4 = { audioPriority: hasDub ? 0 : 1, listed: true, fileIds: [] };
+      }
     }
   }
   return result;

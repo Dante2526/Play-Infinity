@@ -22,7 +22,7 @@ export async function preparePlaybackStartup(input:StartupInput,signal:AbortSign
   const candidates=startupOrder(input.keys,hints,input.preferred);
   const coldByseLead=candidates[0]==='srv_byse'&&Boolean(hints.srv_byse?.listed)&&!hints.srv_byse?.warm;
   // Cold BYSE resolves directly inside its iframe (12s budget) without spawning a duplicate PoW in health probe.
-  const probeKeys=candidates.filter(k=>['srv_byse','srv_streamtape','srv_mixdrop','srv_watchplay','srv_vip','srv_nixplay','srv_saimo'].includes(k)&&(k!=='srv_byse'||hints[k]?.warm)).slice(0,coldByseLead?1:2);
+  const probeKeys=candidates.filter(k=>['srv_byse','srv_streamtape','srv_mixdrop','srv_watchplay','srv_vip','srv_nixplay','srv_saimo','srv_saimo_hls','srv_saimo_mp4'].includes(k)&&(k!=='srv_byse'||hints[k]?.warm)).slice(0,coldByseLead?1:2);
   const health:ServerHealthMap={};
   const ctrl=new AbortController();const abort=()=>ctrl.abort();signal.addEventListener('abort',abort,{once:true});const timer=setTimeout(abort,4500);
   const jobs=probeKeys.map(async key=>{
@@ -43,7 +43,7 @@ export async function preparePlaybackStartup(input:StartupInput,signal:AbortSign
   const urls:Record<string,string>={};
   for(const [key,value] of Object.entries(health)){
     if(key==='srv_byse'&&value.iframeUrl){try{const url=new URL(value.iframeUrl,'https://local');if(url.origin==='https://local'&&url.pathname==='/api/byse-proxy-iframe')urls[key]=url.pathname+url.search;}catch{}}
-    if(key==='srv_saimo'&&value.iframeUrl){try{const url=new URL(value.iframeUrl,'https://local');if(url.origin==='https://local'&&url.pathname==='/api/saimo-proxy-iframe')urls[key]=url.pathname+url.search;}catch{}}
+    if(key.startsWith('srv_saimo')&&value.iframeUrl){try{const url=new URL(value.iframeUrl,'https://local');if(url.origin==='https://local'&&url.pathname==='/api/saimo-proxy-iframe')urls[key]=url.pathname+url.search;}catch{}}
   }
   return {selected:selected||ordered.find(k=>health[k]?.state!=='unavailable'),candidates:ordered,hints,urls};
 }
