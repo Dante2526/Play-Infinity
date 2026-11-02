@@ -304,9 +304,46 @@ test('blacklist: embedplayer2.xyz (CDN FirePlayer do Saimo) NÃO é bloqueado; E
 });
 
 // ---------------------------------------------------------------------------
-// Regressão: HLS aceito pelo health-probe (probeHealthMedia valida #EXTM3U)
-// e o rewrite de sub-playlists (master → media → segmentos)
+// probeHealthMedia: master FirePlayer com EXT-X-MEDIA gigantes no prefixo
+// de 1024 bytes (sem #EXTINF/#EXT-X-STREAM-INF visíveis) deve ser "available"
 // ---------------------------------------------------------------------------
+
+async function loadPlaybackHealth() {
+  const output = await esbuild.build({
+    stdin: {
+      contents: `export { probeHealthMedia } from './server/services/playbackHealth';`,
+      resolveDir: root,
+      loader: 'ts',
+    },
+    bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
+  });
+  const filename = path.join(root, 'tests/virtual-playbackHealth-saimo.cjs');
+  const compiled = new Module(filename, module);
+  compiled.filename = filename;
+  compiled.paths = module.paths;
+  compiled._compile(output.outputFiles[0].text, filename);
+  return compiled.exports;
+}
+
+test('probeHealthMedia: master FirePlayer (EXT-X-MEDIA longa, sem EXTINF no prefixo) → available', async () => {
+  const { probeHealthMedia } = await loadPlaybackHealth();
+  // Réplica do prefixo real: EXT-X-MEDIA com URI gigante ocupa os primeiros
+  // 1024 bytes — #EXT-X-STREAM-INF só aparece depois.
+  const longUri = '/api/saimo-hls-segment?url=' + 'a'.repeat(400) + '&referer=https%3A%2F%2Fembedplayer2.xyz%2F&sig=' + '0'.repeat(64);
+  const body = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID="subtitles",LANGUAGE="por",NAME="Portuguese",URI="' + longUri + '"\n#EXT-X-STREAM-INF:BANDWIDTH=2048000\nmedia.m3u8';
+  const fetchImpl = async () => new Response(body, { status: 200, headers: { 'content-type': 'text/plain' } });
+  const r = await probeHealthMedia('https://example.test/master', new AbortController().signal, fetchImpl);
+  assert.equal(r.state, 'available', 'master com só EXT-X-MEDIA no prefixo é mídia verificável');
+  assert.equal(r.reason, 'media_verified');
+});
+
+test('probeHealthMedia: página de login (200) continua unverified_body', async () => {
+  const { probeHealthMedia } = await loadPlaybackHealth();
+  const fetchImpl = async () => new Response('<html><body>Login</body></html>', { status: 200, headers: { 'content-type': 'text/html' } });
+  const r = await probeHealthMedia('https://example.test/login', new AbortController().signal, fetchImpl);
+  assert.equal(r.state, 'unknown');
+  assert.equal(r.reason, 'unverified_body');
+});
 
 test('saimo-stream reescreve sub-playlist do master HLS (URI= encadeado)', async () => {
   storeMovie = MOVIE_HLS_ONLY;

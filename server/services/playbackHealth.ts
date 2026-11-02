@@ -75,7 +75,11 @@ export async function probeHealthMedia(url: string, signal: AbortSignal, fetchIm
   const type = response.headers.get('content-type') || '';
   // HTTP 200 can also be a login/error page: it is not evidence of media.
   const mp4 = prefix.length >= 12 && new TextDecoder().decode(prefix.subarray(4, 8)) === 'ftyp';
-  const hls = text.startsWith('#EXTM3U') && /#EXT(?:INF|-X-STREAM-INF):/.test(text);
+  // Masters HLS do FirePlayer (Saimo) têm linhas EXT-X-MEDIA gigantes (URIs
+  // assinadas) — nos 1024 bytes do prefixo pode não aparecer nem #EXTINF nem
+  // #EXT-X-STREAM-INF. Qualquer tag #EXT-X-* após #EXTM3U é playlist HLS
+  // legítima; página de login não começa com #EXTM3U.
+  const hls = text.startsWith('#EXTM3U') && /#EXT(?:INF|-X-[A-Z-]+):/.test(text);
   const transportStream = prefix.length >= 189 && prefix[0] === 0x47 && prefix[188] === 0x47;
   if (mp4 || hls || (type.includes('video/mp2t') && transportStream)) return { state: 'available', reason: 'media_verified' };
   return { state: 'unknown', reason: 'unverified_body' };
