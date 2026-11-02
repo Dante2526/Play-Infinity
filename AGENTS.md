@@ -24,7 +24,7 @@
      - `Consumet` / `AnimeFire` (iframes externos não-oficiais)
      - `Starflix` / `Startflix` / `painel-aso.sbs`
      - `Pomfy`
-   - **Consulte sempre o arquivo:** [`src/data/serverBlacklist.ts`](file:///c:/Users/nayla/.antigravity/Play-Infinity/src/data/serverBlacklist.ts).
+   - **Consulte sempre o arquivo:** [`src/data/serverBlacklist.ts`](./src/data/serverBlacklist.ts).
    - Qualquer domínio, rota ou provedor que conste na lista negra **JAMAIS** deve ser reativado ou reintroduzido no catálogo.
 
 3. **Seletor de Servidores Homologados**
@@ -105,7 +105,44 @@
 
 ---
 
-## 8. Memória e Estado das Tarefas (Evitando Amnésia)
+## 8. Detecção de Player em HTML Sanitizado (Regra do rawHtml)
+
+- Qualquer detecção de player/fonte em HTML que passa pelo nosso sanitizer (ex.: `embedPlayerProxy.ts`) **DEVE operar sobre o HTML ANTES da sanitização** (o `rawHtml`).
+- Motivo: o sanitizer injeta JavaScript próprio cujos nomes de player ("bitmovin", "hls", "videojs"...) fazem regexes de detecção darem **falso positivo** contra o nosso próprio código injetado — ocorreu no `probeEmbedPlayer` e foi corrigido com `resolveEmbedPlayerHtmlWithMeta()` que expõe `{html, fellBack, rawHtml}`.
+- Nunca escreva regex de detecção contra o HTML pós-sanitização; use o rawHtml ou os metadados que o proxy expõe.
+
+---
+
+## 9. Hierarquia Allowlist vs Blacklist (ADR-0002)
+
+- As listas de domínios autorizados vivem em **fonte única**: `src/data/streamingAllowlist.ts` (compartilhada client/server; `helpers.ts` reexporta).
+- Hierarquia em `isServerBlacklisted()`: host **exato** na allowlist vence as **keys** da blacklist; **regex/patterns deliberados** da blacklist vencem a allowlist (banimento explícito do dono nunca é sobrescrito).
+- Keys e padrões-string casam por **fronteira de palavra**, nunca por substring crua (o falso positivo "embedplay" → embedplayer2.xyz matou 95% do HLS do Saimo por 7 dias).
+- Para banir um domínio allowlisted: adicione regex de família à entrada da blacklist E remova-o da allowlist.
+- Detalhes e alternativas descartadas: [`docs/adr/0002-allowlist-vs-blacklist.md`](./docs/adr/0002-allowlist-vs-blacklist.md). Teste de regressão: `tests/blacklist-allowlist-guard.test.cjs`.
+
+---
+
+## 10. Protocolo de Sincronização Entre Sessões/Agentes Paralelos
+
+Várias sessões de IA trabalham neste repositório em paralelo (já aconteceu de uma sessão pushar 8 commits no meio do trabalho de outra, duas vezes no mesmo dia):
+
+1. **Antes de editar qualquer arquivo:** `git fetch origin && git pull --rebase origin main`.
+2. **Antes de commitar:** `git fetch origin && git rebase origin/main` (se novos commits chegaram).
+3. **Commit cedo, commit por tema:** sessões que acumulam trabalho não-commitado perdem tudo quando o contexto estoura. Um commit por gargalo/feature, com mensagem autocontida.
+4. **Arquivos auto-gerados NUNCA são commitados** (ex.: `data/available-tmdb-ids.json` — restaurar com `git checkout HEAD -- <arquivo>` se sujar).
+5. **Antes de push:** ver seção 7 (autorização explícita do dono) e usar o fluxo de token da VPS (`GH_TOKEN=$(python3 /home/z/my-project/scripts/vps_get_github_token.py)` + push via `x-access-token`). Push em `main` dispara deploy automático (GitHub Action `main.yml`) e build Android (`build-android.yml`).
+
+---
+
+## 11. Operação: Smoke Test de Produção e ADRs
+
+- **Smoke test do Saimo VOD:** `node scripts/saimo-smoke-prod.cjs [--n 12] [--prefer hls|mp4] [--ids 1,2] [--json]` — amostra títulos reais do catálogo contra `https://play-infinity.stream`, valida bytes (1 chunk) e retorna exit 1 se a taxa de reproduzíveis cair abaixo de `--min-rate`. Rodar após deploys que toquem streaming, e agendar quando possível (baseline 02/11: 88%). Teria pego o bug do embedplay no dia em que ele entrou.
+- **Decisões de arquitetura:** toda decisão que levou >30min de análise ou reverteu decisão anterior ganha um ADR em `docs/adr/` (template em `_template.md`, index no `README.md`). Antes de refazer uma análise de trade-off (ex.: MP4 vs HLS), **leia o ADR correspondente primeiro**.
+
+---
+
+## 12. Memória e Estado das Tarefas (Evitando Amnésia)
 
 - Devido à compactação de histórico em conversas longas, o agente pode perder o contexto de quais tarefas já foram concluídas e sugerir refazê-las.
 - **Antes de propor ou iniciar uma nova tarefa:** O agente DEVE SEMPRE consultar o arquivo `walkthrough.md` na raiz do projeto (se existir) ou verificar diretamente no código (via `grep_search`) se a alteração já não foi implementada por uma instância anterior.
