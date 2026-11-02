@@ -9,6 +9,14 @@ const Module = require('node:module');
 const esbuild = require('esbuild');
 
 const root = path.resolve(__dirname, '..');
+// O catálogo SQLite (102MB) é artefato gerado por scripts/build_saimo_sqlite.py
+// (baixa do upstream Saimo, ~15s com rede). Sem o arquivo, os testes que o
+// exigem pulam com instrução — em vez de falhar a suíte em fresh clone/sandbox.
+const SAIMO_DB_PATH = path.join(root, 'data', 'saimo-catalog.db');
+const SAIMO_DB_SKIP = !fs.existsSync(SAIMO_DB_PATH)
+  ? 'data/saimo-catalog.db ausente — gere com: python3 scripts/build_saimo_sqlite.py (requer rede p/ filmes-saimo.pages.dev)'
+  : false;
+const dbTest = (name, fn) => test(name, SAIMO_DB_SKIP ? { skip: SAIMO_DB_SKIP } : undefined, fn);
 
 async function compileStore() {
   const output = await esbuild.build({
@@ -41,7 +49,7 @@ test('saimoSqliteStore: node:sqlite está disponível no ambiente', async () => 
   assert.equal(storeMod.isSaimoSqliteAvailable(), true, 'node:sqlite com DatabaseSync deve estar disponível');
 });
 
-test('saimoSqliteStore: localiza e abre saimo-catalog.db em modo read-only', async () => {
+dbTest('saimoSqliteStore: localiza e abre saimo-catalog.db em modo read-only', async () => {
   const storeMod = await compileStore();
   const dbPath = storeMod.findSaimoDb();
   assert.ok(dbPath, 'deve encontrar o banco saimo-catalog.db');
@@ -53,7 +61,7 @@ test('saimoSqliteStore: localiza e abre saimo-catalog.db em modo read-only', asy
   assert.equal(store.meta('source'), 'saimo-vod', 'source deve ser saimo-vod');
 });
 
-test('saimoSqliteStore: consulta filme por TMDB ID com sucesso em O(1)', async () => {
+dbTest('saimoSqliteStore: consulta filme por TMDB ID com sucesso em O(1)', async () => {
   const storeMod = await compileStore();
   const store = storeMod.getSaimoStore();
   assert.ok(store, 'loja deve estar aberta');
@@ -70,7 +78,7 @@ test('saimoSqliteStore: consulta filme por TMDB ID com sucesso em O(1)', async (
   }
 });
 
-test('saimoSqliteStore: consulta episódio de série por TMDB ID, temporada e episódio', async () => {
+dbTest('saimoSqliteStore: consulta episódio de série por TMDB ID, temporada e episódio', async () => {
   const storeMod = await compileStore();
   const store = storeMod.getSaimoStore();
   assert.ok(store, 'loja deve estar aberta');
@@ -93,7 +101,7 @@ test('saimoRouter: exporta o router Express com rotas de lookup e stream', async
   assert.equal(typeof storeMod.saimoRouter, 'function', 'deve ser um middleware/router Express');
 });
 
-test('getPlaybackCataloguePresence: inclui srv_saimo com prioridade dublado para itens existentes', async () => {
+dbTest('getPlaybackCataloguePresence: inclui srv_saimo com prioridade dublado para itens existentes', async () => {
   const storeMod = await compileStore();
   // Filme existente (ex: 978592)
   const hints = storeMod.getPlaybackCataloguePresence(978592);
@@ -115,7 +123,7 @@ test('isExternalIframePlayer: reconhece saimo-proxy-iframe como player integrado
   assert.equal(isExternal2, false, '/api/saimo-stream deve ser integrado (não externo)');
 });
 
-test('saimoRoutes: lida com fontes 404 (Monstro: A História de Lizzie Borden) sem travar', async () => {
+dbTest('saimoRoutes: lida com fontes 404 (Monstro: A História de Lizzie Borden) sem travar', async () => {
   const storeMod = await compileStore();
   const store = storeMod.getSaimoStore();
   const ep2 = store.findEpisode(299939, 1, 2);

@@ -22,10 +22,14 @@ test('externalCatalog prioritizes reliable CDNs before probing candidates', () =
   assert.match(code, /allowed\.sort/);
 });
 
-test('externalCatalog checks probeCache positive entry before probe loop for instant 0ms resolve', () => {
+test('externalCatalog checks fresh probeCache entry before probe loop for instant 0ms resolve', () => {
   const code = fs.readFileSync(path.join(__dirname, '../server/services/externalCatalog.ts'), 'utf8');
+  // Guard atualizado (02/11/2026): o cache fresco agora resolve instantaneamente
+  // para AMBAS as polaridades (positivo e negativo) — `return cached.ok` no lugar
+  // do short-circuit só-positivo antigo. Propriedade comportamental preservada:
+  // entrada positiva cacheada NUNCA dispara novo probe.
   assert.match(code, /const cached = probeCache\.get\(cacheKey\);/);
-  assert.match(code, /if \(cached && cached\.expires > Date\.now\(\) && cached\.ok\)/);
+  assert.match(code, /if \(cached && cached\.expires > Date\.now\(\)\) return cached\.ok;/);
 });
 
 test('externalRoutes uses expanded deadline and batch concurrency to reach active IPTV sources', () => {

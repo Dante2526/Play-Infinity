@@ -128,7 +128,7 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(content, /(45000|45\s*\*\s*1000)/, "Boot deve aguardar 45s para estabilização de caches e SQLite");
   });
 
-  test("10. Suporte a Pluto TV / AES-128 e atualização de catálogo de TV", () => {
+  test("10. Suporte a Pluto TV / AES-128 e atualização de catálogo de TV", { skip: !fs.existsSync(path.join(__dirname, "..", "data", "external-channels.txt")) ? 'data/external-channels.txt ausente — artefato de catálogo auditado vive na VPS (não commitado); teste de integração com o arquivo real' : false }, () => {
     const extCatFile = path.join(__dirname, "..", "server", "services", "externalCatalog.ts");
     const content = fs.readFileSync(extCatFile, "utf-8");
     assert.match(content, /pluto\.tv/, "RELIABLE_CDN_PATTERNS deve incluir pluto.tv");
