@@ -24,6 +24,11 @@
  *     (isHls=true, prefer=hls)
  *  9. /api/saimo-stream com fallback de família: HLS morto (404) → cai
  *     pro MP4 (a ordenação é prioridade, não filtro)
+ * 10. /api/saimo-hls-segment: sub-playlist FirePlayer (/m3/<base64>, CT
+ *     text/plain, sem extensão) é detectada por CONTEÚDO e reescrita com
+ *     assinatura HMAC; segmentos em CDN dinâmica (cincloud1.xyz) passam com
+ *     sig válida; sem sig/forjada → 403 (proxy aberto fechado); body
+ *     não-playlist servido byte a byte (bug do pipe vazio)
  */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
@@ -59,6 +64,20 @@ const MOVIE_HLS_ONLY = {
 };
 
 let storeMovie = MOVIE_MIXED;
+const crypto = require('node:crypto');
+
+// Mock determinístico do par sign/verify (mesma semântica do helpers real)
+const TEST_SECRET = 'saimo-test-secret';
+function mockSign(url) {
+  return crypto.createHmac('sha256', TEST_SECRET).update(String(url)).digest('hex');
+}
+function mockVerify(url, sig) {
+  if (!url || !sig) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(mockSign(url)), Buffer.from(String(sig)));
+  } catch { return false; }
+}
+
 SHARED['../services/saimoSqliteStore'] = {
   getSaimoStore: () => ({
     findMovie: (id) => (Number(id) === 299536 ? storeMovie : null),
@@ -67,6 +86,8 @@ SHARED['../services/saimoSqliteStore'] = {
 };
 SHARED['../utils/helpers'] = {
   isPrivateOrLocalHost: async () => false,
+  signProxyUrl: mockSign,
+  verifyProxySignature: mockVerify,
 };
 
 async function loadSaimoRoutes() {
@@ -84,7 +105,7 @@ async function loadSaimoRoutes() {
   };
   const output = await esbuild.build({
     stdin: {
-      contents: `export { handleSaimoStream, handleSaimoProxyIframe } from './server/routes/saimoRoutes';`,
+      contents: `export { handleSaimoStream, handleSaimoProxyIframe, handleSaimoHlsSegment } from './server/routes/saimoRoutes';`,
       resolveDir: root,
       loader: 'ts',
     },
@@ -125,6 +146,7 @@ function mockRes() {
     status(c) { this._status = c; return this; },
     setHeader(k, v) { this._headers[k.toLowerCase()] = v; return this; },
     send(x) { this._sent = x; this.headersSent = true; return this; },
+    end(x) { if (x !== undefined) this._sent = x; this.headersSent = true; return this; },
     json(x) { this._sent = x; this.headersSent = true; return this; },
   };
 }
@@ -299,4 +321,82 @@ test('saimo-stream reescreve sub-playlist do master HLS (URI= encadeado)', async
   const out = String(res._sent);
   assert.ok(out.includes('#EXT-X-STREAM-INF'), 'master entregue');
   assert.ok(out.includes('/api/saimo-hls-segment?url='), 'sub-playlist aponta pro proxy de segmento');
+});
+
+// ---------------------------------------------------------------------------
+// /api/saimo-hls-segment — sub-playlists FirePlayer (text/plain sem
+// extensão, /m3/<base64>) e hosts dinâmicos de segmento (cincloud1.xyz)
+// ---------------------------------------------------------------------------
+
+// Réplica fiel da media playlist real do FirePlayer: /m3/<base64>, CT
+// text/plain, segmentos .js em host CDN dinâmico.
+const FIREPLAYER_MEDIA = '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:2.002000,\nhttps://cincloud1.xyz/p/qJm_xCYOFa1KS2tXg7ySNe1h-IE62.js\n#EXTINF:2.002000,\nhttps://cincloud1.xyz/p/qJm_xCYOFa1KS2tXg7ySNe1h-IE63.js\n';
+const MEDIA_URL = 'https://embedplayer2.xyz/m3/eFkzbEtEZk1KbXFUZWZocDdq';
+
+function segQuery(url) {
+  return { url, referer: 'https://embedplayer2.xyz/', sig: mockSign(url) };
+}
+
+test('saimo-hls-segment: sub-playlist /m3/<base64> CT text/plain é reescrita (detecção por conteúdo)', async () => {
+  installFetch(() => ({
+    ok: true, status: 200,
+    headers: { get: (h) => (h === 'content-type' ? 'text/plain;charset=UTF-8' : null) },
+    arrayBuffer: async () => new TextEncoder().encode(FIREPLAYER_MEDIA).buffer,
+  }));
+  const res = mockRes();
+  await routes.handleSaimoHlsSegment(mockReq(segQuery(MEDIA_URL)), res);
+  const out = String(res._sent);
+  assert.ok(out.includes('/api/saimo-hls-segment?url='), 'segmentos reescritos pro proxy');
+  assert.ok(out.includes('&sig='), 'URLs reescritas vêm assinadas');
+  assert.ok(!/https:\/\/cincloud1\.xyz\/p\//.test(out), 'nenhum segmento absoluto sobrando');
+  assert.equal(res._headers['content-type'], 'application/vnd.apple.mpegurl; charset=utf-8');
+});
+
+test('saimo-hls-segment: segmento em CDN dinâmico com assinatura válida é aceito', async () => {
+  installFetch(() => ({
+    ok: true, status: 206,
+    headers: { get: (h) => (h === 'content-type' ? 'application/javascript' : null) },
+    body: { pipe() {}, on() {} },
+  }));
+  const res = mockRes();
+  const segUrl = 'https://cincloud1.xyz/p/qJm_xCYOFa1KS2tXg7ySNe1h-IE62.js';
+  await routes.handleSaimoHlsSegment(mockReq(segQuery(segUrl)), res);
+  assert.equal(res._status, 206, 'segmento assinado em CDN dinâmico deve passar');
+  assert.equal(res._headers['content-type'], 'application/javascript');
+});
+
+test('saimo-hls-segment: URL SEM assinatura → 403 (proxy aberto fechado)', async () => {
+  installFetch(() => { throw new Error('não deve ser chamado'); });
+  const res = mockRes();
+  await routes.handleSaimoHlsSegment(mockReq({
+    url: 'https://cdn-a.example.com:80/movie/x/y/1.mp4',
+    referer: 'https://embedplayer2.xyz/',
+  }), res);
+  assert.equal(res._status, 403, 'sem sig → 403');
+  assert.equal(fetchCalls.length, 0, 'nenhum fetch feito');
+});
+
+test('saimo-hls-segment: assinatura forjada → 403', async () => {
+  installFetch(() => { throw new Error('não deve ser chamado'); });
+  const res = mockRes();
+  await routes.handleSaimoHlsSegment(mockReq({
+    url: 'https://cincloud1.xyz/p/attacker.js',
+    referer: 'https://embedplayer2.xyz/',
+    sig: 'deadbeef'.repeat(8),
+  }), res);
+  assert.equal(res._status, 403, 'sig inválida → 403');
+  assert.equal(fetchCalls.length, 0, 'nenhum fetch feito');
+});
+
+test('saimo-hls-segment: body text/plain NÃO-playlist é servido byte a byte (sem pipe vazio)', async () => {
+  const errBody = '<html><body>404 Not Found</body></html>';
+  installFetch(() => ({
+    ok: true, status: 200,
+    headers: { get: (h) => (h === 'content-type' ? 'text/plain' : null) },
+    arrayBuffer: async () => new TextEncoder().encode(errBody).buffer,
+  }));
+  const res = mockRes();
+  await routes.handleSaimoHlsSegment(mockReq(segQuery('https://embedplayer2.xyz/m3/deadbeef')), res);
+  assert.equal(String(res._sent), errBody, 'corpo servido íntegro (não vazio)');
+  assert.equal(res._headers['content-type'], 'text/plain');
 });

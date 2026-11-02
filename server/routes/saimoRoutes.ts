@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { Readable } from "node:stream";
 import { getSaimoStore } from "../services/saimoSqliteStore";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
-import { isPrivateOrLocalHost } from "../utils/helpers";
+import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 
 export const saimoRouter = Router();
 
@@ -121,13 +121,58 @@ saimoRouter.get("/api/saimo-lookup", (req: Request, res: Response) => {
 });
 
 /**
+ * Reescreve uma playlist HLS do Saimo pro proxy de segmento — URIs de
+ * áudio/legenda (EXT-X-MEDIA) e linhas de segmento viram
+ * /api/saimo-hls-segment?url=<absoluto>&referer=<referer>&sig=<hmac>.
+ * A assinatura (mesmo padrão do /api/live-stream-proxy) garante que só
+ * URLs que NÓS reescrevemos são aceitas pelo proxy de segmento — o endpoint
+ * deixa de ser um proxy aberto de hosts públicos arbitrários.
+ */
+function rewriteHlsPlaylist(text: string, sourceUrl: string, referer: string): string {
+  const basePath = sourceUrl.substring(0, sourceUrl.lastIndexOf("/") + 1);
+  const proxyUrl = (absoluteUrl: string): string => {
+    const sig = signProxyUrl(absoluteUrl);
+    return `/api/saimo-hls-segment?url=${encodeURIComponent(absoluteUrl)}&referer=${encodeURIComponent(referer)}&sig=${sig}`;
+  };
+  return text.split("\n").map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return line;
+    if (trimmed.includes('URI="')) {
+      return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
+        const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
+        return `URI="${proxyUrl(fullUri)}"`;
+      });
+    }
+    if (trimmed.startsWith("#")) return trimmed;
+    const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
+    return proxyUrl(fullSegUrl);
+  }).join("\n");
+}
+
+/**
  * GET /api/saimo-hls-segment
  * Proxy para segmentos de vídeo (.ts, .js, .css) ou sub-playlists HLS com Referer adequado.
+ *
+ * As sub-playlists do FirePlayer (embedplayer2.xyz/m3/<base64>) vêm SEM
+ * extensão e com content-type text/plain — por isso a detecção de playlist
+ * lê o prefixo do buffer e confirma #EXTM3U no conteúdo (a extensão/CT só
+ * servem de hint pra decidir se vale a pena inspecionar). Binários nunca
+ * passam pelo caminho de texto: o que não é playlist é servido byte a byte
+ * do MESMO buffer (corrige o bug do body consumido por text() quando o
+ * upstream devolvia página de erro em URL .txt).
  */
-saimoRouter.get("/api/saimo-hls-segment", async (req: Request, res: Response) => {
+export async function handleSaimoHlsSegment(req: Request, res: Response): Promise<void | Response> {
   const targetUrl = String(req.query.url || "");
   if (!targetUrl || !targetUrl.startsWith("http")) {
     return res.status(400).send("URL inválida");
+  }
+
+  // Só URLs que saíram do nosso rewrite de playlist (assinadas com o
+  // PROXY_SECRET) são aceitas — fecha o uso como proxy aberto de hosts
+  // públicos arbitrários. Mesmo padrão do /api/live-stream-proxy.
+  const sig = String(req.query.sig || "");
+  if (!sig || !verifyProxySignature(targetUrl, sig)) {
+    return res.status(403).send("Assinatura inválida");
   }
 
   if (!isSaimoUrlAllowed(targetUrl)) {
@@ -169,28 +214,27 @@ saimoRouter.get("/api/saimo-hls-segment", async (req: Request, res: Response) =>
     }
 
     const contentType = upstream.headers.get("content-type") || "";
-    // Se for sub-playlist HLS (#EXTM3U)
-    if (targetUrl.includes(".m3u8") || targetUrl.includes(".txt") || contentType.includes("mpegurl")) {
-      const text = await upstream.text();
-      if (text.trimStart().startsWith("#EXTM3U")) {
+    // Playlist? Hint por extensão/CT — o FirePlayer serve sub-playlists
+    // (/m3/<base64>) como text/plain SEM extensão, então text/plain entra.
+    // A prova final é o conteúdo (#EXTM3U) lido do buffer.
+    const maybePlaylist = targetUrl.includes(".m3u8") || targetUrl.includes(".txt")
+      || contentType.includes("mpegurl") || contentType.includes("text/plain");
+    if (maybePlaylist) {
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      const head = buf.subarray(0, 512).toString("utf-8").trimStart();
+      if (head.startsWith("#EXTM3U")) {
+        const text = buf.toString("utf-8");
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Access-Control-Allow-Origin", "*");
-        const basePath = targetUrl.substring(0, targetUrl.lastIndexOf("/") + 1);
-        const rewritten = text.split("\n").map(line => {
-          const trimmed = line.trim();
-          if (!trimmed) return line;
-          if (trimmed.includes('URI="')) {
-            return trimmed.replace(/URI="([^"]+)"/, (_, uri) => {
-              const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
-              return `URI="/api/saimo-hls-segment?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}"`;
-            });
-          }
-          if (trimmed.startsWith("#")) return trimmed;
-          const fullSegUrl = trimmed.startsWith("http") ? trimmed : new URL(trimmed, basePath).toString();
-          return `/api/saimo-hls-segment?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}`;
-        }).join("\n");
+        const rewritten = rewriteHlsPlaylist(text, targetUrl, referer);
         return res.send(rewritten);
       }
+      // Não é playlist (página de erro, binário com CT textual...) — serve
+      // os bytes EXATOS do buffer: nunca cai no pipe com body já consumido.
+      res.status(upstream.status);
+      res.setHeader("Content-Type", contentType || "application/octet-stream");
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      return res.end(buf);
     }
 
     // Segmento binário de vídeo/áudio
@@ -214,7 +258,8 @@ saimoRouter.get("/api/saimo-hls-segment", async (req: Request, res: Response) =>
       res.status(502).send("Segment fetch error");
     }
   }
-});
+}
+saimoRouter.get("/api/saimo-hls-segment", handleSaimoHlsSegment);
 
 /**
  * GET /api/saimo-proxy-iframe
@@ -709,21 +754,10 @@ export async function handleSaimoStream(req: Request, res: Response): Promise<vo
         }
 
         // Manifesto HLS válido! Reescreve URLs para o proxy de segmento do Saimo
+        // (rewriteHlsPlaylist também registra hosts dinâmicos de segmento no
+        // allowlist — CDNs FirePlayer tipo cincloud1.xyz).
         const referer = streamUrl.includes("embedplayer2.xyz") ? "https://embedplayer2.xyz/" : streamUrl;
-        const basePath = streamUrl.substring(0, streamUrl.lastIndexOf("/") + 1);
-        const rewritten = text.split("\n").map(line => {
-          const l = line.trim();
-          if (!l) return line;
-          if (l.includes('URI="')) {
-            return l.replace(/URI="([^"]+)"/, (_, uri) => {
-              const fullUri = uri.startsWith("http") ? uri : new URL(uri, basePath).toString();
-              return `URI="/api/saimo-hls-segment?url=${encodeURIComponent(fullUri)}&referer=${encodeURIComponent(referer)}"`;
-            });
-          }
-          if (l.startsWith("#")) return l;
-          const fullSegUrl = l.startsWith("http") ? l : new URL(l, basePath).toString();
-          return `/api/saimo-hls-segment?url=${encodeURIComponent(fullSegUrl)}&referer=${encodeURIComponent(referer)}`;
-        }).join("\n");
+        const rewritten = rewriteHlsPlaylist(text, streamUrl, referer);
 
         res.status(200);
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
