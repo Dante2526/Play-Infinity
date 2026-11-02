@@ -437,6 +437,7 @@ import byseRouter from "./server/routes/byseRoutes";
 import streamtapeRouter from "./server/routes/streamtapeRoutes";
 import { doodstreamRouter } from "./server/routes/doodstreamRoutes";
 import { saimoRouter } from "./server/routes/saimoRoutes";
+import { anidigitalRouter } from "./server/routes/anidigitalRoutes";
 
 import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from './server/middlewares/requireAdminAuth';
@@ -459,6 +460,7 @@ app.use(streamtapeRouter);
 app.use(doodstreamRouter);
 
 app.use(saimoRouter);
+app.use(anidigitalRouter);
 app.use(serverBlocksRouter);
 app.use("/api/admin", adminOpsRouter);
 app.use(userOpsRouter);

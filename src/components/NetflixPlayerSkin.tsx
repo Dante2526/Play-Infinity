@@ -334,6 +334,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       { key: "srv_byse", label: "BYSE HD" },
       { key: "srv_saimo_hls", label: "Saimo Play HD" },
       { key: "srv_saimo_mp4", label: "Saimo Turbo" },
+      { key: "srv_anidigital", label: "Anime Digital" },
       { key: "srv_watchplay", label: "WatchPlayer" },
       { key: "srv_vip", label: "VIP Player" },
       { key: "srv_vidsrc", label: "Seriesflix HD" },

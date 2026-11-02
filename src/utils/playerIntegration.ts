@@ -27,6 +27,8 @@ export function isExternalIframePlayer(activeIframeUrl: string, urlInput = ""): 
       activeLower.includes("/api/byse-proxy-iframe") ||
       activeLower.includes("/api/saimo-proxy-iframe") ||
       activeLower.includes("/api/saimo-stream") ||
+      activeLower.includes("/api/anidigital-proxy-iframe") ||
+      activeLower.includes("/api/anidigital-stream") ||
       activeLower.includes("/api/streamtape-proxy-iframe") ||
       activeLower.includes("/api/streamtape-stream");
 

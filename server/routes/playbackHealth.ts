@@ -6,7 +6,7 @@ import { isServerBlacklisted } from '../../src/data/serverBlacklist';
 import { getSaimoStore } from '../services/saimoSqliteStore';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
-const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4']);
+const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_anidigital']);
 const check = createPlaybackHealthCache();
 const router = Router();
 
@@ -105,6 +105,22 @@ router.get('/api/playback-health' , async (req, res) => {
       if (saimoPrefer) saimoParams.set('prefer', saimoPrefer);
       const result = await probeHealthMedia(origin + '/api/saimo-stream?' + saimoParams, signal);
       return { ...result, ...(result.state === 'available' ? { iframeUrl: `/api/saimo-proxy-iframe?${saimoParams}` } : {}) };
+    }
+    if (key === 'srv_anidigital') {
+      // AnimesDigital: anime FHD via busca textual (sem catálogo tmdb_id).
+      // O lookup resolve nome→episódio→m3u8 (com cache) e devolve o
+      // streamUrl assinado; o probe de mídia valida o manifesto de fato.
+      const anidigitalParams = new URLSearchParams({ name, type });
+      if (type === 'tv') {
+        anidigitalParams.set('s', String(season));
+        anidigitalParams.set('e', String(episode));
+      }
+      const lookup = await json(origin + '/api/anidigital-lookup?' + anidigitalParams, signal).catch(() => null);
+      if (!lookup || !lookup.available || !lookup.streamUrl) {
+        return { state: 'unavailable', reason: 'not_in_anidigital_catalog' };
+      }
+      const result = await probeHealthMedia(origin + lookup.streamUrl, signal);
+      return { ...result, ...(result.state === 'available' ? { iframeUrl: `/api/anidigital-proxy-iframe?${anidigitalParams}` } : {}) };
     }
     if (key === 'srv_mixdrop' || key === 'srv_streamtape') {
       let resolved;

@@ -89,7 +89,11 @@ export const ALLOWED_STREAMING_DOMAINS: string[] = [
   "cloudatacdn.com",
   "ds2play.com",
   "do0od.com",
-  "dood.watch"
+  "dood.watch",
+  "animesdigital.org",
+  "api.anivideo.net",
+  "cdn-s01.mywallpaper-4k-image.net",
+  "cdn-sv01.maximaimg.online"
 ];
 
 export const ALLOWED_LIVE_STREAMING_DOMAINS: string[] = [
