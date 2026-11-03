@@ -624,8 +624,9 @@
     if (audioTw) for (const s of audioTw.samples) { const b = take(s); audioParts.push(b); audioLen += b.length; }
 
     // tamanho do moof (para data_offset, relativo ao início do moof)
-    function trunLen(n, hasCts) { return 8 + 4 + 4 + 4 + n * (hasCts ? 12 : 8); }
-    function trafLen(n, hasCts) { return 8 + 20 + 20 + trunLen(n, hasCts); } // traf + tfhd + tfdt + trun
+    // trun: 8 header + 16 (ver/flags+count+data_offset+first_sample_flags) + n×(dur 4 + size 4 [+ cts 4])
+    function trunLen(n, hasCts) { return 8 + 16 + n * (8 + (hasCts ? 4 : 0)); }
+    function trafLen(n, hasCts) { return 8 + 28 + 20 + trunLen(n, hasCts); } // traf + tfhd(28) + tfdt(20) + trun
     let moofSize = 8 + 16; // moof + mfhd
     for (const tw of trackWindows) {
       if (tw.samples.length) moofSize += trafLen(tw.samples.length, tw.track.hasCtts);
@@ -642,20 +643,30 @@
         const baseDts = samples[0].dts - shift;
         const dataOffset = moofSize + 8 + (track.handler === 'vide' ? 0 : videoLen);
         mf.box('traf', function (tf) {
+          // tfhd com defaults (layout comprovado do ffmpeg): default-base-is-moof
+          // + default-duration + default-size + default-flags
           tf.box('tfhd', function (h) {
-            h.u32(0x020002); // default-base-is-moof | default-sample-description-index
+            h.u32(0x020038);
             h.u32(track.trackId);
-            h.u32(1);
+            h.u32(samples[0].duration);
+            h.u32(samples[0].size);
+            h.u32(0x01010000);
           });
           tf.box('tfdt', function (h) { h.u8(1); h.u24(0); h.u64(baseDts); });
+          // trun: [ver/flags][count][data_offset][first_sample_flags] + n×[duration][size][cts?]
+          // bits: 0x1 duration | 0x4 SIZE (o Chromium usa; sem ele o size vira o
+          // default do trex = 0 e o media segment é descartado!) | 0x8 cts |
+          // 0x100 data-offset | 0x200 first-sample-flags
           tf.box('trun', function (h) {
             const hasCts = track.hasCtts;
-            h.u8(1); h.u24(0x000100 | 0x000002 | (hasCts ? 0x000004 : 0) | 0x000001);
+            h.u8(hasCts ? 1 : 0); // v1 = cts signed
+            h.u24(0x000305 | (hasCts ? 0x000008 : 0)); // duration|size|data-offset|first-flags|cts?
             h.u32(samples.length);
             h.s32(dataOffset);
+            h.u32(samples[0].isSync ? 0x02000000 : 0x01000000); // first_sample_flags
             for (const s of samples) {
               h.u32(s.duration);
-              h.u32(s.isSync ? 0x02000000 : 0x01000000);
+              h.u32(s.size);
               if (hasCts) h.s32(s.cts - s.dts);
             }
           });

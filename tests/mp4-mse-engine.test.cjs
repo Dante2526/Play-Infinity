@@ -271,6 +271,7 @@ test('buildFragment: moof/mdat com data_offset exato e cobertura total em janela
 
       const tfhdFlags = dv(tfhd.start + 8, 4).getUint32(0);
       assert.ok((tfhdFlags & 0x020000) !== 0, 'default-base-is-moof');
+      assert.ok((tfhdFlags & 0x000038) !== 0, 'tfhd com default duration/size/flags (layout ffmpeg)');
       const trackId = dv(tfhd.start + 12, 4).getUint32(0);
 
       const tfdtVersion = frag.data[tfdt.start + 8];
@@ -281,9 +282,13 @@ test('buildFragment: moof/mdat com data_offset exato e cobertura total em janela
       const sampleCount = dv(trun.start + 12, 4).getUint32(0);
       const dataOffset = dv(trun.start + 16, 4).getInt32(0);
       assert.ok((trunFlags & 0x000100) !== 0, 'data_offset present');
+      assert.ok((trunFlags & 0x000004) !== 0, 'sample_size present (0x4) — sem ele o Chromium usa default 0 e descarta o segmento');
+      assert.ok((trunFlags & 0x000200) !== 0, 'first_sample_flags present');
+      assert.ok((trunFlags & 0x000001) !== 0, 'sample_duration present');
 
       const track = parsed.tracks.find(tr => tr.trackId === trackId);
       assert.ok(track, 'trackId conhecido: ' + trackId);
+      if (track.hasCtts) assert.ok((trunFlags & 0x000008) !== 0, 'cts (0x8) presente com B-frames');
 
       if (track.handler === 'vide') {
         sawVideoTrun = true;
@@ -299,10 +304,13 @@ test('buildFragment: moof/mdat com data_offset exato e cobertura total em janela
         const fragBytesAt = frag.data.subarray(dataOffset, dataOffset + 16);
         assert.deepEqual(Buffer.from(fragBytesAt), Buffer.from(fileBytesAt),
           `byte apontado pelo data_offset == byte do arquivo (vídeo, t=${t.toFixed(1)}s)`);
-        if (track.hasCtts) assert.ok((trunFlags & 0x000004) !== 0, 'trun com cts offsets (B-frames)');
-        // cts do primeiro sample (relativo) — lê da 1ª entrada do trun
-        const firstCts = dv(trun.start + 20 + 8, 4).getInt32(0);
-        assert.equal(firstCts, first.cts - first.dts, 'cts offset do trun == cts-dts da sample');
+        if (track.hasCtts) assert.ok((trunFlags & 0x000008) !== 0, 'trun com cts (0x8) — B-frames');
+        // primeiro sample do trun: [dur][size] — valida o SIZE (era o bug central!)
+        const entryOff = trun.start + 8 + 4 + 4 + 4 + 4; // ver/flags, count, data_offset, first_sample_flags
+        const firstDur = dv(entryOff, 4).getUint32(0);
+        const firstSize = dv(entryOff + 4, 4).getUint32(0);
+        assert.equal(firstDur, first.duration, 'trun sample0 duration');
+        assert.equal(firstSize, first.size, 'trun sample0 SIZE == size real da sample');
       } else {
         sawAudioTrun = true;
         audioTotal += sampleCount;
