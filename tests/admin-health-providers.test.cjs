@@ -183,7 +183,7 @@ test('health-check cobre catálogos, servidores de vídeo individuais e APIs com
     assert.equal(byName[name].statusCode, 200, `${name} deveria responder HTTP 200`);
   }
   // A aba do painel promete velocidade pros servidores individuais e catálogos
-  for (const name of ['MixDrop', 'Streamtape', 'Catálogo Encontrei.me', 'Catálogo Saimo TV', 'Catálogo AnimesDigital']) {
+  for (const name of ['MixDrop', 'Streamtape', 'Catálogo Encontrei.me', 'Catálogo Vizer', 'Catálogo Saimo TV', 'Catálogo AnimesDigital']) {
     assert.ok(typeof byName[name].speedKbps === 'number' && byName[name].speedKbps > 0, `${name} deveria ter speedKbps > 0`);
   }
   // Corpo pequeno (JSON de configuração) não gera métrica de velocidade

@@ -47,12 +47,18 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
         }
         const reader = response.body?.getReader();
         const chunks: Uint8Array[] = []; let size = 0;
+        const bodyStart = Date.now();
         try {
           while (reader && size < 256 * 1024) {
             const { done, value } = await reader.read(); if (done) break;
             const chunk = value.subarray(0, 256 * 1024 - size); chunks.push(chunk); size += chunk.length;
           }
         } finally { await reader?.cancel().catch(() => {}); }
+        const bodyMs = Date.now() - bodyStart;
+        // Throughput de download (KB/s) — mesmo threshold conservador do
+        // adminOps.measureDownloadSpeed: < 16 KB ou < 25 ms é ruído de página
+        // comprimida que chega instantaneamente, não throughput real.
+        const speedKbps = size >= 16384 && bodyMs >= 25 ? Math.round((size / 1024) / (bodyMs / 1000)) : null;
         const html = Buffer.concat(chunks).toString('utf8');
         const catalogue = /\/series\/online\/[a-z0-9-]+-\d+\/|\/filmes\/online\/[a-z0-9-]+-\d+\//i.test(html);
         const blocked = /<title[^>]*>[^<]*(?:just a moment|access denied|attention required|sign in|log in)/i.test(html);
@@ -62,7 +68,8 @@ export async function checkVizerHealth(options: { timeoutMs?: number; phaseTimeo
         const active = new URL(url).origin; rememberVizerDomain(active);
         return { name: 'Catálogo Vizer', url: active, status: 'ONLINE' as const,
           latencyMs: Date.now() - started, statusCode: response.status,
-          ...(active !== first ? { redirectedFrom: first } : {}) };
+          ...(active !== first ? { redirectedFrom: first } : {}),
+          ...(speedKbps ? { speedKbps } : {}) };
       }
     } catch { lastError = 'Falha ou timeout ao consultar a listagem do Vizer; disponibilidade não confirmada.'; }
   }
