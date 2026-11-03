@@ -1734,8 +1734,23 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             controlsVisible && !isLocked ? "opacity-100 translate-y-0 pointer-events-auto" : "opacity-0 -translate-y-4 pointer-events-none"
           }`}
         >
-        {/* Esquerda: Espaço de respiro */}
-        <div className="w-8 sm:w-10 pointer-events-none"></div>
+        {/* Esquerda: Cadeado (Lock) — só ícone, canto superior esquerdo, apenas em tela cheia */}
+        {isFullscreen ? (
+          <button
+            onClick={handleLockScreen}
+            title="Bloquear controles da tela"
+            aria-label="Bloquear controles da tela"
+            className="group w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center text-white/90 hover:text-white transition-colors cursor-pointer shrink-0"
+          >
+            {isLocking ? (
+              <Lock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse shrink-0" />
+            ) : (
+              <Unlock className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110 shrink-0" />
+            )}
+          </button>
+        ) : (
+          <div className="w-8 sm:w-10 pointer-events-none"></div>
+        )}
 
         {/* Centro: Título formatado S1:E1 "Pilot" com Centralização Absoluta Perfeita */}
         <div className="absolute left-1/2 -translate-x-1/2 top-2.5 sm:top-4 bottom-0 flex items-center justify-center pointer-events-none max-w-[50%] sm:max-w-[65%] px-2 z-10 gap-2">
@@ -2146,23 +2161,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* 2. Bloquear Tela (Apenas em Tela Cheia) */}
-          {isFullscreen && (
-            <button
-              onClick={handleLockScreen}
-              className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
-              title="Bloquear controles da tela"
-            >
-              {isLocking ? (
-                <Lock className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] text-orange-500 scale-110 transition-transform animate-pulse shrink-0" />
-              ) : (
-                <Unlock className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] text-white/80 group-hover:text-white transition-transform group-hover:scale-110 shrink-0" />
-              )}
-              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
-                {isLocking ? "Trancando..." : "Bloquear"}
-              </span>
-            </button>
-          )}
+          {/* 2. Bloquear Tela: movido para o canto superior esquerdo (header) — apenas ícone */}
 
           {/* 3. Pular Abertura (Apenas para séries em Tela Cheia) */}
           {isFullscreen && isSeries && (
@@ -2213,7 +2212,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               title="Próximo Episódio (Tecla N)"
             >
               <SkipForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
-              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">Próximo</span>
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">Próx. Ep.</span>
             </button>
           )}
         </div>
