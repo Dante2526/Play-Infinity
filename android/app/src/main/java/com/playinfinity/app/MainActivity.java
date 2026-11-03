@@ -8,6 +8,7 @@ import com.getcapacitor.BridgeActivity;
 import android.content.res.Configuration;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.CookieManager;
 import android.webkit.WebView;
 import androidx.activity.EdgeToEdge;
 import androidx.core.app.ActivityCompat;
@@ -54,6 +55,15 @@ public class MainActivity extends BridgeActivity {
         try {
             if (this.bridge != null && this.bridge.getWebView() != null) {
                 WebView webView = this.bridge.getWebView();
+
+                // Cloudflare Turnstile (tela de login) exige cookies de terceiros:
+                // o iframe challenges.cloudflare.com não conclui o desafio sem eles
+                // e o widget fica travado em "Verificando..." para sempre. O WebView
+                // do Android bloqueia cookies de terceiros por padrão — habilita aqui.
+                CookieManager cookieManager = CookieManager.getInstance();
+                cookieManager.setAcceptCookie(true);
+                cookieManager.setAcceptThirdPartyCookies(webView, true);
+
                 webView.setWebChromeClient(new WebChromeClient() {
                     @Override
                     public void onPermissionRequest(final PermissionRequest request) {

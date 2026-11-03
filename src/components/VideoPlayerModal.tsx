@@ -1246,6 +1246,7 @@ export function VideoPlayerModal({
       buildUrl: (id: string, s?: number, e?: number) => string;
       isMatch: (u: string) => boolean;
       name: string;
+      internalOnly?: boolean;
     }> = [];
 
     if (isSeries) {
@@ -1268,7 +1269,10 @@ export function VideoPlayerModal({
             return `/api/streamtape-proxy-iframe?id=${id}&s=${epS}&e=${epE}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
+          name: "StreamTape HD",
+          // Servidor de fallback interno: nunca aparece na UI do usuário
+          // (acionado automaticamente quando o servidor primário falha).
+          internalOnly: true
         },
         {
           key: "srv_mixdrop",
@@ -1349,7 +1353,10 @@ export function VideoPlayerModal({
             return `/api/streamtape-proxy-iframe?id=${effectiveMovieId || tmdbId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD"
+          name: "StreamTape HD",
+          // Servidor de fallback interno: nunca aparece na UI do usuário
+          // (acionado automaticamente quando o servidor primário falha).
+          internalOnly: true
         },
         {
           key: "srv_mixdrop",
@@ -3435,7 +3442,7 @@ export function VideoPlayerModal({
                 availableSeasons={availableSeasons}
                 activeServerKey={selectedServerKey}
                 onServerChange={handleServerSwitch}
-                serversList={servers.map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
+                serversList={servers.filter(server => !server.internalOnly).map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
                 onSeasonChange={handleSeasonChange}
                 episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
                 onClose={handleCloseModal}

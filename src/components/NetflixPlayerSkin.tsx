@@ -328,8 +328,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (serversList && serversList.length > 0) {
       return serversList;
     }
+    // srv_streamtape não aparece aqui: é um servidor de fallback interno,
+    // resolvido automaticamente pelo VideoPlayerModal quando o primário falha.
     return [
-      { key: "srv_streamtape", label: "StreamTape HD" },
       { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_byse", label: "BYSE HD" },
       { key: "srv_saimo_hls", label: "Saimo Play HD" },

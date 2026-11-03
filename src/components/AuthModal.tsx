@@ -7,6 +7,7 @@ import { clearLocalUserData } from "../utils/safeStorage";
 import { reportAppError } from "./GlobalErrorModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "./TurnstileWidget";
+import { Capacitor } from "@capacitor/core";
 import {
   getStoredReferralCode,
   resolveReferrerData,
@@ -31,6 +32,15 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // No app nativo (Capacitor) o WebView do Android bloqueia cookies de terceiros
+  // por padrão, o que deixa o desafio do Cloudflare Turnstile travado em
+  // "Verificando..." infinitamente e bloqueia o login. Como o app nativo é um
+  // cliente controlado (APK assinado, sem superfície de bot via navegador) e o
+  // token é uma trava exclusivamente client-side, a verificação só se aplica
+  // ao navegador. O WebView nativo continua protegido pelo rate limit do
+  // Firebase Auth (auth/too-many-requests).
+  const isNativeApp = Capacitor.isNativePlatform();
 
   if (!isOpen) return null;
 
@@ -63,7 +73,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
       }
     }
 
-    if (!turnstileToken) {
+    if (!isNativeApp && !turnstileToken) {
       setError("Por favor, resolva a verificação de segurança (Anti-Bot).");
       return;
     }
@@ -319,15 +329,18 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
               </div>
             </div>
 
-            {/* Verificação Cloudflare Turnstile */}
-            <TurnstileWidget
-              onVerify={(token) => {
-                setTurnstileToken(token);
-                setError("");
-              }}
-              onError={() => setTurnstileToken(null)}
-              onExpire={() => setTurnstileToken(null)}
-            />
+            {/* Verificação Cloudflare Turnstile (apenas navegador — no app nativo
+                o desafio não completa por política de cookies do WebView) */}
+            {!isNativeApp && (
+              <TurnstileWidget
+                onVerify={(token) => {
+                  setTurnstileToken(token);
+                  setError("");
+                }}
+                onError={() => setTurnstileToken(null)}
+                onExpire={() => setTurnstileToken(null)}
+              />
+            )}
 
             <button
               type="submit"

@@ -8,6 +8,7 @@ import { auth, db, firebaseConfig } from "../services/firebase";
 import { CustomDatePicker } from "../components/CustomDatePicker";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "../components/TurnstileWidget";
+import { Capacitor } from "@capacitor/core";
 import { AdminDeployMonitor } from "../components/AdminDeployMonitor";
 import { ServerBlocksAdmin } from "../components/ServerBlocksAdmin";
 import { AdminHealthMonitor } from "../components/AdminHealthMonitor";
@@ -935,9 +936,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </button>
             </div>
 
-            <TurnstileWidget
-              onVerify={() => {}}
-            />
+            {/* Turnstile apenas no navegador: no app nativo (Capacitor) o desafio
+                não completa por política de cookies de terceiros do WebView */}
+            {!Capacitor.isNativePlatform() && (
+              <TurnstileWidget
+                onVerify={() => {}}
+              />
+            )}
 
             <button
               type="submit"
