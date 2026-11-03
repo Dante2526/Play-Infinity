@@ -60,7 +60,7 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
         const id = window.turnstile.render(containerRef.current, {
           sitekey: siteKey,
           theme: theme as "dark" | "light" | "auto",
-          size: "normal",
+          size: "flexible",
           callback: (token: string) => {
             if (isMounted) onVerify(token);
           },
@@ -112,9 +112,9 @@ export const TurnstileWidget: React.FC<TurnstileProps> = ({
   }, [siteKey, theme]);
 
   return (
-    <div className={`w-full flex justify-center items-center my-3 ${className}`}>
+    <div className={`w-full flex justify-center items-center my-2 sm:my-3 ${className}`}>
       {/* Exibição limpa e oficial sem bordas duplas artificiais */}
-      <div ref={containerRef} className="min-h-[65px] flex items-center justify-center" />
+      <div ref={containerRef} className="w-full min-h-[70px] flex items-center justify-center overflow-visible" />
     </div>
   );
 };

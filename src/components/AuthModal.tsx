@@ -207,23 +207,26 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 sm:p-6">
-      <div className="bg-[#1c1c1e]/80 backdrop-blur-3xl border border-white/10 w-full max-w-sm sm:max-w-md overflow-hidden relative shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-fade-in" style={{ borderRadius: '28px' }}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 sm:p-6 overflow-y-auto">
+      <div
+        className="bg-[#1c1c1e]/80 backdrop-blur-3xl border border-white/10 w-full max-w-sm sm:max-w-md relative shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-fade-in my-auto max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto overflow-x-hidden"
+        style={{ borderRadius: '28px' }}
+      >
         {isDismissible && (
           <button
             onClick={onClose}
-            className="absolute top-5 right-5 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all"
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-all z-10"
           >
             <X className="w-4 h-4" />
           </button>
         )}
 
-        <div className="p-8 sm:p-10">
-          <div className="text-center mb-10 mt-2">
-            <h2 className="text-[28px] leading-tight font-extrabold text-white tracking-tight mb-2">
+        <div className="p-6 sm:p-8">
+          <div className="text-center mb-6 sm:mb-8 mt-1">
+            <h2 className="text-[26px] sm:text-[28px] leading-tight font-extrabold text-white tracking-tight mb-2">
               {isLogin ? "Entrar" : "Criar Conta"}
             </h2>
-            <p className="text-white/50 text-[15px] font-medium px-4">
+            <p className="text-white/50 text-[14px] sm:text-[15px] font-medium px-2 sm:px-4">
               {isLogin 
                 ? "Acesse sua conta para continuar assistindo de onde parou." 
                 : "Crie sua conta para sincronizar seus favoritos em qualquer tela."}
@@ -231,13 +234,13 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           </div>
 
           {error && (
-            <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-400 text-sm" style={{ borderRadius: '20px' }}>
+            <div className="mb-5 p-3.5 bg-red-500/10 border border-red-500/20 flex items-start gap-3 text-red-400 text-sm" style={{ borderRadius: '20px' }}>
               <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
               <span className="font-medium leading-relaxed">{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} method="post" action="#" autoComplete="on" className="space-y-4">
+          <form onSubmit={handleSubmit} method="post" action="#" autoComplete="on" className="space-y-3 sm:space-y-4">
             {!isLogin && (
               <div>
                 <label className="block text-white/70 text-xs font-bold mb-1.5 ml-2 uppercase tracking-wider">
@@ -254,7 +257,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="name"
-                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                    className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 sm:py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                     style={{ borderRadius: '22px' }}
                     placeholder="Nome Completo"
                     required
@@ -282,7 +285,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                   autoComplete="username"
                   autoCapitalize="none"
                   spellCheck={false}
-                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 sm:py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                   style={{ borderRadius: '22px' }}
                   placeholder="Seu E-mail"
                   required
@@ -307,7 +310,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete={isLogin ? "current-password" : "new-password"}
-                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
+                  className="w-full bg-white/5 hover:bg-white/10 focus:bg-white/10 border-0 py-3.5 sm:py-4 pl-11 pr-4 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all font-medium text-[15px]"
                   style={{ borderRadius: '22px' }}
                   placeholder={isLogin ? "Senha" : "Senha (mínimo 6 caracteres)"}
                   minLength={6}
@@ -329,14 +332,14 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-4 transition-all mt-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] cursor-pointer"
+              className="w-full bg-orange-600 hover:bg-orange-500 active:scale-[0.98] text-white font-bold text-[16px] py-3.5 sm:py-4 transition-all mt-1 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_4px_14px_rgba(234,88,12,0.4)] cursor-pointer"
               style={{ borderRadius: '22px' }}
             >
               {loading ? "Aguarde..." : (isLogin ? "Entrar" : "Criar Conta")}
             </button>
           </form>
 
-          <div className="mt-8 text-center text-[15px] text-white/50 font-medium">
+          <div className="mt-6 sm:mt-8 text-center text-[15px] text-white/50 font-medium">
             {isLogin ? "Novo por aqui? " : "Já tem uma conta? "}
             <button
               type="button"
@@ -351,10 +354,10 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           </div>
 
           {/* Link público da Política de Privacidade para o Google Play Console */}
-          <div className="mt-6 pt-4 border-t border-white/10 text-center text-xs text-white/40">
+          <div className="mt-5 sm:mt-6 pt-4 border-t border-white/10 text-center text-xs text-white/40">
             <span>Ao continuar, você concorda com a nossa </span>
-            <a 
-              href="/privacidade" 
+            <a
+              href="/privacidade"
               onClick={(e) => {
                 e.preventDefault();
                 window.history.pushState({ type: 'privacy' }, '', '/privacidade');
@@ -364,7 +367,7 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
                   window.dispatchEvent(new Event('popstate'));
                 }
               }}
-              className="text-neutral-400 hover:text-orange-400 underline underline-offset-2 transition-colors cursor-pointer inline-block py-1.5"
+              className="text-neutral-400 hover:text-orange-400 underline underline-offset-2 transition-colors cursor-pointer inline-block py-1"
             >
               Política de Privacidade
             </a>
