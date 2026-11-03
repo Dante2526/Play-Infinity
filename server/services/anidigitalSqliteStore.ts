@@ -118,3 +118,18 @@ export function getAnidigitalStore(): AnidigitalSqliteStore | null {
   const p = findAnidigitalDb();
   return p ? openAnidigitalSqlite(p) : null;
 }
+
+/**
+ * Stats do catálogo local pro health check do painel admin (mesmo contrato
+ * do getSaimoCatalogStatus). Zeros quando node:sqlite indisponível ou .db
+ * ausente — o health check sinaliza a causa no campo `note`.
+ */
+export function getAnidigitalCatalogStatus(): { movies: number; episodes: number; series: number } {
+  const store = getAnidigitalStore();
+  if (!store) return { movies: 0, episodes: 0, series: 0 };
+  return {
+    movies: store.movieIndex.size,
+    episodes: store.episodeIndex.size,
+    series: store.seriesSeasonsIndex.size,
+  };
+}

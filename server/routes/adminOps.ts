@@ -7,11 +7,15 @@ import { exec as cpExec } from "child_process";
 import { Client as SshClient } from "ssh2";
 import { getEncontreiResolverStatus, getVizerCatalogStatus, getEncontreiCatalogStatus } from "./encontreiLookup";
 import { getSaimoCatalogStatus } from "../services/saimoSqliteStore";
+import { getAnidigitalCatalogStatus, isAnidigitalSqliteAvailable, getAnidigitalSqliteLoadError, findAnidigitalDb } from "../services/anidigitalSqliteStore";
 import { checkVizerHealth } from "../services/vizerDomains";
 import { getSentinelStatus, runSentinelCheck, registerAdminPushToken, sendPushToAdmins } from "../services/adminSentinel";
 import { isDelinquentUser } from "../services/dunningWatcher";
 
 export const adminOpsRouter = Router();
+
+/** Tipo da resposta global do fetch (o `Response` deste arquivo é o do Express). */
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
 const ORACLE_VPS_HOST = process.env.ORACLE_VPS_HOST || "147.15.57.146";
 const ORACLE_VPS_PORT = parseInt(process.env.ORACLE_VPS_PORT || "22", 10);
@@ -147,6 +151,14 @@ function executeSshCommand(command: string, timeoutMs = 25000): Promise<{ stdout
 /**
  * GET /api/admin/health-check
  * Checa a saúde dos domínios homologados de forma autenticada
+ *
+ * Cada resultado carrega:
+ *  - category: "catalog" (Vizer/Encontrei/Saimo/AnimesDigital), "server"
+ *    (provedores de vídeo individuais: MixDrop, Streamtape, Byse, players
+ *    embed) ou "api" (TMDB) — o painel agrupa por essa categoria.
+ *  - speedKbps: throughput aproximado de download (KB/s) medido ao ler o
+ *    corpo da resposta (até 256KB) — indicativo de "velocidade" do host
+ *    servindo a VPS; null quando não há corpo suficiente pra medir.
  */
 adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   const tmdbApiKey = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
@@ -155,6 +167,59 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   // Sem esse cookie o site redireciona tudo para /login/ — o health check
   // precisa enviá-lo para validar o estado REAL (sessão logada vs login).
   const encontreiCookie = process.env.ENCONTREI_COOKIE || "";
+
+  /**
+   * Mede a velocidade aproximada de download lendo até maxBytes do corpo da
+   * resposta (com cancelamento do restante). Retorna KB/s, ou null quando o
+   * corpo é pequeno/ausente demais pra uma leitura estável.
+   */
+  async function measureDownloadSpeed(response: FetchResponse, maxBytes = 256 * 1024, maxMs = 4000): Promise<number | null> {
+    try {
+      const reader = (response as any).body?.getReader?.();
+      if (!reader) return null;
+      const start = Date.now();
+      const deadline = start + maxMs;
+      let size = 0;
+      while (size < maxBytes && Date.now() < deadline) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.length;
+      }
+      await reader.cancel().catch(() => {});
+      const ms = Date.now() - start;
+      if (size < 4096 || ms < 20) return null;
+      return Math.round((size / 1024) / (ms / 1000));
+    } catch {
+      return null;
+    }
+  }
+
+  /** Lê até maxBytes do corpo como texto já medindo a velocidade. */
+  async function readBodyWithSpeed(response: FetchResponse, maxBytes = 512 * 1024): Promise<{ text: string; speedKbps: number | null }> {
+    try {
+      const reader = (response as any).body?.getReader?.();
+      if (!reader) {
+        const text = await response.text();
+        return { text, speedKbps: null };
+      }
+      const start = Date.now();
+      const chunks: Buffer[] = [];
+      let size = 0;
+      while (size < maxBytes) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = Buffer.from(value.subarray(0, maxBytes - size));
+        chunks.push(chunk);
+        size += chunk.length;
+      }
+      await reader.cancel().catch(() => {});
+      const ms = Date.now() - start;
+      const speedKbps = size >= 4096 && ms >= 20 ? Math.round((size / 1024) / (ms / 1000)) : null;
+      return { text: Buffer.concat(chunks).toString("utf8"), speedKbps };
+    } catch {
+      return { text: "", speedKbps: null };
+    }
+  }
 
   /**
    * Validação dedicada do encontrei.me:
@@ -183,7 +248,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
       // HTTP OK não basta: sem sessão válida o site redireciona pra /login/
       // e responde 200 com a página de login (falso positivo de "ONLINE").
       const finalUrl = response.url || "";
-      const body = await response.text();
+      const { text: body, speedKbps } = await readBodyWithSpeed(response);
       const pageTitle = (body.match(/<title>([^<]*)<\/title>/) || [""])[1] || "";
       const isLoginPage =
         finalUrl.includes("/login") ||
@@ -195,9 +260,11 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
           name: "Catálogo Encontrei.me",
           url: "https://encontrei.me",
           status: "ONLINE" as const,
+          category: "catalog" as const,
           latencyMs: latency,
           statusCode,
           catalog: getEncontreiCatalogStatus(),
+          ...(speedKbps ? { speedKbps } : {}),
         };
       }
 
@@ -205,6 +272,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         name: "Catálogo Encontrei.me",
         url: "https://encontrei.me",
         status: "OFFLINE" as const,
+        category: "catalog" as const,
         latencyMs: latency,
                 statusCode,
         catalog: getEncontreiCatalogStatus(),
@@ -219,6 +287,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
         name: "Catálogo Encontrei.me",
         url: "https://encontrei.me",
         status: "OFFLINE" as const,
+        category: "catalog" as const,
         latencyMs: null,
         statusCode: 0,
         catalog: getEncontreiCatalogStatus(),
@@ -228,7 +297,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   };
 
   // Use the resolver's domain order; a failed live check never deletes the snapshot.
-  const checkVizer = async () => ({ ...(await checkVizerHealth()), catalog: getVizerCatalogStatus() });
+  const checkVizer = async () => ({ ...(await checkVizerHealth()), category: "catalog" as const, catalog: getVizerCatalogStatus() });
 
   const checkSaimo = async () => {
     const start = Date.now();
@@ -242,19 +311,23 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
       });
       const latency = Date.now() - start;
       const statusCode = response.status;
+      const speedKbps = await measureDownloadSpeed(response);
       return {
         name: "Catálogo Saimo TV",
         url: "https://saimo-tv.pages.dev/movies",
+        category: "catalog" as const,
         status: (statusCode >= 200 && statusCode < 400 ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE",
         latencyMs: latency,
         statusCode,
         catalog: getSaimoCatalogStatus(),
+        ...(speedKbps ? { speedKbps } : {}),
         ...(statusCode >= 400 ? { error: `HTTP ${statusCode}` } : {}),
       };
     } catch (error: any) {
       return {
         name: "Catálogo Saimo TV",
         url: "https://saimo-tv.pages.dev/movies",
+        category: "catalog" as const,
         status: "OFFLINE" as const,
         latencyMs: null,
         statusCode: 0,
@@ -264,42 +337,109 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     }
   };
 
+  /**
+   * Catálogo AnimesDigital (animes dublado/legendado):
+   * - Site + CDN via https://animesdigital.org (mesma origem do resolver)
+   * - Stats do catálogo SQLite local (data/anidigital-catalog.db), quando o
+   *   runtime suporta node:sqlite e o .db está presente. Enquanto isso não
+   *   acontecer, o campo `note` explica o motivo (ex.: Node 20) e o lookup
+   *   segue funcionando via live search.
+   */
+  const checkAnidigital = async () => {
+    const catalog = getAnidigitalCatalogStatus();
+    let note: string | undefined;
+    if (!isAnidigitalSqliteAvailable()) {
+      note = `Catálogo SQLite local inativo (${getAnidigitalSqliteLoadError() || "node:sqlite indisponível"}) — lookup via live search.`;
+    } else if (!findAnidigitalDb()) {
+      note = "anidigital-catalog.db não encontrado no servidor — lookup via live search.";
+    } else if (!catalog.episodes) {
+      note = "Catálogo SQLite local vazio — lookup via live search.";
+    }
+    const start = Date.now();
+    try {
+      const response = await fetch("https://animesdigital.org", {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        },
+        redirect: "follow",
+      });
+      const latency = Date.now() - start;
+      const statusCode = response.status;
+      const speedKbps = await measureDownloadSpeed(response);
+      const online = statusCode >= 200 && statusCode < 400;
+      return {
+        name: "Catálogo AnimesDigital",
+        url: "https://animesdigital.org",
+        category: "catalog" as const,
+        status: (online ? "ONLINE" : "OFFLINE") as "ONLINE" | "OFFLINE",
+        latencyMs: latency,
+        statusCode,
+        catalog,
+        ...(speedKbps ? { speedKbps } : {}),
+        ...(note ? { note } : {}),
+        ...(online ? {} : { error: `HTTP ${statusCode}` }),
+      };
+    } catch (error: any) {
+      return {
+        name: "Catálogo AnimesDigital",
+        url: "https://animesdigital.org",
+        category: "catalog" as const,
+        status: "OFFLINE" as const,
+        latencyMs: null,
+        statusCode: 0,
+        catalog,
+        ...(note ? { note } : {}),
+        error: error?.message || "fetch falhou",
+      };
+    }
+  };
 
-  const staticTargets: Array<{ name: string; url: string; type: string; redirect?: RequestRedirect }> = [
-    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", redirect: "follow" },
-    { name: "VIP Player", url: "https://myembed.biz", type: "html", redirect: "manual" },
-    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html", redirect: "manual" },
-    { name: "MixDrop", url: "https://mxdrop.top", type: "html", redirect: "manual" }
+
+  const staticTargets: Array<{ name: string; url: string; type: string; category: "server" | "api" }> = [
+    { name: "MixDrop", url: "https://mxdrop.top", type: "html", category: "server" },
+    { name: "Streamtape", url: "https://streamtape.com", type: "html", category: "server" },
+    { name: "Byse", url: "https://n1mwq.org", type: "html", category: "server" },
+    { name: "VIP Player", url: "https://myembed.biz", type: "html", category: "server" },
+    { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html", category: "server" },
+    { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", category: "api" }
   ];
 
-  // Encontrei e Vizer usam validação dedicada (cookie de sessão e detecção de
-  // migração de domínio, respectivamente); os demais alvos seguem com fetch simples.
-  const [encontreiResult, vizerResult, saimoResult, ...staticResults] = await Promise.all([
+  // Encontrei, Vizer, Saimo e AnimesDigital usam validação dedicada (cookie de
+  // sessão, detecção de migração de domínio e catálogo SQLite, respectivamente);
+  // os demais alvos (servidores de vídeo individuais + TMDB) seguem com fetch
+  // simples + medição de velocidade de download.
+  const [encontreiResult, vizerResult, saimoResult, anidigitalResult, ...staticResults] = await Promise.all([
     checkEncontrei(),
     checkVizer(),
     checkSaimo(),
+    checkAnidigital(),
     ...staticTargets.map(async (target) => {
       try {
         const start = Date.now();
         const response = await fetch(target.url, {
-          redirect: target.redirect || "follow",
+          redirect: "follow",
           signal: AbortSignal.timeout(8000),
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           }
         });
         const latency = Date.now() - start;
+        const speedKbps = await measureDownloadSpeed(response);
         return {
           name: target.name,
           url: target.url,
+          category: target.category,
           status: response.status >= 200 && response.status < 400 ? ("ONLINE" as const) : ("OFFLINE" as const),
           latencyMs: latency,
-          statusCode: response.status
+          statusCode: response.status,
+          ...(speedKbps ? { speedKbps } : {})
         };
       } catch (error: any) {
         return {
           name: target.name,
           url: target.url,
+          category: target.category,
           status: "OFFLINE" as const,
           latencyMs: null,
           statusCode: error.response?.status || 0,
@@ -309,7 +449,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
     })
   ]);
 
-  const results = [encontreiResult, vizerResult, saimoResult, ...staticResults];
+  const results = [encontreiResult, vizerResult, saimoResult, anidigitalResult, ...staticResults];
   res.json({ success: true, timestamp: Date.now(), results });
 });
 
