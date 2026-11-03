@@ -33,10 +33,12 @@ data/external-channels.txt
 data/encontrei-catalog.db
 data/vizer-catalog.db
 data/saimo-catalog.db
+data/anidigital-catalog.db
 data/test-saimo.db
 public/data/encontrei-catalog.db
 public/data/vizer-catalog.db
 public/data/saimo-catalog.db
+public/data/anidigital-catalog.db
 data/saimo-catalog.db
 data/test-saimo.db
 
