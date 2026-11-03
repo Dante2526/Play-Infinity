@@ -351,14 +351,17 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
   const beforeServers = read('src/data/liveChannels.ts');
   const channels = catalog.getPublicLiveChannels();
 
-  // Premiere 1 HD ganhou as 3 fontes embed válidas do snapshot
+  // Premiere Clubes (id premiere-1) está travado (lockServers:true) na fonte
+  // curada embedTV — NÃO recebe embeds do MinhaTela e fica com 1 servidor
+  // (proxy assinado). SporTV (abaixo) continua cobrindo o merge MinhaTela.
   const premiere = channels.find(c => c.id === 'premiere-1');
   assert.ok(premiere, 'premiere-1 presente');
-  const embeds = premiere.servers.filter(s => s.isEmbed);
-  assert.equal(embeds.length, 3);
-  assert.equal(premiere.servers[0]?.url.startsWith('/api/external-channel?'), true); // Saimo continua primeiro
-  // Nomes sequenciais sem duplicar 'Servidor 1'
-  assert.deepEqual(premiere.servers.map(s => s.name), ['Servidor 1', 'Servidor 2', 'Servidor 3', 'Servidor 4']);
+  assert.equal(premiere.name, 'Premiere Clubes');
+  assert.equal(premiere.lockServers, true);
+  assert.equal(premiere.servers.filter(s => s.isEmbed).length, 0); // sem embeds anexados
+  assert.equal(premiere.servers.length, 1); // travado na fonte curada
+  assert.ok(premiere.servers[0]?.url.startsWith('/api/live-stream-proxy?url='), 'servidor único é o proxy assinado embedTV');
+  assert.equal(premiere.servers[0]?.name, 'Servidor 1');
 
   // SporTV HD também
   const sportv = channels.find(c => c.id === 'sportv');
