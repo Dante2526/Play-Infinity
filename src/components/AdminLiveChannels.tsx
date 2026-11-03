@@ -294,9 +294,22 @@ const AdminChannelCard = React.memo(function AdminChannelCard({
               .slice(0, directToShow)
               .map((srv, sIdx) => {
                 const probe = probeResults[srv.url];
+                // Badge de provedor para fontes curadas (lockServers): a URL
+                // do proxy embedTV carrega o referer w7.embedtv.cc + host
+                // s25-cloudfront-net.lat. Ajuda o admin a identificar a origem
+                // sem ler a URL assinada crua.
+                const isEmbedTv = srv.url.includes('w7.embedtv.cc') || srv.url.includes('s25-cloudfront-net.lat');
                 return (
                   <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
                     <span className="server-name text-white/80 truncate font-medium flex-1" />
+                    {isEmbedTv && (
+                      <span
+                        className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0"
+                        title="Fonte curada embedTV (s25-cloudfront-net.lat + Referer w7.embedtv.cc) — lockServers"
+                      >
+                        embedTV
+                      </span>
+                    )}
                     <div className="flex items-center gap-1.5 shrink-0">
                       {probe && (
                         probe.probing ? (

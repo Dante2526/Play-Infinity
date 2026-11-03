@@ -902,24 +902,23 @@ test('guard: liveChannels.ts não tem NENHUM servidor /api/iptv restante (up.kiw
 test('guard: liveChannels.ts migrou os canais esportivos principais para external-channel', () => {
   const src = read('src/data/liveChannels.ts');
   const refs = (src.match(/\/api\/external-channel\?name=/g) || []).length;
-  assert.ok(refs >= 35, `esperado >=35 refs external-channel, encontrado ${refs}`);
+  // 12 canais (Band, SBT, Record, SporTV, Combate, Animal Planet, Discovery
+  // Channel, Discovery ID, ESPN/ESPN Brasil, ESPN 2, ESPN 4, History) migraram
+  // para fonte curada embedTV (lockServers + proxy assinado) em 03/11/2026,
+  // reduzindo as refs do resolver. Threshold lowered accordingly.
+  assert.ok(refs >= 20, `esperado >=20 refs external-channel, encontrado ${refs}`);
   // NOTA: 'N%20SPORTS' foi removido deliberadamente em 29/10/2026 (commit
   // a11bb22 — fonte 502 em duas rodadas de probe; hoje gerenciado pela
   // blocklist server/services/blockedLiveChannels.ts). Não reintroduzir aqui.
-  // NOTA: 'Premiere%20Clubes' foi retirado do resolver em 03/11/2026 — o
-  // canal premiere-1 foi renomeado para "Premiere Clubes" e travado
-  // (lockServers:true) na fonte curada embedTV (proxy assinado em
-  // /api/live-stream-proxy). Não exige mais o resolver Saimo.
-  // NOTA: 'SporTV%203' também migrado para fonte curada embedTV (mesma
-  // cadeia do Premiere Clubes, stream hash e7e4de42...). sportv-3 agora
-  // usa lockServers:true + proxy assinado, sem resolver Saimo.
+  // NOTA: 'Premiere%20Clubes' (premiere-1), 'SporTV%203' (sportv-3) e mais 12
+  // canais (lista acima) foram migrados para fonte curada embedTV
+  // (lockServers:true + proxy assinado). Não exigem mais o resolver Saimo.
   for (const expected of [
     'Premiere%202', 'Premiere%207',
-    'SporTV', 'SporTV%202',
-    'ESPN', 'ESPN%202', 'ESPN%203', 'ESPN%204', 'ESPN%205',
-    'BAND%20SPORTS%20HD', 'Combate', 'GE%20TV',
-    'Band', 'SBT', 'Record', 'Record%20News', 'CazeTV%201',
-    'Discovery%20Channel', 'History', 'Animal%20Planet', 'Discovery%20ID',
+    'SporTV%202',
+    'ESPN%203', 'ESPN%205',
+    'BAND%20SPORTS%20HD', 'GE%20TV',
+    'Record%20News', 'CazeTV%201',
   ]) {
     assert.ok(src.includes(`name=${expected}`), `canal ${expected} deve estar migrado`);
   }
