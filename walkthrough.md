@@ -8796,3 +8796,17 @@ Limitações: (a) o fix é no player web — o app Android empacota o modal no A
 **Gargalo 6 — Decisões sem registro**: docs/adr/ criado (README index + _template + 3 ADRs): 0001 HLS-first (MP4 vs HLS, alternativas descartadas), 0002 hierarquia allowlist/blacklist, 0003 smoke tests de produção. AGENTS.md seção 11: decisões >30min ou que revertem anteriores ganham ADR; ler ADR antes de refazer trade-off.
 
 **Validação**: tsc 0 erros; build ok; suíte 609/621 (0 falhas); smoke test produção 88% baseline. ADR-0002 é a referência canônica da nova hierarquia.
+
+---
+
+## 2026-11-03 — Provedor de anime AnimesDigital (`srv_anidigital`) na branch work/anidigital-hls (NÃO enviada — aguardando aprovação)
+
+**Contexto**: o dono pediu engenharia reversa de animesdigital.org ("Ve esse aqui se conseguimos usar os players deles, e focado em anime") e depois: "Prepara a melhoria mas nn envia nada, ai tu ja faz a simulação de reprodução e play e pause com o uso da skin da Netflix".
+
+**Engenharia reversa**: WordPress com REST escondido em /chave/; busca POST /func/listanime (token data-secury); páginas de série /anime/a/<slug> → 301 → /anime/b/<slug-obf> com paginação /page/N/; episódios /video/a/<id>/ com iframe player1 = api.anivideo.net/videohls.php?d=<m3u8>; CDNs cdn-sXX.mywallpaper-4k-image.net (séries) e cdn-svXX.maximaimg.online (filmes), segmentos disfarçados de .webp (MPEG-TS real), **CORS \* sem Referer** — só o manifesto passa por nós, segmentos direto na CDN (zero banda de vídeo na VPS, ADR-0004). DESCOBERTA CRÍTICA: o índice de busca é defasado (títulos recentes retornam JSON no_verify_nonce em vez de lista vazia) → probe direto por slug derivado do título (inclui variante -dublado) resolve em 1-2 requests.
+
+**Implementação** (server/services/anidigitalResolver.ts + server/routes/anidigitalRoutes.ts + wiring em 6 arquivos): lookup por nome com cache 6h/20min + dedupe em voo; /api/anidigital-stream com HMAC + allowlist de CDN + rewrite de segmentos relativos→absolutos; /api/anidigital-proxy-iframe com o wrapper WATCHPLAY (mesmo contrato BYSE/Saimo); probe no playbackHealth (srv_anidigital); botão "Anime Digital" no modal (posição 2, após BYSE); allowlist compartilha os 4 hosts novos.
+
+**Simulação com a skin Netflix REAL** (scripts/anidigital-sim + build via vite → scratch/, servido em /sim/anidigital): harness monta o componente NetflixPlayerSkin genuíno (stubando só Firebase/TMDB) sobre o iframe real. Resultados no browser headless contra o site REAL: vídeo tocando (Tank Chair EP5, 24,7min, buffer 50s+), PAUSE via botão da skin → tempo congelado 106.178s por 3s+, PLAY → retomada exata (+5s), SEEK 600s OK, 0 erros de console, rede confirma: 1 request no nosso proxy (manifesto), todos os segmentos direto na CDN. Screenshots em download/anidigital-sim/.
+
+**Testes**: tests/anidigital-resolver.test.cjs (16) — cadeia completa, slug probe, variante dub, dedupe em voo, cache/force, áudio, filme, fallback série, numeração absoluta, allowlist de CDN, rewrite sem proxy de segmento, protocolo WATCHPLAY completo (PAUSE/PLAY/SEEK/SET_VOLUME/SKIP_INTRO/WATCHPLAY_STATUS/ERROR). Suíte total: 637 testes, 620 pass, 0 fail, 17 skip (mesmos 17 do baseline — 604 pass sem as mudanças, +16 novos todos verdes, zero regressões).

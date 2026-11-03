@@ -334,6 +334,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       { key: "srv_byse", label: "BYSE HD" },
       { key: "srv_saimo_hls", label: "Saimo Play HD" },
       { key: "srv_saimo_mp4", label: "Saimo Turbo" },
+      { key: "srv_anidigital", label: "Anime Digital" },
       { key: "srv_watchplay", label: "WatchPlayer" },
       { key: "srv_vip", label: "VIP Player" },
       { key: "srv_vidsrc", label: "Seriesflix HD" },
@@ -2192,15 +2193,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </button>
           )}
 
-          {/* 5. Áudio (Sempre visível: cartão e tela cheia) */}
+          {/* 5. Áudio + Servidor (Sempre visível: cartão e tela cheia) */}
           <button
             onClick={() => setShowAudioSubtitleModal(true)}
             className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
-            title="Áudio"
+            title="Áudio + Servidor"
           >
             <MessageSquareText className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
             <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
-              Áudio
+              Áudio + Servidor
             </span>
           </button>
 
@@ -2462,8 +2463,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                   <MessageSquareText className="w-4 h-4 stroke-[2]" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-white leading-tight">Áudio</h3>
-                  <p className="text-xs text-neutral-400">Escolha o idioma de reprodução</p>
+                  <h3 className="text-base font-bold text-white leading-tight">Áudio + Servidor</h3>
+                  <p className="text-xs text-neutral-400">Escolha o servidor e o idioma de reprodução</p>
                 </div>
               </div>
               <button

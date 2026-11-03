@@ -42,6 +42,13 @@ import { Chromecast } from '@caprockapps/capacitor-chromecast';
 const isSaimoServerKey = (key: string | null | undefined): boolean =>
   key === 'srv_saimo' || key === 'srv_saimo_hls' || key === 'srv_saimo_mp4';
 
+// AnimesDigital: catálogo de anime FHD por HLS direto da CDN
+// (SRV que sempre usa a skin Netflix — wrapper próprio com protocolo WATCHPLAY).
+const isAnidigitalServerKey = (key: string | null | undefined): boolean => key === 'srv_anidigital';
+const isSkinSupportedServerKey = (key: string | null | undefined): boolean =>
+  key === 'srv_watchplay' || key === 'srv_vip' || key === 'srv_mixdrop' ||
+  key === 'srv_streamtape' || key === 'srv_byse' || isSaimoServerKey(key) || isAnidigitalServerKey(key);
+
 interface VideoPlayerModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -1463,6 +1470,39 @@ export function VideoPlayerModal({
       isMatch: (url: string) => url.includes('/api/byse-'),
     });
 
+    // ── AnimesDigital: anime FHD via HLS direto da CDN ──
+    // Catálogo focado em anime (~19k itens): legendado FHD (hardsub PT) e
+    // dublado. O health-probe (/api/anidigital-lookup) só libera o botão
+    // quando a busca por nome acha o título — para conteúdo não-anime o
+    // servidor nunca fica disponível (state: unavailable no startup).
+    // Posição: logo após o BYSE; a skin Netflix cobre 100% (wrapper com
+    // protocolo WATCHPLAY próprio — ADR-0004).
+    const anidigitalName = title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim() || '';
+    if (anidigitalName.length >= 2) {
+      list.splice(1, 0, {
+        key: 'srv_anidigital',
+        label: 'Anime Digital',
+        name: 'AnimesDigital',
+        badge: 'Anime FHD • Legendado/Dublado',
+        buildUrl: (id: string, s?: number, e?: number) => {
+          const params = new URLSearchParams({
+            name: anidigitalName,
+            type: isSeries ? 'tv' : 'movie',
+            cb: String(Date.now()),
+          });
+          if (isSeries) {
+            params.set('s', String(s ?? season));
+            params.set('e', String(e ?? episode));
+          }
+          if ((s === undefined || s === season) && (e === undefined || e === episode) && lastKnownTimeRef.current > 0) {
+            params.set('t', String(lastKnownTimeRef.current));
+          }
+          return '/api/anidigital-proxy-iframe?' + params;
+        },
+        isMatch: (u: string) => u.includes('/api/anidigital-proxy-iframe'),
+      });
+    }
+
     if (!nixplayAvailable) {
       list = list.filter(s => s.key !== "srv_nixplay");
     }
@@ -1546,7 +1586,7 @@ export function VideoPlayerModal({
     setIsLoading(true);
     setActiveIframeUrl(null); // Dispose previous frame before asynchronous lookup.
     // Para o MixDrop liberamos a skin imediatamente; para outros servidores aguardamos evento do stream real
-    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse" || isSaimoServerKey(serverKey));
+    setPlayerSkinReady(serverKey === "srv_mixdrop" || serverKey === "srv_streamtape" || serverKey === "srv_byse" || isSaimoServerKey(serverKey) || isAnidigitalServerKey(serverKey));
     healthPlaybackStartedRef.current = false;
     playbackConfirmedRef.current = false;
     metadataStartedRef.current = false;
@@ -3276,7 +3316,7 @@ export function VideoPlayerModal({
                   allow="autoplay *; encrypted-media *; picture-in-picture *; fullscreen *; screen-wake-lock; accelerometer; gyroscope"
                   referrerPolicy="strict-origin-when-cross-origin"
                   onLoad={() => {
-                    const skinSupported = selectedServerKey === 'srv_watchplay' || selectedServerKey === 'srv_vip' || selectedServerKey === 'srv_mixdrop' || selectedServerKey === 'srv_streamtape' || selectedServerKey === 'srv_byse' || isSaimoServerKey(selectedServerKey);
+                    const skinSupported = isSkinSupportedServerKey(selectedServerKey);
 
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);
