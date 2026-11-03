@@ -200,3 +200,18 @@ video::-webkit-media-controls-enclosure {
 :-webkit-full-screen { overflow: hidden !important; background-color: #000 !important; }
 :-ms-fullscreen { overflow: hidden !important; background-color: #000 !important; }
 
+
+/* ==========================================================================
+   App nativo / Android WebView (html.native-webview — classe setada no
+   index.html antes do primeiro paint)
+   Em WebViews Android com bug de rasterização de GPU, backdrop-filter
+   "derrete" e duplica elementos (na tela de login os botões do header
+   viram um gráfico fantasma laranja esticado). No app o blur é desligado
+   globalmente — painéis translúcidos seguem legíveis sem o blur.
+   ========================================================================== */
+html.native-webview *,
+html.native-webview *::before,
+html.native-webview *::after {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

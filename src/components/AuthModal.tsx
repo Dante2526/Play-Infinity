@@ -7,7 +7,7 @@ import { clearLocalUserData } from "../utils/safeStorage";
 import { reportAppError } from "./GlobalErrorModal";
 import { getFriendlyErrorMessage } from "../utils/errorTranslator";
 import { TurnstileWidget } from "./TurnstileWidget";
-import { Capacitor } from "@capacitor/core";
+import { isNativeAppOrWebView } from "../utils/isNativeAppOrWebView";
 import {
   getStoredReferralCode,
   resolveReferrerData,
@@ -33,14 +33,14 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   const [error, setError] = useState("");
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  // No app nativo (Capacitor) o WebView do Android bloqueia cookies de terceiros
-  // por padrão, o que deixa o desafio do Cloudflare Turnstile travado em
-  // "Verificando..." infinitamente e bloqueia o login. Como o app nativo é um
-  // cliente controlado (APK assinado, sem superfície de bot via navegador) e o
-  // token é uma trava exclusivamente client-side, a verificação só se aplica
-  // ao navegador. O WebView nativo continua protegido pelo rate limit do
+  // No app nativo (Capacitor) e em WebViews Android o desafio do Cloudflare
+  // Turnstile não completa: o WebView bloqueia cookies de terceiros por
+  // padrão e o widget fica travado em "Verificando..." infinitamente,
+  // bloqueando o login. Como o token é uma trava exclusivamente client-side
+  // e o app nativo é um cliente controlado (APK assinado), a verificação só
+  // se aplica ao navegador. O app segue protegido pelo rate limit do
   // Firebase Auth (auth/too-many-requests).
-  const isNativeApp = Capacitor.isNativePlatform();
+  const isNativeApp = isNativeAppOrWebView();
 
   if (!isOpen) return null;
 
@@ -217,9 +217,9 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
   };
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-md p-3 sm:p-6 overflow-y-auto">
+    <div className={`fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto ${isNativeApp ? "bg-black/95" : "bg-black/60 backdrop-blur-md"}`}>
       <div
-        className="bg-[#1c1c1e]/80 backdrop-blur-3xl border border-white/10 w-full max-w-sm sm:max-w-md relative shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-fade-in my-auto max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto overflow-x-hidden"
+        className={`${isNativeApp ? "bg-[#1c1c1e]/95" : "bg-[#1c1c1e]/80 backdrop-blur-3xl"} border border-white/10 w-full max-w-sm sm:max-w-md relative shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-fade-in my-auto max-h-[calc(100vh-1.5rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto overflow-x-hidden`}
         style={{ borderRadius: '28px' }}
       >
         {isDismissible && (

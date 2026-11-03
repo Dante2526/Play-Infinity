@@ -36,6 +36,18 @@
           };
         }
 
+        // App nativo (Capacitor) / Android WebView: marca o <html> ANTES do
+        // primeiro paint para o CSS desligar backdrop-filter — em WebViews com
+        // bug de rasterização de GPU o blur "derrete" elementos (na tela de
+        // login os botões do header viram um gráfico fantasma duplicado).
+        try {
+          var isWebviewEnv = !!(window.Capacitor && window.androidBridge) ||
+                              /;\s*wv\)/.test((navigator.userAgent || ''));
+          if (isWebviewEnv) {
+            document.documentElement.classList.add('native-webview');
+          }
+        } catch (e) {}
+
         // Ativação do DevTools Mobile (Eruda) via barra de endereços (?debug=true, ?dev=true, ?eruda=true, ?devtools=true)
         try {
           var search = window.location.search.toLowerCase();
