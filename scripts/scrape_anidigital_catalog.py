@@ -267,8 +267,14 @@ def phase_d(series, movies, series_b, tmdb_map, out_path):
         if not tmdb_id: continue
         base, slug = b["base"], b["slug"]
         audio = s["audio"]  # "leg" ou "dub"
+        # Largura do zero-padding do número do episódio extraída do m3u8 REAL
+        # da série (ex: "01.mp4" → 2). O CDN 404 se o padding bater errado
+        # ("1.mp4" → 404, "01.mp4" → 200). zfill não trunca: ep 100 com
+        # width 2 → "100" (correto).
+        mw = re.search(r"/(\d+)(?:fhd)?\.mp4/index\.m3u8$", b.get("m3u8_sample", ""))
+        ep_width = len(mw.group(1)) if mw else 2
         for ep_num in s["eps"]:
-            stream_url = f"{base}/{ep_num}.mp4/index.m3u8"
+            stream_url = f"{base}/{str(ep_num).zfill(ep_width)}.mp4/index.m3u8"
             mkey = (int(tmdb_id), ep_num)
             row = ep_merge.get(mkey)
             if not row:
