@@ -8,6 +8,7 @@ import {
   resolveEncontreiMovie,
   resolveVizerMovie,
 } from "./encontreiLookup";
+import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { isPrivateOrLocalHost } from "../utils/helpers";
 
 export const doodstreamRouter = Router();
@@ -313,20 +314,9 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req: Request, res: R
     }
 
     if (!fileId) {
-      return res.status(404).send(`
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body>
-          <div style="text-align:center;"><h2>Conteúdo Indisponível</h2><p>Este título não está disponível no servidor DoodStream HD.</p></div>
-          <script>
-            try {
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Conteúdo não encontrado no catálogo" }, "*");
-              }
-            } catch(e) {}
-          </script>
-        </body></html>
-      `);
+      return res.status(404).send(buildSilentPlayerErrorPage({
+        reason: "DoodStream: Conteúdo não encontrado no catálogo",
+      }));
     }
 
     let resolved = await resolveDoodStreamToken(fileId);
@@ -353,20 +343,9 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req: Request, res: R
     }
 
     if (!resolved || !resolved.alive) {
-      return res.status(502).send(`
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body>
-          <div style="text-align:center;"><h2>Vídeo Expirado</h2><p>O arquivo no DoodStream foi removido ou está temporariamente offline.</p></div>
-          <script>
-            try {
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Vídeo expirado ou removido" }, "*");
-              }
-            } catch(e) {}
-          </script>
-        </body></html>
-      `);
+      return res.status(502).send(buildSilentPlayerErrorPage({
+        reason: "DoodStream: Vídeo expirado ou removido",
+      }));
     }
 
     // Se temos link direto MP4, usamos o player <video> nativo de alta performance
@@ -497,22 +476,13 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req: Request, res: R
 
     // Se não há stream direto MP4, o embed externo do DoodStream é bloqueado por Cloudflare SAMEORIGIN.
     // Dispara WATCHPLAY_ERROR imediatamente (<50ms) para evitar tela branca e permitir fallback instantâneo.
-    return res.status(502).send(`<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-<body>
-  <div style="text-align:center;"><h2>DoodStream Indisponível</h2><p>Servidor DoodStream indisponível ou bloqueado por proteção de origem.</p></div>
-  <script>
-    try {
-      if (window.parent !== window) {
-        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "DoodStream: Proteção de origem ou vídeo indisponível" }, "*");
-      }
-    } catch(e) {}
-  </script>
-</body>
-</html>`);
+    return res.status(502).send(buildSilentPlayerErrorPage({
+      reason: "DoodStream: Proteção de origem ou vídeo indisponível",
+    }));
   } catch (err: any) {
     console.error("[DoodStream Proxy Iframe Error]:", err?.message || err);
-    return res.status(500).send("Erro interno ao carregar DoodStream HD");
+    return res.status(500).send(buildSilentPlayerErrorPage({
+      reason: "DoodStream: Erro interno ao carregar o player",
+    }));
   }
 });

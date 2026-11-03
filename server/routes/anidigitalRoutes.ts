@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
+import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import {
   ANIDIGITAL_BASE,
   buildAnidigitalWrapperHtml,
@@ -148,20 +149,9 @@ anidigitalRouter.get("/api/anidigital-proxy-iframe", async (req: Request, res: R
   const resolution = await resolveAnidigitalStream({ name, type, season, episode, audio, tmdbId });
 
   if (!resolution.m3u8) {
-    return res.status(404).send(`
-      <!DOCTYPE html>
-      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-      <body>
-        <div style="text-align:center;"><h2>Conteúdo Indisponível</h2><p>Título não encontrado no catálogo AnimesDigital.</p></div>
-        <script>
-          try {
-            if (window.parent !== window) {
-              window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "AnimesDigital: título não encontrado na busca" }, "*");
-            }
-          } catch(e) {}
-        </script>
-      </body></html>
-    `);
+    return res.status(404).send(buildSilentPlayerErrorPage({
+      reason: "AnimesDigital: título não encontrado na busca",
+    }));
   }
 
   const u = encodeURIComponent(resolution.m3u8);

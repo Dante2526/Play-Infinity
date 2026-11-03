@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
 import { resolveByseStream, allowedByseMediaUrl, buildByseWrapperHtml, rewriteM3u8, BYSE_USER_AGENT } from '../services/byse/core';
 import { getByseTickets } from '../services/byse/tickets';
+import { buildSilentPlayerErrorPage } from '../services/playerErrorPage';
 import { getByseSources } from './encontreiLookup';
 export function createByseRouter(deps = { resolve: resolveByseStream, sources: getByseSources, tickets: getByseTickets, fetch: (...args: Parameters<typeof fetch>) => fetch(...args) }) {
   const router = Router();
@@ -72,7 +73,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
       res.type('html').send(html);
     } catch {
       if (req.path === '/api/byse-resolve') return res.status(502).json({success:false,error:'BYSE indisponível para este conteúdo.'});
-      res.status(502).type('html').send('<html><body style="background:#000;color:white"><p>BYSE temporariamente indisponível.</p><script>window.parent.postMessage({type:"WATCHPLAY_ERROR",reason:"BYSE indisponível",byseExhausted:true},"*")</script></body></html>');
+      res.status(502).type('html').send(buildSilentPlayerErrorPage({ reason: "BYSE indisponível", exhaustedKey: "byseExhausted" }));
     } finally { clearTimeout(timer); }
   });
   router.get('/api/byse-stream', async (req,res) => {

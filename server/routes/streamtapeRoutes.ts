@@ -3,6 +3,7 @@ import { proxyStreamtapeMedia } from "../services/streamtapeMediaProxy";
 import { createStreamtapeRecovery } from "../services/streamtapeRecovery";
 import { createStreamtapeResolver } from "../services/streamtapeResolver";
 import { createStreamtapeSourcePool } from "../services/streamtapeSources";
+import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { getStreamtapeSources } from "./encontreiLookup";
 
 export const streamtapeRouter = Router();
@@ -124,20 +125,13 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     }
 
     if (!directUrl) {
-      return res.status(502).send(`
-        <!DOCTYPE html>
-        <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-        <body>
-          <div style="text-align:center;"><h2>Vídeo Indisponível</h2><p>Não foi possível iniciar este vídeo no StreamTape.</p></div>
-          <script>
-            try {
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Não foi possível iniciar este vídeo", streamtapeExhausted: true }, "*");
-              }
-            } catch(e) {}
-          </script>
-        </body></html>
-      `);
+      // Falha de resolução é sinal INTERNO (postMessage + fallback silencioso),
+      // nunca UI visível: a página renderizada é preta e muda. O usuário vê o
+      // spinner do modal enquanto o próximo servidor é acionado.
+      return res.status(502).send(buildSilentPlayerErrorPage({
+        reason: "StreamTape: Não foi possível iniciar este vídeo",
+        exhaustedKey: "streamtapeExhausted",
+      }));
     }
 
     // Stream URL usando nosso proxy que garante headers, CORS e renovação via Auto-Healer
@@ -259,7 +253,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         context: ${safeScriptJson(identity)},
         getTime: function() { return v.currentTime || initialSeek || 0; },
         onFatal: function(reason) {
-          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, streamtapeExhausted: true }, "*"); } catch(e) {}
+          try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, streamtapeExhausted: true, playerFrameUrl: window.location.href }, "*"); } catch(e) {}
         }
       });
 
@@ -313,20 +307,9 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     res.send(html);
   } catch (err: any) {
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-      <body>
-        <div style="text-align:center;"><h2>Erro no StreamTape</h2><p>Erro interno ao renderizar reprodutor.</p></div>
-        <script>
-          try {
-            if (window.parent !== window) {
-              window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "StreamTape: Erro interno no servidor" }, "*");
-            }
-          } catch(e) {}
-        </script>
-      </body></html>
-    `);
+    res.status(500).send(buildSilentPlayerErrorPage({
+      reason: "StreamTape: Erro interno no servidor",
+    }));
   }
 });
 

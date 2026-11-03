@@ -1,4 +1,5 @@
 import { solveBysePowAsync } from "./pow";
+import { buildSilentPlayerErrorPage } from "../playerErrorPage";
 
 /**
 
@@ -1151,7 +1152,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
       fatalReported = true;
 
-      try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason }, "*"); } catch (e) {}
+      try { window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, playerFrameUrl: window.location.href }, "*"); } catch (e) {}
 
     }
 
@@ -1291,29 +1292,11 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
 export function notFoundHtml(msg: string): string {
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+  // Sinal interno invisível: nunca expõe "Byse Indisponível" no iframe — o
 
-  body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;text-align:center}
+  // modal mantém o spinner de carregamento e aciona o fallback silencioso.
 
-  </style></head><body>
-
-  <div><h2>Byse Indisponível</h2><p>${msg}</p></div>
-
-  <script>
-
-    try {
-
-      if (window.parent !== window) {
-
-        window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "Byse: ${msg.replace(/"/g, "'")}" }, "*");
-
-      }
-
-    } catch(e) {}
-
-  <\/script>
-
-  </body></html>`;
+  return buildSilentPlayerErrorPage({ reason: "Byse: " + msg.replace(/"/g, "'") });
 
 }
 

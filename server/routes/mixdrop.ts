@@ -6,6 +6,7 @@ import { isPrivateOrLocalIp, isPrivateOrLocalHost, validateSafeUrl } from "../ut
 import { proxyMixdropVideo, isMixdropMediaUrl } from "../services/mixdropProxy";
 import { createMixdropRecovery } from "../services/mixdropRecovery";
 import { createMediaSourcePool } from "../services/mediaSourcePool";
+import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { readHealthPrefix } from "../services/playbackHealth";
 import { getMixdropSources } from "./encontreiLookup";
 
@@ -119,7 +120,10 @@ const router = Router();
         finally { clearTimeout(timer); }
         if (!selected) {
           if (req.query.format === 'json') return res.status(502).json({ success: false, error: 'Nenhuma fonte MixDrop verificada para este conteúdo.' });
-          return res.status(502).send('<html><body><script>window.parent.postMessage({type:"WATCHPLAY_ERROR",reason:"MixDrop: fontes indisponíveis",mixdropExhausted:true},"*")</script></body></html>');
+          return res.status(502).send(buildSilentPlayerErrorPage({
+            reason: "MixDrop: fontes indisponíveis",
+            exhaustedKey: "mixdropExhausted",
+          }));
         }
         rawUrl = 'https://mxdrop.top/e/' + selected.fileId;
       }
@@ -139,21 +143,9 @@ const router = Router();
       }
 
       const sendFallbackHtml = (statusCode: number, message: string) => {
-        return res.status(statusCode).send(`
-          <!DOCTYPE html>
-          <html>
-          <head><meta charset="utf-8"></head>
-          <body style="background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;text-align:center;">
-            <script>
-              console.error("[MixDrop] Erro:", "${message}");
-              if (window.parent !== window) {
-                window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: "${message}" }, "*");
-              }
-            </script>
-            <div>${message}</div>
-          </body>
-          </html>
-        `);
+        // Sinal interno invisível: nunca expõe texto/mensagem crua no iframe —
+        // o modal mantém o spinner e aciona o fallback silencioso.
+        return res.status(statusCode).send(buildSilentPlayerErrorPage({ reason: message }));
       };
 
       const fileMatch = safeCheck.parsedUrl.pathname.match(/\/(?:f|e)\/([a-zA-Z0-9_-]+)/);
@@ -316,7 +308,7 @@ const router = Router();
                 sourceUrl: videoUrl,
                 reloadAfterMs: ${context ? 4000 : 6000}, stallTimeoutMs: ${context ? 10000 : 20000}, retryWindowMs: ${context ? 6000 : 20000},
                 onFatal: function(reason) {
-                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, mixdropFileId: ${scriptJson(fileId)} }, "*");
+                  window.parent.postMessage({ type: "WATCHPLAY_ERROR", reason: reason, mixdropFileId: ${scriptJson(fileId)}, playerFrameUrl: window.location.href }, "*");
                 }
               });
               window.addEventListener("pagehide", function() { bufferRecovery.destroy(); });

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { Readable } from "node:stream";
 import { getSaimoStore } from "../services/saimoSqliteStore";
+import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 
@@ -294,20 +295,10 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
   const item = isTv ? store.findEpisode(id, season, episode) : store.findMovie(id);
 
   if (!item) {
-    return res.status(404).send(`
-      <!DOCTYPE html>
-      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-      <body>
-        <div style="text-align:center;"><h2>Conteúdo Indisponível</h2><p>Título não encontrado no catálogo Saimo Play.</p></div>
-        <script>
-          try {
-            if (window.parent !== window) {
-              window.parent.postMessage({ type: "WATCHPLAY_ERROR", saimoExhausted: true, reason: "Saimo Play: Conteúdo não encontrado no catálogo" }, "*");
-            }
-          } catch(e) {}
-        </script>
-      </body></html>
-    `);
+    return res.status(404).send(buildSilentPlayerErrorPage({
+      reason: "Saimo Play: Conteúdo não encontrado no catálogo",
+      exhaustedKey: "saimoExhausted",
+    }));
   }
 
   let candidates: string[] = audio === "leg" ? (item.servers?.saimo_leg || []) : (item.servers?.saimo_dub || []);
@@ -316,20 +307,10 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
   }
   const allowed = candidates.filter(isSaimoUrlAllowed);
   if (!allowed.length) {
-    return res.status(404).send(`
-      <!DOCTYPE html>
-      <html><head><meta charset="utf-8"><style>body{background:#000;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}</style></head>
-      <body>
-        <div style="text-align:center;"><h2>Fontes Indisponíveis</h2><p>Servidores Saimo desativados para este título.</p></div>
-        <script>
-          try {
-            if (window.parent !== window) {
-              window.parent.postMessage({ type: "WATCHPLAY_ERROR", saimoExhausted: true, reason: "Saimo Play: Todas as fontes desativadas" }, "*");
-            }
-          } catch(e) {}
-        </script>
-      </body></html>
-    `);
+    return res.status(404).send(buildSilentPlayerErrorPage({
+      reason: "Saimo Play: Todas as fontes desativadas",
+      exhaustedKey: "saimoExhausted",
+    }));
   }
 
   // ── Protocolo do playback ──

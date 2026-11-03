@@ -428,6 +428,14 @@ export function VideoPlayerModal({
   const [serverHealth, setServerHealth] = useState<{ identity: string; servers: ServerHealthMap }>({ identity: '', servers: {} });
   // Controle de visibilidade do iframe: oculta o iframe nativo (com botões feios/gigantes) até o vídeo começar a rodar
   const [iframeVisible, setIframeVisible] = useState<boolean>(false);
+  // Frame atual declarou morte (WATCHPLAY_ERROR interno): safety timers de
+  // revelação (4s/4.5s) nunca devem expor um frame morto — a falha é tratada
+  // pelo fallback silencioso e o usuário permanece no spinner de carregamento.
+  const frameFatalRef = useRef<boolean>(false);
+  // URL commitada do iframe atual (sincronizada por effect). Distingue o frame
+  // recém-montado (playerFrameUrl do erro === URL commitada) do iframe antigo
+  // em descarte (playerFrameUrl diverge) dentro da janela de transição.
+  const activeIframeUrlRef = useRef<string | null>(null);
   // Controle de Picture-in-Picture nativo do Android
   const [isNativePiP, setIsNativePiP] = useState<boolean>(false);
   const wasExpandedBeforePiPRef = useRef<boolean>(false);
@@ -1759,16 +1767,27 @@ export function VideoPlayerModal({
     return () => clearTimeout(timer);
   }, [activeIframeUrl, selectedServerKey, error, isAnimeMedia, handleSilentFallback]);
 
+  // Um novo iframe commitado começa limpo: sincroniza a URL commitada (usada
+  // para aceitar erros do frame NOVO mesmo dentro da janela de transição) e
+  // limpa o sinal de morte — o frame anterior moribundo não contamina o novo.
+  useEffect(() => {
+    activeIframeUrlRef.current = activeIframeUrl;
+    frameFatalRef.current = false;
+  }, [activeIframeUrl]);
+
   // Watchdog de segurança do Overlay de Carregamento e Iframe:
   // Em Smart TVs (TCL, Samsung, LG) ou navegadores com política estrita de autoplay, o navegador
   // bloqueia o início automático com som e mantém o vídeo pausado aguardando interação.
   // Após 4.5 segundos com o iframe montado, garantimos que o overlay preto ("Carregando Vídeo...")
   // saia e o iframe fique 100% visível, permitindo ao usuário iniciar via controle remoto.
+  // EXCEÇÃO: frame que declarou morte (WATCHPLAY_ERROR interno) nunca é revelado —
+  // o fallback silencioso cuida e o usuário permanece no spinner.
   useEffect(() => {
     if (!activeIframeUrl || error) return;
     const loadingSafetyTimer = setTimeout(() => {
-      if (playbackConfirmedRef.current) setIsLoading(false);
       setPlayerSkinReady(true);
+      if (frameFatalRef.current) return;
+      if (playbackConfirmedRef.current) setIsLoading(false);
       setIframeVisible(true);
     }, 4500);
     return () => clearTimeout(loadingSafetyTimer);
@@ -2214,9 +2233,23 @@ export function VideoPlayerModal({
         // servidor sem necessidade (ex.: streamtape→byse com fonte viva).
         // Erros REAIS do iframe novo ficam a cargo do watchdog de startup
         // (providerTimeout/startupClock), que dispara o fallback sozinho.
+        //
+        // EXCEÇÃO ao guard: erros que carregam playerFrameUrl idêntico à URL
+        // commitada provêm do frame recém-montado (o antigo tem URL divergente
+        // — cache-buster/troca de fileId sempre muda) e são processados na
+        // hora: sem isso, um StreamTape/Byse que falha < 3s após a troca só
+        // seria resgatado pelo watchdog de startup (45–95s de tela parada).
+        frameFatalRef.current = true;
         const msSinceTransition = Date.now() - transitionEpochRef.current;
         if (msSinceTransition < 3000) {
-          if (!(isSaimoServerKey(selectedServerKey) && event.data?.saimoExhausted === true)) {
+          let fromCommittedFrame = false;
+          try {
+            const reportedFrameUrl = typeof event.data.playerFrameUrl === "string" ? event.data.playerFrameUrl : "";
+            const committedUrl = activeIframeUrlRef.current || "";
+            fromCommittedFrame = !!reportedFrameUrl && !!committedUrl &&
+              reportedFrameUrl === new URL(committedUrl, window.location.origin).href;
+          } catch { fromCommittedFrame = false; }
+          if (!(fromCommittedFrame || (isSaimoServerKey(selectedServerKey) && event.data?.saimoExhausted === true))) {
             console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
             return;
           }
@@ -3328,15 +3361,21 @@ export function VideoPlayerModal({
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);
                       // Safety: se o player demorar para emitir confirmação de playback (ex: Smart TVs TCL),
-                      // libera o spinner em 4s e revela o iframe para permitir início manual
+                      // libera o spinner em 4s e revela o iframe para permitir início manual.
+                      // EXCEÇÃO: frame que declarou morte (WATCHPLAY_ERROR interno — página de erro
+                      // silenciosa do provedor) não é revelado: o fallback cuida e o usuário não vê
+                      // erro bruto de servidor nenhum.
                       setTimeout(() => {
+                        if (frameFatalRef.current) return;
                         setIsLoading(false);
                         setIframeVisible(true);
                       }, 4000);
                     } else {
                       setTimeout(() => setPlayerSkinReady(true), 500);
-                      setIsLoading(false);
-                      setIframeVisible(true);
+                      if (!frameFatalRef.current) {
+                        setIsLoading(false);
+                        setIframeVisible(true);
+                      }
                     }
                   }}
                   onError={() => handleSilentFallback()}

@@ -109,7 +109,13 @@ test('HTTP selection refreshes replaced file IDs and reports exhaustion to the p
   const response = await nativeFetch(base + '/api/md-stream?id=213375&s=1&e=4&format=json');
   assert.equal((await response.json()).fileId, 'replacement');
   global.__mixFreshSources = []; global.__mixSources = [];
-  const html = await (await nativeFetch(base + '/api/md-stream?id=213375&s=1&e=5')).text(); assert.match(html, /mixdropExhausted:true/);
+  const html = await (await nativeFetch(base + '/api/md-stream?id=213375&s=1&e=5')).text();
+  // Contrato da página de erro silenciosa: sinal interno (mixdropExhausted +
+  // playerFrameUrl + reenvios) sem NENHUM texto visível ao usuário.
+  assert.match(html, /"mixdropExhausted":\s*true/);
+  assert.match(html, /payload\.playerFrameUrl = window\.location\.href/);
+  assert.ok((html.match(/setTimeout\(report/g) || []).length >= 3, 'sinal é reenviado para vencer a janela de transição');
+  assert.doesNotMatch(html, /<h[1-6]>|<p[ >]/i);
 });
 test('identical MixDrop IDs in both catalogues do not create a fake second copy', async () => {
   global.__mixSources = [candidate('same'), candidate('same', 'vizer')]; let requests = 0; const upstream = providerFetch();

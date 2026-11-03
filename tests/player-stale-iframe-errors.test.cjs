@@ -101,3 +101,60 @@ test('VideoPlayerModal: cadeia de confiança original intacta (isTrustedPlayerEv
     'comentário/log do guard documenta a limitação da validação de origem'
   );
 });
+
+// =====================================================================
+// Guards da página de erro INVISÍVEL (print de 03/11/2026: "Vídeo
+// Indisponível / Não foi possível iniciar este vídeo no StreamTape"
+// exposto ao usuário por cima da skin). A falha do provedor vira sinal
+// interno; o frame morto nunca é revelado e o fallback não fica refém da
+// janela de transição quando o erro provém do frame recém-commitado.
+// =====================================================================
+
+test('VideoPlayerModal: frame que declara morte é marcado ANTES do guard de transição (safety timers nunca o revelam)', () => {
+  const branch = errorBranch();
+  const fatalIdx = branch.indexOf('frameFatalRef.current = true');
+  const guardIdx = branch.indexOf('const msSinceTransition');
+  assert.ok(fatalIdx !== -1, 'branch de erro marca frameFatalRef');
+  assert.ok(fatalIdx < guardIdx, 'marcação vem antes do guard: frame morto não pode ser revelado nem quando o erro é ignorado');
+});
+
+test('VideoPlayerModal: erro do frame NOVO (playerFrameUrl === URL commitada) passa pela janela de transição', () => {
+  const branch = errorBranch();
+  assert.ok(
+    /fromCommittedFrame = !!reportedFrameUrl && !!committedUrl/.test(branch) &&
+    /reportedFrameUrl === new URL\(committedUrl, window\.location\.origin\)\.href/.test(branch),
+    'bypass compara playerFrameUrl do erro com a URL commitada do iframe atual'
+  );
+  assert.ok(
+    /if \(!\(fromCommittedFrame \|\| \(isSaimoServerKey/.test(branch),
+    'iframe antigo em descarte (URL divergente) segue ignorado — contrato original preservado'
+  );
+});
+
+test('VideoPlayerModal: URL commitada e flag de morte resetam a cada novo iframe', () => {
+  assert.match(
+    content,
+    /useEffect\(\(\) => \{\s*activeIframeUrlRef\.current = activeIframeUrl;\s*frameFatalRef\.current = false;\s*\}, \[activeIframeUrl\]\);/,
+    'frame anterior moribundo não contamina o frame novo',
+  );
+});
+
+test('VideoPlayerModal: safety timers de revelação (4s onLoad e 4.5s overlay) respeitam frameFatalRef', () => {
+  // 4.5s — watchdog do overlay de carregamento
+  const overlayIdx = content.indexOf('const loadingSafetyTimer = setTimeout(() => {');
+  assert.ok(overlayIdx !== -1, 'watchdog do overlay existe');
+  const overlayBlock = content.slice(overlayIdx, overlayIdx + 400);
+  assert.ok(
+    /if \(frameFatalRef\.current\) return;/.test(overlayBlock) &&
+    overlayBlock.indexOf('frameFatalRef') < overlayBlock.indexOf('setIframeVisible(true)'),
+    'overlay 4.5s: frame morto não é revelado e o spinner permanece',
+  );
+  // 4s — safety do onLoad do iframe (Smart TVs)
+  const onLoadIdx = content.indexOf('onLoad={() => {');
+  assert.ok(onLoadIdx !== -1, 'onLoad do iframe existe');
+  const onLoadBlock = content.slice(onLoadIdx, onLoadIdx + 1200);
+  assert.ok(
+    (onLoadBlock.match(/if \(frameFatalRef\.current\) return;/g) || []).length >= 1,
+    'safety 4s do onLoad: frame que declarou morte nunca é revelado',
+  );
+});
