@@ -153,10 +153,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Tá na Área / Troca de Passes & Jogos Ao Vivo',
     quality: '720p',
     description: 'O canal campeão com debates, cobertura ao vivo, vôlei, basquete e futebol.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=SporTV',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F6d42cfb0a7106e953bc582f1b9a6763a%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=541140cf0017f08ae75d6142e4e541836f0e512391906fefaf7001d997d49a72',
         isProxy: false
       }
     ]
@@ -209,10 +210,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'SportsCenter / Premier League & Libertadores',
     quality: '720p',
     description: 'O líder mundial em esportes com Premier League, LaLiga, NFL, NBA e debates.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=ESPN',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fedfeb9b7a050b21ff86fd4e14d4df830%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=21dbc1c8413f18e9816858459291570bdb5ccddb5d3cd07afefff569a369f3a7',
         isProxy: false
       }
     ]
@@ -332,15 +334,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Programa Silvio Santos / Novelas & UEFA Champions League',
     quality: '720p',
     description: 'A TV mais querida do Brasil com auditório, novelas e grandes torneios esportivos.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=SBT',
-        isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: 'https://cdn.jmvstream.com/w/LVW-10801/LVW10801_Xvg4R0u57n/playlist.m3u8',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F8f246fdcdd11e03e7750ed4f8e050161.s25-cloudfront-net.lat%2Fstream%2F490cc63080757904d5fd8a95fd1f34f6%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=ab71a48d6e34750c0b7b1cc7d7359800e0e9e02d8318657a5e105cdd6f30addb',
         isProxy: false
       }
     ]
@@ -353,21 +351,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Jornal da Record / Novelas Bíblicas & Paulistão / Brasileirão',
     quality: '720p',
     description: 'Jornalismo de credibilidade, reality shows e os maiores campeonatos de futebol.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Record',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fee45560b3bf960ee39cc94fd34fa03d4%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=eadfd6fc1e40ae881a1387e0aa58d98afd2ffe12413a9b950b9b246e0030efb4',
         isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3',
-        url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -379,16 +368,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Jogo Aberto / Os Donos da Bola / Fórmula 1',
     quality: '720p',
     description: 'O canal do esporte com o Craque Neto, Renata Fan e as melhores coberturas.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Band',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F8f246fdcdd11e03e7750ed4f8e050161.s25-cloudfront-net.lat%2Fstream%2F41f3ad648b8590ca219cf5e28b908b0b%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=fa57aa03c3f8f57eeb0decff8ef02f802ec8fc05abc200fc704e253075672c95',
         isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: 'https://amg00716-globo-amg00716c1-tcl-br-9495.playouts.now.amagi.tv/playlist.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -544,10 +529,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'NBA, MLB e Ligas Internacionais',
     quality: '720p',
     description: 'ESPN 2 com transmissões de esportes americanos e internacionais.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=ESPN%202',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F61c168a5c8e93c396f48e9c0d5d255c5%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=b022c523067fd4aff7588266d47518d41f6349f58785663ae9af04e604a869e5',
         isProxy: false
       }
     ]
@@ -576,16 +562,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'NFL, NBA e Ligas Americanas',
     quality: '720p',
     description: 'ESPN 4 com cobertura dos principais campeonatos americanos.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=ESPN%204',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F510d20496dc6bb017304d125c737f16c%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=24ca543027e82ca53f1c45a594531dba7b8a5c762616e7aff235b99fa7cdeb94',
         isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: 'http://181.78.197.59:8000/play/a07n/index.m3u8',
-        isProxy: true
       }
     ]
   },
@@ -652,10 +634,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Lutas, MMA, Boxe, Eventos e Pesagens',
     quality: '720p',
     description: 'O maior canal de lutas e artes marciais do Brasil.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Combate',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F60436cfbd0a47c5ffcb9074298b97fbc%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=2f24ac5393d4427a287861acdd7ad67a2818bfa7c7bad3461c11d7039f0517d1',
         isProxy: false
       }
     ]
@@ -668,9 +651,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Documentários, Ciência e Exploração',
     quality: '720p',
     description: 'O canal pioneiro em documentários sobre ciência, tecnologia, história e natureza.',
+    lockServers: true,
     servers: [
-      { name: 'Servidor 1', url: '/api/external-channel?name=Discovery%20Channel', isProxy: false },
-      { name: 'Servidor 2', url: '/api/external-channel?name=Discovery%20World', isProxy: false }
+      {
+        name: 'Servidor 1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fe28bf0fed83f4889c7d23224dbecdfa1%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=eb4ae0b1587b7292e3c78ae29f615b754236c1c28756ad49a1239cf662edf5c0',
+        isProxy: false
+      }
     ]
   },
   {
@@ -681,9 +668,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Programas Históricos e Realities',
     quality: '720p',
     description: 'A história do mundo, grandes eventos e teorias fascinantes.',
+    lockServers: true,
     servers: [
-      { name: 'Servidor 1', url: '/api/external-channel?name=History', isProxy: false },
-      { name: 'Servidor 2', url: '/api/external-channel?name=History%202', isProxy: false }
+      {
+        name: 'Servidor 1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F81cd1c0411b55bbfbd05c17d4de8ed1b%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=34b525e6d2cf48a687f9e9d7f2c56227dd481d7f3806316dc40952819747a43e',
+        isProxy: false
+      }
     ]
   },
   {
@@ -694,8 +685,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Vida Selvagem e Natureza',
     quality: '720p',
     description: 'Programas focados na relação entre humanos e animais e na vida selvagem.',
+    lockServers: true,
     servers: [
-      { name: 'Servidor 1', url: '/api/external-channel?name=Animal%20Planet', isProxy: false }
+      {
+        name: 'Servidor 1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fb9d136b917437d532bd57a8e05d536de%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=067be0661e735b670496328003e21adb4f41f97a149d8c6123a095a923a99426',
+        isProxy: false
+      }
     ]
   },
   {
@@ -706,8 +702,13 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Crimes Reais e Investigações',
     quality: '720p',
     description: 'Mistérios da vida real, crimes chocantes e grandes investigações forenses.',
+    lockServers: true,
     servers: [
-      { name: 'Servidor 1', url: '/api/external-channel?name=Discovery%20ID', isProxy: false }
+      {
+        name: 'Servidor 1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F18b4fefcddfce3fd86d84079bfca5ee1%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=dab4a1285bf946dc1a5c342f69427124af2a9877c2666d59dbac3891de9d95ae',
+        isProxy: false
+      }
     ]
   }
 ];

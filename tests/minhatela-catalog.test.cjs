@@ -353,7 +353,7 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
 
   // Premiere Clubes (id premiere-1) está travado (lockServers:true) na fonte
   // curada embedTV — NÃO recebe embeds do MinhaTela e fica com 1 servidor
-  // (proxy assinado). SporTV (abaixo) continua cobrindo o merge MinhaTela.
+  // (proxy assinado). SporTV (id sportv) também foi travado na mesma fonte.
   const premiere = channels.find(c => c.id === 'premiere-1');
   assert.ok(premiere, 'premiere-1 presente');
   assert.equal(premiere.name, 'Premiere Clubes');
@@ -361,11 +361,18 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
   assert.equal(premiere.servers.filter(s => s.isEmbed).length, 0); // sem embeds anexados
   assert.equal(premiere.servers.length, 1); // travado na fonte curada
   assert.ok(premiere.servers[0]?.url.startsWith('/api/live-stream-proxy?url='), 'servidor único é o proxy assinado embedTV');
-  assert.equal(premiere.servers[0]?.name, 'Servidor 1');
 
-  // SporTV HD também
   const sportv = channels.find(c => c.id === 'sportv');
-  assert.equal(sportv.servers.filter(s => s.isEmbed).length, 2);
+  assert.equal(sportv.lockServers, true);
+  assert.equal(sportv.servers.filter(s => s.isEmbed).length, 0); // travado, sem embeds
+
+  // CazéTV (id cazetv) NÃO está travado (fonte embedTV morta em 03/11/2026,
+  // 404 — ficou no resolver Saimo) → continua recebendo embeds do MinhaTela.
+  // Cobertura do merge "anexa fontes embed" para canais não-locked.
+  const cazetv = channels.find(c => c.id === 'cazetv');
+  assert.ok(cazetv, 'cazetv presente');
+  assert.ok(!cazetv.lockServers);
+  assert.ok(cazetv.servers.filter(s => s.isEmbed).length >= 1, 'cazetv recebe embeds do MinhaTela');
 
   // Canal exclusivo novo entrou no catálogo público
   const paramount = channels.find(c => c.id === 'mt-paramount-1');
