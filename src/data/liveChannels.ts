@@ -185,10 +185,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Automobilismo, Tênis e Ligas Internacionais',
     quality: '720p',
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
+    // Fonte única curada: embedTV (mesmo operador/host do Premiere Clubes),
+    // Fonte 2 do catalogo saimo-tv para SporTV 3 — mesma cadeia: playlist HLS
+    // live disfarçada de error.txt em s25-cloudfront-net.lat, segmentos .png
+    // (MPEG-TS) em lb02 sem CORS → proxy. Referer https://w7.embedtv.cc/ +
+    // UA Chrome/126 exigidos pelo WAF do Cloudflare. Sig = HMAC-SHA256 do
+    // PROXY_SECRET (determinístico, não expira; regerar com
+    // scripts/vps_sign_premiere_fonte2.py <url> se rotacionado).
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=SporTV%203',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fe7e4de42b3bcdff4ea97933dcadf207f%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=5f07ea9f7348bee5516de7c98cca37a05642cb12f7907d2a8bbf5ba0ae1e5249',
         isProxy: false
       }
     ]
