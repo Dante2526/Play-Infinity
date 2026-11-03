@@ -187,7 +187,9 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
       }
       await reader.cancel().catch(() => {});
       const ms = Date.now() - start;
-      if (size < 4096 || ms < 20) return null;
+      // Threshold conservador: páginas HTML comprimidas (br/gzip) chegam em
+      // poucos ms — leituras instantâneas são ruído, não throughput real.
+      if (size < 16384 || ms < 25) return null;
       return Math.round((size / 1024) / (ms / 1000));
     } catch {
       return null;
@@ -214,7 +216,7 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
       }
       await reader.cancel().catch(() => {});
       const ms = Date.now() - start;
-      const speedKbps = size >= 4096 && ms >= 20 ? Math.round((size / 1024) / (ms / 1000)) : null;
+      const speedKbps = size >= 16384 && ms >= 25 ? Math.round((size / 1024) / (ms / 1000)) : null;
       return { text: Buffer.concat(chunks).toString("utf8"), speedKbps };
     } catch {
       return { text: "", speedKbps: null };
@@ -396,10 +398,14 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
   };
 
 
-  const staticTargets: Array<{ name: string; url: string; type: string; category: "server" | "api" }> = [
+  const staticTargets: Array<{ name: string; url: string; type: string; category: "server" | "api"; accept403?: boolean; userAgent?: string }> = [
     { name: "MixDrop", url: "https://mxdrop.top", type: "html", category: "server" },
     { name: "Streamtape", url: "https://streamtape.com", type: "html", category: "server" },
-    { name: "Byse", url: "https://n1mwq.org", type: "html", category: "server" },
+    // Byse (n1mwq.org) fica atrás de anti-bot/Cloudflare: um probe simples leva
+    // HTTP 403 mesmo com o UA real do player (Chrome 131) — a reprodução usa
+    // PoW/tickets. 403 = host vivo; timeout/DNS/5xx = offline de verdade.
+    { name: "Byse", url: "https://n1mwq.org", type: "html", category: "server", accept403: true,
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36" },
     { name: "VIP Player", url: "https://myembed.biz", type: "html", category: "server" },
     { name: "Watchplayer", url: "https://v1.watchplay.shop", type: "html", category: "server" },
     { name: "TMDB API", url: `https://api.themoviedb.org/3/configuration?api_key=${tmdbApiKey}`, type: "json", category: "api" }
@@ -421,19 +427,24 @@ adminOpsRouter.get("/health-check", async (req: Request, res: Response) => {
           redirect: "follow",
           signal: AbortSignal.timeout(8000),
           headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": target.userAgent || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           }
         });
         const latency = Date.now() - start;
         const speedKbps = await measureDownloadSpeed(response);
+        // Anti-bot (Byse): 403 é a resposta esperada de um probe simples — o
+        // host está no ar e respondendo; a reprodução real usa PoW/tickets.
+        const protected403 = !!target.accept403 && response.status === 403;
+        const online = (response.status >= 200 && response.status < 400) || protected403;
         return {
           name: target.name,
           url: target.url,
           category: target.category,
-          status: response.status >= 200 && response.status < 400 ? ("ONLINE" as const) : ("OFFLINE" as const),
+          status: online ? ("ONLINE" as const) : ("OFFLINE" as const),
           latencyMs: latency,
           statusCode: response.status,
-          ...(speedKbps ? { speedKbps } : {})
+          ...(speedKbps ? { speedKbps } : {}),
+          ...(protected403 ? { note: "Anti-bot ativo: HTTP 403 é a resposta esperada deste probe — a reprodução usa PoW/tickets e segue normal." } : {})
         };
       } catch (error: any) {
         return {

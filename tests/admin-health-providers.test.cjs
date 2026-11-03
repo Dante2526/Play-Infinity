@@ -81,8 +81,12 @@ async function mockFetch(url, options = {}) {
   if (href.startsWith('https://api.themoviedb.org')) {
     return new Response(JSON.stringify({ images: { base_url: 'http://image.tmdb.org' } }), { status: 200 });
   }
-  // Servidores de vídeo individuais + players embed
-  if (/^https:\/\/(mxdrop\.top|streamtape\.com|n1mwq\.org|myembed\.biz|v1\.watchplay\.shop)/.test(href)) {
+  // Servidores de vídeo individuais + players embed. O Byse fica atrás de
+  // anti-bot: responde 403 ao probe simples (comportamento real observado).
+  if (href.startsWith('https://n1mwq.org')) {
+    return new Response('<html><body>Forbidden</body></html>', { status: 403, headers: { 'content-type': 'text/html' } });
+  }
+  if (/^https:\/\/(mxdrop\.top|streamtape\.com|myembed\.biz|v1\.watchplay\.shop)/.test(href)) {
     return pageResponse(href);
   }
   throw new Error('URL não mockada no teste: ' + href);
@@ -169,10 +173,17 @@ test('health-check cobre catálogos, servidores de vídeo individuais e APIs com
   for (const [name, category] of Object.entries(expected)) {
     assert.equal(byName[name].category, category, `${name} deveria ser category=${category}`);
     assert.equal(byName[name].status, 'ONLINE', `${name} deveria estar ONLINE`);
+  }
+  // Byse responde 403 ao probe (anti-bot) e ainda assim o painel mostra
+  // ONLINE com nota explicando — timeout/DNS/5xx é que seriam offline.
+  assert.equal(byName['Byse'].statusCode, 403);
+  assert.match(byName['Byse'].note, /Anti-bot/);
+  assert.ok(!byName['Byse'].speedKbps, 'Byse (corpo 403 minúsculo) não deveria reportar speedKbps');
+  for (const name of ['Catálogo Encontrei.me', 'Catálogo Vizer', 'Catálogo Saimo TV', 'Catálogo AnimesDigital', 'MixDrop']) {
     assert.equal(byName[name].statusCode, 200, `${name} deveria responder HTTP 200`);
   }
   // A aba do painel promete velocidade pros servidores individuais e catálogos
-  for (const name of ['MixDrop', 'Streamtape', 'Byse', 'Catálogo Encontrei.me', 'Catálogo Saimo TV', 'Catálogo AnimesDigital']) {
+  for (const name of ['MixDrop', 'Streamtape', 'Catálogo Encontrei.me', 'Catálogo Saimo TV', 'Catálogo AnimesDigital']) {
     assert.ok(typeof byName[name].speedKbps === 'number' && byName[name].speedKbps > 0, `${name} deveria ter speedKbps > 0`);
   }
   // Corpo pequeno (JSON de configuração) não gera métrica de velocidade
