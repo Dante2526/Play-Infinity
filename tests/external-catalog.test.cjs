@@ -910,9 +910,12 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
   // canal premiere-1 foi renomeado para "Premiere Clubes" e travado
   // (lockServers:true) na fonte curada embedTV (proxy assinado em
   // /api/live-stream-proxy). Não exige mais o resolver Saimo.
+  // NOTA: 'SporTV%203' também migrado para fonte curada embedTV (mesma
+  // cadeia do Premiere Clubes, stream hash e7e4de42...). sportv-3 agora
+  // usa lockServers:true + proxy assinado, sem resolver Saimo.
   for (const expected of [
     'Premiere%202', 'Premiere%207',
-    'SporTV', 'SporTV%202', 'SporTV%203',
+    'SporTV', 'SporTV%202',
     'ESPN', 'ESPN%202', 'ESPN%203', 'ESPN%204', 'ESPN%205',
     'BAND%20SPORTS%20HD', 'Combate', 'GE%20TV',
     'Band', 'SBT', 'Record', 'Record%20News', 'CazeTV%201',
