@@ -906,8 +906,12 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
   // NOTA: 'N%20SPORTS' foi removido deliberadamente em 29/10/2026 (commit
   // a11bb22 — fonte 502 em duas rodadas de probe; hoje gerenciado pela
   // blocklist server/services/blockedLiveChannels.ts). Não reintroduzir aqui.
+  // NOTA: 'Premiere%20Clubes' foi retirado do resolver em 03/11/2026 — o
+  // canal premiere-1 foi renomeado para "Premiere Clubes" e travado
+  // (lockServers:true) na fonte curada embedTV (proxy assinado em
+  // /api/live-stream-proxy). Não exige mais o resolver Saimo.
   for (const expected of [
-    'Premiere%20Clubes', 'Premiere%202', 'Premiere%207',
+    'Premiere%202', 'Premiere%207',
     'SporTV', 'SporTV%202', 'SporTV%203',
     'ESPN', 'ESPN%202', 'ESPN%203', 'ESPN%204', 'ESPN%205',
     'BAND%20SPORTS%20HD', 'Combate', 'GE%20TV',

@@ -789,6 +789,10 @@ export function getPublicLiveChannels(): LiveChannel[] {
   // de embed deles como servidores adicionais (isEmbed). Copia o canal —
   // nunca muta INITIAL_LIVE_CHANNELS.
   const withMinhaTela = channels.map((ch) => {
+    // Canal com fontes curadas manualmente (ex. Premiere Clubes → embedTV
+    // assinado): não anexar embeds do MinhaTela nem reordenar. Preserva o
+    // "lockServers" declarado em INITIAL_LIVE_CHANNELS.
+    if (ch.lockServers) return ch;
     const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
     if (extra.length === 0) return ch;
 

@@ -13,22 +13,38 @@ export interface LiveChannel {
     isEmbed?: boolean;
   }[];
   description?: string;
+  /**
+   * Quando true, getPublicLiveChannels NAO anexa fontes embed do MinhaTela
+   * nem reordena servidores — o canal fica travado nos servers definidos
+   * abaixo (usado para canais cuja fonte foi curada manualmente, ex. o
+   * Premiere Clubes com o servidor embedTV HLS assinado).
+   */
+  lockServers?: boolean;
 }
 
 export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
   // --- ESPORTES & PREMIERE ---
   {
     id: 'premiere-1',
-    name: 'Premiere 1 HD',
+    name: 'Premiere Clubes',
     category: 'Esportes',
     logo: 'https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/brazil/premiere-br.png',
     currentProgram: 'Campeonato Brasileiro - Série A & B Ao Vivo',
     quality: '720p',
     description: 'Transmissões completas e exclusivas dos jogos do futebol nacional.',
+    // Fonte única curada: embedTV (mesmo operador do embedcanaisdetv.xyz),
+    // playlist HLS live disfarçada de error.txt no host s25-cloudfront-net.lat
+    // (Cloudflare WAF, CORS * na playlist; segmentos em lb02 sem CORS → proxy).
+    // Proxy assinado injeta Referer https://w7.embedtv.cc/ + UA Chrome/126
+    // (exigidos pelo WAF para IPs não-datacenter; a VPS passa até sem eles,
+    // mas mantemos por fidelidade ao catálogo saimo). Sig = HMAC-SHA256 do
+    // PROXY_SECRET sobre a URL upstream — determinístico, não expira; se o
+    // PROXY_SECRET for rotacionado, regerar com scripts/vps_sign_premiere_fonte2.py.
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%20Clubes',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F09fa89e371c7b10ad5e48266b2d7a261%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=ca3d945638635dafd42f6c4c116c6c8be9006a5937e2d0c4624ec59b36072756',
         isProxy: false
       }
     ]
