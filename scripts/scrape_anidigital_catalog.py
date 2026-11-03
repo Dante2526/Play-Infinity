@@ -244,13 +244,10 @@ def phase_c(series, movies, series_b):
             json.dump(done, open(cache,"w"), ensure_ascii=False)
         time.sleep(0.05)  # TMDB aguenta ~40/s, gentil
     # filmes
-    mtodo = [i for i, m in enumerate(movies) if str(i) not in done and m.get("slug")]
-    print(f"[C] {len(mtodo)} filmes pra match TMDB", flush=True)
-    for idx in mtodo:
-        m = movies[idx]
-        res = tmdb_search(m["title"], "movie")
-        done[f"movie:{idx}"] = {"tmdb_id": res[0] if res else None, "title": m["title"], "audio": m["audio"], "slug": m["slug"], "id": m["id"]}
-        time.sleep(0.05)
+    # Filmes: SKIP no match TMDB (v1) — filmes não foram sondados na fase B
+    # (sem base), então seriam pulados na fase D independente do match.
+    # Evita ~60min de TMDB calls à toa. Filmes ficam pra v2 com filtro melhor.
+    print(f"[C] {len(movies)} 'filmes' SKIPPADOS no match TMDB (v1)", flush=True)
     json.dump(done, open(cache,"w"), ensure_ascii=False)
     matched = sum(1 for v in done.values() if v.get("tmdb_id"))
     print(f"[C] {matched}/{len(done)} matched no TMDB", flush=True)
