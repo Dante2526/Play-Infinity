@@ -1488,8 +1488,15 @@ export function VideoPlayerModal({
           const params = new URLSearchParams({
             name: anidigitalName,
             type: isSeries ? 'tv' : 'movie',
+            // Prioridade PT-BR (AGENTS.md): pede dub; o resolver cai pra leg
+            // se o dub não estiver no catálogo SQLite.
+            audio: 'dub',
             cb: String(Date.now()),
           });
+          // tmdb_id ativa o lookup SQLite-first (instantâneo) no resolver;
+          // sem ele, cai pro live search em /func/listanime.
+          const tid = Number(id);
+          if (Number.isFinite(tid) && tid > 0) params.set('tmdb_id', String(tid));
           if (isSeries) {
             params.set('s', String(s ?? season));
             params.set('e', String(e ?? episode));

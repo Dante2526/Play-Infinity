@@ -28,6 +28,7 @@
  */
 
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
+import { getAnidigitalStore } from "./anidigitalSqliteStore";
 
 export const ANIDIGITAL_BASE = "https://animesdigital.org";
 
@@ -343,6 +344,10 @@ export interface AnidigitalResolveOptions {
   episode?: number;
   audio?: "dub" | "leg";
   force?: boolean;
+  /** tmdb_id do TMDB — quando presente, o resolver consulta o catálogo SQLite
+   *  (data/anidigital-catalog.db) PRIMEIRO (lookup instantâneo por tmdb_id).
+   *  Se não achar, cai pro live search em /func/listanime. */
+  tmdbId?: number;
 }
 
 /**
@@ -355,7 +360,59 @@ export interface AnidigitalResolveOptions {
  * por temporada (convencao de anime) — o animesdigital numera episodos
  * de forma absoluta por serie.
  */
+function resolveByTmdbId(
+  tmdbId: number,
+  type: "movie" | "tv",
+  episode: number | undefined,
+  wantAudio: "dub" | "leg",
+): AnidigitalResolution | null {
+  const store = getAnidigitalStore();
+  if (!store) return null;
+  try {
+    // episodeIndex.get / movieIndex.get JÁ parseiam o payload (vizerSqliteStore)
+    // e retornam o objeto diretamente (null se ausente).
+    if (type === "tv") {
+      const ep = Math.max(1, episode || 1);
+      const p = store.episodeIndex.get(`${tmdbId}:1:${ep}`);
+      if (!p) return null;
+      const choice = p[wantAudio] || p.dub || p.leg;
+      if (!choice || !choice.streamUrl || !isAnidigitalCdnUrl(choice.streamUrl)) return null;
+      return {
+        m3u8: choice.streamUrl,
+        title: p.title,
+        audio: p.dub ? "dub" : "leg",
+        dub: !!p.dub,
+        leg: !!p.leg,
+        resolvedAt: Date.now(),
+      };
+    } else {
+      const p = store.movieIndex.get(tmdbId);
+      if (!p) return null;
+      const choice = p[wantAudio] || p.dub || p.leg;
+      if (!choice || !choice.streamUrl || !isAnidigitalCdnUrl(choice.streamUrl)) return null;
+      return {
+        m3u8: choice.streamUrl,
+        title: p.title,
+        audio: p.dub ? "dub" : "leg",
+        dub: !!p.dub,
+        leg: !!p.leg,
+        resolvedAt: Date.now(),
+      };
+    }
+  } catch {
+    return null;
+  }
+}
+
 export async function resolveAnidigitalStream(opts: AnidigitalResolveOptions): Promise<AnidigitalResolution> {
+  // ---- SQLite-first: se tmdb_id disponível, consulta o catálogo antes do live search ----
+  if (opts.tmdbId && Number.isFinite(opts.tmdbId)) {
+    const wantAudio: "dub" | "leg" = opts.audio === "dub" ? "dub" : "leg";
+    const hit = resolveByTmdbId(opts.tmdbId, opts.type, opts.episode, wantAudio);
+    if (hit) return hit;
+    // senão: cai pro live search abaixo (fallback)
+  }
+
   const key = [
     normalizeAnidigitalTitle(opts.name),
     opts.type,
