@@ -770,7 +770,7 @@ export default function App() {
   return (
     <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col lg:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
       {/* HEADER DESKTOP */}
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
         <header className="hidden lg:flex fixed top-4 lg:top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
         <div 
           tabIndex={-1}
@@ -876,7 +876,7 @@ export default function App() {
       )}
 
       {/* MOBILE BRANDING ON TOP */}
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
       <div className={`lg:hidden absolute ${Capacitor.isNativePlatform() ? 'top-10' : 'top-4'} left-0 w-full flex justify-between items-center px-4 z-50 pointer-events-none max-w-full`}>
         <div 
           tabIndex={-1}
@@ -1006,7 +1006,7 @@ export default function App() {
       </React.Suspense>
 
       {/* Footer Area */}
-      {viewState.type !== 'admin' && viewState.type !== 'downloads' && (
+      {viewState.type !== 'admin' && viewState.type !== 'downloads' && viewState.type !== 'privacy' && (
       <footer className="pt-16 pb-24 lg:pb-10 flex flex-col items-center text-center opacity-80 border-t border-neutral-900 mt-12 bg-[#0a0a0a] relative z-20">
         <div className="font-black text-4xl tracking-tighter flex items-center mb-6">
           <span className="text-white">Play</span><span className="text-orange-500 ml-1">Infinity</span>
@@ -1092,7 +1092,7 @@ export default function App() {
       )}
 
       {/* MOBILE BOTTOM NAVIGATION (iOS FROSTED GLASS DOCK) */}
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
       <div className="lg:hidden fixed bottom-3 sm:bottom-6 left-1/2 -translate-x-1/2 w-[94%] max-w-sm sm:max-w-md z-50 pointer-events-none">
         <nav className="relative bg-black/40 backdrop-blur-2xl backdrop-saturate-150 border border-white/15 rounded-full px-2 py-1.5 flex items-center justify-around shadow-[0_12px_36px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.2)] pointer-events-auto">
           <div className="flex items-center justify-between w-full">
@@ -1107,7 +1107,7 @@ export default function App() {
       </div>
       )}
 
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
         <VirtualRemote isHidden={playerModal.isOpen || !!activeLiveChannel} />
       )}
       
@@ -1115,7 +1115,7 @@ export default function App() {
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
       <GlobalErrorModal />
-      {viewState.type !== 'admin' && (
+      {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
         <>
           <WhatsNewModal />
           <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />

@@ -3,7 +3,7 @@ import { ArrowLeft, Shield } from 'lucide-react';
 
 export default function PrivacyPolicyPage() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white pt-24 pb-20 px-4 sm:px-6">
+    <div className="min-h-screen bg-[#0a0a0a] text-white pt-8 sm:pt-12 pb-16 px-4 sm:px-6">
       <div className="max-w-3xl mx-auto">
         <button 
           type="button"
