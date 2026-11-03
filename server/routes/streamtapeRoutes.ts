@@ -148,6 +148,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <script src="/mp4-mse-engine.js?v=1"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
     #container { width: 100%; height: 100%; position: relative; }
@@ -156,13 +157,50 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
 </head>
 <body>
   <div id="container">
-    <video id="video" src="${streamUrl}" playsinline webkit-playsinline></video>
+    <video id="video" playsinline webkit-playsinline></video>
   </div>
   <script>
     (function() {
       var v = document.getElementById("video");
       var hasEverPlayed = false;
       var initialSeek = ${initialTime};
+      var streamUrl = ${JSON.stringify(streamUrl)};
+
+      // Opção A: transmuxing MP4 → fMP4 via MSE (janelas de ~6s com fetch Range).
+      // Fallback gracioso pro <video> nativo em qualquer falha do engine.
+      var engineAttached = false;
+      if (window.PlayInfinityMp4Mse && window.MediaSource && typeof window.MediaSource.isTypeSupported === 'function') {
+        var mseNative = function (reason) {
+          try { console.log('[st-mse] fallback nativo:', reason); } catch (e) {}
+          if (window.__piMseEngine) {
+            try { window.__piMseEngine.destroy(); } catch (e) {}
+            window.__piMseEngine = null;
+          }
+          if (window.__piMseNative) return;
+          window.__piMseNative = true;
+          var pos = v.currentTime || initialSeek || 0;
+          v.src = streamUrl;
+          if (pos > 1) {
+            v.addEventListener('loadedmetadata', function once() {
+              v.removeEventListener('loadedmetadata', once);
+              try { v.currentTime = pos; } catch (e) {}
+              v.play().catch(function () { v.muted = true; v.play().catch(function () {}); });
+            });
+          }
+        };
+        try {
+          var engine = window.PlayInfinityMp4Mse.attach(v, streamUrl, {
+            initialTime: initialSeek > 2 ? initialSeek : 0,
+            onFatal: mseNative,
+            onFallback: mseNative
+          });
+          window.__piMseEngine = engine;
+          engineAttached = !!engine;
+        } catch (e) {
+          engineAttached = false;
+        }
+      }
+      if (!engineAttached) v.src = streamUrl;
 
       // Se foi passado timestamp inicial (ex: retomada após pausa longa ou Continuar Assistindo),
       // posiciona no segundo salvo assim que os metadados do vídeo estiverem prontos

@@ -244,6 +244,7 @@ const router = Router();
             }
           </style>
           <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+          <script src="/mp4-mse-engine.js?v=1"></script>
         </head>
         <body>
           <div id="artplayer-container"></div>
@@ -253,10 +254,50 @@ const router = Router();
               var videoUrl = ${JSON.stringify(streamUrl)};
               var posterUrl = ${JSON.stringify(posterUrl)};
 
+              // Opção A: transmuxing MP4 → fMP4 via MSE — baixa o vídeo em janelas
+              // de ~6s (fetch Range) e alimenta o MediaSource com buffer controlado.
+              // Fallback gracioso pro playback nativo (src direto) em qualquer falha.
+              var mseNative = function (reason) {
+                try { console.log('[md-mse] fallback nativo:', reason); } catch (e) {}
+                if (window.__piMseEngine) {
+                  try { window.__piMseEngine.destroy(); } catch (e) {}
+                  window.__piMseEngine = null;
+                }
+                if (window.__piMseNative) return; // já está no nativo (recovery pode ter recarregado)
+                window.__piMseNative = true;
+                var el = window.artInstance && window.artInstance.video;
+                var pos = (el && el.currentTime) || 0;
+                if (el) {
+                  el.src = videoUrl;
+                  if (pos > 1) {
+                    el.addEventListener('loadedmetadata', function once() {
+                      el.removeEventListener('loadedmetadata', once);
+                      try { el.currentTime = pos; } catch (e) {}
+                      el.play().catch(function () {});
+                    });
+                  }
+                }
+              };
+
               var art = new Artplayer({
                 container: "#artplayer-container",
                 url: videoUrl,
                 type: "mp4",
+                customType: {
+                  mp4: function (video, url, artInstance) {
+                    if (window.PlayInfinityMp4Mse && window.MediaSource && typeof window.MediaSource.isTypeSupported === 'function') {
+                      var engine = window.PlayInfinityMp4Mse.attach(video, url, {
+                        onFatal: function (reason) { mseNative('fatal:' + reason); },
+                        onFallback: function (reason) { mseNative(reason); }
+                      });
+                      window.__piMseEngine = engine;
+                      if (!engine) mseNative('attach_null');
+                    } else {
+                      mseNative('no_mse');
+                      video.src = url;
+                    }
+                  }
+                },
                 poster: posterUrl || "",
                 autoplay: ${req.query.paused !== '1'},
                 muted: false,
