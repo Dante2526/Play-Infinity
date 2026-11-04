@@ -185,10 +185,16 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Eventos Olímpicos, Atletismo e Futebol Ao Vivo',
     quality: '720p',
     description: 'Transmissões esportivas variadas e grandes competições mundiais.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=SporTV%202',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn10embed.xyz%2Fsportv2%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=03fa378345428f990a52b6e7cb600c9b453f1aa8eb0bdc79ce43fcc85b97176b',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat%2Fstream%2F78c6dca900a9623b93f50986d21faf11%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=7cae6dacb0d9e625f02c08654d13d78b330bc8450e981601c156d7bafd7414dd',
         isProxy: false
       }
     ]

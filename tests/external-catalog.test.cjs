@@ -906,16 +906,15 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
   // Channel, Discovery ID, ESPN/ESPN Brasil, ESPN 2, ESPN 4, History) + Premiere 2, 3, 4, 5, 6
   // migraram para fontes curadas Saimo HD / embedTV (lockServers + proxy assinado)
   // reduzindo as refs do resolver. Threshold lowered accordingly.
-  assert.ok(refs >= 15, `esperado >=15 refs external-channel, encontrado ${refs}`);
+  assert.ok(refs >= 14, `esperado >=15 refs external-channel, encontrado ${refs}`);
   // NOTA: 'N%20SPORTS' foi removido deliberadamente em 29/10/2026 (commit
   // a11bb22 — fonte 502 em duas rodadas de probe; hoje gerenciado pela
   // blocklist server/services/blockedLiveChannels.ts). Não reintroduzir aqui.
   // NOTA: 'Premiere Clubes', 'Premiere 2', 'Premiere 3', 'Premiere 4', 'Premiere 5', 'Premiere 6',
-  // 'SporTV 3' (sportv-3) e mais 12 canais foram migrados para fontes curadas Saimo HD / embedTV
+  // 'SporTV 2', 'SporTV 3' e mais 12 canais foram migrados para fontes curadas Saimo HD / embedTV
   // (lockServers:true + proxy assinado). Não exigem mais o resolver Saimo.
   for (const expected of [
     'Premiere%207',
-    'SporTV%202',
     'ESPN%203', 'ESPN%205',
     'BAND%20SPORTS%20HD', 'GE%20TV',
     'Record%20News', 'CazeTV%201',

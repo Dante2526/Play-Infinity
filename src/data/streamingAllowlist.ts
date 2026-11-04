@@ -117,6 +117,7 @@ export const ALLOWED_LIVE_STREAMING_DOMAINS: string[] = [
   "vix-content.net",
   "embedplayer2.xyz",
   "embedplayer.site",
+  "cdn10embed.xyz",
   "cdn13embed.xyz",
   "embedcanaisdetv.xyz",
   "s25-cloudfront-net.lat",

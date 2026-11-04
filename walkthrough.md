@@ -1,3 +1,32 @@
+## 04/11/2026 — Curadoria Oficial do SporTV 2 HD (Fontes 1 FHD & 2 com Referer)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou captura do modal de fontes do SporTV 2 no app ("Fonte 1 • FHD com Referer", "Fonte 2 (em uso) com Referer") e solicitou: *"no sport tv 2 essas 2 fontes funciopnam bota elas, as que estão la tao off"*.
+
+**Diagnóstico da Causa Raiz:**
+1. O canal `sportv-2` estava usando o resolver genérico `url: '/api/external-channel?name=SporTV%202'` sem `lockServers: true`.
+2. Em `data/external-channels.txt`, as fontes secundárias apontavam para o host Xtream morto `corruptx.org`.
+3. Sem `lockServers: true`, servidores embed instáveis ou offline eram adicionados pelo catálogo.
+
+**Modificações Realizadas:**
+1. **Allowlist de Streaming (`src/data/streamingAllowlist.ts`):**
+   - Adicionado o domínio CDN dedicado `cdn10embed.xyz` em `ALLOWED_LIVE_STREAMING_DOMAINS` conforme ADR-0002.
+2. **Curadoria Oficial do SporTV 2 (`src/data/liveChannels.ts`):**
+   - Configurado `lockServers: true` no canal `sportv-2`.
+   - **Servidor 1 (Saimo FHD):** `https://d1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn10embed.xyz/sportv2/index.m3u8` com referer `https://embedcanaisdetv.xyz/` e assinatura HMAC-SHA256 (`/api/live-stream-proxy`).
+   - **Servidor 2 (embedTV):** `https://82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat/stream/78c6dca900a9623b93f50986d21faf11/error.txt` com referer `https://w7.embedtv.cc/` e assinatura HMAC-SHA256 (`/api/live-stream-proxy`).
+3. **Catálogo de Retaguarda (`data/external-channels.txt`):**
+   - Atualizado bloco `canal: SporTV 2` com ambas as fontes oficiais, qualidades FHD/HD e cabeçalhos referer/agente, removendo os links mortos de `corruptx.org`.
+4. **Testes Automatizados (`tests/external-catalog.test.cjs`):**
+   - Atualizado guard reconhecendo `sportv-2` como canal curado e travado (`lockServers: true`).
+
+**Validação Realizada:**
+- `node --test`: 105/105 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles de produção Vite e `dist/server.cjs` gerados com 100% de sucesso.
+
+---
+
 ## 04/11/2026 — Remoção de Servidores Mortos e Fontes Saimo HD no Premiere 3 a 6
 
 **Contexto e Solicitação do Usuário:**

@@ -138,7 +138,6 @@
   "136": "package.json",
   "137": "build",
   "138": "main",
-  "139": "getDetails",
   "140": "4. Otimização do Endpoint `/api/watchplayer-stream`",
   "141": "Masonry Channel Grid Implementation Plan",
   "142": "build_anidigital_sqlite.py",
