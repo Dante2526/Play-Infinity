@@ -1,3 +1,26 @@
+## 04/11/2026 — Curadoria Oficial do Premiere 7 HD (Exclusiva Fonte 1 FHD com Referer)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou captura do modal de fontes do Premiere 7 no app ("Fonte 1 • FHD (em uso) com Referer") e solicitou: *"essa no premiere 7 outras remove"*.
+
+**Diagnóstico da Causa Raiz:**
+1. O canal `premiere-7` utilizava o resolver genérico `url: '/api/external-channel?name=Premiere%207'` sem `lockServers: true`.
+2. Sem `lockServers: true`, o catálogo do MinhaTela anexava servidores embed secundários desnecessários ou inoperantes.
+
+**Modificações Realizadas:**
+1. **Curadoria Oficial do Premiere 7 (`src/data/liveChannels.ts`):**
+   - Configurado `lockServers: true` no canal `premiere-7`.
+   - Vinculada exclusivamente a **Fonte 1 (Saimo FHD)**: `https://d1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz/premiere7/index.m3u8` com referer `https://embedcanaisdetv.xyz/` e assinatura HMAC-SHA256 (`/api/live-stream-proxy`).
+2. **Testes Automatizados (`tests/external-catalog.test.cjs`):**
+   - Atualizado guard reconhecendo `premiere-7` como canal curado e travado (`lockServers: true`).
+
+**Validação Realizada:**
+- `node --test`: 105/105 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles de produção Vite e `dist/server.cjs` gerados com 100% de sucesso.
+
+---
+
 ## 04/11/2026 — Curadoria Oficial do SporTV 2 HD (Fontes 1 FHD & 2 com Referer)
 
 **Contexto e Solicitação do Usuário:**

@@ -152,10 +152,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
     quality: '720p',
     description: 'Canal Premiere 7 com cobertura de jogos ao vivo do futebol nacional.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%207',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere7%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=633511e2924dfc48845c85d52452939c4b8fbb6ce945055288e6a3062dcb68d9',
         isProxy: false
       }
     ]
