@@ -14,7 +14,7 @@ O usuário solicitou: *"la no painel adm quero saber em quantos dispositivos cad
 3. **Interface Mobile-First no Painel Admin (`src/pages/AdminPage.tsx`):**
    - **Métrica Global no Topo:** Adicionado Card 5 *"Aparelhos Conectados"* exibindo a somatória em tempo real de dispositivos ativos em todas as contas.
    - **Tamanho Original dos Cartões:** Expandido o container para `max-w-[1680px]` com grid adaptativo `xl:grid-cols-5` e `lg:grid-cols-3`, devolvendo aos cartões a largura original espaçosa (~320px) sem faixas pretas ociosas nas laterais em monitores desktop.
-   - **Badge no Card de Cada Cliente:** Exibe badge interativo `📱 N dispositivos` ao lado do status da assinatura.
+   - **Badge no Card de Cada Cliente:** Exibe badge interativo `📱 N dispositivos` ao lado do status da assinatura, com design dark glassmorphic refinado, ícone nítido e seta indicadora de abertura/fechamento.
    - **Drawer de Detalhes:** Ao clicar no badge, expande uma gaveta responsiva mostrando cada aparelho, tipo (mobile, tv, desktop) e o horário exato da última atividade.
 4. **Testes Automatizados (`tests/device-sessions.test.cjs`):**
    - 4 testes unitários cobrindo classificação de User-Agent, persistência de `deviceId`, expurgo de sessões > 30 dias e fallback de tokens FCM.
