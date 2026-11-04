@@ -910,11 +910,11 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
   // NOTA: 'N%20SPORTS' foi removido deliberadamente em 29/10/2026 (commit
   // a11bb22 — fonte 502 em duas rodadas de probe; hoje gerenciado pela
   // blocklist server/services/blockedLiveChannels.ts). Não reintroduzir aqui.
-  // NOTA: 'Premiere%20Clubes' (premiere-1), 'SporTV%203' (sportv-3) e mais 12
-  // canais (lista acima) foram migrados para fonte curada embedTV
+  // NOTA: 'Premiere Clubes' (premiere-1), 'Premiere 2' (premiere-2), 'SporTV 3' (sportv-3) e mais 12
+  // canais (lista acima) foram migrados para fonte curada embedTV / Saimo HD
   // (lockServers:true + proxy assinado). Não exigem mais o resolver Saimo.
   for (const expected of [
-    'Premiere%202', 'Premiere%207',
+    'Premiere%207',
     'SporTV%202',
     'ESPN%203', 'ESPN%205',
     'BAND%20SPORTS%20HD', 'GE%20TV',

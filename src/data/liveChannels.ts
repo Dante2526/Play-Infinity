@@ -57,10 +57,16 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Transmissão Ao Vivo - Rodada Esportiva',
     quality: '720p',
     description: 'Canal secundário Premiere para rodadas simultâneas de jogos.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%202',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere2%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=5a7516bcea811f03361788226111cd858a3083078f25df8a1c707ab15a690d0b',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2F82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat%2Fstream%2F1ebc0b14635da26d815c1b9c9d394ae9%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=238e84123baef53ca218f56dc793c9ee6f9a404f22d5aeb083b719bbb657a082',
         isProxy: false
       }
     ]

@@ -1,3 +1,30 @@
+## 04/11/2026 — Fontes Oficiais Saimo no Premiere 2 HD (Fonte 1 HD & Fonte 2 com Referer)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou: *"Para o Premiere2, o canal de TV, use as fontes Saimo - Fonte 1 HD e Fonte 2 com refer que tem aqui."*. Anteriormente o canal utilizava fontes Xtream legadas que apresentavam instabilidade e ausência de headers referer exigidos pelo WAF da origem.
+
+**Modificações Realizadas:**
+1. **Configuração de Servidores Curados (`src/data/liveChannels.ts`):**
+   - Canal `premiere-2` promovido para `lockServers: true` com duas fontes oficiais ativas:
+     - **Servidor 1 (Saimo HD):** `https://d1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz/premiere2/index.m3u8` com `referer: https://embedcanaisdetv.xyz/`.
+     - **Servidor 2 (embedTV):** `https://82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat/stream/1ebc0b14635da26d815c1b9c9d394ae9/error.txt` com `referer: https://w7.embedtv.cc/`.
+   - Ambas envelopadas e assinadas determinísticamente com HMAC-SHA256 (`/api/live-stream-proxy`), preservando User-Agent e headers em tempo de execução.
+2. **Atualização da Allowlist de Streaming (`src/data/streamingAllowlist.ts`):**
+   - Incluídos os domínios `cdn13embed.xyz`, `embedcanaisdetv.xyz` e `s25-cloudfront-net.lat` em `ALLOWED_LIVE_STREAMING_DOMAINS` conforme ADR-0002.
+3. **Catálogo de Retaguarda (`data/external-channels.txt`):**
+   - Bloco de `canal: Premiere 2` atualizado com as duas fontes oficiais e seus respectivos headers de referer e agente.
+4. **Painel Administrativo (`src/components/AdminLiveChannels.tsx`):**
+   - Adicionado badge visual `Saimo HD` para identificar a Fonte 1 nos servidores curados.
+5. **Testes Automatizados (`tests/external-catalog.test.cjs`):**
+   - Atualizado guard para reconhecer `premiere-2` como canal locked curado; suíte completa passando (59/59).
+
+**Validação Realizada:**
+- `node --test`: 59/59 testes do catálogo externo e 45/45 testes de regressão aprovados (100% verde).
+- `npx tsc --noEmit`: 0 erros de compilação.
+- `npm run build`: Bundles Vite e servidor compilados com sucesso.
+
+---
+
 ## 03/11/2026 — Rastreamento de Dispositivos por Usuário no Painel Admin (Android 79/1.4.47)
 
 **Contexto e Solicitação do Usuário:**
