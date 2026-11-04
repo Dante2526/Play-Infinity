@@ -310,8 +310,8 @@
     "semantic_hash": "af2bd18a7bdd45f4be5dc3c7a7b88bd7"
   },
   "src/App.tsx": {
-    "mtime": 1793753132.280646,
-    "ast_hash": "fb786cfc957edb7e2548fa7c4beffed6",
+    "mtime": 1793758267.6363554,
+    "ast_hash": "8cee7bd0540a00334ce3462c7507f1be",
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
@@ -505,8 +505,8 @@
     "semantic_hash": "5b8602d81fc297a03740eb3d61fb5e93"
   },
   "src/pages/AdminPage.tsx": {
-    "mtime": 1793753132.2999315,
-    "ast_hash": "0f33b4fcd4331c02df8b6fe8e1c3dc6b",
+    "mtime": 1793758578.165413,
+    "ast_hash": "322653d5d3aa94e789a21ba8e6f09cd4",
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
@@ -550,8 +550,8 @@
     "semantic_hash": "494f54b55a800bb0697430b3f26951b8"
   },
   "src/pages/UserProfilePage.tsx": {
-    "mtime": 1793489656.7085114,
-    "ast_hash": "0efe192d5ef59bed0c95974ed5a1d7fc",
+    "mtime": 1793758835.9531808,
+    "ast_hash": "7690ad221580130c9678a7bd23af7101",
     "semantic_hash": ""
   },
   "src/services/adminApi.ts": {
@@ -835,8 +835,8 @@
     "semantic_hash": "639c5ca9163cb53294086814a8d5ed15"
   },
   "task.md": {
-    "mtime": 1793756871.4067826,
-    "ast_hash": "426658d044154ad8d5cfeac32fed8eca",
+    "mtime": 1793758074.6006958,
+    "ast_hash": "5d89b35f1e4d4ffbadff567bb848bb7b",
     "semantic_hash": ""
   },
   "tsc_output.txt": {
@@ -1135,12 +1135,12 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1793753132.211366,
+    "mtime": 1793759141.0065622,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1793753132.2197292,
+    "mtime": 1793759141.007568,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
@@ -1657,6 +1657,11 @@
   "scripts/anidigital-sim/index.html": {
     "mtime": 1793753132.2262683,
     "ast_hash": "65db2e0736ba8b336797c773feaef63b",
+    "semantic_hash": ""
+  },
+  "src/services/deviceSessionService.ts": {
+    "mtime": 1793758139.083946,
+    "ast_hash": "e116a72e7b0c3e04df56d1b2b5236d07",
     "semantic_hash": ""
   }
 }

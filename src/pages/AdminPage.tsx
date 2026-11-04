@@ -998,7 +998,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto animate-fade-in">
+      <div className="w-full max-w-[1680px] mx-auto animate-fade-in">
         
         {/* Header Admin em Cartão */}
         <div className="p-4 sm:p-6 bg-white/5 border border-white/10 rounded-2xl sm:rounded-3xl backdrop-blur-xl mb-6 sm:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1160,7 +1160,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         ) : (
           <>
         {/* Dashboard Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 sm:gap-5 xl:gap-6">
           
           {/* Card 1: Total Users */}
           <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 shadow-xl flex flex-col hover:bg-[#1c1c1e]/80 transition-colors">
