@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop } from "lucide-react";
+import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronDown, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
@@ -1536,18 +1536,16 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               onClick={() => setSelectedDevicesUser(selectedDevicesUser?.id === client.id ? null : client)}
                               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
                                 selectedDevicesUser?.id === client.id
-                                  ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/30'
-                                  : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                                  ? 'bg-cyan-500/25 text-cyan-100 border border-cyan-400/70 ring-2 ring-cyan-400/20 shadow-[0_0_16px_rgba(6,182,212,0.3)]'
+                                  : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25 hover:border-cyan-400/50 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
                               }`}
                               title={client.isDevicesEstimated ? "Estimativa baseada em tokens/atividade recente. Clique para ver detalhes." : "Clique para ver os aparelhos deste usuário"}
                             >
-                              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+                              <Smartphone className={`w-3 h-3 shrink-0 transition-colors ${selectedDevicesUser?.id === client.id ? 'text-cyan-200' : 'text-cyan-400'}`} />
                               <span>
                                 {client.devicesCount || 0} {client.devicesCount === 1 ? 'dispositivo' : 'dispositivos'}
                               </span>
-                              {Boolean(client.devicesList && client.devicesList.length > 0) && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
-                              )}
+                              <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${selectedDevicesUser?.id === client.id ? 'rotate-180 text-cyan-200' : 'text-cyan-400/70'}`} />
                             </button>
                           </div>
 
@@ -1777,7 +1775,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                     {/* Drawer de Dispositivos Conectados do Cliente */}
                     {selectedDevicesUser?.id === client.id && (
-                      <div className="bg-[#141416] border border-cyan-500/30 rounded-2xl p-3 sm:p-4 mt-2 space-y-2 text-xs mx-1 sm:mx-2 animate-fade-in">
+                      <div className="bg-gradient-to-b from-cyan-950/30 to-[#141416]/95 border border-cyan-500/35 backdrop-blur-xl rounded-2xl p-3.5 sm:p-4 -mt-0.5 space-y-2.5 text-xs mx-1 sm:mx-2 shadow-[0_8px_28px_rgba(6,182,212,0.12)] animate-fade-in">
                         <div className="flex items-center justify-between border-b border-white/10 pb-2">
                           <span className="font-bold text-cyan-300 flex items-center gap-1.5 text-xs sm:text-sm">
                             <Smartphone className="w-4 h-4 text-cyan-400" />
