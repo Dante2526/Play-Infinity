@@ -38,7 +38,7 @@ const CACHE_FILE =
   path.join(process.cwd(), "data", "minhatela-cache.json");
 const REFRESH_MS = 20 * 60 * 1000;
 const REQUEST_TIMEOUT_MS = 9000;
-const MAX_SERVERS_PER_CHANNEL = 12;
+const MAX_SERVERS_PER_CHANNEL = 3;
 const DETAIL_BATCH_SIZE = 6;
 
 export interface MinhaTelaStream {

@@ -351,16 +351,16 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
   const beforeServers = read('src/data/liveChannels.ts');
   const channels = catalog.getPublicLiveChannels();
 
-  // Premiere Clubes (id premiere-1) está travado (lockServers:true) na fonte
-  // curada embedTV — NÃO recebe embeds do MinhaTela e fica com 1 servidor
+  // Premiere Clubes (id premiere-1) está travado (lockServers:true) nas fontes
+  // curadas Saimo HD + embedTV — NÃO recebe embeds do MinhaTela e fica com 2 servidores
   // (proxy assinado). SporTV (id sportv) também foi travado na mesma fonte.
   const premiere = channels.find(c => c.id === 'premiere-1');
   assert.ok(premiere, 'premiere-1 presente');
   assert.equal(premiere.name, 'Premiere Clubes');
   assert.equal(premiere.lockServers, true);
   assert.equal(premiere.servers.filter(s => s.isEmbed).length, 0); // sem embeds anexados
-  assert.equal(premiere.servers.length, 1); // travado na fonte curada
-  assert.ok(premiere.servers[0]?.url.startsWith('/api/live-stream-proxy?url='), 'servidor único é o proxy assinado embedTV');
+  assert.equal(premiere.servers.length, 2); // travado nas fontes curadas (Saimo HD + embedTV)
+  assert.ok(premiere.servers[0]?.url.startsWith('/api/live-stream-proxy?url='), 'servidor 1 é o proxy assinado Saimo HD');
 
   const sportv = channels.find(c => c.id === 'sportv');
   assert.equal(sportv.lockServers, true);

@@ -1,3 +1,33 @@
+## 04/11/2026 — Remoção de Servidores Mortos e Fontes Saimo HD no Premiere 3 a 6
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou captura do painel admin com os canais Premiere 3 HD e Premiere 4 HD apresentando *"13 servidores • Fora do Ar"* com Servidores 2 e 3 marcando *"OFF (200)"* e solicitou: *"tem alguns servidores mortos, remove eles"*.
+
+**Diagnóstico da Causa Raiz:**
+1. Os canais Premiere 3 e 4 não possuíam `lockServers: true`, fazendo com que `getMinhaTelaServersFor()` anexasse até 12 servidores embed de terceiros (`meuplayeronlinehd.com`, `sporturbo.link`, etc.), quase todos caídos ou bloqueados.
+2. Em `data/external-channels.txt`, as fontes secundárias apontavam para o host Xtream morto `corruptx.org`.
+3. Ao rodar o teste no admin, as fontes mortas e os iframes bloqueados retornavam status 200 de HTML ou erro sem tag `#EXTM3U`, resultando no badge *"OFF (200)"*.
+
+**Modificações Realizadas:**
+1. **Curadoria Oficial Saimo HD (`src/data/liveChannels.ts`):**
+   - Canais `premiere-3`, `premiere-4`, `premiere-5` e `premiere-6` configurados com `lockServers: true`.
+   - Vinculada exclusivamente a fonte oficial Saimo HD (`cdn13embed.xyz/premiereX/index.m3u8`) com referer `https://embedcanaisdetv.xyz/` e assinatura HMAC-SHA256 no proxy interno (`/api/live-stream-proxy`).
+   - `premiere-1` (Premiere Clubes) atualizado com Fonte 1 (Saimo HD) e Fonte 2 (embedTV).
+2. **Expurgo de Hosts Mortos no Catálogo (`data/external-channels.txt`):**
+   - Substituídas todas as fontes mortas de `corruptx.org` nos blocos Premiere 3 a 8 pelas fontes ativas da Saimo TV com referers corretos.
+3. **Teto de Embeds no MinhaTela (`server/services/minhatelaCatalog.ts`):**
+   - Reduzido `MAX_SERVERS_PER_CHANNEL` de 12 para 3, impedindo que canais futuros sejam inflados com dezenas de servidores duplicados.
+4. **Testes Automatizados (`tests/external-catalog.test.cjs` e `tests/minhatela-catalog.test.cjs`):**
+   - Atualizados thresholds e asserções para cobrir as migrações curadas; 100/100 testes passando.
+
+**Validação Realizada:**
+- `node --test`: 100/100 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de compilação.
+- `npm run build`: Bundles Vite e `dist/server.cjs` gerados com sucesso.
+- Grafo de conhecimento atualizado: 2115 nós, 4354 arestas e 155 comunidades.
+
+---
+
 ## 04/11/2026 — Fontes Oficiais Saimo no Premiere 2 HD (Fonte 1 HD & Fonte 2 com Referer)
 
 **Contexto e Solicitação do Usuário:**

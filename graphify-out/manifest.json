@@ -75,7 +75,7 @@
     "semantic_hash": "d13794c0d7bd77240785ef6b56e67098"
   },
   "data/catalog-state.json": {
-    "mtime": 1793586749.902436,
+    "mtime": 1793801272.0065897,
     "ast_hash": "b6c7e6c58bcf629fd726d79e9875ab24",
     "semantic_hash": "b6c7e6c58bcf629fd726d79e9875ab24"
   },
@@ -470,8 +470,8 @@
     "semantic_hash": "8ea385ad66cc68f120d2d3371fee44e5"
   },
   "src/data/liveChannels.ts": {
-    "mtime": 1793799978.0952287,
-    "ast_hash": "f3b08a8681776fd5f360363620565ec2",
+    "mtime": 1793802943.94607,
+    "ast_hash": "2fb41c04e42277be627d9d029dde57be",
     "semantic_hash": ""
   },
   "src/data/sagas.ts": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793761870.832801,
-    "ast_hash": "320497d229016517def674b455e2dedc",
+    "mtime": 1793800652.0814462,
+    "ast_hash": "de43a85252f86c7806e8afca632ad3d4",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,12 +1135,12 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1793800562.022333,
+    "mtime": 1793803412.276582,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1793800562.0241044,
+    "mtime": 1793803412.2774987,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
@@ -1470,7 +1470,7 @@
     "semantic_hash": ""
   },
   "data/releases-state.json": {
-    "mtime": 1793586754.925,
+    "mtime": 1793801277.012795,
     "ast_hash": "0c993be38616302ac40eca0a711dc72d",
     "semantic_hash": ""
   },
@@ -1560,8 +1560,8 @@
     "semantic_hash": ""
   },
   "server/services/minhatelaCatalog.ts": {
-    "mtime": 1793566648.7275622,
-    "ast_hash": "7e32e111e6eb6f9e43a89fc81a8d2757",
+    "mtime": 1793803264.241748,
+    "ast_hash": "4bb83e00704c7c766b8859ec32a04a6c",
     "semantic_hash": ""
   },
   "server/services/newReleasesWatcher.ts": {

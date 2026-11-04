@@ -44,6 +44,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiereclubes%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=29097558a041595382b50d7863f618fa91cd9fc953af0e3800a4856176463d4d',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
         url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F09fa89e371c7b10ad5e48266b2d7a261%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=ca3d945638635dafd42f6c4c116c6c8be9006a5937e2d0c4624ec59b36072756',
         isProxy: false
       }
@@ -79,10 +84,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
     quality: '720p',
     description: 'Cobertura de todos os lances e partidas dos campeonatos estaduais e nacionais.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%203',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere3%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=eee4df7e7c09746806f882ccd5112601fcbfd8868dfe7a480ccac06e1170f1a1',
         isProxy: false
       }
     ]
@@ -95,10 +101,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Copa do Brasil & Campeonatos Estaduais',
     quality: '720p',
     description: 'Canal complementar Premiere com cobertura de futebol 100% brasileira.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%204',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere4%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=27e409e5b90918d98f204e5aca24592efd363cab981b145fd1903d6a72b9abd7',
         isProxy: false
       }
     ]
@@ -111,10 +118,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
     quality: '720p',
     description: 'Canal Premiere 5 com cobertura de jogos ao vivo do futebol nacional.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%205',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere5%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=bfe4c0204b51232d2a036c506adbd0819d8dfd69c4b901c04cba8242ae282a33',
         isProxy: false
       }
     ]
@@ -127,10 +135,11 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Futebol Ao Vivo - Jogos Simultâneos',
     quality: '720p',
     description: 'Canal Premiere 6 com cobertura de jogos ao vivo do futebol nacional.',
+    lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/external-channel?name=Premiere%206',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere6%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=71e6cf1a8ca3a7f6c4f5c0817f1a2b843d600eab5e9749eafed519c448176030',
         isProxy: false
       }
     ]
