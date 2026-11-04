@@ -138,6 +138,7 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 
 
 import { OnPlayHandler } from "../types";
+import { triggerBysePrewarm, cancelBysePrewarm } from "../services/bysePrewarm";
 
 export function DetailsPage({ 
   itemId, 
@@ -241,6 +242,23 @@ export function DetailsPage({
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
   }, [itemId]);
+
+  // Pré-aquecimento seguro do BYSE em segundo plano com debounce de 1.5s e AbortController
+  useEffect(() => {
+    const targetId = item.tmdbId || item.id || itemId;
+    if (targetId && Number(targetId) > 0) {
+      triggerBysePrewarm({
+        id: Number(targetId),
+        type: item.type === 'movie' ? 'movie' : 'tv',
+        season: selectedSeason,
+        episode: 1,
+        name: item.title,
+      });
+    }
+    return () => {
+      cancelBysePrewarm();
+    };
+  }, [itemId, item.tmdbId, item.id, item.type, item.title, selectedSeason]);
 
   // Sincronizar episódios assistidos
   useEffect(() => {

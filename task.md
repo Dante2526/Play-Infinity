@@ -1,10 +1,19 @@
-# Checklist de Tarefas — Otimização de Performance Geral do App (18/10/2026)
+# Checklist de Execução — Rastreamento de Dispositivos por Usuário no Painel Admin
 
-- [x] **Fase 2.3 (TDD - RED):** Criar teste automatizado `scratch/test-app-performance.mjs` validando os 5 pontos de performance e confirmar falha inicial (RED)
-- [x] **Tarefa 1:** Ativar `tmdbCache` + deduplicação em `server/routes/tmdbProxy.ts` e cache em memória + deduplicação em `src/services/tmdb.ts`
-- [x] **Tarefa 2:** Remover `refresh: '1'` forçado de `checkLiveAvailability` em `src/utils/mediaUtils.ts`
-- [x] **Tarefa 3:** Desacoplar `viewState.type` dos `useEffect` do Firestore (`onSnapshot` e `updatePresence`) em `src/App.tsx` via `useRef`
-- [x] **Tarefa 4:** Cachear lista consolidada em `/api/downloads-catalog` (`server/routes/encontreiLookup.ts`) com TTL de 10 minutos
-- [x] **Tarefa 5:** Criar `getCatalogByIdMap` O(1) em `src/services/favorites.ts` e utilizar em `src/pages/HomePage.tsx`
-- [x] **Fase 3 (Verificação & Code Review):** Rodar teste GREEN (`scratch/test-app-performance.mjs`), `npx tsc --noEmit`, `graphify update .`, e executar Code Review estruturado
-- [x] **Fase 4 (Conclusão):** Atualizar `walkthrough.md` com resultados e evidências
+- [x] **Fase 1: Serviço de Sessões de Dispositivos e Testes**
+  - [x] 1.1 Criar `src/services/deviceSessionService.ts` com geração de `deviceId`, detecção de modelo/plataforma e sanitização de mapa
+  - [x] 1.2 Criar testes unitários em `tests/device-sessions.test.cjs` e validar comportamento (4/4 aprovados)
+
+- [x] **Fase 2: Integração no Ciclo de Vida da Aplicação**
+  - [x] 2.1 Conectar registro de dispositivo no `onAuthStateChanged` e no heartbeat de presença em `src/App.tsx`
+  - [x] 2.2 Conectar desregistro limpo do dispositivo no logout em `src/pages/UserProfilePage.tsx` sem violar `clearLocalUserData`
+
+- [x] **Fase 3: Interface no Painel Admin**
+  - [x] 3.1 Atualizar `loadStats` e tipagem `ClientUser` em `src/pages/AdminPage.tsx` para carregar `devices` e calcular contagem ativa
+  - [x] 3.2 Renderizar badge `Smartphone` com contagem no card de cada usuário e drawer mobile-first com os aparelhos conectados
+  - [x] 3.3 Adicionar Card 5 (Aparelhos Conectados) no dashboard executivo de métricas
+
+- [x] **Fase 4: Verificação e Revisão**
+  - [x] 4.1 Rodar suíte de testes (`node --test`: 35/35 testes do ecossistema e guards aprovados) e validação TypeScript (`npx tsc --noEmit`: 0 erros)
+  - [x] 4.2 Executar Code Review formal
+  - [x] 4.3 Atualizar `walkthrough.md` com evidências

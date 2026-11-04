@@ -1,3 +1,62 @@
+## 03/11/2026 — Rastreamento de Dispositivos por Usuário no Painel Admin (Android 79/1.4.47)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou: *"la no painel adm quero saber em quantos dispositivos cada usuarios esta logado"*. Anteriormente, o sistema registrava apenas o timestamp de último acesso global (`lastActive`), sem manter um inventário discriminado de aparelhos (Smart TV, Celular Android, Desktop, etc.) conectados à mesma conta.
+
+**Modificações Realizadas:**
+1. **Serviço de Sessão de Dispositivos (`src/services/deviceSessionService.ts`):**
+   - Implementado `getOrCreateDeviceId()` gerando identificador único e persistente no `safeLocalStorage` (`playinfinity_device_id`).
+   - Detecção automática de metadados: distingue Samsung Smart TV, LG WebOS, Android TV, Apple TV, Fire TV Stick, App Android Nativo, Celular Web (Chrome, Samsung Internet), iPhone e Desktops (Windows, Mac, Linux).
+   - Função `resolveUserDevices`: calcula a quantidade de aparelhos ativos (últimos 30 dias) e aplica fallback inteligente usando `fcmTokens` e `lastActive` para contas criadas antes da atualização.
+2. **Integração no Ciclo de Vida (`src/App.tsx` & `src/pages/UserProfilePage.tsx`):**
+   - Registro automático do dispositivo em `onAuthStateChanged` e atualização no heartbeat a cada 3 minutos em `usuarios/{uid}.devices[deviceId]`.
+   - Remoção limpa do dispositivo no `handleLogout` em `UserProfilePage.tsx` antes do `signOut(auth)`, respeitando as guardas de `clearLocalUserData()`.
+3. **Interface Mobile-First no Painel Admin (`src/pages/AdminPage.tsx`):**
+   - **Métrica Global no Topo:** Adicionado Card 5 *"Aparelhos Conectados"* exibindo a somatória em tempo real de dispositivos ativos em todas as contas.
+   - **Badge no Card de Cada Cliente:** Exibe badge interativo `📱 N dispositivos` ao lado do status da assinatura.
+   - **Drawer de Detalhes:** Ao clicar no badge, expande uma gaveta responsiva mostrando cada aparelho, tipo (mobile, tv, desktop) e o horário exato da última atividade.
+4. **Testes Automatizados (`tests/device-sessions.test.cjs`):**
+   - 4 testes unitários cobrindo classificação de User-Agent, persistência de `deviceId`, expurgo de sessões > 30 dias e fallback de tokens FCM.
+
+**Validação Realizada:**
+- `node --test tests/device-sessions.test.cjs tests/account-switch-cleanup.test.cjs`: 12/12 testes aprovados (100%).
+- `npx tsc --noEmit`: 0 erros de compilação.
+- `npm run build`: Bundles Vite e `dist/server.cjs` gerados com sucesso.
+- Code Review formal: Aprovado sem ressalvas.
+
+---
+
+## 03/11/2026 — Otimização BYSE (Pré-Aquecimento Seguro, TTL 2h30), Fix do MixDrop MSE (moov > 2MB & AbortError) e Fila de Fallback (Android 79/1.4.47)
+
+**Contexto e Diagnóstico:**
+1. **Frieza do BYSE em Títulos Long-Tail (*Harry Potter e a Ordem da Fênix* / TMDB `675`):** Ao iniciar filmes do catálogo geral não pré-aquecidos, o BYSE demandava até 25s resolvendo PoW e manifests upstream com cache TTL curto (20min), estourando o timeout do modal.
+2. **Crash do MixDrop MSE (`AbortError: signal is aborted without reason`):** Ao acionar o fallback para MixDrop, arquivos MP4 com átomo `moov` grande (> 2MB, no HP5 são 5.74 MB) sofriam seeking com debounce enquanto o leitor de streams ainda alocava memória, gerando rejeição não tratada em `readWithIdle` e aborto indevido em `onSeeking`.
+3. **Truncamento da Fila de Fallback e Descarte do BYSE:** `VideoPlayerModal.tsx` limitava `startupPlanRef.current.candidates` a 2 itens (`slice(0, 2)`). Após testar duas alternativas rápidas, exibia "Conteúdo Indisponível" sem nunca re-testar o BYSE, mesmo quando o BYSE já havia terminado sua resolução em background.
+
+**Modificações Realizadas:**
+1. **BYSE Seguro e TTL Estendido (`server/services/byse/core.ts`):**
+   - Cache TTL do BYSE aumentado de 20 min para 2h30min (`Math.floor(2.5 * 60 * 60 * 1000)`), alinhado com a duração real dos tokens assinados upstream.
+2. **Pré-Aquecimento Seguro no Frontend (`src/services/bysePrewarm.ts` e `src/pages/DetailsPage.tsx`):**
+   - Criado serviço de pré-aquecimento seguro com debounce de 1.5s, cancelamento via `AbortController` ao trocar de filme e semáforo estrito de 1 requisição ativa por cliente.
+   - Ativado automaticamente na montagem da tela de detalhes (`DetailsPage.tsx`), garantindo que enquanto o usuário lê a sinopse o BYSE seja aquecido sem onerar a VPS.
+3. **Blindagem do MP4-MSE Engine (`public/mp4-mse-engine.js`):**
+   - Tratamento da Promise de cancelamento em `readWithIdle` com `p.catch(() => {})`, eliminando o `AbortError` não tratado.
+   - Fast-path para `<video>` nativo quando o arquivo é faststart e o átomo `moov` excede 2 MB, evitando saturação de heap JS.
+   - Proteção no `onSeeking`: impede cancelamento da janela inicial (`t <= 0.2` ou janela ativa).
+4. **Fila de Fallback Completa no Player (`src/components/VideoPlayerModal.tsx`):**
+   - Removido truncamento `slice(0, 2)` de `candidates`, preservando a ordem completa de contingência.
+   - Simplificada condição de reteste do BYSE para garantir que após falha temporária das alternativas ele seja re-executado com ticket já pronto.
+   - Marcado `healthPlaybackStartedRef` como verdadeiro quando metadados já estão carregados (`readyState >= 3`).
+5. **Versionamento:**
+   - Incrementado `versionCode` para 79 e `versionName` para "1.4.47" em `android/app/build.gradle`.
+
+**Validação Realizada:**
+- `node --test`: 109/109 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de tipo (código 0).
+- Code Review formal: Aprovado sem ressalvas.
+
+---
+
 ## 02/11/2026 — Correção Saimo Play HD: HLS Seguro, Descarte de Hosts Mortos, Controles Netflix e Fallback Imediato em 404 (Android 76/1.4.44)
 
 **Contexto e Diagnóstico:**

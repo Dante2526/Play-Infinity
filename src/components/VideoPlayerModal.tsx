@@ -1564,7 +1564,7 @@ export function VideoPlayerModal({
       if(!refresh&&remaining.length){startupExpandedRef.current=true;return prepareStartup(targetSeason,targetEpisode,epoch,undefined,remaining,true);}
       setActiveIframeUrl(null);setIsLoading(false);setError('Nenhuma fonte respondeu disponível para este conteúdo. Tente novamente.');return null;
     }
-    startupPlanRef.current={identity,candidates:result.candidates.slice(0,2),urls:result.urls};return result.selected;
+    startupPlanRef.current={identity,candidates:result.candidates,urls:result.urls};return result.selected;
   };
 
   // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
@@ -1665,7 +1665,7 @@ export function VideoPlayerModal({
           if(recovered){void handleServerSwitch(recovered,true);return;}
         }catch{if(epoch!==serverSelectionEpochRef.current)return;}
       }
-      if(plan.candidates.includes('srv_byse') && servers.some(s=>s.key==='srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')){
+      if(servers.some(s=>s.key==='srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')){
         fallbackAttemptsRef.current.add('srv_byse_retried');
         fallbackAttemptsRef.current.delete('srv_byse');
         console.warn('[VideoPlayerModal] Fontes alternativas esgotadas durante inicialização. Retestando BYSE com resolução em background concluída...');
@@ -2120,7 +2120,7 @@ export function VideoPlayerModal({
           pausedAtRef.current = null;
         }
 
-        if (incomingTime > lastKnownTimeRef.current && incomingTime - lastKnownTimeRef.current < 1.5 && isPaused === false && (data.readyState === undefined || data.readyState >= 2)) {
+        if ((incomingTime > lastKnownTimeRef.current && incomingTime - lastKnownTimeRef.current < 1.5 && isPaused === false && (data.readyState === undefined || data.readyState >= 2)) || (data.duration > 0 && typeof data.readyState === 'number' && data.readyState >= 3 && isPaused === false)) {
           healthPlaybackStartedRef.current = true;
         }
         // 4. Atualiza a memória de tempo (deve ser DEPOIS do diff)

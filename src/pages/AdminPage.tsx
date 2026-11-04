@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent } from "lucide-react";
+import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
@@ -18,6 +18,7 @@ import { AdminLiveChannels } from "../components/AdminLiveChannels";
 import { EncontreiCookieAlert, EncontreiCookieBadge } from "../components/EncontreiCookieAlert";
 import { AdminMascotWidget } from "../components/AdminMascotWidget";
 import { registerAdminFcmToken } from "../services/pushNotifications";
+import { resolveUserDevices, DeviceSession } from "../services/deviceSessionService";
 
 export interface ClientUser {
   id: string;
@@ -43,6 +44,10 @@ export interface ClientUser {
   referralChain?: string[];
   referralStatus?: string;
   trialUntil?: string;
+  devices?: Record<string, any>;
+  devicesCount?: number;
+  devicesList?: DeviceSession[];
+  isDevicesEstimated?: boolean;
 }
 
 interface AdminPageProps {
@@ -128,8 +133,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
     total: 0,
     active: 0,
     inactive: 0,
-    watchingNow: 0
+    watchingNow: 0,
+    totalDevices: 0
   });
+  const [selectedDevicesUser, setSelectedDevicesUser] = useState<ClientUser | null>(null);
 
   // Client List State
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -292,6 +299,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       let active = 0;
       let inactive = 0;
       let watchingNow = 0;
+      let totalDevices = 0;
       const list: ClientUser[] = [];
       
       const fiveMinutesAgo = new Date();
@@ -366,6 +374,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           } catch(e){console.warn("Silenced error:", e);}
         }
 
+        const fcmTokensCount = Array.isArray(data.fcmTokens)
+          ? data.fcmTokens.filter((t: any) => typeof t === "string" && t.trim()).length
+          : (typeof data.fcmToken === "string" && data.fcmToken.trim() ? 1 : 0);
+        const resolvedDevs = resolveUserDevices(data.devices, fcmTokensCount, data.ultimoAcesso || data.lastActive);
+        totalDevices += resolvedDevs.count;
+
         list.push({
           id: docSnap.id,
           name: data.nome || data.name || data.displayName || data.nomeExibicao || "",
@@ -388,7 +402,11 @@ export function AdminPage({ onBack }: AdminPageProps) {
           referralLevel: typeof data.referralLevel === "number" ? data.referralLevel : 0,
           referralChain: Array.isArray(data.referralChain) ? data.referralChain : [],
           referralStatus: data.referralStatus || (data.trialUntil ? "trial" : (activeStatus ? "active" : "registered")),
-          trialUntil: data.trialUntil || data.testeExpiracao || data.testarAte
+          trialUntil: data.trialUntil || data.testeExpiracao || data.testarAte,
+          devices: data.devices || {},
+          devicesCount: resolvedDevs.count,
+          devicesList: resolvedDevs.activeDevices,
+          isDevicesEstimated: resolvedDevs.isEstimated
         });
       });
 
@@ -400,7 +418,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       });
 
       setUsersList(list);
-      setStats({ total, active, inactive, watchingNow });
+      setStats({ total, active, inactive, watchingNow, totalDevices });
     } catch (err) {
       console.error("Erro ao carregar estatísticas", err);
     } finally {
@@ -1142,7 +1160,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         ) : (
           <>
         {/* Dashboard Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
           
           {/* Card 1: Total Users */}
           <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 shadow-xl flex flex-col hover:bg-[#1c1c1e]/80 transition-colors">
@@ -1224,6 +1242,22 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </span>
               Ativos nos últimos 5 minutos
             </p>
+          </div>
+
+          {/* Card 5: Dispositivos Conectados */}
+          <div className="bg-[#1c1c1e]/60 border border-white/5 backdrop-blur-xl rounded-[28px] p-6 shadow-xl flex flex-col hover:bg-[#1c1c1e]/80 transition-colors">
+            <div className="flex items-center gap-4 mb-4 text-white/70">
+              <div className="p-3 bg-cyan-500/20 text-cyan-400 rounded-[18px]">
+                <Smartphone className="w-6 h-6" />
+              </div>
+              <span className="font-semibold">Aparelhos Conectados</span>
+            </div>
+            {loadingUsers ? (
+              <div className="h-10 min-w-[48px] w-12 bg-cyan-500/20 rounded-xl animate-pulse my-0.5" />
+            ) : (
+              <div className="min-w-[48px] w-fit text-center text-4xl font-black text-cyan-400 whitespace-nowrap">{stats.totalDevices}</div>
+            )}
+            <p className="text-white/40 text-sm mt-2 font-medium">Dispositivos ativos em contas</p>
           </div>
 
         </div>
@@ -1495,6 +1529,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             }`}>
                               {isActive ? 'Ativo' : isExpiredClient ? 'Expirado' : 'Inativo'}
                             </span>
+
+                            {/* Badge de Dispositivos Conectados */}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDevicesUser(selectedDevicesUser?.id === client.id ? null : client)}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold shrink-0 transition-all cursor-pointer ${
+                                selectedDevicesUser?.id === client.id
+                                  ? 'bg-cyan-500 text-black shadow-lg shadow-cyan-500/30'
+                                  : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/25 shadow-[0_0_10px_rgba(6,182,212,0.15)]'
+                              }`}
+                              title={client.isDevicesEstimated ? "Estimativa baseada em tokens/atividade recente. Clique para ver detalhes." : "Clique para ver os aparelhos deste usuário"}
+                            >
+                              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+                              <span>
+                                {client.devicesCount || 0} {client.devicesCount === 1 ? 'dispositivo' : 'dispositivos'}
+                              </span>
+                              {Boolean(client.devicesList && client.devicesList.length > 0) && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                              )}
+                            </button>
                           </div>
 
                           {/* E-mail com cópia */}
@@ -1719,6 +1773,54 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           </strong>
                           <p className="leading-relaxed">{client.notes}</p>
                        </div>
+                    )}
+
+                    {/* Drawer de Dispositivos Conectados do Cliente */}
+                    {selectedDevicesUser?.id === client.id && (
+                      <div className="bg-[#141416] border border-cyan-500/30 rounded-2xl p-3 sm:p-4 mt-2 space-y-2 text-xs mx-1 sm:mx-2 animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                          <span className="font-bold text-cyan-300 flex items-center gap-1.5 text-xs sm:text-sm">
+                            <Smartphone className="w-4 h-4 text-cyan-400" />
+                            Aparelhos Conectados — {client.name || client.email}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDevicesUser(null)}
+                            className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/10 cursor-pointer"
+                            title="Fechar"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                        {client.devicesList && client.devicesList.length > 0 ? (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                            {client.devicesList.map((dev) => (
+                              <div key={dev.id} className="bg-white/5 border border-white/10 rounded-xl p-2.5 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="p-2 bg-cyan-500/20 text-cyan-300 rounded-lg shrink-0">
+                                    {dev.type === 'tv' ? <Tv className="w-4 h-4" /> : dev.type === 'desktop' ? <Laptop className="w-4 h-4" /> : <Smartphone className="w-4 h-4" />}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-white truncate text-xs">{dev.name}</p>
+                                    <p className="text-[10px] text-white/50 truncate">
+                                      Visto {new Date(dev.lastActive).toLocaleDateString('pt-BR')} às {new Date(dev.lastActive).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-mono text-cyan-400/80 uppercase px-2 py-0.5 rounded bg-cyan-500/10 shrink-0">
+                                  {dev.type}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-white/60 py-2">
+                            {client.isDevicesEstimated 
+                              ? `Nenhum aparelho registrou dados detalhados ainda, mas constam ${client.devicesCount} dispositivo(s) associado(s) por push/atividade recente.`
+                              : "Nenhum aparelho ativo registrado recentemente para esta conta."}
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
                   );

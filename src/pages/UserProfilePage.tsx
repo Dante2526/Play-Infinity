@@ -137,6 +137,7 @@ import { OnPlayHandler } from "../types";
 import { buildReferralLink, generateReferralCode } from "../services/referralService";
 import { Gift, Share2, Copy as CopyIcon } from "lucide-react";
 import { auth, db } from "../services/firebase";
+import { unregisterDeviceSession } from "../services/deviceSessionService";
 import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { signOut, updatePassword, reauthenticateWithCredential, EmailAuthProvider, updateProfile } from "firebase/auth";
 
@@ -259,6 +260,10 @@ export function UserProfilePage({
 
   const handleLogout = async () => {
     try {
+      const currentUid = auth.currentUser?.uid;
+      if (currentUid) {
+        await unregisterDeviceSession(currentUid);
+      }
       await removeFcmTokenFromCloud(); // Remove o token FCM deste aparelho antes de sair
       // clearLocalUserData() cobre TODAS as chaves reais de dados de conta
       // (playinfinity_user_favorites, favorite_timestamps, read_notifications,

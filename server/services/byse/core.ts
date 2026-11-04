@@ -541,7 +541,7 @@ const byseResolveCache = new Map<string, ByseResolved>();
 
 const byseResolveInflight = new Map<string, Promise<ByseResolved>>();
 
-const BYSE_CACHE_TTL = 20 * 60 * 1000;
+const BYSE_CACHE_TTL = Math.floor(2.5 * 60 * 60 * 1000); // 2h30min (tokens CDN duram ~3h)
 
 const BYSE_SHARED_CACHE_FILE = path.join(process.cwd(), "data", "byse-resolve-cache.json");
 

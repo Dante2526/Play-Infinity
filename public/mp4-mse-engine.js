@@ -788,7 +788,14 @@
         const chunks = [];
         let size = 0, idle = null, done = false;
         const failIdle = function () { cleanup(); try { controller.abort(); } catch (e) {} reject(new Error('mse_idle_timeout')); };
-        const cleanup = function () { if (idle) clearTimeout(idle); done = true; try { reader.cancel(); } catch (e) {} };
+        const cleanup = function () {
+          if (idle) clearTimeout(idle);
+          done = true;
+          try {
+            const p = reader.cancel();
+            if (p && typeof p.catch === 'function') p.catch(function () {});
+          } catch (e) {}
+        };
         (function pump() {
           if (done) return;
           if (idle) clearTimeout(idle);
@@ -830,6 +837,9 @@
       if (truncatedMoov) {
         const moovSize = truncatedMoov.size;
         if (moovSize > 64 * 1024 * 1024) throw new Error('mse_moov_huge');
+        if (truncatedMoov.start < 65536 && moovSize > 2 * 1024 * 1024) {
+          throw new Error('mse_moov_faststart_native');
+        }
         const buf = await fetchRange(truncatedMoov.start, truncatedMoov.start + moovSize - 1, opts.headerTimeoutMs);
         return { parsed: parseMp4(buf.subarray(0, moovSize), truncatedMoov.start), ftypBytes: ftypBytes };
       }
@@ -1111,10 +1121,12 @@
       const t = video.currentTime;
       engine.stats.lastAction = 'seek@' + t.toFixed(1);
       if (inBuffered(t)) { engine.stats.lastAction += '/buffered'; return; }
+      if (t <= 0.2 && nextWindowStart === 0 && fetchingWindow) return;
       if (seekDebounce) clearTimeout(seekDebounce);
       seekDebounce = setTimeout(function () {
         if (engine.destroyed || !sb) return;
         if (inBuffered(t)) return;
+        if (fetchingWindow && t >= nextWindowStart - 0.2 && t <= nextWindowStart + opts.segmentSeconds) return;
         if (fetchController) { try { fetchController.abort(); } catch (e) {} fetchingWindow = false; }
         if (t >= lastAppendedEndSec - 0.5) {
           nextWindowStart = Math.max(t, 0);

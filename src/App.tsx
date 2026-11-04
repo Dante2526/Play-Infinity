@@ -113,6 +113,7 @@ import {
 } from "./services/watchedEpisodes";
 import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem, fetchHistoryFromCloud } from "./services/playbackHistory";
 import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "./services/comments";
+import { registerDeviceSession } from "./services/deviceSessionService";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
@@ -318,6 +319,7 @@ export default function App() {
         if (user.displayName) {
           setUserDisplayName(user.displayName);
         }
+        registerDeviceSession(user.uid); // Registra aparelho conectado no Firestore
         fetchHistoryFromCloud(); // Baixa histórico e mescla no login
         fetchFavoritesFromCloud(); // Baixa favoritos da nuvem
         fetchWatchedFromCloud(); // Baixa episódios assistidos
@@ -502,6 +504,7 @@ export default function App() {
           ultimoAcesso: new Date().toISOString(),
           lastActive: new Date().toISOString()
         });
+        registerDeviceSession(currentUser.uid);
       } catch (err) {
         try {
           await updateDoc(doc(db, "users", currentUser.uid), {

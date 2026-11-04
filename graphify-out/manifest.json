@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1793127958.0553167,
-    "ast_hash": "04eb9d2753e706c73aa04803ff4a52e7",
+    "mtime": 1793756921.4722354,
+    "ast_hash": "3e2ca6b9b7ebf3c9abe679cf1f33af3f",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -15,8 +15,8 @@
     "semantic_hash": "fbaf7cc870c663eb52dcf218531c439d"
   },
   "android/app/src/main/java/com/playinfinity/app/MainActivity.java": {
-    "mtime": 1792860824.8295417,
-    "ast_hash": "b2d0de6d345e91ff0945c2f3212d76a3",
+    "mtime": 1793753132.2088892,
+    "ast_hash": "b26514f773a4be7f556e29c66d149e12",
     "semantic_hash": ""
   },
   "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java": {
@@ -75,7 +75,7 @@
     "semantic_hash": "d13794c0d7bd77240785ef6b56e67098"
   },
   "data/catalog-state.json": {
-    "mtime": 1792862456.7310338,
+    "mtime": 1793586749.902436,
     "ast_hash": "b6c7e6c58bcf629fd726d79e9875ab24",
     "semantic_hash": "b6c7e6c58bcf629fd726d79e9875ab24"
   },
@@ -110,8 +110,8 @@
     "semantic_hash": "331ef318616a37831a3cef798301577a"
   },
   "package.json": {
-    "mtime": 1792860886.50641,
-    "ast_hash": "32b6cdb46b2ac72cf1ebdde22b3f206a",
+    "mtime": 1793489656.640847,
+    "ast_hash": "e6c9afbcdc0ba977678a5486ce7f85fc",
     "semantic_hash": ""
   },
   "patch_channels.js": {
@@ -185,8 +185,8 @@
     "semantic_hash": "ba199d81330d41efb7e9277dd777d2a2"
   },
   "server.ts": {
-    "mtime": 1793123866.805218,
-    "ast_hash": "74eeee61b1241885d134a1c70e456f82",
+    "mtime": 1793753132.242811,
+    "ast_hash": "a43804277672d26642a718707d1c15eb",
     "semantic_hash": ""
   },
   "server/firebaseAdmin.ts": {
@@ -200,8 +200,8 @@
     "semantic_hash": ""
   },
   "server/routes/adminOps.ts": {
-    "mtime": 1793057116.675709,
-    "ast_hash": "e28bcac01399a20ed1cf5e6ca0518c68",
+    "mtime": 1793753132.2453296,
+    "ast_hash": "a1d5cd748a780ab7dac86c399fe161a9",
     "semantic_hash": ""
   },
   "server/routes/bolodechocolate.ts": {
@@ -225,18 +225,18 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1793057116.6788585,
-    "ast_hash": "927c2b0c5ab8785bed247c53cea2cfb0",
+    "mtime": 1793753132.257398,
+    "ast_hash": "e18addb574c58304f17bed475a42044b",
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
-    "mtime": 1793057116.6808197,
-    "ast_hash": "5a6ffded3fc75d3d5fa4f41c5b12920d",
+    "mtime": 1793489656.6539383,
+    "ast_hash": "6bc6b6f70d889517ec46089dcc59e41b",
     "semantic_hash": ""
   },
   "server/routes/mixdrop.ts": {
-    "mtime": 1793057116.683826,
-    "ast_hash": "bbd31c0cb70970f7d59858e63816c930",
+    "mtime": 1793753132.2603996,
+    "ast_hash": "9b5eee780681fb31df53d6179b37d9b2",
     "semantic_hash": ""
   },
   "server/routes/nixplayRoutes.ts": {
@@ -270,8 +270,8 @@
     "semantic_hash": ""
   },
   "server/routes/videoScrapers.ts": {
-    "mtime": 1792847790.9834414,
-    "ast_hash": "cc58fbcf88c86c4b725c7d8672467aac",
+    "mtime": 1793489656.6619177,
+    "ast_hash": "3515382d9d7632d8506c8792b4bdcb6c",
     "semantic_hash": ""
   },
   "server/routes/vidsrcRoutes.ts": {
@@ -300,8 +300,8 @@
     "semantic_hash": "cdd8bb88918f8ba2d41814d8db037c30"
   },
   "server/utils/helpers.ts": {
-    "mtime": 1792414433.1894698,
-    "ast_hash": "c44b69ddd6c65fe8c464689dda9c8a06",
+    "mtime": 1793753132.2794383,
+    "ast_hash": "d551c5d73ba384905b21c29d80c000fa",
     "semantic_hash": ""
   },
   "setup-vps.sh": {
@@ -310,33 +310,33 @@
     "semantic_hash": "af2bd18a7bdd45f4be5dc3c7a7b88bd7"
   },
   "src/App.tsx": {
-    "mtime": 1793123866.8030927,
-    "ast_hash": "b62f52d9bea7b176ecbb9917e00456b7",
+    "mtime": 1793758267.6363554,
+    "ast_hash": "8cee7bd0540a00334ce3462c7507f1be",
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
-    "mtime": 1792890305.336747,
-    "ast_hash": "998943b389f25d4ebac3fc17f15aabc0",
+    "mtime": 1793489656.6817074,
+    "ast_hash": "e34fce928a975d8847a7846afc691742",
     "semantic_hash": ""
   },
   "src/components/AdminDeployMonitor.tsx": {
-    "mtime": 1792863152.4975107,
-    "ast_hash": "443856625ce4139c3f8c5cb551e0557e",
+    "mtime": 1793489656.6837082,
+    "ast_hash": "b3a6eee847a135c7b631e026afba3363",
     "semantic_hash": ""
   },
   "src/components/AdminHealthMonitor.tsx": {
-    "mtime": 1792863172.438084,
-    "ast_hash": "bc63fc86cb5136754b7db15d952dc1e6",
+    "mtime": 1793753132.2826545,
+    "ast_hash": "31306d1c7e1312b6f1147b20aaf16790",
     "semantic_hash": ""
   },
   "src/components/AdminPushNotifications.tsx": {
-    "mtime": 1792311650.3780339,
-    "ast_hash": "10c51d8c5e7a92928cfdededc7f8f589",
+    "mtime": 1793489656.686344,
+    "ast_hash": "ac0c340fcf3cc1b3ee5ec99880220bd4",
     "semantic_hash": ""
   },
   "src/components/AuthModal.tsx": {
-    "mtime": 1793123866.807335,
-    "ast_hash": "c95976fbfff85c7481a6cecb7e7ce132",
+    "mtime": 1793753132.2852294,
+    "ast_hash": "85885c3bd1f0720c8f3b8592d34c3f1c",
     "semantic_hash": ""
   },
   "src/components/BidirectionalProgressBar.tsx": {
@@ -350,9 +350,9 @@
     "semantic_hash": "788f4e332b88ea0f1f261d7b4193f744"
   },
   "src/components/CastModal.tsx": {
-    "mtime": 1791510418.9606066,
-    "ast_hash": "45e9e5247c1ea97a39a413d43575d84d",
-    "semantic_hash": "45e9e5247c1ea97a39a413d43575d84d"
+    "mtime": 1793489656.6878505,
+    "ast_hash": "970fd01b8e6ea90a48fc8ae465b6f36d",
+    "semantic_hash": ""
   },
   "src/components/ChannelLogo.tsx": {
     "mtime": 1789731728.8769934,
@@ -390,13 +390,13 @@
     "semantic_hash": "199529f293a9c986df0cbd3d8abf2eb5"
   },
   "src/components/LivePlayerModal.tsx": {
-    "mtime": 1793103233.4206738,
-    "ast_hash": "f36d347b76e07e4ff83210033f1e4021",
+    "mtime": 1793565225.4044845,
+    "ast_hash": "bbf78b9a4ed943cfa0a984be538983af",
     "semantic_hash": ""
   },
   "src/components/LiveTvPage.tsx": {
-    "mtime": 1793103233.422681,
-    "ast_hash": "d5831d494cecb0380469e7cfa11e22b9",
+    "mtime": 1793489656.6948597,
+    "ast_hash": "f3c3bbbe378a4bc9d8403d4ee48a2520",
     "semantic_hash": ""
   },
   "src/components/NavItem.tsx": {
@@ -405,8 +405,8 @@
     "semantic_hash": "78a13e12251b711b2f028de6ba0a037e"
   },
   "src/components/NetflixPlayerSkin.tsx": {
-    "mtime": 1793065194.3278716,
-    "ast_hash": "14551604a59c79b65323a6d4ac57260a",
+    "mtime": 1793753132.2872446,
+    "ast_hash": "35dbfc574e4cdd810852f0b2afe3326d",
     "semantic_hash": ""
   },
   "src/components/NotificationModal.tsx": {
@@ -415,8 +415,8 @@
     "semantic_hash": ""
   },
   "src/components/PaywallModal.tsx": {
-    "mtime": 1793057116.6974845,
-    "ast_hash": "5c5067ce04a96c84156e7e8dd2f5f132",
+    "mtime": 1793489656.7004597,
+    "ast_hash": "ea0f6bca26f1969019383be6583b2c10",
     "semantic_hash": ""
   },
   "src/components/ReleaseCalendarPage.tsx": {
@@ -440,13 +440,13 @@
     "semantic_hash": ""
   },
   "src/components/TurnstileWidget.tsx": {
-    "mtime": 1790766890.808668,
-    "ast_hash": "2e39db6aeacd9f881a38f9b06729d03c",
-    "semantic_hash": "2e39db6aeacd9f881a38f9b06729d03c"
+    "mtime": 1793753132.2892442,
+    "ast_hash": "a1d2c148afd7e2ceb1fd51cf6165fdb0",
+    "semantic_hash": ""
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1793065427.3934665,
-    "ast_hash": "972e4fff97d4f98da53757c280a1b43b",
+    "mtime": 1793756360.7425854,
+    "ast_hash": "ab1535e31954c29c6cb58af4c6b6786e",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -470,8 +470,8 @@
     "semantic_hash": "8ea385ad66cc68f120d2d3371fee44e5"
   },
   "src/data/liveChannels.ts": {
-    "mtime": 1793057116.7005968,
-    "ast_hash": "a06a5f66e2b8b2a5df763863b07ce55a",
+    "mtime": 1793753132.2933993,
+    "ast_hash": "5d9fb207300dfcb6a5d1f7ca04d8b000",
     "semantic_hash": ""
   },
   "src/data/sagas.ts": {
@@ -480,8 +480,8 @@
     "semantic_hash": ""
   },
   "src/data/serverBlacklist.ts": {
-    "mtime": 1792847791.0206053,
-    "ast_hash": "c1a11463367c2a78eec488d918e40102",
+    "mtime": 1793753132.2949164,
+    "ast_hash": "f1f8bbae917737afda1a55e4d74cbd0f",
     "semantic_hash": ""
   },
   "src/hooks/useSmartTV.ts": {
@@ -490,8 +490,8 @@
     "semantic_hash": ""
   },
   "src/hooks/useSubscription.ts": {
-    "mtime": 1793116821.1633377,
-    "ast_hash": "2f2a4ea669a9be2c0eb546f230c40469",
+    "mtime": 1793489656.7050028,
+    "ast_hash": "cb6f44fb06f87234c88132b9d6c0254a",
     "semantic_hash": ""
   },
   "src/hooks/useVoiceSearch.ts": {
@@ -505,13 +505,13 @@
     "semantic_hash": "5b8602d81fc297a03740eb3d61fb5e93"
   },
   "src/pages/AdminPage.tsx": {
-    "mtime": 1793057116.7036383,
-    "ast_hash": "33ffaba8dc8727d5fb57ab2fe23c52bf",
+    "mtime": 1793758578.165413,
+    "ast_hash": "322653d5d3aa94e789a21ba8e6f09cd4",
     "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
-    "mtime": 1793122362.4931283,
-    "ast_hash": "878a91c157ed57069e538f6464be2772",
+    "mtime": 1793756115.2204869,
+    "ast_hash": "8c6fa563c2092ea35707dbf84287c51e",
     "semantic_hash": ""
   },
   "src/pages/DownloadsPage.tsx": {
@@ -535,13 +535,13 @@
     "semantic_hash": ""
   },
   "src/pages/HomePage.tsx": {
-    "mtime": 1793115833.8092754,
-    "ast_hash": "7d45be48783cacbe4f853a8f7e726a69",
+    "mtime": 1793491706.8515806,
+    "ast_hash": "94d33b9c0d01588246874792e152f278",
     "semantic_hash": ""
   },
   "src/pages/PrivacyPolicyPage.tsx": {
-    "mtime": 1793123866.811285,
-    "ast_hash": "1f484970e95943ae2508f0521e165204",
+    "mtime": 1793753132.3009312,
+    "ast_hash": "0182b0c03e693efc2e1ae7bc7ccd2caa",
     "semantic_hash": ""
   },
   "src/pages/ProviderPage.tsx": {
@@ -550,8 +550,8 @@
     "semantic_hash": "494f54b55a800bb0697430b3f26951b8"
   },
   "src/pages/UserProfilePage.tsx": {
-    "mtime": 1793121491.5975382,
-    "ast_hash": "d21c6ca9097c925fcf74c497ed6b7cbb",
+    "mtime": 1793758835.9531808,
+    "ast_hash": "7690ad221580130c9678a7bd23af7101",
     "semantic_hash": ""
   },
   "src/services/adminApi.ts": {
@@ -565,18 +565,18 @@
     "semantic_hash": "3b7f6d40f433d57a7ae79da2ea120ec8"
   },
   "src/services/downloadService.ts": {
-    "mtime": 1791499308.5938148,
-    "ast_hash": "f9144c46fcabf3eae7ab7657ab994574",
-    "semantic_hash": "f9144c46fcabf3eae7ab7657ab994574"
+    "mtime": 1793489656.7125692,
+    "ast_hash": "b4cf30445c5641ad0ab3e54af1c4422e",
+    "semantic_hash": ""
   },
   "src/services/encontreiCatalog.ts": {
-    "mtime": 1792847791.033275,
-    "ast_hash": "595ef3b969b9ddc1575502762ac2da3d",
+    "mtime": 1793489656.7143734,
+    "ast_hash": "4a5db05ab81604c9e4ca1a50e40ba946",
     "semantic_hash": ""
   },
   "src/services/episodeAvailability.ts": {
-    "mtime": 1792501343.2389877,
-    "ast_hash": "f750625f74882bc0b32378c6273c5559",
+    "mtime": 1793489656.715778,
+    "ast_hash": "a4dbc36ae41e241ec200131559ade57c",
     "semantic_hash": ""
   },
   "src/services/favorites.ts": {
@@ -590,8 +590,8 @@
     "semantic_hash": "a5e90b34fef7c8ff6717b2f833014767"
   },
   "src/services/liveTvStorage.ts": {
-    "mtime": 1793103233.4246805,
-    "ast_hash": "5c17bad303b3560d1effcb1d7d819cec",
+    "mtime": 1793489656.7179716,
+    "ast_hash": "49bb560c18195983e01f3adad1c3f6de",
     "semantic_hash": ""
   },
   "src/services/networkQuality.ts": {
@@ -610,18 +610,18 @@
     "semantic_hash": "f576c968bdc42e8a09ee56d84c2e1f3a"
   },
   "src/services/playbackHistory.ts": {
-    "mtime": 1792886975.7149556,
-    "ast_hash": "378d18276b0546c2b8a5d1fc6b2bc9db",
+    "mtime": 1793492292.2798104,
+    "ast_hash": "f8d29843309dc01ce6819bb046637670",
     "semantic_hash": ""
   },
   "src/services/pushNotifications.ts": {
-    "mtime": 1792935119.0339985,
-    "ast_hash": "2b82acc106a5bb2410b1420cd81348d0",
+    "mtime": 1793489656.7233346,
+    "ast_hash": "b74b7d7146115cd72e8ad975aaceabcf",
     "semantic_hash": ""
   },
   "src/services/tmdb.ts": {
-    "mtime": 1793112725.8773577,
-    "ast_hash": "3a11ac2f5a3b0e8f2ad136c9cd1e68fd",
+    "mtime": 1793489656.724946,
+    "ast_hash": "9d784b80631a2d19df0f78718e598f40",
     "semantic_hash": ""
   },
   "src/services/watchedEpisodes.ts": {
@@ -645,7 +645,7 @@
     "semantic_hash": "ff6a05960c1b751c051941e4ba0bcfb7"
   },
   "src/utils/envUtils.ts": {
-    "mtime": 1791023915.553285,
+    "mtime": 1793489638.4139678,
     "ast_hash": "872842a4072da422305b7ec08b89ce74",
     "semantic_hash": "872842a4072da422305b7ec08b89ce74"
   },
@@ -660,8 +660,8 @@
     "semantic_hash": ""
   },
   "src/utils/safeStorage.ts": {
-    "mtime": 1793121447.852499,
-    "ast_hash": "703640a7ae5e73c6ad441e560d597afe",
+    "mtime": 1793489656.7316217,
+    "ast_hash": "af0e410994c5246feed78cfe38849082",
     "semantic_hash": ""
   },
   "src/utils/suppressErrors.ts": {
@@ -735,13 +735,13 @@
     "semantic_hash": "1d7c2599c6e5776470dc0c5bc0ca8c05"
   },
   ".github/workflows/main.yml": {
-    "mtime": 1792867587.2323766,
-    "ast_hash": "753fd4dcf4a17e18d138508e61d6df3d",
+    "mtime": 1793489656.6328113,
+    "ast_hash": "095403e64d3ebbfa57c98ff4859b0988",
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1792847790.925746,
-    "ast_hash": "97752660c6e2bddb9e43e0cc98e3596b",
+    "mtime": 1793753132.2041905,
+    "ast_hash": "70ad3625cf4e3556e4a99e41520e1d95",
     "semantic_hash": ""
   },
   "INFRAESTRUTURA_ORACLE_E_CLOUDFLARE.md": {
@@ -805,8 +805,8 @@
     "semantic_hash": "b6c52100cf0f00b71a1c25d54ce82241"
   },
   "index.html": {
-    "mtime": 1792847790.9372244,
-    "ast_hash": "aaca8c175b4ff89a98d373b5a7188e80",
+    "mtime": 1793753132.2187333,
+    "ast_hash": "310b8f5335a1b865784828f942930cb0",
     "semantic_hash": ""
   },
   "mixdrop.html": {
@@ -835,8 +835,8 @@
     "semantic_hash": "639c5ca9163cb53294086814a8d5ed15"
   },
   "task.md": {
-    "mtime": 1792313045.9522538,
-    "ast_hash": "1eecdcc383d94f954cc2ae186c61b6d3",
+    "mtime": 1793758074.6006958,
+    "ast_hash": "5d89b35f1e4d4ffbadff567bb848bb7b",
     "semantic_hash": ""
   },
   "tsc_output.txt": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793128613.7026544,
-    "ast_hash": "fc4cd8ce97c4661338af66b6b5a832ea",
+    "mtime": 1793756937.837083,
+    "ast_hash": "c98cbe9dac1d41125c0a4a212af4635f",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,23 +1135,23 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1793128182.0711594,
-    "ast_hash": "aba7f6ab9ffdff1ce9e534539ac2bafe",
+    "mtime": 1793759141.0065622,
+    "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1793128182.0751953,
-    "ast_hash": "aba7f6ab9ffdff1ce9e534539ac2bafe",
+    "mtime": 1793759141.007568,
+    "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": ""
   },
   "server/routes/streamtapeRoutes.ts": {
-    "mtime": 1792847790.9803824,
-    "ast_hash": "9a260d0c98d101a118c00fa784b8a323",
+    "mtime": 1793753132.2688344,
+    "ast_hash": "82a510ad2d09a6f2d0d9ff7c9c8352c1",
     "semantic_hash": ""
   },
   "server/routes/doodstreamRoutes.ts": {
-    "mtime": 1793057116.67671,
-    "ast_hash": "f226d85ab51a664eaafe3b825d164328",
+    "mtime": 1793753132.24884,
+    "ast_hash": "30955b78d7097c500200dae85b34ad53",
     "semantic_hash": ""
   },
   "scripts/deploy-release.sh": {
@@ -1170,18 +1170,18 @@
     "semantic_hash": ""
   },
   "server/routes/byseRoutes.ts": {
-    "mtime": 1792891574.8700755,
-    "ast_hash": "2cfb65b03458dadfcb34c11a7934c56b",
+    "mtime": 1793753132.2473307,
+    "ast_hash": "05c376e94a683a2c0c10e7e8457c71e4",
     "semantic_hash": ""
   },
   "server/routes/playbackHealth.ts": {
-    "mtime": 1792847790.9737146,
-    "ast_hash": "86f48d426e3b7d63b4104abe37bfe18c",
+    "mtime": 1793753132.2623978,
+    "ast_hash": "f4eacb86cec78210d54c3424c325231b",
     "semantic_hash": ""
   },
   "server/services/byse/core.ts": {
-    "mtime": 1792893936.8690865,
-    "ast_hash": "c1c54fc9374a73f2fb04c2e0a048e3b6",
+    "mtime": 1793755999.6831295,
+    "ast_hash": "dedb2260d91ceb5df3f8c61024d68873",
     "semantic_hash": ""
   },
   "server/services/byse/pow.ts": {
@@ -1190,8 +1190,8 @@
     "semantic_hash": ""
   },
   "server/services/byse/sources.ts": {
-    "mtime": 1792851582.2405016,
-    "ast_hash": "11ae21fd368a6ad38e5f1f65edbf0d58",
+    "mtime": 1793756752.2781272,
+    "ast_hash": "69e799a3244c8df2da7326a817a7c5d9",
     "semantic_hash": ""
   },
   "server/services/byse/tickets.ts": {
@@ -1205,18 +1205,18 @@
     "semantic_hash": ""
   },
   "server/services/mixdropProxy.ts": {
-    "mtime": 1792847790.990489,
-    "ast_hash": "7d8f3ff4ae2c5b91a2e47fb74398f503",
+    "mtime": 1793489656.671659,
+    "ast_hash": "2599c691b7b417fc2e4f1fc8603d6b9b",
     "semantic_hash": ""
   },
   "server/services/mixdropRecovery.ts": {
-    "mtime": 1792847790.9935148,
-    "ast_hash": "549f28a6d04007aae35df4a53607a892",
+    "mtime": 1793489656.671659,
+    "ast_hash": "351e3fa1d54f7c4c65d0df14cd622e9f",
     "semantic_hash": ""
   },
   "server/services/playbackHealth.ts": {
-    "mtime": 1792847790.9974957,
-    "ast_hash": "b131ca75680ddc70479c65bb06354c0d",
+    "mtime": 1793753132.2760594,
+    "ast_hash": "470e5a13ae4834e92d9ddd0dab05ddf3",
     "semantic_hash": ""
   },
   "server/services/streamtapeMediaProxy.ts": {
@@ -1240,8 +1240,8 @@
     "semantic_hash": ""
   },
   "server/services/vizerDomains.ts": {
-    "mtime": 1792936364.6907873,
-    "ast_hash": "36d506ad881f879836a8db67f74b0ae5",
+    "mtime": 1793753132.2778032,
+    "ast_hash": "df198aa0f81619f444e0ae2d34a04a78",
     "semantic_hash": ""
   },
   "server/utils/loadEnvironment.ts": {
@@ -1260,28 +1260,28 @@
     "semantic_hash": ""
   },
   "src/services/catalogSearch.ts": {
-    "mtime": 1792847791.031276,
-    "ast_hash": "fb61e6ba4ba1b6dcafc4e33719cef2b2",
+    "mtime": 1793489656.710568,
+    "ast_hash": "2574043e0d4dfd11e157b7231d659283",
     "semantic_hash": ""
   },
   "src/services/homeReleaseFeed.ts": {
-    "mtime": 1793114331.1553893,
-    "ast_hash": "d688d4eb28db5d5d44255ac8bda14331",
+    "mtime": 1793489656.7169063,
+    "ast_hash": "bd0f8f8965ada5ab5506cd14971aff1d",
     "semantic_hash": ""
   },
   "src/services/mixdropSourceRouting.ts": {
-    "mtime": 1792847791.0342948,
-    "ast_hash": "abaae31ea14d91b93a42e537eac75758",
+    "mtime": 1793489656.718511,
+    "ast_hash": "afabd23ec39459a6a11adc819075b93a",
     "semantic_hash": ""
   },
   "src/services/playbackHealth.ts": {
-    "mtime": 1792847791.035277,
-    "ast_hash": "cc7e65a4d9c15801293781bc0bc7f27a",
+    "mtime": 1793489656.7206624,
+    "ast_hash": "b3b36a9c3b3a2646cee379aae00590a1",
     "semantic_hash": ""
   },
   "src/services/playbackStartup.ts": {
-    "mtime": 1793064260.1349404,
-    "ast_hash": "6f261ad947b430811ef34a6675bc8a44",
+    "mtime": 1793756663.6179295,
+    "ast_hash": "d96c8a6c48a6035fb9750711ab310852",
     "semantic_hash": ""
   },
   "src/utils/playerFrameMessages.ts": {
@@ -1290,8 +1290,8 @@
     "semantic_hash": ""
   },
   "src/utils/playerIntegration.ts": {
-    "mtime": 1792847791.0372765,
-    "ast_hash": "5c4205baca8a765976d343f74345d61d",
+    "mtime": 1793753132.3079839,
+    "ast_hash": "768c59c71d19dfa4e3c6b91a2c644191",
     "semantic_hash": ""
   },
   ".github/workflows/sync-drive.yml": {
@@ -1330,8 +1330,8 @@
     "semantic_hash": ""
   },
   "src/components/AdminLiveChannels.tsx": {
-    "mtime": 1793103233.4176762,
-    "ast_hash": "060b1b53ed980434f29e6de53e0c8f4f",
+    "mtime": 1793753132.2841642,
+    "ast_hash": "46338d90cbf6a625755e4d55c59ef281",
     "semantic_hash": ""
   },
   "src/services/liveChannelService.ts": {
@@ -1350,13 +1350,13 @@
     "semantic_hash": ""
   },
   "server/services/adminSentinel.ts": {
-    "mtime": 1793127909.734991,
-    "ast_hash": "4b41986882756b52243fa020d3e4e890",
+    "mtime": 1793489656.6642406,
+    "ast_hash": "5e1bf042e29ce2054314a4efeec1fbc4",
     "semantic_hash": ""
   },
   "src/components/AdminMascotWidget.tsx": {
-    "mtime": 1793057116.693401,
-    "ast_hash": "38ab450c5e379b276a74798507fcaa20",
+    "mtime": 1793148980.8392887,
+    "ast_hash": "e848ee053762dfc05c63d72e09b2ae2c",
     "semantic_hash": ""
   },
   "scripts/bootstrap-external-catalog.ts": {
@@ -1365,23 +1365,23 @@
     "semantic_hash": ""
   },
   "server/routes/externalRoutes.ts": {
-    "mtime": 1793103233.4096684,
-    "ast_hash": "c078fd4341c60192e1ae1124b3d3478e",
+    "mtime": 1793551298.5345752,
+    "ast_hash": "ecf7faf5b77d97bd9614bdeb3b812a2f",
     "semantic_hash": ""
   },
   "server/services/externalCatalog.ts": {
-    "mtime": 1793128044.5036414,
-    "ast_hash": "65abd8784f29455b57ed4ddd5fa6a8de",
+    "mtime": 1793753132.2743514,
+    "ast_hash": "49bd44de1bcf3b1491f4c6e95c271912",
     "semantic_hash": ""
   },
   "server/services/saimoCatalogScraper.ts": {
-    "mtime": 1793057116.6903734,
-    "ast_hash": "efd27bcbee0eee8356671fe0dd7273c7",
+    "mtime": 1793155700.4385116,
+    "ast_hash": "c647f970ec8f1a9fc027ba2af24bfcaf",
     "semantic_hash": ""
   },
   "server/services/vizerSqliteStore.ts": {
-    "mtime": 1793057116.6903734,
-    "ast_hash": "373d65df87a06fef5b317a00f61af36e",
+    "mtime": 1793489656.6761768,
+    "ast_hash": "baaf26ca9798564cdfeb2de6f08bc855",
     "semantic_hash": ""
   },
   "server/utils/externalValidation.ts": {
@@ -1395,8 +1395,8 @@
     "semantic_hash": ""
   },
   "src/utils/subscriptionStatus.ts": {
-    "mtime": 1793057116.7057786,
-    "ast_hash": "b1a104aa33266160490b2431266c830f",
+    "mtime": 1793489656.7326334,
+    "ast_hash": "bfbf8816e7985d86842fca496a380f5b",
     "semantic_hash": ""
   },
   "src/utils/vttParser.ts": {
@@ -1425,8 +1425,8 @@
     "semantic_hash": ""
   },
   "server/services/liveChannelProbe.ts": {
-    "mtime": 1793103233.4136796,
-    "ast_hash": "4afdf570cf51882de7d2975dd63f8b57",
+    "mtime": 1793504719.6829338,
+    "ast_hash": "f4ca3a2f330f97be061faa0f7639b15e",
     "semantic_hash": ""
   },
   "src/components/ContinueWatchingRow.tsx": {
@@ -1435,8 +1435,8 @@
     "semantic_hash": ""
   },
   "src/components/ExternalChannelSources.tsx": {
-    "mtime": 1793103233.418676,
-    "ast_hash": "902a0f74f31c680250a8386947a131d5",
+    "mtime": 1793502765.669564,
+    "ast_hash": "f224537821de849636cbe15ccb064027",
     "semantic_hash": ""
   },
   "src/services/liveCatalogue.ts": {
@@ -1450,13 +1450,218 @@
     "semantic_hash": ""
   },
   "public/privacidade.html": {
-    "mtime": 1793122977.568218,
-    "ast_hash": "319c22ec5e25037614538ceb8972ef3d",
+    "mtime": 1793753132.2242587,
+    "ast_hash": "2100709af1fcda60e81d8478df2e9b54",
     "semantic_hash": ""
   },
   "public/privacy.html": {
     "mtime": 1793122986.9392045,
     "ast_hash": "6baf3c0277d694e013b0964638cc11a9",
+    "semantic_hash": ""
+  },
+  "android/app/google-services.json": {
+    "mtime": 1793489959.646624,
+    "ast_hash": "e27357633ee41064bc59bb10b161e978",
+    "semantic_hash": ""
+  },
+  "android/app/src/main/java/com/playinfinity/app/OpenNotificationSettingsPlugin.java": {
+    "mtime": 1793489656.6358109,
+    "ast_hash": "33e740f43a0a00a600d9768049cbe3d0",
+    "semantic_hash": ""
+  },
+  "data/releases-state.json": {
+    "mtime": 1793586754.925,
+    "ast_hash": "0c993be38616302ac40eca0a711dc72d",
+    "semantic_hash": ""
+  },
+  "public/mp4-mse-engine.js": {
+    "mtime": 1793756280.0343833,
+    "ast_hash": "7ea4eccb9ce9cbf2db3efde8f4ad80a9",
+    "semantic_hash": ""
+  },
+  "scripts/anidigital-sim/harness-entry.tsx": {
+    "mtime": 1793753132.2252667,
+    "ast_hash": "b40146162906cf15391e442fae9a0f76",
+    "semantic_hash": ""
+  },
+  "scripts/anidigital-sim/stubs/playbackHistory.ts": {
+    "mtime": 1793753132.2272758,
+    "ast_hash": "7ddbccd19539bce9993127568afeabf6",
+    "semantic_hash": ""
+  },
+  "scripts/anidigital-sim/stubs/tmdb.ts": {
+    "mtime": 1793753132.2272758,
+    "ast_hash": "523774a829517c7ff43df6b072600cdb",
+    "semantic_hash": ""
+  },
+  "scripts/build_anidigital_sqlite.py": {
+    "mtime": 1793753132.2368016,
+    "ast_hash": "9c93bc90d11a0acd03ea9278155e406a",
+    "semantic_hash": ""
+  },
+  "scripts/build_encontrei_sqlite.py": {
+    "mtime": 1793489656.6418536,
+    "ast_hash": "92e3748c4163a0a9d94c353ba7ae62ad",
+    "semantic_hash": ""
+  },
+  "scripts/build_saimo_sqlite.py": {
+    "mtime": 1793573288.1484716,
+    "ast_hash": "ac931ee37091e96c73254df1b082d86f",
+    "semantic_hash": ""
+  },
+  "scripts/scrape_anidigital_catalog.py": {
+    "mtime": 1793753132.2418013,
+    "ast_hash": "d6c5f4fd15744a5c9684a73140fa3903",
+    "semantic_hash": ""
+  },
+  "scripts/simplify_live_channel_servers.py": {
+    "mtime": 1793489656.6448548,
+    "ast_hash": "18f1893a66a93fde53b0ed6e22842e0d",
+    "semantic_hash": ""
+  },
+  "server/routes/anidigitalRoutes.ts": {
+    "mtime": 1793753132.2463315,
+    "ast_hash": "e217113ddaf925d5094ac64e246ba9db",
+    "semantic_hash": ""
+  },
+  "server/routes/saimoRoutes.ts": {
+    "mtime": 1793753132.2659607,
+    "ast_hash": "ed42251ef0323f546caf501cf63dba52",
+    "semantic_hash": ""
+  },
+  "server/services/anidigitalResolver.ts": {
+    "mtime": 1793753132.2693422,
+    "ast_hash": "64cf86572a03af90554626be0b6e743a",
+    "semantic_hash": ""
+  },
+  "server/services/anidigitalSqliteStore.ts": {
+    "mtime": 1793753132.2703502,
+    "ast_hash": "bdca9f5859c479c167325cce40a70b09",
+    "semantic_hash": ""
+  },
+  "server/services/blockedLiveChannels.ts": {
+    "mtime": 1793489656.6653366,
+    "ast_hash": "afa7a5103f315af19908289069a2ab07",
+    "semantic_hash": ""
+  },
+  "server/services/dunningWatcher.ts": {
+    "mtime": 1793489656.6680284,
+    "ast_hash": "4f457daacbc8383697c58ff6c7693aee",
+    "semantic_hash": ""
+  },
+  "server/services/embedPlayerProxy.ts": {
+    "mtime": 1793566629.9765897,
+    "ast_hash": "73646a77613657c304852df082b12539",
+    "semantic_hash": ""
+  },
+  "server/services/encontreiSqliteStore.ts": {
+    "mtime": 1793489656.669113,
+    "ast_hash": "6374ef9cbd281ca6ec86d02d8b9509e9",
+    "semantic_hash": ""
+  },
+  "server/services/minhatelaCatalog.ts": {
+    "mtime": 1793566648.7275622,
+    "ast_hash": "7e32e111e6eb6f9e43a89fc81a8d2757",
+    "semantic_hash": ""
+  },
+  "server/services/newReleasesWatcher.ts": {
+    "mtime": 1793489656.6731665,
+    "ast_hash": "50ff1566f0d6053863a26e19300395bd",
+    "semantic_hash": ""
+  },
+  "server/services/playerErrorPage.ts": {
+    "mtime": 1793753132.2771494,
+    "ast_hash": "3c4fb784522c85ea61710a5cd8b467a0",
+    "semantic_hash": ""
+  },
+  "server/services/saimoSqliteStore.ts": {
+    "mtime": 1793581247.771305,
+    "ast_hash": "72d61721606375bda52f0daf32c144e9",
+    "semantic_hash": ""
+  },
+  "src/components/NotificationPermissionGate.tsx": {
+    "mtime": 1793489656.698366,
+    "ast_hash": "84d79f9f8b5b65e96d5ece1df20e44b9",
+    "semantic_hash": ""
+  },
+  "src/data/streamingAllowlist.ts": {
+    "mtime": 1793753132.2959225,
+    "ast_hash": "c56c75421c2c69a3ab19a7d59714eb34",
+    "semantic_hash": ""
+  },
+  "src/services/bysePrewarm.ts": {
+    "mtime": 1793756073.2771602,
+    "ast_hash": "3baee5cd95bfc50b4cc9b0a98aba00a0",
+    "semantic_hash": ""
+  },
+  "src/services/notifGateLogic.ts": {
+    "mtime": 1793489656.719568,
+    "ast_hash": "3feeb135fa414cc24ebc57c17d162151",
+    "semantic_hash": ""
+  },
+  "src/services/webCastSdk.ts": {
+    "mtime": 1793489656.7285442,
+    "ast_hash": "f613df9a182a5146a7edf52fcb166910",
+    "semantic_hash": ""
+  },
+  "src/utils/apiBaseUrl.ts": {
+    "mtime": 1793489656.7300096,
+    "ast_hash": "751e8f12319866145ac8fee9dcc78d3d",
+    "semantic_hash": ""
+  },
+  "src/utils/isNativeAppOrWebView.ts": {
+    "mtime": 1793753132.3049524,
+    "ast_hash": "faa6163d1fa819edddf6afaabb29af9f",
+    "semantic_hash": ""
+  },
+  "docs/adr/0001-saimo-hls-first.md": {
+    "mtime": 1793753132.2121918,
+    "ast_hash": "4d4f18d5a1ee2dd2dd1efaa01a3a0e7a",
+    "semantic_hash": ""
+  },
+  "docs/adr/0002-allowlist-vs-blacklist.md": {
+    "mtime": 1793753132.2131977,
+    "ast_hash": "591fe0d0cb682a6288233188cc8242f2",
+    "semantic_hash": ""
+  },
+  "docs/adr/0003-production-smoke-tests.md": {
+    "mtime": 1793753132.2142007,
+    "ast_hash": "251c1b4f8fa7e35fa33d73f0681d0dc2",
+    "semantic_hash": ""
+  },
+  "docs/adr/0004-anidigital-anime-provider.md": {
+    "mtime": 1793753132.2147076,
+    "ast_hash": "2dbcdb913d3212823b0911132068051c",
+    "semantic_hash": ""
+  },
+  "docs/adr/README.md": {
+    "mtime": 1793753132.2157211,
+    "ast_hash": "a950f77d3c19b0f3e44c32fa5fa2b9f5",
+    "semantic_hash": ""
+  },
+  "docs/adr/_template.md": {
+    "mtime": 1793753132.2167318,
+    "ast_hash": "98f47a98adb58f84e8928b6feb4cbd1e",
+    "semantic_hash": ""
+  },
+  "docs/black-clover-audit.md": {
+    "mtime": 1793489656.6368105,
+    "ast_hash": "bfc199a83a7b16191d6bdbe4a41c7666",
+    "semantic_hash": ""
+  },
+  "docs/superpowers/plans/2026-11-01-masonry-channel-grid.md": {
+    "mtime": 1793504719.7525427,
+    "ast_hash": "43438aabbf8f8d5426941a8c1a870738",
+    "semantic_hash": ""
+  },
+  "scripts/anidigital-sim/index.html": {
+    "mtime": 1793753132.2262683,
+    "ast_hash": "65db2e0736ba8b336797c773feaef63b",
+    "semantic_hash": ""
+  },
+  "src/services/deviceSessionService.ts": {
+    "mtime": 1793758139.083946,
+    "ast_hash": "e116a72e7b0c3e04df56d1b2b5236d07",
     "semantic_hash": ""
   }
 }
