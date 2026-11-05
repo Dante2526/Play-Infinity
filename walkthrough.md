@@ -1,3 +1,22 @@
+## 05/11/2026 — Seletor de Episódios com Bordas Arredondadas no Player Netflix
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou captura do drawer de episódios no player com skin Netflix e solicitou:
+*"esse cartão ai o seletor de eps, dentro do player skin netflix quero ele com bordas arredondadas"*.
+
+**Diagnóstico e Mudanças Visuais:**
+1. O painel `showEpisodeDrawer` em `src/components/NetflixPlayerSkin.tsx` era renderizado como um drawer clássico preso às bordas sem raio (`rounded-none` e `border-l`), contrastando com outros cartões flutuantes do player.
+2. Atualizado o container com padding adaptativo (`p-2.5 sm:p-4 md:p-6`) para permitir que o cartão flutue visualmente.
+3. Adicionado contorno arredondado (`rounded-2xl sm:rounded-3xl`), borda sutil (`border border-neutral-800/90`) e `overflow-hidden` no cartão do seletor.
+4. Arredondados os cantos de cada item de episódio (`rounded-xl sm:rounded-2xl`) com espaçamento tátil aprimorado (`p-2.5 sm:p-3`).
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `node --test tests/minhatela-catalog.test.cjs tests/external-catalog.test.cjs`: 73/73 testes aprovados (100%).
+- `npm run build`: Bundles Vite e servidor de produção gerados com sucesso.
+
+---
+
 ## 05/11/2026 — Filtro Global de Canais com Referer e Curadoria do CazéTV 1
 
 **Contexto e Solicitação do Usuário:**

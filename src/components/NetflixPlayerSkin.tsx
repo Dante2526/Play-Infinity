@@ -2311,11 +2311,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             e.stopPropagation();
             setShowEpisodeDrawer(false);
           }}
-          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end animate-in fade-in duration-200 pointer-events-auto"
+          className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex justify-end p-2.5 sm:p-4 md:p-6 animate-in fade-in duration-200 pointer-events-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:w-96 h-full bg-[#141414] border-l border-neutral-800 flex flex-col shadow-2xl animate-in slide-in-from-right duration-250 pointer-events-auto"
+            className="w-full sm:w-96 h-full bg-[#141414]/95 border border-neutral-800/90 rounded-2xl sm:rounded-3xl flex flex-col shadow-2xl overflow-hidden animate-in slide-in-from-right duration-250 pointer-events-auto"
           >
             {/* Cabeçalho do Drawer */}
             <div className="p-4 sm:p-5 border-b border-neutral-800 flex items-start justify-between gap-2">
@@ -2363,7 +2363,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                         if (onEpisodeChange) onEpisodeChange(epNum);
                         setShowEpisodeDrawer(false);
                       }}
-                      className={`w-full text-left p-2.5 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
+                      className={`w-full text-left p-2.5 sm:p-3 rounded-xl sm:rounded-2xl transition-all flex items-center justify-between cursor-pointer border ${
                         isCurrent
                           ? "bg-white/10 border-white/30 text-white shadow-md shadow-black/40"
                           : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
@@ -2414,7 +2414,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                       if (onEpisodeChange) onEpisodeChange(epNum);
                       setShowEpisodeDrawer(false);
                     }}
-                    className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between cursor-pointer border ${
+                    className={`w-full text-left p-3 rounded-xl sm:rounded-2xl transition-all flex items-center justify-between cursor-pointer border ${
                       episode === epNum
                         ? "bg-white/10 border-white/30 text-white"
                         : "bg-neutral-900/60 hover:bg-neutral-800 border-neutral-800/80 text-neutral-300"
