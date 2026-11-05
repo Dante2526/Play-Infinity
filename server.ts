@@ -44,6 +44,8 @@ import playbackHealthRouter from "./server/routes/playbackHealth";
 import castRouter from "./server/routes/cast";
 import tmdbProxyRouter from "./server/routes/tmdbProxy";
 import externalRouter from "./server/routes/externalRoutes";
+import saimoLiveRouter from "./server/routes/saimoLiveRoutes";
+import { startSaimoLiveTokenWatcher } from "./server/services/saimoLiveTokenWatcher";
 import { startSaimoSyncCron } from "./server/services/saimoCatalogScraper";
 
 export const app = express();
@@ -480,6 +482,7 @@ app.use(tmdbProxyRouter);
 // (canais-saimo.pages.dev) + resolução com fallback de fontes + redirect 302
 // (proxy assinado para http:// / referer — Mixed Content).
 app.use(externalRouter);
+app.use(saimoLiveRouter);
 
   // Em produção, isso pode ser útil, mas no ambiente DEV rouba os assets do Vite!
   if (process.env.NODE_ENV === "production" || process.env.VERCEL) {
@@ -600,6 +603,7 @@ app.use(externalRouter);
         // Sync do catálogo externo de canais (Saimo) no boot + cron 6h.
         // APP_PROBE=1 pula (mesma condição dos demais services de background).
         startSaimoSyncCron();
+        startSaimoLiveTokenWatcher();
         // Fontes embed MinhaTela (agregador reversado): injeta fontes extras
         // nos canais existentes + canais exclusivos (Paramount+, Disney+,
         // HBO Max, Prime Video, A Fazenda 18...) no catálogo público de TV.

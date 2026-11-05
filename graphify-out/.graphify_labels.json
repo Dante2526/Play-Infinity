@@ -153,5 +153,6 @@
   "151": "ssh2",
   "152": "@vitejs/plugin-react",
   "153": "playbackHistory.ts",
-  "154": "tmdb.ts"
+  "154": "tmdb.ts",
+  "155": "firebase-modules.d.ts"
 }

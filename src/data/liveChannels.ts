@@ -49,7 +49,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       },
       {
         name: 'Servidor 2',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F09fa89e371c7b10ad5e48266b2d7a261%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=ca3d945638635dafd42f6c4c116c6c8be9006a5937e2d0c4624ec59b36072756',
+        url: '/api/saimo-source?channel=premiere-1&source=2',
         isProxy: false
       }
     ]
@@ -71,7 +71,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       },
       {
         name: 'Servidor 2',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat%2Fstream%2F1ebc0b14635da26d815c1b9c9d394ae9%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=238e84123baef53ca218f56dc793c9ee6f9a404f22d5aeb083b719bbb657a082',
+        url: '/api/saimo-source?channel=premiere-2&source=2',
         isProxy: false
       }
     ]
@@ -195,7 +195,7 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       },
       {
         name: 'Servidor 2',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F82bab43b2c8839fdc6d7e7412433babc.s25-cloudfront-net.lat%2Fstream%2F78c6dca900a9623b93f50986d21faf11%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=7cae6dacb0d9e625f02c08654d13d78b330bc8450e981601c156d7bafd7414dd',
+        url: '/api/saimo-source?channel=sportv-2&source=2',
         isProxy: false
       }
     ]

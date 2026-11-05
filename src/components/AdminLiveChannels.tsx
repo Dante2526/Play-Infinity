@@ -298,8 +298,8 @@ const AdminChannelCard = React.memo(function AdminChannelCard({
                 // do proxy embedTV carrega o referer w7.embedtv.cc + host
                 // s25-cloudfront-net.lat. Ajuda o admin a identificar a origem
                 // sem ler a URL assinada crua.
-                const isEmbedTv = srv.url.includes('w7.embedtv.cc') || srv.url.includes('s25-cloudfront-net.lat');
-                const isCdn13 = srv.url.includes('embedcanaisdetv.xyz') || srv.url.includes('cdn13embed.xyz');
+                const isEmbedTv = srv.url.includes('w7.embedtv.cc') || srv.url.includes('s25-cloudfront-net.lat') || (srv.url.includes('/api/saimo-source') && srv.url.includes('source=2'));
+                const isCdn13 = srv.url.includes('embedcanaisdetv.xyz') || srv.url.includes('cdn13embed.xyz') || srv.url.includes('cdn10embed.xyz') || (srv.url.includes('/api/saimo-source') && !srv.url.includes('source=2'));
                 return (
                   <div key={sIdx} className="server-row flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white/5 text-[11px]">
                     <span className="server-name text-white/80 truncate font-medium flex-1" />

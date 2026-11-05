@@ -13,6 +13,7 @@ import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { checkVidsrcSeason } from "./vidsrcRoutes";
 import { checkVipSeason, checkVizerSeason, getEncontreiSeasonEpisodes } from "./encontreiLookup";
 import { loadNixplayCatalog, resolveNixplaySeriesId } from "../services/nixplayCatalog";
+import { forceTokenRefresh } from "../services/saimoLiveTokenWatcher";
 
 const router = Router();
 
@@ -3020,6 +3021,9 @@ const router = Router();
       }
 
       if (!upstreamRes.ok) {
+        if (upstreamRes.status === 404 && (currentUrl.includes("s25-cloudfront-net.lat") || currentUrl.includes("error.txt"))) {
+          forceTokenRefresh().catch(() => {});
+        }
         return res.status(upstreamRes.status).send(`Upstream status: ${upstreamRes.status}`);
       }
 

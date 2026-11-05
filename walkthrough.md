@@ -1,3 +1,68 @@
+## 04/11/2026 — Sistema de Auto-Atualização e Auto-Cura de Tokens Ao Vivo (Saimo & embedTV)
+
+**Contexto e Solicitação do Usuário:**
+Após identificarmos a expiração frequente dos hashes dinâmicos de transmissão na família `embedTV` (`*.s25-cloudfront-net.lat/stream/<hash>/error.txt`), o usuário solicitou: *"então temos que desenvolver algo que atualize esse token sozinho quando mudar"*.
+
+**Diagnóstico da Causa Raiz:**
+1. Servidores secundários de canais premium (ex.: Premiere Clubes, SporTV 2, Premiere 2) utilizam URLs do cluster `embedTV` cujo token/hash expira periodicamente upstream.
+2. URLs estáticas salvas em `liveChannels.ts` ficavam órfãs após horas/dias, gerando status HTTP 404 (OFF) no painel admin e falha de playback para o usuário final.
+3. O catálogo remoto da Saimo (`https://canais-saimo.pages.dev/catalogo.txt`) publica os hashes atualizados em tempo quase real.
+
+**Arquitetura e Implementação:**
+1. **Watcher em Background (`server/services/saimoLiveTokenWatcher.ts`):**
+   - Baixa e processa o catálogo da Saimo a cada 20 minutos.
+   - Extrai e mapeia canais para aliases padronizados (`premiere-1`, `sportv-2`, `premiere-2`, etc.) e armazena os metadados de stream (FHD/HD, URLs, tokens dinâmicos).
+   - Armazena os tokens em memória e com persistência resiliente em disco (`data/saimo-live-tokens-cache.json`).
+   - Expõe o método `forceTokenRefresh()` com debounce inteligente (15s) para re-sincronização imediata sob demanda.
+2. **Endpoint Dinâmico de Transmissão (`server/routes/saimoLiveRoutes.ts`):**
+   - Rota `GET /api/saimo-source?channel=:channelId&source=:sourceNumber`.
+   - Resolve o canal e a fonte solicitada direto da memória atualizada.
+   - Gera um redirecionamento HTTP 302 direto para o proxy `/api/live-stream-proxy` com assinatura criptográfica HMAC-SHA256 (`sig`) em tempo real.
+   - Também suporta o modo JSON (`format=json`) para consumo programático ou diagnóstico de latência.
+3. **Auto-Cura Reativa no Proxy (`server/routes/videoScrapers.ts`):**
+   - Ao receber status HTTP 404 de origens da família `s25-cloudfront-net.lat`, o `/api/live-stream-proxy` aciona `forceTokenRefresh()` em segundo plano para puxar imediatamente o catálogo mais recente.
+4. **Migração dos Canais Curados (`src/data/liveChannels.ts`):**
+   - Migrados os Servidores 2 de `premiere-1`, `premiere-2` e `sportv-2` para apontar imutavelmente para `/api/saimo-source?channel=<id>&source=2`.
+5. **Painel Administrativo (`src/components/AdminLiveChannels.tsx`):**
+   - Badge `embedTV` configurado para reconhecer e exibir visualmente fontes originadas via `/api/saimo-source?channel=...&source=2`.
+
+**Validação Realizada:**
+- Testes unitários dedicados em `tests/saimo-live-token-watcher.test.cjs`: 4/4 passando.
+- Suíte geral de testes automatizados: 109/109 passando com 100% de sucesso.
+- Compilação estática TypeScript (`npx tsc --noEmit`): 0 erros.
+- Build de produção (`npm run build`): bundles de frontend e servidor gerados com êxito.
+
+---
+
+## 04/11/2026 — Atualização da Fonte 2 do Premiere Clubes (Expiração do Hash no Upstream embedTV)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou duas capturas:
+1. No painel admin do app, o canal Premiere Clubes marcava "Servidor 2 (embedTV): OFF (404)".
+2. No site oficial da Saimo TV, ambas as fontes (Fonte 1 FHD e Fonte 2) constavam como ativas/online.
+O usuário solicitou: *"verifica iosso pramin, no meu duiz que umas das fontes ta off mas la no iste do saimion as 2 fontes estão on"*.
+
+**Diagnóstico da Causa Raiz:**
+1. A Fonte 2 (embedTV) utiliza URLs dinâmicas com rotação periódica de hash no host `s25-cloudfront-net.lat`.
+2. Em `src/data/liveChannels.ts`, o canal `premiere-1` (Premiere Clubes) estava configurado com o hash expirado `09fa89e371c7b10ad5e48266b2d7a261`, que passou a retornar HTTP 404 pelo Cloudflare/openresty da origem.
+3. No catálogo atualizado da Saimo (`canais-saimo.pages.dev/catalogo.txt`), o hash ativo da Fonte 2 é `37423de26588e33f7b814e400541a754` sob o subdomínio `804d60c4f9bced6aed1ac3bbc5130622`.
+
+**Modificações Realizadas:**
+1. **Atualização da Fonte 2 (`src/data/liveChannels.ts`):**
+   - Substituída a URL de Servidor 2 pelo stream ativo: `https://804d60c4f9bced6aed1ac3bbc5130622.s25-cloudfront-net.lat/stream/37423de26588e33f7b814e400541a754/error.txt`.
+   - Assinatura recalculada determinísticamente via HMAC-SHA256 (`sig=fd594d8f0101078546f004add3c05e875ae6f54bb48c8bf385ffa153b09fa839`).
+2. **Atualização do Catálogo Local (`data/external-channels.txt`):**
+   - Atualizada a linha de fonte secundária do Premiere Clubes para apontar para o novo hash funcional.
+
+**Validação Realizada:**
+- Teste direto contra a origem: HTTP 200 HLS com `#EXTM3U` válido.
+- Teste no proxy `/api/live-stream-proxy`: HTTP 200 com reescrita correta de segmentos `.ts`/`.png`.
+- `node --test`: 105/105 testes automatizados aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles Vite e servidor compilados com sucesso.
+
+---
+
 ## 04/11/2026 — Curadoria Oficial do Premiere 7 HD (Exclusiva Fonte 1 FHD com Referer)
 
 **Contexto e Solicitação do Usuário:**

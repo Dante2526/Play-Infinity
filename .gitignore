@@ -44,3 +44,5 @@ data/test-saimo.db
 
 # Snapshot do catálogo MinhaTela (fontes embed) — cache dinâmico do watcher.
 data/minhatela-cache.json
+
+data/saimo-live-tokens-cache.json
