@@ -1,3 +1,46 @@
+## 05/11/2026 — Fix Definitivo de Telas Pretas com Spinner Contínuo e Fim dos Piscas/Flashes no Fallback (Android 86/1.4.54)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou log de fallbacks sucessivos no filme *Harry Potter e as Relíquias da Morte - Parte 2* (`srv_saimo_mp4` -> `srv_byse` -> `anidigital` -> `srv_saimo_hls` -> `streamtape` -> `srv_mixdrop` -> `srv_watchplay`) e reportou:
+*"peguei esse log vi denovo aquela tela de carregamento diferente que vc disse que tinha corrigido"*.
+O usuário observou que, durante a transição entre servidores, o player alternava (piscava) entre o spinner de carregamento e a skin do player pausada com botão central de Play em 00:00 sem início real do vídeo.
+
+**Diagnóstico e Causa Raiz:**
+1. **Falso Positivo de Reprodução Confirmada (`playbackConfirmedRef.current`):**
+   - No tratador de mensagens `handleStatusMessage` em `src/components/VideoPlayerModal.tsx`, a guarda de inicialização avaliava meramente `data.duration > 0 || data.readyState >= 2`.
+   - Quando um servidor carregava apenas o cabeçalho/metadados da mídia (mesmo pausado em `00:00` ou prestes a falhar nos chunks subsequentes), `playbackConfirmedRef.current` tornava-se `true` e disparava `setIsLoading(false)`.
+   - Isso desmontava prematuramente o overlay preto de carregamento (`z-50`), revelando os controles da skin do player congelados em `00:00`.
+   - Quando o watchdog de timeout (7.5s/9s) detectava a ausência de fluxo de vídeo e executava o fallback automático, o overlay preto era reativado, gerando o efeito de pisca-pisca / alternância visual.
+2. **Exposição do `NetflixPlayerSkin` durante Fallback:**
+   - O container da skin (`NetflixPlayerSkin`) ficava ativo e renderizado no DOM sem guarda de visibilidade baseada em `iframeVisible` e `playbackConfirmedRef.current`.
+   - Como a skin inicia com `controlsVisible = true`, ela exibia os botões centrais e barras de navegação mesmo antes de haver vídeo rolando.
+3. **Vazamento de `setIsLoading(false)` em `handleExtract` e MixDrop:**
+   - Em `handleExtract`, URLs de servidores suportados executavam `setIsLoading(false)` antes do carregamento real do stream.
+   - Em `handleSilentFallback`, o avanço de arquivos do MixDrop não resetava `iframeVisible`, permitindo que o iframe ficasse visível durante o novo fetch.
+
+**Modificações Realizadas:**
+1. **Confirmação Estrita de Reprodução Ativa (`src/components/VideoPlayerModal.tsx`):**
+   - `playbackConfirmedRef.current` agora só se torna `true` quando a mídia está efetivamente em reprodução contínua:
+     `isPaused === false && (currentTime > 0.1 || readyState >= 3 || healthPlaybackStartedRef.current)`.
+   - A mera presença de `duration > 0` não remove mais o overlay de carregamento.
+2. **Blindagem Visual da Skin Netflix:**
+   - O container de `NetflixPlayerSkin` agora aplica `opacity-0 pointer-events-none` enquanto `!iframeVisible || !playbackConfirmedRef.current`, transitando suavemente (`transition-opacity duration-300`) apenas quando o vídeo já está rodando.
+3. **Overlay Contínuo Travado em `z-50`:**
+   - Atualizada a guarda do overlay preto de carregamento: permanece ininterruptamente cobrindo a tela enquanto `!iframeVisible || isLoading || !playbackConfirmedRef.current`.
+4. **Resets Limpos no Fallback do MixDrop e Inicialização:**
+   - Ao comutar arquivos internos no MixDrop, `playbackConfirmedRef.current`, `healthPlaybackStartedRef.current` e `iframeVisible` são resetados para `false`.
+   - Em `setupInitialServer`, garantido estado de loading limpo e iframe oculto.
+   - Em `handleExtract`, removido o `setIsLoading(false)` prematuro para servidores homologados.
+5. **Versionamento:**
+   - Incrementado `android/app/build.gradle` para `versionCode 86` (`v1.4.54`).
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- `node --test tests/catalog-season.test.cjs tests/tmdb-season-remap.test.cjs tests/playback-startup.test.cjs tests/byse-sources.test.cjs tests/player-integration.test.cjs tests/player-stale-iframe-errors.test.cjs`: 39/39 testes aprovados (100%).
+- `node --test tests/playback-startup.test.cjs ... tests/vizer.test.cjs`: 194/194 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Sincronização dos Testes de CI com Timeouts Rápidos do Player (Android 85/1.4.53)
 
 **Contexto e Solicitação do Usuário:**

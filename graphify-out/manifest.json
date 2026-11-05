@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1793902943.5513742,
-    "ast_hash": "fb64848106d0d04bb0a252f7e051da4f",
+    "mtime": 1793912752.6027393,
+    "ast_hash": "04d5454c411b0cddf6c491fa1038632a",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -445,8 +445,8 @@
     "semantic_hash": "a1d2c148afd7e2ceb1fd51cf6165fdb0"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1793900991.8408377,
-    "ast_hash": "58193125af35e9bc05f670479696f2a5",
+    "mtime": 1793904910.914163,
+    "ast_hash": "3f09ca2e71bb20fe22afe36576202893",
     "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793902960.6824882,
-    "ast_hash": "36f177db2b05e105ed411f1fb4dd5a12",
+    "mtime": 1793912871.0170407,
+    "ast_hash": "92b78c005bb2b97d8042949c71d925ad",
     "semantic_hash": ""
   },
   "worker/README.md": {

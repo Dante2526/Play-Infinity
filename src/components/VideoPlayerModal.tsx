@@ -1687,6 +1687,9 @@ export function VideoPlayerModal({
         const url = buildBalancedMixdropUrl(next.fileId, season, episode, next.exclude);
         if (url) {
           hasSeekedInitialTimeRef.current = false; transitionEpochRef.current = Date.now();
+          playbackConfirmedRef.current = false;
+          healthPlaybackStartedRef.current = false;
+          setIframeVisible(false);
           setIsLoading(true); setError(null); setActiveIframeUrl(url); setUrlInput(url); setExtractedSource(url);
           return;
         }
@@ -1795,7 +1798,7 @@ export function VideoPlayerModal({
       setPlayerSkinReady(true);
       if (frameFatalRef.current) return;
       const skinSupported = isSkinSupportedServerKey(selectedServerKey);
-      if (!skinSupported || playbackConfirmedRef.current || healthPlaybackStartedRef.current) {
+      if (!skinSupported || (playbackConfirmedRef.current && healthPlaybackStartedRef.current)) {
         setIsLoading(false);
         setIframeVisible(true);
       }
@@ -1981,6 +1984,10 @@ export function VideoPlayerModal({
         if (targetServerKey === 'srv_mixdrop' && (effectiveMovieId || tmdbId)) targetUrl = buildBalancedMixdropUrl(undefined, targetSeason, targetEpisode) || targetUrl;
         if (initialSelectionEpoch !== serverSelectionEpochRef.current) return;
         setSelectedServerKey(targetServerKey);
+        setIsLoading(true);
+        setIframeVisible(false);
+        playbackConfirmedRef.current = false;
+        healthPlaybackStartedRef.current = false;
 
         setUrlInput(targetUrl);
         handleExtract(targetUrl);
@@ -2143,11 +2150,13 @@ export function VideoPlayerModal({
         }
 
         if (!playbackConfirmedRef.current) {
-          if (
-            (typeof data.duration === "number" && data.duration > 0) ||
-            (typeof data.currentTime === "number" && data.currentTime > 0) ||
-            (typeof data.readyState === "number" && data.readyState >= 2)
-          ) {
+          const isPlaying =
+            healthPlaybackStartedRef.current ||
+            (isPaused === false && typeof data.currentTime === "number" && data.currentTime > 0.1) ||
+            (isPaused === false && typeof data.readyState === "number" && data.readyState >= 3) ||
+            (typeof data.currentTime === "number" && data.currentTime > 1);
+
+          if (isPlaying) {
             // Se for transição recente (< 800ms), aguarda estabilização do novo frame
             if (isRecentTransition && Date.now() - transitionEpochRef.current < 800) {
               return;
@@ -2156,6 +2165,7 @@ export function VideoPlayerModal({
             playbackConfirmedRef.current = true;
             setPlayerSkinReady(true);
             setIsLoading(false);
+            setIframeVisible(true);
             retrySameServerRef.current = false;
             const wasFallback = fallbackAttemptsRef.current.size > 0;
             if(!startupPlanRef.current||healthPlaybackStartedRef.current)fallbackAttemptsRef.current.clear();
@@ -2181,9 +2191,9 @@ export function VideoPlayerModal({
         // Revela o iframe (remove opacity-0) apenas quando o vídeo começou a tocar, para esconder botões nativos gigantes
         if (
           !iframeVisible &&
-          ((typeof data.currentTime === "number" && data.currentTime > 0.1) ||
-            data.paused === false ||
-            (typeof data.readyState === "number" && data.readyState >= 3))
+          ((typeof data.currentTime === "number" && data.currentTime > 0.1 && isPaused === false) ||
+            (typeof data.readyState === "number" && data.readyState >= 3 && isPaused === false) ||
+            playbackConfirmedRef.current)
         ) {
           setIframeVisible(true);
         }
@@ -2678,7 +2688,9 @@ export function VideoPlayerModal({
     ) {
       setActiveIframeUrl(resolveStreamIframeUrl(cleanUrl));
       setExtractedSource(cleanUrl);
-      setIsLoading(false);
+      if (!isSkinSupportedServerKey(selectedServerKey)) {
+        setIsLoading(false);
+      }
       return;
     }
 
@@ -2689,7 +2701,9 @@ export function VideoPlayerModal({
       if (data.success && data.playerUrl) {
         setActiveIframeUrl(resolveStreamIframeUrl(data.playerUrl));
         setExtractedSource(data.playerUrl);
-        setIsLoading(false);
+        if (!isSkinSupportedServerKey(selectedServerKey)) {
+          setIsLoading(false);
+        }
       } else {
         handleSilentFallback();
       }
@@ -3295,7 +3309,7 @@ export function VideoPlayerModal({
             {/* NetflixPlayerSkin movido para o final (z-40) */}
 
             {/* Overlay Anti-Flash e Carregamento Contínuo: cobre a transição inteira até a mídia estar realmente pronta */}
-            {!error && (isLoading || (isSkinSupportedServerKey(selectedServerKey) ? !playbackConfirmedRef.current : (activeIframeUrl && !playerSkinReady))) && (
+            {!error && (isLoading || (isSkinSupportedServerKey(selectedServerKey) ? (!playbackConfirmedRef.current || !iframeVisible) : (activeIframeUrl && !playerSkinReady))) && (
               <div
                 className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center gap-3.5 select-none"
                 style={{ transition: "opacity 0.3s ease" }}
@@ -3338,6 +3352,7 @@ export function VideoPlayerModal({
                   onPlay={() => {
                     setPlayerSkinReady(true);
                     setIsLoading(false);
+                    setIframeVisible(true);
                     playbackConfirmedRef.current = true;
                   }}
                   onError={(e: any) => {
@@ -3347,7 +3362,6 @@ export function VideoPlayerModal({
                   }}
                   onLoadedMetadata={() => {
                     setPlayerSkinReady(true);
-                    setIsLoading(false);
                   }}
                 />
               ) : (
@@ -3377,10 +3391,10 @@ export function VideoPlayerModal({
 
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);
-                      // Só libera o spinner e revela o iframe se a reprodução foi confirmada
+                      // Só libera o spinner e revela o iframe se a reprodução foi efetivamente confirmada
                       setTimeout(() => {
                         if (frameFatalRef.current) return;
-                        if (playbackConfirmedRef.current || healthPlaybackStartedRef.current) {
+                        if (playbackConfirmedRef.current && healthPlaybackStartedRef.current) {
                           setIsLoading(false);
                           setIframeVisible(true);
                         }
@@ -3437,7 +3451,7 @@ export function VideoPlayerModal({
             )}
 
             {/* Player Oficial Estilo Netflix Cinematográfico */}
-            <div className={`absolute inset-0 pointer-events-none ${isNativePiP ? 'hidden' : ''}`}>
+            <div className={`absolute inset-0 pointer-events-none ${isNativePiP ? 'hidden' : ''} ${!iframeVisible || !playbackConfirmedRef.current ? 'opacity-0 pointer-events-none' : 'opacity-100 transition-opacity duration-300'}`}>
               <NetflixPlayerSkin
                 mediaId={resolvedId}
                 tmdbId={effectiveTmdbId}
