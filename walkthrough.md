@@ -27,14 +27,19 @@ O usuário enviou capturas da série *Vision Quest* (onde o Episódio 8 só ser�
    - Se `isUpcoming`, o botão `▶ Assistir Episódio` é substituído pelo badge `Em breve` com ícone de relógio, mantendo `Ver Série` e `Favorito`.
 4. **Testes Automatizados (`tests/unreleased-episodes-guard.test.cjs`):**
    - 6 testes cobrindo datas passadas, data de hoje, datas futuras, formatação `DD/MM` e bloqueio de avanço automático para episódios inéditos no player.
-5. **Versionamento:**
+5. **Otimizações de Início Rápido e Pré-Aquecimento:**
+   - Em `src/pages/DetailsPage.tsx`: atualizado o pré-aquecimento do BYSE para resolver automaticamente o primeiro episódio não assistido ainda lançado (ex.: Episódio 7) em vez de ficar fixo no Episódio 1.
+   - Adicionado gatilho de pré-aquecimento leve no `onMouseEnter` dos cards de episódios para resolver o ticket antes do clique.
+   - Em `src/components/VideoPlayerModal.tsx`: filtrados episódios inéditos em `filteredSeasonEpisodes` para sincronizar a contagem total com os episódios disponíveis.
+6. **Versionamento e Deploy:**
    - Incrementado `versionCode` para 82 e `versionName` para "1.4.50" em `android/app/build.gradle`.
+   - Enviado com sucesso para o GitHub (`git push origin main`, commits `3e332d6` e `7e35786`).
 
 **Validação Realizada:**
 - `node --test tests/unreleased-episodes-guard.test.cjs`: 6/6 testes aprovados (100%).
 - `node --test tests/player-next-episode-guard.test.cjs`: 6/6 testes aprovados (100%).
 - `npx tsc --noEmit`: 0 erros de compilação (código 0).
-- `npm run build`: Bundles Vite e servidor de produção compilados com sucesso.
+- `git push origin main`: Concluído com sucesso (deploy automático e build Android em andamento).
 
 ---
 
