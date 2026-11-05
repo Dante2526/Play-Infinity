@@ -252,7 +252,7 @@ export function DetailsPage({
         id: Number(targetId),
         type: item.type === 'movie' ? 'movie' : 'tv',
         season: selectedSeason,
-        episode: 1,
+        episode: (() => { if (isSeries && currentEpisodes && currentEpisodes.length > 0) { const firstUnwatched = currentEpisodes.find(ep => !isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep) && !isEpisodeUpcoming(ep.airDate)); if (firstUnwatched) return firstUnwatched.ep; } return 1; })(),
         name: item.title,
       });
     }
@@ -1075,7 +1075,7 @@ export function DetailsPage({
                     >
                       <div 
                         className={`flex items-center gap-3 sm:gap-3.5 flex-1 min-w-0 ${isUpcoming ? "cursor-default" : "cursor-pointer"}`}
-                        tabIndex={isUpcoming ? -1 : 0} role={isUpcoming ? "region" : "button"} onClick={isUpcoming ? undefined : () => {
+                        tabIndex={isUpcoming ? -1 : 0} role={isUpcoming ? "region" : "button"} onMouseEnter={() => { if (!isUpcoming && effectiveTmdbId) triggerBysePrewarm({ id: Number(effectiveTmdbId), type: 'tv', season: selectedSeason, episode: ep.ep, name: item.title }); }} onClick={isUpcoming ? undefined : () => {
                           const epUrl = isSeries 
                             ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
                             : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;

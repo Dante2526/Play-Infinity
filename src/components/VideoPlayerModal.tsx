@@ -13,7 +13,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
-import { isExternalIframePlayer, preferredPlaybackServer } from "../utils/playerIntegration";
+import { isExternalIframePlayer, preferredPlaybackServer, isEpisodeUpcoming } from "../utils/playerIntegration";
 import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
@@ -1170,7 +1170,7 @@ export function VideoPlayerModal({
     if (eav && eav.verifiedFromCatalog && Array.isArray(eav.episodes)) {
       return seasonData.episodes.filter(e => eav.episodes.includes(e.episode_number));
     }
-    return seasonData.episodes;
+    const unreleased = (ep) => isEpisodeUpcoming(ep?.air_date); return seasonData.episodes.filter(e => !unreleased(e));
   }, [seasonData, episodeAvailabilityInfo]);
 
   // Total de episódios da temporada selecionada com streaming comprovado
