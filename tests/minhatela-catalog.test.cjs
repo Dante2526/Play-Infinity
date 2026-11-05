@@ -366,13 +366,19 @@ test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS'
   assert.equal(sportv.lockServers, true);
   assert.equal(sportv.servers.filter(s => s.isEmbed).length, 0); // travado, sem embeds
 
-  // CazéTV (id cazetv) NÃO está travado (fonte embedTV morta em 03/11/2026,
-  // 404 — ficou no resolver Saimo) → continua recebendo embeds do MinhaTela.
-  // Cobertura do merge "anexa fontes embed" para canais não-locked.
+  // CazéTV (id cazetv) está travado (lockServers:true) nas 2 fontes curadas (Saimo FHD + embedTV),
+  // sem embeds de terceiros anexados.
   const cazetv = channels.find(c => c.id === 'cazetv');
   assert.ok(cazetv, 'cazetv presente');
-  assert.ok(!cazetv.lockServers);
-  assert.ok(cazetv.servers.filter(s => s.isEmbed).length >= 1, 'cazetv recebe embeds do MinhaTela');
+  assert.equal(cazetv.lockServers, true);
+  assert.equal(cazetv.servers.filter(s => s.isEmbed).length, 0);
+
+  // BM&C News (id bmc-news) NÃO está travado -> continua recebendo embeds do MinhaTela.
+  // Cobertura do merge "anexa fontes embed" para canais não-locked.
+  const bmc = channels.find(c => c.id === 'bmc-news');
+  assert.ok(bmc, 'bmc-news presente');
+  assert.ok(!bmc.lockServers);
+  assert.ok(bmc.servers.filter(s => s.isEmbed).length >= 1, 'bmc-news recebe embeds do MinhaTela');
 
   // Canal exclusivo novo entrou no catálogo público
   const paramount = channels.find(c => c.id === 'mt-paramount-1');

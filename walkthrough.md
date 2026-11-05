@@ -1,3 +1,35 @@
+## 05/11/2026 — Filtro Global de Canais com Referer e Curadoria do CazéTV 1
+
+**Contexto e Solicitação do Usuário:**
+1. O usuário observou que o CazéTV apresentava 4 servidores no app, sendo que 2 estavam inoperantes (OFF), e no modal oficial da Saimo constavam 2 fontes com referer ativas: *"caze tv 1 tem 2 servidores on, remove os outros 2 la que estão off"*.
+2. Em seguida, após análise que identificou que 180 canais do catálogo possuíam apenas links piratas HTTP/Xtream sem proteção, o usuário determinou: *"mantem no nossoc atalogo somente os canais que tem servidor com refer"*.
+
+**Diagnóstico da Causa Raiz:**
+1. O canal `cazetv` em `src/data/liveChannels.ts` não possuía `lockServers: true` e mantinha um link morto da Wurl/FIFA Plus no Servidor 2. Sem a trava, o app anexava embeds mortos de terceiros do MinhaTela, totalizando 4 servidores.
+2. O catálogo da Saimo (`externalCatalog.ts`) publicava indiscriminadamente canais que só possuíam links piratas HTTP/Xtream na porta 80/8080, os quais caem frequentemente ou geram erro de *Mixed Content* no navegador.
+
+**Modificações Realizadas:**
+1. **Curadoria do CazéTV 1 (`src/data/liveChannels.ts`):**
+   - Ativado `lockServers: true` para eliminar servidores de terceiros e embeds mortos.
+   - **Servidor 1 (Saimo FHD):** Apontado para a fonte oficial `cdn13embed.xyz/cazetv/index.m3u8` com referer `https://embedcanaisdetv.xyz/` e proxy assinado HMAC-SHA256.
+   - **Servidor 2 (embedTV Auto-Atualizado):** Conectado à rota `/api/saimo-source?channel=cazetv&source=2`.
+   - Adicionados aliases `"cazetv": "cazetv1"`, `"caze-tv": "cazetv1"`, etc. em `server/services/saimoLiveTokenWatcher.ts`.
+2. **Filtro Global de Canais com Referer (`server/services/externalCatalog.ts`):**
+   - Em `getPublicLiveChannels()`: adicionada guarda obrigatória `if (!channel.fontes.some(f => Boolean(f.referer))) continue;`.
+   - Em `resolveExternalChannel()`: filtrado o pool de candidatos para considerar estritamente fontes com `referer`.
+3. **Sincronização da Base Local (`data/external-channels.txt`):**
+   - Atualizado o catálogo local com os 376 canais da Saimo, mantendo disponíveis todos os 196 canais nobres com fontes HTTPS e referer.
+4. **Testes Automatizados:**
+   - Atualizado `tests/minhatela-catalog.test.cjs` reconhecendo `cazetv` com `lockServers: true` e preservando teste de merge com `bmc-news`.
+   - Atualizado `tests/external-catalog.test.cjs` com teste de guarda `guard: getPublicLiveChannels publica somente canais com fonte com referer`.
+
+**Validação Realizada:**
+- `node --test`: 82/82 testes aprovados (100% de sucesso).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles de produção Vite e servidor compilados com sucesso.
+
+---
+
 ## 04/11/2026 — Sistema de Auto-Atualização e Auto-Cura de Tokens Ao Vivo (Saimo & embedTV)
 
 **Contexto e Solicitação do Usuário:**

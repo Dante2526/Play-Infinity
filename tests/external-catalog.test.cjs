@@ -49,7 +49,7 @@ async function loadModule(exportsFrom, file) {
 let catalog, validation, scraper;
 test.before(async () => {
   catalog = await loadModule(
-    '{parseExternalChannels, parseExternalBases, buildFonteUrl, normalizeChannelName, findExternalChannel, resolveExternalChannel, clearExternalCatalogCache, externalCatalogStats, validatePlaylistContent, probeSegmentMagicBytes, NON_MEDIA_EXTENSIONS, probeExternalFonte}',
+    '{parseExternalChannels, parseExternalBases, buildFonteUrl, normalizeChannelName, findExternalChannel, resolveExternalChannel, clearExternalCatalogCache, externalCatalogStats, validatePlaylistContent, probeSegmentMagicBytes, NON_MEDIA_EXTENSIONS, probeExternalFonte, getPublicLiveChannels, loadExternalChannels}',
     './server/services/externalCatalog'
   );
   validation = await loadModule(
@@ -911,14 +911,30 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
   // a11bb22 — fonte 502 em duas rodadas de probe; hoje gerenciado pela
   // blocklist server/services/blockedLiveChannels.ts). Não reintroduzir aqui.
   // NOTA: 'Premiere Clubes', 'Premiere 2', 'Premiere 3', 'Premiere 4', 'Premiere 5', 'Premiere 6',
-  // 'Premiere 7', 'SporTV 2', 'SporTV 3' e mais 12 canais foram migrados para fontes curadas Saimo HD / embedTV
+  // 'Premiere 7', 'SporTV 2', 'SporTV 3', 'CazéTV' e mais canais foram migrados para fontes curadas Saimo HD / embedTV
   // (lockServers:true + proxy assinado). Não exigem mais o resolver Saimo.
   for (const expected of [
     'ESPN%203', 'ESPN%205',
     'BAND%20SPORTS%20HD', 'GE%20TV',
-    'Record%20News', 'CazeTV%201',
+    'Record%20News',
   ]) {
     assert.ok(src.includes(`name=${expected}`), `canal ${expected} deve estar migrado`);
+  }
+});
+
+test('guard: getPublicLiveChannels publica somente canais com fonte com referer', () => {
+  const channels = catalog.getPublicLiveChannels();
+  const saimoChannels = channels.filter(c => c.id.startsWith('saimo-'));
+  assert.ok(saimoChannels.length > 0, 'deve conter canais saimo');
+  // Nenhum canal saimo publicado pode vir de canal sem fonte com referer no catalogo
+  const allParsed = catalog.loadExternalChannels();
+  const refererMap = new Map();
+  for (const c of allParsed) {
+    refererMap.set(catalog.normalizeChannelName(c.name), c.fontes.some(f => Boolean(f.referer)));
+  }
+  for (const sc of saimoChannels) {
+    const rawName = catalog.normalizeChannelName(sc.name);
+    assert.equal(refererMap.get(rawName), true, `canal saimo ${sc.name} deve ter fonte com referer`);
   }
 });
 

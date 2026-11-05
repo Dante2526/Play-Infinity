@@ -613,9 +613,12 @@ export async function resolveExternalChannel(
     ssrfOk: boolean;
   }
   const candidates: Candidate[] = [];
+  const hasAnyReferer = channel.fontes.some((f) => Boolean(f.referer));
   for (let i = 0; i < channel.fontes.length; i++) {
     const fonte = channel.fontes[i];
     if (fonte.chave) continue; // DASH ClearKey — incompatível
+    // Se o canal possui fontes com referer, prioriza estritamente as fontes com referer
+    if (hasAnyReferer && !fonte.referer) continue;
     const url = buildFonteUrl(fonte, bases);
     if (!url) continue;
     candidates.push({ index: i, url, fonte, ssrfOk: false });
@@ -770,6 +773,11 @@ export function getPublicLiveChannels(): LiveChannel[] {
     represented.add(normalized);
     // Preserve the existing product restriction on adult channels.
     if (/adult|\+18|xxx|porn/i.test(`${channel.category || ''} ${channel.name}`)) continue;
+
+    // Filtro mandatário (Ordem do Dono): Somente canais com pelo menos 1 fonte com Referer
+    // (garante streams HTTPS estáveis como cdn13embed/embedTV e expurga links HTTP piratas/caídos).
+    const hasRefererSource = channel.fontes.some((f) => Boolean(f.referer));
+    if (!hasRefererSource) continue;
     const category = normalizeChannelName(channel.category || '');
     const mapped: LiveChannel['category'] = /esport|sport|futebol/.test(category) ? 'Esportes'
       : /noticia|news/.test(category) ? 'Notícias'
