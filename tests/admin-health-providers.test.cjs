@@ -64,7 +64,7 @@ async function mockFetch(url, options = {}) {
     Object.defineProperty(response, 'url', { value: 'https://encontrei.me/' });
     return response;
   }
-  if (href.startsWith('https://www.vizer.host')) {
+  if (href.startsWith('https://www.vizer.host') || href.startsWith('https://www.vizer.date')) {
     // O checkVizerHealth valida a listagem real: precisa de um link
     // /series/online/<slug>-<id>/ no HTML da página.
     return new Response(
@@ -209,8 +209,8 @@ test('catálogos carregam stats locais e o Vizer valida a listagem real antes de
   // Stubs do encontreiLookup refletem os contadores dos catálogos em memória
   assert.deepEqual(byName['Catálogo Encontrei.me'].catalog, { movies: 44, episodes: 55, series: 66 });
   assert.deepEqual(byName['Catálogo Vizer'].catalog, { movies: 11, episodes: 22, series: 33 });
-  // O mock do vizer.host devolve HTML de listagem com link /series/online/<slug>-<id>/
-  assert.ok(fetchLog.some(u => u.startsWith('https://www.vizer.host/series/online/')), 'deveria ter probado a listagem do Vizer');
+  // O mock do vizer.date/host devolve HTML de listagem com link /series/online/<slug>-<id>/
+  assert.ok(fetchLog.some(u => u.startsWith('https://www.vizer.date/series/online/') || u.startsWith('https://www.vizer.host/series/online/')), 'deveria ter probado a listagem do Vizer');
 });
 
 test('provedor de vídeo individual fora do ar aparece OFFLINE sem quebrar os demais', async () => {

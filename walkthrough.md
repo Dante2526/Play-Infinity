@@ -1,3 +1,31 @@
+## 05/11/2026 — Migração de Domínio do Vizer para `vizer.date` (Android 84/1.4.52)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou: *"o vizer ja colocou outro dominio denovo, atualiza, e usa o grafo"*.
+
+**Diagnóstico e Causa Raiz:**
+1. Através da consulta ao grafo de conhecimento (Graphify), o nó `vizerDomains.ts` foi identificado como fonte central da lista `VIZER_DOMAINS` e do monitor de saúde `checkVizerHealth`.
+2. Os domínios anteriores (`vizer.host`, `vizer.press`, `vizer.uno`, `vizer.reisen`, `vizer.website`) passaram a redirecionar com HTTP 301 para o novo domínio oficial: `https://www.vizer.date/`.
+3. Teste direto em `https://www.vizer.date/series/online/` confirmou retorno HTTP 200 e catálogo ativo.
+
+**Modificações Realizadas:**
+1. **Domínio Primário Configurado (`server/services/vizerDomains.ts`):**
+   - Adicionado `'https://www.vizer.date'` na primeira posição de `VIZER_DOMAINS`.
+   - Mantidos os domínios antigos no array de fallback para garantir compatibilidade com redirects históricos e persistência de cache.
+2. **Atualização dos Testes Automatizados:**
+   - `tests/vizer.test.cjs`: Atualizadas as asserções de ordem de chamada e fallback para validar `vizer.date`.
+   - `tests/admin-health-providers.test.cjs`: Adicionado mock e validação de `vizer.date` no health check do admin.
+3. **Versionamento:**
+   - Incrementado `android/app/build.gradle` para `versionCode 84` (`v1.4.52`).
+4. **Grafo de Conhecimento:**
+   - Sincronizado via `graphify update .` (2.151 nós, 4.425 arestas).
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `node --test tests/vizer.test.cjs tests/admin-health-providers.test.cjs tests/unreleased-episodes-guard.test.cjs tests/player-next-episode-guard.test.cjs tests/saimo-sqlite-store.test.cjs tests/blacklist-allowlist-guard.test.cjs`: 43/43 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Fallback Silencioso com Tela Preta Contínua sem Piscas (Android 83/1.4.51)
 
 **Contexto e Solicitação do Usuário:**
