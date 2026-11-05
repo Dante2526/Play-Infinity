@@ -244,22 +244,6 @@ export function DetailsPage({
     document.body.scrollTop = 0;
   }, [itemId]);
 
-  // Pré-aquecimento seguro do BYSE em segundo plano com debounce de 1.5s e AbortController
-  useEffect(() => {
-    const targetId = item.tmdbId || item.id || itemId;
-    if (targetId && Number(targetId) > 0) {
-      triggerBysePrewarm({
-        id: Number(targetId),
-        type: item.type === 'movie' ? 'movie' : 'tv',
-        season: selectedSeason,
-        episode: (() => { if (isSeries && currentEpisodes && currentEpisodes.length > 0) { const firstUnwatched = currentEpisodes.find(ep => !isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep) && !isEpisodeUpcoming(ep.airDate)); if (firstUnwatched) return firstUnwatched.ep; } return 1; })(),
-        name: item.title,
-      });
-    }
-    return () => {
-      cancelBysePrewarm();
-    };
-  }, [itemId, item.tmdbId, item.id, item.type, item.title, selectedSeason]);
 
   // Sincronizar episódios assistidos
   useEffect(() => {
@@ -584,6 +568,31 @@ export function DetailsPage({
 
 
   const totalSeasonEpisodes = currentEpisodes.length;
+
+  // Pré-aquecimento seguro do BYSE em segundo plano com debounce de 1.5s e AbortController
+  useEffect(() => {
+    const targetId = item.tmdbId || item.id || itemId;
+    if (targetId && Number(targetId) > 0) {
+      let targetEp = 1;
+      if (isSeries) {
+        if (!seasonData?.episodes || seasonData.episodes.length === 0) return;
+        const releasedEpisodes = currentEpisodes.filter(ep => ep.airDate && !isEpisodeUpcoming(ep.airDate));
+        if (releasedEpisodes.length === 0) return;
+        const firstUnwatched = releasedEpisodes.find(ep => !isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep));
+        targetEp = firstUnwatched ? firstUnwatched.ep : releasedEpisodes[releasedEpisodes.length - 1].ep;
+      }
+      triggerBysePrewarm({
+        id: Number(targetId),
+        type: item.type === 'movie' ? 'movie' : 'tv',
+        season: selectedSeason,
+        episode: targetEp,
+        name: item.title,
+      });
+    }
+    return () => {
+      cancelBysePrewarm();
+    };
+  }, [itemId, item.tmdbId, item.id, item.type, item.title, selectedSeason, isSeries, seasonData, currentEpisodes, effectiveTmdbId]);
 
   // URL de reprodução: Aponta para WatchPlayer com skin Netflix e autoplay
   const targetPlayerUrl = isSeries

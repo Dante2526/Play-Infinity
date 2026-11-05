@@ -1,3 +1,36 @@
+## 05/11/2026 — Fallback Silencioso com Tela Preta Contínua sem Piscas (Android 83/1.4.51)
+
+**Contexto e Solicitação do Usuário:**
+O usuário relatou excesso de alternância visual e "piscas" durante o carregamento inicial e transição de servidores (fallback):
+*"ai tem mais essa questão eu to vendo muita tela de carregamento e piscas, eu sei que propavalemnte issso e no falback, nesse caso pesso que ele segure na tela preta com spinner de carregamento ate achar o servidor que vai reproduzir"*
+E enviou capturas mostrando o spinner de carregamento intercalando com a skin do player pausada com botão central de Play em 00:00 sem início real do vídeo.
+
+**Diagnóstico e Causa Raiz:**
+1. No `onLoad` do `<iframe>` em `src/components/VideoPlayerModal.tsx`, um timer de 4000ms executava cegamente `setIsLoading(false); setIframeVisible(true);`.
+2. Como a skin do player inicializava com controles visíveis, o overlay de carregamento (`isLoading || (activeIframeUrl && !playerSkinReady)`) desaparecia prematuramente, revelando controles estáticos em 00:00 antes de haver confirmação real de fluxo de mídia (`playbackConfirmedRef.current`).
+3. Quando o servidor inicial falhava (ex.: stream 404/502 ou timeout), o watchdog disparava fallback automático e reativava `setIsLoading(true)`, criando o efeito de pisca-pisca na tela.
+
+**Modificações Realizadas:**
+1. **Overlay Contínuo até Confirmação de Reprodução (`src/components/VideoPlayerModal.tsx`):**
+   - Atualizada a guarda do overlay preto de carregamento: para servidores homologados com skin, a tela preta com spinner agora permanece ininterruptamente ativa enquanto `!playbackConfirmedRef.current`.
+   - Camada elevada para `z-50` com botão de fechar acessível (`X`) no topo direito caso o usuário decida sair durante a busca por fontes.
+   - Removida a desativação cega do spinner no timer de 4000ms do `onLoad`: agora só esconde o carregamento e revela o player se a reprodução foi efetivamente confirmada.
+   - O mesmo critério foi aplicado ao timer de segurança de 4500ms no `useEffect`.
+2. **Respostas Limpas no Saimo (`server/routes/saimoRoutes.ts`):**
+   - Atualizado o status retornado para `404` (em vez de `502`) quando streams não são encontrados, permitindo marcação rápida de indisponibilidade pelo verificador de saúde sem poluir logs com falhas de gateway.
+3. **Proteção de Pré-Aquecimento na Página de Detalhes (`src/pages/DetailsPage.tsx`):**
+   - Bloqueado o disparo de pré-aquecimento do BYSE para episódios inéditos/futuros (ex.: Vision Quest S01E08).
+4. **Versionamento:**
+   - Atualizado `android/app/build.gradle` para `versionCode 83` e `versionName "1.4.51"`.
+5. **Grafo de Conhecimento:**
+   - Sincronizado com `python -m graphify update .` (2150 nós, 4424 arestas).
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código de saída 0).
+- `node --test tests/unreleased-episodes-guard.test.cjs tests/player-next-episode-guard.test.cjs tests/saimo-sqlite-store.test.cjs tests/blacklist-allowlist-guard.test.cjs`: 26/26 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Tratamento de Episódios Inéditos ("Em breve") na Grade e no Calendário (Android 82/1.4.50)
 
 **Contexto e Solicitação do Usuário:**

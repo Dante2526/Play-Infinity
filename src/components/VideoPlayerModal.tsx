@@ -1794,8 +1794,11 @@ export function VideoPlayerModal({
     const loadingSafetyTimer = setTimeout(() => {
       setPlayerSkinReady(true);
       if (frameFatalRef.current) return;
-      if (playbackConfirmedRef.current) setIsLoading(false);
-      setIframeVisible(true);
+      const skinSupported = isSkinSupportedServerKey(selectedServerKey);
+      if (!skinSupported || playbackConfirmedRef.current || healthPlaybackStartedRef.current) {
+        setIsLoading(false);
+        setIframeVisible(true);
+      }
     }, 4500);
     return () => clearTimeout(loadingSafetyTimer);
   }, [activeIframeUrl, error, selectedServerKey]);
@@ -3292,11 +3295,18 @@ export function VideoPlayerModal({
             {/* NetflixPlayerSkin movido para o final (z-40) */}
 
             {/* Overlay Anti-Flash e Carregamento Contínuo: cobre a transição inteira até a mídia estar realmente pronta */}
-            {!error && (isLoading || (activeIframeUrl && !playerSkinReady)) && (
+            {!error && (isLoading || (isSkinSupportedServerKey(selectedServerKey) ? !playbackConfirmedRef.current : (activeIframeUrl && !playerSkinReady))) && (
               <div
-                className="absolute inset-0 bg-black z-40 flex flex-col items-center justify-center gap-3.5 pointer-events-none select-none"
+                className="absolute inset-0 bg-black z-50 flex flex-col items-center justify-center gap-3.5 select-none"
                 style={{ transition: "opacity 0.3s ease" }}
               >
+                <button
+                  onClick={handleCloseModal}
+                  className="absolute top-4 right-4 p-2 text-neutral-400 hover:text-white rounded-full bg-white/10 hover:bg-white/20 transition-colors cursor-pointer pointer-events-auto"
+                  title="Fechar"
+                >
+                  <X className="w-5 h-5" />
+                </button>
                 <Loader2 className="w-9 h-9 text-orange-500 animate-spin" />
                 <p className="text-sm font-semibold text-white tracking-wide">
                   {isSeries ? `Carregando Episódio ${episode}...` : `Carregando ${title || "Vídeo"}...`}
@@ -3367,15 +3377,13 @@ export function VideoPlayerModal({
 
                     if (skinSupported) {
                       setTimeout(() => setPlayerSkinReady(true), 500);
-                      // Safety: se o player demorar para emitir confirmação de playback (ex: Smart TVs TCL),
-                      // libera o spinner em 4s e revela o iframe para permitir início manual.
-                      // EXCEÇÃO: frame que declarou morte (WATCHPLAY_ERROR interno — página de erro
-                      // silenciosa do provedor) não é revelado: o fallback cuida e o usuário não vê
-                      // erro bruto de servidor nenhum.
+                      // Só libera o spinner e revela o iframe se a reprodução foi confirmada
                       setTimeout(() => {
                         if (frameFatalRef.current) return;
-                        setIsLoading(false);
-                        setIframeVisible(true);
+                        if (playbackConfirmedRef.current || healthPlaybackStartedRef.current) {
+                          setIsLoading(false);
+                          setIframeVisible(true);
+                        }
                       }, 4000);
                     } else {
                       setTimeout(() => setPlayerSkinReady(true), 500);

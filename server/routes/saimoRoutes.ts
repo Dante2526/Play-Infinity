@@ -799,7 +799,7 @@ export async function handleSaimoStream(req: Request, res: Response): Promise<vo
   }
 
   if (!res.headersSent) {
-    res.status(502).send("Unable to play stream from Saimo servers");
+    res.status(404).send("Stream not found in Saimo servers");
   }
 }
 saimoRouter.get("/api/saimo-stream", handleSaimoStream);
