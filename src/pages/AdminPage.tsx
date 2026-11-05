@@ -144,6 +144,101 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [selectedNetworkRoot, setSelectedNetworkRoot] = useState<string>("all");
+  type ExpirationFilterType = "all" | "active" | "expiring_soon" | "expired";
+  const [expirationFilter, setExpirationFilter] = useState<ExpirationFilterType>("all");
+
+  // Classifica o estado de vencimento de um cliente
+  const getClientExpirationStatus = React.useCallback((client: ClientUser, now: number = Date.now()): "vitalicio" | "expired" | "expiring_soon" | "active" => {
+    if (client.accessType === "vitalicio") return "vitalicio";
+    
+    if (client.expirationDate) {
+      const d = new Date(client.expirationDate);
+      if (!isNaN(d.getTime())) {
+        if (d.getFullYear() >= 2099) return "vitalicio";
+        
+        const diff = d.getTime() - now;
+        if (diff <= 0) {
+          return "expired";
+        }
+        // Vencendo em até 2 dias (48 horas)
+        if (diff <= 2 * 24 * 60 * 60 * 1000) {
+          return "expiring_soon";
+        }
+        return "active";
+      }
+    }
+    
+    if (client.subscription !== "ACTIVE") {
+      return "expired";
+    }
+    
+    return "active";
+  }, []);
+
+  // Contadores para os filtros de vencimento
+  const expirationFilterCounts = React.useMemo(() => {
+    const now = Date.now();
+    let active = 0;
+    let expiringSoon = 0;
+    let expired = 0;
+    
+    usersList.forEach(u => {
+      const status = getClientExpirationStatus(u, now);
+      if (status === "expired") {
+        expired++;
+      } else if (status === "expiring_soon") {
+        expiringSoon++;
+      } else {
+        active++;
+      }
+    });
+    
+    return {
+      all: usersList.length,
+      active,
+      expiringSoon,
+      expired
+    };
+  }, [usersList, getClientExpirationStatus]);
+
+  // Lista de clientes filtrada de forma memoizada e consistente
+  const filteredUsers = React.useMemo(() => {
+    const q = searchTerm.toLowerCase();
+    const now = Date.now();
+    
+    return usersList.filter(u => {
+      const matchesSearch = (
+        !q ||
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.accessType && u.accessType.toLowerCase().includes(q)) ||
+        (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
+        (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
+        (u.referralCode && u.referralCode.toLowerCase().includes(q))
+      );
+      if (!matchesSearch) return false;
+
+      if (selectedNetworkRoot !== "all") {
+        const matchesNetwork = u.rootReferrer === selectedNetworkRoot || u.id === selectedNetworkRoot;
+        if (!matchesNetwork) return false;
+      }
+
+      if (expirationFilter !== "all") {
+        const status = getClientExpirationStatus(u, now);
+        if (expirationFilter === "expired") {
+          return status === "expired";
+        }
+        if (expirationFilter === "expiring_soon") {
+          return status === "expiring_soon";
+        }
+        if (expirationFilter === "active") {
+          return status === "active" || status === "vitalicio";
+        }
+      }
+
+      return true;
+    });
+  }, [usersList, searchTerm, selectedNetworkRoot, expirationFilter, getClientExpirationStatus]);
 
   // Mapeia o tamanho das redes de amigos e ancestrais
   const referralCounts = React.useMemo(() => {
@@ -1297,6 +1392,81 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </div>
           </div>
 
+          {/* Filtros por Vencimento: Todos, Em Dia, Vencendo em até 2 dias, Vencidos */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none max-w-full">
+            <button
+              type="button"
+              onClick={() => setExpirationFilter("all")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                expirationFilter === "all"
+                  ? "bg-white text-black shadow-lg shadow-white/10"
+                  : "bg-white/5 hover:bg-white/10 text-white/70 border border-white/5"
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Todos</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                expirationFilter === "all" ? "bg-black/15 text-black" : "bg-white/10 text-white/80"
+              }`}>
+                {expirationFilterCounts.all}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setExpirationFilter("active")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                expirationFilter === "active"
+                  ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30"
+                  : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20"
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Em Dia</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                expirationFilter === "active" ? "bg-black/25 text-white" : "bg-emerald-500/20 text-emerald-300"
+              }`}>
+                {expirationFilterCounts.active}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setExpirationFilter("expiring_soon")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                expirationFilter === "expiring_soon"
+                  ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30"
+                  : "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20"
+              }`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              <span>Vencendo em 2 dias</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                expirationFilter === "expiring_soon" ? "bg-black/25 text-white" : "bg-amber-500/20 text-amber-200"
+              }`}>
+                {expirationFilterCounts.expiringSoon}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setExpirationFilter("expired")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                expirationFilter === "expired"
+                  ? "bg-red-500 text-white shadow-lg shadow-red-500/30"
+                  : "bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              <span>Vencidos</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                expirationFilter === "expired" ? "bg-black/25 text-white" : "bg-red-500/20 text-red-300"
+              }`}>
+                {expirationFilterCounts.expired}
+              </span>
+            </button>
+          </div>
+
           {/* Filtro por Redes de Amigos / Indicações */}
           {referralNetworks.length > 0 && (
             <div className="mb-6 p-4 bg-orange-950/20 border border-orange-500/20 rounded-2xl flex flex-col gap-2.5">
@@ -1369,48 +1539,24 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 </div>
               ))}
             </div>
-          ) : usersList.filter(u => {
-            const q = searchTerm.toLowerCase();
-            const matchesSearch = (
-              (u.name && u.name.toLowerCase().includes(q)) ||
-              (u.email && u.email.toLowerCase().includes(q)) ||
-              (u.accessType && u.accessType.toLowerCase().includes(q)) ||
-              (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
-              (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
-              (u.referralCode && u.referralCode.toLowerCase().includes(q))
-            );
-            if (selectedNetworkRoot !== "all") {
-              const matchesNetwork = u.rootReferrer === selectedNetworkRoot || u.id === selectedNetworkRoot;
-              return matchesSearch && matchesNetwork;
-            }
-            return matchesSearch;
-          }).length === 0 ? (
+          ) : filteredUsers.length === 0 ? (
             <div className="text-center py-12 border border-dashed border-white/10 rounded-[22px] bg-white/[0.02]">
               <Users className="w-10 h-10 text-white/20 mx-auto mb-3" />
               <p className="text-white/50 text-sm font-medium">
-                {searchTerm ? "Nenhum cliente encontrado com esse termo." : "Nenhum cliente cadastrado no banco de dados."}
+                {searchTerm
+                  ? "Nenhum cliente encontrado com esse termo."
+                  : expirationFilter === "expiring_soon"
+                  ? "Nenhum cliente vencendo nos próximos 2 dias."
+                  : expirationFilter === "expired"
+                  ? "Nenhum cliente vencido encontrado."
+                  : expirationFilter === "active"
+                  ? "Nenhum cliente em dia encontrado."
+                  : "Nenhum cliente cadastrado no banco de dados."}
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
-              {usersList
-                .filter(u => {
-                  const q = searchTerm.toLowerCase();
-                  const matchesSearch = (
-                    (u.name && u.name.toLowerCase().includes(q)) ||
-                    (u.email && u.email.toLowerCase().includes(q)) ||
-                    (u.accessType && u.accessType.toLowerCase().includes(q)) ||
-                    (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
-                    (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
-                    (u.referralCode && u.referralCode.toLowerCase().includes(q))
-                  );
-                  if (selectedNetworkRoot !== "all") {
-                    const matchesNetwork = u.rootReferrer === selectedNetworkRoot || u.id === selectedNetworkRoot;
-                    return matchesSearch && matchesNetwork;
-                  }
-                  return matchesSearch;
-                })
-                .map((client) => {
+              {filteredUsers.map((client) => {
                   const initial = (client.name || client.email || 'U').charAt(0).toUpperCase();
                   let expireLabel = "Não definida";
                   if (client.expirationDate) {
@@ -1423,14 +1569,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   }
 
                   const isActive = client.subscription === "ACTIVE";
-                  
-                  let isExpiredClient = false;
-                  if (client.expirationDate) {
-                    const d = new Date(client.expirationDate);
-                    if (!isNaN(d.getTime()) && d.getFullYear() < 2099 && d.getTime() <= Date.now()) {
-                      isExpiredClient = true;
-                    }
-                  }
+                  const expirationStatus = getClientExpirationStatus(client);
+                  const isExpiredClient = expirationStatus === "expired";
+                  const isExpiringSoonClient = expirationStatus === "expiring_soon";
 
                   // Verifica se o usuário está ativo/assistindo nos últimos 5 minutos (ignora administradores)
                   const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
@@ -1529,6 +1670,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             }`}>
                               {isActive ? 'Ativo' : isExpiredClient ? 'Expirado' : 'Inativo'}
                             </span>
+
+                            {/* Badge de Alerta: Vencendo em até 2 dias */}
+                            {isExpiringSoonClient && (
+                              <span 
+                                title="Assinatura expira em menos de 48 horas"
+                                className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse shrink-0 flex items-center gap-1 shadow-[0_0_10px_rgba(245,158,11,0.2)]"
+                              >
+                                <AlertTriangle className="w-3 h-3 text-amber-400 shrink-0" />
+                                <span>Vence em breve</span>
+                              </span>
+                            )}
 
                             {/* Badge de Dispositivos Conectados */}
                             <button
@@ -1634,12 +1786,20 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           </div>
 
                           {/* Vencimento */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2 min-w-0">
+                          <div className={`border rounded-xl px-3 py-2 flex items-center justify-between gap-2 min-w-0 transition-colors ${
+                            isExpiringSoonClient
+                              ? 'bg-amber-500/10 border-amber-500/40 text-amber-200'
+                              : isExpiredClient
+                              ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                              : 'bg-white/5 border-white/10 text-white/90'
+                          }`}>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
+                              <Clock className={`w-3.5 h-3.5 shrink-0 ${
+                                isExpiringSoonClient ? 'text-amber-400' : isExpiredClient ? 'text-red-400' : 'text-white/40'
+                              }`} />
                               <span className="text-white/40 text-[11px] sm:text-xs">Vence:</span>
                             </div>
-                            <span className="font-medium text-white/90 text-[11px] sm:text-xs truncate">{expireLabel}</span>
+                            <span className="font-medium text-[11px] sm:text-xs truncate">{expireLabel}</span>
                           </div>
                         </div>
 

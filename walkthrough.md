@@ -1,3 +1,34 @@
+## 05/11/2026 — Filtros Rápidos por Vencimento de Clientes no Painel Admin (Todos, Em Dia, Vencendo em 2 Dias e Vencidos)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou uma forma ágil de filtrar clientes cadastrados pelo estado de sua assinatura:
+*"coloca na filtros pramin ver quem ta vencido quem esta em dia e quem ta proximo de vencer tipo uns 2 dias proximos de vencer"*
+
+**Diagnóstico e Implementação:**
+1. **Estado e Classificação de Vencimento (`getClientExpirationStatus`):**
+   - Implementada função determinística em `src/pages/AdminPage.tsx` que classifica cada cliente em 4 estados:
+     - `vitalicio`: clientes com acesso permanente (`accessType === 'vitalicio'` ou ano >= 2099).
+     - `expired`: clientes com data de expiração no passado (`diff <= 0`) ou `subscription !== 'ACTIVE'`.
+     - `expiring_soon`: clientes ativos cuja data de expiração vence dentro das próximas 48 horas (`0 < diff <= 2 dias`).
+     - `active`: clientes ativos com validade regular além de 2 dias.
+2. **Barra de Filtros Rápidos com Contadores Visuais:**
+   - Adicionados 4 botões de filtro com badges dinâmicos de contagem calculados via `useMemo`:
+     - **Todos** (total de clientes)
+     - **Em Dia** (ícone de check verde)
+     - **Vencendo em 2 dias** (ícone de alerta âmbar com contagem de clientes a expirar)
+     - **Vencidos** (ícone de relógio vermelho com contagem de inativos/expirados)
+3. **Badges e Destaques Visuais no Card do Cliente:**
+   - Clientes com vencimento em menos de 48h recebem um badge pulsante `⚠️ Vence em breve` e a caixa de vencimento ganha contorno e fundo âmbar suave (`bg-amber-500/10 border-amber-500/40`).
+   - Clientes vencidos exibem a caixa de vencimento com contorno vermelho (`bg-red-500/10 border-red-500/30`).
+4. **Performance e Reatividade:**
+   - Toda a lista é filtrada de forma memoizada (`filteredUsers`), combinando busca por texto, rede de amigos e o filtro de vencimento sem re-renderizações desnecessárias.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `node --test tests/public-frontend.test.cjs tests/account-switch-cleanup.test.cjs`: 12/12 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Alinhamento Vertical Fixo das Colunas de Clientes no Painel Admin
 
 **Contexto e Solicitação do Usuário:**
