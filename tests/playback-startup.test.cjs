@@ -46,6 +46,6 @@ test('five seconds of discovery still leaves a full eight seconds after iframe a
 test('content-routed MixDrop is never reloaded by a late catalogue file ID',()=>{
  assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&t=4',false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&url=https%3A%2F%2Fmxdrop.top%2Fe%2Fmknjxedxixxo8l3',true),false);assert.equal(api.shouldReloadMixdropFrame(null,false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',false),true);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',true),false);
 });
-test('cold BYSE gets 25s with alternatives and 45s as final listed source, and ready/fallback sources get 15s',()=>{
- assert.equal(api.startupMediaLimit('srv_byse',false,false),45000);assert.equal(api.startupMediaLimit('srv_byse',true,false),25000);assert.equal(api.startupMediaLimit('srv_byse',false,true),15000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),15000);assert.equal(api.startupMediaLimit('srv_streamtape',false,false),15000);
+test('cold BYSE gets 9s with alternatives and 12s as final listed source, and ready/fallback sources get 7.5s-9s',()=>{
+ assert.equal(api.startupMediaLimit('srv_byse',false,false),12000);assert.equal(api.startupMediaLimit('srv_byse',true,false),9000);assert.equal(api.startupMediaLimit('srv_byse',false,true),9000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),9000);assert.equal(api.startupMediaLimit('srv_streamtape',false,false),9000);
 });

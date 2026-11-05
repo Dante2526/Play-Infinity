@@ -1,3 +1,31 @@
+## 05/11/2026 — Sincronização dos Testes de CI com Timeouts Rápidos do Player (Android 85/1.4.53)
+
+**Contexto e Solicitação do Usuário:**
+A pipeline do GitHub Actions falhou na validação de testes automatizados com a asserção:
+`✖ cold BYSE gets 25s with alternatives and 45s as final listed source, and ready/fallback sources get 15s`
+`AssertionError [ERR_ASSERTION]: Expected values to be strictly equal: 12000 !== 45000` em `tests/playback-startup.test.cjs:49:1`.
+
+**Diagnóstico e Causa Raiz:**
+1. Os limites de espera de inicialização do player em `src/services/playbackStartup.ts` foram otimizados para fallbacks ágeis (9s/12s para BYSE e 7.5s/9s para fontes gerais), eliminando a retenção excessiva do player em telas pretas de 25s a 45s.
+2. O teste de regressão `tests/playback-startup.test.cjs` mantinha asserções antigas (esperando 25000ms e 45000ms).
+3. Em `tests/catalog-season.test.cjs`, a sondagem do mock de redirecionamento 302 utilizava season 4, que possui registros locais no banco SQLite do Vizer, colidindo com a asserção de lista vazia.
+
+**Modificações Realizadas:**
+1. **Alinhamento dos Testes de Startup (`tests/playback-startup.test.cjs`):**
+   - Atualizadas as asserções de `startupMediaLimit` para refletir os tempos rápidos: 12s para BYSE sem alternativa, 9s com alternativa ou preparado, e 9s/7.5s para demais provedores.
+2. **Isolamento de Redirecionamento 302 (`tests/catalog-season.test.cjs`):**
+   - Atualizada a consulta do teste para season 99, garantindo teste determinístico de fallback para snapshot sem conflitos de catálogo real.
+3. **Versionamento:**
+   - Incrementado `android/app/build.gradle` para `versionCode 85` (`v1.4.53`).
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- `node --test tests/catalog-season.test.cjs tests/tmdb-season-remap.test.cjs`: 13/13 testes aprovados (100%).
+- `node --test tests/playback-startup.test.cjs ... tests/vizer.test.cjs`: 194/194 testes aprovados (100%).
+- `node --test tests/public-frontend.test.cjs`: 4/4 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Eliminação de Timeouts Longos no Player, Blindagem 502 de Temporadas e TMDB Discover
 
 **Contexto e Solicitação do Usuário:**

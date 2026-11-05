@@ -24,7 +24,7 @@ before(async () => {
     assert.equal(parsed.searchParams.get('id'), '53251');
     assert.equal(parsed.searchParams.get('audio'), 'Dublado');
     assert.equal(opts.redirect, 'manual');
-    if (parsed.searchParams.get('season') === '4') return new Response('login', { status: 302 });
+    if (parsed.searchParams.get('season') === '99') return new Response('login', { status: 302 });
     return Response.json({ episodes: [
       { number: 52, id: 3, url: '/episode-3/' },
       { number: 1, id: 1, url: '/episode-1/' },
@@ -57,7 +57,7 @@ test('missing authentication falls back to listed snapshot episodes, not guessed
   process.env.ENCONTREI_COOKIE = 'test-session';
 });
 test('login redirects never become a successful complete listing', async () => {
-  const r = await nativeFetch(base + '/api/catalog-season?tmdb_id=73223&season=4');
+  const r = await nativeFetch(base + '/api/catalog-season?tmdb_id=73223&season=99');
   const d = await r.json();
   assert.equal(d.source, 'snapshot');
   assert.deepEqual(d.episodes, []);

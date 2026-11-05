@@ -1,8 +1,8 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1793877689.8865643,
-    "ast_hash": "2bd346f2ce5f95df3186bbc63b5b63ef",
-    "semantic_hash": "2bd346f2ce5f95df3186bbc63b5b63ef"
+    "mtime": 1793902943.5513742,
+    "ast_hash": "fb64848106d0d04bb0a252f7e051da4f",
+    "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
     "mtime": 1792861033.9877646,
@@ -225,9 +225,9 @@
     "semantic_hash": "a90be22d9e624bb64278671fe1674664"
   },
   "server/routes/encontreiLookup.ts": {
-    "mtime": 1793753132.257398,
-    "ast_hash": "e18addb574c58304f17bed475a42044b",
-    "semantic_hash": "e18addb574c58304f17bed475a42044b"
+    "mtime": 1793901212.8715117,
+    "ast_hash": "2638e8717dd1cf6b8b6bc7a238a38c33",
+    "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
     "mtime": 1793489656.6539383,
@@ -275,9 +275,9 @@
     "semantic_hash": "33a4cebdbbdabc5663ef09f4debc1463"
   },
   "server/routes/vidsrcRoutes.ts": {
-    "mtime": 1792311650.5430138,
-    "ast_hash": "405789dc743b27badf2159ef97e118a5",
-    "semantic_hash": "405789dc743b27badf2159ef97e118a5"
+    "mtime": 1793901212.9061437,
+    "ast_hash": "6472349a9b198a4af656d23f14ebb20d",
+    "semantic_hash": ""
   },
   "server/services/catalogWatcher.ts": {
     "mtime": 1791481071.8197594,
@@ -420,9 +420,9 @@
     "semantic_hash": "ea0f6bca26f1969019383be6583b2c10"
   },
   "src/components/ReleaseCalendarPage.tsx": {
-    "mtime": 1790766890.8076627,
-    "ast_hash": "15395cb6d55e9380c9aa59aeafa91202",
-    "semantic_hash": "15395cb6d55e9380c9aa59aeafa91202"
+    "mtime": 1793887648.978895,
+    "ast_hash": "3a6ed99a0bfef0bee338ec9a8b29026f",
+    "semantic_hash": ""
   },
   "src/components/ReportBugModal.tsx": {
     "mtime": 1791501271.0726063,
@@ -445,9 +445,9 @@
     "semantic_hash": "a1d2c148afd7e2ceb1fd51cf6165fdb0"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1793756360.7425854,
-    "ast_hash": "ab1535e31954c29c6cb58af4c6b6786e",
-    "semantic_hash": "ab1535e31954c29c6cb58af4c6b6786e"
+    "mtime": 1793900991.8408377,
+    "ast_hash": "58193125af35e9bc05f670479696f2a5",
+    "semantic_hash": ""
   },
   "src/components/VirtualRemote.tsx": {
     "mtime": 1789731729.0708976,
@@ -510,9 +510,9 @@
     "semantic_hash": "1d5df86cc035f2bdb8728ba8bddffb6d"
   },
   "src/pages/DetailsPage.tsx": {
-    "mtime": 1793756115.2204869,
-    "ast_hash": "8c6fa563c2092ea35707dbf84287c51e",
-    "semantic_hash": "8c6fa563c2092ea35707dbf84287c51e"
+    "mtime": 1793901212.9144905,
+    "ast_hash": "cbb335bd6e41804465b4adea92330cca",
+    "semantic_hash": ""
   },
   "src/pages/DownloadsPage.tsx": {
     "mtime": 1791499308.5919278,
@@ -620,9 +620,9 @@
     "semantic_hash": "b74b7d7146115cd72e8ad975aaceabcf"
   },
   "src/services/tmdb.ts": {
-    "mtime": 1793489656.724946,
-    "ast_hash": "9d784b80631a2d19df0f78718e598f40",
-    "semantic_hash": "9d784b80631a2d19df0f78718e598f40"
+    "mtime": 1793901212.929151,
+    "ast_hash": "fb4a1887be8630ed38b776fdd35646ff",
+    "semantic_hash": ""
   },
   "src/services/watchedEpisodes.ts": {
     "mtime": 1790122085.225402,
@@ -835,8 +835,8 @@
     "semantic_hash": "639c5ca9163cb53294086814a8d5ed15"
   },
   "task.md": {
-    "mtime": 1793808214.566629,
-    "ast_hash": "0e166bf7519212a3f6ae5e1fc1bcb96e",
+    "mtime": 1793888255.0352688,
+    "ast_hash": "5be6ca98f701d8d12be916dc620fd3a0",
     "semantic_hash": ""
   },
   "tsc_output.txt": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793839576.46484,
-    "ast_hash": "e51f2cee752e5a22a24cce4ab4943d8a",
+    "mtime": 1793902960.6824882,
+    "ast_hash": "36f177db2b05e105ed411f1fb4dd5a12",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1135,12 +1135,12 @@
     "semantic_hash": "dc5187c60faa7d418d50532ca94c6a60"
   },
   "data/available-tmdb-ids.json": {
-    "mtime": 1793879207.7920458,
+    "mtime": 1793888134.5601008,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": "7c23159bf95ca39cf2d842ce26b36966"
   },
   "public/data/available-tmdb-ids.json": {
-    "mtime": 1793879207.7942002,
+    "mtime": 1793888134.5618396,
     "ast_hash": "7c23159bf95ca39cf2d842ce26b36966",
     "semantic_hash": "7c23159bf95ca39cf2d842ce26b36966"
   },
@@ -1240,9 +1240,9 @@
     "semantic_hash": "dcc3e32b3b6cd6133fa8aadf2173fc0d"
   },
   "server/services/vizerDomains.ts": {
-    "mtime": 1793753132.2778032,
-    "ast_hash": "df198aa0f81619f444e0ae2d34a04a78",
-    "semantic_hash": "df198aa0f81619f444e0ae2d34a04a78"
+    "mtime": 1793899639.95851,
+    "ast_hash": "dc1fd5a94ca85f65ab2458915d0afda3",
+    "semantic_hash": ""
   },
   "server/utils/loadEnvironment.ts": {
     "mtime": 1792858479.5925703,
@@ -1280,9 +1280,9 @@
     "semantic_hash": "b3b36a9c3b3a2646cee379aae00590a1"
   },
   "src/services/playbackStartup.ts": {
-    "mtime": 1793756663.6179295,
-    "ast_hash": "d96c8a6c48a6035fb9750711ab310852",
-    "semantic_hash": "d96c8a6c48a6035fb9750711ab310852"
+    "mtime": 1793900927.63783,
+    "ast_hash": "5980267db7435cf0972c7f17b5894b48",
+    "semantic_hash": ""
   },
   "src/utils/playerFrameMessages.ts": {
     "mtime": 1792847791.0372765,
@@ -1290,9 +1290,9 @@
     "semantic_hash": "ebb8b1ca783ff621966186b076760025"
   },
   "src/utils/playerIntegration.ts": {
-    "mtime": 1793878951.334769,
-    "ast_hash": "e4001bb1fbb2b794c4ad43138b66f7f1",
-    "semantic_hash": "e4001bb1fbb2b794c4ad43138b66f7f1"
+    "mtime": 1793887871.1067977,
+    "ast_hash": "9b487d0c6c853a7c5a82136d080d6e96",
+    "semantic_hash": ""
   },
   ".github/workflows/sync-drive.yml": {
     "mtime": 1792522480.490932,
@@ -1525,9 +1525,9 @@
     "semantic_hash": "e217113ddaf925d5094ac64e246ba9db"
   },
   "server/routes/saimoRoutes.ts": {
-    "mtime": 1793753132.2659607,
-    "ast_hash": "ed42251ef0323f546caf501cf63dba52",
-    "semantic_hash": "ed42251ef0323f546caf501cf63dba52"
+    "mtime": 1793893179.7648077,
+    "ast_hash": "e4d7fd596cdd5c4838511198255bc41b",
+    "semantic_hash": ""
   },
   "server/services/anidigitalResolver.ts": {
     "mtime": 1793753132.2693422,
