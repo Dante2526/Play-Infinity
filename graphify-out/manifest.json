@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1793912752.6027393,
-    "ast_hash": "04d5454c411b0cddf6c491fa1038632a",
+    "mtime": 1793914226.1717796,
+    "ast_hash": "8da01143077df6b3bbc980aa2ffa3bf2",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -15,9 +15,9 @@
     "semantic_hash": "fbaf7cc870c663eb52dcf218531c439d"
   },
   "android/app/src/main/java/com/playinfinity/app/MainActivity.java": {
-    "mtime": 1793753132.2088892,
-    "ast_hash": "b26514f773a4be7f556e29c66d149e12",
-    "semantic_hash": "b26514f773a4be7f556e29c66d149e12"
+    "mtime": 1793914194.6162925,
+    "ast_hash": "0b8bace6973ad1ef9496a70ad5ed6a32",
+    "semantic_hash": ""
   },
   "android/app/src/main/java/com/playinfinity/app/PiPPlugin.java": {
     "mtime": 1792456433.22795,
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793912871.0170407,
-    "ast_hash": "92b78c005bb2b97d8042949c71d925ad",
+    "mtime": 1793914318.6176682,
+    "ast_hash": "fdbaa1e7d7be845b2a158e41980a519a",
     "semantic_hash": ""
   },
   "worker/README.md": {

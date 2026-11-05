@@ -1,3 +1,34 @@
+## 05/11/2026 — Remoção do Banner Preto Nativo Superior (ActionBar) no App Android (Android 87/1.4.55)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura de tela do app no Android mostrando uma barra preta horizontal no topo (exibindo à esquerda 'Play Infinity' e à direita o logotipo em anel/portal), duplicada acima do cabeçalho oficial do app, e solicitou:
+*"No app instlado no android a versão mais atualizada ta aparecendo aquele banner preto todo bugado na parte superior, tira."*
+
+**Diagnóstico e Causa Raiz:**
+1. **Tema Nativo com DarkActionBar no Android:**
+   - Em `android/app/src/main/res/values/styles.xml`, o estilo base `AppTheme` herdava de `Theme.AppCompat.Light.DarkActionBar`.
+   - Quando a SplashScreen nativa (`Theme.SplashScreen`) finalizava a exibição no Android 12+, ela restaurava o tema base da aplicação configurado em `AndroidManifest.xml` (`@style/AppTheme`) devido à ausência do atributo `postSplashScreenTheme`.
+   - Isso fazia o Android inflar uma `ActionBar` nativa de 56dp com fundo preto, título da Activity ('Play Infinity') e ícone da aplicação.
+2. **Duplicação Visual de Cabeçalho:**
+   - Como o app React já renderiza seu próprio cabeçalho responsivo (`src/App.tsx`), o WebView era empurrado para baixo da ActionBar nativa, gerando a barra preta duplicada e desalinhada no topo.
+
+**Modificações Realizadas:**
+1. **Eliminação da ActionBar em Todos os Temas (`android/app/src/main/res/values/styles.xml`):**
+   - Alterado `AppTheme` para herdar de `Theme.AppCompat.DayNight.NoActionBar` com `windowActionBar = false`, `windowNoTitle = true` e `android:windowNoTitle = true`.
+   - Configurado `postSplashScreenTheme` em `AppTheme.NoActionBarLaunch` apontando explicitamente para `@style/AppTheme.NoActionBar`.
+2. **Tema Limpo no Manifesto (`android/app/src/main/AndroidManifest.xml`):**
+   - Atualizada a tag `<application>` para usar `android:theme="@style/AppTheme.NoActionBar"`.
+3. **Reforço de Tema no Ciclo de Vida (`android/app/src/main/java/com/playinfinity/app/MainActivity.java`):**
+   - Adicionada a instrução `setTheme(R.style.AppTheme_NoActionBar);` logo no início do método `onCreate` antes de `EdgeToEdge.enable(this)` e `super.onCreate`.
+4. **Versionamento:**
+   - Incrementado `versionCode` para **87** e `versionName` para **"1.4.55"** em `android/app/build.gradle`.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- `node --test tests/public-frontend.test.cjs tests/player-integration.test.cjs`: 7/7 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Fix Definitivo de Telas Pretas com Spinner Contínuo e Fim dos Piscas/Flashes no Fallback (Android 86/1.4.54)
 
 **Contexto e Solicitação do Usuário:**

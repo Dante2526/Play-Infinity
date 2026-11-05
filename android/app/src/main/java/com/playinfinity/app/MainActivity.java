@@ -24,6 +24,9 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        // Assegura tema limpo sem ActionBar nativa duplicada
+        setTheme(R.style.AppTheme_NoActionBar);
+
         // Habilita Edge-to-Edge nativo para todas as versões do Android suportadas
         EdgeToEdge.enable(this);
 
