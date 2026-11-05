@@ -1,3 +1,31 @@
+## 05/11/2026 — Alinhamento Vertical Fixo das Colunas de Clientes no Painel Admin
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do painel administrativo ("Clientes Cadastrados") mostrando que as caixas de senha, vencimento, botões de ação e tempo ficavam em posições horizontais flutuantes (em zigue-zague) conforme o tamanho do nome do cliente variava, e solicitou:
+*"essas informações de clientes empre ficarem na mesma direção na vertifical, independnete do tamanho do nome do usuario e as tags que acompanham ele"*
+
+**Diagnóstico e Causa Raiz:**
+1. No container de cada cliente em `src/pages/AdminPage.tsx`, o bloco do perfil (avatar, nome, tags de plano/status, dispositivos e e-mail) não possuía largura fixa definida no breakpoint desktop (`xl:`).
+2. Clientes com nomes curtos (ex: "Flávio") ocupavam menos espaço horizontal do que clientes com nomes longos (ex: "Ailson Carlos"), fazendo com que o bloco subsequente de Credenciais/Ações iniciasse em coordenadas horizontais diferentes em cada linha.
+3. Os botões de ação e caixas de tempo utilizavam `flex-wrap` solto, quebrando de forma desigual entre os cartões.
+
+**Modificações Realizadas:**
+1. **Coluna 1 (Perfil & Identificação):**
+   - Definida largura fixa uniforme de `xl:w-[410px] 2xl:w-[460px] shrink-0` no desktop, garantindo que o término do bloco seja rigorosamente no mesmo pixel em todas as linhas.
+2. **Coluna 2 (Credenciais & Ações da Conta):**
+   - Agrupadas a Linha 1 (Senha e Vencimento em `grid grid-cols-2`) e a Linha 2 (Botões Link, Editar, Notas e Revogar) em um container com largura uniforme fixa de `xl:w-[320px] 2xl:w-[340px] shrink-0`.
+   - Agora todas as caixas de senha, datas de vencimento e botões de ação começam na exata mesma coordenada vertical em 100% dos clientes.
+3. **Coluna 3 (Ações Rápidas de Extensão de Tempo):**
+   - Isolada como coluna independente (`xl:shrink-0`), perfeitamente alinhada na vertical à direita da Coluna 2.
+4. **Mobile-First Preservado:**
+   - Em telas mobile e tablets (`< xl`), os blocos mantêm `w-full` empilhados verticalmente de forma responsiva e sem overflow horizontal.
+
+**Validação Realizada:**
+- `npm run lint` (`tsc --noEmit`): 0 erros (código 0).
+- `node --test tests/public-frontend.test.cjs tests/account-switch-cleanup.test.cjs`: 12/12 testes aprovados (100%).
+
+---
+
 ## 05/11/2026 — Remoção do Banner Preto Nativo Superior (ActionBar) no App Android (Android 87/1.4.55)
 
 **Contexto e Solicitação do Usuário:**

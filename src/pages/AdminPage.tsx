@@ -1443,9 +1443,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
                   return (
                     <div key={client.id} className="flex flex-col gap-2">
-                      <div className="bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col xl:flex-row xl:items-center justify-between gap-4 max-w-full overflow-hidden shadow-lg relative">
-                      {/* Perfil & Identificação */}
-                      <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 max-w-full">
+                      <div className="bg-black/50 hover:bg-black/70 border border-white/10 hover:border-white/20 rounded-[22px] p-4 sm:p-5 transition-all flex flex-col xl:flex-row xl:items-center xl:justify-start gap-4 xl:gap-6 max-w-full overflow-hidden shadow-lg relative">
+                      {/* Coluna 1: Perfil & Identificação (Largura fixa uniforme em desktop para alinhamento vertical estrito) */}
+                      <div className="flex items-start sm:items-center gap-3 sm:gap-4 min-w-0 w-full xl:w-[410px] 2xl:w-[460px] shrink-0">
                         <div className="relative shrink-0 mt-0.5 sm:mt-0">
                           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-black text-base sm:text-lg text-white shadow-[0_0_15px_rgba(234,88,12,0.4)]">
                             {initial}
@@ -1602,19 +1602,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         </div>
                       </div>
 
-                      {/* Informações e Controles */}
-                      <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 text-xs text-white/70 w-full xl:w-auto">
-                        {/* Linha de Senha e Vencimento */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full sm:w-auto">
+                      {/* Coluna 2: Credenciais & Ações (Largura fixa uniforme em desktop para alinhamento vertical estrito) */}
+                      <div className="flex flex-col gap-2 w-full xl:w-[320px] 2xl:w-[340px] shrink-0 text-xs text-white/70">
+                        {/* Linha 1: Senha e Vencimento */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                           {/* Senha */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between sm:justify-start gap-2 min-w-[130px]">
-                            <div className="flex items-center gap-1.5">
+                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2 min-w-0">
+                            <div className="flex items-center gap-1.5 shrink-0">
                               <Key className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                               <span className="text-white/40 text-[11px] sm:text-xs">Senha:</span>
                             </div>
                             {client.initialPassword ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-mono font-bold text-orange-300 text-[12px]">{client.initialPassword}</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-mono font-bold text-orange-300 text-[12px] truncate">{client.initialPassword}</span>
                                 <button
                                   type="button"
                                   onClick={() => copyToClipboard(client.initialPassword!, `pass-${client.id}`)}
@@ -1629,12 +1629,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-white/30 italic text-[10px]">(Criptografada)</span>
+                              <span className="text-white/30 italic text-[10px] truncate">(Criptografada)</span>
                             )}
                           </div>
 
                           {/* Vencimento */}
-                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between sm:justify-start gap-2 min-w-[150px]">
+                          <div className="bg-white/5 border border-white/10 rounded-xl px-3 py-2 flex items-center justify-between gap-2 min-w-0">
                             <div className="flex items-center gap-1.5 shrink-0">
                               <Clock className="w-3.5 h-3.5 text-white/40 shrink-0" />
                               <span className="text-white/40 text-[11px] sm:text-xs">Vence:</span>
@@ -1643,7 +1643,71 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           </div>
                         </div>
 
-                        {/* Ações Rápidas de Extensão de Tempo */}
+                        {/* Linha 2: Botões de Ação */}
+                        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full">
+                          {/* Botão de Copiar Link de Indicação */}
+                          <button
+                            type="button"
+                            onClick={() => handleCopyClientReferralLink(client)}
+                            title="Copiar link de indicação deste cliente"
+                            className="px-3 py-2 bg-orange-600/15 hover:bg-orange-600/25 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/30 flex-1 sm:flex-initial"
+                          >
+                            {copiedKey === `ref-${client.id}` ? (
+                              <>
+                                <Check className="w-3.5 h-3.5 text-green-400" />
+                                <span className="text-green-400">Copiado!</span>
+                              </>
+                            ) : (
+                              <>
+                                <LinkIcon className="w-3.5 h-3.5" />
+                                <span>Link</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Botão de Editar Credenciais */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(client)}
+                            title="Editar e-mail e senha do cliente"
+                            className="px-3.5 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/20 flex-1 sm:flex-initial"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span>Editar</span>
+                          </button>
+
+                          {/* Botão de Notas */}
+                          {client.notes && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedNotesId(expandedNotesId === client.id ? null : client.id)}
+                              title="Ver anotações do cliente"
+                              className={`px-3.5 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border ${
+                                expandedNotesId === client.id 
+                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' 
+                                  : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
+                              } flex-1 sm:flex-initial`}
+                            >
+                              {expandedNotesId === client.id ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                              <span>Notas</span>
+                            </button>
+                          )}
+
+                          {/* Botão de Revogar Acesso */}
+                          <button
+                            type="button"
+                            onClick={() => handleRevokeDirect(client)}
+                            title="Revogar acesso do cliente"
+                            className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-red-500/20 flex-1 sm:flex-initial"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Revogar</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Coluna 3: Ações Rápidas de Extensão de Tempo (Alinhada verticalmente em desktop) */}
+                      <div className="w-full xl:w-auto shrink-0 flex items-center">
                         <div className="bg-white/5 border border-white/10 rounded-xl p-2 sm:px-2.5 sm:py-1.5 flex items-center justify-between sm:justify-start gap-1.5 w-full sm:w-auto">
                           <span className="text-white/40 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1 mr-0.5 shrink-0">
                             <Timer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
@@ -1696,68 +1760,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               +7d
                             </button>
                           </div>
-                        </div>
-
-                        {/* Botões de Ação */}
-                        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
-                          {/* Botão de Copiar Link de Indicação */}
-                          <button
-                            type="button"
-                            onClick={() => handleCopyClientReferralLink(client)}
-                            title="Copiar link de indicação deste cliente"
-                            className="px-3 py-2 bg-orange-600/15 hover:bg-orange-600/25 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/30 shrink-0"
-                          >
-                            {copiedKey === `ref-${client.id}` ? (
-                              <>
-                                <Check className="w-3.5 h-3.5 text-green-400" />
-                                <span className="text-green-400">Copiado!</span>
-                              </>
-                            ) : (
-                              <>
-                                <LinkIcon className="w-3.5 h-3.5" />
-                                <span>Link</span>
-                              </>
-                            )}
-                          </button>
-
-                          {/* Botão de Editar Credenciais */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(client)}
-                            title="Editar e-mail e senha do cliente"
-                            className="px-3.5 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/20"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                            <span>Editar</span>
-                          </button>
-
-                          {/* Botão de Notas */}
-                          {client.notes && (
-                            <button
-                              type="button"
-                              onClick={() => setExpandedNotesId(expandedNotesId === client.id ? null : client.id)}
-                              title="Ver anotações do cliente"
-                              className={`px-3.5 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border ${
-                                expandedNotesId === client.id 
-                                  ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' 
-                                  : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
-                              }`}
-                            >
-                              {expandedNotesId === client.id ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                              <span>Notas</span>
-                            </button>
-                          )}
-
-                          {/* Botão de Revogar Acesso */}
-                          <button
-                            type="button"
-                            onClick={() => handleRevokeDirect(client)}
-                            title="Revogar acesso do cliente"
-                            className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-red-500/20"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            <span>Revogar</span>
-                          </button>
                         </div>
                       </div>
                     </div>

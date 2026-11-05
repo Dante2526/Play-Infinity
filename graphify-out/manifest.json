@@ -505,9 +505,9 @@
     "semantic_hash": "5b8602d81fc297a03740eb3d61fb5e93"
   },
   "src/pages/AdminPage.tsx": {
-    "mtime": 1793761722.9410448,
-    "ast_hash": "1d5df86cc035f2bdb8728ba8bddffb6d",
-    "semantic_hash": "1d5df86cc035f2bdb8728ba8bddffb6d"
+    "mtime": 1793915104.416858,
+    "ast_hash": "e5e9bbbff8ac62519601704935bfb8fc",
+    "semantic_hash": ""
   },
   "src/pages/DetailsPage.tsx": {
     "mtime": 1793901212.9144905,
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1793914318.6176682,
-    "ast_hash": "fdbaa1e7d7be845b2a158e41980a519a",
+    "mtime": 1793915209.7865765,
+    "ast_hash": "dc04e541658751eb78e93d698b604692",
     "semantic_hash": ""
   },
   "worker/README.md": {
