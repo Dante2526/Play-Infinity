@@ -218,7 +218,7 @@ async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean; cache?: b
         controller = new AbortController();
         timeoutId = setTimeout(() => {
           try { controller?.abort(); } catch(e){console.warn("Silenced error:", e);}
-        }, 6000);
+        }, 9000);
       }
 
       const fetchOptions: RequestInit = {
@@ -253,7 +253,7 @@ async function fetchTmdbRaw<T>(url: string, opts?: { silent?: boolean; cache?: b
       return { ok: false, status: res.status, data: null };
     } catch (err: any) {
       if (err?.name === 'AbortError') {
-        console.warn(`[TMDB Service] Requisição abortada por timeout de 6s (${url}). Ativando fallback instantâneo...`);
+        console.warn(`[TMDB Service] Requisição abortada por timeout de 9s (${url}). Ativando fallback instantâneo...`);
       } else {
         console.warn(`[TMDB Service] Proxy local inacessível (${err?.message || err}) em ${url}. Ativando fallback...`);
       }

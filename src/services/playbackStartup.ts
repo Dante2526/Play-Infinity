@@ -160,8 +160,8 @@ export function createStartupMediaClock() {
 }
 
 export function startupMediaLimit(key: string, hasAlternative: boolean, prepared: boolean) {
-  if (key === 'srv_byse' && !prepared) return hasAlternative ? 25000 : 45000;
-  return 15000;
+  if (key === 'srv_byse' && !prepared) return hasAlternative ? 9000 : 12000;
+  return hasAlternative ? 7500 : 9000;
 }
 
 export function shouldReloadMixdropFrame(activeUrl: string | null | undefined, started: boolean) {

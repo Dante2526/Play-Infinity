@@ -65,7 +65,7 @@ export async function checkVipSeason(
   try {
     const port = process.env.PORT || 3000;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
+    const timeout = setTimeout(() => controller.abort(), 2500);
     const res = await fetch(`http://localhost:${port}/api/myembed-stream?id=${tmdb}&type=tv&s=${season}&e=1`, {
       signal: controller.signal,
     });
@@ -1588,7 +1588,7 @@ router.get("/api/series-seasons-available", async (req, res) => {
         .filter(n => !isNaN(n) && n > 0);
     }
     if (candidateSeasons.length === 0) {
-      candidateSeasons = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      candidateSeasons = [1];
     }
 
     // ============================================================================
@@ -1617,7 +1617,7 @@ router.get("/api/series-seasons-available", async (req, res) => {
     // Seasons que precisam de probe network (estão em candidates mas NÃO em catálogo)
     const seasonsToProbe = candidateSeasons.filter(
       s => !catalogSeasons.includes(s)
-    );
+    ).slice(0, 4);
 
     // Cache só pra probes (TTL 20min)
     const probeCacheKey = `${tmdbId}:probe:${seasonsToProbe.join(",")}`;
@@ -1704,12 +1704,18 @@ router.get("/api/series-seasons-available", async (req, res) => {
         return false;
       };
 
-      const probes = await Promise.all(
-        seasonsToProbe.map(async (s) => ({
-          season: s,
-          available: await probeSeason(s),
-        }))
-      );
+      const timeoutPromise = new Promise<{ season: number; available: boolean }[]>((resolve) => {
+        setTimeout(() => resolve([]), 5500);
+      });
+      const probes = await Promise.race([
+        Promise.all(
+          seasonsToProbe.map(async (s) => ({
+            season: s,
+            available: await probeSeason(s),
+          }))
+        ),
+        timeoutPromise
+      ]);
       probedSeasons = probes.filter(p => p.available).map(p => p.season);
 
       _verifiedSeasonsCache.set(probeCacheKey, {

@@ -559,7 +559,7 @@ export async function checkVidsrcSeason(
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    const timeout = setTimeout(() => controller.abort(), 2500);
 
     const r1 = await fetch(
       `https://vidsrc.sh/vs_src.php?type=tv&id=${tmdb}&season=${season}&episode=1`,

@@ -452,9 +452,10 @@ export function DetailsPage({
   useEffect(() => {
     if (!isSeries || !effectiveTmdbId) return;
     let isMounted = true;
-    const candidates = (tmdbDetails?.seasons || [])
+    const declared = (tmdbDetails?.seasons || [])
       .filter(s => s.season_number > 0 && s.episode_count > 0)
       .map(s => s.season_number);
+    const candidates = declared.length > 0 ? declared : (selectedSeason ? [selectedSeason] : [1]);
 
     // O catálogo pode descobrir temporadas enquanto os metadados ainda carregam.
 

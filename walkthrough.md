@@ -1,3 +1,37 @@
+## 05/11/2026 — Eliminação de Timeouts Longos no Player, Blindagem 502 de Temporadas e TMDB Discover
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou os seguintes logs para correção imediata:
+1. `[TMDB Service] Requisição abortada por timeout de 6s (/api/tmdb/discover/tv...)`
+2. `GET /api/series-seasons-available?tmdb_id=259909 502 (Bad Gateway)`
+3. `Player atual (srv_saimo_mp4) demorou mais de 15s sem iniciar... Player atual (srv_byse) demorou mais de 25s sem iniciar...`
+
+**Diagnóstico e Causa Raiz:**
+1. **Timeouts Excessivos de Fallback (15s a 25s):** Em `src/services/playbackStartup.ts` e `src/components/VideoPlayerModal.tsx`, servidores lentos ou com falhas retinham o fallback por 15s (`saimo_mp4`) e até 25s/95s (`byse`), acumulando esperas de até 40s antes de encontrar uma fonte funcional.
+2. **Bad Gateway (502) em `/api/series-seasons-available`:** Quando chamado sem `candidate_seasons` (no 1º render da série Dexter 259909), o backend sondava cegamente 10 temporadas em 6 servidores externos em paralelo. A rota ultrapassava 15 segundos e o Nginx na VPS encerrava a conexão com HTTP 502.
+3. **Timeout Rígido do TMDB (6s):** Consultas complexas do discover paginado com filtros de provedores levavam pouco mais de 6s sob carga, ativando fallback antes da resposta chegar.
+
+**Modificações Realizadas:**
+1. **Timeouts Rápidos de Fallback:**
+   - Em `src/services/playbackStartup.ts`: Reduzido `startupMediaLimit` para 7.5s (geral) e 9s (`srv_byse`) quando há alternativas disponíveis.
+   - Em `src/components/VideoPlayerModal.tsx`: Reduzido `providerTimeout` (de 95s/45s/15s para 8s-12s).
+2. **Blindagem Contra 502 em `/api/series-seasons-available` (`server/routes/encontreiLookup.ts`):**
+   - Se `candidateSeasons` for omitido, default para `[1]` em vez de 10 temporadas.
+   - Limitada a sondagem a no máximo 4 temporadas por requisição (`slice(0, 4)`).
+   - Reduzidos os timeouts dos probes internos (`checkVipSeason` e `checkVidsrcSeason` para 2.5s).
+   - Implementado timeout global de segurança de 5.5s com `Promise.race`: nunca excede o limite do proxy reverso.
+3. **Prevenção no Cliente (`src/pages/DetailsPage.tsx`):**
+   - `candidates` agora garante fallback local com a temporada selecionada (`[selectedSeason || 1]`), evitando chamadas vazias.
+4. **Alívio no TMDB Client (`src/services/tmdb.ts`):**
+   - Timeout elevado de 6s para 9s para acomodar queries de discover com paginação e filtros de provedores sem abort prematuro.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `node --test`: 43/43 testes aprovados (100%).
+- Grafo atualizado via Graphify: 2.152 nós e 4.426 conexões.
+
+---
+
 ## 05/11/2026 — Migração de Domínio do Vizer para `vizer.date` (Android 84/1.4.52)
 
 **Contexto e Solicitação do Usuário:**
