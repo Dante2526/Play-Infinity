@@ -31,6 +31,7 @@ import { savePlaybackProgress } from "../services/playbackHistory";
 import { getTimelinePreviewImages } from "../services/tmdb";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { parseVtt, type VttCue } from "../utils/vttParser";
+import { computeNextEpisode } from "../utils/playerIntegration";
 
 const PiP = registerPlugin<any>("PiP");
 
@@ -133,7 +134,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   isSeries,
   season = 1,
   episode = 1,
-  totalEpisodes = 24,
+  totalEpisodes,
   availableSeasons,
   onSeasonChange,
   episodesList,
@@ -1330,9 +1331,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           }
           break;
         case "n":
-          if (isSeries && onEpisodeChange) {
+          if (isSeries) {
             e.preventDefault();
-            onEpisodeChange(episode + 1);
+            handlePlayNextRef.current?.();
           }
           break;
         case "m":
@@ -1370,47 +1371,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   // RECURSO: PRÓXIMO EPISÓDIO FLUTUANTE (NETFLIX & DISNEY+)
   // ========================================================
   const nextEpisode = useMemo(() => {
-    if (!isSeries || !episode) return null;
-    const currentEpNum = Number(episode);
-    const curSeasonNum = Number(season || 1);
-
-    if (episodesList && episodesList.length > 0) {
-      const nextInSameSeason = episodesList.find(e => Number(e.episode_number) === currentEpNum + 1);
-      if (nextInSameSeason) {
-        return {
-          ...nextInSameSeason,
-          seasonNumber: curSeasonNum,
-          isNextSeason: false,
-        };
-      }
-    }
-
-    if (totalEpisodes && currentEpNum < totalEpisodes) {
-      const nextEpNum = currentEpNum + 1;
-      return {
-        episode_number: nextEpNum,
-        name: `Episódio ${nextEpNum}`,
-        overview: '',
-        seasonNumber: curSeasonNum,
-        isNextSeason: false,
-        still_path: undefined,
-      };
-    }
-
-    const nextSeasonNum = curSeasonNum + 1;
-    const availList = (availableSeasons || []).map(Number);
-    if (availList.includes(nextSeasonNum) || (totalEpisodes && currentEpNum >= totalEpisodes)) {
-      return {
-        episode_number: 1,
-        name: `Temporada ${nextSeasonNum} • Episódio 1`,
-        overview: '',
-        seasonNumber: nextSeasonNum,
-        isNextSeason: true,
-        still_path: undefined,
-      };
-    }
-
-    return null;
+    return computeNextEpisode({
+      isSeries,
+      episode,
+      season,
+      episodesList,
+      availableSeasons,
+      totalEpisodes,
+    });
   }, [isSeries, episodesList, episode, season, availableSeasons, totalEpisodes]);
 
   // Galeria local instantânea de cenas dos episódios da temporada (já em memória via episodesList)
@@ -1467,6 +1435,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   }, [episode, season, tmdbId, mediaId, nextMovieInfo?.id]);
 
   // Handler unificado para avançar para o próximo episódio ou próximo filme
+  const handlePlayNextRef = useRef<() => void>(() => {});
   const handlePlayNext = useCallback(() => {
     if (nextEpisodeTimerRef.current) {
       clearInterval(nextEpisodeTimerRef.current);
@@ -1486,6 +1455,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       }
     }
   }, [isMovieContinuation, nextMovieInfo, onPlayNextMovie, isSeries, nextEpisode, onSeasonChange, onEpisodeChange]);
+  handlePlayNextRef.current = handlePlayNext;
 
   // Handler para dispensar a contagem e ver os créditos completos
   const handleDismissNextPrompt = useCallback(() => {
@@ -2205,15 +2175,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             </span>
           </button>
 
-          {/* 6. Próximo Episódio (Apenas para séries em Tela Cheia) */}
-          {isFullscreen && isSeries && onEpisodeChange && (
+          {/* 6. Próximo Episódio (Apenas para séries em Tela Cheia quando houver próximo) */}
+          {isFullscreen && isSeries && Boolean(nextEpisode) && (
             <button
-              onClick={() => onEpisodeChange(episode + 1)}
+              onClick={handlePlayNext}
               className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
-              title="Próximo Episódio (Tecla N)"
+              title={nextEpisode?.isNextSeason ? `Próxima Temporada (T${nextEpisode.seasonNumber}:E1)` : "Próximo Episódio (Tecla N)"}
             >
               <SkipForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] shrink-0" />
-              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">Próx. Ep.</span>
+              <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
+                {nextEpisode?.isNextSeason ? "Próx. Temp." : "Próx. Ep."}
+              </span>
             </button>
           )}
         </div>

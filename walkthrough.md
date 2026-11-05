@@ -1,3 +1,35 @@
+## 05/11/2026 — Ocultar Botão "Próximo Episódio" no Fim da Série (Episódio Final)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou captura da tela cheia do player com a série no último episódio (Episódio 8 de 8) e apontou:
+*"Aí tem que ver isso aí, dentro do Play, Netflix, esse exemplo que eu te mandei aí é o episódio 8. E só vai até o episódio 8, mas tu tá vendo o botão de próximo episódio como se fosse ter um próximo episódio, só que vai só até o episódio 8, não era para aparecer, confere? use o grafo"*.
+
+**Diagnóstico e Causa Raiz:**
+1. Em `src/components/NetflixPlayerSkin.tsx`, a renderização do botão "Próx. Ep." na barra inferior avaliava apenas `isFullscreen && isSeries && onEpisodeChange`, sem conferir se existia um próximo episódio (`Boolean(nextEpisode)`).
+2. No cálculo de `nextEpisode`, a cláusula `|| (totalEpisodes && currentEpNum >= totalEpisodes)` forçava a criação de uma falsa "Temporada 2 • Episódio 1" ao atingir o último episódio, mesmo quando a série possuía temporada única (`availableSeasons = [1]`).
+3. O atalho de teclado `N` avançava cegamente para `episode + 1`.
+
+**Modificações Realizadas:**
+1. **Helper Puro e Determinístico (`src/utils/playerIntegration.ts`):**
+   - Criada a função `computeNextEpisode`: valida lista de episódios da temporada atual e apenas transiciona para próxima temporada se ela estiver explicitamente presente em `availableSeasons`.
+   - Se for o último episódio da última temporada, retorna `null`.
+2. **Integração na Skin Netflix (`src/components/NetflixPlayerSkin.tsx`):**
+   - Substituída a lógica interna por `computeNextEpisode`.
+   - Removido o valor padrão enganoso `totalEpisodes = 24`.
+   - Botão "Próx. Ep." condicionado estritamente a `Boolean(nextEpisode)` (não aparece no episódio final).
+   - Botão vinculado ao handler seguro `handlePlayNext()`.
+   - Atalho de teclado `N` protegido para só disparar quando houver próximo episódio.
+3. **Cobertura de Testes Automatizados (`tests/player-next-episode-guard.test.cjs`):**
+   - 6 testes cobrindo temporada única no fim (null), no meio (ep 5), transição para T2:E1 e fim da última temporada (null).
+
+**Validação Realizada:**
+- `node --test tests/player-next-episode-guard.test.cjs`: 6/6 testes aprovados (100%).
+- `node --test`: 82/82 testes aprovados.
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles Vite e servidor de produção gerados com sucesso.
+
+---
+
 ## 05/11/2026 — Seletor de Episódios com Bordas Arredondadas no Player Netflix
 
 **Contexto e Solicitação do Usuário:**
