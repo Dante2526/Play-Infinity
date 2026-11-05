@@ -1,3 +1,43 @@
+## 05/11/2026 — Tratamento de Episódios Inéditos ("Em breve") na Grade e no Calendário (Android 82/1.4.50)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou capturas da série *Vision Quest* (onde o Episódio 8 só será exibido oficialmente em 10 de novembro de 2026) e apontou:
+1. *"O primeiro ajuste é na tela de episódio. Essa série é Vision Quest. O episódio 8 só vai lançar 10 de novembro, mas ele aparece na grade de episódios. Logo, na lógica, nenhum dos nossos servidores que usamos vai ter esse episódio que ainda não foi lançado, mas ele aparece aí. Então, não é para aparecer. Na verdade, o que eu quero é que apareça até a série Episódio 8, só que não apareça o botão de marcar como visto, download, Chromecast, reportar bug e play. Apareça Em breve. Em breve, talvez a data do lançamento seria bom também."*
+2. *"Aí no segundo pedido que eu te mandei, o do calendário, mostra lá que Vision Quest vai ser lançado só 10 de novembro de 2026, mas fica com o botão de assistir episódio. Se ainda não lançou, só lança em 10 de novembro, não tem por que ter o botão de assistir episódio, confere?"*
+
+**Diagnóstico e Causa Raiz:**
+1. Em `src/pages/DetailsPage.tsx`, o array `currentEpisodes` recebia os episódios do TMDB sem extrair o campo `air_date`, renderizando os 5 botões de ação (visto, download, chromecast, bug, play) mesmo em episódios futuros. Ao clicar, o player tentava reproduzir um arquivo inexistente nos servidores.
+2. Em `src/components/ReleaseCalendarPage.tsx`, itens com status `upcoming` ou com `airDate > todayStr` exibiam o botão `▶ Assistir Episódio`, gerando requisições infrutíferas para episódios ainda não exibidos.
+3. Em `src/utils/playerIntegration.ts`, `computeNextEpisode` não validava se o próximo episódio da mesma temporada possuía `air_date` futuro.
+
+**Modificações Realizadas:**
+1. **Helpers Determinísticos (`src/utils/playerIntegration.ts`):**
+   - Adicionado `air_date?: string` na interface `EpisodeItem`.
+   - Implementado `isEpisodeUpcoming(airDate, refDate)`: compara a data de exibição de forma timezone-segura contra a data local brasileira (`YYYY-MM-DD`).
+   - Implementado `formatEpisodeAirDate(airDate)`: formata para padrão curto brasileiro `DD/MM` (ex.: "10/11").
+   - Atualizado `computeNextEpisode`: retorna `null` caso o próximo episódio na lista seja inédito (`isEpisodeUpcoming`).
+2. **Grade de Episódios (`src/pages/DetailsPage.tsx`):**
+   - Mapeado `airDate: ep.air_date || null` no carregamento dos episódios.
+   - Nos episódios inéditos (`isUpcoming`):
+     - Linha desativada para clique (`cursor-default` e sem `onClick`).
+     - Botões de ação (visto, download, chromecast, reportar bug e play) ocultados.
+     - Exibido badge refinado: `Em breve • DD/MM` (ex.: `Em breve • 10/11`) com ícone de relógio `Clock`.
+3. **Calendário de Lançamentos (`src/components/ReleaseCalendarPage.tsx`):**
+   - Calculada a guarda `isUpcoming = ep.status === 'upcoming' || (!isToday && !isReleased && !isEnded && ep.airDate > todayStr)`.
+   - Se `isUpcoming`, o botão `▶ Assistir Episódio` é substituído pelo badge `Em breve` com ícone de relógio, mantendo `Ver Série` e `Favorito`.
+4. **Testes Automatizados (`tests/unreleased-episodes-guard.test.cjs`):**
+   - 6 testes cobrindo datas passadas, data de hoje, datas futuras, formatação `DD/MM` e bloqueio de avanço automático para episódios inéditos no player.
+5. **Versionamento:**
+   - Incrementado `versionCode` para 82 e `versionName` para "1.4.50" em `android/app/build.gradle`.
+
+**Validação Realizada:**
+- `node --test tests/unreleased-episodes-guard.test.cjs`: 6/6 testes aprovados (100%).
+- `node --test tests/player-next-episode-guard.test.cjs`: 6/6 testes aprovados (100%).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- `npm run build`: Bundles Vite e servidor de produção compilados com sucesso.
+
+---
+
 ## 05/11/2026 — Ocultar Botão "Próximo Episódio" no Fim da Série (Episódio Final)
 
 **Contexto e Solicitação do Usuário:**

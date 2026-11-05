@@ -323,6 +323,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                   const isSeasonEnded = ep.status === 'season_ended';
                   const isSeriesEnded = ep.status === 'series_ended';
                   const isEnded = isSeasonEnded || isSeriesEnded;
+                  const isUpcoming = ep.status === 'upcoming' || (!isToday && !isReleased && !isEnded && ep.airDate > todayStr);
 
                       return (
                         <div
@@ -450,39 +451,49 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
 
                           {/* Lado Direito: Ações */}
                           <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto shrink-0 justify-end pt-2 md:pt-0 border-t md:border-t-0 border-white/5">
-                            {/* Botão Assistir Episódio */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPlay?.(
-                                  `${ep.seriesTitle} - T${ep.seasonNumber}:E${ep.episodeNumber}`,
-                                  ep.playerUrl,
-                                  'series',
-                                  ep.tmdbId,
-                                  ep.imdbId,
-                                  ep.seasonNumber,
-                                  ep.episodeNumber,
-                                  undefined,
-                                  false,
-                                  undefined,
-                                  false,
-                                  ep.seriesBackdrop || ep.seriesPoster,
-                                  ep.seriesBackdrop,
-                                  ep.seriesPoster
-                                );
-                              }}
-                              className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
-                                isToday
-                                  ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
-                                  : isSeasonEnded
-                                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
-                                  : 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'
-                              }`}
-                              title={isEnded ? "Assistir Último Ep" : "Assistir Episódio"}
-                            >
-                              <Play className="w-3.5 h-3.5 fill-current" />
-                              <span>{isEnded ? "Assistir Último Ep" : "Assistir Episódio"}</span>
-                            </button>
+                            {/* Ação de Reprodução ou Em Breve */}
+                            {isUpcoming ? (
+                              <div
+                                className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 font-bold text-xs"
+                                title="Episódio inédito com lançamento agendado oficialmente"
+                              >
+                                <Clock className="w-3.5 h-3.5 text-orange-400 shrink-0" />
+                                <span>Em breve</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onPlay?.(
+                                    `${ep.seriesTitle} - T${ep.seasonNumber}:E${ep.episodeNumber}`,
+                                    ep.playerUrl,
+                                    'series',
+                                    ep.tmdbId,
+                                    ep.imdbId,
+                                    ep.seasonNumber,
+                                    ep.episodeNumber,
+                                    undefined,
+                                    false,
+                                    undefined,
+                                    false,
+                                    ep.seriesBackdrop || ep.seriesPoster,
+                                    ep.seriesBackdrop,
+                                    ep.seriesPoster
+                                  );
+                                }}
+                                className={`flex-1 md:flex-initial flex items-center justify-center gap-2 px-5 py-2.5 rounded-full font-bold text-xs transition-all cursor-pointer ${
+                                  isToday
+                                    ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]'
+                                    : isSeasonEnded
+                                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_15px_rgba(99,102,241,0.3)]'
+                                    : 'bg-orange-600 hover:bg-orange-500 text-white shadow-[0_0_15px_rgba(234,88,12,0.3)]'
+                                }`}
+                                title={isEnded ? "Assistir Último Ep" : "Assistir Episódio"}
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                <span>{isEnded ? "Assistir Último Ep" : "Assistir Episódio"}</span>
+                              </button>
+                            )}
 
                             {/* Botão Ver Série */}
                             <button

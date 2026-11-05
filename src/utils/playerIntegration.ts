@@ -44,6 +44,7 @@ export interface EpisodeItem {
   name?: string;
   overview?: string;
   still_path?: string;
+  air_date?: string;
 }
 
 export interface NextEpisodeResult {
@@ -80,6 +81,9 @@ export function computeNextEpisode(options: ComputeNextEpisodeOptions): NextEpis
   if (episodesList && episodesList.length > 0) {
     const nextInSameSeason = episodesList.find((e) => Number(e.episode_number) === currentEpNum + 1);
     if (nextInSameSeason) {
+      if (nextInSameSeason.air_date && isEpisodeUpcoming(nextInSameSeason.air_date)) {
+        return null;
+      }
       return {
         ...nextInSameSeason,
         seasonNumber: curSeasonNum,
@@ -118,4 +122,36 @@ export function computeNextEpisode(options: ComputeNextEpisodeOptions): NextEpis
   }
 
   return null;
+}
+
+/**
+ * Retorna a data de hoje no formato YYYY-MM-DD considerando o fuso horário local.
+ */
+export function getLocalTodayDateString(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Determina se uma data de exibição (airDate: "YYYY-MM-DD") é futura em relação a hoje.
+ */
+export function isEpisodeUpcoming(airDate?: string | null, referenceDate = new Date()): boolean {
+  if (!airDate || typeof airDate !== 'string') return false;
+  const cleanDate = airDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) return false;
+  const todayStr = getLocalTodayDateString(referenceDate);
+  return cleanDate > todayStr;
+}
+
+/**
+ * Formata uma data "YYYY-MM-DD" para exibição curta brasileira (ex: "10/11").
+ */
+export function formatEpisodeAirDate(airDate?: string | null): string | null {
+  if (!airDate || typeof airDate !== 'string') return null;
+  const match = airDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, , month, day] = match;
+  return `${day}/${month}`;
 }

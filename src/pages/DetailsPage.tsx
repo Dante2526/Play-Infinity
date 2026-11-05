@@ -37,6 +37,7 @@ import {
   Cast,
   Bug
 } from "lucide-react";
+import { isEpisodeUpcoming, formatEpisodeAirDate } from "../utils/playerIntegration";
 import { ReportBugModal } from "../components/ReportBugModal";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
@@ -560,7 +561,8 @@ export function DetailsPage({
         desc: ep.overview && ep.overview.trim() !== ""
           ? ep.overview
           : `Acompanhe o episódio ${ep.episode_number} da Temporada ${selectedSeason} de ${item.title}.`,
-        stillPath: ep.still_path ? formatImageUrl(ep.still_path, 'w300') : null
+        stillPath: ep.still_path ? formatImageUrl(ep.still_path, 'w300') : null,
+        airDate: ep.air_date || null
       }));
     }
 
@@ -573,7 +575,8 @@ export function DetailsPage({
         name: `Episódio ${epNum}`,
         duration: "45m",
         desc: `Acompanhe o episódio ${epNum} da Temporada ${selectedSeason} de ${item.title}.`,
-        stillPath: null
+        stillPath: null,
+        airDate: null
       };
     });
   }, [seasonData, episodeAvailabilityInfo, selectedSeason, item.title, tmdbDetails]);
@@ -1056,6 +1059,8 @@ export function DetailsPage({
               <div className="space-y-3">
                 {currentEpisodes.map(ep => {
                   const watched = isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep);
+                  const isUpcoming = isEpisodeUpcoming(ep.airDate);
+                  const airDateFormatted = formatEpisodeAirDate(ep.airDate);
                   const fullEpTitle = `T${selectedSeason}:E${ep.ep} ${ep.name}`;
                   return (
                     <div 
@@ -1063,12 +1068,14 @@ export function DetailsPage({
                       className={`flex items-center justify-between p-3 sm:p-3.5 border rounded-xl transition-all group ${
                         watched 
                           ? "bg-[#131914] border-emerald-500/30 hover:border-emerald-500/50" 
+                          : isUpcoming
+                          ? "bg-[#141414] border-neutral-800/60 opacity-90"
                           : "bg-[#171717] hover:bg-[#202020] border-neutral-800/80 hover:border-orange-500/40"
                       }`}
                     >
                       <div 
-                        className="flex items-center gap-3 sm:gap-3.5 flex-1 min-w-0 cursor-pointer"
-                        tabIndex={0} role="button" onClick={() => {
+                        className={`flex items-center gap-3 sm:gap-3.5 flex-1 min-w-0 ${isUpcoming ? "cursor-default" : "cursor-pointer"}`}
+                        tabIndex={isUpcoming ? -1 : 0} role={isUpcoming ? "region" : "button"} onClick={isUpcoming ? undefined : () => {
                           const epUrl = isSeries 
                             ? `https://v1.watchplay.shop/tvshow/${effectiveTmdbId}/${selectedSeason}/${ep.ep}`
                             : `https://v1.watchplay.shop/movie/${item.imdbId || effectiveTmdbId}`;
@@ -1097,7 +1104,7 @@ export function DetailsPage({
                             <img 
                               src={ep.stillPath} 
                               alt={ep.name}
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              className={`w-full h-full object-cover transition-transform duration-300 ${isUpcoming ? "opacity-75" : "group-hover:scale-105"}`}
                               loading="lazy"
                               onError={(e) => {
                                 (e.currentTarget as HTMLElement).style.display = 'none';
@@ -1125,7 +1132,7 @@ export function DetailsPage({
                             <span className="text-[11px] font-bold text-orange-400/90 tracking-wide">
                               T{selectedSeason}:E{ep.ep}
                             </span>
-                            <h4 className={`text-sm font-bold transition-colors truncate max-w-full ${watched ? "text-neutral-300 opacity-80" : "text-white group-hover:text-orange-400"}`}>
+                            <h4 className={`text-sm font-bold transition-colors truncate max-w-full ${watched ? "text-neutral-300 opacity-80" : isUpcoming ? "text-neutral-300" : "text-white group-hover:text-orange-400"}`}>
                               {ep.name}
                             </h4>
                           </div>
@@ -1136,6 +1143,16 @@ export function DetailsPage({
                       <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 ml-2 sm:ml-3">
                         <span className="text-xs text-neutral-500 hidden sm:inline mr-1">{ep.duration}</span>
                         
+                        {isUpcoming ? (
+                          <div 
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs font-semibold shrink-0"
+                            title={`Lançamento agendado para ${airDateFormatted || 'em breve'}`}
+                          >
+                            <Clock className="w-3.5 h-3.5 stroke-[2] text-orange-400 shrink-0" />
+                            <span>Em breve{airDateFormatted ? ` • ${airDateFormatted}` : ''}</span>
+                          </div>
+                        ) : (
+                          <>
                         {/* Botão de marcar/desmarcar visto (Caixinha com setinha branca) */}
                         <button
                           tabIndex={0} role="button" onClick={(e) => {
@@ -1259,6 +1276,8 @@ export function DetailsPage({
                         >
                           <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                         </div>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
