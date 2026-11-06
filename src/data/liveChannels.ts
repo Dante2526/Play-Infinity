@@ -391,11 +391,18 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Jogo Aberto / Os Donos da Bola / Fórmula 1',
     quality: '720p',
     description: 'O canal do esporte com o Craque Neto, Renata Fan e as melhores coberturas.',
+    // Upstream embedTV morto (HTTP 404 desde nov/2026 — stream hash
+    // 41f3ad648b8590ca219cf5e28b908b0b foi removido do s25-cloudfront-net.lat).
+    // Substituído pela fonte Saimo (138.204.86.4:8080/BAND_HD/index.m3u8, 720p 30fps),
+    // acessível via /api/saimo-source que assina a URL proxy server-side com o
+    // PROXY_SECRET real (não depende do fallback). Site embedtv.cc também está
+    // com player quebrado: as 145 páginas ww0.embedtv.cc/<id> servem todas o
+    // mesmo stream de teste Akamai (cph-p2p-msl.akamaized.net/hls/live/2000341/test).
     lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F8f246fdcdd11e03e7750ed4f8e050161.s25-cloudfront-net.lat%2Fstream%2F41f3ad648b8590ca219cf5e28b908b0b%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=fa57aa03c3f8f57eeb0decff8ef02f802ec8fc05abc200fc704e253075672c95',
+        url: '/api/saimo-source?channel=band&source=2',
         isProxy: false
       }
     ]
