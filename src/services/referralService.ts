@@ -22,6 +22,113 @@ export {
 const STORAGE_KEY = "playinfinity_ref_code";
 const COOKIE_NAME = "pi_ref";
 
+// --- Canal de aquisição do cliente (saimon / embedtv) ---
+// "saimon"  → seguidores trazidos pelo streamer Saimon (link ?src=saimon)
+// "embedtv" → seguidores trazidos pelo site embedtv.cc (link ?src=embedtv ou referrer embedtv.cc)
+export type AcquisitionSource = "saimon" | "embedtv";
+const SOURCE_STORAGE_KEY = "playinfinity_acq_source";
+const SOURCE_COOKIE_NAME = "pi_acq_src";
+const SOURCE_TTL_DAYS = 30;
+export const KNOWN_ACQUISITION_SOURCES: AcquisitionSource[] = ["saimon", "embedtv"];
+
+function normalizeSource(raw: string | null | undefined): AcquisitionSource | null {
+  if (!raw) return null;
+  const v = String(raw).trim().toLowerCase();
+  if (v === "saimon" || v === "saimo" || v === "saimonstreamer" || v === "saimon_streamer") return "saimon";
+  if (v === "embedtv" || v === "embed" || v === "embedtvcc" || v === "embedtv.cc") return "embedtv";
+  return null;
+}
+
+function detectSourceFromReferrer(): AcquisitionSource | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const ref = document.referrer || "";
+    if (!ref) return null;
+    const host = (() => {
+      try { return new URL(ref).hostname.toLowerCase(); } catch { return ""; }
+    })();
+    if (!host) return null;
+    if (host.includes("embedtv.cc") || host.includes("embedtv.lat")) return "embedtv";
+    if (host.includes("twitch.tv") && host.includes("saimon")) return "saimon";
+    if (host.includes("saimon")) return "saimon";
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Captura o canal de aquisição da URL (?src=saimon / ?src=embedtv) ou detecta
+ * pelo referrer (embedtv.cc → "embedtv"). Persiste em localStorage + cookie.
+ * Retorna o canal detectado, ou o já salvo se nada novo for capturado.
+ */
+export function captureAcquisitionSourceFromUrl(): AcquisitionSource | null {
+  if (typeof window === "undefined") return getStoredAcquisitionSource();
+
+  let detected: AcquisitionSource | null = null;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    // Aceita ?src=, ?utm_source=, ?source= (case-insensitive).
+    const rawSrc = params.get("src") || params.get("utm_source") || params.get("source");
+    if (rawSrc) {
+      detected = normalizeSource(rawSrc);
+    }
+    // Se não veio pela URL, tenta detectar pelo referrer (embedtv.cc).
+    if (!detected) {
+      detected = detectSourceFromReferrer();
+    }
+  } catch (err) {
+    console.warn("[Acquisition] Erro ao capturar canal da URL:", err);
+  }
+
+  if (detected) {
+    try {
+      localStorage.setItem(SOURCE_STORAGE_KEY, detected);
+      sessionStorage.setItem(SOURCE_STORAGE_KEY, detected);
+      const expires = new Date(Date.now() + SOURCE_TTL_DAYS * 24 * 60 * 60 * 1000).toUTCString();
+      document.cookie = `${SOURCE_COOKIE_NAME}=${detected}; path=/; expires=${expires}; SameSite=Lax`;
+    } catch (err) {
+      console.warn("[Acquisition] Erro ao persistir canal:", err);
+    }
+    return detected;
+  }
+
+  return getStoredAcquisitionSource();
+}
+
+export function getStoredAcquisitionSource(): AcquisitionSource | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const local = localStorage.getItem(SOURCE_STORAGE_KEY);
+    const detected = normalizeSource(local);
+    if (detected) return detected;
+
+    const session = sessionStorage.getItem(SOURCE_STORAGE_KEY);
+    const detected2 = normalizeSource(session);
+    if (detected2) return detected2;
+
+    const match = document.cookie.match(new RegExp(`(?:^|; )${SOURCE_COOKIE_NAME}=([^;]*)`));
+    if (match && match[1]) {
+      const detected3 = normalizeSource(match[1]);
+      if (detected3) return detected3;
+    }
+  } catch (err) {
+    console.warn("[Acquisition] Erro ao ler canal salvo:", err);
+  }
+  return null;
+}
+
+export function clearStoredAcquisitionSource(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(SOURCE_STORAGE_KEY);
+    sessionStorage.removeItem(SOURCE_STORAGE_KEY);
+    document.cookie = `${SOURCE_COOKIE_NAME}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
+  } catch (err) {
+    console.warn("[Acquisition] Erro ao limpar canal:", err);
+  }
+}
+
 /**
  * Captura parâmetros de indicação (?ref=, ?ind=, ?r=) da URL e persiste.
  */

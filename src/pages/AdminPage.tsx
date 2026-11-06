@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronDown, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop } from "lucide-react";
-import { buildReferralLink, generateReferralCode, classifyReferralStatus } from "../services/referralService";
+import { buildReferralLink, generateReferralCode, classifyReferralStatus, KNOWN_ACQUISITION_SOURCES, type AcquisitionSource } from "../services/referralService";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -34,6 +34,8 @@ export interface ClientUser {
   notes?: string;
   fixedDiscount?: number;
   oneTimeDiscount?: number;
+  // Canal de aquisição do cliente (saimon / embedtv / null = outro/desconhecido)
+  acquisitionSource?: AcquisitionSource | null;
   // Campos de Rastreamento de Indicação em Cadeia
   referralCode?: string;
   referredBy?: string;
@@ -146,6 +148,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [selectedNetworkRoot, setSelectedNetworkRoot] = useState<string>("all");
   type ExpirationFilterType = "all" | "active" | "expiring_soon" | "expired";
   const [expirationFilter, setExpirationFilter] = useState<ExpirationFilterType>("all");
+  // Filtro por canal de aquisição (saimon / embedtv / outros)
+  type AcquisitionSourceFilterType = "all" | "saimon" | "embedtv" | "outros";
+  const [acquisitionSourceFilter, setAcquisitionSourceFilter] = useState<AcquisitionSourceFilterType>("all");
 
   // Classifica o estado de vencimento de um cliente
   const getClientExpirationStatus = React.useCallback((client: ClientUser, now: number = Date.now()): "vitalicio" | "expired" | "expiring_soon" | "active" => {
@@ -201,6 +206,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
     };
   }, [usersList, getClientExpirationStatus]);
 
+  // Contadores para os filtros por canal de aquisição (Saimon / embedTV / Outros)
+  const acquisitionSourceCounts = React.useMemo(() => {
+    let saimon = 0;
+    let embedtv = 0;
+    let outros = 0;
+    usersList.forEach(u => {
+      if (u.acquisitionSource === "saimon") saimon++;
+      else if (u.acquisitionSource === "embedtv") embedtv++;
+      else outros++;
+    });
+    return { all: usersList.length, saimon, embedtv, outros };
+  }, [usersList]);
+
   // Lista de clientes filtrada de forma memoizada e consistente
   const filteredUsers = React.useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -236,9 +254,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
         }
       }
 
+      if (acquisitionSourceFilter !== "all") {
+        if (acquisitionSourceFilter === "outros") {
+          // "Outros" = sem canal definido (null/undefined) — não é saimon nem embedtv.
+          if (u.acquisitionSource === "saimon" || u.acquisitionSource === "embedtv") return false;
+        } else {
+          if (u.acquisitionSource !== acquisitionSourceFilter) return false;
+        }
+      }
+
       return true;
     });
-  }, [usersList, searchTerm, selectedNetworkRoot, expirationFilter, getClientExpirationStatus]);
+  }, [usersList, searchTerm, selectedNetworkRoot, expirationFilter, acquisitionSourceFilter, getClientExpirationStatus]);
 
   // Mapeia o tamanho das redes de amigos e ancestrais
   const referralCounts = React.useMemo(() => {
@@ -292,6 +319,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [accessType, setAccessType] = useState<"mensal" | "teste" | "vitalicio" | "4horas" | "1dia" | "30min" | "7dias">("mensal");
   const [monthlyPrice, setMonthlyPrice] = useState<"9.90" | "13.00">("13.00");
+  // Canal de aquisição no cadastro manual: "none" = outro/não definido.
+  const [newAcquisitionSource, setNewAcquisitionSource] = useState<"none" | AcquisitionSource>("none");
   const [createLoading, setCreateLoading] = useState(false);
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
@@ -323,6 +352,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [editOneTimeDiscount, setEditOneTimeDiscount] = useState<number>(0);
   const [editFixedDiscountStr, setEditFixedDiscountStr] = useState<string>("0,00");
   const [editOneTimeDiscountStr, setEditOneTimeDiscountStr] = useState<string>("0,00");
+  // Canal de aquisição editável pelo admin: "none" = sem canal (limpar).
+  const [editAcquisitionSource, setEditAcquisitionSource] = useState<"none" | AcquisitionSource>("none");
 
   // Helper para parsing flexivel de moeda (aceita 20, 20,5, 20.5, 100, etc)
   const parseCurrencyInput = (val: string): number => {
@@ -501,7 +532,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
           devices: data.devices || {},
           devicesCount: resolvedDevs.count,
           devicesList: resolvedDevs.activeDevices,
-          isDevicesEstimated: resolvedDevs.isEstimated
+          isDevicesEstimated: resolvedDevs.isEstimated,
+          acquisitionSource: (data.acquisitionSource === "saimon" || data.acquisitionSource === "embedtv")
+            ? data.acquisitionSource
+            : null
         });
       });
 
@@ -666,7 +700,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
         valorMensalidade: accessType === "mensal" ? valorNum : null,
         valor: accessType === "mensal" ? valorTxt : null,
         senha: newPassword,
-        criadoEm: new Date().toISOString()
+        criadoEm: new Date().toISOString(),
+        acquisitionSource: newAcquisitionSource === "none" ? null : newAcquisitionSource
       });
 
       setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso!${accessType === 'mensal' ? ` Mensalidade: R$ ${valorTxt}.` : ''} O acesso expira em: ${expireStr}`);
@@ -682,6 +717,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setNewEmail("");
       setNewPassword("");
       setMonthlyPrice("13.00");
+      setNewAcquisitionSource("none");
       await loadStats();
     } catch (err: any) {
       setCreateError(getFriendlyErrorMessage(err, "Não foi possível criar o acesso do cliente."));
@@ -776,6 +812,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
     const oneTime = user.oneTimeDiscount || 0;
     setEditOneTimeDiscount(oneTime);
     setEditOneTimeDiscountStr(oneTime > 0 ? formatCurrencyDisplay(oneTime) : "0,00");
+    setEditAcquisitionSource(user.acquisitionSource === "saimon" || user.acquisitionSource === "embedtv" ? user.acquisitionSource : "none");
     setEditError("");
     setEditSuccess("");
   };
@@ -892,6 +929,8 @@ export function AdminPage({ onBack }: AdminPageProps) {
         notes: editNotes,
         fixedDiscount: editFixedDiscount,
         oneTimeDiscount: editOneTimeDiscount,
+        // Canal de aquisição: "none" = limpar (null). Caso contrário, usa o selecionado.
+        acquisitionSource: editAcquisitionSource === "none" ? null : editAcquisitionSource,
       };
       if (trimmedName !== undefined) {
         updates.nome = trimmedName;
@@ -1467,6 +1506,82 @@ export function AdminPage({ onBack }: AdminPageProps) {
             </button>
           </div>
 
+          {/* Filtros por Canal de Aquisição: Todos / Saimon / embedTV / Outros */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none max-w-full">
+            <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold shrink-0 pr-1 hidden sm:inline">Canal:</span>
+            <button
+              type="button"
+              onClick={() => setAcquisitionSourceFilter("all")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                acquisitionSourceFilter === "all"
+                  ? "bg-white text-black shadow-lg shadow-white/10"
+                  : "bg-white/5 hover:bg-white/10 text-white/70 border border-white/5"
+              }`}
+            >
+              <Share2 className="w-3.5 h-3.5" />
+              <span>Todos</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                acquisitionSourceFilter === "all" ? "bg-black/15 text-black" : "bg-white/10 text-white/80"
+              }`}>
+                {acquisitionSourceCounts.all}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAcquisitionSourceFilter("saimon")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                acquisitionSourceFilter === "saimon"
+                  ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30"
+                  : "bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/20"
+              }`}
+              title="Seguidores trazidos pelo streamer Saimon"
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Saimon</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                acquisitionSourceFilter === "saimon" ? "bg-black/25 text-white" : "bg-orange-500/20 text-orange-200"
+              }`}>
+                {acquisitionSourceCounts.saimon}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAcquisitionSourceFilter("embedtv")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                acquisitionSourceFilter === "embedtv"
+                  ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
+                  : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20"
+              }`}
+              title="Seguidores trazidos pelo site embedtv.cc"
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span>embedTV</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                acquisitionSourceFilter === "embedtv" ? "bg-black/25 text-white" : "bg-blue-500/20 text-blue-200"
+              }`}>
+                {acquisitionSourceCounts.embedtv}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAcquisitionSourceFilter("outros")}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
+                acquisitionSourceFilter === "outros"
+                  ? "bg-zinc-500 text-white shadow-lg shadow-zinc-500/30"
+                  : "bg-white/5 hover:bg-white/10 text-white/60 border border-white/10"
+              }`}
+              title="Clientes sem canal de aquisição definido (cadastro direto, indicação manual, etc.)"
+            >
+              <AlertCircle className="w-3.5 h-3.5" />
+              <span>Outros</span>
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
+                acquisitionSourceFilter === "outros" ? "bg-black/25 text-white" : "bg-white/10 text-white/70"
+              }`}>
+                {acquisitionSourceCounts.outros}
+              </span>
+            </button>
+          </div>
+
           {/* Filtro por Redes de Amigos / Indicações */}
           {referralNetworks.length > 0 && (
             <div className="mb-6 p-4 bg-orange-950/20 border border-orange-500/20 rounded-2xl flex flex-col gap-2.5">
@@ -1670,6 +1785,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             }`}>
                               {isActive ? 'Ativo' : isExpiredClient ? 'Expirado' : 'Inativo'}
                             </span>
+
+                            {/* Badge Canal de Aquisição (Saimon / embedTV) */}
+                            {client.acquisitionSource === 'saimon' && (
+                              <span
+                                title="Seguidor trazido pelo streamer Saimon (?src=saimon)"
+                                className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-orange-500/20 text-orange-300 border border-orange-500/40 shrink-0 flex items-center gap-1 shadow-[0_0_10px_rgba(249,115,22,0.2)]"
+                              >
+                                <Users className="w-3 h-3 text-orange-400 shrink-0" />
+                                <span>Saimon</span>
+                              </span>
+                            )}
+                            {client.acquisitionSource === 'embedtv' && (
+                              <span
+                                title="Seguidor trazido pelo site embedtv.cc (?src=embedtv ou referrer embedtv.cc)"
+                                className="px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 shrink-0 flex items-center gap-1 shadow-[0_0_10px_rgba(59,130,246,0.2)]"
+                              >
+                                <Tv className="w-3 h-3 text-blue-400 shrink-0" />
+                                <span>embedTV</span>
+                              </span>
+                            )}
 
                             {/* Badge de Alerta: Vencendo em até 2 dias */}
                             {isExpiringSoonClient && (
@@ -2122,6 +2257,54 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             </div>
 
+            {/* Canal de Aquisição (Saimon / embedTV) */}
+            <div>
+              <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1.5 uppercase tracking-wider ml-1">
+                Canal de Aquisição
+                <span className="text-white/30 normal-case font-normal ml-2">(de onde este cliente veio)</span>
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewAcquisitionSource("none")}
+                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+                    newAcquisitionSource === "none"
+                      ? "bg-white/15 text-white ring-2 ring-white/40"
+                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                  title="Cadastro direto, sem canal definido"
+                >
+                  <span>Outro / Direto</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewAcquisitionSource("saimon")}
+                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+                    newAcquisitionSource === "saimon"
+                      ? "bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/50"
+                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                  title="Seguidor trazido pelo streamer Saimon"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Saimon</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewAcquisitionSource("embedtv")}
+                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
+                    newAcquisitionSource === "embedtv"
+                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400/50"
+                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                  }`}
+                  title="Seguidor trazido pelo site embedtv.cc"
+                >
+                  <Tv className="w-3.5 h-3.5" />
+                  <span>embedTV</span>
+                </button>
+              </div>
+            </div>
+
             {/* Campos de Cadastro */}
             {accessType === 'mensal' ? (
               <div className="space-y-3">
@@ -2362,6 +2545,54 @@ export function AdminPage({ onBack }: AdminPageProps) {
                   className="w-full bg-white/5 border border-white/10 py-1.5 px-2.5 text-white rounded-lg focus:outline-none focus:ring-1 focus:ring-orange-500 text-xs font-mono"
                   placeholder="Digite nova senha ou mantenha atual"
                 />
+              </div>
+
+              {/* Canal de Aquisição (Saimon / embedTV) */}
+              <div className="p-2.5 rounded-xl bg-black/40 border border-white/10 space-y-2">
+                <label className="text-white/80 text-[10px] sm:text-[11px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Share2 className="w-3.5 h-3.5 text-orange-400" />
+                  Canal de Aquisição
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEditAcquisitionSource("none")}
+                    className={`py-1.5 px-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all text-center truncate ${
+                      editAcquisitionSource === "none"
+                        ? "bg-white/20 text-white shadow-sm"
+                        : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="Limpar canal (cadastro direto)"
+                  >
+                    Outro / Direto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditAcquisitionSource("saimon")}
+                    className={`py-1.5 px-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all text-center truncate flex items-center justify-center gap-1 ${
+                      editAcquisitionSource === "saimon"
+                        ? "bg-orange-500 text-white shadow-sm"
+                        : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="Seguidor do streamer Saimon"
+                  >
+                    <Users className="w-3 h-3" />
+                    Saimon
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditAcquisitionSource("embedtv")}
+                    className={`py-1.5 px-1 rounded-lg text-[10px] sm:text-[11px] font-bold transition-all text-center truncate flex items-center justify-center gap-1 ${
+                      editAcquisitionSource === "embedtv"
+                        ? "bg-blue-500 text-white shadow-sm"
+                        : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
+                    }`}
+                    title="Seguidor do site embedtv.cc"
+                  >
+                    <Tv className="w-3 h-3" />
+                    embedTV
+                  </button>
+                </div>
               </div>
 
               {/* Programação de Tempo & Duração do Teste / Acesso */}

@@ -77,7 +77,7 @@ import { useSmartTV } from "./hooks/useSmartTV";
 import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "./utils/statusBar";
 import { setupFcmTokenRefreshListener } from "./services/pushNotifications";
-import { captureReferralFromUrl } from "./services/referralService";
+import { captureReferralFromUrl, captureAcquisitionSourceFromUrl } from "./services/referralService";
 
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
@@ -338,9 +338,11 @@ export default function App() {
   // Mantém o token FCM atualizado no Firestore quando o FCM o rotaciona (app nativo Android)
   useEffect(() => setupFcmTokenRefreshListener(), []);
 
-  // Captura código de indicação da URL (?ref=, ?ind=, ?r=) e persiste com segurança
+  // Captura código de indicação da URL (?ref=, ?ind=, ?r=) e persiste com segurança.
+  // Também captura o canal de aquisição (?src=saimon|embedtv ou referrer embedtv.cc).
   useEffect(() => {
     captureReferralFromUrl();
+    captureAcquisitionSourceFromUrl();
   }, []);
 
   // Reinscreve o listener do doc do usuário quando ele morre por erro transitório

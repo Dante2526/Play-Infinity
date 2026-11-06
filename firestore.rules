@@ -22,7 +22,10 @@ service cloud.firestore {
       let allowedKeys = [
         "nome", "email", "senha", "assinatura", "tipoAcesso",
         "photoURL", "historicoReproducao", "historicoRemovido", "episodiosAssistidos",
-        "favoritos", "createdAt", "updatedAt", "valorMensalidade", "valor", "criadoEm"
+        "favoritos", "createdAt", "updatedAt", "valorMensalidade", "valor", "criadoEm",
+        // Canal de aquisição do cliente (ex.: "saimon" via streamer Saimon, "embedtv" via embedtv.cc).
+        // Capturado automaticamente por ?src= na URL pública; admin pode sobrescrever a qualquer momento.
+        "acquisitionSource"
       ];
       let keysOk = request.resource.data.keys().hasOnly(allowedKeys);
       let assinaturaOk = !("assinatura" in request.resource.data) || request.resource.data.assinatura == "INATIVA";
@@ -30,7 +33,10 @@ service cloud.firestore {
       // O cadastro público só pode usar a tarifa padrão. Descontos são administrativos.
       let priceOk = (!("valorMensalidade" in request.resource.data) || request.resource.data.valorMensalidade == 13)
         && (!("valor" in request.resource.data) || request.resource.data.valor == "13,00");
-      return keysOk && assinaturaOk && tipoAcessoOk && priceOk;
+      // acquisitionSource, se presente, só pode ser um dos valores conhecidos.
+      let sourceOk = !("acquisitionSource" in request.resource.data)
+        || request.resource.data.acquisitionSource in ["saimon", "embedtv"];
+      return keysOk && assinaturaOk && tipoAcessoOk && priceOk && sourceOk;
     }
 
     function isSafeUpdate() {
@@ -38,7 +44,8 @@ service cloud.firestore {
         "nome", "email", "photoURL", "senha", "senhaInicial",
         "historicoReproducao", "historicoRemovido", "episodiosAssistidos",
         "favoritos", "updatedAt",
-        "assinatura", "subscription", "ultimoAcesso", "lastActive"
+        "assinatura", "subscription", "ultimoAcesso", "lastActive",
+        "acquisitionSource"
       ];
       let affectedKeys = request.resource.data.diff(resource.data).affectedKeys();
       let hasOnlyAllowed = affectedKeys.hasOnly(allowedKeys);
@@ -48,8 +55,17 @@ service cloud.firestore {
         request.resource.data.assinatura == "EXPIRADA" && 
         request.resource.data.subscription == "INACTIVE"
       );
+
+      // Só aceita gravação/alteração de acquisitionSource se o valor for válido ou null
+      // (admin pode limpar o canal retroativamente enviando null).
+      let tryingToChangeSource = affectedKeys.hasAny(["acquisitionSource"]);
+      let isValidSourceChange = !tryingToChangeSource || (
+        !("acquisitionSource" in request.resource.data)
+        || request.resource.data.acquisitionSource == null
+        || request.resource.data.acquisitionSource in ["saimon", "embedtv"]
+      );
       
-      return hasOnlyAllowed && isValidSubscriptionChange;
+      return hasOnlyAllowed && isValidSubscriptionChange && isValidSourceChange;
     }
 
     match /usuarios/{userId} {

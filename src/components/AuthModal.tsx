@@ -13,7 +13,8 @@ import {
   resolveReferrerData,
   computeReferralLineage,
   generateReferralCode,
-  clearStoredReferralCode
+  clearStoredReferralCode,
+  captureAcquisitionSourceFromUrl
 } from "../services/referralService";
 
 interface AuthModalProps {
@@ -150,6 +151,10 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
 
           const myReferralCode = generateReferralCode(name, email, userCred.user.uid);
 
+          // Canal de aquisição (saimon / embedtv) — captura automática da URL
+          // (?src=saimon|embedtv) ou referrer (embedtv.cc). Persistente por 30 dias.
+          const acquisitionSource = captureAcquisitionSourceFromUrl();
+
           await setDoc(doc(db, "usuarios", userCred.user.uid), {
             nome: name.trim(),
             email: email.trim(),
@@ -166,10 +171,14 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
             rootReferrerName: lineage.rootReferrerName,
             referralLevel: lineage.referralLevel,
             referralChain: lineage.referralChain,
-            referralStatus: "registered"
+            referralStatus: "registered",
+            acquisitionSource: acquisitionSource || null
           }, { merge: true });
 
           clearStoredReferralCode();
+          // O canal de aquisição é mantido em storage por 30 dias para preservar
+          // a origem em cadastros futuros no mesmo aparelho. O admin pode
+          // reatribuir ou limpar via painel (Editar Cliente).
         }
       }
 
