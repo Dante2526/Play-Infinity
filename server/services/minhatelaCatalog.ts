@@ -1,3 +1,4 @@
+import { BLOCKED_EXTERNAL_CHANNELS } from "./blockedLiveChannels";
 import fs from "fs";
 import path from "path";
 
@@ -366,6 +367,8 @@ export function getMinhaTelaNewChannels(represented: Set<string>): MinhaTelaNewC
   for (const mt of snapshot.values()) {
     const servers = streamsToEmbedServers(mt.streams || []);
     if (servers.length === 0) continue; // sem fonte não vale canal novo
+    const normalized = mt.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ");
+    if (BLOCKED_EXTERNAL_CHANNELS.has(normalized)) continue;
     const key = minhaTelaKey(mt.name);
     if (represented.has(key)) continue;
     represented.add(key); // dois slugs distintos não geram canal duplicado

@@ -1,3 +1,4 @@
+import { isAllowedEmbedUrl, probeEmbedPlayer } from "../services/embedPlayerProxy";
 import { readHealthPrefix } from "../services/playbackHealth";
 import { Router } from "express";
 import { isPrivateOrLocalHost } from "../utils/helpers";
@@ -221,6 +222,25 @@ router.get("/api/admin/probe-channel", async (req, res) => {
     const targetUrl = String(req.query.url || "").trim();
     if (!targetUrl) {
       return res.status(400).json({ success: false, error: "URL obrigatória" });
+    }
+
+    // Canais e provedores embed (MinhaTela, players HTML):
+    // sondados via probeEmbedPlayer sem exigir stream HLS #EXTM3U (evita falso-positivo OFF 200).
+    let embedUrlToProbe = targetUrl;
+    if (targetUrl.startsWith("/api/embed-player?")) {
+      try {
+        const parsed = new URL(targetUrl, "https://play-infinity.stream");
+        embedUrlToProbe = parsed.searchParams.get("url") || targetUrl;
+      } catch {}
+    }
+    if (isAllowedEmbedUrl(embedUrlToProbe)) {
+      const embedProbe = await probeEmbedPlayer(embedUrlToProbe);
+      return res.json({
+        success: true,
+        online: embedProbe.alive,
+        statusCode: embedProbe.alive ? 200 : (embedProbe.status === "ok" ? 200 : 503),
+        ...(embedProbe.alive ? {} : { error: `Embed ${embedProbe.status}` })
+      });
     }
 
     // Timeout 12s para canais externos (/api/external-channel?name=...):

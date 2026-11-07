@@ -234,15 +234,21 @@ export default function App() {
   const { isPremium, trial, loading: subscriptionLoading } = useSubscription();
   const isTrialActive = trial.isTrialActive;
 
-  // Trava no prazo exato (teste de 30 min, ou acesso concedido de 30min/1h/4h/1dia/7dias/mensal):
-  // quando o acesso expira com o player aberto, para a reprodução na hora e reabre o
-  // modal de pagamento (sem a opção de teste, se já foi usado).
+  // Trava com tolerância anti-cobrança-repentina (grace period):
+  // Se o usuário está com o player aberto e o status reportar temporariamente
+  // !isPremium (ex: renovação de token do Firebase Auth, micro-queda de Wi-Fi),
+  // aguarda 8s antes de cortar a reprodução. Se o status normalizar dentro
+  // da janela de tolerância, o timer é cancelado e o vídeo continua sem interrupção.
   useEffect(() => {
-    if (!subscriptionLoading && playerModal.isOpen && !isPremium && !isTrialActive && !isDevEnvironment) {
+    if (subscriptionLoading || !playerModal.isOpen || isPremium || isTrialActive || isDevEnvironment) {
+      return;
+    }
+    const graceTimer = window.setTimeout(() => {
       setPlayerModal((prev) => ({ ...prev, isOpen: false }));
       setIsPaywallOpen(true);
-    }
-  }, [subscriptionLoading, isPremium, isTrialActive, playerModal.isOpen]);
+    }, 8000);
+    return () => window.clearTimeout(graceTimer);
+  }, [subscriptionLoading, isPremium, isTrialActive, playerModal.isOpen, isDevEnvironment]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;

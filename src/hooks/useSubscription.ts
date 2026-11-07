@@ -71,6 +71,15 @@ export function useSubscription() {
     // persistida restaurar). O cache só é limpo no primeiro caso.
     let sawSignedInUser = false;
 
+    // Timeout de segurança contra travamento de verificação:
+    // Se a conexão com o Firebase Auth / Firestore demorar mais de 4.5s,
+    // destrava o loading com base no cache local para evitar cobrança repentina ou tela travada.
+    const safetyTimeout = window.setTimeout(() => {
+      if (!disposed) {
+        setLoading(false);
+      }
+    }, 4500);
+
     const clearExpiryTimer = () => {
       if (expiryTimerRef.current !== null) {
         window.clearTimeout(expiryTimerRef.current);
@@ -240,6 +249,16 @@ export function useSubscription() {
                   console.warn("Silenced error:", retryErr);
                 }
                 if (disposed || gen !== authGeneration) return;
+                // Anti-Cobrança Repentina: preserva Premium se houver cache válido durante instabilidade de rede
+                const cachedSub = readCachedSubscription();
+                if (cachedSub?.isPremium) {
+                  console.warn("[useSubscription] Rede transitória indisponível: preservando status Premium do cache local.");
+                  setIsPremium(true);
+                  setIsPlus(cachedSub.isPlus ?? false);
+                  setIsVitalicio(cachedSub.isVitalicio ?? false);
+                  setLoading(false);
+                  return;
+                }
                 setIsPremium(isDev);
                 setTrial(NO_TRIAL);
                 setIsPlus(false);
@@ -279,6 +298,7 @@ export function useSubscription() {
 
     return () => {
       disposed = true;
+      window.clearTimeout(safetyTimeout);
       clearExpiryTimer();
       unsubscribeAuth();
     };

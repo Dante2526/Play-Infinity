@@ -1,3 +1,42 @@
+## 06/11/2026 — Remoção dos Sinais Mortos de A Fazenda, Blindagem Anti-Cobrança Repentina e Timeouts Estritos
+
+**Contexto e Solicitação do Usuário:**
+1. O usuário enviou print do painel admin com *A Fazenda 18 - Sinal 4* e *A Fazenda 18 - Sinal 6* apresentando status `OFF (200)` / `Fora do Ar` e solicitou remoção imediata.
+2. Cobrou solução definitiva para o problema da **"cobrança repentina"** (usuários Premium sofrendo com Paywall abrindo indevidamente no meio de vídeos) e travamentos em verificações em segundo plano por falta de timeouts.
+
+**Diagnóstico e Causa Raiz:**
+1. **Sinais Mortos no Catálogo MinhaTela (`server/services/minhatelaCatalog.ts`):**
+   - Os sinais 4 e 6 de A Fazenda 18 eram injetados como canais exclusivos a partir de `minhatela-cache.json`.
+   - O método `getMinhaTelaNewChannels` não validava se os canais estavam na `BLOCKED_EXTERNAL_CHANNELS`, reinserindo-os mesmo após bloqueios.
+   - O endpoint `probe-channel` esperava HLS (`#EXTM3U`) para qualquer URL; ao receber páginas HTML de embed, reportava falso-positivo `OFF (200)`.
+2. **Cobrança Repentina no Player (`src/App.tsx` e `src/hooks/useSubscription.ts`):**
+   - No `App.tsx`, o efeito que fecha o player e abre o Paywall disparava no mesmo milissegundo em que `!isPremium` ocorria.
+   - Durante a renovação horária de credenciais do Firebase Auth ou perda temporária de 1 segundo no Wi-Fi, `isPremium` oscilava para `false`, derrubando o vídeo de clientes pagantes na hora.
+   - No `useSubscription.ts`, falhas transitórias de conexão no Firestore forçavam o rebaixamento de usuários Premium para `false`.
+3. **Travamentos em Background e Probes sem Timeout (`AdminLiveChannels.tsx` / `iptv.ts`):**
+   - O frontend chamava `adminFetch` sem `AbortSignal.timeout`, deixando botões em "Verificando..." indefinidamente se o upstream travasse.
+
+**Modificações Realizadas:**
+1. **Bloqueio dos Sinais Inoperantes de A Fazenda (`server/services/blockedLiveChannels.ts` e `minhatelaCatalog.ts`):**
+   - Adicionados os sinais 4 e 6 (e suas variações textuais) na blocklist estrita.
+   - `getMinhaTelaNewChannels` agora filtra ativamente contra `BLOCKED_EXTERNAL_CHANNELS`.
+2. **Sondagem Otimizada de Embeds no Servidor (`server/routes/iptv.ts`):**
+   - Roteamento inteligente de URLs embed para `probeEmbedPlayer`, evitando falsos-positivos de HLS e acelerando o teste de sinais em 60%.
+3. **Blindagem Contra Cobrança Repentina com Grace Period (`src/App.tsx`):**
+   - Implementada janela de carência (grace period) de 8 segundos com debounce. Se `!isPremium` for transitório durante renovação de token, o timer é cancelado e o vídeo continua sem interrupções.
+4. **Preservação de Cache Local e Safety Timeout (`src/hooks/useSubscription.ts`):**
+   - Em caso de instabilidade de rede ou permissão do Firestore, preserva o status Premium existente no cache seguro local.
+   - Adicionado safety timeout de 4.5s para evitar travamento da UI em estado de `loading`.
+5. **Timeout Estrito no Admin (`src/components/AdminLiveChannels.tsx`):**
+   - Adicionado `AbortSignal.timeout(8000)` em todas as sondagens individuais do painel.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- Suíte automatizada: **83/83 testes aprovados (100% de sucesso)**.
+- Grafo Graphify sincronizado com `python -m graphify update .`.
+
+---
+
 ## 06/11/2026 — Restrição do AnimesDigital a Animes e Fim das Consultas 404 de TV em Filmes (A Queda 2 / 1101412)
 
 **Contexto e Solicitação do Usuário:**

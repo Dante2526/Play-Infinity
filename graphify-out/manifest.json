@@ -230,9 +230,9 @@
     "semantic_hash": ""
   },
   "server/routes/iptv.ts": {
-    "mtime": 1793489656.6539383,
-    "ast_hash": "6bc6b6f70d889517ec46089dcc59e41b",
-    "semantic_hash": "6bc6b6f70d889517ec46089dcc59e41b"
+    "mtime": 1794013416.3958323,
+    "ast_hash": "d5e3d724bc2b6cf788dbc53978356f07",
+    "semantic_hash": ""
   },
   "server/routes/mixdrop.ts": {
     "mtime": 1793753132.2603996,
@@ -310,8 +310,8 @@
     "semantic_hash": "af2bd18a7bdd45f4be5dc3c7a7b88bd7"
   },
   "src/App.tsx": {
-    "mtime": 1794008662.1789575,
-    "ast_hash": "e6d801ef9956119384b06f9547839db5",
+    "mtime": 1794013365.690774,
+    "ast_hash": "48ca1445d4df3a0e0f6ff6665bfa8020",
     "semantic_hash": ""
   },
   "src/components/AdminBugReports.tsx": {
@@ -490,9 +490,9 @@
     "semantic_hash": "0e4c667b20397664daf899e047d403ce"
   },
   "src/hooks/useSubscription.ts": {
-    "mtime": 1793489656.7050028,
-    "ast_hash": "cb6f44fb06f87234c88132b9d6c0254a",
-    "semantic_hash": "cb6f44fb06f87234c88132b9d6c0254a"
+    "mtime": 1794013386.0821664,
+    "ast_hash": "66d2d930b3c7ed595188cb7b36e335b8",
+    "semantic_hash": ""
   },
   "src/hooks/useVoiceSearch.ts": {
     "mtime": 1791023915.5407593,
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1794010210.308232,
-    "ast_hash": "c959e513ad284ace54ae299e00cd4851",
+    "mtime": 1794010753.8186533,
+    "ast_hash": "5e5dd0565a9118ef32ed2cc6b412fc1c",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1330,9 +1330,9 @@
     "semantic_hash": ""
   },
   "src/components/AdminLiveChannels.tsx": {
-    "mtime": 1793840665.9046714,
-    "ast_hash": "ed09ac2d2ea00ed8441c1aa007890195",
-    "semantic_hash": "ed09ac2d2ea00ed8441c1aa007890195"
+    "mtime": 1794013440.5363667,
+    "ast_hash": "25699048a28f609dfad2d71ae6927502",
+    "semantic_hash": ""
   },
   "src/services/liveChannelService.ts": {
     "mtime": 1792876689.8307896,
@@ -1540,9 +1540,9 @@
     "semantic_hash": "bdca9f5859c479c167325cce40a70b09"
   },
   "server/services/blockedLiveChannels.ts": {
-    "mtime": 1793489656.6653366,
-    "ast_hash": "afa7a5103f315af19908289069a2ab07",
-    "semantic_hash": "afa7a5103f315af19908289069a2ab07"
+    "mtime": 1794013277.3399127,
+    "ast_hash": "00f7af244da6600a912f10f9916194a3",
+    "semantic_hash": ""
   },
   "server/services/dunningWatcher.ts": {
     "mtime": 1793489656.6680284,
@@ -1560,9 +1560,9 @@
     "semantic_hash": "6374ef9cbd281ca6ec86d02d8b9509e9"
   },
   "server/services/minhatelaCatalog.ts": {
-    "mtime": 1793803264.241748,
-    "ast_hash": "4bb83e00704c7c766b8859ec32a04a6c",
-    "semantic_hash": "4bb83e00704c7c766b8859ec32a04a6c"
+    "mtime": 1794013260.3107626,
+    "ast_hash": "95892bb8a2ee8cbdb6729d62b5f9f6c1",
+    "semantic_hash": ""
   },
   "server/services/newReleasesWatcher.ts": {
     "mtime": 1793489656.6731665,

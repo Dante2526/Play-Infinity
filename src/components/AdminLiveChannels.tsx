@@ -577,7 +577,7 @@ export function AdminLiveChannels() {
     }));
 
     try {
-      const res = await adminFetch(`/api/admin/probe-channel?url=${encodeURIComponent(serverUrl)}`);
+      const res = await adminFetch(`/api/admin/probe-channel?url=${encodeURIComponent(serverUrl)}`, { signal: AbortSignal.timeout(8000) });
       const data = await res.json();
       setProbeResults(prev => ({
         ...prev,
