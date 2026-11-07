@@ -17,9 +17,10 @@
    - O frontend chamava `adminFetch` sem `AbortSignal.timeout`, deixando botões em "Verificando..." indefinidamente se o upstream travasse.
 
 **Modificações Realizadas:**
-1. **Bloqueio dos Sinais Inoperantes de A Fazenda (`server/services/blockedLiveChannels.ts` e `minhatelaCatalog.ts`):**
-   - Adicionados os sinais 4 e 6 (e suas variações textuais) na blocklist estrita.
-   - `getMinhaTelaNewChannels` agora filtra ativamente contra `BLOCKED_EXTERNAL_CHANNELS`.
+1. **Bloqueio dos Sinais Inoperantes e Canais Fora do Ar (`server/services/blockedLiveChannels.ts` e `externalCatalog.ts`):**
+   - Adicionados os sinais 4 e 6 de A Fazenda 18 (e suas variações textuais) na blocklist estrita.
+   - Identificados e expurgados outros canais mortos detectados na auditoria: `SportyNet + 1`, `SportyNet + 3`, `AGROMAIS`, `C3-TV` e `Like + | Claro tv+`.
+   - `getMinhaTelaNewChannels` agora filtra ativamente contra `BLOCKED_EXTERNAL_CHANNELS`, impedindo que canais inoperantes exclusivos reapareçam no app e no painel admin.
 2. **Sondagem Otimizada de Embeds no Servidor (`server/routes/iptv.ts`):**
    - Roteamento inteligente de URLs embed para `probeEmbedPlayer`, evitando falsos-positivos de HLS e acelerando o teste de sinais em 60%.
 3. **Blindagem Contra Cobrança Repentina com Grace Period (`src/App.tsx`):**

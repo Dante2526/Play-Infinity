@@ -3854,8 +3854,8 @@
       "source_location": "L549",
       "_origin": "ast",
       "id": "server_startserver",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "startserver()"
     },
     {
@@ -3865,8 +3865,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_firebaseadmin",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "firebaseadmin.ts"
     },
     {
@@ -3876,8 +3876,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "server_firebaseadmin_initializeapp_cert_getapps",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "{ initializeapp, cert, getapps }"
     },
     {
@@ -3887,8 +3887,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "server_firebaseadmin_getfirestore",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "{ getfirestore }"
     },
     {
@@ -3898,8 +3898,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "server_firebaseadmin_getmessaging",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "{ getmessaging }"
     },
     {
@@ -3920,8 +3920,8 @@
       "source_location": "L64",
       "_origin": "ast",
       "id": "server_firebaseadmin_getadminmessaging",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "getadminmessaging()"
     },
     {
@@ -4602,8 +4602,8 @@
       "source_location": "L180",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_fetchwithtimeout",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "fetchwithtimeout()"
     },
     {
@@ -4613,8 +4613,8 @@
       "source_location": "L191",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_once",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "once()"
     },
     {
@@ -4668,8 +4668,8 @@
       "source_location": "L340",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_checkvizerseason",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "checkvizerseason()"
     },
     {
@@ -4679,8 +4679,8 @@
       "source_location": "L367",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_resolvevizerepisode",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "resolvevizerepisode()"
     },
     {
@@ -4778,8 +4778,8 @@
       "source_location": "L685",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_encontreiplayerdata",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "encontreiplayerdata()"
     },
     {
@@ -4789,8 +4789,8 @@
       "source_location": "L740",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getencontreiresolverstatus",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 27,
+      "community_name": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
       "norm_label": "getencontreiresolverstatus()"
     },
     {
@@ -4800,8 +4800,8 @@
       "source_location": "L758",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_encontreiepisodeid",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "encontreiepisodeid()"
     },
     {
@@ -4811,8 +4811,8 @@
       "source_location": "L814",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_pickmixdrop",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "pickmixdrop()"
     },
     {
@@ -4855,8 +4855,8 @@
       "source_location": "L870",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_encknownsetsload",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "encknownsetsload()"
     },
     {
@@ -4866,8 +4866,8 @@
       "source_location": "L887",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_encontreigethtml",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "encontreigethtml()"
     },
     {
@@ -4899,8 +4899,8 @@
       "source_location": "L934",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_ensureencontreifreshlisting",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "ensureencontreifreshlisting()"
     },
     {
@@ -4910,8 +4910,8 @@
       "source_location": "L959",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_ensureencontreifreshcontent",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "ensureencontreifreshcontent()"
     },
     {
@@ -4921,8 +4921,8 @@
       "source_location": "L1014",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_resolveencontreiepisode",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "resolveencontreiepisode()"
     },
     {
@@ -4932,8 +4932,8 @@
       "source_location": "L1090",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_resolveencontreimovie",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "resolveencontreimovie()"
     },
     {
@@ -5009,8 +5009,8 @@
       "source_location": "L1158",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_tryloadcatalog",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "tryloadcatalog()"
     },
     {
@@ -5020,8 +5020,8 @@
       "source_location": "L1247",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_loadcatalogs",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "loadcatalogs()"
     },
     {
@@ -5075,8 +5075,8 @@
       "source_location": "L1434",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_applycatalogpatches",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "applycatalogpatches()"
     },
     {
@@ -5086,8 +5086,8 @@
       "source_location": "L1479",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getencontreiseasonepisodes",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getencontreiseasonepisodes()"
     },
     {
@@ -5163,8 +5163,8 @@
       "source_location": "L2299",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getencontreicatalogstatus",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getencontreicatalogstatus()"
     },
     {
@@ -5196,8 +5196,8 @@
       "source_location": "L2308",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getcataloguemediasources",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getcataloguemediasources()"
     },
     {
@@ -5218,8 +5218,8 @@
       "source_location": "L2348",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getmixdropsources",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getmixdropsources()"
     },
     {
@@ -5229,8 +5229,8 @@
       "source_location": "L2351",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getbysesources",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getbysesources()"
     },
     {
@@ -5240,8 +5240,8 @@
       "source_location": "L2412",
       "_origin": "ast",
       "id": "server_routes_encontreilookup_getplaybackcataloguepresence",
-      "community": 3,
-      "community_name": "devDependencies",
+      "community": 75,
+      "community_name": "loadCatalogs",
       "norm_label": "getplaybackcataloguepresence()"
     },
     {
@@ -5314,7 +5314,7 @@
       "label": "router",
       "file_type": "code",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L5",
+      "source_location": "L6",
       "_origin": "ast",
       "id": "server_routes_iptv_router",
       "community": 37,
@@ -5325,7 +5325,7 @@
       "label": "getFreshXtreamToken()",
       "file_type": "code",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L10",
+      "source_location": "L11",
       "_origin": "ast",
       "id": "server_routes_iptv_getfreshxtreamtoken",
       "community": 37,
@@ -5336,7 +5336,7 @@
       "label": "ProbeResult",
       "file_type": "code",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L112",
+      "source_location": "L113",
       "_origin": "ast",
       "id": "server_routes_iptv_proberesult",
       "community": 37,
@@ -5347,7 +5347,7 @@
       "label": "probeLiveStreamUrl()",
       "file_type": "code",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L124",
+      "source_location": "L125",
       "_origin": "ast",
       "id": "server_routes_iptv_probelivestreamurl",
       "community": 37,
@@ -6428,8 +6428,8 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "server_services_adminsentinel_getsentinelstatus",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 27,
+      "community_name": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
       "norm_label": "getsentinelstatus()"
     },
     {
@@ -6483,8 +6483,8 @@
       "source_location": "L869",
       "_origin": "ast",
       "id": "server_services_adminsentinel_startadminsentinel",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "startadminsentinel()"
     },
     {
@@ -6802,8 +6802,8 @@
       "source_location": "L68",
       "_origin": "ast",
       "id": "server_services_anidigitalsqlitestore_anidigitalsqlitestore",
-      "community": 27,
-      "community_name": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": "anidigitalsqlitestore"
     },
     {
@@ -6813,8 +6813,8 @@
       "source_location": "L72",
       "_origin": "ast",
       "id": "server_services_anidigitalsqlitestore_anidigitalsqlitestore_meta",
-      "community": 27,
-      "community_name": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".meta()"
     },
     {
@@ -6824,8 +6824,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "server_services_anidigitalsqlitestore_anidigitalsqlitestore_close",
-      "community": 27,
-      "community_name": "Walkthrough: Anota\u00c3\u00a7\u00c3\u00b5es e Descontos no Admin",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".close()"
     },
     {
@@ -7396,8 +7396,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_services_catalogwatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "catalogwatcher.ts"
     },
     {
@@ -7407,8 +7407,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_data_dir",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "data_dir"
     },
     {
@@ -7418,8 +7418,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalog_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "catalog_path"
     },
     {
@@ -7429,8 +7429,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_public_catalog_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "public_catalog_path"
     },
     {
@@ -7440,8 +7440,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_state_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "state_path"
     },
     {
@@ -7451,8 +7451,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogepisode",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "catalogepisode"
     },
     {
@@ -7462,8 +7462,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogseries",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "catalogseries"
     },
     {
@@ -7473,8 +7473,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_catalogdata",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "catalogdata"
     },
     {
@@ -7484,8 +7484,8 @@
       "source_location": "L36",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_extracttokensfromuserdoc",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "extracttokensfromuserdoc()"
     },
     {
@@ -7495,8 +7495,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_prettyseriesnamefromslug",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "prettyseriesnamefromslug()"
     },
     {
@@ -7506,8 +7506,8 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_startcatalogwatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "startcatalogwatcher()"
     },
     {
@@ -7517,8 +7517,8 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_checkcatalogupdates",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "checkcatalogupdates()"
     },
     {
@@ -7528,8 +7528,8 @@
       "source_location": "L146",
       "_origin": "ast",
       "id": "server_services_catalogwatcher_sendnotificationsforupdatedseries",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 111,
+      "community_name": "catalogWatcher.ts",
       "norm_label": "sendnotificationsforupdatedseries()"
     },
     {
@@ -7539,8 +7539,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_services_dunningwatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "dunningwatcher.ts"
     },
     {
@@ -7550,8 +7550,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_dunningcandidate",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "dunningcandidate"
     },
     {
@@ -7561,8 +7561,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_isdelinquentuser",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "isdelinquentuser()"
     },
     {
@@ -7572,8 +7572,8 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_builddunningmessage",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "builddunningmessage()"
     },
     {
@@ -7583,8 +7583,8 @@
       "source_location": "L79",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_extracttokens",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "extracttokens()"
     },
     {
@@ -7594,8 +7594,8 @@
       "source_location": "L90",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_extractfirstname",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "extractfirstname()"
     },
     {
@@ -7605,8 +7605,8 @@
       "source_location": "L97",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_checkdunningusers",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "checkdunningusers()"
     },
     {
@@ -7616,8 +7616,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "server_services_dunningwatcher_startdunningwatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 119,
+      "community_name": "dunningWatcher.ts",
       "norm_label": "startdunningwatcher()"
     },
     {
@@ -8320,8 +8320,8 @@
       "source_location": "L740",
       "_origin": "ast",
       "id": "server_services_externalcatalog_getpubliclivechannels",
-      "community": 23,
-      "community_name": "encontreiCatalog.ts",
+      "community": 68,
+      "community_name": "App",
       "norm_label": "getpubliclivechannels()"
     },
     {
@@ -8936,8 +8936,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "newreleaseswatcher.ts"
     },
     {
@@ -8947,8 +8947,8 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_data_dir",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "data_dir"
     },
     {
@@ -8958,8 +8958,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_catalog_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "catalog_path"
     },
     {
@@ -8969,8 +8969,8 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_public_catalog_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "public_catalog_path"
     },
     {
@@ -8980,8 +8980,8 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_state_path",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "state_path"
     },
     {
@@ -8991,8 +8991,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_releasestate",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "releasestate"
     },
     {
@@ -9002,8 +9002,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_releaseitem",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "releaseitem"
     },
     {
@@ -9013,8 +9013,8 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_prettyseriesnamefromslug",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "prettyseriesnamefromslug()"
     },
     {
@@ -9024,8 +9024,8 @@
       "source_location": "L73",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_buildreleasemessage",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "buildreleasemessage()"
     },
     {
@@ -9035,8 +9035,8 @@
       "source_location": "L119",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_diffreleases",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "diffreleases()"
     },
     {
@@ -9046,8 +9046,8 @@
       "source_location": "L136",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_loadcatalog",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "loadcatalog()"
     },
     {
@@ -9057,8 +9057,8 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_loadstate",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "loadstate()"
     },
     {
@@ -9068,8 +9068,8 @@
       "source_location": "L162",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_savestate",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "savestate()"
     },
     {
@@ -9079,8 +9079,8 @@
       "source_location": "L172",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_resolvemovietitle",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "resolvemovietitle()"
     },
     {
@@ -9090,8 +9090,8 @@
       "source_location": "L192",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_extracttokens",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "extracttokens()"
     },
     {
@@ -9101,8 +9101,8 @@
       "source_location": "L203",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_sendreleasepush",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "sendreleasepush()"
     },
     {
@@ -9112,8 +9112,8 @@
       "source_location": "L280",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_checknewreleases",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "checknewreleases()"
     },
     {
@@ -9123,8 +9123,8 @@
       "source_location": "L357",
       "_origin": "ast",
       "id": "server_services_newreleaseswatcher_startnewreleaseswatcher",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 97,
+      "community_name": "newReleasesWatcher.ts",
       "norm_label": "startnewreleaseswatcher()"
     },
     {
@@ -10135,8 +10135,8 @@
       "source_location": "L95",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": "sqlitemovieindex"
     },
     {
@@ -10146,8 +10146,8 @@
       "source_location": "L105",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_constructor",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".constructor()"
     },
     {
@@ -10157,8 +10157,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_get",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".get()"
     },
     {
@@ -10168,8 +10168,8 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_has",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".has()"
     },
     {
@@ -10179,8 +10179,8 @@
       "source_location": "L131",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_set",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".set()"
     },
     {
@@ -10190,8 +10190,8 @@
       "source_location": "L137",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_delete",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".delete()"
     },
     {
@@ -10212,8 +10212,8 @@
       "source_location": "L153",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_clear",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".clear()"
     },
     {
@@ -10223,8 +10223,8 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_basehas",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": "._basehas()"
     },
     {
@@ -10234,8 +10234,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqlitemovieindex_foreachbasewithmixdrop",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".foreachbasewithmixdrop()"
     },
     {
@@ -10311,8 +10311,8 @@
       "source_location": "L247",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqliteepisodeindex_delete",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".delete()"
     },
     {
@@ -10399,8 +10399,8 @@
       "source_location": "L333",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqliteseriesseasonsindex_get",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 40,
+      "community_name": "react",
       "norm_label": ".get()"
     },
     {
@@ -10410,8 +10410,8 @@
       "source_location": "L345",
       "_origin": "ast",
       "id": "server_services_vizersqlitestore_sqliteseriesseasonsindex_has",
-      "community": 11,
-      "community_name": "adminApi.ts",
+      "community": 73,
+      "community_name": "SqliteEpisodeIndex",
       "norm_label": ".has()"
     },
     {
@@ -18943,8 +18943,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "trace_user",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "trace-user.ts"
     },
     {
@@ -18954,8 +18954,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "trace_user_main",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "main()"
     },
     {
@@ -18965,8 +18965,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "trace_user2",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "trace-user2.ts"
     },
     {
@@ -18976,8 +18976,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "trace_user2_main",
-      "community": 8,
-      "community_name": "App.tsx",
+      "community": 120,
+      "community_name": "firebaseAdmin.ts",
       "norm_label": "main()"
     },
     {
@@ -35216,7 +35216,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L10",
+      "source_location": "L11",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35227,7 +35227,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L124",
+      "source_location": "L125",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35238,7 +35238,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L112",
+      "source_location": "L113",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35249,7 +35249,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L5",
+      "source_location": "L6",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35265,7 +35265,7 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
-      "target": "server_services_playbackhealth",
+      "target": "server_services_embedplayerproxy",
       "confidence_score": 1.0
     },
     {
@@ -35277,6 +35277,42 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
+      "target": "server_services_embedplayerproxy_isallowedembedurl",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/iptv.ts",
+      "source_location": "L1",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "server_routes_iptv",
+      "target": "server_services_embedplayerproxy_probeembedplayer",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports_from",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/iptv.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "server_routes_iptv",
+      "target": "server_services_playbackhealth",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "imports",
+      "context": "import",
+      "confidence": "EXTRACTED",
+      "source_file": "server/routes/iptv.ts",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "server_routes_iptv",
       "target": "server_services_playbackhealth_readhealthprefix",
       "confidence_score": 1.0
     },
@@ -35285,7 +35321,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L3",
+      "source_location": "L4",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35297,7 +35333,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L3",
+      "source_location": "L4",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv",
@@ -35321,7 +35357,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L136",
+      "source_location": "L137",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv_probelivestreamurl",
@@ -35334,7 +35370,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L199",
+      "source_location": "L200",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv_probelivestreamurl",
@@ -35346,7 +35382,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "server/routes/iptv.ts",
-      "source_location": "L162",
+      "source_location": "L163",
       "weight": 1.0,
       "_origin": "ast",
       "source": "server_routes_iptv_probelivestreamurl",
@@ -47390,7 +47426,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L322",
+      "source_location": "L328",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47402,7 +47438,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L324",
+      "source_location": "L330",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47414,7 +47450,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L528",
+      "source_location": "L534",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47426,7 +47462,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L326",
+      "source_location": "L332",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47438,7 +47474,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L529",
+      "source_location": "L535",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47450,7 +47486,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L455",
+      "source_location": "L461",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47462,7 +47498,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L852",
+      "source_location": "L858",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47474,7 +47510,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L323",
+      "source_location": "L329",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47486,7 +47522,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L339",
+      "source_location": "L345",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47498,7 +47534,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L345",
+      "source_location": "L351",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47510,7 +47546,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L344",
+      "source_location": "L350",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47522,7 +47558,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L325",
+      "source_location": "L331",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47546,7 +47582,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L705",
+      "source_location": "L711",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47558,7 +47594,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L329",
+      "source_location": "L335",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -47570,7 +47606,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/App.tsx",
-      "source_location": "L251",
+      "source_location": "L257",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_app_app",
@@ -55614,7 +55650,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/hooks/useSubscription.ts",
-      "source_location": "L277",
+      "source_location": "L286",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_hooks_usesubscription_usesubscription",
@@ -55626,7 +55662,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/hooks/useSubscription.ts",
-      "source_location": "L117",
+      "source_location": "L126",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_hooks_usesubscription_usesubscription",
@@ -55638,7 +55674,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/hooks/useSubscription.ts",
-      "source_location": "L95",
+      "source_location": "L104",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_hooks_usesubscription_usesubscription",
@@ -55662,7 +55698,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/hooks/useSubscription.ts",
-      "source_location": "L124",
+      "source_location": "L133",
       "weight": 1.0,
       "_origin": "ast",
       "source": "src_hooks_usesubscription_usesubscription",

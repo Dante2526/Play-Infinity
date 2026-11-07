@@ -1,11 +1,11 @@
 # Graph Report - Play-Infinity  (2026-11-06)
 
 ## Corpus Check
-- 264 files · ~1,769,987 words
+- 264 files · ~1,770,163 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2166 nodes · 4455 edges · 154 communities (128 shown, 26 thin omitted)
+- 2166 nodes · 4458 edges · 159 communities (134 shown, 25 thin omitted)
 - Extraction: 100% EXTRACTED · 0% INFERRED · 0% AMBIGUOUS · INFERRED: 22 edges (avg confidence: 0.58)
 - Token cost: 0 input · 0 output
 
@@ -90,6 +90,7 @@
 - ContentRow.tsx
 - SqliteEpisodeIndex
 - 03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache
+- loadCatalogs
 - playbackHealth.ts
 - Design de Sistema: Notificações Push (Web e Android)
 - Global Constraints
@@ -111,6 +112,7 @@
 - firebase-admin
 - playbackHealth.ts
 - motion
+- newReleasesWatcher.ts
 - helmet
 - react-dom
 - mediaSourcePool.ts
@@ -124,6 +126,7 @@
 - tmdbProxy.ts
 - getByseSources
 - serverBlacklist.ts
+- catalogWatcher.ts
 - scrape_anidigital_catalog.py
 - getApiBaseUrl
 - Diretrizes e Regras do Repositório (Play Infinity)
@@ -131,6 +134,8 @@
 - serverBlocks.ts
 - saimoSqliteStore.ts
 - externalRoutes.ts
+- dunningWatcher.ts
+- firebaseAdmin.ts
 - episodeAvailability.ts
 - Documentação da Infraestrutura de Streaming (Oracle Cloud VPS)
 - getAdminDb
@@ -166,6 +171,8 @@
 10. `formatImageUrl()` - 20 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `main()` --calls--> `getAdminDb()`  [EXTRACTED]
+  trace-user.ts → server/firebaseAdmin.ts
 - `ContentRowInner()` --references--> `react`  [EXTRACTED]
   src/components/ContentRow.tsx → package.json
 - `lazyWithRetry()` --references--> `react`  [EXTRACTED]
@@ -174,13 +181,11 @@
   src/components/NavItem.tsx → package.json
 - `AdminPage()` --references--> `react`  [EXTRACTED]
   src/pages/AdminPage.tsx → package.json
-- `DetailsPage()` --references--> `react`  [EXTRACTED]
-  src/pages/DetailsPage.tsx → package.json
 
 ## Import Cycles
 - None detected.
 
-## Communities (154 total, 26 thin omitted)
+## Communities (159 total, 25 thin omitted)
 
 ### Community 0 - "encontreiLookup.ts"
 Cohesion: 0.02
@@ -196,7 +201,7 @@ Nodes (51): AdminChannelCard, AdminChannelCardProps, AdminLiveChannels(), getCha
 
 ### Community 3 - "devDependencies"
 Cohesion: 0.06
-Nodes (53): applyCatalogPatches(), catalogueMediaSourceCache, catalogueMediaSourcePending, checkVipSeason(), checkVizerSeason(), _encFreshTmdbCache, _encInflight, _encKnownMovieIds (+45 more)
+Nodes (31): catalogueMediaSourceCache, catalogueMediaSourcePending, checkVipSeason(), _encFreshTmdbCache, _encInflight, _encKnownMovieIds, _encKnownSerieIds, _encNeg (+23 more)
 
 ### Community 4 - "VideoPlayerModal.tsx"
 Cohesion: 0.06
@@ -215,8 +220,8 @@ Cohesion: 0.15
 Nodes (19): resolveAnimesOnline(), resolveDirectAnimeStream(), resolveVixsrcStream(), router, speedtestLimiter, router, _tmdbProxyInflight, router (+11 more)
 
 ### Community 8 - "App.tsx"
-Cohesion: 0.05
-Nodes (63): getAdminDb(), getAdminFieldValue(), getAdminMessaging(), { getFirestore }, { getMessaging }, { initializeApp, cert, getApps }, getEncontreiResolverStatus(), getVizerCatalogStatus() (+55 more)
+Cohesion: 0.17
+Nodes (18): getAdminDb(), getAdminFieldValue(), getVizerCatalogStatus(), activeAlerts, channelConsecutiveFails, getAdminPushTokens(), lastMonitoredCounts, MASTER_ADMIN_EMAILS (+10 more)
 
 ### Community 9 - "LiveTvPage.tsx"
 Cohesion: 0.17
@@ -227,8 +232,8 @@ Cohesion: 0.15
 Nodes (30): main(), basesFilePath(), buildFonteUrl(), channelsFilePath(), externalCatalogStats(), ExternalChannel, ExternalFonte, fetchAllowedFonte() (+22 more)
 
 ### Community 11 - "adminApi.ts"
-Cohesion: 0.08
-Nodes (6): findSaimoDb(), getSaimoCatalogStatus(), openSaimoSqlite(), SaimoSqliteStore, SqliteMovieIndex, SqliteSeriesSeasonsIndex
+Cohesion: 0.15
+Nodes (5): findSaimoDb(), getSaimoCatalogStatus(), openSaimoSqlite(), SaimoSqliteStore, SqliteSeriesSeasonsIndex
 
 ### Community 12 - "playbackHistory.ts"
 Cohesion: 0.16
@@ -276,7 +281,7 @@ Nodes (24): buildDeniedHtml(), buildEmbedFallbackHtml(), cacheGet(), cacheSet(),
 
 ### Community 23 - "encontreiCatalog.ts"
 Cohesion: 0.12
-Nodes (23): BLOCKED_EXTERNAL_CHANNELS, getPublicLiveChannels(), bestQuality(), EmbedServer, ensureFresh(), findMinhaTelaChannel(), getMinhaTelaEmbedHosts(), getMinhaTelaNewChannels() (+15 more)
+Nodes (22): BLOCKED_EXTERNAL_CHANNELS, bestQuality(), EmbedServer, ensureFresh(), findMinhaTelaChannel(), getMinhaTelaEmbedHosts(), getMinhaTelaNewChannels(), getMinhaTelaServersFor() (+14 more)
 
 ### Community 24 - "nixplayCatalog.ts"
 Cohesion: 0.09
@@ -291,8 +296,8 @@ Cohesion: 0.11
 Nodes (21): EP, iframeParams, qs, SERVERS, formatTime(), NetflixPlayerSkin(), NetflixPlayerSkinProps, NetflixPlayerStatus (+13 more)
 
 ### Community 27 - "Walkthrough: AnotaÃ§Ãµes e Descontos no Admin"
-Cohesion: 0.17
-Nodes (14): adminOpsRouter, executeSshCommand(), executeSystemOrSshCommand(), FetchResponse, getSshPrivateKey(), ORACLE_VPS_PORT, readBodyWithSpeed(), AnidigitalSqliteStore (+6 more)
+Cohesion: 0.18
+Nodes (15): adminOpsRouter, executeSshCommand(), executeSystemOrSshCommand(), FetchResponse, getSshPrivateKey(), ORACLE_VPS_PORT, readBodyWithSpeed(), getEncontreiResolverStatus() (+7 more)
 
 ### Community 28 - "react"
 Cohesion: 0.12
@@ -343,7 +348,7 @@ Cohesion: 0.22
 Nodes (11): VirtualRemote(), GEEK_AVATARS, handlePosterError(), LiveTvPage, NotificationModal, ReleaseCalendarPage, UserProfilePage(), WebhookPanelModal (+3 more)
 
 ### Community 40 - "react"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (6): tryLoadVizerSqlite(), findVizerDb(), isSqliteAvailable(), LruCache, openVizerSqlite(), VizerSqliteStore
 
 ### Community 41 - "superflix-proxy.js"
@@ -455,8 +460,8 @@ Cohesion: 0.20
 Nodes (7): 1. Dados do Servidor VPS (Oracle Cloud), 2. Como Funciona o Proxy Remoto (`proxy.mjs` + Nginx), 3. Conexão com o Frontend da Aplicação, 4. Configuração Otimizada do Nginx na VPS (`/etc/nginx/sites-available/play-infinity`), 5. Automação de Estabilidade (Watchdog), 6. Causa Raiz do Erro 502 / `EADDRINUSE :8080` (03/10/2026), Documentação da Infraestrutura de Streaming (Oracle Cloud VPS)
 
 ### Community 68 - "App"
-Cohesion: 0.27
-Nodes (8): RFC-7231, applyViewerCors(), isAllowedViewerOrigin(), recordExternalSelection(), ExternalChannelNameValidation, ExternalFormatValidation, validateExternalChannelName(), validateExternalFormatParam()
+Cohesion: 0.25
+Nodes (9): RFC-7231, applyViewerCors(), isAllowedViewerOrigin(), getPublicLiveChannels(), recordExternalSelection(), ExternalChannelNameValidation, ExternalFormatValidation, validateExternalChannelName() (+1 more)
 
 ### Community 69 - "AdminPage.tsx"
 Cohesion: 0.24
@@ -474,9 +479,17 @@ Nodes (5): tryLoadEncontreiSqlite(), EncontreiSqliteStore, findEncontreiDb(), is
 Cohesion: 0.22
 Nodes (8): Atualizar o Node da aplicação para 24 LTS, Dependências e identificação do código executado, Deploy da aplicação na VPS Oracle, Falha de pré-verificação PM2, Limites e operação, Migração única de uma instância fork, Requisitos e ativação, Validação local
 
+### Community 73 - "SqliteEpisodeIndex"
+Cohesion: 0.10
+Nodes (3): AnidigitalSqliteStore, SqliteEpisodeIndex, SqliteMovieIndex
+
 ### Community 74 - "03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache"
 Cohesion: 0.18
 Nodes (11): AdminBugReports(), BugReport, PREDEFINED_RESPONSES, ConfirmModal(), ConfirmModalProps, HOMOLOGATED_SERVERS, SelectedMedia, SERVER_LABELS (+3 more)
+
+### Community 75 - "loadCatalogs"
+Cohesion: 0.15
+Nodes (22): applyCatalogPatches(), checkVizerSeason(), encKnownSetsLoad(), encontreiEpisodeId(), encontreiGetHtml(), encontreiPlayerData(), ensureEncontreiFreshContent(), ensureEncontreiFreshListing() (+14 more)
 
 ### Community 76 - "playbackHealth.ts"
 Cohesion: 0.25
@@ -542,6 +555,10 @@ Nodes (4): build(), fetch_text(), normalize_title(), Path
 Cohesion: 0.40
 Nodes (5): Job, pump(), queue, solveBysePowAsync(), WORKER_SOURCE
 
+### Community 97 - "newReleasesWatcher.ts"
+Cohesion: 0.18
+Nodes (17): buildReleaseMessage(), CATALOG_PATH, checkNewReleases(), DATA_DIR, diffReleases(), extractTokens(), loadCatalog(), loadState() (+9 more)
+
 ### Community 98 - "helmet"
 Cohesion: 0.60
 Nodes (3): ExampleInstrumentedTest, Test, RunWith
@@ -590,6 +607,10 @@ Nodes (4): endpoints, request(), runSmokeTest(), signature
 Cohesion: 0.80
 Nodes (4): check_runtime(), cleanup(), upgrade-node24.sh script, wait_runtime()
 
+### Community 111 - "catalogWatcher.ts"
+Cohesion: 0.17
+Nodes (14): startAdminSentinel(), CATALOG_PATH, CatalogData, CatalogEpisode, CatalogSeries, checkCatalogUpdates(), DATA_DIR, extractTokensFromUserDoc() (+6 more)
+
 ### Community 112 - "scrape_anidigital_catalog.py"
 Cohesion: 0.60
 Nodes (4): ALLOWED_HOSTNAMES, _cache, fetch(), isAllowed()
@@ -610,6 +631,14 @@ Nodes (3): build(), main(), Path
 Cohesion: 0.83
 Nodes (3): main(), Path, simplify()
 
+### Community 119 - "dunningWatcher.ts"
+Cohesion: 0.39
+Nodes (8): getAdminMessaging(), buildDunningMessage(), checkDunningUsers(), DunningCandidate, extractFirstName(), extractTokens(), isDelinquentUser(), startDunningWatcher()
+
+### Community 120 - "firebaseAdmin.ts"
+Cohesion: 0.25
+Nodes (4): { getFirestore }, { getMessaging }, { initializeApp, cert, getApps }, main()
+
 ### Community 121 - "episodeAvailability.ts"
 Cohesion: 0.50
 Nodes (4): 4.1. Sondagem Concorrente em Paralelo (`Promise.any`), 4.2. Cache de Prefixo por Série (`watchPlayerWorkingPrefixCache`), 4.3. Timeouts e Cancelamento de Requisições Zumbis, 4. Otimização do Endpoint `/api/watchplayer-stream`
@@ -629,7 +658,7 @@ Nodes (3): 03/10/2026 (Noite) - Refinamento de Watchdog, Fallback e Cache, 04/10
 ## Knowledge Gaps
 - **793 isolated node(s):** `config`, `name`, `private`, `version`, `type` (+788 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **26 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

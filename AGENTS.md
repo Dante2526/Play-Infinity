@@ -147,3 +147,11 @@ Várias sessões de IA trabalham neste repositório em paralelo (já aconteceu d
 - Devido à compactação de histórico em conversas longas, o agente pode perder o contexto de quais tarefas já foram concluídas e sugerir refazê-las.
 - **Antes de propor ou iniciar uma nova tarefa:** O agente DEVE SEMPRE consultar o arquivo `walkthrough.md` na raiz do projeto (se existir) ou verificar diretamente no código (via `grep_search`) se a alteração já não foi implementada por uma instância anterior.
 - **Após concluir um lote de tarefas:** O agente DEVE atualizar o `walkthrough.md` listando claramente o que foi feito, para que futuras instâncias saibam onde paramos.
+
+---
+
+## 13. Timeouts Rígidos nas Verificações do Antigravity e Anti-Cobrança Repentina
+
+1. **Execuções Síncronas (Zero Spinner "Verificando..."):** Ao executar `run_command`, use SEMPRE `WaitMsBeforeAsync: 10000` para testes, compilações (`npx tsc`), linters e Git. Isso evita que o Antigravity jogue o comando em segundo plano, bloqueie o turno do assistente e deixe a interface travada em "Verificando...".
+2. **Timeouts Explícitos Obrigatórios:** Qualquer comando, script em Node, Python ou PowerShell DEVE possuir timeout explícito e encerrar com `process.exit(0)`. É estritamente PROIBIDO deixar scripts com event-loop pendurado.
+3. **Controle de Custos e Faturamento da API:** Background tasks que rodam sem parar geram ciclos sucessivos de wake-up e recarregamento massivo de histórico/artifacts, multiplicando os tokens consumidos e gerando custos exorbitantes ("cobrança repentina"). Mantenha os comandos rápidos e diretos.

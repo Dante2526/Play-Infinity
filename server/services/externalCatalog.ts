@@ -829,6 +829,8 @@ export function getPublicLiveChannels(): LiveChannel[] {
   // Video, A Fazenda 18, Premiere 8, pay-TV...) viram canais novos completos,
   // todas as fontes já resolvidas como servidores embed.
   for (const mt of getMinhaTelaNewChannels(representedMt)) {
+    const normalized = normalizeChannelName(mt.name);
+    if (BLOCKED_EXTERNAL_CHANNELS.has(normalized)) continue;
     withMinhaTela.push({
       id: mt.id,
       name: mt.name,
