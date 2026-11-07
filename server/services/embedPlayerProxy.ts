@@ -733,10 +733,43 @@ export async function probeEmbedPlayer(url: string): Promise<EmbedProbeResult> {
   // ~5KB de JS que contém nomes de libs (bitmovin, shaka...) no próprio
   // regex dele, o que causaria falso positivo.
   const probeHtml = rawHtml ?? html;
+  // Para meuplayeronlinehd.com/myplay/watch(.html|2.html)?id=X:
+  // watch2.html é um arquivo único de 262KB com dezenas de branches `if (id === "...")`.
+  // Avaliar apenas o bloco correspondente ao `id` consultado (evita falso-positivo OFF 200
+  // causado por `localhost70.xyz` em outros canais, e detecta IDs ausentes/mortos como `bmec`).
+  let targetSnippet = probeHtml;
+  try {
+    const parsedUrl = new URL(url);
+    if (
+      parsedUrl.hostname.toLowerCase().endsWith("meuplayeronlinehd.com") &&
+      /\/myplay\/watch2?\.html$/i.test(parsedUrl.pathname)
+    ) {
+      const chId = parsedUrl.searchParams.get("id");
+      if (chId) {
+        const escapedId = chId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const idBranchRe = new RegExp(`id\\s*===?\\s*["']${escapedId}["']`);
+        const match = idBranchRe.exec(probeHtml);
+        if (!match) {
+          return {
+            url,
+            status: "fetch_failed",
+            fallback: false,
+            sizeBytes: Buffer.byteLength(html, "utf-8"),
+            hasPlayer: false,
+            alive: false,
+            probedAt,
+          };
+        }
+        const rest = probeHtml.slice(match.index);
+        const closeBrace = rest.indexOf("}");
+        targetSnippet = closeBrace > 0 ? rest.slice(0, closeBrace + 1) : rest.slice(0, 450);
+      }
+    }
+  } catch {}
   // Detecção de alvos quebrados / telas brancas de anúncio embutidas em iframes
-  const isBrokenTarget = /dadinhodetapioca\.fun|localhost70\.xyz|s25-cloudfront-net\.lat\/stream\/[^\s"'<>]+\/error\.txt/i.test(probeHtml);
-  const hasPlayer = !isBrokenTarget && PLAYER_RE.test(probeHtml);
-  const probeBytes = Buffer.byteLength(probeHtml, "utf-8");
+  const isBrokenTarget = /dadinhodetapioca\.fun|localhost70\.xyz|s25-cloudfront-net\.lat\/stream\/[^\s"'<>]+\/error\.txt/i.test(targetSnippet);
+  const hasPlayer = !isBrokenTarget && PLAYER_RE.test(targetSnippet);
+  const probeBytes = Buffer.byteLength(targetSnippet, "utf-8");
   // vivo: NÃO caiu no stub de fallback E NÃO é alvo quebrado E (tem player OU HTML cru grande
   // o suficiente pra ser uma página real).
   const alive = !fellBack && !isBrokenTarget && (hasPlayer || probeBytes >= 4000);

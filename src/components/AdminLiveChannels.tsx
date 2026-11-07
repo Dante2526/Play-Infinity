@@ -40,6 +40,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { 
   ExternalChannelSources, 
   invalidateExternalSourcesCache,
+  updateExternalSourcesCache,
   fetchAllExternalSources,
   normalizeExternalSourceName,
   type ExternalSource
@@ -651,6 +652,7 @@ export function AdminLiveChannels() {
             });
             const data = await res.json();
             if (data.success && Array.isArray(data.sources)) {
+              updateExternalSourcesCache(task.name, data.sources);
               setAllSourcesMap(prev => ({
                 ...prev,
                 [task.name]: data.sources,
@@ -669,7 +671,6 @@ export function AdminLiveChannels() {
       await Promise.all(workers);
     } finally {
       setIsProbingAll(false);
-      invalidateExternalSourcesCache();
     }
   };
 

@@ -238,7 +238,7 @@ router.get("/api/admin/probe-channel", async (req, res) => {
       return res.json({
         success: true,
         online: embedProbe.alive,
-        statusCode: embedProbe.alive ? 200 : (embedProbe.status === "ok" ? 200 : 503),
+        statusCode: embedProbe.alive ? 200 : (embedProbe.status === "denied" ? 403 : 404),
         ...(embedProbe.alive ? {} : { error: `Embed ${embedProbe.status}` })
       });
     }

@@ -187,12 +187,74 @@ function isSafeEmbedUrl(raw: string): boolean {
   }
 }
 
+/** IDs mortos ou removidos no watch2.html do meuplayeronlinehd.com e embeds quebrados. */
+const DEAD_MEUPLAYER_IDS = new Set<string>([
+  "bmec",
+  "getv-2",
+  "premiere8",
+  "premiere8-2",
+  "cazetv1",
+  "cazetv1-2",
+  "aee-2",
+  "axn-2",
+  "bis",
+  "canalbrasil",
+  "curta",
+  "curta-2",
+  "paramount1",
+  "paramount2",
+  "paramount3",
+  "paramount4",
+  "primevideo1",
+  "primevideo2",
+  "primevideo4",
+  "max1",
+  "max1-2",
+  "max2",
+  "max2-2",
+  "max3",
+  "max3-2",
+  "max4",
+  "max4-2",
+  "max5",
+  "max5-2",
+  "ds4",
+  "ds5",
+  "afazenda1",
+  "afazenda2",
+  "afazenda3",
+  "afazenda4",
+  "afazenda5",
+  "afazenda6",
+  "afazendamosaico",
+]);
+
+function isDeadCatalogEmbedUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const h = u.hostname.toLowerCase();
+    if (h.endsWith("meuplayeronlinehd.com")) {
+      const id = u.searchParams.get("id");
+      if (id && DEAD_MEUPLAYER_IDS.has(id)) return true;
+    }
+    if (h.endsWith("embedcanaisdetv.xyz")) {
+      const canal = (u.searchParams.get("canal") || "").replace(/\/+$/, "").toLowerCase();
+      if (["arte1", "curta", "canalbrasil", "bis", "discoveryheh", "bloomberg"].includes(canal)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /** Converte as fontes MinhaTela em servidores embed do catálogo Play Infinity. */
 function streamsToEmbedServers(streams: MinhaTelaStream[], startIndex = 0): EmbedServer[] {
   const seen = new Set<string>();
   const valid: MinhaTelaStream[] = [];
   for (const s of streams || []) {
-    if (!s || !s.url || !isSafeEmbedUrl(s.url)) continue;
+    if (!s || !s.url || !isSafeEmbedUrl(s.url) || isDeadCatalogEmbedUrl(s.url)) continue;
     if (seen.has(s.url)) continue;
     seen.add(s.url);
     valid.push(s);

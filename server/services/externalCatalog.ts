@@ -738,6 +738,11 @@ import {
 
 /** Publish catalogue metadata and internal resolver routes, never upstream credentials. */
 export function getPublicLiveChannels(): LiveChannel[] {
+  const loadedExternal = loadExternalChannels();
+  const externalByNorm = new Map<string, ExternalChannel>();
+  for (const ext of loadedExternal) {
+    externalByNorm.set(normalizeChannelName(ext.name), ext);
+  }
   const channels = [...INITIAL_LIVE_CHANNELS];
   const represented = new Set<string>();
   for (const channel of channels) {
@@ -762,7 +767,7 @@ export function getPublicLiveChannels(): LiveChannel[] {
       }
     }
   }
-  for (const channel of loadExternalChannels()) {
+  for (const channel of loadedExternal) {
     if (!validateExternalChannelName(channel.name).ok) continue;
     const normalized = normalizeChannelName(channel.name);
     // Canais bloqueados por ausência de fonte viva (probe 2 rodadas — ver
@@ -796,35 +801,52 @@ export function getPublicLiveChannels(): LiveChannel[] {
   // Saimo): cada canal que também existe no catálogo deles ganha as fontes
   // de embed deles como servidores adicionais (isEmbed). Copia o canal —
   // nunca muta INITIAL_LIVE_CHANNELS.
-  const withMinhaTela = channels.map((ch) => {
-    // Canal com fontes curadas manualmente (ex. Premiere Clubes → embedTV
-    // assinado): não anexar embeds do MinhaTela nem reordenar. Preserva o
-    // "lockServers" declarado em INITIAL_LIVE_CHANNELS.
-    if (ch.lockServers) return ch;
-    const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
-    if (extra.length === 0) return ch;
+  const withMinhaTela = channels
+    .map((ch) => {
+      const activeServers = ch.servers.filter((srv) => {
+        if (!srv.url.startsWith("/api/external-channel?")) return true;
+        if (loadedExternal.length === 0) return true;
+        try {
+          const name = new URL(srv.url, "https://play-infinity.stream").searchParams.get("name");
+          if (!name) return false;
+          const ext = externalByNorm.get(normalizeChannelName(name));
+          return Boolean(ext && ext.fontes.length > 0);
+        } catch {
+          return false;
+        }
+      });
+      const baseChannel = activeServers.length === ch.servers.length ? ch : { ...ch, servers: activeServers };
+      ch = baseChannel;
 
-    // Priorização de Áudio AAC: fontes embed verificadas com som funcional imediato
-    // (ex.: embedcanaisdetv.xyz) são promovidas a Servidor 1 quando a fonte Saimo
-    // utiliza áudio Dolby AC-3 (incompatível com navegadores web padrão em canais esportivos/PPV).
-    const aacIdx = extra.findIndex((s) => /embedcanaisdetv\.xyz/i.test(s.url));
-    const firstIsSaimo = ch.servers[0] && ch.servers[0].url.startsWith("/api/external-channel");
-    const isAc3LikelyChannel =
-      ch.category === "Esportes" ||
-      /\b(sportv|premiere|combate|espn|bandsports|conmebol|fox sports)\b/i.test(ch.name);
+      // Canal com fontes curadas manualmente (ex. Premiere Clubes → embedTV
+      // assinado): não anexar embeds do MinhaTela nem reordenar. Preserva o
+      // "lockServers" declarado em INITIAL_LIVE_CHANNELS.
+      if (ch.lockServers) return ch;
+      const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
+      if (extra.length === 0) return ch;
 
-    if (aacIdx >= 0 && firstIsSaimo && isAc3LikelyChannel) {
-      const aacServer = extra[aacIdx];
-      const remainingExtra = extra.filter((_, i) => i !== aacIdx);
-      const reordered = [aacServer, ...ch.servers, ...remainingExtra];
-      return {
-        ...ch,
-        servers: reordered.map((s, idx) => ({ ...s, name: `Servidor ${idx + 1}` })),
-      };
-    }
+      // Priorização de Áudio AAC: fontes embed verificadas com som funcional imediato
+      // (ex.: embedcanaisdetv.xyz) são promovidas a Servidor 1 quando a fonte Saimo
+      // utiliza áudio Dolby AC-3 (incompatível com navegadores web padrão em canais esportivos/PPV).
+      const aacIdx = extra.findIndex((s) => /embedcanaisdetv\.xyz/i.test(s.url));
+      const firstIsSaimo = ch.servers[0] && ch.servers[0].url.startsWith("/api/external-channel");
+      const isAc3LikelyChannel =
+        ch.category === "Esportes" ||
+        /\b(sportv|premiere|combate|espn|bandsports|conmebol|fox sports)\b/i.test(ch.name);
 
-    return { ...ch, servers: [...ch.servers, ...extra] };
-  });
+      if (aacIdx >= 0 && firstIsSaimo && isAc3LikelyChannel) {
+        const aacServer = extra[aacIdx];
+        const remainingExtra = extra.filter((_, i) => i !== aacIdx);
+        const reordered = [aacServer, ...ch.servers, ...remainingExtra];
+        return {
+          ...ch,
+          servers: reordered.map((s, idx) => ({ ...s, name: `Servidor ${idx + 1}` })),
+        };
+      }
+
+      return { ...ch, servers: [...ch.servers, ...extra] };
+    })
+    .filter((ch) => ch.servers.length > 0);
   // Canais EXCLUSIVOS do MinhaTela (Paramount+, Disney+, HBO Max, Prime
   // Video, A Fazenda 18, Premiere 8, pay-TV...) viram canais novos completos,
   // todas as fontes já resolvidas como servidores embed.

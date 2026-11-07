@@ -1,3 +1,36 @@
+## 06/11/2026 — Correção do "Testar Todos" em Modo Cluster, Falso-Positivo OFF (200) e Expurgo de Canais Offline (v1.4.58 / Code 90)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou capturas do painel administrativo (`BM&C News` e `ESPN 5 HD`) mostrando servidores com `OFF (200)` e alguns botões externos ainda em `[Testar]` após clicar em "Testar Todos", e solicitou:
+*"NA ALTERAÇÃO AI, PELO BOTÃO TESAR TODOS, ALGUNS NAO FORAM COMO VC PODE VER NO PRINT E TEM ALGUNS CANASI OFF, TEM QUE SER TIRADOS TA, ATUALMENTE NO PAINAL ADM MOSTRA TOTASOL DE 88 CANAIS AO TODOS OFF OU ON"*
+
+**Diagnóstico e Causa Raiz:**
+1. **Falso-Positivo `OFF (200)` no `meuplayeronlinehd.com` (`server/services/embedPlayerProxy.ts`):**
+   - O arquivo `watch2.html` possui 262KB com todos os canais encadeados em `if (id === "...")`. Um canal não relacionado (`cbssg`) aponta para `localhost70.xyz`, fazendo a regex global `isBrokenTarget` marcar 100% dos canais do `meuplayeronlinehd.com` como quebrados (`alive: false`, `status: "ok"`), resultando em `OFF (200)` no `iptv.ts`.
+2. **Perda de Estado no "Testar Todos" em PM2 Cluster (`ExternalChannelSources.tsx` / `AdminLiveChannels.tsx`):**
+   - Na VPS, o app roda em PM2 cluster com 2 workers. Ao final do `handleProbeAll`, a chamada `invalidateExternalSourcesCache()` apagava o estado recém-testado no navegador e disparava `GET /api/admin/external-sources?all=1`, que caía no outro worker (cujo `probeCache` em memória estava vazio), revertendo fontes externas para `'untested'` (`[Testar]`).
+3. **Canais e Fontes Offline Entre os 88 Canais:**
+   - Auditoria completa identificou canais 100% inoperantes: *BM&C News / BM&C HD* (`id=bmec` removido do `watch2.html` e sem fontes Saimo na VPS), todos os sinais restantes de *A Fazenda 18* (`Sinal 1, 2, 3, 5, Mosaico` retornando HTTP 404 no CDN JWPlayer), *HBO MAX 1 a 5* (`localhost70.xyz` + `sporturbo.link`), *Prime Video 1, 2, 4*, *Paramount+ 2, 3, 4*, *Disney+ 4, 5* e *CURTA* (404 no `embedcanaisdetv.xyz` e ausente no `watch2.html`).
+
+**Modificações Realizadas:**
+1. **Isolamento de Branch por `?id=` no `probeEmbedPlayer` (`server/services/embedPlayerProxy.ts` e `server/routes/iptv.ts`):**
+   - Para URLs do `meuplayeronlinehd.com/myplay/watch(.html|2.html)`, valida se `id === "<id>"` existe no HTML e avalia `isBrokenTarget` estritamente sobre o bloco daquele `id`.
+   - Em `server/routes/iptv.ts`, embeds inoperantes retornam `statusCode: 404` em vez de `200`.
+2. **Sincronização Direta do Cache de Fontes Externas (`src/components/ExternalChannelSources.tsx` e `src/components/AdminLiveChannels.tsx`):**
+   - Criada `updateExternalSourcesCache(name, sources)` para atualizar `allSourcesCache` in-place sem invalidar para `null` ao fim do `handleProbeAll`, eliminando a perda de estado entre workers do PM2.
+   - Adicionado badge `OFF` também para o estado `'unavailable'`.
+3. **Expurgo de Canais e Servidores Mortos (`server/services/blockedLiveChannels.ts`, `server/services/minhatelaCatalog.ts`, `server/services/externalCatalog.ts`):**
+   - Filtrados em `minhatelaCatalog.ts` todos os IDs mortos do `meuplayeronlinehd.com` e os slugs 404 do `embedcanaisdetv.xyz`.
+   - Bloqueados os canais sem nenhuma fonte ativa em `blockedLiveChannels.ts` e filtrado `external-channel` órfão quando o canal não possui fontes no catálogo externo da VPS.
+4. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 90` / `versionName "1.4.58"`.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `node --test`: 38/38 testes aprovados (100%).
+
+---
+
 ## 06/11/2026 — Remoção do Bloco "Canal de Aquisição" no Modal de Novo Cliente
 
 **Contexto e Solicitação do Usuário:**

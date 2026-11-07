@@ -28,6 +28,15 @@ export function invalidateExternalSourcesCache() {
   window.dispatchEvent(new Event(SOURCES_UPDATED_EVENT));
 }
 
+export function updateExternalSourcesCache(name: string, sources: ExternalSource[]) {
+  if (!allSourcesCache) {
+    allSourcesCache = {};
+  }
+  allSourcesCache[name] = sources;
+  allSourcesCache[normalizeExternalSourceName(name)] = sources;
+  window.dispatchEvent(new Event(SOURCES_UPDATED_EVENT));
+}
+
 export async function fetchAllExternalSources(): Promise<Record<string, ExternalSource[]>> {
   if (allSourcesCache) return allSourcesCache;
   if (allSourcesPromise) return allSourcesPromise;
@@ -165,7 +174,7 @@ export function ExternalChannelSources({ name, maxItems }: ExternalChannelSource
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-300">
                   200 OK{source.latencyMs !== undefined ? ` (${source.latencyMs}ms)` : ''}
                 </span>
-              ) : (source.state === 'failed' || source.state === 'blocked') ? (
+              ) : (source.state === 'failed' || source.state === 'blocked' || source.state === 'unavailable') ? (
                 <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-500/20 text-red-300">
                   OFF
                 </span>
