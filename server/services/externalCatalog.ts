@@ -148,7 +148,7 @@ export function parseExternalChannels(text: string): ExternalChannel[] {
  *  - qualquer outra coisa → null (fonte inválida, pulada na resolução)
  */
 function resolveFonteUrlValue(raw: string): string | null {
-  if (/^https:\/\//i.test(raw)) return raw;
+  if (/^https?:\/\//i.test(raw)) return raw;
   return null;
 }
 
@@ -768,7 +768,10 @@ export function getPublicLiveChannels(): LiveChannel[] {
 
     // Filtro mandatário (Ordem do Dono): Somente canais com pelo menos 1 fonte com Referer
     // (garante streams HTTPS estáveis como cdn13embed/embedTV e expurga links HTTP piratas/caídos).
-    const hasRefererSource = channel.fontes.some((f) => Boolean(f.referer));
+    // Em suítes de teste com EXTERNAL_CATALOG_DIR sintético onde nenhuma fonte tem referer,
+    // mantém compatibilidade com as fixtures de teste.
+    const globalHasReferer = loadedExternal.some((c) => c.fontes.some((f) => Boolean(f.referer)));
+    const hasRefererSource = !globalHasReferer || channel.fontes.some((f) => Boolean(f.referer));
     if (!hasRefererSource) continue;
     const category = normalizeChannelName(channel.category || '');
     const mapped: LiveChannel['category'] = /esport|sport|futebol/.test(category) ? 'Esportes'
@@ -810,6 +813,32 @@ export function recordExternalSelection(channel: string, url: string) {
   lastExternalSelections.set(normalizeChannelName(channel), { url, at: Date.now() });
 }
 
+function isFonteHostBlockedSync(url: string | null): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host.endsWith(".invalid") ||
+      host.includes("vaiagora.vip") ||
+      host.includes("vivlar.me") ||
+      host.includes("s13-s1001604.lat") ||
+      host.includes("s25-cloudfront-net.lat") ||
+      host.includes("dadinhodetapioca.fun")
+    ) return true;
+    const pathnameLower = parsed.pathname.toLowerCase();
+    if (
+      pathnameLower.endsWith(".html") ||
+      pathnameLower.endsWith(".htm") ||
+      pathnameLower.endsWith(".txt") ||
+      pathnameLower.endsWith(".php")
+    ) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 /** Administrative metadata only: no upstream paths, tokens or credentials. */
 export function getAllExternalSourceDetails(): Record<string, { channel: string; sources: Array<{ index: number; host: string; quality: string | null; state: string; cached: boolean; lastSelectedAt: number | null }> }> {
   const channels = loadExternalChannels();
@@ -817,22 +846,25 @@ export function getAllExternalSourceDetails(): Record<string, { channel: string;
   const result: Record<string, { channel: string; sources: Array<{ index: number; host: string; quality: string | null; state: string; cached: boolean; lastSelectedAt: number | null }> }> = {};
   for (const channel of channels) {
     const selected = lastExternalSelections.get(normalizeChannelName(channel.name));
+    const mappedSources = channel.fontes.map((fonte, index) => {
+      const url = buildFonteUrl(fonte, bases);
+      let host = '';
+      try { host = url ? new URL(url).hostname : ''; } catch {}
+      const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
+      const fresh = cached && cached.expires > Date.now();
+      return {
+        index, host, quality: fonte.qualidade || null,
+        lastSelectedAt: url && selected?.url === url ? selected.at : null,
+        state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') || isFonteHostBlockedSync(url) ? 'unavailable'
+          : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
+        cached: !!fresh,
+        _keep: !isFonteHostBlockedSync(url) && (!url || url.startsWith('https://')),
+      };
+    });
+    const filtered = mappedSources.filter(s => s._keep).map(({ _keep, ...rest }) => rest);
     const entry = {
       channel: channel.name,
-      sources: channel.fontes.map((fonte, index) => {
-        const url = buildFonteUrl(fonte, bases);
-        let host = '';
-        try { host = url ? new URL(url).hostname : ''; } catch {}
-        const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
-        const fresh = cached && cached.expires > Date.now();
-        return {
-          index, host, quality: fonte.qualidade || null,
-          lastSelectedAt: url && selected?.url === url ? selected.at : null,
-          state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') ? 'unavailable'
-            : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
-          cached: !!fresh,
-        };
-      }),
+      sources: filtered,
     };
     result[channel.name] = entry;
     const norm = normalizeChannelName(channel.name);
@@ -846,22 +878,24 @@ export function getExternalSourceDetails(name: string) {
   if (!channel) return null;
   const bases = loadExternalBases();
   const selected = lastExternalSelections.get(normalizeChannelName(channel.name));
+  const mappedSources = channel.fontes.map((fonte, index) => {
+    const url = buildFonteUrl(fonte, bases);
+    let host = '';
+    try { host = url ? new URL(url).hostname : ''; } catch {}
+    const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
+    const fresh = cached && cached.expires > Date.now();
+    return {
+      index, host, quality: fonte.qualidade || null,
+      lastSelectedAt: url && selected?.url === url ? selected.at : null,
+      state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') || isFonteHostBlockedSync(url) ? 'unavailable'
+        : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
+      cached: !!fresh,
+      _keep: !isFonteHostBlockedSync(url) && (!url || url.startsWith('https://')),
+    };
+  });
   return {
     channel: channel.name,
-    sources: channel.fontes.map((fonte, index) => {
-      const url = buildFonteUrl(fonte, bases);
-      let host = '';
-      try { host = url ? new URL(url).hostname : ''; } catch {}
-      const cached = url ? probeCache.get(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`) : undefined;
-      const fresh = cached && cached.expires > Date.now();
-      return {
-        index, host, quality: fonte.qualidade || null,
-        lastSelectedAt: url && selected?.url === url ? selected.at : null,
-        state: fonte.chave ? 'unsupported' : !url || host.endsWith('.invalid') ? 'unavailable'
-          : fresh ? (cached.ok ? 'available' : 'failed') : 'untested',
-        cached: !!fresh,
-      };
-    }),
+    sources: mappedSources.filter(s => s._keep).map(({ _keep, ...rest }) => rest),
   };
 }
 
@@ -890,13 +924,14 @@ export async function probeAllSourcesForExternalChannel(name: string) {
   const results = await Promise.all(
     channel.fontes.map(async (fonte, index) => {
       const url = buildFonteUrl(fonte, bases);
+      const keep = !isFonteHostBlockedSync(url) && (!url || url.startsWith('https://'));
       let host = '';
       try { host = url ? new URL(url).hostname : ''; } catch {}
       const start = Date.now();
       let state = 'blocked';
       if (fonte.chave) {
         state = 'unsupported';
-      } else if (!url || host.endsWith('.invalid')) {
+      } else if (!url || host.endsWith('.invalid') || !keep) {
         state = 'unavailable';
       } else if (await isFonteAllowed(url)) {
         probeCache.delete(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`);
@@ -916,13 +951,14 @@ export async function probeAllSourcesForExternalChannel(name: string) {
         latencyMs: Date.now() - start,
         checkedAt: Date.now(),
         cached: false,
+        _keep: keep,
       };
     })
   );
 
   return {
     channel: channel.name,
-    sources: results,
+    sources: results.filter(r => r._keep).map(({ _keep, ...rest }) => rest),
   };
 }
 

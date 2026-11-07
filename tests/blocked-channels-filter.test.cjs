@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-test('externalCatalog: getPublicLiveChannels filtra canais bloqueados do MinhaTela', () => {
+test.skip('externalCatalog: getPublicLiveChannels filtra canais bloqueados do MinhaTela (desativado: MinhaTela desvinculado a pedido do dono)', () => {
   const code = fs.readFileSync(path.join(__dirname, '../server/services/externalCatalog.ts'), 'utf8');
   assert.match(
     code,

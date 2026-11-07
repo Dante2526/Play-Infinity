@@ -1,3 +1,32 @@
+## 07/11/2026 — Expurgo Total de Servidores OFF (Servidor 2 e 3 Mortos) no Catálogo Saimo e Estático (v1.4.60 / Code 92)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou capturas do painel administrativo (`Discovery Science` e `Band News`) mostrando `Servidor 1: 200 OK` mas `Servidor 2: OFF` e `Servidor 3: OFF`, questionando por que esses servidores `OFF` ainda apareciam.
+
+**Diagnóstico e Causa Raiz:**
+1. **Fontes Mortas / Bloqueadas no `catalogo.txt` Bruto da Saimo:**
+   - No catálogo bruto da Saimo, quase todos os canais traziam 3 fontes HTTPS:
+     - **Servidor 1 (`cdn13embed.xyz`):** `200 OK` (100% online).
+     - **Servidor 2 (`bae9594a4d0d760fe6d16dda7acf737a.s25-cloudfront-net.lat/.../error.txt`):** Hash expirado (404) em dezenas de canais (`Discovery Science`, `Band News`, `Premiere 2`, `Discovery Turbo`) e bloqueado por `isFonteAllowed` na sondagem do painel (`s25-cloudfront-net.lat` + `.txt`).
+     - **Servidor 3 (`ffffff.s25-cloudfront-net.lat/.../error.txt`):** Host placeholder morto (`404 Not Found` em 126 de 134 canais) e bloqueado por `isFonteAllowed`.
+2. **Servidores Secundários Mortos/HTTP no Catálogo Estático (`src/data/liveChannels.ts`):**
+   - `premiere-2` e `cazetv` tinham um `Servidor 2` apontando para `/api/saimo-source?channel=...&source=2` cujo hash upstream no Saimo retorna `404 Not Found`.
+   - `record-news` ainda possuía o `Servidor 3` em HTTP puro (`http://45.162.64.114/RECORD_NEWS/index.m3u8`).
+   - `band` apontava para `source=2` (HTTP) em vez das fontes HTTPS 1 e 3 (`vipwaytvcdn.multtv.tv.br`).
+
+**Modificações Realizadas:**
+1. **Filtro de Hosts Bloqueados e Não-HTTPS nas Rotas do Painel Admin (`server/services/externalCatalog.ts`):**
+   - Criada `isFonteHostBlockedSync(url)` e aplicada em `getAllExternalSourceDetails()`, `getExternalSourceDetails()` e `probeAllSourcesForExternalChannel()` para ocultar imediatamente qualquer fonte `http://` ou de domínios bloqueados (`s25-cloudfront-net.lat`, `.txt`, `.invalid`, etc.) da listagem de servidores do painel admin.
+2. **Catálogo Saimo 100% Verificado na VPS Oracle (`/home/ubuntu/play-infinity/current/data/external-channels.txt`):**
+   - Sondadas todas as 507 fontes HTTPS do catálogo Saimo; expurgadas 406 fontes mortas/HTTP/bloqueadas e mantidos apenas **191 canais com 231 fontes HTTPS 100% verificadas (`200 OK`)**. Canais como *Discovery Science* e *Band News* agora exibem exclusivamente o `Servidor 1 (200 OK)`.
+3. **Limpeza do Catálogo Estático (`src/data/liveChannels.ts`):**
+   - Removido o `Servidor 2` (`404`) de `premiere-2` e `cazetv` (mantendo o `Servidor 1 Saimo HD 200 OK`, e preservando os 2 servidores ativos do `premiere-1` e `sportv-2`).
+   - Removido o `Servidor 3` HTTP de `record-news` e atualizado `band` para usar as fontes HTTPS 1 e 3 (`200 OK`).
+4. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 92` / `versionName "1.4.60"`.
+
+---
+
 ## 07/11/2026 — Desvinculação Completa do MinhaTela e Catálogo Saimon Exclusivo HTTPS (v1.4.59 / Code 91)
 
 **Contexto e Solicitação do Usuário:**

@@ -68,11 +68,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         name: 'Servidor 1',
         url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere2%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=5a7516bcea811f03361788226111cd858a3083078f25df8a1c707ab15a690d0b',
         isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: '/api/saimo-source?channel=premiere-2&source=2',
-        isProxy: false
       }
     ]
   },
@@ -255,11 +250,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
         name: 'Servidor 1',
         url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fcazetv%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=c3d1aee563810717685f63558499a1a354aadb1169641d67ff348717e18b9beb',
         isProxy: false
-      },
-      {
-        name: 'Servidor 2',
-        url: '/api/saimo-source?channel=cazetv&source=2',
-        isProxy: false
       }
     ]
   },
@@ -402,7 +392,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/saimo-source?channel=band&source=2',
+        url: '/api/saimo-source?channel=band&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=band&source=3',
         isProxy: false
       }
     ]
@@ -426,11 +421,6 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
       {
         name: 'Servidor 2',
         url: 'https://rnw-rn.otteravision.com/rnw/rn/rnw_rn.m3u8',
-        isProxy: true
-      },
-      {
-        name: 'Servidor 3',
-        url: 'http://45.162.64.114/RECORD_NEWS/index.m3u8',
         isProxy: true
       }
     ]
