@@ -1,3 +1,18 @@
+## 06/11/2026 — Remoção do Bloco "Canal de Aquisição" no Modal de Novo Cliente
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do modal de cadastro de clientes com a seção `CANAL DE AQUISIÇÃO (de onde este cliente veio)` (botões *Outro / Direto*, *Saimon*, *embedTV*) e solicitou:
+*"REMOVE ESSA PARTE AI DO PAINEL ADM"*
+
+**Modificações Realizadas:**
+- Removido o bloco visual de botões de canal de aquisição do modal de cadastro em `src/pages/AdminPage.tsx`. O padrão do formulário mantém o comportamento seguro e limpo sem poluir o formulário com opções desnecessárias.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+- Suíte de testes: 5/5 testes aprovados.
+
+---
+
 ## 06/11/2026 — Sondagem Completa no "Testar Todos" do Painel Admin (Servidores Diretos + Fontes Externas)
 
 **Contexto e Solicitação do Usuário:**
