@@ -322,6 +322,20 @@ export async function resolveFavoriteItems(ids: number[]): Promise<CatalogItem[]
         return tmdbFavoriteCache.get(id)!;
       }
 
+      // Se já sabemos que é filme (ou é o ID fantasma 1101412), resolve direto como filme
+      const knownMeta = getStoredDynamicFavoritesMeta()[id];
+      if (id === 1101412 || (knownMeta && knownMeta.type === 'movie')) {
+        try {
+          const movie = await getDetails(id, 'movie');
+          if (movie && movie.id === id) {
+            const item = buildCatalogItemFromTmdb(movie, 'movie');
+            tmdbFavoriteCache.set(id, item);
+            saveDynamicFavoriteMeta(item);
+            return item;
+          }
+        } catch { /* ignora */ }
+      }
+
       try {
         const tv = await getDetails(id, 'tv');
         if (tv && tv.id === id) {
@@ -416,8 +430,14 @@ export const fetchDynamicScheduleForFavorites = async (favoriteIds: number[]): P
   await Promise.all(
     idsToFetch.map(async (id) => {
       try {
-        const localItem = allCatalog.find(i => i.id === id);
+        const localItem = allCatalog.find(i => i.id === id || i.tmdbId === id);
         if (localItem && localItem.type === 'movie') return;
+
+        const dynamicMeta = getStoredDynamicFavoritesMeta()[id];
+        if (dynamicMeta && dynamicMeta.type === 'movie') return;
+
+        // ID fantasma 1101412 (A Queda 2 - filme) nunca deve ser buscado como série
+        if (id === 1101412 || Number(localItem?.tmdbId) === 1101412 || Number(dynamicMeta?.tmdbId) === 1101412) return;
 
         const tmdbId = localItem?.tmdbId || id;
         const data = await getDetails(Number(tmdbId), 'tv') as any;

@@ -1493,7 +1493,7 @@ export function VideoPlayerModal({
     // Posição: logo após o BYSE; a skin Netflix cobre 100% (wrapper com
     // protocolo WATCHPLAY próprio — ADR-0004).
     const anidigitalName = title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim() || '';
-    if (anidigitalName.length >= 2) {
+    if (anidigitalName.length >= 2 && isAnimeMedia) {
       list.splice(1, 0, {
         key: 'srv_anidigital',
         label: 'Anime Digital',

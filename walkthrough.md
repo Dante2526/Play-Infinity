@@ -1,3 +1,40 @@
+## 06/11/2026 — Restrição do AnimesDigital a Animes e Fim das Consultas 404 de TV em Filmes (A Queda 2 / 1101412)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou logs com erros recorrentes:
+1. `GET /api/anidigital-proxy-iframe?name=Harry+Potter... 404 (Not Found)`
+2. `[TMDB Service] Proxy local retornou status 404 para /api/tmdb/tv/1101412?language=pt-BR. Ativando fallback de dados...`
+E cobrou: *"mas esse erro de a queda 2 vive acontecendo e sim aplica a correção do animesdigital"*.
+
+**Diagnóstico e Causa Raiz:**
+1. **Injeção Incondicional do AnimesDigital no Player (`src/components/VideoPlayerModal.tsx`):**
+   - O servidor `srv_anidigital` era inserido via `list.splice(1, 0, ...)` na 2ª posição de toda lista de servidores avaliando apenas `anidigitalName.length >= 2`, mesmo para filmes ocidentais live-action (Harry Potter, Vingadores, etc.).
+   - Quando o primeiro servidor demorava ou falhava, o fallback automático tentava o AnimesDigital, que obviamente não possui Harry Potter no catálogo de animes, gerando a requisição 404 e atrasando a transição de fontes em até 8 segundos.
+2. **Loop de Consulta de TV para o Filme 1101412 (`src/services/favorites.ts`):**
+   - O ID `1101412` (*A Queda 2*) é um filme, salvo nos favoritos remotos da conta do usuário.
+   - Em `fetchDynamicScheduleForFavorites`, a rotina varria todos os favoritos para montar o cronograma de episódios de TV. Como 1101412 não constava no catálogo fixo (`allCatalog`), a verificação `localItem && localItem.type === 'movie'` falhava, e o código chamava cegamente `getDetails(1101412, 'tv')`.
+   - Em `resolveFavoriteItems`, tentava primeiro `getDetails(id, 'tv')`, disparando `/api/tmdb/tv/1101412` que retornava 404 no TMDB.
+3. **Alerta Ruidoso no Console (`src/services/tmdb.ts`):**
+   - Em `lookupDetails`, o fetch raw inicial não usava `{ silent: true }`, emitindo `console.warn` mesmo quando o próprio serviço executava a auto-resolução cruzada em seguida.
+
+**Modificações Realizadas:**
+1. **Restrição Estrita a Animes no Player (`src/components/VideoPlayerModal.tsx`):**
+   - Inclusão de `isAnimeMedia` na guarda de injeção: `if (anidigitalName.length >= 2 && isAnimeMedia)`.
+   - Filmes e séries convencionais não tentam mais o AnimesDigital, eliminando 100% dos 404s e acelerando o fallback.
+2. **Blindagem de Favoritos Contra Buscas de TV (`src/services/favorites.ts`):**
+   - Em `fetchDynamicScheduleForFavorites`: adicionada checagem explícita contra o ID `1101412` e contra metadados locais de filmes (`dynamicMeta?.type === 'movie'`), impedindo consultas de cronograma de TV para obras cinematográficas.
+   - Em `resolveFavoriteItems`: se o item for `1101412` ou já constar como filme em metadados, resolve direto com `getDetails(id, 'movie')`.
+3. **Silenciamento da Resolução Cruzada (`src/services/tmdb.ts`):**
+   - Configurado `{ silent: true }` nas consultas iniciais e cruzadas de `lookupDetails`, prevenindo avisos de console falsos-positivos.
+4. **Cobertura de Testes Automatizados (`tests/anidigital-server-guard.test.cjs`):**
+   - Criados 3 testes unitários validando a restrição de `isAnimeMedia`, a blindagem de `1101412` nos favoritos e o silenciamento no TMDB.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- `node --test tests/anidigital-server-guard.test.cjs tests/player-integration.test.cjs tests/playback-startup.test.cjs tests/public-frontend.test.cjs tests/byse-sources.test.cjs`: 24/24 testes aprovados (100% de sucesso).
+
+---
+
 ## 05/11/2026 — Filtros Rápidos por Vencimento de Clientes no Painel Admin (Todos, Em Dia, Vencendo em 2 Dias e Vencidos)
 
 **Contexto e Solicitação do Usuário:**

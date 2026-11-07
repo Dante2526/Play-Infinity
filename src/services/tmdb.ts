@@ -461,7 +461,7 @@ export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<D
     };
   }
 
-  const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`);
+  const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, { silent: true });
 
   let crossType: 'movie' | 'tv' | null = null;
   let crossDetails: TMDBDetails | null = null;
@@ -472,7 +472,7 @@ export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<D
   // Quem consome decide se aceita o crossType (verifica similaridade de título).
   if (!outcome.ok && outcome.status === 404 && id && !isNaN(Number(id))) {
     const other: 'movie' | 'tv' = type === 'tv' ? 'movie' : 'tv';
-    const alt = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${other}/${id}?language=pt-BR`);
+    const alt = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${other}/${id}?language=pt-BR`, { silent: true });
     if (alt.ok && alt.data && alt.data.id && alt.data.id !== 0) {
       crossType = other;
       crossDetails = alt.data;
