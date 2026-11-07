@@ -1,3 +1,27 @@
+## 07/11/2026 — Desvinculação Completa do MinhaTela e Catálogo Saimon Exclusivo HTTPS (v1.4.59 / Code 91)
+
+**Contexto e Solicitação do Usuário:**
+O usuário determinou explicitamente:
+*"QUERO MANTEM OS SERVIDORES SO DO SAIMON TA, MINHA TELA NN, E OS SERVIDORES DO SAIMON SEM AQUELES QUE SÃO SO HTTP QUE NN ABRE BEM EM NAVEGADOR"*
+E confirmou a permanência das fontes curadas de alta fidelidade como o *Premiere Clubes* (Servidor 1 `Saimo HD` e Servidor 2 `embedTV`).
+
+**Modificações Realizadas:**
+1. **Desacoplamento Completo do MinhaTela (`server/services/externalCatalog.ts` e `server.ts`):**
+   - Removida a injeção de embeds do MinhaTela (`getMinhaTelaServersFor` e `getMinhaTelaNewChannels`) do catálogo público em `getPublicLiveChannels()`.
+   - Desativado o watcher de background `startMinhaTelaWatcher()` em `server.ts`. O app não consome nem injeta mais iframes de players de terceiros do MinhaTela.
+2. **Filtro Estrito HTTPS no Catálogo Saimon (`server/services/externalCatalog.ts`):**
+   - O resolver `resolveFonteUrlValue` agora descarta qualquer fonte que não inicie com `https://`, eliminando streams HTTP inseguros (IPs piratas `45.185...` e `45.162...` que causavam Mixed Content e falhavam no browser).
+3. **Sincronização do Catálogo Saimon HTTPS na VPS Oracle:**
+   - O arquivo `external-channels.txt` na VPS Oracle foi atualizado com mais de 3.100 linhas filtradas exclusivamente em HTTPS, garantindo fontes legítimas para *Comedy Central* (`Telecine Fun` via `cdn13embed`), *Pluto TV Anime* (`Cartoon Network` via `cdn13embed`), *Discovery Turbo*, etc.
+4. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 91` / `versionName "1.4.59"`.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros (código 0).
+- Suíte automatizada: 35 testes aprovados e 3 testes específicos do MinhaTela marcados como `skip`.
+
+---
+
 ## 06/11/2026 — Correção do "Testar Todos" em Modo Cluster, Falso-Positivo OFF (200) e Expurgo de Canais Offline (v1.4.58 / Code 90)
 
 **Contexto e Solicitação do Usuário:**

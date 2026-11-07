@@ -347,7 +347,7 @@ test('refreshSnapshot: envelope {"json":...}, detalhe por slug e cache em disco'
 // ---------------------------------------------------------------------------
 // 6. getPublicLiveChannels injeta sem mutar o catálogo estático
 // ---------------------------------------------------------------------------
-test('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS', () => {
+test.skip('getPublicLiveChannels: anexa fontes embed sem mutar INITIAL_LIVE_CHANNELS (desativado: MinhaTela desvinculado a pedido do dono)', () => {
   const beforeServers = read('src/data/liveChannels.ts');
   const channels = catalog.getPublicLiveChannels();
 
@@ -420,7 +420,7 @@ test('probeChannelServers: canal só de embeds → online (sem sinal HLS verific
 // ---------------------------------------------------------------------------
 // 8. Guards de integração
 // ---------------------------------------------------------------------------
-test('guard: server.ts inicia o watcher MinhaTela junto dos demais services', () => {
+test.skip('guard: server.ts inicia o watcher MinhaTela (desativado a pedido do dono)', () => {
   const src = read('server.ts');
   assert.ok(src.includes('startMinhaTelaWatcher'), 'watcher chamado no boot');
   assert.ok(src.includes('minhatelaCatalog'), 'import do serviço presente');
@@ -431,7 +431,7 @@ test('guard: .gitignore cobre o cache dinâmico do MinhaTela', () => {
   assert.ok(gi.includes('data/minhatela-cache.json'));
 });
 
-test('guard: getPublicLiveChannels injeta MinhaTela após o Saimo (cópia, sem mutação)', () => {
+test.skip('guard: getPublicLiveChannels injeta MinhaTela após o Saimo (desativado a pedido do dono)', () => {
   const src = read('server/services/externalCatalog.ts');
   assert.ok(src.includes('getMinhaTelaServersFor'), 'anexa fontes nos canais existentes');
   assert.ok(src.includes('getMinhaTelaNewChannels'), 'adiciona canais exclusivos');

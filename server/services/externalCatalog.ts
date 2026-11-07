@@ -148,7 +148,7 @@ export function parseExternalChannels(text: string): ExternalChannel[] {
  *  - qualquer outra coisa → null (fonte inválida, pulada na resolução)
  */
 function resolveFonteUrlValue(raw: string): string | null {
-  if (/^https?:\/\//i.test(raw)) return raw;
+  if (/^https:\/\//i.test(raw)) return raw;
   return null;
 }
 
@@ -754,19 +754,6 @@ export function getPublicLiveChannels(): LiveChannel[] {
       }
     }
   }
-  // Chaves de matching MinhaTela (normalização própria) dos nomes já
-  // representados — evita canal duplicado quando o MinhaTela também tem
-  // um canal que o Saimo/estático já cobre.
-  const representedMt = new Set<string>();
-  for (const channel of channels) {
-    representedMt.add(minhaTelaKey(channel.name));
-    for (const server of channel.servers) {
-      if (server.url.startsWith('/api/external-channel?')) {
-        const name = new URL(server.url, 'https://play-infinity.stream').searchParams.get('name');
-        if (name) representedMt.add(minhaTelaKey(name));
-      }
-    }
-  }
   for (const channel of loadedExternal) {
     if (!validateExternalChannelName(channel.name).ok) continue;
     const normalized = normalizeChannelName(channel.name);
@@ -797,74 +784,24 @@ export function getPublicLiveChannels(): LiveChannel[] {
       servers: [{ name: 'Servidor Multi-Fonte Saimo', url: `/api/external-channel?name=${encodeURIComponent(channel.name)}`, isProxy: false }],
     });
   }
-  // Fontes embed MinhaTela anexadas aos canais EXISTENTES (estáticos +
-  // Saimo): cada canal que também existe no catálogo deles ganha as fontes
-  // de embed deles como servidores adicionais (isEmbed). Copia o canal —
-  // nunca muta INITIAL_LIVE_CHANNELS.
-  const withMinhaTela = channels
-    .map((ch) => {
-      const activeServers = ch.servers.filter((srv) => {
-        if (!srv.url.startsWith("/api/external-channel?")) return true;
-        if (loadedExternal.length === 0) return true;
-        try {
-          const name = new URL(srv.url, "https://play-infinity.stream").searchParams.get("name");
-          if (!name) return false;
-          const ext = externalByNorm.get(normalizeChannelName(name));
-          return Boolean(ext && ext.fontes.length > 0);
-        } catch {
-          return false;
-        }
-      });
-      const baseChannel = activeServers.length === ch.servers.length ? ch : { ...ch, servers: activeServers };
-      ch = baseChannel;
-
-      // Canal com fontes curadas manualmente (ex. Premiere Clubes → embedTV
-      // assinado): não anexar embeds do MinhaTela nem reordenar. Preserva o
-      // "lockServers" declarado em INITIAL_LIVE_CHANNELS.
-      if (ch.lockServers) return ch;
-      const extra = getMinhaTelaServersFor(ch.id, ch.name, ch.servers.length);
-      if (extra.length === 0) return ch;
-
-      // Priorização de Áudio AAC: fontes embed verificadas com som funcional imediato
-      // (ex.: embedcanaisdetv.xyz) são promovidas a Servidor 1 quando a fonte Saimo
-      // utiliza áudio Dolby AC-3 (incompatível com navegadores web padrão em canais esportivos/PPV).
-      const aacIdx = extra.findIndex((s) => /embedcanaisdetv\.xyz/i.test(s.url));
-      const firstIsSaimo = ch.servers[0] && ch.servers[0].url.startsWith("/api/external-channel");
-      const isAc3LikelyChannel =
-        ch.category === "Esportes" ||
-        /\b(sportv|premiere|combate|espn|bandsports|conmebol|fox sports)\b/i.test(ch.name);
-
-      if (aacIdx >= 0 && firstIsSaimo && isAc3LikelyChannel) {
-        const aacServer = extra[aacIdx];
-        const remainingExtra = extra.filter((_, i) => i !== aacIdx);
-        const reordered = [aacServer, ...ch.servers, ...remainingExtra];
-        return {
-          ...ch,
-          servers: reordered.map((s, idx) => ({ ...s, name: `Servidor ${idx + 1}` })),
-        };
+    // Filtra canais externos sem fontes ativas no Saimon
+  return channels.filter((ch) => {
+    const srvs = ch.servers.filter((srv) => {
+      if (!srv.url.startsWith("/api/external-channel?")) return true;
+      if (loadedExternal.length === 0) return true;
+      try {
+        const name = new URL(srv.url, "https://play-infinity.stream").searchParams.get("name");
+        if (!name) return false;
+        const ext = externalByNorm.get(normalizeChannelName(name));
+        return Boolean(ext && ext.fontes.length > 0);
+      } catch {
+        return false;
       }
-
-      return { ...ch, servers: [...ch.servers, ...extra] };
-    })
-    .filter((ch) => ch.servers.length > 0);
-  // Canais EXCLUSIVOS do MinhaTela (Paramount+, Disney+, HBO Max, Prime
-  // Video, A Fazenda 18, Premiere 8, pay-TV...) viram canais novos completos,
-  // todas as fontes já resolvidas como servidores embed.
-  for (const mt of getMinhaTelaNewChannels(representedMt)) {
-    const normalized = normalizeChannelName(mt.name);
-    if (BLOCKED_EXTERNAL_CHANNELS.has(normalized)) continue;
-    withMinhaTela.push({
-      id: mt.id,
-      name: mt.name,
-      category: mt.category,
-      logo: mt.logo,
-      quality: mt.quality,
-      currentProgram: mt.currentProgram,
-      description: mt.description,
-      servers: mt.servers,
     });
-  }
-  return withMinhaTela;
+    ch.servers = srvs;
+    return ch.servers.length > 0;
+  });
+
 }
 
 const lastExternalSelections = new Map<string, { url: string; at: number }>();
