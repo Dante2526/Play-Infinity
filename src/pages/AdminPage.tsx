@@ -2257,53 +2257,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
               </div>
             </div>
 
-            {/* Canal de Aquisição (Saimon / embedTV) */}
-            <div>
-              <label className="block text-white/60 text-[10px] sm:text-xs font-bold mb-1.5 uppercase tracking-wider ml-1">
-                Canal de Aquisição
-                <span className="text-white/30 normal-case font-normal ml-2">(de onde este cliente veio)</span>
-              </label>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setNewAcquisitionSource("none")}
-                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
-                    newAcquisitionSource === "none"
-                      ? "bg-white/15 text-white ring-2 ring-white/40"
-                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                  }`}
-                  title="Cadastro direto, sem canal definido"
-                >
-                  <span>Outro / Direto</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewAcquisitionSource("saimon")}
-                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
-                    newAcquisitionSource === "saimon"
-                      ? "bg-orange-500 text-white shadow-md shadow-orange-500/30 ring-2 ring-orange-400/50"
-                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                  }`}
-                  title="Seguidor trazido pelo streamer Saimon"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span>Saimon</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setNewAcquisitionSource("embedtv")}
-                  className={`flex-1 min-w-[80px] h-[40px] sm:h-[44px] rounded-xl sm:rounded-[20px] font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5 ${
-                    newAcquisitionSource === "embedtv"
-                      ? "bg-blue-500 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400/50"
-                      : "bg-white/5 text-white/60 hover:bg-white/10 hover:text-white"
-                  }`}
-                  title="Seguidor trazido pelo site embedtv.cc"
-                >
-                  <Tv className="w-3.5 h-3.5" />
-                  <span>embedTV</span>
-                </button>
-              </div>
-            </div>
+            
 
             {/* Campos de Cadastro */}
             {accessType === 'mensal' ? (
