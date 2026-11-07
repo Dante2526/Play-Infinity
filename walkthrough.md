@@ -32,6 +32,7 @@ E cobrou: *"mas esse erro de a queda 2 vive acontecendo e sim aplica a correçã
 **Validação Realizada:**
 - `npx tsc --noEmit`: 0 erros (código 0).
 - `node --test tests/anidigital-server-guard.test.cjs tests/player-integration.test.cjs tests/playback-startup.test.cjs tests/public-frontend.test.cjs tests/byse-sources.test.cjs`: 24/24 testes aprovados (100% de sucesso).
+- `git push origin main`: Enviado com sucesso no commit `df1424c` (deploy automático disparado no GitHub Actions).
 
 ---
 
