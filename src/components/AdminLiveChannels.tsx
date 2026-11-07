@@ -595,35 +595,73 @@ export function AdminLiveChannels() {
     }
   };
 
-  // Sondar todos os canais visíveis (testa todos os servidores configurados de cada canal)
+  // Sondar todos os canais visíveis (testa todos os servidores diretos e fontes externas de cada canal)
   const handleProbeAll = async () => {
     if (isProbingAll) return;
     setIsProbingAll(true);
 
-    // Coleta todas as URLs únicas de servidores dos canais visíveis filtrados
-    const serversToProbe: string[] = [];
+    // 1. Coleta servidores diretos únicos (exclui rota genérica de canal externo)
+    const directServersToProbe: string[] = [];
+    // 2. Coleta nomes únicos de canais externos vinculados aos canais visíveis
+    const externalNamesToProbe: string[] = [];
+
     filteredChannels.forEach(ch => {
       (ch.servers || []).forEach(srv => {
-        if (srv.url && !serversToProbe.includes(srv.url)) {
-          serversToProbe.push(srv.url);
+        if (!srv.url) return;
+        if (srv.url.startsWith('/api/external-channel?')) {
+          try {
+            const name = new URL(srv.url, 'https://play-infinity.stream').searchParams.get('name');
+            if (name && !externalNamesToProbe.includes(name)) {
+              externalNamesToProbe.push(name);
+            }
+          } catch {}
+        } else if (!directServersToProbe.includes(srv.url)) {
+          directServersToProbe.push(srv.url);
         }
       });
     });
 
-    setProbingProgress({ current: 0, total: serversToProbe.length });
+    type ProbeTask = { type: 'direct'; url: string } | { type: 'external'; name: string };
+    const tasks: ProbeTask[] = [
+      ...directServersToProbe.map(url => ({ type: 'direct' as const, url })),
+      ...externalNamesToProbe.map(name => ({ type: 'external' as const, name })),
+    ];
+
+    setProbingProgress({ current: 0, total: tasks.length });
 
     // Pool com concorrência de 3 requisições simultâneas para alta velocidade sem gargalo
     const CONCURRENCY = 3;
     let completed = 0;
-    const queue = [...serversToProbe];
+    const queue = [...tasks];
 
     const workers = Array.from({ length: Math.min(CONCURRENCY, queue.length) }, async () => {
       while (queue.length > 0) {
-        const url = queue.shift();
-        if (!url) break;
-        await probeSingleServer(url, false);
+        const task = queue.shift();
+        if (!task) break;
+
+        if (task.type === 'direct') {
+          await probeSingleServer(task.url, false);
+        } else {
+          try {
+            const res = await adminFetch('/api/admin/external-channel-probe-all', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ name: task.name }),
+              signal: AbortSignal.timeout(8000),
+            });
+            const data = await res.json();
+            if (data.success && Array.isArray(data.sources)) {
+              setAllSourcesMap(prev => ({
+                ...prev,
+                [task.name]: data.sources,
+                [normalizeExternalSourceName(task.name)]: data.sources,
+              }));
+            }
+          } catch {}
+        }
+
         completed++;
-        setProbingProgress({ current: completed, total: serversToProbe.length });
+        setProbingProgress({ current: completed, total: tasks.length });
       }
     });
 

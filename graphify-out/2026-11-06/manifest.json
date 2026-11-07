@@ -740,8 +740,8 @@
     "semantic_hash": ""
   },
   "AGENTS.md": {
-    "mtime": 1793753132.2041905,
-    "ast_hash": "70ad3625cf4e3556e4a99e41520e1d95",
+    "mtime": 1794014591.0056508,
+    "ast_hash": "b6e46d89c4a528d96a5b0810d3b71534",
     "semantic_hash": ""
   },
   "INFRAESTRUTURA_ORACLE_E_CLOUDFLARE.md": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1794010753.8186533,
-    "ast_hash": "5e5dd0565a9118ef32ed2cc6b412fc1c",
+    "mtime": 1794013558.9120748,
+    "ast_hash": "60a846f2b3d5f4f3a07a9f902995eb39",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1370,9 +1370,9 @@
     "semantic_hash": "ecf7faf5b77d97bd9614bdeb3b812a2f"
   },
   "server/services/externalCatalog.ts": {
-    "mtime": 1793875667.0248468,
-    "ast_hash": "0671b155f6eb66e69127f0564297ec0e",
-    "semantic_hash": "0671b155f6eb66e69127f0564297ec0e"
+    "mtime": 1794014981.5291004,
+    "ast_hash": "222e20628923c27954088734e6b29e75",
+    "semantic_hash": ""
   },
   "server/services/saimoCatalogScraper.ts": {
     "mtime": 1793155700.4385116,
@@ -1540,8 +1540,8 @@
     "semantic_hash": "bdca9f5859c479c167325cce40a70b09"
   },
   "server/services/blockedLiveChannels.ts": {
-    "mtime": 1794013277.3399127,
-    "ast_hash": "00f7af244da6600a912f10f9916194a3",
+    "mtime": 1794015023.854629,
+    "ast_hash": "0777a914f4520f9d875fac99474283dc",
     "semantic_hash": ""
   },
   "server/services/dunningWatcher.ts": {

@@ -1,7 +1,7 @@
 {
   "android/app/build.gradle": {
-    "mtime": 1793914226.1717796,
-    "ast_hash": "8da01143077df6b3bbc980aa2ffa3bf2",
+    "mtime": 1794015565.2072089,
+    "ast_hash": "711dd7e229d1c5be893c335ab9468beb",
     "semantic_hash": ""
   },
   "android/app/capacitor.build.gradle": {
@@ -845,8 +845,8 @@
     "semantic_hash": "5438b9c4f9a78322b7aae526b74d0a5a"
   },
   "walkthrough.md": {
-    "mtime": 1794013558.9120748,
-    "ast_hash": "60a846f2b3d5f4f3a07a9f902995eb39",
+    "mtime": 1794017020.426543,
+    "ast_hash": "b934c255abd2ccb47a93a9226999f0ae",
     "semantic_hash": ""
   },
   "worker/README.md": {
@@ -1330,8 +1330,8 @@
     "semantic_hash": ""
   },
   "src/components/AdminLiveChannels.tsx": {
-    "mtime": 1794013440.5363667,
-    "ast_hash": "25699048a28f609dfad2d71ae6927502",
+    "mtime": 1794016893.8375077,
+    "ast_hash": "351fef03b32e140095b2ed448c31f303",
     "semantic_hash": ""
   },
   "src/services/liveChannelService.ts": {
@@ -1365,13 +1365,13 @@
     "semantic_hash": "946b86f56de57091a54088492069b7ed"
   },
   "server/routes/externalRoutes.ts": {
-    "mtime": 1793551298.5345752,
-    "ast_hash": "ecf7faf5b77d97bd9614bdeb3b812a2f",
-    "semantic_hash": "ecf7faf5b77d97bd9614bdeb3b812a2f"
+    "mtime": 1794016841.7650218,
+    "ast_hash": "3314665b53bbf59f3fab80663c5bab1b",
+    "semantic_hash": ""
   },
   "server/services/externalCatalog.ts": {
-    "mtime": 1794014981.5291004,
-    "ast_hash": "222e20628923c27954088734e6b29e75",
+    "mtime": 1794016796.5154479,
+    "ast_hash": "b76d106d191eaad7c69f0327130fb627",
     "semantic_hash": ""
   },
   "server/services/saimoCatalogScraper.ts": {
@@ -1409,16 +1409,6 @@
     "ast_hash": "09f0c8284dff0f25df4503db37e636a3",
     "semantic_hash": ""
   },
-  "data/audit-channels-result.json": {
-    "mtime": 1793108671.7986896,
-    "ast_hash": "0e2739ecd164d1e87798eb9d1fe5e360",
-    "semantic_hash": "0e2739ecd164d1e87798eb9d1fe5e360"
-  },
-  "data/audit-progress.json": {
-    "mtime": 1793108671.7939043,
-    "ast_hash": "c1fe005ca6b81f2926fcfb3948de200f",
-    "semantic_hash": "c1fe005ca6b81f2926fcfb3948de200f"
-  },
   "scripts/audit-channels-stability.mjs": {
     "mtime": 1793108417.173721,
     "ast_hash": "ef37c7347f158e814642979c40bb9a45",
@@ -1443,11 +1433,6 @@
     "mtime": 1793103233.4236789,
     "ast_hash": "8997aabe1d8bc905629dcb2c895e9241",
     "semantic_hash": "8997aabe1d8bc905629dcb2c895e9241"
-  },
-  "data/external-channels-clean.txt": {
-    "mtime": 1793128480.6688201,
-    "ast_hash": "70215c25b4b89ac8423e603864db1157",
-    "semantic_hash": ""
   },
   "public/privacidade.html": {
     "mtime": 1793753132.2242587,
@@ -1540,8 +1525,8 @@
     "semantic_hash": "bdca9f5859c479c167325cce40a70b09"
   },
   "server/services/blockedLiveChannels.ts": {
-    "mtime": 1794015023.854629,
-    "ast_hash": "0777a914f4520f9d875fac99474283dc",
+    "mtime": 1794015356.8814855,
+    "ast_hash": "9e53862068ee376b9bdf284aca82b7f3",
     "semantic_hash": ""
   },
   "server/services/dunningWatcher.ts": {

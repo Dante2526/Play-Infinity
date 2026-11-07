@@ -1,3 +1,34 @@
+## 06/11/2026 — Sondagem Completa no "Testar Todos" do Painel Admin (Servidores Diretos + Fontes Externas)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do canal *Pluto TV Esportes* mostrando que, ao clicar no botão "Testar Todos" no painel administrativo, apenas o Servidor 1 (direto) recebia teste (`200 OK`), enquanto os Servidores 2, 3, etc. (fontes externas Saimo) permaneciam sem teste (apenas com o botão cinza `[Testar]`), e cobrou:
+*"cliquei no botão de teatra todosos canais, pq esses ai nn foram testados? acontece com um ou outros o botão de testaR TOFOS E PRA TESTAR TODOS QUE APARECEM EM MEU CATALOGO NO PAINEL ADM"*
+
+**Diagnóstico e Causa Raiz:**
+1. No `AdminLiveChannels.tsx`, o `handleProbeAll` coletava apenas as URLs de `ch.servers`.
+2. Para canais com fontes externas (Saimo), a URL na lista era a rota genérica `/api/external-channel?name=X`. O card esconde essa URL de `directServers` e renderiza cada fonte externa individual desmembrada via `<ExternalChannelSources name={name} />`.
+3. O `<ExternalChannelSources>` exibe o status a partir de `source.state` no `allSourcesMap`. Como o `handleProbeAll` não disparava o teste das fontes externas individuais, elas permaneciam com status `'untested'`, sem badge de status e exibindo `Online (1/5 ativos)` no cabeçalho do card.
+
+**Modificações Realizadas:**
+1. **Sondagem em Paralelo de Fontes Externas no Backend (`server/services/externalCatalog.ts`):**
+   - Implementada a função `probeAllSourcesForExternalChannel(name: string)`: testa todas as fontes do canal em paralelo com limite de 3.5s via `probeExternalFonte`, gravando os resultados no `probeCache` em `d=0`.
+2. **Rota Administrativa de Sondagem Rápida (`server/routes/externalRoutes.ts`):**
+   - Criada a rota `POST /api/admin/external-channel-probe-all` que recebe `{ name: string }` e retorna todas as fontes testadas e atualizadas em uma única chamada.
+3. **Integração no Painel Administrativo (`src/components/AdminLiveChannels.tsx`):**
+   - Atualizado o `handleProbeAll` para mapear tanto `directServersToProbe` quanto `externalNamesToProbe`.
+   - Adicionada execução de sondagem no pool concorrente (3 workers) para ambas as tarefas.
+   - Atualizado o `allSourcesMap` dinamicamente conforme os canais externos concluem seus testes, refletindo os badges (`200 OK` ou `OFF`) em tempo real.
+   - O contador de progresso agora acompanha o total real de tarefas (servidores diretos + canais externos).
+4. **Cobertura de Testes Automatizados (`tests/admin-probe-all-sources.test.cjs`):**
+   - 3 testes cobrindo a exportação da função no backend, o registro da rota e a invocação no frontend.
+
+**Validação Realizada:**
+- `node --test tests/admin-probe-all-sources.test.cjs`: 3/3 testes aprovados (100%).
+- Suíte completa de canais: 65/65 testes aprovados (100%).
+- `npx tsc --noEmit`: 0 erros de compilação (código 0).
+
+---
+
 ## 06/11/2026 — Remoção dos Sinais Mortos de A Fazenda, Blindagem Anti-Cobrança Repentina e Timeouts Estritos
 
 **Contexto e Solicitação do Usuário:**

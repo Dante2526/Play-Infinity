@@ -29,7 +29,7 @@
  */
 import { Router } from "express";
 import { validateExternalChannelName, validateExternalFormatParam } from "../utils/externalValidation";
-import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, getAllExternalSourceDetails, testExternalSource, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
+import { resolveExternalChannel, externalCatalogStats, getExternalSourceDetails, getAllExternalSourceDetails, testExternalSource, probeAllSourcesForExternalChannel, recordExternalSelection, getPublicLiveChannels } from "../services/externalCatalog";
 import { handleEmbedPlayerRequest, probeEmbedPlayer } from "../services/embedPlayerProxy";
 import { syncSaimoAllDeduped } from "../services/saimoCatalogScraper";
 import { signProxyUrl } from "../utils/helpers";
@@ -270,6 +270,24 @@ router.post('/api/admin/external-source-test', async (req, res) => {
   } catch {
     return res.status(502).json({ success: false, error: 'Não foi possível verificar a fonte.' });
   } finally { activeSourceTests--; }
+});
+
+
+router.post('/api/admin/external-channel-probe-all', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const name = validateExternalChannelName(req.body?.name);
+  if (!name.ok) {
+    return res.status(400).json({ success: false, error: name.error });
+  }
+  try {
+    const result = await probeAllSourcesForExternalChannel(name.value!);
+    if (!result) {
+      return res.status(404).json({ success: false, error: 'Canal ausente no catálogo externo.' });
+    }
+    return res.json({ success: true, ...result });
+  } catch (err: any) {
+    return res.status(502).json({ success: false, error: 'Não foi possível sondar as fontes do canal: ' + (err?.message || String(err)) });
+  }
 });
 
 export default router;

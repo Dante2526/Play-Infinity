@@ -922,3 +922,48 @@ export async function testExternalSource(name: string, index: number) {
   }
   return { index, state, latencyMs: Date.now() - start, checkedAt: Date.now(), cached: false };
 }
+
+export async function probeAllSourcesForExternalChannel(name: string) {
+  const channel = findExternalChannel(name, loadExternalChannels());
+  if (!channel || channel.fontes.length === 0) return null;
+  const bases = loadExternalBases();
+
+  const results = await Promise.all(
+    channel.fontes.map(async (fonte, index) => {
+      const url = buildFonteUrl(fonte, bases);
+      let host = '';
+      try { host = url ? new URL(url).hostname : ''; } catch {}
+      const start = Date.now();
+      let state = 'blocked';
+      if (fonte.chave) {
+        state = 'unsupported';
+      } else if (!url || host.endsWith('.invalid')) {
+        state = 'unavailable';
+      } else if (await isFonteAllowed(url)) {
+        probeCache.delete(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=0`);
+        probeCache.delete(`${url}|${fonte.referer || ''}|${fonte.agente || ''}|d=1`);
+        const ok = await probeExternalFonte(url, {
+          referer: fonte.referer,
+          agente: fonte.agente,
+          timeoutMs: 3500,
+        });
+        state = ok ? 'available' : 'failed';
+      }
+      return {
+        index,
+        host,
+        quality: fonte.qualidade || null,
+        state,
+        latencyMs: Date.now() - start,
+        checkedAt: Date.now(),
+        cached: false,
+      };
+    })
+  );
+
+  return {
+    channel: channel.name,
+    sources: results,
+  };
+}
+
