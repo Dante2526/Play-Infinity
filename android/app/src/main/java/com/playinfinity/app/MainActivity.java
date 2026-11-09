@@ -101,6 +101,15 @@ public class MainActivity extends BridgeActivity {
                         });
                     }
                 });
+
+                // Captura downloads no WebView (ex: APK de atualização) e delega para o navegador do Android
+                webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                    try {
+                        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW);
+                        i.setData(android.net.Uri.parse(url));
+                        startActivity(i);
+                    } catch (Exception ignored) {}
+                });
             }
         } catch (Exception e) {
             e.printStackTrace();
