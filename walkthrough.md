@@ -1,3 +1,27 @@
+## 09/11/2026 — Correção de Espaçamento Superior no Hero de Detalhes (v1.4.62 / Code 94)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura da tela de detalhes de filmes/séries (`DetailsPage.tsx`) com o título ("IT: BEM-VINDOS A DERRY - UMA HISTÓRIA DE DERRY") cortado e sobreposto pela barra flutuante de navegação do topo (`Play Infinity | Início Filmes Séries...`).
+
+**Diagnóstico e Causa Raiz:**
+- O container do hero em `src/pages/DetailsPage.tsx` usava altura fixa (`h-[70vh] md:h-[80vh] 2xl:h-[85vh]`) e o container de conteúdo usava `absolute inset-x-0 bottom-0 top-0 flex flex-col justify-end`.
+- Quando um filme possui título longo de 2 ou mais linhas, tags adicionais (ex: CAM, Dorama, Oficial) ou quando a janela possui altura menor (laptop/zoom), o conteúdo era empurrado para cima a partir do `bottom-0`, batendo no topo da tela e ficando posicionado exatamente atrás da barra fixa (`top-4 lg:top-6`).
+
+**Modificações Realizadas:**
+1. **Layout do Hero em `src/pages/DetailsPage.tsx`:**
+   - Container do hero convertido para altura mínima dinâmica: `min-h-[82vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end group overflow-hidden`.
+   - Backdrop e gradientes convertidos para `absolute inset-0 w-full h-full object-cover` com `pointer-events-none` nos degradês.
+   - Container de conteúdo convertido para fluxo normal com margem superior segura: `relative z-10 w-full flex flex-col justify-end flex-1 px-4 pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-10 md:px-12 md:pb-16 mx-auto max-w-7xl` e `mt-auto max-w-4xl`.
+   - Botão "Voltar" reposicionado para `top-20 left-4 sm:top-24 sm:left-6 lg:top-28 lg:left-12` para manter espaçamento harmônico em relação à navbar flutuante.
+2. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 94` / `versionName "1.4.62"`.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros.
+- 66 testes automatizados passaram com sucesso.
+
+---
+
 ## 09/11/2026 — Remoção da Barra de Filtro de Canal de Aquisição no Painel Admin (v1.4.61 / Code 93)
 
 **Contexto e Solicitação do Usuário:**
