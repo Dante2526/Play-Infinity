@@ -85,6 +85,54 @@ process.on("uncaughtException", (err) => {
       timestamp: new Date().toISOString() });
   });
 
+  // Rota de Informações de Versão do App Nativo (usada pelo AppUpdateBanner para detectar APKs antigos)
+  app.get("/api/app-version", (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    let versionData = {
+      minNativeVersionCode: 87, // versões abaixo de 87 ainda têm a ActionBar nativa duplicada
+      latestVersionCode: 99,
+      latestVersionName: "1.4.67",
+      apkUrl: "https://play-infinity.stream/app.apk",
+      changelog: "Correção de layout nativo, downloads otimizados e novos canais esportivos."
+    };
+
+    try {
+      const versionFile = path.join(process.cwd(), "uploads", "releases", "version.json");
+      if (fs.existsSync(versionFile)) {
+        const parsed = JSON.parse(fs.readFileSync(versionFile, "utf8"));
+        versionData = { ...versionData, ...parsed };
+      }
+    } catch {}
+
+    res.json(versionData);
+  });
+
+  // Rota para Download Direto do APK assinado mais recente (sem esperar a Google Play Store)
+  app.get("/app.apk", (_req, res) => {
+    const possiblePaths = [
+      path.join(process.cwd(), "uploads", "releases", "PlayInfinity-latest.apk"),
+      path.join(process.cwd(), "uploads", "releases", "app-release.apk"),
+      path.join(process.cwd(), "android", "app", "build", "outputs", "apk", "release", "app-release.apk")
+    ];
+
+    let foundPath: string | null = null;
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        foundPath = p;
+        break;
+      }
+    }
+
+    if (!foundPath) {
+      return res.status(404).send("O APK atualizado está sendo preparado pelo servidor. Tente novamente em instantes.");
+    }
+
+    res.setHeader("Content-Disposition", 'attachment; filename="PlayInfinity.apk"');
+    res.setHeader("Content-Type", "application/vnd.android.package-archive");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.sendFile(foundPath);
+  });
+
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
   // Isso diz ao Express para confiar no cabeçalho X-Forwarded-For fornecido pelo proxy
   // para identificar o IP real do usuário. Fixes express-rate-limit warnings.

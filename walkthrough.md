@@ -1,3 +1,37 @@
+## 09/11/2026 — Blindagem do Capacitor + APK Direto via VPS contra Lentidão da Play Store (v1.4.67 / Code 99)
+
+**Contexto e Solicitação do Usuário:**
+O usuário relatou frustração com a demora de aprovação da Google Play Store (mais de 3 dias esperando aprovação da correção que eliminava o banner/ActionBar preta superior no app Android):
+*"Tem um jeito de a gente melhorar o nosso capacitor? Sabe a nossa última alteração que corrigia o layout que estava aparecendo um negócio todo estranho na tela inicial? Eu enviei desde aquela época que tu fez a alteração e o pessoal da Play Store nunca que aprovou. Eu preciso de um jeito que eu faça alterações estruturais assim e não precise passar por lá, vá para a Play Store, sei lá. Nosso capacitor já ajuda muito nisso, mas se tiver como melhorar, porque nunca que foi aprovado lá e tá lá ainda bugado o aplicativo até hoje. Deve fazer uns três dias."*
+O usuário optou pela **Opção 1 (Combo Completo)**.
+
+**Modificações Realizadas:**
+1. **Ponte de Controle Remoto Nativo em `StatusBarPlugin.java`:**
+   - Adicionado `hideActionBar()`: esconde a ActionBar nativa programaticamente caso qualquer tema antigo tente inflá-la.
+   - Adicionado `setWindowPadding()`: permite ao React controlar ou zerar o padding/insets da janela nativa do Android em tempo de execução via servidor.
+   - Adicionado `clearWebViewCache()`: permite limpar caches residuais do WebView remotamente.
+   - Adicionado `openExternalUrl()`: abre links de download externo no gerenciador do sistema operacional.
+   - No `getInfo()`: retorna `versionCode` e `versionName` reais do binário instalado no aparelho.
+2. **Anti-Cache e Hardening em `MainActivity.java`:**
+   - Ocultação proativa de `getSupportActionBar()` e `getActionBar()` no ciclo de vida nativo.
+   - Insets da janela integrados com os overrides dinâmicos do `StatusBarPlugin`.
+   - `WebSettings.LOAD_DEFAULT` configurado para garantir revalidação instantânea do `index.html` da VPS.
+   - Anexada assinatura `PlayInfinityApp/<versionName> (vc:<versionCode>)` no `User-Agent` para auditoria.
+3. **Distribuição Direta de APK na VPS Oracle (`server.ts` e `build-android.yml`):**
+   - No `server.ts`: criada a rota `GET /api/app-version` (metadados de versão) e `GET /app.apk` (entrega direta do arquivo APK assinado).
+   - No `.github/workflows/build-android.yml`: configurado `./gradlew bundleRelease assembleRelease` para compilar o `.aab` (Google Play) e o `.apk` assinado simultaneamente, com upload como artifact e envio automático via SCP para `/home/ubuntu/play-infinity/uploads/releases/PlayInfinity-latest.apk` na VPS Oracle.
+4. **Banner Inteligente de Atualização Imediata (`AppUpdateBanner.tsx`):**
+   - No boot do app em `App.tsx`: chama `StatusBar.hideActionBar()` imediatamente.
+   - Detecta se o APK nativo instalado é inferior ao recomendado (ex: builds antigas com ActionBar bugada) e exibe banner com botão **"Atualizar Agora"**, permitindo instalar a versão nova direto de `play-infinity.stream/app.apk` em segundos.
+5. **Versionamento:**
+   - Incrementado para `versionCode 99` / `versionName "1.4.67"` em `android/app/build.gradle`.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+- Testes automatizados (`node --test tests/public-frontend.test.cjs`): **4/4 aprovados**.
+
+---
+
 ## 09/11/2026 — Download Separado: MP4 Direto no Site vs Offline Interno no App Android (v1.4.66 / Code 98)
 
 **Contexto e Solicitação do Usuário:**

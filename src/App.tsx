@@ -142,6 +142,7 @@ const VideoPlayerModal = lazyWithRetry(() => import("./components/VideoPlayerMod
 import { NavItem } from './components/NavItem';
 import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
 import { WhatsNewModal } from './components/WhatsNewModal';
+import { AppUpdateBanner } from './components/AppUpdateBanner';
 
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
 
@@ -252,6 +253,7 @@ export default function App() {
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform()) return;
+    StatusBar.hideActionBar?.().catch(() => {});
     const handleFullscreen = async () => {
       if (document.fullscreenElement) {
         await StatusBar.hide().catch(() => {});

@@ -36,6 +36,16 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(OpenNotificationSettingsPlugin.class);
         super.onCreate(savedInstanceState);
 
+        // Oculta programaticamente qualquer ActionBar nativa que possa ser inflada
+        try {
+            if (getSupportActionBar() != null) {
+                getSupportActionBar().hide();
+            }
+            if (getActionBar() != null) {
+                getActionBar().hide();
+            }
+        } catch (Exception ignored) {}
+
         // Ajusta insets no container de conteúdo para evitar sobreposição da UI
         // em modo normal, zerando insets durante PiP e reprodução em tela cheia
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(android.R.id.content), (view, windowInsets) -> {
@@ -45,7 +55,11 @@ public class MainActivity extends BridgeActivity {
                 androidx.core.graphics.Insets insets = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
                 );
-                view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+                int top = StatusBarPlugin.getCustomPaddingTop() != null ? StatusBarPlugin.getCustomPaddingTop() : insets.top;
+                int bottom = StatusBarPlugin.getCustomPaddingBottom() != null ? StatusBarPlugin.getCustomPaddingBottom() : insets.bottom;
+                int left = StatusBarPlugin.getCustomPaddingLeft() != null ? StatusBarPlugin.getCustomPaddingLeft() : insets.left;
+                int right = StatusBarPlugin.getCustomPaddingRight() != null ? StatusBarPlugin.getCustomPaddingRight() : insets.right;
+                view.setPadding(left, top, right, bottom);
             }
             return WindowInsetsCompat.CONSUMED;
         });
@@ -66,6 +80,18 @@ public class MainActivity extends BridgeActivity {
                 CookieManager cookieManager = CookieManager.getInstance();
                 cookieManager.setAcceptCookie(true);
                 cookieManager.setAcceptThirdPartyCookies(webView, true);
+
+                // Anti-Cache: assegura que o index.html da VPS seja sempre revalidado
+                android.webkit.WebSettings webSettings = webView.getSettings();
+                webSettings.setCacheMode(android.webkit.WebSettings.LOAD_DEFAULT);
+
+                // Anexa a assinatura da versão nativa ao User-Agent
+                try {
+                    String baseUa = webSettings.getUserAgentString();
+                    android.content.pm.PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+                    long vc = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ? pInfo.getLongVersionCode() : pInfo.versionCode;
+                    webSettings.setUserAgentString(baseUa + " PlayInfinityApp/" + pInfo.versionName + " (vc:" + vc + ")");
+                } catch (Exception ignored) {}
 
                 webView.setWebChromeClient(new WebChromeClient() {
                     @Override

@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Android APK & AAB
 
 on:
   workflow_dispatch: # Allows manual trigger from GitHub UI
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build APK
+    name: Build Android Packages (AAB + APK)
     runs-on: ubuntu-latest
 
     steps:
@@ -36,14 +36,36 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Build Release AAB
+      - name: Build Release AAB & APK
         working-directory: ./android
         run: |
           chmod +x ./gradlew
-          ./gradlew bundleRelease
+          ./gradlew bundleRelease assembleRelease
 
-      - name: Upload AAB
+      - name: Upload AAB (Google Play Store)
         uses: actions/upload-artifact@v4
         with:
           name: app-release-aab
           path: android/app/build/outputs/bundle/release/app-release.aab
+
+      - name: Upload APK (Instalação Direta)
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+      - name: 🚀 Publicar APK Direto na VPS Oracle
+        if: ${{ secrets.ORACLE_SSH_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          printf "%s\n" "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle_key
+          chmod 600 ~/.ssh/oracle_key
+          ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts || true
+          SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i "$HOME/.ssh/oracle_key")
+          HOST="${{ secrets.ORACLE_HOST || '147.15.57.146' }}"
+          USER="${{ secrets.ORACLE_USER || 'ubuntu' }}"
+
+          # Cria diretório de releases na VPS e copia o APK
+          ssh "${SSH_OPTS[@]}" "${USER}@${HOST}" "mkdir -p /home/ubuntu/play-infinity/uploads/releases"
+          scp "${SSH_OPTS[@]}" android/app/build/outputs/apk/release/app-release.apk "${USER}@${HOST}:/home/ubuntu/play-infinity/uploads/releases/PlayInfinity-latest.apk"
+          echo "APK publicado com sucesso na VPS Oracle em /home/ubuntu/play-infinity/uploads/releases/PlayInfinity-latest.apk"
