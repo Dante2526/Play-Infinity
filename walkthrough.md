@@ -1,3 +1,31 @@
+## 09/11/2026 — Restauração das Fontes do Premiere 2 HD e Nova Rota Saimo (v1.4.63 / Code 95)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do modal de fontes do Premiere 2 mostrando 2 fontes no provedor ("Fonte 1 · FHD com Referer" e "Fonte 2 · HD · 1280x720 com Referer") e perguntou: *"no canal premiere 2 cade esse segundo canal? o primeiro ta foa doa r"*.
+
+**Diagnóstico e Causa Raiz:**
+1. **Servidor 1 Fora do Ar:** A URL antiga hardcoded em `src/data/liveChannels.ts` apontava para `cdn13embed.xyz/premiere2/index.m3u8` com referer `embedcanaisdetv.xyz`. O domínio `cdn13embed.xyz` expirou/caiu (`ENOTFOUND`). A Saimo rotacionou seus canais no dia 07/11 para o novo domínio ativo `cdn8embed.xyz` com referer `https://playerembedcanais.site/`.
+2. **Servidor 2 Ausente:** O canal `premiere-2` estava com `lockServers: true` e continha apenas o `Servidor 1` (o Servidor 2 anterior de teste `error.txt` havia sido removido após gerar 404).
+3. **Allowlist de Streaming Desatualizada:** `cdn8embed.xyz` e `playerembedcanais.site` não constavam na allowlist de streaming (`src/data/streamingAllowlist.ts`).
+
+**Modificações Realizadas:**
+1. **Allowlist Atualizada (`src/data/streamingAllowlist.ts`):**
+   - Adicionados `cdn8embed.xyz` e `playerembedcanais.site` na allowlist oficial de streaming.
+2. **Configuração de Servidores no Premiere 2 (`src/data/liveChannels.ts`):**
+   - **Servidor 1 (Saimo HD):** Atualizado para a nova URL 100% online `https://d1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz/premiere2/index.m3u8` com referer `https://playerembedcanais.site/` e assinado determinísticamente com HMAC-SHA256.
+   - **Servidor 2 (Backup Multi-Fonte):** Adicionado `/api/external-channel?name=Premiere%202` como rota de contingência dinâmica.
+3. **Catálogo de Canais na VPS Oracle e Local (`data/external-channels.txt`):**
+   - Bloco de `Premiere 2` atualizado com a fonte nova `cdn8embed.xyz`. Sincronizado e recarregado via PM2 na VPS.
+4. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 95` / `versionName "1.4.63"`.
+
+**Validação Realizada:**
+- Teste de stream na VPS Oracle: HTTP 302 com redirecionamento para o proxy assinado e resposta com playlist `#EXTM3U` e segmentos `.ts` intactos.
+- `npx tsc --noEmit`: 0 erros.
+- 65 testes automatizados aprovados (100%).
+
+---
+
 ## 09/11/2026 — Correção de Espaçamento Superior no Hero de Detalhes (v1.4.62 / Code 94)
 
 **Contexto e Solicitação do Usuário:**

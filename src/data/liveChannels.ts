@@ -66,7 +66,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere2%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=5a7516bcea811f03361788226111cd858a3083078f25df8a1c707ab15a690d0b',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere2%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=b90df3d830710a61cf6391bf6d9b8d6c1b1231195dae9d81dc59bd1a2a0d7959',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%202',
         isProxy: false
       }
     ]
