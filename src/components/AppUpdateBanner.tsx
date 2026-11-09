@@ -12,10 +12,10 @@ interface AppVersionInfo {
   changelog?: string;
 }
 
-const EXTERNAL_APK_URL = "https://www.play-infinity.stream/app.apk";
+// URLs com hosts externos para forçar o Capacitor a abrir o navegador nativo (Chrome)
+const EXTERNAL_DOWNLOAD_URL = "https://tinyurl.com/2dcbdnor";
+const FALLBACK_DOWNLOAD_URL = "https://is.gd/Sj8LpJ";
 const DIRECT_APK_URL = "https://play-infinity.stream/app.apk";
-const ANDROID_INTENT_URL =
-  "intent://www.play-infinity.stream/app.apk#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
 
 export function AppUpdateBanner() {
   const [updateAvailable, setUpdateAvailable] = useState<AppVersionInfo | null>(null);
@@ -26,7 +26,6 @@ export function AppUpdateBanner() {
   });
 
   useEffect(() => {
-    // Apenas no App Android Nativo (Capacitor) ou em teste manual via ?test_update=1
     const isTestMode =
       typeof window !== "undefined" && window.location.search.includes("test_update=1");
     if (!Capacitor.isNativePlatform() && !isTestMode) return;
@@ -103,18 +102,15 @@ export function AppUpdateBanner() {
     }
   };
 
-  const openExternalDownload = (urlToOpen: string) => {
-    // 1. Tenta plugin nativo (se disponível)
+  const openExternal = (url: string) => {
     if (StatusBar.openExternalUrl) {
-      StatusBar.openExternalUrl({ url: urlToOpen }).catch(() => {});
+      StatusBar.openExternalUrl({ url }).catch(() => {});
     }
-    // 2. Tenta window.open com target _blank (Capacitor delega domínios com www para o navegador do sistema)
     try {
-      window.open(urlToOpen, "_blank");
+      window.open(url, "_blank");
     } catch {}
-    // 3. Fallback navegação direta
     try {
-      window.location.href = urlToOpen;
+      window.location.href = url;
     } catch {}
   };
 
@@ -140,13 +136,20 @@ export function AppUpdateBanner() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-3 py-1.5 rounded-full bg-white text-orange-700 hover:bg-neutral-100 font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer min-h-[36px]"
+          <a
+            href={EXTERNAL_DOWNLOAD_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => {
+              // Também abre no JS para garantir disparo imediato
+              openExternal(EXTERNAL_DOWNLOAD_URL);
+              setShowModal(true);
+            }}
+            className="px-3 py-1.5 rounded-full bg-white text-orange-700 hover:bg-neutral-100 font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer no-underline min-h-[36px]"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Atualizar</span>
-          </button>
+          </a>
           <button
             onClick={handleDismiss}
             className="p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-w-[32px] min-h-[32px] flex items-center justify-center"
@@ -157,7 +160,7 @@ export function AppUpdateBanner() {
         </div>
       </div>
 
-      {/* MODAL DE ATUALIZAÇÃO E DOWNLOAD INFALÍVEL */}
+      {/* MODAL DE ATUALIZAÇÃO */}
       {showModal && (
         <div className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] relative flex flex-col gap-4 text-white">
@@ -174,7 +177,7 @@ export function AppUpdateBanner() {
               </div>
               <div className="min-w-0">
                 <h3 className="font-bold text-base sm:text-lg text-white tracking-tight">
-                  Atualização do Play Infinity
+                  Baixar Nova Versão
                 </h3>
                 <p className="text-xs text-orange-400 font-semibold">
                   Versão {updateAvailable.latestVersionName} (Build {updateAvailable.latestVersionCode})
@@ -182,66 +185,59 @@ export function AppUpdateBanner() {
               </div>
             </div>
 
-            {/* FEEDBACK DE LINK COPIADO */}
-            {copied ? (
-              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 p-4 rounded-xl text-center space-y-1.5 animate-in zoom-in-95 duration-200">
-                <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-emerald-200">
-                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
-                  <span>Link Copiado com Sucesso!</span>
-                </div>
-                <p className="text-xs text-emerald-100/90 leading-relaxed">
-                  Agora saia do app, abra o <strong>Google Chrome</strong> (ou seu navegador) no celular e <strong>cole na barra de pesquisa</strong> para iniciar o download do instalador na hora.
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={handleCopyLink}
-                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-black text-sm text-center flex items-center justify-center gap-2 shadow-xl active:scale-98 transition-all cursor-pointer min-h-[48px]"
-              >
-                <Copy className="w-4 h-4" />
-                <span>Copiar Link de Download (Recomendado)</span>
-              </button>
-            )}
+            <p className="text-xs text-neutral-300 leading-relaxed">
+              Toque no botão abaixo para abrir o download diretamente no seu navegador (Google Chrome).
+            </p>
 
-            {/* OPÇÕES ADICIONAIS DE ABERTURA DIRETA */}
-            <div className="space-y-2 pt-1 border-t border-white/5">
-              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
-                Ou tente abrir diretamente no navegador:
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <button
-                  onClick={() => openExternalDownload(EXTERNAL_APK_URL)}
-                  className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs text-center flex items-center justify-center gap-1.5 border border-white/10 transition-colors cursor-pointer min-h-[42px]"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
-                  <span>Abrir pelo Navegador</span>
-                </button>
-                <button
-                  onClick={() => openExternalDownload(ANDROID_INTENT_URL)}
-                  className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 font-semibold text-xs text-center flex items-center justify-center gap-1.5 border border-white/5 transition-colors cursor-pointer min-h-[42px]"
-                >
-                  <Download className="w-3.5 h-3.5 text-amber-400" />
-                  <span>Intent do Android</span>
-                </button>
-              </div>
+            <div className="flex flex-col gap-2.5">
+              {/* BOTÃO PRINCIPAL: ABRE O NAVEGADOR VIA HOST EXTERNO */}
+              <a
+                href={EXTERNAL_DOWNLOAD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => openExternal(EXTERNAL_DOWNLOAD_URL)}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-black text-sm text-center flex items-center justify-center gap-2 shadow-xl active:scale-98 transition-all cursor-pointer no-underline min-h-[48px]"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Abrir Navegador e Baixar (.APK)</span>
+              </a>
+
+              {/* BOTÃO ALTERNATIVO */}
+              <a
+                href={FALLBACK_DOWNLOAD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => openExternal(FALLBACK_DOWNLOAD_URL)}
+                className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-neutral-200 hover:text-white font-bold text-xs text-center flex items-center justify-center gap-1.5 border border-white/10 transition-colors cursor-pointer no-underline min-h-[42px]"
+              >
+                <Download className="w-3.5 h-3.5 text-amber-400" />
+                <span>Link Alternativo de Download</span>
+              </a>
             </div>
 
-            {/* LINK VISÍVEL COM SELEÇÃO FÁCIL */}
-            <div className="bg-black/50 border border-white/5 rounded-xl p-2.5 flex items-center justify-between text-xs font-mono text-neutral-300 select-all gap-2">
-              <span className="truncate select-all text-neutral-300">{DIRECT_APK_URL}</span>
-              <button
-                onClick={handleCopyLink}
-                className="text-orange-400 hover:text-orange-300 font-sans font-bold text-xs shrink-0 px-2 py-1 bg-white/5 rounded-lg active:scale-95 transition-all"
-              >
-                {copied ? "Copiado!" : "Copiar"}
-              </button>
+            {/* FEEDBACK DE COPIAR CASO DESEJE */}
+            <div className="pt-2 border-t border-white/5 space-y-2">
+              {copied ? (
+                <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 p-2.5 rounded-xl text-center text-xs flex items-center justify-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>Link copiado! Cole no Chrome se preferir.</span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleCopyLink}
+                  className="w-full py-2 px-3 rounded-lg bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-neutral-200 font-medium text-[11px] flex items-center justify-center gap-1.5 border border-white/5 transition-colors cursor-pointer"
+                >
+                  <Copy className="w-3 h-3" />
+                  <span>Ou copie o link direto: play-infinity.stream/app.apk</span>
+                </button>
+              )}
             </div>
 
             <button
               onClick={() => setShowModal(false)}
-              className="text-center text-xs text-neutral-500 hover:text-neutral-400 pt-1 transition-colors cursor-pointer"
+              className="text-center text-xs text-neutral-500 hover:text-neutral-400 transition-colors cursor-pointer"
             >
-              Fechar esta janela
+              Fechar
             </button>
           </div>
         </div>
