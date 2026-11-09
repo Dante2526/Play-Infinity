@@ -174,12 +174,19 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
           window.__piMseNative = true;
           var pos = v.currentTime || initialSeek || 0;
           v.src = streamUrl;
-          if (pos > 1) {
-            v.addEventListener('loadedmetadata', function once() {
-              v.removeEventListener('loadedmetadata', once);
+          var startPlayback = function () {
+            if (pos > 1) {
               try { v.currentTime = pos; } catch (e) {}
-              v.play().catch(function () { v.muted = true; v.play().catch(function () {}); });
+            }
+            v.play().catch(function () {
+              v.muted = true;
+              v.play().catch(function () {});
             });
+          };
+          v.addEventListener('loadedmetadata', startPlayback, { once: true });
+          v.addEventListener('canplay', startPlayback, { once: true });
+          if (v.readyState >= 2) {
+            startPlayback();
           }
         };
         try {

@@ -257,16 +257,27 @@ const router = Router();
                 }
                 if (window.__piMseNative) return; // já está no nativo (recovery pode ter recarregado)
                 window.__piMseNative = true;
-                var el = window.artInstance && window.artInstance.video;
+                var el = (window.artInstance && window.artInstance.video) || document.querySelector('video');
                 var pos = (el && el.currentTime) || 0;
                 if (el) {
                   el.src = videoUrl;
-                  if (pos > 1) {
-                    el.addEventListener('loadedmetadata', function once() {
-                      el.removeEventListener('loadedmetadata', once);
+                  var startPlayback = function () {
+                    if (pos > 1) {
                       try { el.currentTime = pos; } catch (e) {}
-                      el.play().catch(function () {});
-                    });
+                    }
+                    var p = el.play();
+                    if (p && p.catch) {
+                      p.catch(function () {
+                        if (window.artInstance && window.artInstance.play) {
+                          window.artInstance.play().catch(function () {});
+                        }
+                      });
+                    }
+                  };
+                  el.addEventListener('loadedmetadata', startPlayback, { once: true });
+                  el.addEventListener('canplay', startPlayback, { once: true });
+                  if (el.readyState >= 2) {
+                    startPlayback();
                   }
                 }
               };

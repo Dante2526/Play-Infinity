@@ -1036,24 +1036,34 @@
     }
 
     function bufferedAhead() {
-      if (!sb || !sb.buffered.length) return 0;
-      const t = video.currentTime;
-      for (let i = 0; i < sb.buffered.length; i++) {
-        if (t >= sb.buffered.start(i) - 0.1 && t <= sb.buffered.end(i) + 0.1) {
-          return Math.max(0, sb.buffered.end(i) - t);
+      if (!sb) return 0;
+      try {
+        if (!sb.buffered || !sb.buffered.length) return 0;
+        const t = video.currentTime;
+        for (let i = 0; i < sb.buffered.length; i++) {
+          if (t >= sb.buffered.start(i) - 0.1 && t <= sb.buffered.end(i) + 0.1) {
+            return Math.max(0, sb.buffered.end(i) - t);
+          }
         }
+        return Math.max(0, sb.buffered.end(sb.buffered.length - 1) - t);
+      } catch (e) {
+        return 0;
       }
-      return Math.max(0, sb.buffered.end(sb.buffered.length - 1) - t);
     }
 
     function inBuffered(t) {
-      if (!sb || !sb.buffered.length) return false;
-      // margem de 250ms: o primeiro PTS do buffer pode estar à frente do alvo
-      // (priming do elst) — o MSE clampa o seek pro próximo keyframe de todo jeito.
-      for (let i = 0; i < sb.buffered.length; i++) {
-        if (t >= sb.buffered.start(i) - 0.25 && t <= sb.buffered.end(i) + 0.25) return true;
+      if (!sb) return false;
+      try {
+        if (!sb.buffered || !sb.buffered.length) return false;
+        // margem de 250ms: o primeiro PTS do buffer pode estar à frente do alvo
+        // (priming do elst) — o MSE clampa o seek pro próximo keyframe de todo jeito.
+        for (let i = 0; i < sb.buffered.length; i++) {
+          if (t >= sb.buffered.start(i) - 0.25 && t <= sb.buffered.end(i) + 0.25) return true;
+        }
+        return false;
+      } catch (e) {
+        return false;
       }
-      return false;
     }
 
     function tick() {
@@ -1100,10 +1110,15 @@
     }
 
     function rangesStr() {
-      if (!sb || !sb.buffered.length) return '';
-      const parts = [];
-      for (let i = 0; i < sb.buffered.length; i++) parts.push(sb.buffered.start(i).toFixed(2) + '-' + sb.buffered.end(i).toFixed(2));
-      return parts.join(',');
+      if (!sb) return '';
+      try {
+        if (!sb.buffered || !sb.buffered.length) return '';
+        const parts = [];
+        for (let i = 0; i < sb.buffered.length; i++) parts.push(sb.buffered.start(i).toFixed(2) + '-' + sb.buffered.end(i).toFixed(2));
+        return parts.join(',');
+      } catch (e) {
+        return '';
+      }
     }
 
     function onSeeking() {
@@ -1189,19 +1204,23 @@
     function evictAndWatchdog() {
       if (engine.destroyed || !sb) return;
       const now = Date.now();
-      if (now - lastEvict > 5000 && sb.buffered.length && !sb.updating) {
-        const start = sb.buffered.start(0);
-        if (video.currentTime - start > opts.keepBehind) {
-          try {
-            sb.remove(start, Math.max(start, video.currentTime - opts.keepBehind + 10));
-            lastEvict = now;
-          } catch (e) {}
+      try {
+        if (now - lastEvict > 5000 && sb && sb.buffered && sb.buffered.length && !sb.updating) {
+          const start = sb.buffered.start(0);
+          if (video.currentTime - start > opts.keepBehind) {
+            try {
+              sb.remove(start, Math.max(start, video.currentTime - opts.keepBehind + 10));
+              lastEvict = now;
+            } catch (e) {}
+          }
         }
-      }
+      } catch (e) {}
       const cur = video.currentTime || 0;
       // progresso de playback zera o circuit breaker de resets
       if (Math.abs(cur - lastLoopMarkTime) > 0.5) { resetLoopCount = 0; lastLoopMarkTime = cur; }
-      if (!video.paused && !video.seeking && sb.buffered.length) {
+      let hasBuffer = false;
+      try { hasBuffer = !!(sb && sb.buffered && sb.buffered.length); } catch (e) {}
+      if (!video.paused && !video.seeking && hasBuffer) {
         if (Math.abs(cur - lastCurrentTime) < 0.01 && bufferedAhead() < 0.3 && !fetchingWindow && !sb.updating && !appendQueue.length) {
           if (!stallSince) stallSince = now;
           else if (now - stallSince > opts.stallTimeoutMs) {
@@ -1223,9 +1242,23 @@
       if (seekDebounce) clearTimeout(seekDebounce);
       if (fetchController) { try { fetchController.abort(); } catch (e) {} }
       off();
-      try { if (sb) sb.abort(); } catch (e) {}
-      try { if (ms && ms.readyState === 'open') ms.close(); } catch (e) {}
+      try {
+        if (sb) {
+          sb.removeEventListener('updateend', onSbUpdateEnd);
+          sb.abort();
+        }
+      } catch (e) {}
+      try {
+        if (ms) {
+          ms.removeEventListener('sourceopen', onSourceOpen);
+          if (ms.readyState === 'open') ms.close();
+        }
+      } catch (e) {}
       if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch (e) {} }
+      sb = null;
+      ms = null;
+      objectUrl = null;
+      appendQueue.length = 0;
     }
 
     // ---------- boot ----------
