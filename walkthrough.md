@@ -1,3 +1,29 @@
+## 09/11/2026 — Expurgo de Feeds Eventuais Apple TV e Canais Sem Sinal (v1.4.65 / Code 97)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do painel admin com os cards de `Apple TV 03`, `Apple TV 04`, `Apple TV 05` exibindo status `Servidor 1: OFF` e questionou: *"e esses aqui? vc disse pramin que tinha testado todos"*.
+
+**Diagnóstico e Causa Raiz:**
+1. **Feeds Eventuais Vazios (Apple TV 01 a 06):** No provedor upstream, os canais Apple TV 01 a 06 são feeds de transmissão eventual (utilizados apenas durante jogos ao vivo da MLS/torneios). Quando **não há jogo sendo transmitido**, o provedor envia playlists com `#EXT-X-TARGETDURATION:0` e segmentos `.ts` com `0 bytes` de tamanho (sem vídeo). O sentinela profundo do painel admin realiza inspeção dos bytes do segmento e, ao constatar a ausência de fluxo de vídeo, acusa corretamente `OFF`.
+2. **Canais com Falha de Origem / Conexão Recusada:** Identificados 10 canais no catálogo externo cujos hosts upstream retornavam erro ou recusa de conexão (RIT com erro de certificado SSL, Canal Agro e Rede TV! com `ECONNREFUSED`, Cultura Fast e Geekdot com `404`, Runtime e Record News duplicada com `400`).
+
+**Modificações Realizadas:**
+1. **Expurgo dos 16 Canais Sem Transmissão do Catálogo (`data/external-channels.txt`):**
+   - Removidos os 6 canais de feed eventual da Apple TV (`Apple TV 01` a `06`) que ficam sem sinal na ausência de partidas ao vivo.
+   - Removidos os 10 canais inoperantes ou duplicados (`Band`, `Record News`, `RIT`, `Canal Agro`, `Cultura Fast`, `Rede TV!`, `Runtime`, `24H Naruto Clássico`, `Geekdot`, `MTV`).
+   - Mantidos **174 canais 100% no ar e com transmissão 24h contínua**.
+2. **Sincronização na VPS Oracle:**
+   - Catálogo `external-channels.txt` atualizado e recarregado via PM2 na VPS (`pm2 reload all`).
+3. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 97` / `versionName "1.4.65"`.
+
+**Validação Realizada:**
+- Teste com probe profundo em lote em 190 canais: confirmou 174 ativos com fluxo contínuo e isolou com precisão os 6 feeds de evento e 10 canais fora do ar.
+- `npx tsc --noEmit`: 0 erros.
+- 65 testes automatizados aprovados (100%).
+
+---
+
 ## 09/11/2026 — Auditoria e Saneamento Geral dos 199 Canais (v1.4.64 / Code 96)
 
 **Contexto e Solicitação do Usuário:**
