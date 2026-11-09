@@ -44,12 +44,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiereclubes%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=29097558a041595382b50d7863f618fa91cd9fc953af0e3800a4856176463d4d',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiereclubes%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=a2ff6820c87b2c7355865ee542d8b5d3d9a6196772ed3ab918fc075a69de766b',
         isProxy: false
       },
       {
         name: 'Servidor 2',
-        url: '/api/saimo-source?channel=premiere-1&source=2',
+        url: '/api/external-channel?name=Premiere%20Clubes',
         isProxy: false
       }
     ]
@@ -88,7 +88,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere3%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=eee4df7e7c09746806f882ccd5112601fcbfd8868dfe7a480ccac06e1170f1a1',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere3%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=6ff3e5aac3bc8d114ed0275ec186a678158efb91e8659b0236b44d58c536f3b7',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%203',
         isProxy: false
       }
     ]
@@ -105,7 +110,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere4%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=27e409e5b90918d98f204e5aca24592efd363cab981b145fd1903d6a72b9abd7',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere4%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=569ec27bff533b9c1428bd6f63a8e91868f24884ce2148665aa1abedefe4c9ee',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%204',
         isProxy: false
       }
     ]
@@ -122,7 +132,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere5%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=bfe4c0204b51232d2a036c506adbd0819d8dfd69c4b901c04cba8242ae282a33',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere5%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=4331a33288020afe802df8d3dff5f4cf583c027207f76cc02e14a744865305bb',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%205',
         isProxy: false
       }
     ]
@@ -139,7 +154,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere6%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=71e6cf1a8ca3a7f6c4f5c0817f1a2b843d600eab5e9749eafed519c448176030',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere6%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=eae01b736d303982717498b3ae37166af07d689a70a211952460c696ebc86cf4',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%206',
         isProxy: false
       }
     ]
@@ -156,7 +176,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fpremiere7%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=633511e2924dfc48845c85d52452939c4b8fbb6ce945055288e6a3062dcb68d9',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fpremiere7%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=f998aaf2cce0d96aaae0306b298524af4f98a5b2cf982ac03fa4ff9033e2972e',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Premiere%207',
         isProxy: false
       }
     ]
@@ -190,12 +215,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn10embed.xyz%2Fsportv2%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=03fa378345428f990a52b6e7cb600c9b453f1aa8eb0bdc79ce43fcc85b97176b',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fsportv2%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=23b4a0fb427c0542d3485905d485f7743beeae8b307001fe8aa35d44273cf560',
         isProxy: false
       },
       {
         name: 'Servidor 2',
-        url: '/api/saimo-source?channel=sportv-2&source=2',
+        url: '/api/external-channel?name=SporTV%202',
         isProxy: false
       }
     ]
@@ -253,7 +278,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth2210oq80soveui6lkbi2iza2zf.cdn13embed.xyz%2Fcazetv%2Findex.m3u8&referer=https%3A%2F%2Fembedcanaisdetv.xyz%2F&agente=Mozilla%2F5.0%20(Windows%20NT%2010.0%3B%20Win64%3B%20x64)%20AppleWebKit%2F537.36%20(KHTML%2C%20like%20Gecko)%20Chrome%2F126.0%20Safari%2F537.36&sig=c3d1aee563810717685f63558499a1a354aadb1169641d67ff348717e18b9beb',
+        url: '/api/live-stream-proxy?url=https%3A%2F%2Fd1-ywppjexvlyulasvmgzjdftfjikth0711oq80soveui6lkbi2iza2zf.cdn8embed.xyz%2Fcazetv%2Findex.m3u8&referer=https%3A%2F%2Fplayerembedcanais.site%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=85beeed250151fa27524fe88722bea0b8f7c16a483c9fccc87466c6638011ba7',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=CazeTV%201',
         isProxy: false
       }
     ]
