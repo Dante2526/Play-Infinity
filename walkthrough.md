@@ -1,3 +1,22 @@
+## 09/11/2026 — Remoção da Barra de Filtro de Canal de Aquisição no Painel Admin (v1.4.61 / Code 93)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura da barra de filtro `CANAL: [ Todos ] [ Saimon ] [ embedTV ] [ Outros ]` no topo da listagem de clientes do Painel Admin (`AdminPage.tsx`) e solicitou a sua remoção.
+
+**Modificações Realizadas:**
+1. **Remoção da Barra de Filtro de Aquisição (`src/pages/AdminPage.tsx`):**
+   - Removida a barra de botões `CANAL: Todos / Saimon / embedTV / Outros`.
+   - Limpos o estado `acquisitionSourceFilter`, o tipo `AcquisitionSourceFilterType` e o memo de contadores `acquisitionSourceCounts`.
+   - Simplificada a filtragem memoizada `filteredUsers` removendo a dependência de canal de aquisição.
+2. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado para `versionCode 93` / `versionName "1.4.61"`.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: 0 erros.
+- Suíte automatizada de testes executada com 100% de sucesso.
+
+---
+
 ## 07/11/2026 — Expurgo Total de Servidores OFF (Servidor 2 e 3 Mortos) no Catálogo Saimo e Estático (v1.4.60 / Code 92)
 
 **Contexto e Solicitação do Usuário:**

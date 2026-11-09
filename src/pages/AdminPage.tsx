@@ -148,9 +148,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [selectedNetworkRoot, setSelectedNetworkRoot] = useState<string>("all");
   type ExpirationFilterType = "all" | "active" | "expiring_soon" | "expired";
   const [expirationFilter, setExpirationFilter] = useState<ExpirationFilterType>("all");
-  // Filtro por canal de aquisição (saimon / embedtv / outros)
-  type AcquisitionSourceFilterType = "all" | "saimon" | "embedtv" | "outros";
-  const [acquisitionSourceFilter, setAcquisitionSourceFilter] = useState<AcquisitionSourceFilterType>("all");
 
   // Classifica o estado de vencimento de um cliente
   const getClientExpirationStatus = React.useCallback((client: ClientUser, now: number = Date.now()): "vitalicio" | "expired" | "expiring_soon" | "active" => {
@@ -206,19 +203,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
     };
   }, [usersList, getClientExpirationStatus]);
 
-  // Contadores para os filtros por canal de aquisição (Saimon / embedTV / Outros)
-  const acquisitionSourceCounts = React.useMemo(() => {
-    let saimon = 0;
-    let embedtv = 0;
-    let outros = 0;
-    usersList.forEach(u => {
-      if (u.acquisitionSource === "saimon") saimon++;
-      else if (u.acquisitionSource === "embedtv") embedtv++;
-      else outros++;
-    });
-    return { all: usersList.length, saimon, embedtv, outros };
-  }, [usersList]);
-
   // Lista de clientes filtrada de forma memoizada e consistente
   const filteredUsers = React.useMemo(() => {
     const q = searchTerm.toLowerCase();
@@ -254,18 +238,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
         }
       }
 
-      if (acquisitionSourceFilter !== "all") {
-        if (acquisitionSourceFilter === "outros") {
-          // "Outros" = sem canal definido (null/undefined) — não é saimon nem embedtv.
-          if (u.acquisitionSource === "saimon" || u.acquisitionSource === "embedtv") return false;
-        } else {
-          if (u.acquisitionSource !== acquisitionSourceFilter) return false;
-        }
-      }
-
       return true;
     });
-  }, [usersList, searchTerm, selectedNetworkRoot, expirationFilter, acquisitionSourceFilter, getClientExpirationStatus]);
+  }, [usersList, searchTerm, selectedNetworkRoot, expirationFilter, getClientExpirationStatus]);
 
   // Mapeia o tamanho das redes de amigos e ancestrais
   const referralCounts = React.useMemo(() => {
@@ -1502,82 +1477,6 @@ export function AdminPage({ onBack }: AdminPageProps) {
                 expirationFilter === "expired" ? "bg-black/25 text-white" : "bg-red-500/20 text-red-300"
               }`}>
                 {expirationFilterCounts.expired}
-              </span>
-            </button>
-          </div>
-
-          {/* Filtros por Canal de Aquisição: Todos / Saimon / embedTV / Outros */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 mb-6 scrollbar-none max-w-full">
-            <span className="text-[10px] uppercase tracking-wider text-white/40 font-bold shrink-0 pr-1 hidden sm:inline">Canal:</span>
-            <button
-              type="button"
-              onClick={() => setAcquisitionSourceFilter("all")}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
-                acquisitionSourceFilter === "all"
-                  ? "bg-white text-black shadow-lg shadow-white/10"
-                  : "bg-white/5 hover:bg-white/10 text-white/70 border border-white/5"
-              }`}
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>Todos</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                acquisitionSourceFilter === "all" ? "bg-black/15 text-black" : "bg-white/10 text-white/80"
-              }`}>
-                {acquisitionSourceCounts.all}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAcquisitionSourceFilter("saimon")}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
-                acquisitionSourceFilter === "saimon"
-                  ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30"
-                  : "bg-orange-500/10 hover:bg-orange-500/20 text-orange-300 border border-orange-500/20"
-              }`}
-              title="Seguidores trazidos pelo streamer Saimon"
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Saimon</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                acquisitionSourceFilter === "saimon" ? "bg-black/25 text-white" : "bg-orange-500/20 text-orange-200"
-              }`}>
-                {acquisitionSourceCounts.saimon}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAcquisitionSourceFilter("embedtv")}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
-                acquisitionSourceFilter === "embedtv"
-                  ? "bg-blue-500 text-white shadow-lg shadow-blue-500/30"
-                  : "bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20"
-              }`}
-              title="Seguidores trazidos pelo site embedtv.cc"
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>embedTV</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                acquisitionSourceFilter === "embedtv" ? "bg-black/25 text-white" : "bg-blue-500/20 text-blue-200"
-              }`}>
-                {acquisitionSourceCounts.embedtv}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAcquisitionSourceFilter("outros")}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 cursor-pointer ${
-                acquisitionSourceFilter === "outros"
-                  ? "bg-zinc-500 text-white shadow-lg shadow-zinc-500/30"
-                  : "bg-white/5 hover:bg-white/10 text-white/60 border border-white/10"
-              }`}
-              title="Clientes sem canal de aquisição definido (cadastro direto, indicação manual, etc.)"
-            >
-              <AlertCircle className="w-3.5 h-3.5" />
-              <span>Outros</span>
-              <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-black ${
-                acquisitionSourceFilter === "outros" ? "bg-black/25 text-white" : "bg-white/10 text-white/70"
-              }`}>
-                {acquisitionSourceCounts.outros}
               </span>
             </button>
           </div>
