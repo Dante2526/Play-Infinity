@@ -1,3 +1,35 @@
+## 09/11/2026 — Download Separado: MP4 Direto no Site vs Offline Interno no App Android (v1.4.66 / Code 98)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou uma diferenciação clara no sistema de download:
+*"No site, pode deixar a pessoa baixar o arquivo mesmo. O arquivo vem para ela. O arquivo creio que seja MP4, né? Aí ela pode assistir onde ela quiser, fora do site, porque o arquivo vai baixar mesmo no celular ou no dispositivo dela. Agora, no aplicativo instalado no Android, o capacitor, aí sim, vamos tentar deixar dentro do aplicativo para a pessoa só conseguir assistir por lá, tá?"*
+
+**Modificações Realizadas:**
+1. **Diferenciação por Plataforma em `src/services/downloadService.ts`:**
+   - Detecta a plataforma via `Capacitor.isNativePlatform()`.
+   - **No Site / Navegador Web (`!Capacitor.isNativePlatform()`):**
+     - O download é disparado como um arquivo real `.mp4` direto para a pasta de Downloads do dispositivo do usuário (via âncora nativa `<a download>` apontando para o endpoint `/api/download` com cabeçalhos `Content-Disposition: attachment` e `Content-Type: video/mp4`).
+     - Não realiza buffer do stream em chunks no IndexedDB da aba web, eliminando travamentos de memória.
+     - Registra o download no histórico (`recordDownload`) com feedback visual imediato na barra acelerada de progresso (`startActiveDownloadProgress`).
+   - **No App Android Capacitor (`Capacitor.isNativePlatform()`):**
+     - Mantém o download privado e 100% interno no aplicativo (`Directory.Data` via `@capacitor/filesystem`).
+     - Acompanhamento em tempo real de bytes, taxa em MB/s e ETA, permitindo assistir offline exclusivamente pela aba **Meus Downloads** do app.
+
+2. **Interface Adaptada em `src/pages/DownloadsPage.tsx`:**
+   - Detecta `isNativeApp = Capacitor.isNativePlatform()`.
+   - **No Site:** Exibe o badge **"MP4 no Dispositivo"** e o botão **"Baixar MP4"** (para baixar novamente o arquivo se desejar), além do botão **"Reproduzir"** para streaming web.
+   - **No App Android:** Exibe o badge **"Offline no App"** / **"Preparando offline..."** e o botão **"Baixar no App"**.
+   - Cabeçalho explicativo adaptado dinamicamente para cada ambiente.
+
+3. **Versionamento Android (`android/app/build.gradle`):**
+   - Incrementado `versionCode` para **98** e `versionName` para **"1.4.66"**.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+- Validação dos fluxos isolados no Web e Android nativo.
+
+---
+
 ## 09/11/2026 — Expurgo de Feeds Eventuais Apple TV e Canais Sem Sinal (v1.4.65 / Code 97)
 
 **Contexto e Solicitação do Usuário:**

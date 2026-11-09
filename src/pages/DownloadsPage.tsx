@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { Capacitor } from "@capacitor/core";
 import {
   Download,
   Film,
@@ -30,6 +31,7 @@ import { OnPlayHandler } from "../types";
 import { BidirectionalProgressBar } from "../components/BidirectionalProgressBar";
 
 export function DownloadsPage({
+
   onItemClick,
   onPlay,
   onNavigate
@@ -38,6 +40,7 @@ export function DownloadsPage({
   onPlay?: OnPlayHandler;
   onNavigate?: (type: string) => void;
 }) {
+  const isNativeApp = Capacitor.isNativePlatform();
   const [typeFilter, setTypeFilter] = useState<"all" | "movie" | "series">("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [downloadHistory, setDownloadHistory] = useState<DownloadHistoryItem[]>(() => getDownloadHistory());
@@ -221,7 +224,7 @@ export function DownloadsPage({
               </h1>
             </div>
             <p className="text-neutral-400 text-sm md:text-base max-w-2xl">
-              Gerencie seus filmes e episódios baixados neste dispositivo com download acelerado em múltiplos núcleos.
+              {isNativeApp ? "Gerencie seus filmes e episódios salvos para assistir offline dentro do aplicativo." : "Gerencie seus filmes e episódios baixados no seu dispositivo ou reproduza diretamente pelo site."}
             </p>
           </div>
 
@@ -496,14 +499,14 @@ export function DownloadsPage({
                         onClick={() => handleRedownload(item)}
                         disabled={isCurrentlyDownloading}
                         className="px-4 py-2 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 hover:text-orange-300 border border-orange-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
-                        title="Baixar novamente dentro do app (offline)"
+                        title={isNativeApp ? "Baixar novamente dentro do app (offline)" : "Baixar novamente o arquivo .mp4 no seu aparelho"}
                       >
                         {isCurrentlyDownloading ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-400" />
                         ) : (
                           <Download className="w-3.5 h-3.5" />
                         )}
-                        <span>{isCurrentlyDownloading ? "Baixando..." : "Baixar no App"}</span>
+                        <span>{isCurrentlyDownloading ? "Baixando..." : (isNativeApp ? "Baixar no App" : "Baixar MP4")}</span>
                       </button>
 
                       {/* Remover do Histórico */}

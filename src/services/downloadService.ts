@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 import { getApiBaseUrl } from '../utils/apiBaseUrl';
 import { findMovieByTmdbId, findEpisode } from "./encontreiCatalog";
 import { safeLocalStorage } from "../utils/safeStorage";
@@ -298,9 +299,68 @@ export function triggerDirectDownload(
     quality?: string;
   }
 ) {
-  // Download somente dentro do app: nenhum <a download> é criado — o navegador
-  // não baixa mais nada pro dispositivo. Todo o conteúdo fica no storage
-  // offline da plataforma (IndexedDB / Capacitor Filesystem).
+  const isNative = Capacitor.isNativePlatform();
+  const resolvedFileName = fileName || (meta ? `${meta.title}.mp4` : "video.mp4");
+
+  if (!isNative) {
+    // 🌐 AMBIENTE WEB / NAVEGADOR: Download real do .mp4 para a máquina do usuário
+    if (meta) {
+      const id = meta.type === "movie"
+        ? `movie:${meta.tmdbId}`
+        : `tv:${meta.tmdbId}:${meta.season || 1}:${meta.episode || 1}`;
+
+      recordDownload({
+        id,
+        tmdbId: meta.tmdbId,
+        title: meta.title,
+        type: meta.type,
+        season: meta.season,
+        episode: meta.episode,
+        directDownloadUrl: url,
+        fileName: resolvedFileName,
+        posterUrl: meta.posterUrl,
+        backdropUrl: meta.backdropUrl,
+        quality: meta.quality,
+        hasOfflineBlob: true
+      });
+
+      startActiveDownloadProgress({
+        id,
+        tmdbId: meta.tmdbId,
+        title: meta.title,
+        type: meta.type,
+        season: meta.season,
+        episode: meta.episode,
+        fileName: resolvedFileName,
+        posterUrl: meta.posterUrl,
+        backdropUrl: meta.backdropUrl,
+        quality: meta.quality
+      });
+    }
+
+    try {
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = resolvedFileName;
+      a.rel = "noopener noreferrer";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          if (document.body.contains(a)) {
+            document.body.removeChild(a);
+          }
+        } catch {}
+      }, 1500);
+    } catch (linkErr) {
+      console.warn("[downloadService] Falha ao disparar download no navegador:", linkErr);
+      window.open(url, "_blank");
+    }
+    return;
+  }
+
+  // 📱 APP ANDROID NATIVO: Armazenamento privado em Directory.Data
 
   if (meta) {
     const id = meta.type === "movie"
