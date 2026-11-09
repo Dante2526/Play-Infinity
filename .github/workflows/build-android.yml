@@ -55,10 +55,15 @@ jobs:
           path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: 🚀 Publicar APK Direto na VPS Oracle
-        if: ${{ secrets.ORACLE_SSH_KEY != '' }}
+        env:
+          ORACLE_SSH_KEY_VAL: ${{ secrets.ORACLE_SSH_KEY }}
         run: |
+          if [ -z "$ORACLE_SSH_KEY_VAL" ]; then
+            echo "ORACLE_SSH_KEY não configurada; pulando upload direto para a VPS."
+            exit 0
+          fi
           mkdir -p ~/.ssh
-          printf "%s\n" "${{ secrets.ORACLE_SSH_KEY }}" > ~/.ssh/oracle_key
+          printf "%s\n" "$ORACLE_SSH_KEY_VAL" > ~/.ssh/oracle_key
           chmod 600 ~/.ssh/oracle_key
           ssh-keyscan -H ${{ secrets.ORACLE_HOST || '147.15.57.146' }} >> ~/.ssh/known_hosts || true
           SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15 -i "$HOME/.ssh/oracle_key")
