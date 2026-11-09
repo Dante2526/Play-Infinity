@@ -19,8 +19,9 @@ export function AppUpdateBanner() {
   });
 
   useEffect(() => {
-    // Apenas no App Android Nativo (Capacitor)
-    if (!Capacitor.isNativePlatform()) return;
+    // Apenas no App Android Nativo (Capacitor) ou em teste manual via ?test_update=1
+    const isTestMode = typeof window !== 'undefined' && window.location.search.includes('test_update=1');
+    if (!Capacitor.isNativePlatform() && !isTestMode) return;
 
     let isMounted = true;
 
@@ -86,7 +87,7 @@ export function AppUpdateBanner() {
   if (!updateAvailable || isDismissed) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 z-[120] bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 text-white px-4 py-2.5 shadow-2xl flex items-center justify-between gap-3 text-xs sm:text-sm animate-in slide-in-from-top-full duration-300">
+    <div className="fixed top-0 left-0 right-0 z-[120] bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 text-white px-4 py-2.5 pt-[calc(env(safe-area-inset-top,0px)+0.625rem)] shadow-2xl flex items-center justify-between gap-3 text-xs sm:text-sm animate-in slide-in-from-top-full duration-300">
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="w-7 h-7 rounded-lg bg-black/25 flex items-center justify-center shrink-0">
           <Sparkles className="w-4 h-4 text-amber-200 animate-pulse" />

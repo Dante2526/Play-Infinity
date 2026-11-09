@@ -754,6 +754,7 @@ export default function App() {
   if (!currentUser && viewState.type !== 'admin' && viewState.type !== 'privacy' && !isDevEnvironment) {
     return (
       <div className="bg-[#0a0a0a] min-h-screen relative overflow-hidden flex flex-col">
+        <AppUpdateBanner />
         {/* Background Cinematográfico Desfocado */}
         <div className="absolute inset-0 z-0">
           <img 
@@ -782,6 +783,7 @@ export default function App() {
 
   return (
     <div className="bg-[#0a0a0a] min-h-screen text-white font-sans flex flex-col lg:pb-0 w-full max-w-[100vw] overflow-x-hidden relative">
+      <AppUpdateBanner />
       {/* HEADER DESKTOP */}
       {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
         <header className="hidden lg:flex fixed top-4 lg:top-6 left-1/2 -translate-x-1/2 w-[95%] max-w-6xl items-center justify-between px-3 lg:px-6 py-2.5 lg:py-3 bg-[#0a0a0a]/60 backdrop-blur-2xl border border-white/10 rounded-full z-50 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.8)]">
