@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Capacitor } from "@capacitor/core";
-import { Download, X, Sparkles, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Download, X, Sparkles, ExternalLink, CheckCircle2, Copy } from "lucide-react";
 import { StatusBar } from "../utils/statusBar";
 import { safeSessionStorage } from "../utils/safeStorage";
 
@@ -12,12 +12,15 @@ interface AppVersionInfo {
   changelog?: string;
 }
 
-const ANDROID_INTENT_APK_URL =
-  "intent://play-infinity.stream/app.apk#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
+const EXTERNAL_APK_URL = "https://www.play-infinity.stream/app.apk";
+const DIRECT_APK_URL = "https://play-infinity.stream/app.apk";
+const ANDROID_INTENT_URL =
+  "intent://www.play-infinity.stream/app.apk#Intent;scheme=https;action=android.intent.action.VIEW;category=android.intent.category.BROWSABLE;end";
 
 export function AppUpdateBanner() {
   const [updateAvailable, setUpdateAvailable] = useState<AppVersionInfo | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [isDismissed, setIsDismissed] = useState(() => {
     return safeSessionStorage.getItem("playinfinity_dismiss_update_banner") === "true";
   });
@@ -32,12 +35,10 @@ export function AppUpdateBanner() {
 
     async function checkVersion() {
       try {
-        // Tenta ocultar ActionBar nativa no boot
         if (StatusBar.hideActionBar) {
           StatusBar.hideActionBar().catch(() => {});
         }
 
-        // Obtém informações da versão instalada no aparelho
         let installedVersionCode = 0;
         if (StatusBar.getInfo) {
           const info = await StatusBar.getInfo().catch(() => null);
@@ -46,12 +47,10 @@ export function AppUpdateBanner() {
           }
         }
 
-        // Busca metadados da versão mais recente da VPS
         const res = await fetch("/api/app-version", { cache: "no-store" });
         if (!res.ok) return;
         const data: AppVersionInfo = await res.json();
 
-        // Se o APK instalado for mais antigo que o mínimo recomendado ou que a última versão
         if (installedVersionCode < data.latestVersionCode || isTestMode) {
           if (isMounted) {
             setUpdateAvailable(data);
@@ -69,38 +68,53 @@ export function AppUpdateBanner() {
     };
   }, []);
 
-  const triggerDownload = (e?: React.MouseEvent) => {
-    if (!updateAvailable) return;
-    const apkUrl = updateAvailable.apkUrl || "https://play-infinity.stream/app.apk";
-
-    // Abre o modal de auxílio para o usuário ter feedback visual imediato
-    setShowModal(true);
-
-    // 1. Tenta plugin nativo (se suportado na versão instalada)
-    if (StatusBar.openExternalUrl) {
-      StatusBar.openExternalUrl({ url: apkUrl }).catch(() => {});
+  const handleCopyLink = () => {
+    const url = DIRECT_APK_URL;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(url)
+        .then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 8000);
+        })
+        .catch(() => fallbackCopy(url));
+      return;
     }
+    fallbackCopy(url);
+  };
 
-    // 2. Dispara Intent oficial do Android para o navegador padrão
+  const fallbackCopy = (text: string) => {
     try {
-      window.location.href = ANDROID_INTENT_APK_URL;
+      const el = document.createElement("input");
+      el.value = text;
+      el.style.position = "fixed";
+      el.style.top = "0";
+      el.style.left = "0";
+      el.style.opacity = "0";
+      document.body.appendChild(el);
+      el.focus();
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 8000);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  const openExternalDownload = (urlToOpen: string) => {
+    // 1. Tenta plugin nativo (se disponível)
+    if (StatusBar.openExternalUrl) {
+      StatusBar.openExternalUrl({ url: urlToOpen }).catch(() => {});
+    }
+    // 2. Tenta window.open com target _blank (Capacitor delega domínios com www para o navegador do sistema)
+    try {
+      window.open(urlToOpen, "_blank");
     } catch {}
-
-    // 3. Fallback Capacitor target _system
+    // 3. Fallback navegação direta
     try {
-      window.open(apkUrl, "_system");
-    } catch {}
-
-    // 4. Fallback anchor dinâmico
-    try {
-      const a = document.createElement("a");
-      a.href = apkUrl;
-      a.target = "_system";
-      a.download = "PlayInfinity.apk";
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      window.location.href = urlToOpen;
     } catch {}
   };
 
@@ -126,16 +140,13 @@ export function AppUpdateBanner() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <a
-            href={ANDROID_INTENT_APK_URL}
-            target="_system"
-            rel="noopener noreferrer"
-            onClick={triggerDownload}
-            className="px-3 py-1.5 rounded-full bg-white text-orange-700 hover:bg-neutral-100 font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer no-underline min-h-[36px]"
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-3 py-1.5 rounded-full bg-white text-orange-700 hover:bg-neutral-100 font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer min-h-[36px]"
           >
             <Download className="w-3.5 h-3.5" />
             <span>Atualizar</span>
-          </a>
+          </button>
           <button
             onClick={handleDismiss}
             className="p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer min-w-[32px] min-h-[32px] flex items-center justify-center"
@@ -146,13 +157,13 @@ export function AppUpdateBanner() {
         </div>
       </div>
 
-      {/* MODAL DE CONFIRMAÇÃO & AJUDA DE DOWNLOAD */}
+      {/* MODAL DE ATUALIZAÇÃO E DOWNLOAD INFALÍVEL */}
       {showModal && (
         <div className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-[#141414] border border-white/10 rounded-2xl w-full max-w-md p-5 sm:p-6 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.9)] relative flex flex-col gap-4 text-white">
             <button
               onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 p-1 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-full text-neutral-400 hover:text-white hover:bg-white/10 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -163,7 +174,7 @@ export function AppUpdateBanner() {
               </div>
               <div className="min-w-0">
                 <h3 className="font-bold text-base sm:text-lg text-white tracking-tight">
-                  Atualização do Aplicativo
+                  Atualização do Play Infinity
                 </h3>
                 <p className="text-xs text-orange-400 font-semibold">
                   Versão {updateAvailable.latestVersionName} (Build {updateAvailable.latestVersionCode})
@@ -171,44 +182,59 @@ export function AppUpdateBanner() {
               </div>
             </div>
 
-            <div className="bg-neutral-900/80 border border-white/5 rounded-xl p-3.5 text-xs text-neutral-300 space-y-2">
-              <p className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>O download do arquivo <strong>PlayInfinity.apk</strong> foi enviado para o seu navegador.</span>
+            {/* FEEDBACK DE LINK COPIADO */}
+            {copied ? (
+              <div className="bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 p-4 rounded-xl text-center space-y-1.5 animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-center gap-1.5 font-bold text-sm text-emerald-200">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <span>Link Copiado com Sucesso!</span>
+                </div>
+                <p className="text-xs text-emerald-100/90 leading-relaxed">
+                  Agora saia do app, abra o <strong>Google Chrome</strong> (ou seu navegador) no celular e <strong>cole na barra de pesquisa</strong> para iniciar o download do instalador na hora.
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={handleCopyLink}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-black text-sm text-center flex items-center justify-center gap-2 shadow-xl active:scale-98 transition-all cursor-pointer min-h-[48px]"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Copiar Link de Download (Recomendado)</span>
+              </button>
+            )}
+
+            {/* OPÇÕES ADICIONAIS DE ABERTURA DIRETA */}
+            <div className="space-y-2 pt-1 border-t border-white/5">
+              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">
+                Ou tente abrir diretamente no navegador:
               </p>
-              <p className="flex items-start gap-2">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                <span>Ao terminar o download, puxe a barra de notificações do Android e toque no arquivo para instalar.</span>
-              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  onClick={() => openExternalDownload(EXTERNAL_APK_URL)}
+                  className="py-2.5 px-3 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs text-center flex items-center justify-center gap-1.5 border border-white/10 transition-colors cursor-pointer min-h-[42px]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-orange-400" />
+                  <span>Abrir pelo Navegador</span>
+                </button>
+                <button
+                  onClick={() => openExternalDownload(ANDROID_INTENT_URL)}
+                  className="py-2.5 px-3 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 font-semibold text-xs text-center flex items-center justify-center gap-1.5 border border-white/5 transition-colors cursor-pointer min-h-[42px]"
+                >
+                  <Download className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Intent do Android</span>
+                </button>
+              </div>
             </div>
 
-            <div className="flex flex-col gap-2 pt-1">
-              <a
-                href={ANDROID_INTENT_APK_URL}
-                target="_system"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  try { window.location.href = ANDROID_INTENT_APK_URL; } catch {}
-                }}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-500 hover:to-amber-500 text-white font-bold text-sm text-center flex items-center justify-center gap-2 shadow-lg active:scale-98 transition-all cursor-pointer no-underline"
+            {/* LINK VISÍVEL COM SELEÇÃO FÁCIL */}
+            <div className="bg-black/50 border border-white/5 rounded-xl p-2.5 flex items-center justify-between text-xs font-mono text-neutral-300 select-all gap-2">
+              <span className="truncate select-all text-neutral-300">{DIRECT_APK_URL}</span>
+              <button
+                onClick={handleCopyLink}
+                className="text-orange-400 hover:text-orange-300 font-sans font-bold text-xs shrink-0 px-2 py-1 bg-white/5 rounded-lg active:scale-95 transition-all"
               >
-                <ExternalLink className="w-4 h-4" />
-                <span>Abrir no Navegador (Chrome)</span>
-              </a>
-
-              <a
-                href={updateAvailable.apkUrl || "https://play-infinity.stream/app.apk"}
-                target="_system"
-                download="PlayInfinity.apk"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  try { window.open(updateAvailable.apkUrl || "https://play-infinity.stream/app.apk", "_system"); } catch {}
-                }}
-                className="w-full py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white font-medium text-xs text-center flex items-center justify-center gap-2 border border-white/5 transition-colors cursor-pointer no-underline"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Link Direto Alternativo</span>
-              </a>
+                {copied ? "Copiado!" : "Copiar"}
+              </button>
             </div>
 
             <button
