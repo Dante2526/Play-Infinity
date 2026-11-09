@@ -9833,3 +9833,23 @@ Limitações: (a) o fix é no player web — o app Android empacota o modal no A
 **Simulação com a skin Netflix REAL** (scripts/anidigital-sim + build via vite → scratch/, servido em /sim/anidigital): harness monta o componente NetflixPlayerSkin genuíno (stubando só Firebase/TMDB) sobre o iframe real. Resultados no browser headless contra o site REAL: vídeo tocando (Tank Chair EP5, 24,7min, buffer 50s+), PAUSE via botão da skin → tempo congelado 106.178s por 3s+, PLAY → retomada exata (+5s), SEEK 600s OK, 0 erros de console, rede confirma: 1 request no nosso proxy (manifesto), todos os segmentos direto na CDN. Screenshots em download/anidigital-sim/.
 
 **Testes**: tests/anidigital-resolver.test.cjs (16) — cadeia completa, slug probe, variante dub, dedupe em voo, cache/force, áudio, filme, fallback série, numeração absoluta, allowlist de CDN, rewrite sem proxy de segmento, protocolo WATCHPLAY completo (PAUSE/PLAY/SEEK/SET_VOLUME/SKIP_INTRO/WATCHPLAY_STATUS/ERROR). Suíte total: 637 testes, 620 pass, 0 fail, 17 skip (mesmos 17 do baseline — 604 pass sem as mudanças, +16 novos todos verdes, zero regressões).
+
+
+---
+
+## 2026-11-09 — Correção de Fallback Nativo do MixDrop/StreamTape e Blindagem de SourceBuffer contra InvalidStateError
+
+**Contexto**: O usuário reportou erro no episódio "Você" (S1E8) com o player exibindo "Conteúdo Indisponível". Logs registraram fatal:mse_sourcebuffer no MixDrop e Uncaught InvalidStateError: Failed to read the buffered property from SourceBuffer em mp4-mse-engine.js:1103, seguido por falhas 502 em StreamTape e BYSE.
+
+**Causa Raiz**:
+1. Em public/mp4-mse-engine.js, rangesStr(), bufferedAhead(), inBuffered() e evictAndWatchdog() acessavam sb.buffered sem guarda try/catch. Ao ocorrer erro no SourceBuffer ou desmontagem do MediaSource pelo browser, sb.buffered lançava InvalidStateError, travando a thread JS do player.
+2. Em server/routes/mixdrop.ts e server/routes/streamtapeRoutes.ts, o fallback nativo (mseNative) só registrava o listener de el.play() quando pos > 1. Para novos episódios iniciando no segundo zero (pos <= 1), o vídeo nunca iniciava a reprodução e permanecia pausado até o watchdog de 7.5s acionar fallback para servidores secundários indisponíveis.
+
+**Correções**:
+- public/mp4-mse-engine.js: Todo acesso a sb.buffered foi blindado com try/catch com retorno defensivo; remoção limpa de listeners e anulação de referências (sb = null; ms = null) no destroy().
+- server/routes/mixdrop.ts e server/routes/streamtapeRoutes.ts: mseNative agora sempre aciona startPlayback() incondicionalmente para qualquer posição (restaurando pos > 1 se aplicável), ouvindo loadedmetadata e canplay com { once: true }, chamando el.play() e artInstance.play(), ou reproduzindo imediatamente se readyState >= 2.
+
+**Validação**:
+- npx tsc --noEmit: 0 erros.
+- node --test tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs: 40/40 passaram.
+- node --test tests/blacklist-allowlist-guard.test.cjs: 5/5 passaram.
