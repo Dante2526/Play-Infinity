@@ -680,33 +680,33 @@ export function DetailsPage({
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen bg-[#0a0a0a] animate-in fade-in duration-500">
       
       {/* Hero Cover Cinematográfico */}
-      <div className="relative w-full h-[70vh] md:h-[80vh] 2xl:h-[85vh] group overflow-hidden">
+      <div className="relative w-full min-h-[82vh] md:min-h-[88vh] lg:min-h-[92vh] flex flex-col justify-end group overflow-hidden">
         <img 
           src={displayBackdrop} 
           alt={item.title} 
           decoding="async"
-          className="w-full h-full object-cover object-center scale-105 transition-transform duration-1000" 
+          className="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-1000" 
           onError={(e) => {
             e.currentTarget.onerror = null;
             e.currentTarget.src = FALLBACK_BACKDROP;
           }}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent"></div>
-        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-transparent pointer-events-none"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a] via-[#0a0a0a]/50 to-transparent pointer-events-none"></div>
         
         {/* Back Button */}
         <button 
           onClick={onBack}
-          className="absolute top-20 left-4 md:top-24 md:left-12 z-40 flex items-center gap-2 text-xs md:text-sm font-bold text-white px-4 py-2.5 rounded-full bg-black/70 hover:bg-orange-600 border border-white/15 hover:border-orange-500 shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer group"
+          className="absolute top-20 left-4 sm:top-24 sm:left-6 lg:top-28 lg:left-12 z-40 flex items-center gap-2 text-xs md:text-sm font-bold text-white px-4 py-2.5 rounded-full bg-black/70 hover:bg-orange-600 border border-white/15 hover:border-orange-500 shadow-2xl backdrop-blur-md transition-all duration-300 hover:scale-105 active:scale-95 cursor-pointer group"
           title="Voltar para a página anterior"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>Voltar</span>
         </button>
 
-        {/* Informações do Filme/Série sobre o Hero */}
-        <div className="absolute inset-x-0 bottom-0 top-0 flex flex-col justify-end px-4 py-10 md:px-12 md:py-16 z-10 mx-auto max-w-7xl">
-          <div className="max-w-4xl">
+        {/* Informações do Filme/Série sobre o Hero (Com pt seguro para nunca sobrepor o menu superior fixo) */}
+        <div className="relative z-10 w-full flex flex-col justify-end flex-1 px-4 pt-28 sm:pt-32 md:pt-36 lg:pt-40 pb-10 md:px-12 md:pb-16 mx-auto max-w-7xl">
+          <div className="mt-auto max-w-4xl">
             {/* Tag TMDB / Tipo */}
             <div className="flex items-center gap-2.5 mb-4 flex-wrap">
               <span className="px-3 py-1 bg-orange-600/30 text-orange-400 border border-orange-500/40 rounded-full text-xs font-black tracking-wider uppercase">
