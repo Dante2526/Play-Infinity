@@ -490,6 +490,20 @@ export function DetailsPage({
     }
   }, [availableSeasons, selectedSeason]);
 
+  const seasonsScrollRef = React.useRef<HTMLDivElement>(null);
+  const currentSeasonButtonRef = React.useRef<HTMLButtonElement>(null);
+
+  // Auto-scroll suave para centralizar a temporada ativa na barra
+  React.useEffect(() => {
+    if (currentSeasonButtonRef.current && seasonsScrollRef.current) {
+      currentSeasonButtonRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center'
+      });
+    }
+  }, [selectedSeason]);
+
   const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = React.useState<EpisodeAvailabilityInfo | null>(null);
 
   // Buscar episódios reais da temporada selecionada no TMDB sempre que mudar série ou temporada
@@ -1023,32 +1037,73 @@ export function DetailsPage({
                     </span>
                   </button>
 
-                  {/* Seletor de Temporadas */}
-                  <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide bg-black/40 p-1 rounded-xl border border-white/5 max-w-full min-w-0">
-                    {availableSeasons.map(s => {
-                      const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
-                      const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, seasonEpCount);
-                      const isCurrent = selectedSeason === s;
-                      return (
-                        <button
-                          key={s}
-                          onClick={() => setSelectedSeason(s)}
-                          className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
-                            isCurrent
-                              ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold'
-                              : seasonDone
-                                ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
-                                : 'text-neutral-400 hover:text-white hover:bg-white/5'
-                          }`}
-                          title={seasonDone ? `Temporada ${s} (Assistida)` : `Temporada ${s}`}
-                        >
-                          <span>T{s}</span>
-                          {seasonDone && (
-                            <Check className={`w-3 h-3 ${isCurrent ? "text-white" : "text-emerald-400"} stroke-[3]`} />
-                          )}
-                        </button>
-                      );
-                    })}
+                  {/* Seletor de Temporadas com Scrollbar Bonita, Suporte a Roda do Mouse e Setas */}
+                  <div className="relative flex items-center min-w-0 max-w-full">
+                    {availableSeasons.length > 6 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (seasonsScrollRef.current) {
+                            seasonsScrollRef.current.scrollBy({ left: -140, behavior: 'smooth' });
+                          }
+                        }}
+                        className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/5 shrink-0 mr-1 cursor-pointer transition-all active:scale-90"
+                        title="Rolar temporadas para a esquerda"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    <div
+                      ref={seasonsScrollRef}
+                      onWheel={(e) => {
+                        if (e.deltaY !== 0) {
+                          e.currentTarget.scrollLeft += e.deltaY;
+                        }
+                      }}
+                      className="flex items-center gap-1.5 overflow-x-auto season-scrollbar bg-black/40 p-1 pb-1.5 rounded-xl border border-white/5 max-w-full min-w-0 scroll-smooth"
+                    >
+                      {availableSeasons.map(s => {
+                        const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
+                        const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, seasonEpCount);
+                        const isCurrent = selectedSeason === s;
+                        return (
+                          <button
+                            key={s}
+                            ref={isCurrent ? currentSeasonButtonRef : undefined}
+                            onClick={() => setSelectedSeason(s)}
+                            className={`relative px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 shrink-0 ${
+                              isCurrent
+                                ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white shadow-md shadow-orange-600/30 font-extrabold'
+                                : seasonDone
+                                  ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-900/50'
+                                  : 'text-neutral-400 hover:text-white hover:bg-white/5'
+                            }`}
+                            title={seasonDone ? `Temporada ${s} (Assistida)` : `Temporada ${s}`}
+                          >
+                            <span>T{s}</span>
+                            {seasonDone && (
+                              <Check className={`w-3 h-3 ${isCurrent ? "text-white" : "text-emerald-400"} stroke-[3]`} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {availableSeasons.length > 6 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (seasonsScrollRef.current) {
+                            seasonsScrollRef.current.scrollBy({ left: 140, behavior: 'smooth' });
+                          }
+                        }}
+                        className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/5 shrink-0 ml-1 cursor-pointer transition-all active:scale-90"
+                        title="Rolar temporadas para a direita"
+                      >
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

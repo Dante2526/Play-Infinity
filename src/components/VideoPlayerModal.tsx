@@ -3103,7 +3103,7 @@ export function VideoPlayerModal({
                 <span>Temporada:</span>
               </div>
 
-              <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hide max-w-full">
+              <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1 bg-black/40 p-1 pb-1.5 rounded-xl border border-white/5 overflow-x-auto season-scrollbar max-w-full scroll-smooth">
                 {availableSeasons.map((s) => {
                   const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
                   const seasonDone = isSeasonFullyWatched(resolvedId, s, sCount);
@@ -3184,7 +3184,7 @@ export function VideoPlayerModal({
                   <span className="hidden sm:inline">Anterior</span>
                 </button>
 
-                <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide py-1 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px]">
+                <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1.5 overflow-x-auto season-scrollbar py-1 pb-1.5 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px] scroll-smooth">
                   {episodeNumbers.map((ep) => {
                     const watched = isEpisodeWatched(resolvedId, season, ep);
                     const isCurrent = episode === ep;

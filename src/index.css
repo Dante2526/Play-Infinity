@@ -137,6 +137,40 @@ input[type="number"] {
   background: rgba(255, 255, 255, 0.45);
 }
 
+/* Scrollbar bonita, fina e moderna para carrossel de temporadas e episódios */
+.season-scrollbar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.season-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.season-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+.season-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(90deg, #ea580c, #f59e0b);
+  border-radius: 9999px;
+  box-shadow: 0 0 6px rgba(234, 88, 12, 0.35);
+  transition: all 0.2s ease;
+}
+
+.season-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(90deg, #f97316, #fbbf24);
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.6);
+}
+
+.season-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #ea580c rgba(255, 255, 255, 0.05);
+}
+
 /* Utilitário para ocultar scrollbars completamente */
 .scrollbar-hide::-webkit-scrollbar,
 .no-scrollbar::-webkit-scrollbar {

@@ -1,3 +1,27 @@
+## 10/11/2026 — Scrollbar Bonita, Roda do Mouse e Setas no Seletor de Temporadas e Episódios (DetailsPage & VideoPlayerModal)
+
+**Contexto e Solicitação do Usuário:**
+O usuário enviou uma captura do seletor de temporadas na página de detalhes da série "Hora de Aventura" (Adventure Time - 10 temporadas), onde as temporadas além de T8 estavam cortadas e inacessíveis no desktop:
+*"essa e a serie hora de aventura e tem mais temporadas, preicsda de uma barra pra rolar pra ver as demais, faz uma bonita ok"*
+
+**Modificações Realizadas:**
+1. **Estilo Customizado `.season-scrollbar` em `src/index.css`:**
+   - Scrollbar ultrafina (altura de 4px) com trilho translúcido escuro e bordas arredondadas (`rounded-full`).
+   - Polegar (thumb) com gradiente laranja/âmbar (`linear-gradient(90deg, #ea580c, #f59e0b)`) e efeito de brilho suave (`box-shadow: 0 0 6px rgba(234, 88, 12, 0.35)`).
+   - Efeito hover aprimorado com brilho intenso (`box-shadow: 0 0 10px rgba(249, 115, 22, 0.6)`).
+   - Suporte cross-browser para Firefox com `scrollbar-width: thin` e `scrollbar-color`.
+2. **Navegação Ergonômica na Página de Detalhes (`src/pages/DetailsPage.tsx`):**
+   - **Roda do Mouse (`onWheel`):** converte a rolagem vertical do mouse (`deltaY`) em rolagem horizontal imediata, permitindo ao usuário no PC rolar as temporadas sem precisar clicar ou arrastar.
+   - **Setas de Navegação:** adicionadas setas sutis e modernas (`ChevronLeft` e `ChevronRight`) quando a série tem mais de 6 temporadas.
+   - **Auto-scroll:** ao selecionar uma temporada, a barra rola automaticamente com animação suave (`scrollIntoView({ inline: 'center' })`) para mantê-la visível.
+3. **Ergonomia no Player Modal (`src/components/VideoPlayerModal.tsx`):**
+   - Aplicada a mesma barra `.season-scrollbar` e suporte a rolagem pela roda do mouse tanto no seletor de temporadas quanto na lista de episódios dentro do player.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+
+---
+
 ## 09/11/2026 — Blindagem do Capacitor + APK Direto via VPS contra Lentidão da Play Store (v1.4.67 / Code 99)
 
 **Contexto e Solicitação do Usuário:**
