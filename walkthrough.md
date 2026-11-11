@@ -1,3 +1,35 @@
+## 10/11/2026 — Integração e Homologação do Servidor Vizer HD (1080p HLS + Skin Netflix)
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou extração e integração dos servidores de vídeo do site `vizer.best` (ex: `https://vizer.best/series/visionquest`) com simulação completa de compatibilidade com a skin Netflix (play, pause, avançar 10s, retroceder 10s, passar para o próximo episódio):
+*"vamo fazer screps desse site pra usar os servidores de filmes e series deles, veja se e possivel: https://vizer.best/series/visionquest"*
+*"antes cria uma simulação completa que vc via testar reprodução e a comaptibilidde com nossa skin netfflix testandi play, pause a vançar e retorceder 10s assim como passar para proximo ep"*
+
+**Modificações Realizadas:**
+1. **Engenharia Reversa e Extração Limpa de Streams Vizer HD (`server/routes/vizerRoutes.ts`):**
+   - Resolução transparente de catálogo TMDB para endpoints `fshd.link/serie/{tmdbId}/{season}/{episode}` e `fshd.link/filme/{tmdbId}`.
+   - Extração via `/api/options` e `/api/players` dos hashes de stream do CDN `112234152.xyz` / `venom.00000410.xyz`.
+   - Proxy de HLS e segmentos TS com reescrita dinâmica de manifest e bypass de CORS em `/api/vizer-hls-proxy`.
+   - Player Iframe Same-Origin (`/api/vizer-proxy-iframe`) baseado em HLS.js emitindo e escutando o protocolo completo `WATCHPLAY` de `postMessage` compatível com a `NetflixPlayerSkin`.
+   - Cache em memória de resolução por 2 horas para garantir início instantâneo de vídeo.
+2. **Atualização da Allowlist de Streaming (`src/data/streamingAllowlist.ts`):**
+   - Inclusão dos domínios oficiais e CDNs do Vizer (`vizer.best`, `fshd.link`, `112234152.xyz`, `00000410.xyz`, `venom.00000410.xyz`) na lista permitida em conformidade com o ADR-0002.
+3. **Registro do Servidor no Player Modal (`src/components/VideoPlayerModal.tsx`):**
+   - Registrado como `srv_vizer` ("Vizer HD"), habilitado com suporte nativo a `NetflixPlayerSkin`, timeout de fallback de 12s e transição automática em caso de falha.
+4. **Simulação e Testes de Regressão Automatizados (`tests/vizer-netflix-skin-simulation.test.cjs`):**
+   - Criado teste automatizado validando extração de streams reais, decodificação de pacotes MPEG-TS (byte de sincronia `0x47`), e emulação dos comandos Play, Pause, Seek +10s, Seek -10s e transição de episódios da skin Netflix.
+   - Integrado ao pipeline do GitHub Actions (`.github/workflows/main.yml`).
+5. **Aprimoramento Visual e Navegação da Scrollbar de Temporadas (`src/index.css` & `src/pages/DetailsPage.tsx`):**
+   - Altura da `.season-scrollbar` ajustada para 5px com contraste e brilho reforçados no trilho e polegar.
+   - Espaçamento inferior `pb-2` para garantir renderização fluida sem sobrepor botões.
+   - Setas de navegação horizontal ativadas sempre que a série tiver mais de 5 temporadas, tanto no desktop quanto no mobile.
+
+**Validação Realizada:**
+- `node --test tests/vizer-netflix-skin-simulation.test.cjs`: **3/3 testes aprovados**.
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+
+---
+
 ## 10/11/2026 — Desativação do Avanço Automático no Preview de Próximo Episódio/Filme
 
 **Contexto e Solicitação do Usuário:**

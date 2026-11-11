@@ -185,9 +185,9 @@
     "semantic_hash": "ba199d81330d41efb7e9277dd777d2a2"
   },
   "server.ts": {
-    "mtime": 1794236953.3083446,
-    "ast_hash": "aef199a73d78550eb66c1c93183a3ff5",
-    "semantic_hash": "aef199a73d78550eb66c1c93183a3ff5"
+    "mtime": 1794358062.8261304,
+    "ast_hash": "4e726b186a441f6bbbded6e311ea0dce",
+    "semantic_hash": "4e726b186a441f6bbbded6e311ea0dce"
   },
   "server/firebaseAdmin.ts": {
     "mtime": 1791481071.813867,
@@ -445,9 +445,9 @@
     "semantic_hash": "a1d2c148afd7e2ceb1fd51cf6165fdb0"
   },
   "src/components/VideoPlayerModal.tsx": {
-    "mtime": 1794356046.7519417,
-    "ast_hash": "5921e5588067002a6f54c0766f119141",
-    "semantic_hash": "5921e5588067002a6f54c0766f119141"
+    "mtime": 1794358130.508315,
+    "ast_hash": "00c1160e6e13ca5f3a183897233f268f",
+    "semantic_hash": "00c1160e6e13ca5f3a183897233f268f"
   },
   "src/components/VirtualRemote.tsx": {
     "mtime": 1789731729.0708976,
@@ -1570,9 +1570,9 @@
     "semantic_hash": "84d79f9f8b5b65e96d5ece1df20e44b9"
   },
   "src/data/streamingAllowlist.ts": {
-    "mtime": 1794223983.253999,
-    "ast_hash": "d5dfd7b1f4ab75d9f6d5f493ccc05366",
-    "semantic_hash": "d5dfd7b1f4ab75d9f6d5f493ccc05366"
+    "mtime": 1794358006.4057684,
+    "ast_hash": "f1ae11c6505fe4699944c1dee403fbdb",
+    "semantic_hash": "f1ae11c6505fe4699944c1dee403fbdb"
   },
   "src/services/bysePrewarm.ts": {
     "mtime": 1793756073.2771602,
@@ -1668,5 +1668,10 @@
     "mtime": 1794264504.4123726,
     "ast_hash": "7dc0c53459d5cdbb13524cd2d2211e66",
     "semantic_hash": "7dc0c53459d5cdbb13524cd2d2211e66"
+  },
+  "server/routes/vizerRoutes.ts": {
+    "mtime": 1794357957.8273692,
+    "ast_hash": "8e9cca950c5f2a7c70b29388dbc882c4",
+    "semantic_hash": "8e9cca950c5f2a7c70b29388dbc882c4"
   }
 }

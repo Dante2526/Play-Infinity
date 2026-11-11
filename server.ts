@@ -411,6 +411,8 @@ process.on("uncaughtException", (err) => {
     "/myembed-stream",
     "/byse-resolve",
     "/byse-proxy-iframe",
+    "/vizer-stream",
+    "/vizer-proxy-iframe",
     "/md-stream", // ex-/mixdrop-stream (renomeado p/ driblar adblockers) — precisa continuar com limite restrito
     
     
@@ -436,6 +438,7 @@ process.on("uncaughtException", (err) => {
       req.path.startsWith("/md-proxy") ||
       req.path.startsWith("/byse-stream") ||
       req.path.startsWith("/byse-hls.js") ||
+      req.path.startsWith("/vizer-hls-proxy") ||
       req.path.startsWith("/vidsrc-proxy") ||
       req.path.startsWith("/streamtape-stream") ||
       req.path.startsWith("/streamtape-proxy-iframe") ||
@@ -487,6 +490,7 @@ import streamtapeRouter from "./server/routes/streamtapeRoutes";
 import { doodstreamRouter } from "./server/routes/doodstreamRoutes";
 import { saimoRouter } from "./server/routes/saimoRoutes";
 import { anidigitalRouter } from "./server/routes/anidigitalRoutes";
+import { vizerRouter } from "./server/routes/vizerRoutes";
 
 import { adminOpsRouter } from "./server/routes/adminOps";
 import { requireAdminAuth } from './server/middlewares/requireAdminAuth';
@@ -510,6 +514,7 @@ app.use(doodstreamRouter);
 
 app.use(saimoRouter);
 app.use(anidigitalRouter);
+app.use(vizerRouter);
 app.use(serverBlocksRouter);
 app.use("/api/admin", adminOpsRouter);
 app.use(userOpsRouter);

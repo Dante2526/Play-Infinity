@@ -46,7 +46,7 @@ const isSaimoServerKey = (key: string | null | undefined): boolean =>
 // (SRV que sempre usa a skin Netflix — wrapper próprio com protocolo WATCHPLAY).
 const isAnidigitalServerKey = (key: string | null | undefined): boolean => key === 'srv_anidigital';
 const isSkinSupportedServerKey = (key: string | null | undefined): boolean =>
-  key === 'srv_watchplay' || key === 'srv_vip' || key === 'srv_mixdrop' ||
+  key === 'srv_vizer' || key === 'srv_watchplay' || key === 'srv_vip' || key === 'srv_mixdrop' ||
   key === 'srv_streamtape' || key === 'srv_byse' || isSaimoServerKey(key) || isAnidigitalServerKey(key);
 
 interface VideoPlayerModalProps {
@@ -1475,6 +1475,28 @@ export function VideoPlayerModal({
     }
 
     list.unshift({
+      key: 'srv_vizer',
+      label: 'Vizer HD',
+      name: 'Vizer',
+      badge: '1080p • Dublado PT-BR',
+      buildUrl: (id: string, s?: number, e?: number) => {
+        const params = new URLSearchParams({
+          tmdbId: String(effectiveMovieId || tmdbId || id),
+          type: isSeries ? 'series' : 'movie'
+        });
+        if (isSeries) {
+          params.set('s', String(s ?? season));
+          params.set('e', String(e ?? episode));
+        }
+        if ((s === undefined || s === season) && (e === undefined || e === episode) && lastKnownTimeRef.current > 0) {
+          params.set('t', String(lastKnownTimeRef.current));
+        }
+        return '/api/vizer-proxy-iframe?' + params;
+      },
+      isMatch: (url: string) => url.includes('/api/vizer-'),
+    });
+
+    list.unshift({
       key: 'srv_byse', label: 'BYSE HD', name: 'BYSE', badge: 'HLS • Player integrado',
       buildUrl: (id: string, s?: number, e?: number) => {
         const identity = new URLSearchParams({id:String(effectiveMovieId || tmdbId || id),name:title?.split(/\s*-\s*(?:T\d|Temporada)/i)[0].trim()||''});
@@ -1761,7 +1783,7 @@ export function VideoPlayerModal({
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
     // Allow bounded source selection, token renewal and one alternate file.
-    const providerTimeout = selectedServerKey === "srv_byse" ? 12000 : selectedServerKey === "srv_streamtape" ? 10000 : (isWatchplay ? 9000 : (isMixdrop ? 10000 : 8000));
+    const providerTimeout = (selectedServerKey === "srv_vizer" || selectedServerKey === "srv_byse") ? 12000 : selectedServerKey === "srv_streamtape" ? 10000 : (isWatchplay ? 9000 : (isMixdrop ? 10000 : 8000));
     const plan=startupPlanRef.current;
     const health=healthRef.current.identity===healthIdentityRef.current?healthRef.current.servers:{};
     const alternative=plan?.candidates.some(key=>key!==selectedServerKey&&!fallbackAttemptsRef.current.has(key)&&playbackHealthState(health,key)!=='unavailable')||false;
@@ -2267,6 +2289,7 @@ export function VideoPlayerModal({
         if (
           (selectedServerKey === 'srv_streamtape' && event.data.streamtapeExhausted === true) ||
           (selectedServerKey === 'srv_byse' && event.data.byseExhausted === true) ||
+          (selectedServerKey === 'srv_vizer' && event.data.vizerExhausted === true) ||
           (isSaimoServerKey(selectedServerKey) && event.data.saimoExhausted === true)
         ) {
           // The iframe already exhausted distinct catalogue files. Do not start
@@ -3083,7 +3106,7 @@ export function VideoPlayerModal({
                 <span>Temporada:</span>
               </div>
 
-              <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1 bg-black/40 p-1 pb-1.5 rounded-xl border border-white/5 overflow-x-auto season-scrollbar max-w-full scroll-smooth">
+              <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1 bg-black/40 p-1 pb-2 rounded-xl border border-white/5 overflow-x-auto season-scrollbar max-w-full scroll-smooth">
                 {availableSeasons.map((s) => {
                   const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
                   const seasonDone = isSeasonFullyWatched(resolvedId, s, sCount);
@@ -3164,7 +3187,7 @@ export function VideoPlayerModal({
                   <span className="hidden sm:inline">Anterior</span>
                 </button>
 
-                <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1.5 overflow-x-auto season-scrollbar py-1 pb-1.5 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px] scroll-smooth">
+                <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1.5 overflow-x-auto season-scrollbar py-1 pb-2 px-0.5 max-w-[240px] sm:max-w-[400px] md:max-w-[500px] scroll-smooth">
                   {episodeNumbers.map((ep) => {
                     const watched = isEpisodeWatched(resolvedId, season, ep);
                     const isCurrent = episode === ep;

@@ -1039,7 +1039,7 @@ export function DetailsPage({
 
                   {/* Seletor de Temporadas com Scrollbar Bonita, Suporte a Roda do Mouse e Setas */}
                   <div className="relative flex items-center min-w-0 max-w-full">
-                    {availableSeasons.length > 6 && (
+                    {availableSeasons.length > 5 && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1047,7 +1047,7 @@ export function DetailsPage({
                             seasonsScrollRef.current.scrollBy({ left: -140, behavior: 'smooth' });
                           }
                         }}
-                        className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/5 shrink-0 mr-1 cursor-pointer transition-all active:scale-90"
+                        className="flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/10 shrink-0 mr-1 cursor-pointer transition-all active:scale-90"
                         title="Rolar temporadas para a esquerda"
                       >
                         <ChevronLeft className="w-3.5 h-3.5" />
@@ -1061,7 +1061,7 @@ export function DetailsPage({
                           e.currentTarget.scrollLeft += e.deltaY;
                         }
                       }}
-                      className="flex items-center gap-1.5 overflow-x-auto season-scrollbar bg-black/40 p-1 pb-1.5 rounded-xl border border-white/5 max-w-full min-w-0 scroll-smooth"
+                      className="flex items-center gap-1.5 overflow-x-auto season-scrollbar bg-black/40 p-1 pb-2 rounded-xl border border-white/5 max-w-full min-w-0 scroll-smooth"
                     >
                       {availableSeasons.map(s => {
                         const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
@@ -1090,7 +1090,7 @@ export function DetailsPage({
                       })}
                     </div>
 
-                    {availableSeasons.length > 6 && (
+                    {availableSeasons.length > 5 && (
                       <button
                         type="button"
                         onClick={() => {
@@ -1098,7 +1098,7 @@ export function DetailsPage({
                             seasonsScrollRef.current.scrollBy({ left: 140, behavior: 'smooth' });
                           }
                         }}
-                        className="hidden sm:flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/5 shrink-0 ml-1 cursor-pointer transition-all active:scale-90"
+                        className="flex items-center justify-center w-6 h-6 rounded-lg bg-black/60 hover:bg-white/10 text-neutral-400 hover:text-white border border-white/10 shrink-0 ml-1 cursor-pointer transition-all active:scale-90"
                         title="Rolar temporadas para a direita"
                       >
                         <ChevronRight className="w-3.5 h-3.5" />
