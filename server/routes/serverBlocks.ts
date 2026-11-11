@@ -19,6 +19,7 @@
 import { Router, Request, Response } from "express";
 import fs from "fs";
 import path from "path";
+import { ADDITIONAL_VOD_SERVERS } from '../../src/data/additionalVodServers';
 
 const router = Router();
 
@@ -180,6 +181,8 @@ async function isAdminToken(req: Request): Promise<boolean> {
 
 /** Valida serverKey contra whitelist */
 const VALID_SERVER_KEYS = new Set([
+  ...ADDITIONAL_VOD_SERVERS.map(s=>s.key),
+  'srv_saimo',
   "srv_byse", // BYSE HD
   "srv_streamtape",
   "srv_watchplay",

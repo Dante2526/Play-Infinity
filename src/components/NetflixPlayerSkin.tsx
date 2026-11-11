@@ -275,7 +275,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
-  const selectedAudio = activeServerKey === "srv_vizer" ? "vizer" : ["srv_saimo", "srv_saimo_hls", "srv_saimo_mp4"].includes(activeServerKey) ? "saimo" : activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_byse" ? "byse" : activeServerKey === "srv_streamtape" ? "streamtape" : activeServerKey === "srv_doodstream" ? "doodstream" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
+  const selectedAudio = ["srv_saimo", "srv_saimo_hls", "srv_saimo_mp4"].includes(activeServerKey) ? "saimo" : activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_byse" ? "byse" : activeServerKey === "srv_streamtape" ? "streamtape" : activeServerKey === "srv_doodstream" ? "doodstream" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
     const [selectedSubtitle, setSelectedSubtitle] = useState<string>(isAnime ? "on" : "off");
 
   // Estado dos cues VTT e cue ativa
@@ -332,7 +332,6 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     // srv_streamtape não aparece aqui: é um servidor de fallback interno,
     // resolvido automaticamente pelo VideoPlayerModal quando o primário falha.
     return [
-      { key: "srv_vizer", label: "Vizer HD" },
       { key: "srv_mixdrop", label: "MixDrop HD" },
       { key: "srv_byse", label: "BYSE HD" },
       { key: "srv_saimo_hls", label: "Saimo Play HD" },

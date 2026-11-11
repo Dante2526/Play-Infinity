@@ -22,3 +22,8 @@ test('BYSE is primary while explicit choices, saved preferences and admin exclus
  assert.equal(choose(['srv_byse','srv_mixdrop'],'srv_byse','srv_mixdrop'),'srv_byse');
  assert.equal(choose(['srv_streamtape','srv_mixdrop'],'blocked'),'srv_streamtape');
 });
+
+test('episode advancement remains available independently of the removed Vizer player',()=>{
+ const next=m.exports.computeNextEpisode({isSeries:true,season:1,episode:1,totalEpisodes:7,availableSeasons:[1],episodesList:Array.from({length:7},(_,i)=>({episode_number:i+1,name:`Episódio ${i+1}`}))});
+ assert.equal(next.episode_number,2);assert.equal(next.seasonNumber,1);assert.equal(next.isNextSeason,false);
+});

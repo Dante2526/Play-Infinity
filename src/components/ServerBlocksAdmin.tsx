@@ -23,6 +23,7 @@ import {
 import { auth } from "../services/firebase";
 import { adminFetch } from "../services/adminApi";
 import { ConfirmModal } from "./ConfirmModal";
+import { ADDITIONAL_VOD_SERVERS } from '../data/additionalVodServers';
 
 interface ServerBlock {
   id: string;
@@ -53,6 +54,7 @@ interface ServerOption {
 }
 
 const HOMOLOGATED_SERVERS: ServerOption[] = [
+  ...ADDITIONAL_VOD_SERVERS,
   {
     key: "srv_byse",
     label: "BYSE HD",
@@ -105,6 +107,8 @@ const HOMOLOGATED_SERVERS: ServerOption[] = [
 ];
 
 const SERVER_LABELS: Record<string, string> = {
+  ...Object.fromEntries(ADDITIONAL_VOD_SERVERS.map(s=>[s.key,s.label])),
+  srv_saimo: 'Saimo (legado)',
   srv_streamtape: "StreamTape HD",
   srv_byse: "BYSE HD",
   srv_watchplay: "WatchPlayer",

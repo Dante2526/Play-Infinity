@@ -10025,3 +10025,13 @@ Correções locais: health Vizer com verificação de mídia e URL same-origin; 
 ### Validação adicional solicitada
 
 Criado scripts/matchbox-playback-smoke.cjs: monta VideoPlayerModal e NetflixPlayerSkin reais, com CSS compilado e APIs/fontes simuladas no limite HTTP, Firebase sem sessão. Cenários desktop: início lento aos8500ms sem abandonar fonte, erro Saimo com fallback StreamTape, esgotamento que encerra cadeia sem reiniciar. Emulação mobile390x844 também verifica início lento e pausa/retomada pelos botões da skin. Não é mídia real nos fixtures, nem Android físico ou produção autenticada. 58 testes direcionados e TypeScript repetidos e aprovados. Resultados gerados em scratch/matchbox-modal-smoke*.json. Sem push/deploy.
+
+## 10/11/2026 — Novos servidores ignorados e investigação do Vizer original
+
+Admin agora lista Saimo Play HD, Saimo Turbo, Vizer HD e AnimesDigital; backend aceita as mesmas chaves por metadados compartilhados em src/data/additionalVodServers.ts. Três testes de renderização, validação e ciclo salvar/ler/desbloquear aprovados em persistência temporária.
+
+Atualização de 11/11/2026: por pedido explícito do dono, Vizer HD/FsPlay também foi removido integralmente (seletor e fallback, skin, health/startup, router/proxies e CI/testes exclusivos). srv_vizer não é aceito em novos bloqueios no admin. Permanecem os controles de Saimo HLS/MP4 e AnimesDigital, e o catálogo Vizer que alimenta MixDrop/StreamTape/BYSE. Graphify consultado; TypeScript e 57 testes direcionados, incluindo catálogo Vizer, aprovados. Sem commit/push/deploy.
+
+Envio à main autorizado pelo dono em 11/11/2026 (“pode enviar”). Main remota conferida, TypeScript e os 57 testes repetidos e aprovados antes do envio. O commit reúne a remoção do player Vizer HD/FsPlay e a inclusão dos servidores restantes no painel de bloqueios; catálogo Vizer preservado. O push dispara o deploy automático, cuja conclusão precisa ser verificada separadamente.
+
+Em 11/11/2026 o dono decidiu abandonar o protótipo Abyss devido à necessidade de retransmitir vídeo na VPS ou ativar serviço de borda. Removidos serviço, rota de mídia, health Abyss, smoke, testes específicos e ADR provisório. Nenhum Worker foi implementado. Mantidos catálogo Vizer, player FsPlay, parser que ignora formatos incompatíveis e cancelamento do iframe. Melhorias independentes de servidores ignorados preservadas. Protótipo nunca commitado, enviado ou implantado. Evidências históricas e decisão em docs/vizer-original-player-investigation.md. Main local em d8aebc4; sem push/deploy deste lote.

@@ -80,7 +80,7 @@ export async function preparePlaybackStartup(
 
   // Cold BYSE resolves directly inside its iframe (12s budget) without spawning a duplicate PoW in health probe.
   const probeKeys = candidates
-    .filter(k => ['srv_byse', 'srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_vizer', 'srv_anidigital'].includes(k) && (k !== 'srv_byse' || hints[k]?.warm))
+    .filter(k => ['srv_byse', 'srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_anidigital'].includes(k) && (k !== 'srv_byse' || hints[k]?.warm))
     .slice(0, 2);
 
   const health: ServerHealthMap = {};
@@ -115,12 +115,6 @@ export async function preparePlaybackStartup(
 
   // Mapeia URLs prontas retornadas por qualquer probe
   for (const [key, value] of Object.entries(health)) {
-    if (key === 'srv_vizer' && value.iframeUrl) {
-      try {
-        const url = new URL(value.iframeUrl, 'https://local');
-        if (url.origin === 'https://local' && url.pathname === '/api/vizer-proxy-iframe') urls[key] = url.pathname + url.search;
-      } catch {}
-    }
     if (key === 'srv_byse' && value.iframeUrl) {
       try {
         const url = new URL(value.iframeUrl, 'https://local');

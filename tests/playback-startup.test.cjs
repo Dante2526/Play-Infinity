@@ -57,7 +57,7 @@ test('MP4-only Saimo hints do not manufacture HLS or legacy duplicate fallback a
 
 test('a HLS alias that resolved to the same MP4 is not retried as a fresh source',()=>{
  const health={srv_saimo_hls:{state:'available',mediaKind:'mp4'},srv_saimo_mp4:{state:'available',mediaKind:'mp4'}};
- assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4','srv_vizer'],new Set(['srv_saimo_hls']),health),'srv_vizer');
+ assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4','srv_streamtape'],new Set(['srv_saimo_hls']),health),'srv_streamtape');
  health.srv_saimo_hls.mediaKind='hls';
  assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4'],new Set(['srv_saimo_hls']),health),'srv_saimo_mp4');
 });

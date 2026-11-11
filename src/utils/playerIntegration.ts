@@ -25,9 +25,6 @@ export function isExternalIframePlayer(activeIframeUrl: string, urlInput = ""): 
       activeLower.includes("/api/vidsrc-proxy") ||
       activeLower.includes("/api/vidsrc-player") ||
       activeLower.includes("/api/byse-proxy-iframe") ||
-      activeLower.includes("/api/vizer-proxy-iframe") ||
-      activeLower.includes("/api/vizer-hls-proxy") ||
-      activeLower.includes("/api/vizer-stream") ||
       activeLower.includes("/api/saimo-proxy-iframe") ||
       activeLower.includes("/api/saimo-stream") ||
       activeLower.includes("/api/anidigital-proxy-iframe") ||

@@ -6,7 +6,7 @@ import { isServerBlacklisted } from '../../src/data/serverBlacklist';
 import { getSaimoStore } from '../services/saimoSqliteStore';
 import { createPlaybackHealthCache, probeHealthMedia, readHealthPrefix } from '../services/playbackHealth';
 
-const providers = new Set(['srv_vizer', 'srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_anidigital']);
+const providers = new Set(['srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay','srv_byse', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_anidigital']);
 const check = createPlaybackHealthCache();
 const router = Router();
 
@@ -67,16 +67,6 @@ router.get('/api/playback-health' , async (req, res) => {
   };
   const selected = req.query.startup === '1' ? requested.slice(0,2) : requested.filter(key=>key!=='srv_byse');
   const entries = await Promise.all(selected.map(async key => [key, await check(identity + ':' + key, async signal => {
-    if (key === 'srv_vizer') {
-      const query = new URLSearchParams({ tmdbId: id, type: type === 'tv' ? 'series' : 'movie' });
-      if (type === 'tv') { query.set('s', String(season)); query.set('e', String(episode)); }
-      const response = await fetch(origin + '/api/vizer-stream?' + query, { signal });
-      const payload = await readHealthPrefix(response, 64 * 1024);
-      if (!response.ok) return { state: 'unknown', reason: 'vizer_resolve_' + response.status };
-      const resolved = JSON.parse(new TextDecoder().decode(payload));
-      const result = await probeHealthMedia(localMedia(resolved.proxyUrl, ['/api/vizer-hls-proxy']), signal);
-      return { ...result, ...(result.state === 'available' ? { iframeUrl: '/api/vizer-proxy-iframe?' + query } : {}) };
-    }
     if(key==='srv_byse') {
       const hints=getPlaybackCataloguePresence(Number(id),type==='tv'?season:undefined,type==='tv'?episode:undefined);
       if(!hints.srv_byse.fileIds.some(hasWarmByseStream)) {
