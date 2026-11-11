@@ -778,7 +778,7 @@ export function VideoPlayerModal({
     }
   }, [onPlayMovie, quality, selectedServerKey]);
 
-  const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(true);
+  const [nixplayAvailable, setNixplayAvailable] = useState<boolean>(false);
   // NOVO: guarda o series_id do Nixplay retornado pelo /api/nixplay-check
   // Necessário porque para algumas séries (ex: HxH), series_id != tmdb_id
   // O buildUrl do srv_nixplay usa esse ID em vez do tmdbId pra montar a URL

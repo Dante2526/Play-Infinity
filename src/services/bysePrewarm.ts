@@ -25,20 +25,21 @@ export function triggerBysePrewarm(input: {
   const numId = Number(input.id);
   if (!Number.isInteger(numId) || numId < 1) return;
 
-  // 3. Debounce de 1.5 segundos (tempo de intenção do usuário: evita estourar ao folhear vários itens)
+  // 3. Debounce ágil de 250ms (inicia quase imediatamente quando o usuário abre a página)
   debounceTimer = setTimeout(() => {
     debounceTimer = null;
     const controller = new AbortController();
     activeController = controller;
 
-    const mediaType = input.type === 'tv' || input.type === 'series' ? 'tv' : 'movie';
+    const isTv = input.type === 'tv' || input.type === 'series';
     const params = new URLSearchParams({
       id: String(numId),
-      type: mediaType,
-      s: String(input.season || 1),
-      e: String(input.episode || 1),
       name: (input.name || '').slice(0, 160),
     });
+    if (isTv) {
+      params.set('s', String(input.season || 1));
+      params.set('e', String(input.episode || 1));
+    }
 
     const url = `${getApiBaseUrl()}/api/byse-resolve?${params.toString()}`;
 
@@ -63,15 +64,17 @@ export function triggerBysePrewarm(input: {
           activeController = null;
         }
       });
-  }, 1500);
+  }, 250);
 }
 
-export function cancelBysePrewarm() {
+export function cancelBysePrewarm(abortInflight = false) {
   if (debounceTimer) {
     clearTimeout(debounceTimer);
     debounceTimer = null;
   }
-  if (activeController) {
+  // Só aborta o in-flight se explicitamente solicitado (ex: desmontagem ao trocar de tela),
+  // para permitir que o aquecimento termine e puele o cache caso o usuário clique em Assistir rapidamente.
+  if (abortInflight && activeController) {
     activeController.abort();
     activeController = null;
   }

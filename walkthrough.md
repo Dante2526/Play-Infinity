@@ -9935,3 +9935,26 @@ Limitações: (a) o fix é no player web — o app Android empacota o modal no A
 - npx tsc --noEmit: 0 erros.
 - node --test tests/mixdrop.test.cjs tests/mixdrop-routing.test.cjs: 40/40 passaram.
 - node --test tests/blacklist-allowlist-guard.test.cjs: 5/5 passaram.
+
+
+---
+
+## 2026-11-10 — Fast-Path BYSE, Pré-Aquecimento Real e Desativação do Nixplay (Reprodução Instantânea)
+
+**Contexto**: Usuário reportou falha ao tentar assistir "Outra Mamãe", com cascatas de erro no console (MixDrop demorando >9s, WatchPlayer stream_error, VIP timeout, Nixplay 401 Unauthorized e timeout final no BYSE).
+
+**Causa Raiz**:
+1. `src/services/bysePrewarm.ts` enviava `s=1&e=1` incondicionalmente, fazendo filmes serem tratados como séries pelo backend e abortando o prewarm. Além disso, o unmount da DetailsPage ao abrir o modal abortava a requisição in-flight antes da resolução do PoW terminar.
+2. `src/services/playbackStartup.ts` excluía o BYSE frio da lista de sondagem e deixava o probe do MixDrop (que respondia metadata do banco local em 50ms) vencer a inicialização, forçando o usuário a carregar MP4 em CDN externa lenta.
+3. As credenciais do Nixplay (`testelogado-vods`) expiraram no provedor (`nixplay.lat`), retornando 401 Unauthorized e queimando 9s de timeout em cada fallback.
+
+**Correções**:
+- `src/services/bysePrewarm.ts`: Parâmetros `s` e `e` só são enviados para séries (`isTv`). Debounce reduzido para 250ms e cancelamento seguro que preserva a requisição in-flight quando o usuário clica em reproduzir.
+- `src/services/playbackStartup.ts`: BYSE recebe prioridade máxima (`providerWeight = 0`) e Fast-Path imediato (`if (candidates[0] === 'srv_byse') return { selected: 'srv_byse' }`), eliminando a seleção espúria do MixDrop.
+- `server/services/nixplayCatalog.ts` e `server/routes/nixplayRoutes.ts`: `isNixplayAvailable` e `/api/nixplay-check` retornam `false` enquanto a conta de testes estiver desativada.
+- `src/components/VideoPlayerModal.tsx`: `nixplayAvailable` inicializado como `false`.
+
+**Validação**:
+- `npx tsc --noEmit`: 0 erros.
+- `scratch/test_startup_verification.mjs`: Ordem de startup e plano de execução selecionam `srv_byse` instantaneamente como #1.
+- `tests/blacklist-allowlist-guard.test.cjs`: 5/5 passaram.

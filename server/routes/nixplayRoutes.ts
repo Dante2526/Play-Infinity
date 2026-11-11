@@ -36,64 +36,8 @@ function isAllowedNixplayProxyHost(hostname: string): boolean {
 // Verifica se um filme/série existe no Nixplay e retorna o series_id correto
 // (necessário porque para algumas séries, series_id != tmdb_id, ex: HxH)
 router.get("/api/nixplay-check", async (req, res) => {
-  const { tmdb_id, type, name } = req.query;
-  if (!tmdb_id || !type) return res.status(400).json({ error: "Missing tmdb_id or type" });
-  
-  await loadNixplayCatalog();
-  
-  const isSeries = type === "series";
-  
-  if (isSeries) {
-    // Para séries: tenta resolver o series_id do Nixplay
-    const seriesName = name ? String(name) : undefined;
-    const resolvedId = resolveNixplaySeriesId(String(tmdb_id), seriesName);
-    if (resolvedId) {
-      // Reutiliza cache em memória se já existir
-      const cachedEp = nixplayEpisodeCache.get(resolvedId);
-      if (cachedEp && (Date.now() - cachedEp.fetchedAt < NIXPLAY_CACHE_TTL)) {
-        return res.json({ available: true, seriesId: resolvedId, totalEpisodes: cachedEp.episodes.length });
-      }
-
-      // Busca o total de episódios do Nixplay (pra override do TMDB quando Nixplay tem mais)
-      let totalEpisodes = 0;
-      try {
-        const infoUrl = `https://nixplay.lat/player_api.php?username=testelogado-vods&password=GwXanZ3Dj&action=get_series_info&series_id=${resolvedId}`;
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
-        const response = await fetch(infoUrl, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (response.ok) {
-          const data = await response.json();
-          const eps = data.episodes || {};
-          if (Array.isArray(eps)) {
-            totalEpisodes = eps.length;
-          } else if (typeof eps === 'object') {
-            for (const sk of Object.keys(eps)) {
-              if (Array.isArray(eps[sk])) totalEpisodes += eps[sk].length;
-            }
-          }
-          // Salva no cache de episódios também
-          const flatEps: any[] = [];
-          if (Array.isArray(eps)) {
-            flatEps.push(...eps);
-          } else {
-            for (const sk of Object.keys(eps).sort((a,b) => Number(a) - Number(b))) {
-              if (Array.isArray(eps[sk])) flatEps.push(...eps[sk]);
-            }
-          }
-          nixplayEpisodeCache.set(resolvedId, { episodes: flatEps, fetchedAt: Date.now() });
-        }
-      } catch (e) {
-        // Não falha o check se não conseguir buscar total de eps
-      }
-      return res.json({ available: true, seriesId: resolvedId, totalEpisodes });
-    }
-    return res.json({ available: false });
-  } else {
-    // Para filmes: checa direto por tmdb_id (a API de filmes retorna tmdb_id)
-    const available = isNixplayAvailable(String(tmdb_id), false);
-    return res.json({ available });
-  }
+  // Provedor Nixplay suspenso: credenciais upstream desativadas (HTTP 401 Disabled).
+  return res.json({ available: false });
 });
 
 // Resolve o redirect do Nixplay server-side e retorna a URL assinada do R2 para o player

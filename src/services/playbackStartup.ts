@@ -20,7 +20,10 @@ export function startupOrder(keys: string[], hints: Record<string, CatalogueHint
   const eligible = listed.length ? listed : keys;
   const usable = eligible.some(k => hints[k]?.audioPriority === 0) ? eligible.filter(k => hints[k]?.audioPriority !== 2) : eligible;
   return [...usable].sort((a, b) => {
-    const score = (k: string) => (hints[k]?.audioPriority ?? 1) * 100 + (k === preferred ? 0 : 1);
+    // BYSE é o player homologado primário (same-origin, HLS 1080p sem anúncios).
+    // Sempre recebe prioridade máxima sobre servidores secundários (Mixdrop, Streamtape).
+    const providerWeight = (k: string) => (k === 'srv_byse' ? 0 : k === preferred ? 1 : 2);
+    const score = (k: string) => (hints[k]?.audioPriority ?? 1) * 100 + providerWeight(k);
     return score(a) - score(b);
   });
 }
@@ -63,9 +66,9 @@ export async function preparePlaybackStartup(
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
 
   const candidates = startupOrder(input.keys, hints, input.preferred);
-  const coldByseLead = candidates[0] === 'srv_byse' && Boolean(hints.srv_byse?.listed) && !hints.srv_byse?.warm;
 
-  if (coldByseLead) {
+  // Fast-Path: se BYSE é o candidato #1, inicia direto nele sem disputa de probe com hosts lentos
+  if (candidates[0] === 'srv_byse') {
     return { selected: 'srv_byse', candidates, hints, urls: {} };
   }
 
