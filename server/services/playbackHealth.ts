@@ -1,5 +1,6 @@
 export type PlaybackHealthState = 'available' | 'unavailable' | 'unknown';
 export interface PlaybackHealthResult {
+  mediaKind?: 'hls' | 'mp4';
   state: PlaybackHealthState;
   checkedAt: number;
   reason: string;
@@ -81,6 +82,6 @@ export async function probeHealthMedia(url: string, signal: AbortSignal, fetchIm
   // legítima; página de login não começa com #EXTM3U.
   const hls = text.startsWith('#EXTM3U') && /#EXT(?:INF|-X-[A-Z-]+):/.test(text);
   const transportStream = prefix.length >= 189 && prefix[0] === 0x47 && prefix[188] === 0x47;
-  if (mp4 || hls || (type.includes('video/mp2t') && transportStream)) return { state: 'available', reason: 'media_verified' };
+  if (mp4 || hls || (type.includes('video/mp2t') && transportStream)) return { state: 'available', reason: 'media_verified', ...(mp4 ? { mediaKind: 'mp4' as const } : hls ? { mediaKind: 'hls' as const } : {}) };
   return { state: 'unknown', reason: 'unverified_body' };
 }

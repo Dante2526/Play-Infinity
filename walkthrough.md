@@ -9986,3 +9986,15 @@ Limitações: (a) o fix é no player web — o app Android empacota o modal no A
 - `npx tsc --noEmit`: 0 erros.
 - `scratch/test_startup_verification.mjs`: Ordem de startup e plano de execução selecionam `srv_byse` instantaneamente como #1.
 - `tests/blacklist-allowlist-guard.test.cjs`: 5/5 passaram.
+
+## 10/11/2026 — Matchbox: health Vizer, seleção Saimo e esgotamento de fontes
+
+Investigação de produção confirmou Saimo reproduzindo Matchbox 1148365 em Chromium (~9,6s até currentTime>2). prefer=hls também entregou MP4. Vizer health retornava 400; HTML FSHD atual usa CONTENT_INFO e seletores FsPlay PT-BR. O destino real FsPlay deste filme respondeu 404/Vídeo Offline em formato /bounce/ não suportado; não afirmar recuperação do arquivo externo.
+
+Correções locais: health Vizer com verificação de mídia e URL same-origin; parser atual FsPlay dublado; cancelamento de resolução ao abortar health; erros de resolução JSON502 com reason; mediaKind efetivo e prefer Saimo alinhados; deduplicação de alias/variantes de mesmo protocolo; prazo de mídia de12s; trocas automáticas preservam plano; histórico não é apagado por sinal curto de play; removido retry BYSE sem evidência de fonte nova. Renovação interna e retomada preservadas.
+
+58 testes direcionados e TypeScript aprovados. Suíte ampla: 699 testes,668 pass,21 skip,10 fail (embed-probe,guards TV/iframe e rede real Vizer); seis reproduzidos na base HEAD. Não declarar suíte inteira verde. Sem teste autenticado do modal completo; não confundir ensaio de iframe de produção com teste completo do modal corrigido. Limitações externas e decisões em docs/superpowers/plans/2026-11-10-matchbox-progress.md. Sem push/deploy deste lote.
+
+### Validação adicional solicitada
+
+Criado scripts/matchbox-playback-smoke.cjs: monta VideoPlayerModal e NetflixPlayerSkin reais, com CSS compilado e APIs/fontes simuladas no limite HTTP, Firebase sem sessão. Cenários desktop: início lento aos8500ms sem abandonar fonte, erro Saimo com fallback StreamTape, esgotamento que encerra cadeia sem reiniciar. Emulação mobile390x844 também verifica início lento e pausa/retomada pelos botões da skin. Não é mídia real nos fixtures, nem Android físico ou produção autenticada. 58 testes direcionados e TypeScript repetidos e aprovados. Resultados gerados em scratch/matchbox-modal-smoke*.json. Sem push/deploy.

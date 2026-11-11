@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from '../utils/apiBaseUrl';
-export type ServerHealth = { state: 'available' | 'unavailable' | 'unknown'; checkedAt: number; reason: string; iframeUrl?:string };
+export type ServerHealth = { state: 'available' | 'unavailable' | 'unknown'; checkedAt: number; reason: string; iframeUrl?:string; mediaKind?: 'hls' | 'mp4' };
 export type ServerHealthMap = Record<string, ServerHealth>;
 
 export function playbackHealthState(health: ServerHealthMap, key: string): ServerHealth['state'] {

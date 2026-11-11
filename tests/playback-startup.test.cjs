@@ -46,6 +46,18 @@ test('five seconds of discovery still leaves a full eight seconds after iframe a
 test('content-routed MixDrop is never reloaded by a late catalogue file ID',()=>{
  assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&t=4',false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?id=674&url=https%3A%2F%2Fmxdrop.top%2Fe%2Fmknjxedxixxo8l3',true),false);assert.equal(api.shouldReloadMixdropFrame(null,false),false);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',false),true);assert.equal(api.shouldReloadMixdropFrame('/api/md-stream?url=legacy',true),false);
 });
-test('cold BYSE gets 9s with alternatives and 12s as final listed source, and ready/fallback sources get 7.5s-9s',()=>{
- assert.equal(api.startupMediaLimit('srv_byse',false,false),12000);assert.equal(api.startupMediaLimit('srv_byse',true,false),9000);assert.equal(api.startupMediaLimit('srv_byse',false,true),9000);assert.equal(api.startupMediaLimit('srv_mixdrop',false,false),9000);assert.equal(api.startupMediaLimit('srv_streamtape',false,false),9000);
+test('source attachment keeps a 12-second media budget even when another server is listed',()=>{
+ for(const key of ['srv_byse','srv_mixdrop','srv_streamtape','srv_saimo_mp4'])for(const alt of [false,true])assert.equal(api.startupMediaLimit(key,alt,false),12000);
+});
+
+test('MP4-only Saimo hints do not manufacture HLS or legacy duplicate fallback attempts',()=>{
+ const hints={srv_saimo:hint(true),srv_saimo_mp4:hint(true)};
+ assert.deepEqual(api.startupOrder(['srv_saimo','srv_saimo_hls','srv_saimo_mp4'],hints),['srv_saimo_mp4']);
+});
+
+test('a HLS alias that resolved to the same MP4 is not retried as a fresh source',()=>{
+ const health={srv_saimo_hls:{state:'available',mediaKind:'mp4'},srv_saimo_mp4:{state:'available',mediaKind:'mp4'}};
+ assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4','srv_vizer'],new Set(['srv_saimo_hls']),health),'srv_vizer');
+ health.srv_saimo_hls.mediaKind='hls';
+ assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4'],new Set(['srv_saimo_hls']),health),'srv_saimo_mp4');
 });

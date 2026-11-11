@@ -38,7 +38,8 @@ export async function resolveVizerHls(
   season?: number,
   episode?: number,
   isSeries: boolean = true,
-  refresh: boolean = false
+  refresh: boolean = false,
+  signal?: AbortSignal
 ): Promise<{ masterUrl: string; playerRedirect: string }> {
   const cacheKey = isSeries
     ? `series:${tmdbId}:${season || 1}:${episode || 1}`
@@ -56,6 +57,9 @@ export async function resolveVizerHls(
     : `https://fshd.link/filme/${tmdbId}`;
 
   const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  if (signal?.aborted) controller.abort();
   const timer = setTimeout(() => controller.abort(), 12000);
 
   try {
@@ -75,6 +79,11 @@ export async function resolveVizerHls(
 
     // Extrai o content_id
     let contentId: number | null = null;
+    const currentInfo = html.match(/\b(?:var|let|const)\s+CONTENT_INFO\s*=\s*["'](\d+)["']/);
+    // The first dubbed option can be Abyss. This integration implements
+    // FsPlay HLS only; do not send a different player's URL to its parser.
+    const dubbedServer = [...html.matchAll(/class=["']server-selector["'][^>]*data-id=["'](\d+)["'][^>]*data-lang=["']2["'][^>]*>([\s\S]*?)<\/div>/g)]
+      .find(match => /FsPlay/i.test(match[2]));
 
     if (isSeries) {
       // Procura o data-contentid do episódio ativo
@@ -97,10 +106,17 @@ export async function resolveVizerHls(
     }
 
     if (!contentId) {
+      if (currentInfo) contentId = Number(currentInfo[1]);
+    }
+    if (!contentId) {
       throw new Error("Não foi possível identificar o content_id do título no Vizer");
     }
 
     // Consulta opções do player
+    let videoId: number;
+    if (dubbedServer && currentInfo) {
+      videoId = Number(dubbedServer[1]);
+    } else {
     const optRes = await fetch("https://fshd.link/api/options", {
       method: "POST",
       signal: controller.signal,
@@ -121,7 +137,8 @@ export async function resolveVizerHls(
       throw new Error("Vizer não possui opções de vídeo disponíveis para este título");
     }
 
-    const videoId = optData.options[0].ID;
+    videoId = optData.options[0].ID;
+    }
 
     // Obtém a URL do player
     const playerRes = await fetch("https://fshd.link/api/players", {
@@ -166,7 +183,7 @@ export async function resolveVizerHls(
     const playerRedirect = redirectMatch[1];
     const dataMatch = playerRedirect.match(/data=([a-f0-9]+)/);
     if (!dataMatch || !dataMatch[1]) {
-      throw new Error("Hash de dados do player não localizado");
+      throw new Error("Formato do FsPlay indisponível para o resolvedor HLS");
     }
 
     const masterUrl = `https://112234152.xyz/hls/${dataMatch[1]}/master.txt`;
@@ -180,6 +197,7 @@ export async function resolveVizerHls(
     vizerCache.set(cacheKey, entry);
     return { masterUrl, playerRedirect };
   } finally {
+    signal?.removeEventListener('abort', abort);
     clearTimeout(timer);
   }
 }
@@ -296,6 +314,9 @@ vizerRouter.get("/api/vizer-hls-proxy", async (req: Request, res: Response): Pro
  * Retorna dados de resolução em JSON
  */
 vizerRouter.get("/api/vizer-stream", async (req: Request, res: Response): Promise<void | Response> => {
+  const controller = new AbortController();
+  const abort = () => { if (!res.writableEnded) controller.abort(); };
+  res.once('close', abort);
   const tmdbId = Number(req.query.tmdbId || req.query.id);
   const isSeries = req.query.type === "series" || (req.query.s !== undefined && req.query.s !== "");
   const season = req.query.s ? Number(req.query.s) : undefined;
@@ -307,7 +328,7 @@ vizerRouter.get("/api/vizer-stream", async (req: Request, res: Response): Promis
   }
 
   try {
-    const { masterUrl, playerRedirect } = await resolveVizerHls(tmdbId, season, episode, isSeries, refresh);
+    const { masterUrl, playerRedirect } = await resolveVizerHls(tmdbId, season, episode, isSeries, refresh, controller.signal);
     const proxyUrl = `/api/vizer-hls-proxy?url=${encodeURIComponent(masterUrl)}&ref=${encodeURIComponent(playerRedirect)}`;
 
     return res.json({
@@ -317,8 +338,9 @@ vizerRouter.get("/api/vizer-stream", async (req: Request, res: Response): Promis
       playerRedirect
     });
   } catch (err: any) {
-    return res.status(404).json({
+    return res.status(502).json({
       success: false,
+      reason: "vizer_resolution_failed",
       error: err.message || "Conteúdo não localizado no Vizer"
     });
   }

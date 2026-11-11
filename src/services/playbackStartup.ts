@@ -16,6 +16,12 @@ export type StartupInput = {
 export type CatalogueHint = { listed: boolean; warm: boolean; audioPriority?: number };
 
 export function startupOrder(keys: string[], hints: Record<string, CatalogueHint>, preferred?: string) {
+  // An explicit protocol hint supersedes the legacy Saimo alias. If the
+  // catalogue knows this title has only MP4, never manufacture an HLS retry.
+  if (hints.srv_saimo?.listed) {
+    const protocols = ['srv_saimo_hls', 'srv_saimo_mp4'].filter(k => hints[k]?.listed);
+    if (protocols.length) keys = keys.filter(k => k === 'srv_saimo' ? !protocols.some(p => keys.includes(p)) : !k.startsWith('srv_saimo_') || protocols.includes(k));
+  }
   const listed = keys.filter(k => hints[k]?.listed);
   const eligible = listed.length ? listed : keys;
   const usable = eligible.some(k => hints[k]?.audioPriority === 0) ? eligible.filter(k => hints[k]?.audioPriority !== 2) : eligible;
@@ -109,6 +115,12 @@ export async function preparePlaybackStartup(
 
   // Mapeia URLs prontas retornadas por qualquer probe
   for (const [key, value] of Object.entries(health)) {
+    if (key === 'srv_vizer' && value.iframeUrl) {
+      try {
+        const url = new URL(value.iframeUrl, 'https://local');
+        if (url.origin === 'https://local' && url.pathname === '/api/vizer-proxy-iframe') urls[key] = url.pathname + url.search;
+      } catch {}
+    }
     if (key === 'srv_byse' && value.iframeUrl) {
       try {
         const url = new URL(value.iframeUrl, 'https://local');
@@ -143,7 +155,10 @@ export async function preparePlaybackStartup(
 
 export function nextStartupKey(keys: string[], attempted: Set<string>, health: ServerHealthMap) {
   const score = (key: string) => (health[key]?.state === 'available' ? 0 : 1);
-  return keys.filter(key => !attempted.has(key) && health[key]?.state !== 'unavailable').sort((a, b) => score(a) - score(b))[0];
+  return keys.filter(key => !attempted.has(key) && health[key]?.state !== 'unavailable' &&
+    !(key.startsWith('srv_saimo') && health[key]?.mediaKind && [...attempted].some(previous =>
+      previous.startsWith('srv_saimo') && health[previous]?.mediaKind === health[key].mediaKind)))
+    .sort((a, b) => score(a) - score(b))[0];
 }
 
 // Start the media budget when its iframe is attached, never during metadata probes.
@@ -163,8 +178,7 @@ export function createStartupMediaClock() {
 }
 
 export function startupMediaLimit(key: string, hasAlternative: boolean, prepared: boolean) {
-  if (key === 'srv_byse' && !prepared) return hasAlternative ? 9000 : 12000;
-  return hasAlternative ? 7500 : 9000;
+  return 12000;
 }
 
 export function shouldReloadMixdropFrame(activeUrl: string | null | undefined, started: boolean) {

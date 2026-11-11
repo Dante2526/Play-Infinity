@@ -58,6 +58,29 @@ test('small media reads cancel full downloads when the CDN ignores Range', async
   const response = new Response(new ReadableStream({ start(c) { c.enqueue(Buffer.alloc(100000)); }, cancel() { cancelled = true; } }));
   assert.equal((await api.readHealthPrefix(response, 1024)).length, 1024); assert.equal(cancelled, true);
 });
+
+test('Vizer health accepts its key, resolves movies without episode parameters and hides upstream URLs', async () => {
+  global.fetch = async (raw) => {
+    const u = new URL(raw);
+    assert.equal(u.origin, base);
+    if (u.pathname === '/api/vizer-stream') {
+      assert.equal(u.searchParams.get('tmdbId'), '1148365');
+      assert.equal(u.searchParams.get('type'), 'movie');
+      assert.equal(u.searchParams.has('s'), false);
+      return Response.json({ proxyUrl: '/api/vizer-hls-proxy?url=private-fixture' });
+    }
+    assert.equal(u.pathname, '/api/vizer-hls-proxy');
+    return new Response('#EXTM3U\n#EXTINF:6,\nsegment.ts');
+  };
+  try {
+    const r = await nativeFetch(base + '/api/playback-health?id=1148365&type=movie&servers=srv_vizer');
+    assert.equal(r.status, 200);
+    const d = await r.json();
+    assert.equal(d.servers.srv_vizer.state, 'available');
+    assert.equal(d.servers.srv_vizer.mediaKind, 'hls');
+    assert.ok(!JSON.stringify(d).includes('private-fixture'));
+  } finally { global.fetch = nativeFetch; }
+});
 test('transient upstream failures and throttling remain unknown; explicit 404 is unavailable', async () => {
   for (const status of [403, 429, 502, 404, 410]) {
     const found = await api.probeHealthMedia('http://fixture', new AbortController().signal, async () => new Response('', { status }));

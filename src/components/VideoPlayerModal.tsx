@@ -1687,13 +1687,6 @@ export function VideoPlayerModal({
           if(recovered){void handleServerSwitch(recovered,true);return;}
         }catch{if(epoch!==serverSelectionEpochRef.current)return;}
       }
-      if(servers.some(s=>s.key==='srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')){
-        fallbackAttemptsRef.current.add('srv_byse_retried');
-        fallbackAttemptsRef.current.delete('srv_byse');
-        console.warn('[VideoPlayerModal] Fontes alternativas esgotadas durante inicialização. Retestando BYSE com resolução em background concluída...');
-        void handleServerSwitch('srv_byse', true);
-        return;
-      }
       setActiveIframeUrl(null);setIsLoading(false);setError('Não foi possível iniciar nas fontes disponíveis. Tente novamente.');return;
     }
 
@@ -1732,22 +1725,15 @@ export function VideoPlayerModal({
 
     fallbackAttemptsRef.current.add(selectedServerKey);
     // Identifica próximo servidor ainda não tentado
-    const nextServer = rankPlaybackServers<(typeof servers)[number]>(servers, health).find(s => !fallbackAttemptsRef.current.has(s.key) && s.key !== selectedServerKey && !isServerBlacklisted(s.key));
+    const nextKey = nextStartupKey(rankPlaybackServers<(typeof servers)[number]>(servers, health).map(s => s.key), fallbackAttemptsRef.current, health);
+    const nextServer = servers.find(s => s.key === nextKey);
     if (nextServer) {
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);
       hasSeekedInitialTimeRef.current = false;
-      handleServerSwitch(nextServer.key);
+      handleServerSwitch(nextServer.key, true);
       return;
     }
 
-    if (servers.some(s => s.key === 'srv_byse') && !fallbackAttemptsRef.current.has('srv_byse_retried')) {
-      fallbackAttemptsRef.current.add('srv_byse_retried');
-      fallbackAttemptsRef.current.delete('srv_byse');
-      console.warn('[VideoPlayerModal] Fontes alternativas esgotadas. Retestando BYSE com resolução em background concluída...');
-      hasSeekedInitialTimeRef.current = false;
-      handleServerSwitch('srv_byse');
-      return;
-    }
 
     console.error("[VideoPlayerModal] Conteúdo indisponível nos servidores homologados.");
     setActiveIframeUrl(null);
@@ -2152,7 +2138,7 @@ export function VideoPlayerModal({
           pausedAtRef.current = null;
         }
 
-        if ((incomingTime > lastKnownTimeRef.current && incomingTime - lastKnownTimeRef.current < 1.5 && isPaused === false && (data.readyState === undefined || data.readyState >= 2)) || (data.duration > 0 && typeof data.readyState === 'number' && data.readyState >= 3 && isPaused === false)) {
+        if (incomingTime > lastKnownTimeRef.current && incomingTime - lastKnownTimeRef.current < 1.5 && isPaused === false && (data.readyState === undefined || data.readyState >= 2)) {
           healthPlaybackStartedRef.current = true;
         }
         // 4. Atualiza a memória de tempo (deve ser DEPOIS do diff)
@@ -2190,7 +2176,8 @@ export function VideoPlayerModal({
             setIframeVisible(true);
             retrySameServerRef.current = false;
             const wasFallback = fallbackAttemptsRef.current.size > 0;
-            if(!startupPlanRef.current||healthPlaybackStartedRef.current)fallbackAttemptsRef.current.clear();
+            // Keep exhausted sources for this content session. A short-lived
+            // play signal must not reopen the failed fallback chain.
 
             if (isSeries && tmdbId && !wasFallback) {
               try {
