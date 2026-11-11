@@ -71,3 +71,18 @@ test('prepared source reuses authenticated ticket without starting resolver and 
  const before=resolveCalls;const ok=await nativeFetch(base+'/api/byse-proxy-iframe?id=84958&s=1&e=4&prepared='+ticket);assert.equal(resolveCalls,before);assert.equal(ok.status,200);assert.match(await ok.text(),/WATCHPLAY_STATUS/);
  const wrong=await nativeFetch(base+'/api/byse-proxy-iframe?id=84958&s=1&e=3&prepared='+ticket);assert.equal(wrong.status,502);
 });
+
+test('a valid cold source taking longer than six seconds is not reported unavailable',async()=>{
+ const app=express(),tickets=api.createByseTickets(crypto.randomBytes(32));
+ app.use(api.createByseRouter({
+  tickets:()=>tickets,
+  sources:async()=>[{fileId:'cold-film',source:'vizer',audio:'Dublado'}],
+  resolve:async()=>{await new Promise(r=>setTimeout(r,6200));return {fileId:'cold-film',m3u8:'https://r66nv9ed.com/cold.m3u8',resolvedAt:Date.now(),expiresAt:Date.now()+600000}},
+  fetch:async()=>new Response('#EXTM3U\n#EXTINF:6,\nsegment.ts\n#EXT-X-ENDLIST')
+ }));
+ const local=app.listen(0,'127.0.0.1');await new Promise(r=>local.once('listening',r));
+ try{
+  const response=await nativeFetch(`http://127.0.0.1:${local.address().port}/api/byse-resolve?id=1400837`,{signal:AbortSignal.timeout(10000)});
+  assert.equal(response.status,200);const result=await response.json();assert.equal(result.fileId,'cold-film');assert.equal(result.source,'vizer');
+ }finally{local.closeAllConnections();await new Promise(r=>local.close(r));}
+});

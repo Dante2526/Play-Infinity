@@ -41,7 +41,10 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
     res.setHeader('Cache-Control','no-store');
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const resolved = await Promise.race([select(req.query), new Promise<never>((_,reject) => { timer = setTimeout(()=>reject(new Error('timeout')),6000); })]);
+      // Cold resolution includes catalogue selection, provider authentication
+      // and PoW. The modal owns the shorter deadline for switching players;
+      // this route must not report a healthy cold source unavailable at 6s.
+      const resolved = await Promise.race([select(req.query), new Promise<never>((_,reject) => { timer = setTimeout(()=>reject(new Error('timeout')),45000); })]);
       const proxyUrl = proxy(resolved.m3u8,resolved.fileId);
       const identity = new URLSearchParams();
       for (const field of ['id','s','e','name']) if (req.query[field]) identity.set(field,String(req.query[field]));
@@ -71,8 +74,9 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
         }`);
       html=html.replace(/type: "WATCHPLAY_ERROR",/g, 'type: "WATCHPLAY_ERROR", byseExhausted: true,');
       res.type('html').send(html);
-    } catch {
-      if (req.path === '/api/byse-resolve') return res.status(502).json({success:false,error:'BYSE indisponível para este conteúdo.'});
+    } catch (error) {
+      const reason = error instanceof Error && error.message === 'timeout' ? 'byse_resolution_timeout' : 'byse_resolution_failed';
+      if (req.path === '/api/byse-resolve') return res.status(502).json({success:false,reason,error:'BYSE indisponível para este conteúdo.'});
       res.status(502).type('html').send(buildSilentPlayerErrorPage({ reason: "BYSE indisponível", exhaustedKey: "byseExhausted" }));
     } finally { clearTimeout(timer); }
   });
