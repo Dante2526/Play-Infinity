@@ -1,3 +1,30 @@
+## 10/11/2026 — Correção de Busca Instantânea Saimo, Auto-Correção de Typo e Resolvedor Vizer HD
+
+**Contexto e Diagnóstico:**
+1. O usuário relatou que ao buscar *"Matchbox"* (TMDB 1148365), a busca exibia "Nenhum título encontrado para 'Matchbox'", mesmo com o filme presente no catálogo Saimo VOD.
+2. Ao buscar *"Matcbox"* (sem "h"), o TMDB retornava 0 resultados por falta de tolerância a erros de digitação (typo).
+3. O filme *"Outra Mamãe"* (TMDB 1400837) gerou erro 502 no Vizer HD (`/api/vizer-proxy-iframe?tmdbId=1400837&type=movie`) e uma cascata de fallbacks de quase 40 segundos antes de tocar no MixDrop.
+
+**Causas Raízes e Correções:**
+1. **Inclusão do Saimo no Lote de Reproduzíveis (`server/routes/encontreiLookup.ts`):**
+   - A rota `/api/check-playable-batch` checava apenas `_vizerMovieIndex` e `_encontreiMovieIndex`.
+   - Adicionado `saimoStore?.findMovie(id)` e `saimoStore?.findEpisode(id, 1, 1)`, validando instantaneamente (0.1ms via SQLite) títulos do Saimo sem depender de timeouts de rede.
+2. **Auto-Correção de Typo Inteligente no TMDB Proxy (`server/routes/tmdbProxy.ts` & `server/services/saimoSqliteStore.ts`):**
+   - Implementado `findFuzzyTitle` com distância de Levenshtein (<= 1) contra palavras-chave dos títulos em cache do SQLite.
+   - Quando o TMDB responde vazio para uma query (ex: `Matcbox`), o proxy auto-corrige para o termo mais próximo (`Matchbox`) e refaz a busca transparentemente.
+3. **Correção do Extrator de Filmes Vizer HD (`server/routes/vizerRoutes.ts`):**
+   - Páginas de filmes do FSHD contêm `var CONTENT_INFO = '32408'` em script JS em vez de `data-contentid` no HTML.
+   - Atualizado o regex para ler `CONTENT_INFO` e priorizar estritamente opções Dublado PT-BR (`type: 1`).
+4. **Otimização do Watchdog e Timeouts (`server/routes/byseRoutes.ts`, `src/components/VideoPlayerModal.tsx`, `src/services/catalogSearch.ts`):**
+   - Reduzido o timeout de espera do BYSE de 45s/12s para 6s/7s.
+   - Ampliado o timeout de resposta do lote de busca no cliente de 4.5s para 8s.
+
+**Validação Realizada:**
+- `npx tsx scratch/test_all_fixes.mjs`: Matchbox encontrado no Saimo, `Matcbox` -> `matchbox`, extração de `CONTENT_INFO: 32408`.
+- `npx tsc --noEmit`: **0 erros de compilação**.
+
+---
+
 ## 10/11/2026 — Otimização de Resolução: Priorização de Fontes e Eliminação de Delay no Fallback
 
 **Contexto e Diagnóstico:**
