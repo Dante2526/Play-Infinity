@@ -71,10 +71,27 @@ export interface SaimoSqliteStore {
   meta(key: string): string | null;
   findMovie(tmdbId: number): any | null;
   findEpisode(tmdbId: number, season: number, episode: number): any | null;
+  findFuzzyTitle(queryText: string): string | null;
   close(): void;
 }
 
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > 2) return 99;
+  const d: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) d[i][0] = i;
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    }
+  }
+  return d[m][n];
+}
+
 let _cachedStore: SaimoSqliteStore | null = null;
+let _cachedWords: Set<string> | null = null;
 
 export function openSaimoSqlite(dbPath?: string): SaimoSqliteStore | null {
   if (_cachedStore) return _cachedStore;
@@ -112,6 +129,29 @@ export function openSaimoSqlite(dbPath?: string): SaimoSqliteStore | null {
       },
       findEpisode(tmdbId: number, season: number, episode: number): any | null {
         return episodeIndex.get(`${tmdbId}:${season}:${episode}`) || null;
+      },
+      findFuzzyTitle(queryText: string): string | null {
+        if (!queryText || queryText.trim().length < 4) return null;
+        const norm = queryText.trim().toLowerCase();
+        if (!_cachedWords) {
+          try {
+            const rows = db.prepare("SELECT title FROM movies").all();
+            _cachedWords = new Set<string>();
+            for (const r of rows) {
+              if (!r.title) continue;
+              const words = r.title.toLowerCase().replace(/[^a-z0-9]+/g, " ").split(" ");
+              for (const w of words) if (w.length >= 4) _cachedWords.add(w);
+            }
+          } catch {
+            _cachedWords = new Set();
+          }
+        }
+        for (const w of _cachedWords) {
+          if (Math.abs(w.length - norm.length) <= 1 && levenshtein(w, norm) <= 1) {
+            return w;
+          }
+        }
+        return null;
       },
       close(): void {
         try {

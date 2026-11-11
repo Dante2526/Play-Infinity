@@ -92,8 +92,10 @@ export async function resolveVizerHls(
         contentId = parseInt(activeMatch[1], 10);
       }
     } else {
-      // Para filmes, procura data-contentinfo ou data-contentid
-      const movieMatch = html.match(/data-contentid=["'](\d+)["']|data-contentinfo=["'](\d+)["']/);
+      // Para filmes, procura CONTENT_INFO no script ou data-contentinfo/id nas tags
+      const movieMatch = html.match(/var\s+CONTENT_INFO\s*=\s*['"]?(\d+)['"]?/i) ||
+                         html.match(/CONTENT_INFO\s*=\s*['"]?(\d+)['"]?/i) ||
+                         html.match(/data-contentid=["'](\d+)["']|data-contentinfo=["'](\d+)["']/i);
       if (movieMatch) {
         contentId = parseInt(movieMatch[1] || movieMatch[2], 10);
       }
@@ -101,7 +103,8 @@ export async function resolveVizerHls(
 
     if (!contentId) {
       // Fallback genérico
-      const anyMatch = html.match(/data-contentid=["'](\d+)["']/);
+      const anyMatch = html.match(/var\s+CONTENT_INFO\s*=\s*['"]?(\d+)['"]?/i) ||
+                       html.match(/data-contentid=["'](\d+)["']/);
       if (anyMatch) contentId = parseInt(anyMatch[1], 10);
     }
 
@@ -137,7 +140,10 @@ export async function resolveVizerHls(
       throw new Error("Vizer não possui opções de vídeo disponíveis para este título");
     }
 
-    videoId = optData.options[0].ID;
+    // Prioriza estritamente áudio Dublado PT-BR (type: 1) sobre Legendado (type: 2)
+    const dubOpt = optData.options.find((o: any) => o.type === 1);
+    const selectedOpt = dubOpt || optData.options[0];
+    videoId = selectedOpt.ID;
     }
 
     // Obtém a URL do player

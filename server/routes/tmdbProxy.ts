@@ -1,9 +1,6 @@
 import { Router } from "express";
-// Nota: imports antigos (axios, cheerio, firebase, fs/path/crypto, etc.) eram
-// leftovers de copy-paste e NUNCA usados aqui. Com o build usando
-// --packages=external, um require("axios") derrubaria o servidor em produção
-// (axios nao esta em dependencies) — removidos ao montar o router no server.ts.
 import { tmdbCache } from "../utils/caches";
+import { getSaimoStore } from "../services/saimoSqliteStore";
 
 const router = Router();
 const _tmdbProxyInflight = new Map<string, Promise<{ status: number; data: any }>>();
@@ -34,7 +31,31 @@ router.get(["/api/tmdb", "/api/tmdb/*"], async (req, res) => {
             signal: AbortSignal.timeout(15000),
             headers: { "accept": "application/json" }
           });
-          const data = await response.json();
+          let data = await response.json();
+
+          // Auto-correção de digitação (typo): se a busca no TMDB retornar vazia,
+          // consulta títulos aproximados no catálogo local do Saimo (ex.: Matcbox -> Matchbox)
+          if (cleanPath.startsWith("search/") && (!data?.results || data.results.length === 0)) {
+            const rawQuery = query.get("query") || "";
+            const saimoStore = getSaimoStore();
+            const corrected = saimoStore?.findFuzzyTitle(rawQuery);
+            if (corrected && corrected.toLowerCase() !== rawQuery.toLowerCase()) {
+              const retryQuery = new URLSearchParams(query);
+              retryQuery.set("query", corrected);
+              const retryUrl = `https://api.themoviedb.org/3/${cleanPath}?${retryQuery.toString()}`;
+              try {
+                const retryRes = await fetch(retryUrl, {
+                  signal: AbortSignal.timeout(10000),
+                  headers: { "accept": "application/json" }
+                });
+                const retryData = await retryRes.json();
+                if (retryRes.ok && retryData?.results && retryData.results.length > 0) {
+                  data = retryData;
+                }
+              } catch {}
+            }
+          }
+
           if (response.ok && data && typeof data === "object") {
             tmdbCache.set(cacheKey, { status: response.status, data });
           }

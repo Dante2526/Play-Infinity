@@ -41,7 +41,7 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
     res.setHeader('Cache-Control','no-store');
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const resolved = await Promise.race([select(req.query), new Promise<never>((_,reject) => { timer = setTimeout(()=>reject(new Error('timeout')),45000); })]);
+      const resolved = await Promise.race([select(req.query), new Promise<never>((_,reject) => { timer = setTimeout(()=>reject(new Error('timeout')),6000); })]);
       const proxyUrl = proxy(resolved.m3u8,resolved.fileId);
       const identity = new URLSearchParams();
       for (const field of ['id','s','e','name']) if (req.query[field]) identity.set(field,String(req.query[field]));

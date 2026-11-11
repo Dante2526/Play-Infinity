@@ -56,13 +56,13 @@ export async function searchCatalog(
   signal.addEventListener('abort', cancel, { once: true });
   if (signal.aborted) controller.abort();
   // This deadline also bounds the worker queue; late results never update the UI.
-  const timer = setTimeout(cancel, 10000);
+  const timer = setTimeout(cancel, 15000);
   const request = async (url: string, init?: RequestInit) => {
     const phase = new AbortController();
     const stop = () => phase.abort();
     controller.signal.addEventListener('abort', stop, { once: true });
     if (controller.signal.aborted) phase.abort();
-    const phaseTimer = setTimeout(stop, 4500);
+    const phaseTimer = setTimeout(stop, 8000);
     try {
       const response = await fetch(apiBase() + url, { ...init, signal: phase.signal, cache: 'no-store' });
       if (!response.ok) return null;

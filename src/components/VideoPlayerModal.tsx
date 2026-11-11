@@ -1769,7 +1769,7 @@ export function VideoPlayerModal({
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
     // Allow bounded source selection, token renewal and one alternate file.
-    const providerTimeout = (selectedServerKey === "srv_vizer" || selectedServerKey === "srv_byse") ? 12000 : selectedServerKey === "srv_streamtape" ? 10000 : (isWatchplay ? 9000 : (isMixdrop ? 10000 : 8000));
+    const providerTimeout = (selectedServerKey === "srv_vizer" || selectedServerKey === "srv_byse") ? 7000 : selectedServerKey === "srv_streamtape" ? 8000 : (isWatchplay ? 8000 : (isMixdrop ? 8500 : 7000));
     const plan=startupPlanRef.current;
     const health=healthRef.current.identity===healthIdentityRef.current?healthRef.current.servers:{};
     const alternative=plan?.candidates.some(key=>key!==selectedServerKey&&!fallbackAttemptsRef.current.has(key)&&playbackHealthState(health,key)!=='unavailable')||false;

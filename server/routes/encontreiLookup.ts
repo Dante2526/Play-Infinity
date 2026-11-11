@@ -1790,6 +1790,7 @@ router.all("/api/check-playable-batch", async (req, res) => {
     const unverifiedItems: RequestItem[] = [];
 
     const now = Date.now();
+    const saimoStore = getSaimoStore();
 
     for (const item of items) {
       const id = item.id;
@@ -1798,8 +1799,8 @@ router.all("/api/check-playable-batch", async (req, res) => {
       let found = false;
 
       // 1. Checa índice de filmes e séries locais respeitando o tipo solicitado
-      const inMovieIndex = _vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id);
-      const inSeriesIndex = _vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id);
+      const inMovieIndex = _vizerMovieIndex.has(id) || _encontreiMovieIndex.has(id) || Boolean(saimoStore?.findMovie(id));
+      const inSeriesIndex = _vizerSeriesSeasonsIndex.has(id) || _encontreiSeriesSeasonsIndex.has(id) || Boolean(saimoStore?.findEpisode(id, 1, 1));
 
       if (isExplicitMovie) {
         if (inMovieIndex) {
