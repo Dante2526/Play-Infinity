@@ -2271,7 +2271,7 @@ export function VideoPlayerModal({
             fromCommittedFrame = !!reportedFrameUrl && !!committedUrl &&
               reportedFrameUrl === new URL(committedUrl, window.location.origin).href;
           } catch { fromCommittedFrame = false; }
-          if (!(fromCommittedFrame || (isSaimoServerKey(selectedServerKey) && event.data?.saimoExhausted === true))) {
+          if (!(fromCommittedFrame || event.data?.byseExhausted === true || event.data?.vizerExhausted === true || event.data?.streamtapeExhausted === true || (isSaimoServerKey(selectedServerKey) && event.data?.saimoExhausted === true))) {
             console.warn(`[VideoPlayerModal] Erro de player ignorado — iframe anterior em descarte (${msSinceTransition}ms após a troca): ${event.data.reason || event.data.type}`);
             return;
           }

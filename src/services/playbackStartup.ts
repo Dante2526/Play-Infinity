@@ -51,7 +51,7 @@ export async function preparePlaybackStartup(
   const meta = new AbortController();
   const stop = () => meta.abort();
   signal.addEventListener('abort', stop, { once: true });
-  const mt = setTimeout(stop, 1200);
+  const mt = setTimeout(stop, 2500);
 
   try {
     const r = await fetcher(apiOrigin() + '/api/playback-candidates?' + params, { signal: meta.signal });
@@ -74,7 +74,7 @@ export async function preparePlaybackStartup(
 
   // Cold BYSE resolves directly inside its iframe (12s budget) without spawning a duplicate PoW in health probe.
   const probeKeys = candidates
-    .filter(k => ['srv_byse', 'srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_anidigital'].includes(k) && (k !== 'srv_byse' || hints[k]?.warm))
+    .filter(k => ['srv_byse', 'srv_streamtape', 'srv_mixdrop', 'srv_watchplay', 'srv_vip', 'srv_nixplay', 'srv_saimo', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_vizer', 'srv_anidigital'].includes(k) && (k !== 'srv_byse' || hints[k]?.warm))
     .slice(0, 2);
 
   const health: ServerHealthMap = {};

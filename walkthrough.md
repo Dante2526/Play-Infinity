@@ -1,3 +1,31 @@
+## 10/11/2026 — Otimização de Resolução: Priorização de Fontes e Eliminação de Delay no Fallback
+
+**Contexto e Diagnóstico:**
+O usuário compartilhou log do console ao abrir o filme *"Outra Mamãe"* (TMDB 1400837):
+```
+[MixDrop Rastreio] 🔎 Origem: VIZER | fileId: k00npk66c97937
+DetailsPage-CIbn64dh.js:17 GET https://play-infinity.stream/api/byse-resolve?id=1400837&type=movie&s=1&e=1&name=Outra+Mam%C3%A3e 502 (Bad Gateway)
+[VideoPlayerModal] Player atual (srv_byse) demorou mais de 7.5s sem iniciar. Tentando fallback automático.
+[VideoPlayerModal] Player atual (srv_saimo_mp4) demorou mais de 7.5s sem iniciar. Tentando fallback automático.
+```
+O scraper já havia encontrado o fileId HD do MixDrop via Vizer (`k00npk66c97937`), mas o player tentou o BYSE (502), esperou 7.5s no watchdog, tentou o Saimo MP4 (4.3 GB, demorou mais de 7.5s no buffer inicial) e só então caiu no MixDrop.
+
+**Causas Raízes e Correções:**
+1. **Fallback Instantâneo sem Esperar Watchdog (`src/components/VideoPlayerModal.tsx`):**
+   - O listener de `postMessage` descartava erros ocorridos em menos de 3.000ms após a troca de servidor.
+   - Adicionada isenção para eventos definitivos (`byseExhausted`, `vizerExhausted`, `streamtapeExhausted` e `saimoExhausted`), acionando o fallback imediatamente (0ms) assim que o servidor retorna 502/indisponível.
+2. **Ampliação do Timeout de Candidatos (`src/services/playbackStartup.ts`):**
+   - Timeout de `/api/playback-candidates` ampliado de 1.200ms para 2.500ms, evitando que oscilações de rede gerem hints vazios que forçavam tentativa cega do BYSE.
+   - Incluído `srv_vizer` no pool de sondagem rápida de `probeKeys`.
+3. **Reconhecimento do Vizer como Player Integrado (`src/utils/playerIntegration.ts`):**
+   - Registradas as rotas `/api/vizer-` em `isExternalIframePlayer` para assegurar controle integral pela skin Netflix.
+
+**Validação Realizada:**
+- `node --test tests/playback-startup.test.cjs tests/vizer-netflix-skin-simulation.test.cjs`: **14/14 testes aprovados**.
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+
+---
+
 ## 10/11/2026 — Integração e Homologação do Servidor Vizer HD (1080p HLS + Skin Netflix)
 
 **Contexto e Solicitação do Usuário:**
