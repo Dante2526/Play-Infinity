@@ -2203,30 +2203,10 @@ export function VideoPlayerModal({
         (event.data.type === "PLAYER_EVENT" && event.data.data?.event === "ended");
 
       if (isEnded) {
-        if (isSeries) {
-          const totalEpCount = seasonData?.episodes?.length || 0;
-          const hasNextEpInSeason = totalEpCount > 0 ? (episode < totalEpCount) : true; // fallback if we don't know
-
-          if (hasNextEpInSeason) {
-            const nextEp = episode + 1;
-            console.log(`[Player Auto-Next] Episódio ${episode} encerrado. Passando e iniciando episódio ${nextEp}...`);
-            setAutoNextNotice({ nextEp });
-            handleEpisodeChange(nextEp);
-            setTimeout(() => setAutoNextNotice(null), 4500);
-          } else {
-            const availNums = (availableSeasons || []).map(Number);
-            const totalSeasons = Math.max(seriesDetails?.number_of_seasons || 0, ...(availNums.length > 0 ? availNums : [1]));
-            const hasNextSeason = totalSeasons > 0 && season < totalSeasons;
-
-            if (hasNextSeason) {
-              const nextSeason = season + 1;
-              console.log(`[Player Auto-Next] Temporada ${season} encerrada. Passando para Temp ${nextSeason} Ep 1...`);
-
-              void handleSeasonChange(nextSeason);
-            } else {
-              console.log(`[Player Auto-Next] Fim da série alcançado.`);
-            }
-          }
+        // Ao encerrar o vídeo, apenas marca o episódio atual como assistido e mantém a tela aguardando o clique do usuário
+        if (isSeries && resolvedId) {
+          markEpisodeWatched(resolvedId, season, episode, true);
+          console.log(`[Player Video Ended] Episódio ${episode} finalizado. Marcado como assistido. Aguardando ação do usuário.`);
         }
       } else if (event.data.type === "WATCHPLAY_INTRO_ACTIVE") {
         setIsIntroActive(!!event.data.active);

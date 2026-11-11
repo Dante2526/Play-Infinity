@@ -1,3 +1,29 @@
+## 10/11/2026 — Desativação do Avanço Automático no Preview de Próximo Episódio/Filme
+
+**Contexto e Solicitação do Usuário:**
+O usuário solicitou que o preview de próximo episódio ou próximo filme da saga não avance mais sozinho:
+*"usa o grafo quando aparecer aquele preview de proximo ep em serie ou filmes nn vai mais opassar sozinho, o usuario tyem que clicar nela"*
+
+**Modificações Realizadas:**
+1. **Remoção do Timer Automático em `src/components/NetflixPlayerSkin.tsx`:**
+   - Eliminados o estado `nextEpisodeCountdown` e o timer de contagem regressiva de 10s (`nextEpisodeTimerRef`).
+   - O card flutuante não força mais a chamada de `handlePlayNext()` ao zerar o tempo; ele permanece estático e visível durante os créditos aguardando a decisão do usuário.
+2. **Atualização Visual do Card Flutuante:**
+   - O cabeçalho foi alterado de *"Próximo em 10s"* para *"Próximo Episódio Disponível"* (ou *"Próxima Temporada (T{X})"* / *"Próximo Filme da Saga"*).
+   - A barra regressiva que esvaziava foi substituída por uma linha de destaque laranja/âmbar moderna com sombra sutil.
+   - Tornou-se clicável a área de informações (além da thumbnail e do botão *"Assistir Agora"*).
+   - O botão *"X"* permanece ativo para quem deseja fechar o card e ver os créditos inteiros.
+3. **Ajuste do Evento de Fim de Vídeo em `src/components/VideoPlayerModal.tsx`:**
+   - No evento `isEnded`, o episódio atual é marcado como assistido (`markEpisodeWatched`), mas a troca automática para o próximo episódio (`handleEpisodeChange(nextEp)`) foi desativada, respeitando a escolha do usuário de clicar quando desejar.
+4. **Sincronização do Grafo de Conhecimento:**
+   - Executado `graphify . --update --no-viz --code-only`, atualizando `graphify-out/graph.json` com 2.193 nós e 3.983 arestas.
+
+**Validação Realizada:**
+- `node --test tests/player-next-episode-guard.test.cjs`: **6/6 testes aprovados**.
+- `npx tsc --noEmit`: **0 erros de tipagem**.
+
+---
+
 ## 10/11/2026 — Scrollbar Bonita, Roda do Mouse e Setas no Seletor de Temporadas e Episódios (DetailsPage & VideoPlayerModal)
 
 **Contexto e Solicitação do Usuário:**
