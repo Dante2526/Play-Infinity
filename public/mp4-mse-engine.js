@@ -1216,6 +1216,20 @@
         }
       } catch (e) {}
       const cur = video.currentTime || 0;
+      // Seek pra frente: a janela começa no keyframe ≥ alvo, deixando o alvo num
+      // buraco sem dados — o vídeo ficaria "seeking" pra sempre. Pula pro keyframe.
+      if (video.seeking && !restoring && !inBuffered(cur)) {
+        try {
+          for (let i = 0; sb.buffered && i < sb.buffered.length; i++) {
+            const s = sb.buffered.start(i);
+            if (s > cur && s - cur <= opts.segmentSeconds + 15) {
+              log('seek gap ' + cur.toFixed(1) + ' → ' + s.toFixed(1));
+              video.currentTime = s + 0.05;
+              break;
+            }
+          }
+        } catch (e) {}
+      }
       // progresso de playback zera o circuit breaker de resets
       if (Math.abs(cur - lastLoopMarkTime) > 0.5) { resetLoopCount = 0; lastLoopMarkTime = cur; }
       let hasBuffer = false;
