@@ -1,3 +1,23 @@
+## 12/11/2026 — Restauração do Catálogo Vizer: Migração para www.vizer.food
+
+**Contexto e Diagnóstico:**
+O painel de monitoramento de saúde acusou o "Catálogo Vizer" como `OFFLINE` (HTTP 301, Vizer redirecionou para um domínio não configurado). O domínio antigo `www.vizer.date` respondeu com redirecionamento permanente (HTTP 301) para `https://www.vizer.food/`. Por medidas de segurança contra redirecionamentos não autorizados (SSRF), o `server/services/vizerDomains.ts` bloqueia domínios ausentes de `VIZER_DOMAINS`.
+
+**Ações Realizadas:**
+1. **Atualização da Lista de Domínios Homologados (`server/services/vizerDomains.ts`):**
+   - Adicionados `https://www.vizer.food` e `https://vizer.food` no topo da lista `VIZER_DOMAINS` como domínios primários.
+   - Mantido fallback transparente para domínios legados (`.date`, `.host`, `.press`, `.uno`, etc.).
+2. **Allowlist Compartilhada de Domínios (`src/data/streamingAllowlist.ts`):**
+   - Adicionado `vizer.food` à lista `ALLOWED_LIVE_STREAMING_DOMAINS`.
+3. **Atualização dos Testes Unitários (`tests/vizer.test.cjs`):**
+   - Atualizada a asserção do domínio primário e de fallback para `.food`.
+   - 13/13 testes unitários aprovados com 100% de sucesso.
+4. **Validação em Tempo Real:**
+   - Chamada direta de `checkVizerHealth()` retornou `ONLINE` (HTTP 200, 2202ms) para `https://www.vizer.food`.
+   - `npx tsc --noEmit`: 0 erros de tipagem.
+
+---
+
 ## 12/11/2026 — Correção de Travamento no Seek (Barra de Progresso) do MixDrop e Eliminação de Cascata de Fallbacks
 
 **Contexto e Diagnóstico:**

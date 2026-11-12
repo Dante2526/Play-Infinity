@@ -122,6 +122,7 @@ export const ALLOWED_LIVE_STREAMING_DOMAINS: string[] = [
   "venom.00000410.xyz",
   "fshd.link",
   "vizer.best",
+  "vizer.food",
   "cdn8embed.xyz",
   "playerembedcanais.site",
   "cdn10embed.xyz",
