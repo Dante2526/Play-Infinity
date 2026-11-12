@@ -21,6 +21,11 @@
    - Atualizada a versão do script para `/mp4-mse-engine.js?v=2` para evitar cache antigo.
 4. **Ignorar Servidores Não Listados no Startup (`src/services/playbackStartup.ts`):**
    - Servidores explicitamente marcados como `listed: false` nos hints não são selecionados como primários nem no fallback.
+5. **Auditoria Nemotron 3 Ultra 550B & Blindagem de Edge Cases (`public/mp4-mse-engine.js`):**
+   - Implementado controle de geração `fetchEpoch` para evitar race conditions em abort de seeks rápidos sucessivos.
+   - Proteção de fim de arquivo (`EOF`) em `inBuffered` para tolerar variações entre duração do container e último frame de áudio/vídeo.
+   - Garantia de revogação de `objectUrl` via `finally` em todos os fluxos.
+   - Atualizada a versão do script para `/mp4-mse-engine.js?v=3`.
 
 **Validação Realizada:**
 - `npx tsc --noEmit`: **0 erros de compilação**.
