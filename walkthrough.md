@@ -1,3 +1,33 @@
+## 12/11/2026 — Correção de Travamento no Seek (Barra de Progresso) do MixDrop e Eliminação de Cascata de Fallbacks
+
+**Contexto e Diagnóstico:**
+1. Ao reproduzir episódios com disponibilidade restrita ao MixDrop/Encontrei (ex: *Arcanjo Renegado* T5 E2), o `VideoPlayerModal` tentava o BYSE primeiro por 10s antes de chavear para o MixDrop, causando cascata de 404s.
+2. Ao avançar a barra de progresso no MixDrop, o vídeo ficava congelado em carregamento infinito com erro `SourceBuffer has been removed from the parent media source` e `[md-mse] fallback nativo: fatal:mse_sourcebuffer`.
+
+**Causa Raiz Identificada:**
+1. O `mp4-mse-engine.js` chamava `resetMse(t)` para qualquer seek para trás ou salto > 30s para frente. O `resetMse` destruía o `MediaSource`, revogava o Object URL e reatribuía `video.src = objectUrl`, resetando `currentTime` para 0 e pausando o elemento `<video>`.
+2. Em paralelo, o `createMixdropRecovery` (criado para o modo nativo antigo) observava o vídeo em 0s sem buffer e, após 6s, chamava `reloadSource()` (`video.src = options.sourceUrl; video.load()`). Isso sobrepunha a URL blob do MediaSource em plena execução, desanexando o `SourceBuffer` e matando o motor MSE.
+3. Se `video.currentTime` caísse milésimos antes do primeiro PTS decodificável (por priming de B-frames/ctts), o Chromium permanecia em estado `seeking` indefinidamente.
+
+**Ações Realizadas:**
+1. **Seek Não-Destrutivo no MSE (`public/mp4-mse-engine.js`):**
+   - Eliminada a destruição/recriação do `MediaSource` durante o seek.
+   - O seek agora cancela requisições pendentes da rede, limpa a fila `appendQueue`, calcula o GOP exato (`planWindow`) que contém o tempo desejado e injeta diretamente no `SourceBuffer` ativo.
+   - Adicionado micro-nudge automático em `onSbUpdateEnd` para ajustar milésimos de segundo de defasagem de PTS/elst e destravar a decodificação instantaneamente.
+2. **Proteção Anti-Interferência no Recovery (`server/services/mixdropRecovery.ts` & `server/services/streamtapeRecovery.ts`):**
+   - Adicionada verificação `isMseActive()`. Se o MSE estiver ativo (`blob:` URL ou `window.__piMseEngine`), o recovery nativo não pausa o vídeo nem sobrescreve `video.src`. O recovery só é ativado se houver fallback nativo real.
+3. **Retomada de Reprodução Pós-Seek (`server/routes/mixdrop.ts`):**
+   - Garantido que `v.play()` seja disparado se o vídeo estava tocando antes do seek (`resumePlay: true`).
+   - Atualizada a versão do script para `/mp4-mse-engine.js?v=2` para evitar cache antigo.
+4. **Ignorar Servidores Não Listados no Startup (`src/services/playbackStartup.ts`):**
+   - Servidores explicitamente marcados como `listed: false` nos hints não são selecionados como primários nem no fallback.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: **0 erros de compilação**.
+- `node --test tests/mixdrop.test.cjs tests/playback-startup.test.cjs tests/blacklist-allowlist-guard.test.cjs`: **47/47 testes aprovados**.
+
+---
+
 ## 12/11/2026 — Conformidade Google Play: Remoção de Recursos Sociais (Política para Famílias) e Versão 100
 
 **Contexto e Motivo da Rejeição:**
