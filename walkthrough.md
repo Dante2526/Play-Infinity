@@ -1,3 +1,17 @@
+## 12/11/2026 — Otimização Ultra-Ágil de Reconexão do Assistente de Voz "Infinity"
+
+**Contexto e Objetivo:**
+Reduzir ao mínimo a janela cega quando o motor de voz gratuito do Chromium/Google encerra sessões em silêncio ou ao alternar abas (`src/hooks/usePlayerVoiceAssistant.ts`).
+
+**Ações Realizadas:**
+1. **Reconexão em 80ms:** Reduzido o delay de restart no `onend` e `visibilitychange`/`focus` de 250ms/150ms para **80ms**.
+2. **Watchdog Ágil (1,5s) Sem Reset:** O vigia agora roda a cada **1,5 segundos** usando refs (`isListeningRef` e `startSessionRef`) para nunca resetar o intervalo por oscilações de estado.
+3. **Destravamento Anti-Deadlock:** Se `start()` ficar pendente sem disparar `onstart` por > 2s, `isStartingRef` é destravado automaticamente.
+4. **Renovação Preventiva (45s):** Renova a sessão preventivamente aos 45s de vida (antes do corte silencioso de ~60s do Google Speech), preservando falas recentes nos últimos 2,5s.
+5. **Validação:** `npx tsc --noEmit` (0 erros) e 6/6 testes unitários aprovados.
+
+---
+
 ## 12/11/2026 — Correção de Race Condition no Bloqueio Dinâmico de Servidores pelo Painel ADM
 
 **Contexto e Causa Raiz:**

@@ -37,10 +37,15 @@ export function usePlayerVoiceAssistant({
 
   const recognitionRef = useRef<any>(null);
   const isStartingRef = useRef(false);
+  const startingAtRef = useRef(0);
+  const isListeningRef = useRef(false);
+  const sessionStartedAtRef = useRef(0);
+  const lastResultAtRef = useRef(0);
   const onCommandRef = useRef(onCommand);
   const onWakeRef = useRef(onWakeWordDetected);
   const isPlayingRef = useRef(isPlaying);
   const isContinuousRef = useRef(isContinuous);
+  const startSessionRef = useRef<() => void>(() => {});
   const restartTimerRef = useRef<any>(null);
   const feedbackTimeoutRef = useRef<any>(null);
 
@@ -70,6 +75,7 @@ export function usePlayerVoiceAssistant({
       } catch {}
       recognitionRef.current = null;
     }
+    isListeningRef.current = false;
     setIsListening(false);
   }, []);
 
@@ -105,11 +111,14 @@ export function usePlayerVoiceAssistant({
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
+        isListeningRef.current = true;
         setIsListening(true);
         isStartingRef.current = false;
+        sessionStartedAtRef.current = Date.now();
       };
 
       recognition.onresult = (event: any) => {
+        lastResultAtRef.current = Date.now();
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
           const text = res[0]?.transcript || '';
@@ -145,18 +154,19 @@ export function usePlayerVoiceAssistant({
       };
 
       recognition.onend = () => {
+        isListeningRef.current = false;
         setIsListening(false);
         recognitionRef.current = null;
         isStartingRef.current = false;
 
-        // Se o modo contínuo estiver ativo, agenda o reinício imediato com nova instância
+        // Se o modo contínuo estiver ativo, agenda o reinício ultra-rápido (80ms) com nova instância
         if (isContinuousRef.current) {
           if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
           restartTimerRef.current = setTimeout(() => {
             if (isContinuousRef.current && document.visibilityState === 'visible') {
-              startRecognitionSession();
+              startSessionRef.current();
             }
-          }, 250);
+          }, 80);
         }
       };
 
@@ -169,11 +179,16 @@ export function usePlayerVoiceAssistant({
     }
   }, [lang, handleTranscript, showFeedback, safeStopCurrentRecognition]);
 
-  // Inicia uma sessão de reconhecimento limpa (anti-conflito)
+  // Inicia uma sessão de reconhecimento limpa com destravamento anti-deadlock
   const startRecognitionSession = useCallback(() => {
     if (!isSupported) return;
-    if (isStartingRef.current) return;
+    if (isStartingRef.current) {
+      // Se start() ficou travado sem disparar onstart por > 2s, destrava forçadamente
+      if (Date.now() - startingAtRef.current < 2000) return;
+      console.warn('[VoiceAssistant] Destravando start() pendente após 2s.');
+    }
     isStartingRef.current = true;
+    startingAtRef.current = Date.now();
 
     safeStopCurrentRecognition();
 
@@ -191,6 +206,10 @@ export function usePlayerVoiceAssistant({
       isStartingRef.current = false;
     }
   }, [isSupported, safeStopCurrentRecognition, createRecognition]);
+
+  useEffect(() => {
+    startSessionRef.current = startRecognitionSession;
+  }, [startRecognitionSession]);
 
   // Checagem inicial de suporte da Web Speech API
   useEffect(() => {
@@ -214,7 +233,7 @@ export function usePlayerVoiceAssistant({
     }
   }, [isContinuous, isSupported, startRecognitionSession, safeStopCurrentRecognition]);
 
-  // Watchdog Timer (Guardião): Verifica a cada 3.5 segundos se a escuta caiu silenciosamente
+  // Watchdog Timer Ágil (1.5s, sem reset por oscilação) + Renovação Preventiva a cada 45s
   useEffect(() => {
     if (!isContinuous || !isSupported) return;
 
@@ -222,14 +241,27 @@ export function usePlayerVoiceAssistant({
       if (!isContinuousRef.current) return;
       if (document.visibilityState !== 'visible') return;
 
-      // Se deveria estar escutando mas não há instância ativa ou isListening está false
-      if (!recognitionRef.current || !isListening) {
-        startRecognitionSession();
+      const now = Date.now();
+
+      // 1. Se não há instância ativa ou isListening está false, reanima imediatamente
+      if (!recognitionRef.current || !isListeningRef.current) {
+        startSessionRef.current();
+        return;
       }
-    }, 3500);
+
+      // 2. Renovação preventiva aos 45s (antes do timeout silencioso de ~60s do Google Speech),
+      // evitando renovar bem no meio de uma frase dita nos últimos 2.5s
+      if (
+        sessionStartedAtRef.current > 0 &&
+        now - sessionStartedAtRef.current >= 45000 &&
+        now - lastResultAtRef.current > 2500
+      ) {
+        startSessionRef.current();
+      }
+    }, 1500);
 
     return () => clearInterval(watchdogInterval);
-  }, [isContinuous, isSupported, isListening, startRecognitionSession]);
+  }, [isContinuous, isSupported]);
 
   // Reativação imediata ao voltar de segundo plano / outra aba / desbloqueio de tela
   useEffect(() => {
@@ -238,9 +270,9 @@ export function usePlayerVoiceAssistant({
         if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
         restartTimerRef.current = setTimeout(() => {
           if (isContinuousRef.current) {
-            startRecognitionSession();
+            startSessionRef.current();
           }
-        }, 150);
+        }, 80);
       }
     };
 
@@ -250,7 +282,7 @@ export function usePlayerVoiceAssistant({
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
     };
-  }, [isSupported, startRecognitionSession]);
+  }, [isSupported]);
 
   // Ativação por toque manual (Push-to-Talk)
   const triggerPushToTalk = useCallback(async () => {
