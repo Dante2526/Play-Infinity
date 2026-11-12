@@ -746,6 +746,7 @@
     let retryCount = 0;
     let lastEvict = 0;
     let restoring = false;
+    let restoringSince = 0, seekStuckSince = 0;
     let resetLoopCount = 0;
     let lastLoopMarkTime = 0;
     let initSegmentBytes = null;
@@ -1168,6 +1169,7 @@
       }
       engine.stats.resets++;
       restoring = true;
+      restoringSince = Date.now();
       // escape: se algo travar, libera o handler de seek depois de um tempo
       setTimeout(function () { restoring = false; }, 6000);
       try { if (sb) sb.abort(); } catch (e) {}
@@ -1219,17 +1221,36 @@
       // Seek pra frente: a janela começa no keyframe ≥ alvo, deixando o alvo num
       // buraco sem dados — o vídeo ficaria "seeking" pra sempre. Pula pro keyframe.
       if (video.seeking && !restoring && !inBuffered(cur)) {
+        let nudged = false;
         try {
           for (let i = 0; sb.buffered && i < sb.buffered.length; i++) {
             const s = sb.buffered.start(i);
             if (s > cur && s - cur <= opts.segmentSeconds + 15) {
               log('seek gap ' + cur.toFixed(1) + ' → ' + s.toFixed(1));
               video.currentTime = s + 0.05;
+              nudged = true;
               break;
             }
           }
         } catch (e) {}
-      }
+        // Seek ignorado (ex.: chegou durante restoring) ou janela errada: força
+        // carregar o ponto atual depois de 2s parado num buraco.
+        if (!nudged) {
+          if (!seekStuckSince) seekStuckSince = now;
+          else if (now - seekStuckSince > 2000) {
+            seekStuckSince = 0;
+            engine.stats.lastAction = 'seek-stuck ' + cur.toFixed(1);
+            const near = fetchingWindow && cur >= nextWindowStart - 0.2 && cur <= nextWindowStart + opts.segmentSeconds;
+            if (!near) {
+              if (fetchController) { try { fetchController.abort(); } catch (e) {} fetchingWindow = false; }
+              if (cur >= lastAppendedEndSec - 0.5) { nextWindowStart = cur; eosQueued = false; tick(); }
+              else resetMse(cur);
+              return;
+            }
+          }
+        } else seekStuckSince = 0;
+      } else seekStuckSince = 0;
+      if (restoring && video.seeking && now - (restoringSince || now) > 3000) restoring = false;
       // progresso de playback zera o circuit breaker de resets
       if (Math.abs(cur - lastLoopMarkTime) > 0.5) { resetLoopCount = 0; lastLoopMarkTime = cur; }
       let hasBuffer = false;
@@ -1292,6 +1313,7 @@
         if (initT > 1) {
           // mesmo mecanismo do reset: janela alvo pré-carregada + restore com buffer
           restoring = true;
+      restoringSince = Date.now();
           setTimeout(function () { restoring = false; }, 6000);
           nextWindowStart = initT;
           beginReset(initT);
