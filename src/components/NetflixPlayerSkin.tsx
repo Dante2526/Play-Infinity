@@ -1806,7 +1806,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 e.preventDefault();
                 triggerPushToTalk();
               }}
-              className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center gap-1.5 border backdrop-blur-md ${
+              className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center justify-center border backdrop-blur-md min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] ${
                 voiceContinuous
                   ? "text-amber-300 bg-gradient-to-r from-orange-600/35 via-amber-600/30 to-orange-600/35 border-orange-500/60 shadow-[0_0_18px_rgba(249,115,22,0.55)] scale-105"
                   : voiceListening
@@ -1821,25 +1821,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             >
               {voiceContinuous ? (
                 <div className="relative flex items-center justify-center">
-                  <AudioWaveform className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 stroke-[2.2] animate-pulse" />
+                  <AudioWaveform className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 stroke-[2.2] animate-pulse" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400" />
                 </div>
               ) : voiceListening ? (
-                <AudioLines className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 stroke-[2.2] animate-bounce" />
+                <AudioLines className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 stroke-[2.2] animate-bounce" />
               ) : (
-                <AudioLines className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8] text-neutral-300" />
+                <AudioLines className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8] text-neutral-300" />
               )}
-              <span className="text-[10px] sm:text-[11px] font-extrabold tracking-tight hidden md:inline">
-                {voiceContinuous ? (
-                  <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-amber-300 inline animate-spin [animation-duration:4s]" />
-                    Infinity
-                  </span>
-                ) : (
-                  "Infinity"
-                )}
-              </span>
             </button>
           )}
 

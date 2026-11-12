@@ -17,7 +17,9 @@
    - **Tolerância a Silêncio:** Ignora eventos normais de `no-speech` e `aborted`, impedindo encerramento prematuro.
    - **Watchdog / Heartbeat:** Timer a cada 3.5 segundos que verifica e reanima a escuta caso a instância tenha morrido silenciosamente.
    - **Retorno de Background (`visibilitychange` & `focus`):** Ao voltar de segundo plano ou mudar de aba, a escuta é reestabelecida em 150ms.
-4. **Testes e Tipagem:**
+4. **Ajuste Minimalista do Botão de Voz (`src/components/NetflixPlayerSkin.tsx`):**
+   - Removido o rótulo de texto "Infinity" do botão da barra superior, mantendo exclusivamente o ícone circular com a onda sonora animada (`AudioWaveform`/`AudioLines`), padronizado com os botões PiP, tela cheia e fechar.
+5. **Testes e Tipagem:**
    - Criado `tests/voice-permission-resilience.test.cjs` com 2/2 testes aprovados.
    - `tests/player-voice-assistant.test.cjs` com 4/4 testes aprovados.
    - `npx tsc --noEmit`: 0 erros de compilação.
