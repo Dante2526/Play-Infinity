@@ -452,7 +452,7 @@ doodstreamRouter.get("/api/doodstream-proxy-iframe", async (req: Request, res: R
             if (!isNaN(dt)) v.currentTime = Math.max(0, Math.min(v.duration || 99999, v.currentTime + dt));
             break;
           case "SKIP_INTRO":
-            var skipSec = typeof e.data.seconds === "number" ? e.data.seconds : 75;
+            var skipSec = typeof e.data.seconds === "number" ? e.data.seconds : 45;
             v.currentTime = Math.max(0, Math.min((v.duration || 99999) - 5, v.currentTime + skipSec));
             break;
           case "SET_VOLUME":

@@ -856,7 +856,7 @@ const router = Router();
                     }
                     break;
                   case "SKIP_INTRO":
-                    var sec = Number(e.data.seconds) || 75;
+                    var sec = Number(e.data.seconds) || 45;
                     var cur = (v ? v.currentTime : 0) || 0;
                     var maxD = (v && v.duration > 0 ? v.duration : 99999);
                     var target = Math.max(0, Math.min(cur + sec, maxD - 5));

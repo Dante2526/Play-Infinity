@@ -586,7 +586,7 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
           v.currentTime = v.currentTime + d.seconds;
         }
         if (d.type === "SKIP_INTRO" && v) {
-          var secIntro = typeof d.seconds === "number" ? d.seconds : 75;
+          var secIntro = typeof d.seconds === "number" ? d.seconds : 45;
           v.currentTime = Math.max(0, Math.min(v.currentTime + secIntro, (v.duration || 99999) - 5));
         }
         if (d.type === "MUTE" && v) { v.muted = true; }

@@ -2077,7 +2077,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 onSkipIntro();
               }}
               className="flex items-center gap-1 sm:gap-1.5 py-1 px-1 sm:px-1.5 text-white/90 hover:text-white transition-colors cursor-pointer group"
-              title="Pular Abertura (+75s) - Tecla S"
+              title={`Pular Abertura (+${skipDurationSeconds || 45}s) - Tecla S`}
             >
               <FastForward className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[1.7] group-hover:text-orange-400 transition-colors shrink-0" />
               <span className="font-normal text-[10px] xs:text-[11px] sm:text-xs whitespace-nowrap">
