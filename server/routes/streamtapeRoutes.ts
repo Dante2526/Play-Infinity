@@ -142,7 +142,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <script src="/mp4-mse-engine.js?v=1"></script>
+  <script src="/mp4-mse-engine.js?v=2"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; overflow: hidden; width: 100%; height: 100%; }
     #container { width: 100%; height: 100%; position: relative; }

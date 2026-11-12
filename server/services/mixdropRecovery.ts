@@ -38,6 +38,13 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     if (restore) video.removeEventListener("loadedmetadata", restore);
     restore = null;
   }
+  function isMseActive() {
+    try {
+      if (video && typeof video.src === 'string' && video.src.indexOf('blob:') === 0) return true;
+      if (typeof window !== 'undefined' && (window as any).__piMseEngine && !(window as any).__piMseNative) return true;
+    } catch (e) {}
+    return false;
+  }
   function fail(reason: string) {
     if (fatalSent) return;
     fatalSent = true;
@@ -49,12 +56,14 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     options.onFatal(reason);
   }
   function hold() {
+    if (isMseActive()) return;
     if (!wantsPlay || video.ended || video.seeking || fatalSent) return;
     holding = true;
     if (!stalledAt) stalledAt = Date.now();
     pauseInternally();
   }
   function reloadSource() {
+    if (isMseActive()) return;
     if (reloads >= 1 || fatalSent || !wantsPlay) return;
     reloads++;
     reloadedAt = Date.now();
@@ -73,6 +82,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     video.load();
   }
   function waiting() {
+    if (isMseActive()) return;
     if (!wantsPlay || video.paused && !holding || video.seeking || video.ended) return;
     if ((hasPlayed || video.currentTime > 0) &&
         (bufferedAhead() < 0.5 || video.readyState < 3)) hold();
@@ -113,6 +123,11 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     reloadSource();
   });
   const timer = setInterval(() => {
+    if (isMseActive()) {
+      holding = false;
+      stalledAt = 0;
+      return;
+    }
     if (video.ended) { holding = false; wantsPlay = false; stalledAt = 0; cancelRestore(); return; }
     const current = video.currentTime || 0;
     if (!holding && hasPlayed && wantsPlay && !video.paused && !video.seeking) {

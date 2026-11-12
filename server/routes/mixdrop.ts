@@ -236,7 +236,7 @@ const router = Router();
             }
           </style>
           <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
-          <script src="/mp4-mse-engine.js?v=1"></script>
+          <script src="/mp4-mse-engine.js?v=2"></script>
         </head>
         <body>
           <div id="artplayer-container"></div>
@@ -852,6 +852,9 @@ const router = Router();
                       t = Math.max(0, Math.min(t, isFinite(v.duration) ? v.duration : t));
                       if (art) art.currentTime = t;
                       else if (v) v.currentTime = t;
+                      if (e.data.resumePlay && v && v.paused) {
+                        try { v.play().catch(function() {}); } catch(err) {}
+                      }
                       sendStatus();
                     }
                     break;

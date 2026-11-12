@@ -13,6 +13,13 @@ export function createStreamtapeRecovery(video: HTMLVideoElement, options: {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stallTimer: ReturnType<typeof setTimeout> | undefined;
   let controller: AbortController | undefined;
+  function isMseActive() {
+    try {
+      if (video && typeof video.src === 'string' && video.src.indexOf('blob:') === 0) return true;
+      if (typeof window !== 'undefined' && (window as any).__piMseEngine && !(window as any).__piMseNative) return true;
+    } catch (e) {}
+    return false;
+  }
   function fatal() {
     if (failed) return;
     failed = true; recovering = false; resolving = false; epoch++;
@@ -20,7 +27,7 @@ export function createStreamtapeRecovery(video: HTMLVideoElement, options: {
     options.onFatal('StreamTape: falha persistente no vídeo (código ' + (video.error?.code || 0) + ')');
   }
   async function recover(alternate = false) {
-    if (failed || resolving) return;
+    if (isMseActive() || failed || resolving) return;
     clearTimeout(stallTimer);
     if (!recovering) {
       target = options.getTime();
@@ -74,7 +81,7 @@ export function createStreamtapeRecovery(video: HTMLVideoElement, options: {
   // Long buffer exhaustion can occur without a media error. Allow a short
   // network dip, then try another file, preserving position and pause intent.
   const stalled = () => {
-    if (!options.context || failed || video.paused || recovering || stallTimer) return;
+    if (isMseActive() || !options.context || failed || video.paused || recovering || stallTimer) return;
     const position = options.getTime();
     stallTimer = setTimeout(() => {
       stallTimer = undefined;

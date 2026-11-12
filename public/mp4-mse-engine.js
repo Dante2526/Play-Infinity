@@ -1011,6 +1011,20 @@
           }
           return;
         }
+        // Micro-nudge pós-seek: se o player estiver buscando e o tempo alvo estiver
+        // milésimos de segundo antes do primeiro PTS do buffer (priming do elst/b-frames),
+        // ajusta para dentro do buffer para destravar imediatamente a decodificação.
+        if (video.seeking && sb && sb.buffered && sb.buffered.length) {
+          const cur = video.currentTime;
+          for (let i = 0; i < sb.buffered.length; i++) {
+            const start = sb.buffered.start(i);
+            if (cur >= start - 0.25 && cur < start) {
+              log('seek nudging ' + cur.toFixed(2) + ' → ' + (start + 0.02).toFixed(2));
+              try { video.currentTime = start + 0.02; } catch (e) {}
+              break;
+            }
+          }
+        }
         pump();
         maybeEos();
       } catch (err) {
@@ -1139,37 +1153,43 @@
     function onSeeking() {
       if (engine.destroyed || !sb) return;
       engine.stats.seekEvents++;
-      log('SEEKING t=' + video.currentTime.toFixed(2) + ' buf=[' + rangesStr() + '] restoring=' + restoring);
-      // Seeks internos do restore pós-reset: o próprio reset já programou a
-      // janela do alvo — reagir aqui criaria um ciclo infinito de resets.
-      if (restoring) {
-        if (inBuffered(video.currentTime)) restoring = false;
-        return;
-      }
-      // captura o alvo IMEDIATAMENTE: o browser pode reverter o currentTime
-      // (seek pra região sem dados em MSE 'ended') antes do debounce rodar.
+      log('SEEKING t=' + video.currentTime.toFixed(2) + ' buf=[' + rangesStr() + ']');
+
       const t = video.currentTime;
       engine.stats.lastAction = 'seek@' + t.toFixed(1);
-      if (inBuffered(t)) { engine.stats.lastAction += '/buffered'; return; }
+      if (inBuffered(t)) {
+        engine.stats.lastAction += '/buffered';
+        return;
+      }
       if (t <= 0.2 && nextWindowStart === 0 && fetchingWindow) return;
+
       if (seekDebounce) clearTimeout(seekDebounce);
       seekDebounce = setTimeout(function () {
         if (engine.destroyed || !sb) return;
-        if (inBuffered(t)) return;
-        if (fetchingWindow && t >= nextWindowStart - 0.2 && t <= nextWindowStart + opts.segmentSeconds) return;
-        if (fetchController) { try { fetchController.abort(); } catch (e) {} fetchingWindow = false; }
-        if (t >= lastAppendedEndSec - 0.5 && t - lastAppendedEndSec <= 30) {
-          nextWindowStart = Math.max(t, 0);
-          eosQueued = false;
-          engine.stats.lastAction = 'seek-fwd ' + t.toFixed(1);
-          log('seek fwd ' + t.toFixed(1) + 's');
-          tick();
-        } else {
-          engine.stats.lastAction = (t > lastAppendedEndSec ? 'seek-fwd-reset ' : 'seek-back-reset ') + t.toFixed(1);
-          log('seek ' + (t > lastAppendedEndSec ? 'fwd gap ' : 'back ') + t.toFixed(1) + 's → reset');
-          resetMse(t);
+        const cur = video.currentTime;
+        if (inBuffered(cur)) return;
+        if (fetchingWindow && cur >= nextWindowStart - 0.2 && cur <= nextWindowStart + opts.segmentSeconds) return;
+
+        // Aborta requisição de rede anterior para focar no novo tempo imediatamente
+        if (fetchController) {
+          try { fetchController.abort(); } catch (e) {}
+          fetchingWindow = false;
         }
-      }, 120);
+
+        // Descarta blocos antigos enfileirados
+        appendQueue.length = 0;
+        eosQueued = false;
+
+        // Encontra o GOP alinhado por keyframe que cobre o tempo solicitado
+        const plan = planWindow(parsed, cur, cur + opts.segmentSeconds);
+        const t0 = plan ? plan.startSec : Math.max(0, cur);
+        nextWindowStart = t0;
+
+        engine.stats.lastAction = 'seek-jump ' + cur.toFixed(1) + ' (gop ' + t0.toFixed(1) + ')';
+        log('seek jump to ' + cur.toFixed(1) + 's (iniciando em GOP ' + t0.toFixed(1) + 's)');
+
+        tick();
+      }, 100);
     }
 
     function resetMse(startAt) {
@@ -1266,8 +1286,10 @@
             const near = fetchingWindow && cur >= nextWindowStart - 0.2 && cur <= nextWindowStart + opts.segmentSeconds;
             if (!near) {
               if (fetchController) { try { fetchController.abort(); } catch (e) {} fetchingWindow = false; }
-              if (cur >= lastAppendedEndSec - 0.5) { nextWindowStart = cur; eosQueued = false; tick(); }
-              else resetMse(cur);
+              const plan = planWindow(parsed, cur, cur + opts.segmentSeconds);
+              nextWindowStart = plan ? plan.startSec : Math.max(0, cur);
+              eosQueued = false;
+              tick();
               return;
             }
           }
@@ -1283,8 +1305,11 @@
           if (!stallSince) stallSince = now;
           else if (now - stallSince > opts.stallTimeoutMs) {
             stallSince = 0;
-            log('stall → reset em ' + cur.toFixed(1) + 's');
-            resetMse(cur);
+            log('stall → recarregando em ' + cur.toFixed(1) + 's');
+            const plan = planWindow(parsed, cur, cur + opts.segmentSeconds);
+            nextWindowStart = plan ? plan.startSec : Math.max(0, cur);
+            eosQueued = false;
+            tick();
             return;
           }
         } else stallSince = 0;
