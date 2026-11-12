@@ -16,6 +16,10 @@ import {
   clearStoredReferralCode,
   captureAcquisitionSourceFromUrl
 } from "../services/referralService";
+import {
+  requestMicrophonePermission,
+  isMicrophonePermissionGranted
+} from "../services/voicePermissionService";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -196,6 +200,15 @@ export function AuthModal({ isOpen, onClose, isDismissible = true }: AuthModalPr
           });
           navigator.credentials.store(cred).catch(() => {});
         } catch(credErr){console.warn("Silenced error:", credErr);}
+      }
+
+      // Solicita proativamente permissão de microfone para novos cadastros e acessos
+      if (!isMicrophonePermissionGranted()) {
+        try {
+          await requestMicrophonePermission();
+        } catch (micErr) {
+          console.warn("[Auth] Permissão de microfone ignorada ou adiada:", micErr);
+        }
       }
 
       onClose(); // Autenticação com sucesso

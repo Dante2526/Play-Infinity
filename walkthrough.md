@@ -1,3 +1,29 @@
+## 12/11/2026 — Permissão Proativa de Microfone e Blindagem Anti-Morte do Assistente "Infinity"
+
+**Contexto e Feedback do Usuário:**
+1. **Permissão de Microfone Proativa:** Novos usuários e clientes não ativados não devem precisar abrir o player e clicar manualmente no botão de microfone para conceder a permissão. O app deve solicitar logo no cadastro, login ou primeiro toque.
+2. **Microfone Não Escutava Após Inatividade / Troca de Aba:** Quando o usuário deixava o vídeo tocando e ia para outro aplicativo ("fazer outras coisas"), ao retornar e chamar "Infinity", a Web Speech API no Chromium/Android havia sofrido timeout silencioso (`onend` / `no-speech`), sem conseguir restabelecer a escuta.
+
+**Ações Realizadas:**
+1. **Serviço Centralizado de Permissão (`src/services/voicePermissionService.ts`):**
+   - Função `requestMicrophonePermission()` que requisita `getUserMedia` e libera o stream imediatamente.
+   - Detecção de permissão prévia e ativação padrão do modo contínuo de voz quando concedida.
+2. **Solicitação Proativa Antecipada:**
+   - `src/components/AuthModal.tsx`: Solicita permissão de microfone imediatamente após a criação de conta de novos usuários e no login.
+   - `src/components/PaywallModal.tsx`: Captura a permissão no primeiro toque do usuário não ativado.
+   - `src/App.tsx`: Solicitação no primeiro toque autêntico (`pointerdown`, `{ once: true }`) para novos acessos.
+3. **Blindagem do Assistente Contínuo (`src/hooks/usePlayerVoiceAssistant.ts`):**
+   - **Instâncias Limpas:** Descarta a instância anterior e cria sempre uma nova instância limpa de `SpeechRecognition` a cada reinício (eliminando erros de `InvalidStateError` do Chrome).
+   - **Tolerância a Silêncio:** Ignora eventos normais de `no-speech` e `aborted`, impedindo encerramento prematuro.
+   - **Watchdog / Heartbeat:** Timer a cada 3.5 segundos que verifica e reanima a escuta caso a instância tenha morrido silenciosamente.
+   - **Retorno de Background (`visibilitychange` & `focus`):** Ao voltar de segundo plano ou mudar de aba, a escuta é reestabelecida em 150ms.
+4. **Testes e Tipagem:**
+   - Criado `tests/voice-permission-resilience.test.cjs` com 2/2 testes aprovados.
+   - `tests/player-voice-assistant.test.cjs` com 4/4 testes aprovados.
+   - `npx tsc --noEmit`: 0 erros de compilação.
+
+---
+
 ## 12/11/2026 — Otimização Mobile do Painel Admin (Credenciais e Mascote Byte)
 
 **Contexto e Diagnóstico:**

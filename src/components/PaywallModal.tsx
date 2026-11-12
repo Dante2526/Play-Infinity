@@ -7,6 +7,10 @@ import { useSubscription, startTrial, TRIAL_DURATION_MS } from '../hooks/useSubs
 import { deriveStatus } from '../utils/subscriptionStatus';
 import { reportAppError } from './GlobalErrorModal';
 import { getFriendlyErrorMessage } from '../utils/errorTranslator';
+import {
+  requestMicrophonePermission,
+  isMicrophonePermissionGranted
+} from '../services/voicePermissionService';
 
 interface PaywallModalProps {
   isOpen: boolean;
@@ -80,6 +84,20 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
     } else if (isOpen) {
       // Visitante não logado vê o novo preço padrão de R$ 13,00
       setMonthlyFeeText("13,00");
+    }
+  }, [isOpen]);
+
+  // Solicita proativamente a permissão do microfone no primeiro toque no Paywall
+  // para deixar o comando de voz "Infinity" pronto para quando o usuário ativar a conta
+  useEffect(() => {
+    if (isOpen && !isMicrophonePermissionGranted()) {
+      const askMicOnFirstInteraction = () => {
+        requestMicrophonePermission().catch(() => {});
+      };
+      window.addEventListener('pointerdown', askMicOnFirstInteraction, { once: true });
+      return () => {
+        window.removeEventListener('pointerdown', askMicOnFirstInteraction);
+      };
     }
   }, [isOpen]);
 

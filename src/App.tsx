@@ -78,6 +78,10 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar } from "./utils/statusBar";
 import { setupFcmTokenRefreshListener } from "./services/pushNotifications";
 import { captureReferralFromUrl, captureAcquisitionSourceFromUrl } from "./services/referralService";
+import {
+  requestMicrophonePermission,
+  isMicrophonePermissionGranted
+} from "./services/voicePermissionService";
 
 const WebhookPanelModal = lazyWithRetry(() => import("./components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("./components/ReleaseCalendarPage"));
@@ -350,6 +354,22 @@ export default function App() {
   useEffect(() => {
     captureReferralFromUrl();
     captureAcquisitionSourceFromUrl();
+  }, []);
+
+  // Solicita proativamente permissão de microfone para novos usuários ou visitantes
+  // no primeiro toque autêntico na tela (requisito de ativação do navegador)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isMicrophonePermissionGranted()) return;
+
+    const askMicOnFirstTouch = () => {
+      requestMicrophonePermission().catch(() => {});
+    };
+
+    window.addEventListener('pointerdown', askMicOnFirstTouch, { once: true });
+    return () => {
+      window.removeEventListener('pointerdown', askMicOnFirstTouch);
+    };
   }, []);
 
   // Reinscreve o listener do doc do usuário quando ele morre por erro transitório
