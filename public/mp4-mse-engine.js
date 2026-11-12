@@ -738,6 +738,7 @@
     let nextWindowStart = Math.max(0, Number(opts.initialTime) || 0);
     let seqNum = 1;
     let fetchingWindow = false;
+    let fetchEpoch = 0;
     let fetchController = null;
     let lastAppendedEndSec = 0;
     let durationSec = 0;
@@ -1084,6 +1085,12 @@
       if (!sb) return false;
       try {
         if (!sb.buffered || !sb.buffered.length) return false;
+        // Edge case no final do vídeo: o tempo de fim reportado pelo Chromium
+        // pode ser a duração exata do container, enquanto o buffer termina alguns frames antes.
+        if (durationSec > 0 && t >= durationSec - 0.5) {
+          const lastEnd = sb.buffered.end(sb.buffered.length - 1);
+          if (lastEnd >= durationSec - 1.0) return true;
+        }
         // margem de 250ms: o primeiro PTS do buffer pode estar à frente do alvo
         // (priming do elst) — o MSE clampa o seek pro próximo keyframe de todo jeito.
         for (let i = 0; i < sb.buffered.length; i++) {
@@ -1106,12 +1113,14 @@
     async function loadNextWindow() {
       if (fetchingWindow || engine.destroyed || !sb) return;
       fetchingWindow = true;
+      const epoch = ++fetchEpoch;
       const t0 = nextWindowStart;
       const t1 = t0 + opts.segmentSeconds;
       try {
         const span = computeSpan(t0, t1);
         if (!span) { eosQueued = true; maybeEos(); return; }
         const bytes = await fetchRange(span.spanStart, span.spanEnd - 1, opts.segmentTimeoutMs);
+        if (epoch !== fetchEpoch || engine.destroyed) return;
         const fragment = buildFragment(parsed, bytes, span.spanStart, t0, t1, seqNum++);
         if (!fragment) { eosQueued = true; maybeEos(); return; }
         engine.stats.windows++;
@@ -1123,18 +1132,18 @@
         pump();
         log('janela [' + t0.toFixed(1) + ',' + fragment.windowEndSec.toFixed(1) + ') v:' + fragment.samplesVideo + ' a:' + fragment.samplesAudio);
       } catch (err) {
-        if (engine.destroyed) return;
+        if (engine.destroyed || epoch !== fetchEpoch) return;
         retryCount++;
         if (retryCount <= opts.maxRetries) {
           const delay = 500 * Math.pow(2, retryCount - 1);
           log('retry ' + t0.toFixed(1) + 's em ' + delay + 'ms: ' + (err && err.message));
           fetchingWindow = false;
-          setTimeout(function () { if (!engine.destroyed) tick(); }, delay);
+          setTimeout(function () { if (!engine.destroyed && epoch === fetchEpoch) tick(); }, delay);
           return;
         }
         if (opts.onFatal) opts.onFatal('mse_window_failed:' + (err && err.message));
       } finally {
-        if (!engine.destroyed) fetchingWindow = false;
+        if (!engine.destroyed && epoch === fetchEpoch) fetchingWindow = false;
       }
     }
 
@@ -1170,7 +1179,8 @@
         if (inBuffered(cur)) return;
         if (fetchingWindow && cur >= nextWindowStart - 0.2 && cur <= nextWindowStart + opts.segmentSeconds) return;
 
-        // Aborta requisição de rede anterior para focar no novo tempo imediatamente
+        // Invalida a época de busca anterior para evitar sobrescrita por fetch defasado
+        fetchEpoch++;
         if (fetchController) {
           try { fetchController.abort(); } catch (e) {}
           fetchingWindow = false;
@@ -1221,7 +1231,7 @@
       const t0 = Math.max(0, startAt || 0);
       nextWindowStart = t0;
       try { if (ms && ms.readyState === 'open') ms.close(); } catch (e) {}
-      if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch (e) {} objectUrl = null; }
+      finally { if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch (e) {} objectUrl = null; } }
       beginReset(t0);
       resetting = false;
       setupMse();

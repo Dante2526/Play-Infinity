@@ -236,7 +236,7 @@ const router = Router();
             }
           </style>
           <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
-          <script src="/mp4-mse-engine.js?v=2"></script>
+          <script src="/mp4-mse-engine.js?v=3"></script>
         </head>
         <body>
           <div id="artplayer-container"></div>
