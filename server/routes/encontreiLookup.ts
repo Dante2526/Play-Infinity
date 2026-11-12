@@ -1513,9 +1513,20 @@ router.get('/api/catalog-season', async (req, res) => {
   try {
     loadCatalogs();
     const key = `${id}:${season}`;
+    // Episódios do índice Vizer somam sempre (Encontrei e Vizer publicam em ritmos diferentes).
+    const vizerNumbers: number[] = [];
+    if (_vizerEpisodeIndex instanceof SqliteEpisodeIndex) {
+      vizerNumbers.push(..._vizerEpisodeIndex.seasonEpisodes(id, season));
+    } else {
+      const prefix = `${id}:${season}:`;
+      for (const [k, ep] of _vizerEpisodeIndex as Map<string, any>) {
+        if (k.startsWith(prefix) && Number.isInteger(ep.episode) && ep.episode > 0) vizerNumbers.push(ep.episode);
+      }
+    }
+    const union = (a: number[]) => [...new Set([...a, ...vizerNumbers])].sort((x, y) => x - y);
     const cached = seasonListingCache.get(key);
     if (cached && cached.expires > Date.now()) {
-      return res.json({ season, episodes: cached.episodes, source: 'encontrei-live' });
+      return res.json({ season, episodes: union(cached.episodes), source: 'encontrei-live' });
     }
     const serieId = _tmdbToSerieIdMap.get(id);
     const cookie = (process.env.ENCONTREI_COOKIE || '').trim();
@@ -1539,20 +1550,11 @@ router.get('/api/catalog-season', async (req, res) => {
       if (episodes) {
         if (seasonListingCache.size >= 100) seasonListingCache.delete(seasonListingCache.keys().next().value!);
         seasonListingCache.set(key, { expires: Date.now() + 5 * 60 * 1000, episodes });
-        return res.json({ season, episodes, source: 'encontrei-live' });
+        return res.json({ season, episodes: union(episodes), source: 'encontrei-live' });
       }
     }
     // A partial local snapshot must not be padded to the TMDB episode count.
-    const fallbackNumbers = getEncontreiSeasonEpisodes(id, season);
-    if (_vizerEpisodeIndex instanceof SqliteEpisodeIndex) {
-      fallbackNumbers.push(..._vizerEpisodeIndex.seasonEpisodes(id, season));
-    } else {
-      const prefix = `${id}:${season}:`;
-      for (const [key, ep] of _vizerEpisodeIndex as Map<string, any>) {
-        if (key.startsWith(prefix) && Number.isInteger(ep.episode) && ep.episode > 0) fallbackNumbers.push(ep.episode);
-      }
-    }
-    const episodes = [...new Set(fallbackNumbers)].sort((a, b) => a - b);
+    const episodes = union(getEncontreiSeasonEpisodes(id, season));
     return res.json({ season, episodes, source: 'snapshot' });
   } catch {
     return res.status(503).json({ error: 'Lista de episódios temporariamente indisponível' });
