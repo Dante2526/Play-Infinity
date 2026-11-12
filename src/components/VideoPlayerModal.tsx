@@ -114,27 +114,39 @@ function extractSrcFromInput(input: string): string {
 
 const SUPERFLIX_REGEX = /superflix[a-z0-9-]*\.(top|net|org|com|shop|site|app|api|online|link|xyz|cc|to|vip|pro)/i;
 
-// Cache em memória dos server blocks por tmdbId (evita refetch em cada reabertura)
-// TTL 2min — admin faz mudança no painel, usuário vê em até 2min
+// Cache em memória dos server blocks por tmdbId (TTL curto + invalidação instantânea)
 const _serverBlocksCache = new Map<number, { timestamp: number; keys: Set<string> }>();
-const SERVER_BLOCKS_CACHE_TTL = 2 * 60 * 1000;
+const SERVER_BLOCKS_CACHE_TTL = 15 * 1000;
+
+if (typeof window !== "undefined") {
+  window.addEventListener("playinfinity:server_blocks_changed", () => {
+    _serverBlocksCache.clear();
+  });
+}
+
+function isBlockedByAdmin(key: string | null | undefined, blockedSet: Set<string>): boolean {
+  if (!key || blockedSet.size === 0) return false;
+  if (blockedSet.has(key)) return true;
+  if (blockedSet.has("srv_saimo") && isSaimoServerKey(key)) return true;
+  return false;
+}
 
 /**
  * Busca lista de server_keys bloqueados para um tmdbId.
  * Retorna Set vazio se não há blocks ou se fetch falha.
  */
-async function fetchBlockedServers(tmdbId: number | string | undefined): Promise<Set<string>> {
+async function fetchBlockedServers(tmdbId: number | string | undefined, forceRefresh = false): Promise<Set<string>> {
   if (!tmdbId) return new Set();
   const id = Number(tmdbId);
   if (isNaN(id)) return new Set();
 
   const cached = _serverBlocksCache.get(id);
-  if (cached && Date.now() - cached.timestamp < SERVER_BLOCKS_CACHE_TTL) {
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < SERVER_BLOCKS_CACHE_TTL) {
     return cached.keys;
   }
 
   try {
-    const res = await fetch(`/api/server-blocks?tmdb_id=${id}`, { cache: "no-store" });
+    const res = await fetch(`/api/server-blocks?tmdb_id=${id}&_t=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return cached?.keys || new Set();
     const data = await res.json();
     const keys = new Set<string>(data.blockedServerKeys || []);
@@ -1567,7 +1579,7 @@ export function VideoPlayerModal({
     // Aplica blocks dinâmicos vindos do painel admin (Firestore/painel via /api/server-blocks)
     // O admin pode bloquear qualquer server_key pra esse tmdbId (ex: srv_watchplay pra F1).
     if (blockedServerKeys.size > 0) {
-      list = list.filter(s => !blockedServerKeys.has(s.key));
+      list = list.filter(s => !isBlockedByAdmin(s.key, blockedServerKeys));
     }
 
     // Aplica a lista negra permanente (hardcoded em src/data/serverBlacklist.ts)
@@ -1758,6 +1770,19 @@ export function VideoPlayerModal({
   const silentFallbackRef = useRef(handleSilentFallback);
   silentFallbackRef.current = handleSilentFallback;
 
+  // Guarda reativa: se blockedServerKeys atualizar e o servidor ativo estiver bloqueado,
+  // troca imediatamente para o primeiro servidor elegível válido.
+  useEffect(() => {
+    if (!isOpen || blockedServerKeys.size === 0) return;
+    if (isBlockedByAdmin(selectedServerKey, blockedServerKeys)) {
+      const nextValid = servers.find((s) => !isBlockedByAdmin(s.key, blockedServerKeys));
+      if (nextValid && nextValid.key !== selectedServerKey) {
+        console.warn(`[VideoPlayerModal] Servidor '${selectedServerKey}' bloqueado dinamicamente. Alternando para '${nextValid.key}'.`);
+        void handleServerSwitch(nextValid.key, true);
+      }
+    }
+  }, [isOpen, blockedServerKeys, selectedServerKey, servers, handleServerSwitch]);
+
   // Availability is checked on open/episode change, never by a heavy polling loop
   // while another player is already healthy.
   const mixdropRecoveryRef = useRef(async () => { });
@@ -1926,6 +1951,23 @@ export function VideoPlayerModal({
           return;
         }
 
+        // Aguarda os bloqueios dinâmicos do painel ADM ANTES de escolher ou sondar qualquer servidor,
+        // evitando que o player abra em um servidor excluído/bloqueado por race condition.
+        const blockLookupId = tmdbId ? Number(tmdbId) : (effectiveMovieId ? Number(effectiveMovieId) : null);
+        const activeBlockedKeys = (blockLookupId && !isNaN(blockLookupId))
+          ? await fetchBlockedServers(blockLookupId, true)
+          : blockedServerKeys;
+        if (initialSelectionEpoch !== serverSelectionEpochRef.current) return;
+        if (activeBlockedKeys.size > 0) {
+          setBlockedServerKeys(activeBlockedKeys);
+        }
+
+        const eligibleServerList = serversRef.current.filter(s => !isBlockedByAdmin(s.key, activeBlockedKeys));
+        const eligibleKeys = eligibleServerList.map(s => s.key);
+        const safeInitialServerKey = initialServerKey && !isBlockedByAdmin(initialServerKey, activeBlockedKeys)
+          ? initialServerKey
+          : undefined;
+
         const isMixdropTarget =
           (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/md-stream"))) ||
           resolvedId === "969681" ||
@@ -1936,20 +1978,20 @@ export function VideoPlayerModal({
         if (isSeries && tmdbId) {
           try {
             prefServer = localStorage.getItem(`preferred_server_${tmdbId}`);
-            if (prefServer && !serversRef.current.find(s => s.key === prefServer)) {
+            if (prefServer && (!eligibleServerList.find(s => s.key === prefServer) || isBlockedByAdmin(prefServer, activeBlockedKeys))) {
               prefServer = null;
             }
           } catch (e) { }
         }
 
         // BYSE is the default; an explicit or saved choice still takes priority.
-        let targetServerKey = preferredPlaybackServer(serversRef.current.map(s=>s.key),initialServerKey,prefServer);
-        try {const chosen=await prepareStartup(targetSeason,targetEpisode,initialSelectionEpoch,targetServerKey);if(!chosen)return;targetServerKey=chosen;}catch{if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;}
+        let targetServerKey = preferredPlaybackServer(eligibleKeys, safeInitialServerKey, prefServer);
+        try {const chosen=await prepareStartup(targetSeason,targetEpisode,initialSelectionEpoch,targetServerKey,eligibleKeys);if(!chosen)return;targetServerKey=chosen;}catch{if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;}
         if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;
         let targetUrl: string;
         if (!startupPlanRef.current && targetServerKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(targetSeason, targetEpisode));
 
-        if (!isSeries && isMixdropTarget && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
+        if (!isSeries && isMixdropTarget && !isBlockedByAdmin("srv_mixdrop", activeBlockedKeys) && defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop."))) {
           targetServerKey = "srv_mixdrop"; targetUrl = defaultUrl;
         } else {
           let resolvedTargetUrl = "";
@@ -1963,7 +2005,7 @@ export function VideoPlayerModal({
           if (resolvedTargetUrl) {
             targetUrl = resolvedTargetUrl;
           } else {
-            const targetSrv = serversRef.current.find(s => s.key === targetServerKey) || serversRef.current[0];
+            const targetSrv = eligibleServerList.find(s => s.key === targetServerKey) || eligibleServerList[0] || serversRef.current[0];
             targetUrl = isSeries
               ? targetSrv.buildUrl(resolvedId, targetSeason, targetEpisode)
               : targetSrv.buildUrl(resolvedId);

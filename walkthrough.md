@@ -1,3 +1,25 @@
+## 12/11/2026 — Correção de Race Condition no Bloqueio Dinâmico de Servidores pelo Painel ADM
+
+**Contexto e Causa Raiz:**
+Ao excluir/bloquear um servidor pelo Painel ADM (`/api/server-blocks`), o `VideoPlayerModal.tsx` disparava `setupInitialServer()` em paralelo com `fetchBlockedServers()`, sem aguardar o retorno dos bloqueios. Consequentemente:
+1. O player iniciava no servidor bloqueado antes de receber a lista de bloqueios.
+2. Quando `fetchBlockedServers()` retornava, o servidor era removido da lista visual do modal "Áudio + Servidor", deixando o vídeo tocando no servidor excluído e sem nenhum item marcado com checkmark no seletor.
+3. O cache local de 2 minutos (`SERVER_BLOCKS_CACHE_TTL`) atrasava a atualização após ações no painel ADM.
+
+**Ações Realizadas:**
+1. **Sincronização Pré-Startup (`src/components/VideoPlayerModal.tsx`):**
+   - `setupInitialServer` agora aguarda `fetchBlockedServers(blockLookupId, true)` antes de eleger `targetServerKey` ou chamar `prepareStartup`.
+   - `eligibleServerList` e `eligibleKeys` filtram bloqueios (incluindo alias `srv_saimo` via `isBlockedByAdmin`) antes da seleção inicial e da regra `isMixdropTarget`.
+2. **Guarda Reativa:**
+   - Adicionado `useEffect` que monitora `blockedServerKeys` e comuta automaticamente via `handleServerSwitch` caso o servidor em execução seja bloqueado.
+3. **Invalidação Instantânea de Cache (`src/components/ServerBlocksAdmin.tsx`):**
+   - Ao salvar ou excluir bloqueios no painel ADM, dispara `playinfinity:server_blocks_changed`, limpando imediatamente `_serverBlocksCache` no frontend, além de reduzir o TTL para 15s com cache-busting `&_t=`.
+4. **Validação:**
+   - `npx tsc --noEmit`: 0 erros.
+   - `node --test tests/admin-new-server-blocks.test.cjs tests/server-blocks.test.cjs`: **9/9 aprovados**.
+
+---
+
 ## 12/11/2026 — Permissão Proativa de Microfone e Blindagem Anti-Morte do Assistente "Infinity"
 
 **Contexto e Feedback do Usuário:**

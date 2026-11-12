@@ -331,6 +331,9 @@ export function ServerBlocksAdmin() {
       setSelectedMedia(null);
       setFReason("");
       await loadBlocks();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("playinfinity:server_blocks_changed"));
+      }
       setTimeout(() => setSuccess(null), 5000);
     } catch (err: any) {
       setError(err.message || "Erro ao salvar bloqueio de servidor.");
@@ -358,6 +361,9 @@ export function ServerBlocksAdmin() {
       setSuccess("Bloqueio removido com sucesso!");
       setBlockToDelete(null);
       await loadBlocks();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("playinfinity:server_blocks_changed"));
+      }
       setTimeout(() => setSuccess(null), 3500);
     } catch (err: any) {
       setError(err.message || "Erro ao remover bloqueio.");
