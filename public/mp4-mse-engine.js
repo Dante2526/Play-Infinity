@@ -748,6 +748,7 @@
     let lastEvict = 0;
     let restoring = false;
     let restoringSince = 0, seekStuckSince = 0;
+    let resetting = false;
     let resetLoopCount = 0;
     let lastLoopMarkTime = 0;
     let initSegmentBytes = null;
@@ -949,7 +950,7 @@
       }
       try { sb.mode = 'segments'; } catch (e) {}
       sb.addEventListener('updateend', onSbUpdateEnd);
-      sb.addEventListener('error', function () { if (opts.onFatal) opts.onFatal('mse_sourcebuffer'); });
+      sb.addEventListener('error', onSbError);
       if (Number.isFinite(durationSec) && durationSec > 0) {
         try { ms.duration = durationSec; } catch (e) {}
       }
@@ -961,7 +962,7 @@
         const rp = resetPending;
         resetPending = null;
         rp.preFetch.then(function (result) {
-          if (engine.destroyed || !sb) return;
+          if (engine.destroyed || !sb || resetting) return;
           if (result) {
             try {
               const frag = buildFragment(parsed, result.bytes, result.spanStart, rp.startAt, rp.startAt + opts.segmentSeconds, seqNum++);
@@ -984,25 +985,37 @@
       startScheduler();
     }
 
-    function onSbUpdateEnd() {
-      log('updateend buffered=[' + rangesStr() + '] restoring=' + restoring + ' pendingRestore=' + pendingRestore);
-      if (pendingRestore !== null && !sb.updating && appendQueue.length === 0) {
-        const target = pendingRestore;
-        pendingRestore = null;
-        restoring = false; // só agora o guard libera: o buffer já cobre o alvo
-        log('restore: currentTime → ' + target.toFixed(1) + ' (com buffer pronto)');
-        try { video.currentTime = target; } catch (e) {}
-        // play() é ESSENCIAL: num vídeo ended (paused=true), o Chromium não
-        // engata o pipeline do novo MSE sem playback ativo — o buffered nunca
-        // populava e o seek ficava em loop de resets.
-        if ((!video.paused || video.ended) && video.play) {
-          const p = video.play();
-          if (p && p.catch) p.catch(function () {});
+    function onSbError(e) {
+      if (engine.destroyed || resetting || (e && e.target && e.target !== sb)) return;
+      if (opts.onFatal) opts.onFatal('mse_sourcebuffer');
+    }
+
+    function onSbUpdateEnd(e) {
+      if (engine.destroyed || !sb || resetting || (e && e.target && e.target !== sb)) return;
+      try {
+        log('updateend buffered=[' + rangesStr() + '] restoring=' + restoring + ' pendingRestore=' + pendingRestore);
+        let isUpdating = false;
+        try { isUpdating = sb.updating; } catch (e) { return; }
+        if (pendingRestore !== null && !isUpdating && appendQueue.length === 0) {
+          const target = pendingRestore;
+          pendingRestore = null;
+          restoring = false; // só agora o guard libera: o buffer já cobre o alvo
+          log('restore: currentTime → ' + target.toFixed(1) + ' (com buffer pronto)');
+          try { video.currentTime = target; } catch (e) {}
+          // play() é ESSENCIAL: num vídeo ended (paused=true), o Chromium não
+          // engata o pipeline do novo MSE sem playback ativo — o buffered nunca
+          // populava e o seek ficava em loop de resets.
+          if ((!video.paused || video.ended) && video.play) {
+            const p = video.play();
+            if (p && p.catch) p.catch(function () {});
+          }
+          return;
         }
-        return;
+        pump();
+        maybeEos();
+      } catch (err) {
+        log('onSbUpdateEnd caught: ' + (err && err.message));
       }
-      pump();
-      maybeEos();
     }
 
     function pump() {
@@ -1171,10 +1184,17 @@
       }
       engine.stats.resets++;
       restoring = true;
+      resetting = true;
       restoringSince = Date.now();
       // escape: se algo travar, libera o handler de seek depois de um tempo
       setTimeout(function () { restoring = false; }, 6000);
-      try { if (sb) sb.abort(); } catch (e) {}
+      if (sb) {
+        const oldSb = sb;
+        sb = null;
+        try { oldSb.removeEventListener('updateend', onSbUpdateEnd); } catch (e) {}
+        try { oldSb.removeEventListener('error', onSbError); } catch (e) {}
+        try { oldSb.abort(); } catch (e) {}
+      }
       appendQueue.length = 0;
       eosQueued = false;
       lastAppendedEndSec = 0;
@@ -1183,6 +1203,7 @@
       try { if (ms && ms.readyState === 'open') ms.close(); } catch (e) {}
       if (objectUrl) { try { URL.revokeObjectURL(objectUrl); } catch (e) {} objectUrl = null; }
       beginReset(t0);
+      resetting = false;
       setupMse();
     }
 
@@ -1282,7 +1303,9 @@
       try {
         if (sb) {
           sb.removeEventListener('updateend', onSbUpdateEnd);
+          sb.removeEventListener('error', onSbError);
           sb.abort();
+          sb = null;
         }
       } catch (e) {}
       try {
