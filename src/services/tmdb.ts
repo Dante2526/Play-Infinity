@@ -573,8 +573,22 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
     };
   }
   // Tentativa direta (silenciosa no !ok porque ainda há remapeamento a tentar).
-  const direct = await fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, { silent: true });
-  if (direct.ok && direct.data) return direct.data;
+  const [direct, catalog] = await Promise.all([
+    fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, { silent: true }),
+    fetchTmdbRaw<{ episodes: number[] }>(`${getApiBaseUrl()}/api/catalog-season?tmdb_id=${seriesId}&season=${seasonNumber}`, { silent: true }),
+  ]);
+  if (direct.ok && direct.data) {
+    // TMDB costuma atrasar o cadastro de episódios novos; completa com os do catálogo.
+    const eps = direct.data.episodes || [];
+    const have = new Set(eps.map(e => e.episode_number));
+    const extra = (catalog.ok && Array.isArray(catalog.data?.episodes) ? catalog.data.episodes : [])
+      .filter(n => Number.isInteger(n) && n > 0 && n <= 9999 && !have.has(n));
+    if (!extra.length) return direct.data;
+    const merged = [...eps, ...extra.map(n => ({ id: 0, name: `Episódio ${n}`, episode_number: n,
+      season_number: seasonNumber, overview: '', still_path: '', air_date: '' }))]
+      .sort((a, b) => a.episode_number - b.episode_number);
+    return { ...direct.data, episodes: merged, episode_count: Math.max(direct.data.episode_count || 0, merged.length) };
+  }
 
   if (direct.status === 404) {
     const mapped = await resolveTmdbSeasonNumber(seriesId, seasonNumber);
