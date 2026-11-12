@@ -1,4 +1,4 @@
-import { preparePlaybackStartup, createStartupMediaClock, startupMediaLimit, shouldReloadMixdropFrame, nextStartupKey } from "../services/playbackStartup";
+import { preparePlaybackStartup, createStartupMediaClock, startupMediaLimit, shouldReloadMixdropFrame, nextStartupKey, type CatalogueHint } from "../services/playbackStartup";
 export const __NIXPLAY_TOTAL_EPISODES_VERSION__ = "2.1.0";
 import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import Hls from "hls.js";
@@ -398,7 +398,7 @@ export function VideoPlayerModal({
   const startupClockRef=useRef(createStartupMediaClock());
   const startupExpandedRef=useRef(false);
   const startupControllerRef=useRef<AbortController|null>(null);
-  const startupPlanRef=useRef<{identity:string;candidates:string[];urls:Record<string,string>}|null>(null);
+  const startupPlanRef=useRef<{identity:string;candidates:string[];urls:Record<string,string>;hints?:Record<string,CatalogueHint>}|null>(null);
   const [selectedServerKey, setSelectedServerKey] = useState<string>(initialServerKey || "srv_byse");
 
   // Wrap de URLs MP4 nativos (como Nixplay) via bridge page para garantir postMessage
@@ -1564,7 +1564,7 @@ export function VideoPlayerModal({
       if(!refresh&&remaining.length){startupExpandedRef.current=true;return prepareStartup(targetSeason,targetEpisode,epoch,undefined,remaining,true);}
       setActiveIframeUrl(null);setIsLoading(false);setError('Nenhuma fonte respondeu disponível para este conteúdo. Tente novamente.');return null;
     }
-    startupPlanRef.current={identity,candidates:result.candidates,urls:result.urls};return result.selected;
+    startupPlanRef.current={identity,candidates:result.candidates,urls:result.urls,hints:result.hints};return result.selected;
   };
 
   // Quando o mixdropFileId chega do catálogo (via backend lookup ~50ms),
@@ -1652,7 +1652,7 @@ export function VideoPlayerModal({
       if(fallbackAttemptsRef.current.has(selectedServerKey))return;
       fallbackAttemptsRef.current.add(selectedServerKey);
       const health=healthRef.current.identity===plan.identity?healthRef.current.servers:{};
-      const nextKey=nextStartupKey(plan.candidates.filter(key=>servers.some(s=>s.key===key)),fallbackAttemptsRef.current,health);
+      const nextKey=nextStartupKey(plan.candidates.filter(key=>servers.some(s=>s.key===key)),fallbackAttemptsRef.current,health,plan.hints);
       const next=servers.find(s=>s.key===nextKey);
       if(next){void handleServerSwitch(next.key,true);return;}
       if(!startupExpandedRef.current){
@@ -1703,7 +1703,7 @@ export function VideoPlayerModal({
 
     fallbackAttemptsRef.current.add(selectedServerKey);
     // Identifica próximo servidor ainda não tentado
-    const nextKey = nextStartupKey(rankPlaybackServers<(typeof servers)[number]>(servers, health).map(s => s.key), fallbackAttemptsRef.current, health);
+    const nextKey = nextStartupKey(rankPlaybackServers<(typeof servers)[number]>(servers, health).map(s => s.key), fallbackAttemptsRef.current, health, startupPlanRef.current?.hints);
     const nextServer = servers.find(s => s.key === nextKey);
     if (nextServer) {
       console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) falhou ou demorou. Comutando silenciosamente para ${nextServer.name}...`);

@@ -73,8 +73,8 @@ export async function preparePlaybackStartup(
 
   const candidates = startupOrder(input.keys, hints, input.preferred);
 
-  // Fast-Path: se BYSE é o candidato #1, inicia direto nele sem disputa de probe com hosts lentos
-  if (candidates[0] === 'srv_byse') {
+  // Fast-Path: se BYSE é o candidato #1 e está listado, inicia direto nele sem disputa de probe com hosts lentos
+  if (candidates[0] === 'srv_byse' && hints.srv_byse?.listed !== false) {
     return { selected: 'srv_byse', candidates, hints, urls: {} };
   }
 
@@ -147,9 +147,13 @@ export async function preparePlaybackStartup(
   return { selected: finalSelected, candidates: ordered, hints, urls };
 }
 
-export function nextStartupKey(keys: string[], attempted: Set<string>, health: ServerHealthMap) {
+export function nextStartupKey(keys: string[], attempted: Set<string>, health: ServerHealthMap, hints?: Record<string, CatalogueHint>) {
+  const eligible = hints
+    ? keys.filter(key => hints[key]?.listed !== false)
+    : keys;
+  const pool = eligible.length ? eligible : keys;
   const score = (key: string) => (health[key]?.state === 'available' ? 0 : 1);
-  return keys.filter(key => !attempted.has(key) && health[key]?.state !== 'unavailable' &&
+  return pool.filter(key => !attempted.has(key) && health[key]?.state !== 'unavailable' &&
     !(key.startsWith('srv_saimo') && health[key]?.mediaKind && [...attempted].some(previous =>
       previous.startsWith('srv_saimo') && health[previous]?.mediaKind === health[key].mediaKind)))
     .sort((a, b) => score(a) - score(b))[0];
