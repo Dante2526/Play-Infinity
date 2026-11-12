@@ -300,6 +300,46 @@ export function AdminPage({ onBack }: AdminPageProps) {
   const [createSuccess, setCreateSuccess] = useState("");
   const [createError, setCreateError] = useState("");
   const [lastCreatedUser, setLastCreatedUser] = useState<{name?: string, email: string, password?: string, expirationDate: string, monthlyFee?: string} | null>(null);
+  const [copiedCredentialField, setCopiedCredentialField] = useState<string | null>(null);
+  const [showCredentialPassword, setShowCredentialPassword] = useState(false);
+
+  const handleCopyCredentialText = (text: string, fieldName: string) => {
+    if (!text) return;
+    try {
+      navigator.clipboard?.writeText(text);
+      setCopiedCredentialField(fieldName);
+      setTimeout(() => {
+        setCopiedCredentialField((prev) => (prev === fieldName ? null : prev));
+      }, 2000);
+    } catch (e) {
+      console.warn("Erro ao copiar para clipboard:", e);
+    }
+  };
+
+  const buildCredentialWhatsAppMessage = (user: {name?: string, email: string, password?: string, expirationDate: string, monthlyFee?: string}) => {
+    const greeting = user.name ? `Olá, ${user.name}! 👋` : "Olá! 👋";
+    return `${greeting}\n\n` +
+      `Seu acesso ao *Play Infinity* foi liberado com sucesso! 🎉\n\n` +
+      `🌐 *Acesso:* https://play-infinity.stream\n` +
+      `📧 *E-mail:* ${user.email}\n` +
+      `🔑 *Senha:* ${user.password || ""}\n` +
+      (user.monthlyFee ? `💰 *Mensalidade:* ${user.monthlyFee}\n` : "") +
+      `⏰ *Vencimento:* ${user.expirationDate}\n\n` +
+      `Para assistir, basta acessar o link acima e fazer login com seu e-mail e senha. Bom proveito! 🍿✨`;
+  };
+
+  const handleShareWhatsAppCredential = () => {
+    if (!lastCreatedUser) return;
+    const msg = buildCredentialWhatsAppMessage(lastCreatedUser);
+    const url = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const handleCopyFullCredentialAccess = () => {
+    if (!lastCreatedUser) return;
+    const msg = buildCredentialWhatsAppMessage(lastCreatedUser);
+    handleCopyCredentialText(msg, "full_message");
+  };
 
   // Revoke Access State
   const [revokeEmail, setRevokeEmail] = useState("");
@@ -2025,24 +2065,147 @@ export function AdminPage({ onBack }: AdminPageProps) {
 
         {/* Último Cliente Cadastrado */}
         {lastCreatedUser && (
-          <div className="mt-8 bg-green-500/10 border border-green-500/20 backdrop-blur-xl rounded-[28px] p-8 animate-fade-in">
-            <h3 className="text-xl font-bold text-green-400 mb-4 flex items-center gap-2">
-              <Check className="w-5 h-5 text-green-400" />
-              Credenciais do Último Cliente Cadastrado
-            </h3>
-            <p className="text-white/60 text-sm leading-relaxed mb-4 max-w-3xl">
-              Guarde essas informações e envie para o seu cliente (ou use o e-mail caso precise revogar o acesso dele depois).
-            </p>
-            <div className="bg-black/60 p-5 rounded-xl border border-white/5 inline-block text-sm text-white/90 font-mono tracking-wide">
+          <div className="mt-6 sm:mt-8 bg-gradient-to-br from-green-500/15 via-emerald-950/25 to-black/70 border border-green-500/30 backdrop-blur-xl rounded-2xl sm:rounded-[28px] p-4 sm:p-6 lg:p-7 shadow-2xl relative animate-fade-in overflow-hidden">
+            {/* Botão Fechar / Dispensar */}
+            <button
+              type="button"
+              onClick={() => setLastCreatedUser(null)}
+              className="absolute top-3 right-3 sm:top-5 sm:right-5 p-2 rounded-xl text-white/50 hover:text-white hover:bg-white/10 transition-colors"
+              title="Dispensar credenciais"
+              aria-label="Dispensar credenciais"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            {/* Cabeçalho */}
+            <div className="flex items-start gap-3 pr-10 mb-3">
+              <div className="p-2 sm:p-2.5 bg-green-500/20 text-green-400 rounded-xl sm:rounded-2xl shrink-0 mt-0.5 border border-green-500/30">
+                <Check className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-base sm:text-lg font-bold text-green-400 leading-snug">
+                  Credenciais do Último Cliente Cadastrado
+                </h3>
+                <p className="text-white/60 text-xs sm:text-sm mt-0.5 leading-relaxed">
+                  Envie o acesso pronto no WhatsApp ou copie os dados individualmente.
+                </p>
+              </div>
+            </div>
+
+            {/* Grid dos Dados do Cliente */}
+            <div className="bg-black/60 border border-white/10 rounded-xl sm:rounded-2xl p-3.5 sm:p-4 my-3.5 divide-y divide-white/5 space-y-2.5 sm:space-y-3 font-sans">
+              {/* Nome */}
               {lastCreatedUser.name && (
-                <>Nome: <strong className="text-white">{lastCreatedUser.name}</strong><br/></>
+                <div className="flex items-center justify-between gap-2 pt-1 first:pt-0">
+                  <span className="text-white/50 text-xs shrink-0">Nome</span>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-white font-medium text-xs sm:text-sm truncate">
+                      {lastCreatedUser.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCredentialText(lastCreatedUser.name!, "name")}
+                      className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                      title="Copiar Nome"
+                    >
+                      {copiedCredentialField === "name" ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
               )}
-              E-mail: <strong className="text-orange-400">{lastCreatedUser.email}</strong><br/>
-              Senha: <strong className="text-orange-400">{lastCreatedUser.password}</strong><br/>
+
+              {/* E-mail */}
+              <div className="flex items-center justify-between gap-2 pt-2.5">
+                <span className="text-white/50 text-xs shrink-0">E-mail</span>
+                <div className="flex items-center gap-1.5 min-w-0 max-w-[75%] sm:max-w-none">
+                  <span className="text-orange-400 font-mono text-xs sm:text-sm font-semibold truncate break-all select-all">
+                    {lastCreatedUser.email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCredentialText(lastCreatedUser.email, "email")}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                    title="Copiar E-mail"
+                  >
+                    {copiedCredentialField === "email" ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Senha */}
+              <div className="flex items-center justify-between gap-2 pt-2.5">
+                <span className="text-white/50 text-xs shrink-0">Senha</span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <span className="text-orange-400 font-mono text-xs sm:text-sm font-semibold select-all">
+                    {showCredentialPassword ? lastCreatedUser.password : "••••••••"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowCredentialPassword(!showCredentialPassword)}
+                    className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                    title={showCredentialPassword ? "Ocultar Senha" : "Ver Senha"}
+                  >
+                    {showCredentialPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  {lastCreatedUser.password && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopyCredentialText(lastCreatedUser.password!, "password")}
+                      className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors shrink-0 min-h-[36px] min-w-[36px] flex items-center justify-center"
+                      title="Copiar Senha"
+                    >
+                      {copiedCredentialField === "password" ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Mensalidade (se houver) */}
               {lastCreatedUser.monthlyFee && (
-                <>Mensalidade: <strong className="text-emerald-400">{lastCreatedUser.monthlyFee}</strong><br/></>
+                <div className="flex items-center justify-between gap-2 pt-2.5">
+                  <span className="text-white/50 text-xs shrink-0">Mensalidade</span>
+                  <span className="text-emerald-400 font-semibold text-xs sm:text-sm">
+                    {lastCreatedUser.monthlyFee}
+                  </span>
+                </div>
               )}
-              Vencimento: <span className="text-white/70">{lastCreatedUser.expirationDate}</span>
+
+              {/* Vencimento */}
+              <div className="flex items-center justify-between gap-2 pt-2.5">
+                <span className="text-white/50 text-xs shrink-0">Vencimento</span>
+                <span className="text-white/80 font-mono text-xs sm:text-sm text-right">
+                  {lastCreatedUser.expirationDate}
+                </span>
+              </div>
+            </div>
+
+            {/* Botões de Ação Rápida */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleShareWhatsAppCredential}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-xs sm:text-sm font-bold rounded-xl sm:rounded-2xl shadow-lg shadow-emerald-900/30 transition-all min-h-[44px]"
+              >
+                <Send className="w-4 h-4" />
+                <span>Enviar no WhatsApp</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyFullCredentialAccess}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white/10 hover:bg-white/15 active:scale-[0.98] border border-white/15 text-white text-xs sm:text-sm font-bold rounded-xl sm:rounded-2xl transition-all min-h-[44px]"
+              >
+                {copiedCredentialField === "full_message" ? (
+                  <>
+                    <Check className="w-4 h-4 text-green-400" />
+                    <span className="text-green-400">Mensagem Copiada!</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 text-white/70" />
+                    <span>Copiar Mensagem Pronta</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         )}

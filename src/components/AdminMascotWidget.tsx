@@ -330,7 +330,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
         aria-label="Assistente Byte"
         className={`fixed flex flex-col items-end pointer-events-auto select-none ${
           dragging ? "z-50" : "z-40"
-        }${pos ? "" : " bottom-4 right-4 sm:bottom-6 sm:right-6"}`}
+        }${pos ? "" : " bottom-3 right-3 sm:bottom-6 sm:right-6"}`}
         style={
           pos
             ? { left: `${pos.x}px`, top: `${pos.y}px`, right: "auto", bottom: "auto" }
@@ -360,7 +360,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
           onClick={handleWidgetClick}
           onDoubleClick={handleWidgetDoubleClick}
           style={{ touchAction: "none" }}
-          className={`group flex items-center gap-2.5 p-1.5 pr-3 sm:pr-4 rounded-full border shadow-2xl backdrop-blur-xl transition-all duration-300 min-h-[48px] min-w-[48px] cursor-grab ${
+          className={`group flex items-center gap-2 p-1.5 sm:gap-2.5 sm:pr-4 rounded-full border shadow-2xl backdrop-blur-xl transition-all duration-300 min-h-[44px] min-w-[44px] sm:min-h-[48px] sm:min-w-[48px] cursor-grab ${
             dragging ? "cursor-grabbing scale-105" : ""
           } ${
             isOpen
@@ -378,6 +378,11 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
           {/* Container do Mascote SVG Miniatura */}
           <div className="relative w-9 h-9 sm:w-10 sm:h-10 flex items-center justify-center shrink-0">
             <div className={`absolute inset-0 rounded-full blur-md ${moodColors.aura}`} />
+            {alertCount > 0 && (
+              <span className="sm:hidden absolute -top-1 -right-1 px-1.5 py-0.2 bg-red-500 text-white font-bold text-[9px] rounded-full shrink-0 z-20">
+                {alertCount}
+              </span>
+            )}
             
             {/* SVG do Mascote */}
             <svg
@@ -444,7 +449,7 @@ export function AdminMascotWidget({ onSelectSection }: AdminMascotWidgetProps) {
           </div>
 
           {/* Rótulo de Texto + Indicador */}
-          <div className="flex flex-col text-left">
+          <div className="hidden sm:flex flex-col text-left">
             <div className="flex items-center gap-1.5">
               <span className="text-white font-black text-xs tracking-wide">Byte</span>
               {alertCount > 0 && (
