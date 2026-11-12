@@ -546,14 +546,15 @@
     if (t0Ticks >= lastSample.dts + lastSample.duration) return null; // além do fim
 
     let startIdx = -1, startDts = -1;
-    for (const k of syncs) {
-      if (k.dts >= t0Ticks) { startIdx = k.idx; startDts = k.dts; break; }
+    // O fragmento DEVE começar no keyframe anterior ou igual a t0 (startDts <= t0Ticks),
+    // para que t0 fique coberto pelo buffer. Começar no keyframe posterior deixaria
+    // o alvo num vácuo sem dados e travaria o player em "seeking" para sempre.
+    for (let i = syncs.length - 1; i >= 0; i--) {
+      if (syncs[i].dts <= t0Ticks) { startIdx = syncs[i].idx; startDts = syncs[i].dts; break; }
     }
     if (startIdx === -1) {
-      // t0 cai depois do último keyframe: último GOP (trecho final)
-      const last = syncs[syncs.length - 1];
-      startIdx = last ? last.idx : 0;
-      startDts = last ? last.dts : 0;
+      startIdx = syncs[0] ? syncs[0].idx : 0;
+      startDts = syncs[0] ? syncs[0].dts : 0;
     }
     let endDts = -1, isFinal = false;
     for (const k of syncs) {
@@ -1144,14 +1145,15 @@
         if (inBuffered(t)) return;
         if (fetchingWindow && t >= nextWindowStart - 0.2 && t <= nextWindowStart + opts.segmentSeconds) return;
         if (fetchController) { try { fetchController.abort(); } catch (e) {} fetchingWindow = false; }
-        if (t >= lastAppendedEndSec - 0.5) {
+        if (t >= lastAppendedEndSec - 0.5 && t - lastAppendedEndSec <= 30) {
           nextWindowStart = Math.max(t, 0);
           eosQueued = false;
           engine.stats.lastAction = 'seek-fwd ' + t.toFixed(1);
           log('seek fwd ' + t.toFixed(1) + 's');
+          tick();
         } else {
-          engine.stats.lastAction = 'seek-back-reset ' + t.toFixed(1);
-          log('seek back ' + t.toFixed(1) + 's → reset');
+          engine.stats.lastAction = (t > lastAppendedEndSec ? 'seek-fwd-reset ' : 'seek-back-reset ') + t.toFixed(1);
+          log('seek ' + (t > lastAppendedEndSec ? 'fwd gap ' : 'back ') + t.toFixed(1) + 's → reset');
           resetMse(t);
         }
       }, 120);
