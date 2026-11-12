@@ -1,3 +1,26 @@
+## 12/11/2026 — Implementação do Assistente de Voz "Infinity" no Player (Zero API Key)
+
+**Contexto e Objetivo:**
+Adicionar controle por voz ao player (`NetflixPlayerSkin.tsx`) sem chaves de API pagas ou serviços externos, usando o motor nativo da Web Speech API (`pt-BR`). Ao ouvir a palavra de ativação "Infinity" (ou ao tocar no botão de microfone), o player pausa a reprodução imediatamente e executa comandos de navegação, volume e tela.
+
+**Ações Realizadas:**
+1. **Parser de Comandos de Voz Fonético (`src/utils/voiceCommandParser.ts`):**
+   - Reconhecimento de wake word "Infinity" (e variações: "infiniti", "infinito", "infinit").
+   - Comandos mapeados: `PLAY`, `PAUSE`, `NEXT_EPISODE`, `SKIP_INTRO`, `VOLUME_UP` (+10%), `VOLUME_DOWN` (-10%), `MUTE`, `SEEK_FORWARD` (+10s), `SEEK_REWIND` (-10s), `FULLSCREEN` e `ASPECT_RATIO`.
+2. **Hook de Voz do Player (`src/hooks/usePlayerVoiceAssistant.ts`):**
+   - Gerencia escuta contínua com auto-restart e modo push-to-talk.
+   - Dispara callback de auto-pausa imediata ao detectar o wake word se o vídeo estiver tocando.
+   - Fornece feedback de estado e texto para a interface visual.
+3. **Integração na Skin Netflix (`src/components/NetflixPlayerSkin.tsx`):**
+   - Botão de microfone integrado na barra superior (touch target >= 44x44px).
+   - Animação de pulso e iluminação quando o assistente contínuo estiver ativado.
+   - Cápsula flutuante translúcida no topo com animação ("🎤 Ouvindo comando...", "✓ Próximo episódio", "✓ Volume +10%").
+4. **Testes e Tipagem:**
+   - Criado `tests/player-voice-assistant.test.cjs` com 4 testes unitários aprovados (**4/4 pass**).
+   - `npx tsc --noEmit`: **0 erros de tipagem**.
+
+---
+
 ## 12/11/2026 — Correção de Temporada Marcada Indevidamente como Assistida (Precedência e TMDB Outdated)
 
 **Contexto e Diagnóstico:**

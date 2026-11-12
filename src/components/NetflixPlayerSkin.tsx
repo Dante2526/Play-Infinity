@@ -26,7 +26,11 @@ import {
   Scan,
   Loader2,
   Film,
+  Mic,
+  MicOff,
 } from "lucide-react";
+import { usePlayerVoiceAssistant } from "../hooks/usePlayerVoiceAssistant";
+import type { PlayerVoiceAction } from "../utils/voiceCommandParser";
 import { savePlaybackProgress } from "../services/playbackHistory";
 import { getTimelinePreviewImages } from "../services/tmdb";
 import { Capacitor, registerPlugin } from "@capacitor/core";
@@ -636,6 +640,82 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     },
     [iframeRef, playerStatus.currentTime]
   );
+
+  // Assistente de Voz Nativo Infinity (Zero API Key)
+  const handleVoiceCommand = useCallback((action: PlayerVoiceAction, _label: string) => {
+    switch (action) {
+      case 'PLAY':
+        sendCommand({ type: "PLAY" });
+        setPlayerStatus(p => ({ ...p, paused: false }));
+        break;
+      case 'PAUSE':
+        sendCommand({ type: "PAUSE" });
+        setPlayerStatus(p => ({ ...p, paused: true }));
+        break;
+      case 'NEXT_EPISODE':
+        if (isSeries && onEpisodeChange && typeof episode === 'number') {
+          onEpisodeChange(episode + 1);
+        }
+        break;
+      case 'SKIP_INTRO':
+        onSkipIntro();
+        break;
+      case 'VOLUME_UP':
+        setPlayerStatus(prev => {
+          const cur = prev.muted ? 0 : prev.volume;
+          const next = Math.min(1, Math.max(0, Math.round((cur + 0.1) * 10) / 10));
+          sendCommand({ type: "SET_VOLUME", volume: next });
+          return { ...prev, volume: next, muted: next === 0 };
+        });
+        break;
+      case 'VOLUME_DOWN':
+        setPlayerStatus(prev => {
+          const cur = prev.muted ? 0 : prev.volume;
+          const next = Math.min(1, Math.max(0, Math.round((cur - 0.1) * 10) / 10));
+          sendCommand({ type: "SET_VOLUME", volume: next });
+          return { ...prev, volume: next, muted: next === 0 };
+        });
+        break;
+      case 'MUTE':
+        setPlayerStatus(prev => {
+          const nextMuted = !prev.muted;
+          sendCommand({ type: "SET_MUTED", muted: nextMuted });
+          return { ...prev, muted: nextMuted };
+        });
+        break;
+      case 'SEEK_FORWARD':
+        sendCommand({ type: "SEEK_RELATIVE", seconds: 10 });
+        break;
+      case 'SEEK_REWIND':
+        sendCommand({ type: "SEEK_RELATIVE", seconds: -10 });
+        break;
+      case 'FULLSCREEN':
+        onToggleFullscreen();
+        break;
+      case 'ASPECT_RATIO':
+        onToggleAspectRatio?.();
+        break;
+    }
+  }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onToggleAspectRatio]);
+
+  const handleWakeWord = useCallback(() => {
+    // Pausa imediatamente ao detectar "Infinity" para evitar interferência do som do filme no microfone
+    sendCommand({ type: "PAUSE" });
+    setPlayerStatus(p => ({ ...p, paused: true }));
+  }, [sendCommand]);
+
+  const {
+    isSupported: voiceSupported,
+    isListening: voiceListening,
+    isContinuous: voiceContinuous,
+    feedback: voiceFeedback,
+    triggerPushToTalk,
+    toggleContinuousMode
+  } = usePlayerVoiceAssistant({
+    onCommand: handleVoiceCommand,
+    onWakeWordDetected: handleWakeWord,
+    isPlaying: !playerStatus.paused
+  });
 
   // Escuta mensagens e atualiza o estado da Skin Netflix
   useEffect(() => {
@@ -1711,6 +1791,41 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
           </button>
 
+          {/* Botão Assistente de Voz Infinity */}
+          {voiceSupported && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleContinuousMode();
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                triggerPushToTalk();
+              }}
+              className={`p-1.5 sm:p-2 transition-all cursor-pointer rounded-full relative flex items-center gap-1 ${
+                voiceContinuous
+                  ? "text-orange-400 bg-orange-500/25 ring-1 ring-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+                  : voiceListening
+                  ? "text-emerald-400 bg-emerald-500/20"
+                  : "text-white/80 hover:text-white hover:bg-white/10"
+              }`}
+              title={
+                voiceContinuous
+                  ? "Assistente Infinity ATIVADO (Diga 'Infinity' para pausar e comandar). Clique para desativar."
+                  : "Assistente de Voz (Clique para ativar escuta contínua 'Infinity')"
+              }
+            >
+              {voiceContinuous ? (
+                <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2] animate-pulse" />
+              ) : (
+                <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
+              )}
+              <span className="text-[10px] font-bold hidden md:inline uppercase tracking-tight">
+                {voiceContinuous ? "Infinity Ativo" : "Voz"}
+              </span>
+            </button>
+          )}
+
           {/* Botão de Transmitir removido e movido para a interface principal (DetailsPage) */}
 
           <button
@@ -1740,6 +1855,26 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           </button>
         </div>
       </div>
+      )}
+
+      {/* Feedback Visual do Assistente de Voz Infinity */}
+      {voiceFeedback.visible && (
+        <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/85 backdrop-blur-md border border-white/20 text-white shadow-2xl transition-all duration-200">
+          <div
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+              voiceFeedback.type === "listening"
+                ? "bg-orange-500 animate-ping"
+                : voiceFeedback.type === "success"
+                ? "bg-emerald-400"
+                : voiceFeedback.type === "error"
+                ? "bg-rose-500"
+                : "bg-amber-400"
+            }`}
+          />
+          <span className="text-xs sm:text-sm font-semibold tracking-wide whitespace-nowrap">
+            {voiceFeedback.text}
+          </span>
+        </div>
       )}
 
       {/* ========================================================
