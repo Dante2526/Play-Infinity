@@ -28,6 +28,10 @@ import {
   Film,
   Mic,
   MicOff,
+  AudioLines,
+  AudioWaveform,
+  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 import { usePlayerVoiceAssistant } from "../hooks/usePlayerVoiceAssistant";
 import type { PlayerVoiceAction } from "../utils/voiceCommandParser";
@@ -1791,7 +1795,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <PictureInPicture2 className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
           </button>
 
-          {/* Botão Assistente de Voz Infinity */}
+          {/* Botão Assistente de Voz Infinity com Ícones & Animações Premium */}
           {voiceSupported && (
             <button
               onClick={(e) => {
@@ -1802,26 +1806,39 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 e.preventDefault();
                 triggerPushToTalk();
               }}
-              className={`p-1.5 sm:p-2 transition-all cursor-pointer rounded-full relative flex items-center gap-1 ${
+              className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center gap-1.5 border backdrop-blur-md ${
                 voiceContinuous
-                  ? "text-orange-400 bg-orange-500/25 ring-1 ring-orange-500/50 shadow-[0_0_12px_rgba(249,115,22,0.4)]"
+                  ? "text-amber-300 bg-gradient-to-r from-orange-600/35 via-amber-600/30 to-orange-600/35 border-orange-500/60 shadow-[0_0_18px_rgba(249,115,22,0.55)] scale-105"
                   : voiceListening
-                  ? "text-emerald-400 bg-emerald-500/20"
-                  : "text-white/80 hover:text-white hover:bg-white/10"
+                  ? "text-emerald-300 bg-emerald-500/20 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                  : "text-white/80 bg-white/5 border-white/10 hover:text-white hover:bg-white/15 hover:border-white/20"
               }`}
               title={
                 voiceContinuous
-                  ? "Assistente Infinity ATIVADO (Diga 'Infinity' para pausar e comandar). Clique para desativar."
-                  : "Assistente de Voz (Clique para ativar escuta contínua 'Infinity')"
+                  ? "Assistente Infinity ATIVO (Diga 'Infinity' para pausar e comandar). Clique para desligar."
+                  : "Assistente de Voz Infinity (Clique para ativar ou segure para falar direto)"
               }
             >
               {voiceContinuous ? (
-                <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[2] animate-pulse" />
+                <div className="relative flex items-center justify-center">
+                  <AudioWaveform className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400 stroke-[2.2] animate-pulse" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400" />
+                </div>
+              ) : voiceListening ? (
+                <AudioLines className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-400 stroke-[2.2] animate-bounce" />
               ) : (
-                <Mic className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8]" />
+                <AudioLines className="w-4 h-4 sm:w-5 sm:h-5 stroke-[1.8] text-neutral-300" />
               )}
-              <span className="text-[10px] font-bold hidden md:inline uppercase tracking-tight">
-                {voiceContinuous ? "Infinity Ativo" : "Voz"}
+              <span className="text-[10px] sm:text-[11px] font-extrabold tracking-tight hidden md:inline">
+                {voiceContinuous ? (
+                  <span className="bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-amber-300 inline animate-spin [animation-duration:4s]" />
+                    Infinity
+                  </span>
+                ) : (
+                  "Infinity"
+                )}
               </span>
             </button>
           )}
@@ -1857,23 +1874,44 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       </div>
       )}
 
-      {/* Feedback Visual do Assistente de Voz Infinity */}
+      {/* Aura Neon de Cinema no Perímetro do Player quando o Assistente está Ativo/Ouvindo */}
+      {(voiceListening || voiceFeedback.type === 'listening') && (
+        <div className="absolute inset-0 pointer-events-none z-40 transition-opacity duration-300 ring-2 ring-inset ring-orange-500/50 shadow-[inset_0_0_50px_rgba(249,115,22,0.22)] rounded-none sm:rounded-2xl animate-pulse" />
+      )}
+
+      {/* Feedback Visual Futurista do Assistente de Voz Infinity */}
       {voiceFeedback.visible && (
-        <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-2.5 px-4 py-2 rounded-full bg-black/85 backdrop-blur-md border border-white/20 text-white shadow-2xl transition-all duration-200">
-          <div
-            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-              voiceFeedback.type === "listening"
-                ? "bg-orange-500 animate-ping"
-                : voiceFeedback.type === "success"
-                ? "bg-emerald-400"
-                : voiceFeedback.type === "error"
-                ? "bg-rose-500"
-                : "bg-amber-400"
-            }`}
-          />
-          <span className="text-xs sm:text-sm font-semibold tracking-wide whitespace-nowrap">
-            {voiceFeedback.text}
-          </span>
+        <div className="absolute top-16 sm:top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-neutral-950/90 backdrop-blur-2xl border border-white/20 text-white shadow-[0_12px_40px_rgba(0,0,0,0.9),0_0_25px_rgba(249,115,22,0.35)] transition-all duration-300 animate-in fade-in zoom-in-95">
+          {voiceFeedback.type === "listening" ? (
+            /* Equalizador Animado de Ondas Sonoras (Soundwave Visualizer) */
+            <div className="flex items-center gap-1 h-5 px-1">
+              <span className="w-1 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full animate-[pulse_0.6s_ease-in-out_infinite] h-3.5" />
+              <span className="w-1 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full animate-[pulse_0.4s_ease-in-out_infinite_0.15s] h-5" />
+              <span className="w-1 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full animate-[pulse_0.7s_ease-in-out_infinite_0.3s] h-2.5" />
+              <span className="w-1 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full animate-[pulse_0.5s_ease-in-out_infinite_0.45s] h-4" />
+              <span className="w-1 bg-gradient-to-t from-orange-500 to-amber-300 rounded-full animate-[pulse_0.65s_ease-in-out_infinite_0.2s] h-3" />
+            </div>
+          ) : voiceFeedback.type === "success" ? (
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.5)]">
+              <CheckCircle2 className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          ) : voiceFeedback.type === "error" ? (
+            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-rose-500/20 text-rose-400 shadow-[0_0_12px_rgba(244,63,94,0.5)]">
+              <MicOff className="w-4 h-4 stroke-[2.5]" />
+            </div>
+          ) : (
+            <Sparkles className="w-5 h-5 text-amber-400 animate-spin [animation-duration:6s]" />
+          )}
+
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider flex items-center gap-1">
+              <Sparkles className="w-2.5 h-2.5 inline" />
+              Assistente Infinity
+            </span>
+            <span className="text-xs sm:text-sm font-bold text-white tracking-wide truncate max-w-[280px] sm:max-w-[400px]">
+              {voiceFeedback.text}
+            </span>
+          </div>
         </div>
       )}
 
