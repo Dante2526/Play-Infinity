@@ -1,3 +1,27 @@
+## 12/11/2026 — Conformidade Google Play: Remoção de Recursos Sociais (Política para Famílias) e Versão 100
+
+**Contexto e Motivo da Rejeição:**
+O aplicativo foi rejeitado na Google Play Store sob os *Requisitos da Política para Famílias: Recursos e Aplicativos Sociais*. O revisor identificou a seção "Comentários da Comunidade" como troca de texto livre entre usuários sem controle parental ou lembrete de segurança online para menores.
+
+**Ações Realizadas:**
+1. **Remoção Integral da Seção de Comentários (`src/pages/DetailsPage.tsx`):**
+   - Removido formulário de postagem, listagem de comentários e botões de curtir.
+   - Eliminados estados `commentText`, `comments` e handlers `handleCommentSubmit`, `handleToggleLike`.
+2. **Exclusão do Serviço e Limpeza de Imports (`src/services/comments.ts`):**
+   - Arquivo `src/services/comments.ts` excluído via `git rm`.
+   - Limpos imports não utilizados em `src/App.tsx`, `src/pages/HomePage.tsx`, `src/pages/GlobalSearchPage.tsx`, `src/pages/FavoritesPage.tsx`, `src/pages/ProviderPage.tsx` e `src/pages/UserProfilePage.tsx`.
+   - App agora opera como catálogo e player estritamente de consumo audiovisual, sem recursos sociais.
+3. **Incremento de Versão Android (`android/app/build.gradle`):**
+   - `versionCode`: **99 -> 100**.
+   - `versionName`: **"1.4.67" -> "1.4.68"**.
+   - Pronto para compilação automática do novo bundle AAB no GitHub Actions.
+
+**Validação Realizada:**
+- `npx tsc --noEmit`: **0 erros de compilação**.
+- `node --test tests/*.test.cjs`: **18/18 testes aprovados**.
+
+---
+
 ## 10/11/2026 — Correção de Busca Instantânea Saimo, Auto-Correção de Typo e Resolvedor Vizer HD
 
 **Contexto e Diagnóstico:**

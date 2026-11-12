@@ -116,7 +116,6 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "../services/playbackHistory";
-import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "../services/comments";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";

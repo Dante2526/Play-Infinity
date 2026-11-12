@@ -121,7 +121,6 @@ import {
   getSeasonWatchedCount
 } from "../services/watchedEpisodes";
 import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem } from "../services/playbackHistory";
-import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "../services/comments";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
 const FALLBACK_BACKDROP = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1200&q=80";
@@ -186,9 +185,6 @@ export function DetailsPage({
   const [loadingSeason, setLoadingSeason] = useState<boolean>(false);
   const [castUrl, setCastUrl] = useState<string | null>(null);
   const [castMediaDetails, setCastMediaDetails] = useState<{ mediaType: 'movie' | 'series', tmdbId: number, imdbId?: string, season?: number, episode?: number } | undefined>(undefined);
-  const commentTargetId = item.tmdbId || item.id || itemId;
-  const [commentText, setCommentText] = useState("");
-  const [comments, setComments] = useState<CommentItem[]>(() => getCommentsForItem(commentTargetId));
 
   // Sincronizar item e dados quando itemId ou initialItem mudarem
   useEffect(() => {
@@ -217,9 +213,6 @@ export function DetailsPage({
     }
   }, [itemId, initialItem, allCatalogs]);
 
-  useEffect(() => {
-    setComments(getCommentsForItem(commentTargetId));
-  }, [commentTargetId]);
   const [isFavorite, setIsFavorite] = useState<boolean>(() => isItemFavorite(itemId, item.tmdbId));
   const [, setWatchedUpdateTick] = useState(0);
   const [trailerVideo, setTrailerVideo] = useState<TrailerVideo | null>(null);
@@ -621,21 +614,6 @@ export function DetailsPage({
   const match = item.match || 94;
   const displayBackdrop = item.backdropUrl || item.imageUrl;
   const displayPoster = item.posterUrl || item.imageUrl;
-
-  const handleCommentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!commentText.trim()) return;
-    const added = addComment(commentTargetId, commentText, "Você");
-    if (added) {
-      setComments(getCommentsForItem(commentTargetId));
-      setCommentText("");
-    }
-  };
-
-  const handleToggleLike = (commentId: string | number) => {
-    const updated = toggleCommentLike(commentTargetId, commentId);
-    setComments(updated);
-  };
 
   const currentGenres: string[] = normalizeGenres(
     Array.isArray(item.genres) && item.genres.length > 0
@@ -1398,66 +1376,7 @@ export function DetailsPage({
             );
           })()}
 
-          {/* Comments Section */}
-          <div className="space-y-6 pt-4 border-t border-neutral-800/50">
-            <h3 className="text-xl font-bold text-white flex items-center gap-3">
-              Comentários da Comunidade <span className="text-neutral-500 font-medium text-base">({comments.length})</span>
-            </h3>
-            
-            <form onSubmit={handleCommentSubmit} className="flex gap-4">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-orange-400 flex items-center justify-center font-bold text-base shadow-lg shrink-0 text-white">
-                V
-              </div>
-              <div className="flex-1 relative">
-                <textarea 
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Deixe sua avaliação sobre o filme ou série..."
-                  className="w-full bg-[#141414] border border-neutral-800 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-orange-500 transition-all placeholder:text-neutral-600 resize-none h-20"
-                ></textarea>
-                <div className="flex justify-end mt-2">
-                  <button 
-                    type="submit" 
-                    className={`px-4 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${commentText.trim() ? 'bg-orange-600 text-white cursor-pointer' : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'}`}
-                  >
-                    <Send className="w-3 h-3" /> Publicar
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            <div className="space-y-4 pt-2">
-              {comments.map(c => (
-                <div key={c.id} className="flex gap-4 p-4 rounded-xl bg-[#121212] border border-neutral-800/60 hover:border-neutral-700/80 transition-all group">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-orange-600/30 to-amber-600/20 text-orange-400 flex items-center justify-center font-bold shrink-0 text-sm border border-orange-500/30 shadow-inner">
-                    {c.avatarLetter || c.user.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white text-sm">{c.user}</span>
-                        <span className="text-xs text-neutral-500">{c.timeAgo || "recentemente"}</span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleLike(c.id)}
-                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          c.likedByUser 
-                            ? "text-orange-500 bg-orange-600/15 border border-orange-500/30" 
-                            : "text-neutral-500 hover:text-neutral-300 hover:bg-white/5 border border-transparent"
-                        }`}
-                        title={c.likedByUser ? "Descurtir" : "Curtir este comentário"}
-                      >
-                        <ThumbsUp className={`w-3.5 h-3.5 ${c.likedByUser ? "fill-current text-orange-500" : ""}`} />
-                        <span>{c.likes > 0 ? c.likes : ""}</span>
-                      </button>
-                    </div>
-                    <p className="text-neutral-300 text-sm font-normal leading-relaxed break-words">{c.text}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* Final da Coluna Principal */}
         </div>
 
         {/* Coluna Direita: Títulos Semelhantes com capas TMDB */}

@@ -112,7 +112,6 @@ import {
   fetchWatchedFromCloud
 } from "./services/watchedEpisodes";
 import { getPlaybackHistory, PlaybackHistoryItem, removePlaybackItem, fetchHistoryFromCloud } from "./services/playbackHistory";
-import { getCommentsForItem, addComment, toggleCommentLike, CommentItem } from "./services/comments";
 import { registerDeviceSession } from "./services/deviceSessionService";
 
 const FALLBACK_POSTER = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?auto=format&fit=crop&w=500&q=80";
