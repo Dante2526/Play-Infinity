@@ -1,3 +1,27 @@
+## 12/11/2026 — Correção de Temporada Marcada Indevidamente como Assistida (Precedência e TMDB Outdated)
+
+**Contexto e Diagnóstico:**
+No seletor de temporadas de *Arcanjo Renegado* (T5), o botão de pílula exibia `T5 ✓` como se estivesse completamente assistida, mesmo com apenas 3 de 5 episódios assistidos pelo usuário (episódios 4 e 5 pendentes). Ao mesmo tempo, o botão lateral exibia corretamente `Marcar T5`.
+
+**Causa Raiz Identificada:**
+1. Em `src/pages/DetailsPage.tsx` e `src/components/VideoPlayerModal.tsx`, a contagem de episódios da temporada avaliava primeiro `tmdbDetails?.seasons?.find(...)?.episode_count` com operador `||` antes de `totalSeasonEpisodes`.
+2. Como o TMDB cadastrou inicialmente apenas 1 episódio para a Temporada 5 recém-lançada (`episode_count: 1`), a expressão avaliava `1` como truthy e nunca usava `totalSeasonEpisodes` (que tinha os 5 episódios reais do catálogo local).
+3. Ao chamar `isSeasonFullyWatched(seriesId, 5, 1)`, a verificação checava `watchedCount >= 1` (1 >= 1 = true), marcando a temporada inteira como assistida.
+
+**Ações Realizadas:**
+1. **Prioridade para a Temporada Ativa (`DetailsPage.tsx` & `VideoPlayerModal.tsx`):**
+   - Para a temporada atualmente selecionada, usa obrigatoriamente `totalSeasonEpisodes` (a quantidade real exibida na tela).
+2. **Memorização de Contagens Reais (`knownSeasonCounts`):**
+   - Criado estado para registrar a contagem real de episódios de temporadas carregadas via catálogo.
+   - Adicionada consulta proativa ao endpoint `/api/catalog-season` para temporadas com contagem suspeita/desatualizada no TMDB (`episode_count <= 1`).
+3. **Blindagem no Serviço (`src/services/watchedEpisodes.ts`):**
+   - `isSeasonFullyWatched` agora verifica o maior índice de episódio assistido no `store`. Se o usuário assistiu por exemplo até o episódio 3, uma chamada com `episodeCount: 1` não considera a temporada concluída.
+4. **Testes e Tipagem:**
+   - Criado `tests/watched-episodes-season.test.cjs` com 3 testes unitários aprovados.
+   - `npx tsc --noEmit`: 0 erros de tipagem.
+
+---
+
 ## 12/11/2026 — Restauração do Catálogo Vizer: Migração para www.vizer.food
 
 **Contexto e Diagnóstico:**

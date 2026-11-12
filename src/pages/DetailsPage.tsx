@@ -38,6 +38,7 @@ import {
   Bug
 } from "lucide-react";
 import { isEpisodeUpcoming, formatEpisodeAirDate } from "../utils/playerIntegration";
+import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { ReportBugModal } from "../components/ReportBugModal";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
@@ -499,6 +500,32 @@ export function DetailsPage({
 
   const [episodeAvailabilityInfo, setEpisodeAvailabilityInfo] = React.useState<EpisodeAvailabilityInfo | null>(null);
 
+  // Memoriza contagens reais de episódios por temporada descobertas no catálogo/detalhes
+  const [knownSeasonCounts, setKnownSeasonCounts] = useState<Record<number, number>>({});
+
+  // Consulta proativa no catálogo para temporadas onde o TMDB possui contagem suspeita (<= 1)
+  useEffect(() => {
+    if (!isSeries || !effectiveTmdbId || !availableSeasons.length) return;
+    let isMounted = true;
+    availableSeasons.forEach(s => {
+      const tmdbCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || 0;
+      if (tmdbCount <= 1) {
+        fetch(`${getApiBaseUrl()}/api/catalog-season?tmdb_id=${effectiveTmdbId}&season=${s}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (isMounted && data && Array.isArray(data.episodes) && data.episodes.length > 0) {
+              setKnownSeasonCounts(prev => ({
+                ...prev,
+                [s]: Math.max(prev[s] || 0, data.episodes.length)
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    });
+    return () => { isMounted = false; };
+  }, [isSeries, effectiveTmdbId, availableSeasons, tmdbDetails]);
+
   // Buscar episódios reais da temporada selecionada no TMDB sempre que mudar série ou temporada
   useEffect(() => {
     if (!isSeries || !effectiveTmdbId || isNaN(Number(effectiveTmdbId))) return;
@@ -576,6 +603,16 @@ export function DetailsPage({
 
 
   const totalSeasonEpisodes = currentEpisodes.length;
+
+  // Atualiza contagem quando a temporada ativa carrega seus episódios reais
+  useEffect(() => {
+    if (selectedSeason && totalSeasonEpisodes > 0) {
+      setKnownSeasonCounts(prev => {
+        if (prev[selectedSeason] === totalSeasonEpisodes) return prev;
+        return { ...prev, [selectedSeason]: totalSeasonEpisodes };
+      });
+    }
+  }, [selectedSeason, totalSeasonEpisodes]);
 
   // Pré-aquecimento seguro do BYSE em segundo plano com debounce de 1.5s e AbortController
   useEffect(() => {
@@ -1042,7 +1079,10 @@ export function DetailsPage({
                       className="flex items-center gap-1.5 overflow-x-auto season-scrollbar bg-black/40 p-1 pb-2 rounded-xl border border-white/5 max-w-full min-w-0 scroll-smooth"
                     >
                       {availableSeasons.map(s => {
-                        const seasonEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || (s === selectedSeason ? totalSeasonEpisodes : 6);
+                        const tmdbEpCount = tmdbDetails?.seasons?.find(season => season.season_number === s)?.episode_count || 0;
+                        const seasonEpCount = (s === selectedSeason && totalSeasonEpisodes > 0)
+                          ? totalSeasonEpisodes
+                          : Math.max(knownSeasonCounts[s] || 0, tmdbEpCount || 0) || 6;
                         const seasonDone = isSeasonFullyWatched(effectiveTmdbId, s, seasonEpCount);
                         const isCurrent = selectedSeason === s;
                         return (

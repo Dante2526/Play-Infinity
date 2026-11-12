@@ -147,7 +147,19 @@ export function getSeasonWatchedCount(seriesId: number | string, season: number,
 
 export function isSeasonFullyWatched(seriesId: number | string, season: number, episodeCount: number): boolean {
   if (!seriesId || episodeCount <= 0) return false;
-  return getSeasonWatchedCount(seriesId, season, episodeCount) >= episodeCount;
+  const store = getStore();
+  const prefix = `${seriesId}_s${season}_e`;
+  let maxWatchedEp = 0;
+  for (const key of Object.keys(store)) {
+    if (key.startsWith(prefix) && store[key]) {
+      const epNum = parseInt(key.slice(prefix.length), 10);
+      if (!isNaN(epNum) && epNum > maxWatchedEp) {
+        maxWatchedEp = epNum;
+      }
+    }
+  }
+  const effectiveEpisodeCount = Math.max(episodeCount, maxWatchedEp);
+  return getSeasonWatchedCount(seriesId, season, effectiveEpisodeCount) >= effectiveEpisodeCount;
 }
 
 export function getAllWatchedEpisodes(): Record<string, boolean> {

@@ -29,6 +29,7 @@ import { sagas } from "../data/sagas";
 import { createMixdropSourceRouting } from "../services/mixdropSourceRouting";
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from "../services/encontreiCatalog";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
+import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { rankPlaybackServers, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
 import { Capacitor } from '@capacitor/core';
@@ -1191,6 +1192,40 @@ export function VideoPlayerModal({
     }
     return 8;
   }, [filteredSeasonEpisodes, episodeAvailabilityInfo, seasonData, seriesDetails, season]);
+
+  // Memoriza contagens reais de episódios por temporada descobertas no catálogo/detalhes
+  const [knownSeasonCounts, setKnownSeasonCounts] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    if (season && totalSeasonEpisodes > 0) {
+      setKnownSeasonCounts(prev => {
+        if (prev[season] === totalSeasonEpisodes) return prev;
+        return { ...prev, [season]: totalSeasonEpisodes };
+      });
+    }
+  }, [season, totalSeasonEpisodes]);
+
+  useEffect(() => {
+    if (!resolvedId || !availableSeasons.length) return;
+    let isMounted = true;
+    availableSeasons.forEach(s => {
+      const tmdbCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || 0;
+      if (tmdbCount <= 1) {
+        fetch(`${getApiBaseUrl()}/api/catalog-season?tmdb_id=${resolvedId}&season=${s}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(data => {
+            if (isMounted && data && Array.isArray(data.episodes) && data.episodes.length > 0) {
+              setKnownSeasonCounts(prev => ({
+                ...prev,
+                [s]: Math.max(prev[s] || 0, data.episodes.length)
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    });
+    return () => { isMounted = false; };
+  }, [resolvedId, availableSeasons, seriesDetails]);
 
   // Array numérico de episódios para o seletor (apenas episódios disponíveis no servidor)
   const episodeNumbers = useMemo(() => {
@@ -3072,7 +3107,10 @@ export function VideoPlayerModal({
 
               <div onWheel={(e) => { if (e.deltaY !== 0) e.currentTarget.scrollLeft += e.deltaY; }} className="flex items-center gap-1 bg-black/40 p-1 pb-2 rounded-xl border border-white/5 overflow-x-auto season-scrollbar max-w-full scroll-smooth">
                 {availableSeasons.map((s) => {
-                  const sCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || (s === season ? totalSeasonEpisodes : 8);
+                  const tmdbEpCount = seriesDetails?.seasons?.find(sn => sn.season_number === s)?.episode_count || 0;
+                  const sCount = (s === season && totalSeasonEpisodes > 0)
+                    ? totalSeasonEpisodes
+                    : Math.max(knownSeasonCounts[s] || 0, tmdbEpCount || 0) || 8;
                   const seasonDone = isSeasonFullyWatched(resolvedId, s, sCount);
                   const isCurrent = season === s;
                   return (
