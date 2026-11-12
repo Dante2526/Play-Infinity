@@ -712,6 +712,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     isSupported: voiceSupported,
     isListening: voiceListening,
     isContinuous: voiceContinuous,
+    isAwake: voiceAwake,
     feedback: voiceFeedback,
     triggerPushToTalk,
     toggleContinuousMode
@@ -1807,26 +1808,31 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 triggerPushToTalk();
               }}
               className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center justify-center border backdrop-blur-md min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] ${
-                voiceContinuous
-                  ? "text-amber-300 bg-gradient-to-r from-orange-600/35 via-amber-600/30 to-orange-600/35 border-orange-500/60 shadow-[0_0_18px_rgba(249,115,22,0.55)] scale-105"
-                  : voiceListening
-                  ? "text-emerald-300 bg-emerald-500/20 border-emerald-500/40 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                voiceAwake
+                  ? "text-amber-300 bg-gradient-to-r from-orange-600/40 via-amber-600/35 to-orange-600/40 border-orange-500/70 shadow-[0_0_20px_rgba(249,115,22,0.65)] scale-105"
+                  : voiceContinuous
+                  ? "text-white/90 bg-white/10 border-white/15 hover:text-white hover:bg-white/15 hover:border-white/25"
                   : "text-white/80 bg-white/5 border-white/10 hover:text-white hover:bg-white/15 hover:border-white/20"
               }`}
               title={
-                voiceContinuous
-                  ? "Assistente Infinity ATIVO (Diga 'Infinity' para pausar e comandar). Clique para desligar."
+                voiceAwake
+                  ? "Assistente Infinity OUVINDO seu comando..."
+                  : voiceContinuous
+                  ? "Assistente Infinity ATIVO em segundo plano (Diga 'Infinity' para pausar e comandar). Clique para desligar."
                   : "Assistente de Voz Infinity (Clique para ativar ou segure para falar direto)"
               }
             >
-              {voiceContinuous ? (
+              {voiceAwake ? (
                 <div className="relative flex items-center justify-center">
                   <AudioWaveform className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400 stroke-[2.2] animate-pulse" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
                   <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400" />
                 </div>
-              ) : voiceListening ? (
-                <AudioLines className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-400 stroke-[2.2] animate-bounce" />
+              ) : voiceContinuous ? (
+                <div className="relative flex items-center justify-center">
+                  <AudioLines className="w-5 h-5 sm:w-6 sm:h-6 text-white/85 stroke-[1.9]" />
+                  <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-400/90" />
+                </div>
               ) : (
                 <AudioLines className="w-5 h-5 sm:w-6 sm:h-6 stroke-[1.8] text-neutral-300" />
               )}
@@ -1864,9 +1870,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       </div>
       )}
 
-      {/* Aura Neon de Cinema no Perímetro do Player quando o Assistente está Ativo/Ouvindo */}
-      {(voiceListening || voiceFeedback.type === 'listening') && (
-        <div className="absolute inset-0 pointer-events-none z-40 transition-opacity duration-300 ring-2 ring-inset ring-orange-500/50 shadow-[inset_0_0_50px_rgba(249,115,22,0.22)] rounded-none sm:rounded-2xl animate-pulse" />
+      {/* Aura Neon de Cinema no Perímetro do Player APENAS quando o Assistente desperta para a voz humana */}
+      {(voiceAwake || (voiceFeedback.visible && voiceFeedback.type === 'listening')) && (
+        <div className="absolute inset-0 pointer-events-none z-40 transition-opacity duration-300 ring-2 ring-inset ring-orange-500/60 shadow-[inset_0_0_50px_rgba(249,115,22,0.28)] rounded-none sm:rounded-2xl animate-pulse" />
       )}
 
       {/* Feedback Visual Futurista do Assistente de Voz Infinity */}

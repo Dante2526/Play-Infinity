@@ -28,6 +28,7 @@ export function usePlayerVoiceAssistant({
 }: UsePlayerVoiceAssistantOptions) {
   const [isSupported, setIsSupported] = useState(true);
   const [isListening, setIsListening] = useState(false);
+  const [isAwake, setIsAwake] = useState(false);
   const [isContinuous, setIsContinuous] = useState(() => isContinuousVoiceEnabledByDefault());
   const [feedback, setFeedback] = useState<VoiceAssistantFeedback>({
     visible: false,
@@ -39,6 +40,9 @@ export function usePlayerVoiceAssistant({
   const isStartingRef = useRef(false);
   const startingAtRef = useRef(0);
   const isListeningRef = useRef(false);
+  const isAwakeRef = useRef(false);
+  const awakeTimerRef = useRef<any>(null);
+  const lastExecutedRef = useRef<{ action: string; at: number }>({ action: '', at: 0 });
   const sessionStartedAtRef = useRef(0);
   const lastResultAtRef = useRef(0);
   const onCommandRef = useRef(onCommand);
@@ -58,8 +62,31 @@ export function usePlayerVoiceAssistant({
     if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
     setFeedback({ visible: true, text, type });
     feedbackTimeoutRef.current = setTimeout(() => {
-      setFeedback(prev => ({ ...prev, visible: false }));
+      setFeedback(prev => ({ ...prev, visible: false, type: 'info' }));
     }, durationMs);
+  }, []);
+
+  const activateAwake = useCallback((durationMs = 4500) => {
+    if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
+    isAwakeRef.current = true;
+    setIsAwake(true);
+    awakeTimerRef.current = setTimeout(() => {
+      isAwakeRef.current = false;
+      setIsAwake(false);
+    }, durationMs);
+  }, []);
+
+  const deactivateAwake = useCallback((delayMs = 0) => {
+    if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
+    if (delayMs > 0) {
+      awakeTimerRef.current = setTimeout(() => {
+        isAwakeRef.current = false;
+        setIsAwake(false);
+      }, delayMs);
+    } else {
+      isAwakeRef.current = false;
+      setIsAwake(false);
+    }
   }, []);
 
   // Encerra a instância atual limpando handlers para evitar disparos zumbis
@@ -83,20 +110,36 @@ export function usePlayerVoiceAssistant({
     const trimmed = transcript.trim();
     if (!trimmed) return;
 
-    // Se detectou "Infinity", auto-pausa a reprodução imediatamente
-    if (hasWakeWord(trimmed)) {
+    const wakeDetected = hasWakeWord(trimmed);
+
+    // 1. Se detectou a palavra de ativação humana ("Infinity"), acorda o assistente e pausa o vídeo
+    if (wakeDetected) {
+      activateAwake(4500);
       if (isPlayingRef.current) {
         onWakeRef.current?.();
       }
-      showFeedback('🎤 Ouvindo comando...', 'listening', 3500);
+      showFeedback('🎤 Ouvindo comando...', 'listening', 4500);
+    }
+
+    // 2. Só executa comandos quando acordado por voz humana ("Infinity") ou Push-to-Talk.
+    // Impede que diálogos do próprio filme disparem comandos ou acendam a borda laranja.
+    if (!wakeDetected && !isAwakeRef.current) {
+      return;
     }
 
     const command = parseVoiceCommand(trimmed);
     if (command) {
-      showFeedback(`✓ ${command.label}`, 'success', 2500);
+      const now = Date.now();
+      if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
+        return;
+      }
+      lastExecutedRef.current = { action: command.action, at: now };
+
+      showFeedback(`✓ ${command.label}`, 'success', 2200);
       onCommandRef.current(command.action, command.label);
+      deactivateAwake(wakeDetected ? 700 : 250);
     }
-  }, [showFeedback]);
+  }, [showFeedback, activateAwake, deactivateAwake]);
 
   // Cria sempre uma nova instância limpa de reconhecimento
   const createRecognition = useCallback(() => {
@@ -220,6 +263,7 @@ export function usePlayerVoiceAssistant({
     return () => {
       if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
       if (restartTimerRef.current) clearTimeout(restartTimerRef.current);
+      if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
       safeStopCurrentRecognition();
     };
   }, [safeStopCurrentRecognition]);
@@ -296,6 +340,7 @@ export function usePlayerVoiceAssistant({
       onWakeRef.current?.();
     }
 
+    activateAwake(4500);
     showFeedback('🎤 Fale um comando (ex: Pause, Próximo, Volume +)', 'listening', 4500);
 
     // Garante permissão
@@ -304,7 +349,7 @@ export function usePlayerVoiceAssistant({
     }
 
     startRecognitionSession();
-  }, [isSupported, showFeedback, startRecognitionSession]);
+  }, [isSupported, showFeedback, startRecognitionSession, activateAwake]);
 
   // Alterna o modo contínuo de escuta (wake word "Infinity")
   const toggleContinuousMode = useCallback(async () => {
@@ -317,6 +362,7 @@ export function usePlayerVoiceAssistant({
       setIsContinuous(false);
       isContinuousRef.current = false;
       setContinuousVoiceEnabled(false);
+      deactivateAwake(0);
       safeStopCurrentRecognition();
       showFeedback('Assistente de voz desativado.', 'info', 2000);
     } else {
@@ -335,12 +381,13 @@ export function usePlayerVoiceAssistant({
       showFeedback('Assistente ativado! Diga "Infinity" a qualquer momento.', 'success', 3500);
       startRecognitionSession();
     }
-  }, [isSupported, isContinuous, showFeedback, safeStopCurrentRecognition, startRecognitionSession]);
+  }, [isSupported, isContinuous, showFeedback, safeStopCurrentRecognition, startRecognitionSession, deactivateAwake]);
 
   return {
     isSupported,
     isListening,
     isContinuous,
+    isAwake,
     feedback,
     triggerPushToTalk,
     toggleContinuousMode

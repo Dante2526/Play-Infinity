@@ -1,3 +1,11 @@
+## 12/11/2026 — Borda Laranja Sob Demanda (Somente Voz Humana Acordada) & Anti-Eco no Assistente "Infinity"
+
+- **Indicador Visual Sem Distração (`NetflixPlayerSkin.tsx`):** A aura laranja nas bordas do player e o brilho laranja intenso do botão no cabeçalho agora aparecem exclusivamente quando `voiceAwake` está ativo (ou quando `voiceFeedback.visible && voiceFeedback.type === 'listening'`). Em escuta passiva contínua durante a reprodução, o botão permanece discreto em estilo neutro translúcido com apenas um ponto verde indicador.
+- **Filtro Anti-Eco do Filme (`voicePermissionService.ts`):** `requestMicrophonePermission()` agora solicita `{ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } }` (com fallback seguro para `{ audio: true }`) para isolar a voz externa do usuário sobre o áudio da reprodução.
+- **Gating de Wake-Word & Estado `isAwake` (`usePlayerVoiceAssistant.ts`):** Comandos não executam sem `wakeDetected` ou `isAwake` ativo (evitando acionamentos por falas do filme), `triggerPushToTalk` ativa `isAwake`, `toggleContinuousMode` limpa o estado ao desligar, `showFeedback` reseta `type: 'info'` ao ocultar e o cleanup limpa `awakeTimerRef`.
+- **Android Versioning (`android/app/build.gradle`):** Incrementado para `versionCode 104` / `versionName "1.4.72"`.
+- **Verificação:** `npx tsc --noEmit` (exit 0), `node tests/player-voice-assistant.test.cjs` (4/4) e `node tests/voice-permission-resilience.test.cjs` (4/4).
+
 ## 12/11/2026 — Otimização Ultra-Ágil de Reconexão do Assistente de Voz "Infinity"
 
 **Contexto e Objetivo:**

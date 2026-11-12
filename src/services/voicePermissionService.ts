@@ -54,7 +54,18 @@ export async function requestMicrophonePermission(): Promise<boolean> {
   }
 
   try {
-    const stream = await mediaDevices.getUserMedia({ audio: true });
+    let stream: MediaStream;
+    try {
+      stream = await mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
+    } catch {
+      stream = await mediaDevices.getUserMedia({ audio: true });
+    }
     // Fecha imediatamente todas as faixas para liberar o microfone
     stream.getTracks().forEach((track) => {
       try {
