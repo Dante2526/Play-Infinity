@@ -1,3 +1,25 @@
+## 12/11/2026 — Otimização Mobile do Painel Admin (Credenciais e Mascote Byte)
+
+**Contexto e Diagnóstico:**
+1. **Card de Credenciais do Último Cliente:** No mobile, apresentava espaçamento excessivo (`p-8`), quebra inadequada de linhas no e-mail, senha visível sem opção de ocultar e ausência de botões rápidos para copiar dados ou enviar diretamente no WhatsApp para o cliente.
+2. **Mascote Flutuante Byte:** A pílula com texto completo ("Byte 100% Online") ficava sobreposta aos botões de ação e filtros temporais (`+1d`, `+7d`) em telas compactas de celulares (360px–430px).
+
+**Ações Realizadas:**
+1. **Redesign Mobile-First do Card de Credenciais (`src/pages/AdminPage.tsx`):**
+   - Padding responsivo (`p-4 sm:p-6 lg:p-7`) com cantos arredondados adaptáveis.
+   - Botão para dispensar/fechar o card (X) com um toque.
+   - Linhas estruturadas com cópia individual com feedback visual (Nome, E-mail, Senha com alternador de visibilidade de olho).
+   - Botão de ação primária 🟢 **"Enviar no WhatsApp"** gerando mensagem completa formatada com link de acesso e credenciais via `wa.me/?text=...`.
+   - Botão de ação secundária 📋 **"Copiar Mensagem Pronta"** para área de transferência.
+2. **Mascote Byte Ultra-Compacto no Mobile (`src/components/AdminMascotWidget.tsx`):**
+   - No mobile, o mascote se torna um orbe circular de 44x44px no canto inferior direito (`bottom-3 right-3`), sem encobrir os botões de ação de tempo.
+   - Rótulo de texto expandido mantido apenas no desktop (`hidden sm:flex`).
+   - Badge de alerta numérico dedicado para mobile quando houver alertas pendentes.
+3. **Validação:**
+   - `npx tsc --noEmit`: 0 erros de compilação.
+
+---
+
 ## 12/11/2026 — Implementação do Assistente de Voz "Infinity" no Player (Zero API Key)
 
 **Contexto e Objetivo:**
