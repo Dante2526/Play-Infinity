@@ -1,3 +1,9 @@
+## 13/11/2026 — Botão do Assistente de Voz sem Camada Circular em Repouso
+
+- **Limpeza Visual (`src/components/NetflixPlayerSkin.tsx`):** removidos `border`, `backdrop-blur-md`, `bg-white/5` e `bg-white/10` nos estados desligado e passivo do botão de voz para alinhar aos demais ícones do cabeçalho (mantendo área de toque `min-h-[44px] min-w-[44px]`, ponto verde discreto em escuta contínua e a cor/animação laranja `voiceAwake` apenas ao acordar ouvindo).
+- **Android Versioning (`android/app/build.gradle`):** incrementado para `versionCode 106` / `versionName "1.4.74"`.
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**11/11 passaram, 0 falhas**) e `npx tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Correções de Servidores, Players, Proxies e Anti-SSRF (Fases 1–5)
 
 - **Fase 1 (Controles, VIP & Blacklist):** corrigido `SEEK_RELATIVE` sombreado e ligado `SKIP_INTRO` nos templates HTML (`server/routes/videoScrapers.ts`); adicionado `&sig=` no stream `/api/myembed-stream`; substituídas checagens manuais por `isServerBlacklisted()` em `server/routes/videoScrapers.ts` e `server.ts`; removidas origens mortas (`videasy.to`, `superflixapi.top`) de `allowedOrigins` em `src/components/VideoPlayerModal.tsx`.
