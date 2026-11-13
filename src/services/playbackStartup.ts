@@ -57,7 +57,7 @@ export async function preparePlaybackStartup(
   const meta = new AbortController();
   const stop = () => meta.abort();
   signal.addEventListener('abort', stop, { once: true });
-  const mt = setTimeout(stop, 2500);
+  const mt = setTimeout(stop, 5000);
 
   try {
     const r = await fetcher(apiOrigin() + '/api/playback-candidates?' + params, { signal: meta.signal });

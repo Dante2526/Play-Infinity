@@ -397,16 +397,9 @@ export async function resolveVizerEpisode(
 
   const pData = await vizerFetchJson(`do=playerData&id=${vid}`, 3500);
   if (!pData) return null;
-  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
-
-  // Extrai mixdrop, streamtape e doodstream
-  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
-  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
-  const mDood = sStr.match(/(?:^|&)doodstream=([^&]+)/i);
-  const mixdrop = mMix ? mMix[1] : null;
-  const streamtape = mStape ? mStape[1] : null;
-  const doodstream = mDood ? mDood[1] : null;
-  if (!mixdrop && !streamtape && !doodstream) return null;
+  const picked = pickMixdrop(pData);
+  if (!picked) return null;
+  const { mixdrop, streamtape = null, doodstream = null, byse = null, audio } = picked;
 
   const epObj = {
     episode_id: parseInt(vid, 10),
@@ -414,8 +407,8 @@ export async function resolveVizerEpisode(
     season,
     episode,
     tmdb_id: tmdbId,
-    audio: pData.current_audio || "Dublado",
-    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "" },
+    audio,
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "", byse: byse || "" },
     source_url: target.url,
     _fetchedAt: Date.now()
   };
@@ -434,6 +427,7 @@ export async function resolveVizerEpisode(
     mixdrop,
     streamtape,
     doodstream,
+    byse,
     audio: epObj.audio,
     server_name: "MixDrop",
     season,
@@ -476,22 +470,15 @@ export async function resolveVizerMovie(tmdbId: number, name?: string) {
     `/filmes/online/x-${vizerMovieId}/`
   );
   if (!pData) return null;
-  const sStr = ((pData.servers_dub || "") + "&" + (pData.servers_leg || "")).replace(/&amp;/g, "&");
-
-  // Extrai mixdrop, streamtape e doodstream
-  const mMix = sStr.match(/(?:^|&)mixdrop=([^&]+)/i);
-  const mStape = sStr.match(/(?:^|&)streamtape=([^&]+)/i);
-  const mDood = sStr.match(/(?:^|&)doodstream=([^&]+)/i);
-  const mixdrop = mMix ? mMix[1] : null;
-  const streamtape = mStape ? mStape[1] : null;
-  const doodstream = mDood ? mDood[1] : null;
-  if (!mixdrop && !streamtape && !doodstream) return null;
+  const picked = pickMixdrop(pData);
+  if (!picked) return null;
+  const { mixdrop, streamtape = null, doodstream = null, byse = null, audio } = picked;
 
   const movieObj = {
     video_id: vizerMovieId,
     tmdb_id: tmdbId,
-    audio: pData.current_audio || "Dublado",
-    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "" },
+    audio,
+    servers: { mixdrop: mixdrop || "", streamtape: streamtape || "", doodstream: doodstream || "", byse: byse || "" },
     _fetchedAt: Date.now()
   };
 
@@ -502,6 +489,7 @@ export async function resolveVizerMovie(tmdbId: number, name?: string) {
     mixdrop,
     streamtape,
     doodstream,
+    byse,
     audio: movieObj.audio,
     server_name: "MixDrop",
     source: "vizer-live",
@@ -533,26 +521,98 @@ let _vizerFreshListing: {
   at: number;
 } | null = null;
 const _vizerFreshTmdbCache = new Map<string, number | null>(); // "s:slug"/"f:slug" → tmdb
+const _vizerFreshInflight = new Map<string, Promise<void>>();
+const _vizerFreshTitleNeg = new Map<string, number>(); // "s:title"/"f:title" → expiresAt
 const _vizerKnownSerieIds = new Set<number>();
 const _vizerKnownMovieIds = new Set<number>();
 let _vizerKnownSetsLoaded = false;
 
-/** Popula os sets de ids já conhecidos (snapshots vizer) — 1x por processo. */
+/** Extrai pares { slug, id } únicos de listagens/buscas Videobox. */
+export function parseVideoboxSearchLinks(
+  html: string,
+  kind: "series" | "movies"
+): Array<{ slug: string; id: number }> {
+  const segment = kind === "series" ? "series" : "filmes";
+  const regex = new RegExp(
+    `href="(?:https:\\/\\/(?:www\\.)?(?:vizer\\.[a-z]+|encontrei\\.me))?\\/${segment}\\/online\\/([a-z0-9-]+)-(\\d+)\\/"`,
+    "gi"
+  );
+  const out: Array<{ slug: string; id: number }> = [];
+  const seen = new Set<number>();
+  for (const m of String(html || "").matchAll(regex)) {
+    const id = parseInt(m[2], 10);
+    if (id > 0 && !seen.has(id)) {
+      seen.add(id);
+      out.push({ slug: m[1], id });
+    }
+  }
+  return out;
+}
+
+/** Popula os sets de ids já conhecidos (snapshots vizer + SQLite) — 1x por processo. */
 function vizerKnownSetsLoad(): void {
   if (_vizerKnownSetsLoaded) return;
   _vizerKnownSetsLoaded = true;
   try {
     loadVizerMovieIds();
-    // séries: serie_ids dos episódios do snapshot vizer
+    // séries: serie_ids dos episódios do snapshot JSON ou já hidratados via SQLite
     for (const ep of _vizerCatalog?.episodes || []) {
       const id = Number((ep as any).serie_id);
       if (id > 0) _vizerKnownSerieIds.add(id);
+    }
+    for (const sid of _tmdbToSerieIdMap.values()) {
+      if (sid > 0) _vizerKnownSerieIds.add(sid);
     }
     // filmes: vizer_movie_ids do mapeamento TMDB→vizer (vizer-movie-ids.json)
     for (const vid of _tmdbToVizerMovieIdMap.values()) {
       if (vid > 0) _vizerKnownMovieIds.add(vid);
     }
   } catch { /* snapshot indisponível — segue com sets vazios */ }
+}
+
+/** Busca textual direta no Vizer (do=buscarContent) para encontrar lançamentos além da página 1. */
+async function vizerSearchLive(
+  kind: "series" | "movies",
+  title: string
+): Promise<Array<{ slug: string; id: number }>> {
+  const cleanTitle = title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim();
+  if (!cleanTitle || cleanTitle.length < 2) return [];
+
+  const searchType = kind === "series" ? "series" : "filmes";
+  const queries = [cleanTitle];
+  const spacedCamel = cleanTitle.replace(/([a-z0-9])([A-Z])/g, "$1 $2").trim();
+  if (spacedCamel && spacedCamel !== cleanTitle) queries.push(spacedCamel);
+  const compact = cleanTitle.replace(/\s+/g, "").trim();
+  if (compact && compact !== cleanTitle && !queries.includes(compact)) queries.push(compact);
+
+  const order = getVizerDomainOrder();
+  for (const q of queries) {
+    for (const base of order) {
+      try {
+        const url = `${base}/index.php?app=videobox&module=video&controller=index&do=buscarContent&q=${encodeURIComponent(q)}&type=${searchType}`;
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Referer": `${base}/buscar/`,
+          },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) continue;
+        const json = await res.json().catch(() => null);
+        const html = String(json?.html || "");
+        if (!html) continue;
+        rememberVizerDomain(res.url || base);
+        const links = parseVideoboxSearchLinks(html, kind).filter((it) => encSlugMatchesTitle(it.slug, title));
+        if (links.length > 0) return links;
+        break; // domínio respondeu JSON válido sem match para essa query -> tenta próxima variação de query
+      } catch {
+        continue;
+      }
+    }
+  }
+  return [];
 }
 
 /** HTML GET no Vizer (listagens/páginas de item) com fallback duplo de domínio. */
@@ -585,16 +645,14 @@ async function ensureVizerFreshListing(): Promise<void> {
   if (_vizerFreshListing && Date.now() - _vizerFreshListing.at < VIZER_FRESH_LISTING_TTL_MS) return;
   const series: Array<{ slug: string; id: number }> = [];
   const movies: Array<{ slug: string; id: number }> = [];
-  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+  for (const p of ["/series/online/", "/filmes/online/"]) {
     const html = await vizerFetchHtml(p);
     if (!html) continue;
-    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
-      const id = parseInt(m[2], 10);
-      if (id > 0 && !series.some(x => x.id === id)) series.push({ slug: m[1], id });
+    for (const item of parseVideoboxSearchLinks(html, "series")) {
+      if (!series.some(x => x.id === item.id)) series.push(item);
     }
-    for (const m of html.matchAll(/href="(?:https:\/\/(?:www\.)?vizer\.[a-z]+)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
-      const id = parseInt(m[2], 10);
-      if (id > 0 && !movies.some(x => x.id === id)) movies.push({ slug: m[1], id });
+    for (const item of parseVideoboxSearchLinks(html, "movies")) {
+      if (!movies.some(x => x.id === item.id)) movies.push(item);
     }
   }
   _vizerFreshListing = { series, movies, at: Date.now() };
@@ -604,65 +662,99 @@ async function ensureVizerFreshListing(): Promise<void> {
  * Descobre conteúdo NOVO (pós-snapshot) no Vizer e popula os índices:
  * séries → _tmdbToSerieIdMap (tmdb → serie_id);
  * filmes → _tmdbToVizerMovieIdMap (tmdb → vizer_movie_id) + entrada placeholder
- * em _vizerMovieIndex (servers vazios — resolvidos depois pelo resolveVizerMovie).
- * `title` filtra candidatos pelo slug (reusa encSlugMatchesTitle do scan do encontrei).
+ * em _vizerMovieIndex / _encontreiMovieIndex (espelho IPS).
  */
 async function ensureVizerFreshContent(kind: "series" | "movies", title?: string): Promise<void> {
-  try {
-    loadCatalogs();
-    vizerKnownSetsLoad();
-    await ensureVizerFreshListing();
-    if (!_vizerFreshListing) return;
+  const tag = kind === "series" ? "s" : "f";
+  const normKey = `${tag}:${encNormTitle(title || "")}`;
+  const negExp = _vizerFreshTitleNeg.get(normKey);
+  if (title && negExp && Date.now() < negExp) return;
+  const inflight = _vizerFreshInflight.get(normKey);
+  if (inflight) return inflight;
 
-    const known = kind === "series" ? _vizerKnownSerieIds : _vizerKnownMovieIds;
-    const items = kind === "series" ? _vizerFreshListing.series : _vizerFreshListing.movies;
-    const tag = kind === "series" ? "s" : "f";
+  const work = (async () => {
+    try {
+      loadCatalogs();
+      vizerKnownSetsLoad();
+      const known = kind === "series" ? _vizerKnownSerieIds : _vizerKnownMovieIds;
 
-    const candidates = items.filter(it => {
-      if (known.has(it.id)) return false;                               // já no snapshot
-      if (_vizerFreshTmdbCache.has(`${tag}:${it.slug}`)) return false;  // já resolvido antes
-      return encSlugMatchesTitle(it.slug, title);                       // sem título: bounded
-    }).slice(0, VIZER_FRESH_MAX_CANDIDATES);
-
-    for (const it of candidates) {
-      const cacheKey = `${tag}:${it.slug}`;
-      const pagePath = kind === "series"
-        ? `/series/online/${it.slug}-${it.id}/`
-        : `/filmes/online/${it.slug}-${it.id}/`;
-      const html = await vizerFetchHtml(pagePath);
-      if (!html) {
-        _vizerFreshTmdbCache.set(cacheKey, null);
-        continue;
+      let rawItems: Array<{ slug: string; id: number }> = [];
+      if (title && title.trim().length >= 2) {
+        rawItems = await vizerSearchLive(kind, title);
       }
-      const tm = html.match(/data-tmdb-id="(\d+)"/);
-      const tmdb = tm ? parseInt(tm[1], 10) : 0;
-      _vizerFreshTmdbCache.set(cacheKey, tmdb || null);
-      if (!tmdb) continue;
+      if (rawItems.length === 0) {
+        await ensureVizerFreshListing();
+        rawItems = _vizerFreshListing
+          ? (kind === "series" ? _vizerFreshListing.series : _vizerFreshListing.movies)
+          : [];
+      }
 
-      if (kind === "series") {
-        if (!_tmdbToSerieIdMap.has(tmdb)) {
-          _tmdbToSerieIdMap.set(tmdb, it.id);
-          console.log(`[vizer-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
+      const candidates = rawItems.filter(it => {
+        if (known.has(it.id)) return false;                               // já no snapshot
+        if (_vizerFreshTmdbCache.has(`${tag}:${it.slug}`)) return false;  // já resolvido antes
+        return encSlugMatchesTitle(it.slug, title);                       // sem título: bounded
+      }).slice(0, VIZER_FRESH_MAX_CANDIDATES);
+
+      let mappedCount = 0;
+      for (const it of candidates) {
+        const cacheKey = `${tag}:${it.slug}`;
+        const pagePath = kind === "series"
+          ? `/series/online/${it.slug}-${it.id}/`
+          : `/filmes/online/${it.slug}-${it.id}/`;
+        const html = await vizerFetchHtml(pagePath);
+        if (!html) {
+          _vizerFreshTmdbCache.set(cacheKey, null);
+          continue;
         }
-      } else {
-        if (!_tmdbToVizerMovieIdMap.has(tmdb)) {
-          _tmdbToVizerMovieIdMap.set(tmdb, it.id);
-          console.log(`[vizer-fresh] Filme novo mapeado: tmdb=${tmdb} → vizer_movie_id=${it.id} (${it.slug})`);
-        }
-        if (!_vizerMovieIndex.has(tmdb)) {
-          _vizerMovieIndex.set(tmdb, {
-            video_id: it.id,
-            tmdb_id: tmdb,
-            title: it.slug.replace(/-/g, " "),
-            servers: {},
-            _fetchedAt: Date.now(),
-          } as any);
+        const tm = html.match(/data-tmdb-id="(\d+)"/);
+        const tmdb = tm ? parseInt(tm[1], 10) : 0;
+        _vizerFreshTmdbCache.set(cacheKey, tmdb || null);
+        if (!tmdb) continue;
+        mappedCount++;
+
+        if (kind === "series") {
+          if (!_tmdbToSerieIdMap.has(tmdb)) {
+            _tmdbToSerieIdMap.set(tmdb, it.id);
+            console.log(`[vizer-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
+          }
+        } else {
+          if (!_tmdbToVizerMovieIdMap.has(tmdb)) {
+            _tmdbToVizerMovieIdMap.set(tmdb, it.id);
+            console.log(`[vizer-fresh] Filme novo mapeado: tmdb=${tmdb} → vizer_movie_id=${it.id} (${it.slug})`);
+          }
+          if (!_vizerMovieIndex.has(tmdb)) {
+            _vizerMovieIndex.set(tmdb, {
+              video_id: it.id,
+              tmdb_id: tmdb,
+              title: it.slug.replace(/-/g, " "),
+              servers: {},
+              _fetchedAt: Date.now(),
+            } as any);
+          }
+          if (!_encontreiMovieIndex.has(tmdb)) {
+            _encontreiMovieIndex.set(tmdb, {
+              video_id: it.id,
+              tmdb_id: tmdb,
+              title: it.slug.replace(/-/g, " "),
+              servers: {},
+              _fetchedAt: Date.now(),
+            } as any);
+          }
         }
       }
+
+      if (title && mappedCount === 0 && rawItems.length === 0) {
+        _vizerFreshTitleNeg.set(normKey, Date.now() + ENC_NEG_TTL_MS);
+      }
+    } catch (e: any) {
+      console.warn("[vizer-fresh] Erro no scan incremental:", e?.message || e);
+    } finally {
+      _vizerFreshInflight.delete(normKey);
     }
-  } catch (e: any) {
-    console.warn("[vizer-fresh] Erro no scan incremental:", e?.message || e);
-  }
+  })();
+
+  _vizerFreshInflight.set(normKey, work);
+  return work;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -809,64 +901,49 @@ async function encontreiEpisodeId(
   }
 }
 
-/** Extrai mixdrop e streamtape de um playerData JSON. Tenta servers_dub primeiro, depois servers_leg.
- *  Áudio = "Dublado" se servers_dub tem conteúdo, senão "Legendado". */
-function pickMixdrop(d: any): { mixdrop: string; streamtape?: string | null; doodstream?: string | null; audio: "Dublado" | "Legendado" } | null {
+/** Extrai servidores de um playerData JSON com prioridade estrita PT-BR (servers_dub antes de servers_leg). */
+export function pickMixdrop(d: any): { mixdrop: string; streamtape?: string | null; doodstream?: string | null; byse?: string | null; audio: "Dublado" | "Legendado" } | null {
   if (!d || typeof d !== "object") return null;
-  const dubRaw = String(d.servers_dub || "");
-  const legRaw = String(d.servers_leg || "");
-  const dub = dubRaw.replace(/&amp;/g, "&");
-  const leg = legRaw.replace(/&amp;/g, "&");
-  const audio: "Dublado" | "Legendado" = dubRaw.length > 0 ? "Dublado" : "Legendado";
-  const RE_MIX = /(?:^|&)mixdrop=([^&]+)/i;
-  const RE_STAPE = /(?:^|&)streamtape=([^&]+)/i;
-  const RE_DOOD = /(?:^|&)doodstream=([^&]+)/i;
-  const mDub = dub.match(RE_MIX);
-  const mDubStape = dub.match(RE_STAPE);
-  const mDubDood = dub.match(RE_DOOD);
-  const mLeg = leg.match(RE_MIX);
-  const mLegStape = leg.match(RE_STAPE);
-  const mLegDood = leg.match(RE_DOOD);
-  const streamtape = mDubStape?.[1] || mLegStape?.[1] || null;
-  const doodstream = mDubDood?.[1] || mLegDood?.[1] || null;
-
-  if (mDub) return { mixdrop: mDub[1], streamtape, doodstream, audio: "Dublado" };
-  if (mLeg) return { mixdrop: mLeg[1], streamtape, doodstream, audio: "Legendado" };
-  if (streamtape) return { mixdrop: "", streamtape, doodstream, audio };
-  if (doodstream) return { mixdrop: "", streamtape: null, doodstream, audio };
+  const extract = (raw: unknown) => {
+    const s = String(raw || "").replace(/&amp;/g, "&");
+    const mixdrop = s.match(/(?:^|&)mixdrop=([a-zA-Z0-9_-]+)/i)?.[1] || "";
+    const streamtape = s.match(/(?:^|&)streamtape=([a-zA-Z0-9_-]+)/i)?.[1] || null;
+    const doodstream = s.match(/(?:^|&)doodstream=([a-zA-Z0-9_-]+)/i)?.[1] || null;
+    const byse = s.match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1] || null;
+    return (mixdrop || streamtape || doodstream || byse) ? { mixdrop, streamtape, doodstream, byse } : null;
+  };
+  const dub = extract(d.servers_dub);
+  if (dub) return { ...dub, audio: "Dublado" };
+  const leg = extract(d.servers_leg);
+  if (leg) return { ...leg, audio: "Legendado" };
   return null;
+}
+
+/** Detecta o interstitial "Entre no nosso Discord" (wcchallenge) do encontrei.me sem confundir com cookie expirado do AJAX. */
+export function isEncontreiHtmlChallenge(html: string): boolean {
+  const s = String(html || "");
+  return /data-pageController=['"]wcchallenge['"]|id=['"]dcgSkip['"]|Entre no nosso Discord/i.test(s);
 }
 
 // ──────────────────────────────────────────────────────────────────────────
 // REFRESH INCREMENTAL — conteúdo NOVO no encontrei.me (pós-snapshot do catálogo)
-//
-// O snapshot local congela o catálogo (ex.: 22/09/2026). Séries/filmes
-// adicionados DEPOIS ficam invisíveis pro resolver live, pois
-// _tmdbToSerieIdMap/_encontreiMovieIndex só saem do snapshot — e a busca
-// /search/ do site devolve 403 ("Sorry, you do not have permission") pra
-// essa conta. Solução validada ao vivo (scratch/test-encontrei-search.mjs):
-//   1. Varrer as primeiras páginas de listagem (/series/online/, /filmes/online/)
-//   2. Item com id NOVO (ausente do snapshot) = candidato
-//   3. A página do item expõe data-tmdb-id="<tmdb>" (série e filme)
-//   4. Mapeia tmdb → serie_id/video_id e segue o fluxo normal
-//      (episodesList → playerData → pickMixdrop).
-// Caso real validado: Carrie a Estranha (tmdb 288673, estreou 07/10/2026) →
-// serie_id 82940 → ep_id 82941 → mixdrop dublado pjkr4deehg7r646.
 // ──────────────────────────────────────────────────────────────────────────
 
 const ENC_FRESH_LISTING_TTL_MS = 10 * 60 * 1000; // listagens re-varridas no máx 1x/10min
 const ENC_FRESH_MAX_CANDIDATES = 12;             // proteção: no máx N páginas por scan
+let _encHtmlChallengeUntil = 0;
 let _encFreshListing: {
   series: Array<{ slug: string; id: number }>;
   movies: Array<{ slug: string; id: number }>;
   at: number;
 } | null = null;
 const _encFreshTmdbCache = new Map<string, number | null>(); // "s:slug"/"f:slug" → tmdb
+const _encFreshInflight = new Map<string, Promise<void>>();
 const _encKnownSerieIds = new Set<number>();
 const _encKnownMovieIds = new Set<number>();
 let _encKnownSetsLoaded = false;
 
-/** Popula os sets de ids já conhecidos (catálogo snapshot) — 1x por processo. */
+/** Popula os sets de ids já conhecidos (catálogo snapshot + SQLite) — 1x por processo. */
 function encKnownSetsLoad(): void {
   if (_encKnownSetsLoaded) return;
   _encKnownSetsLoaded = true;
@@ -876,6 +953,9 @@ function encKnownSetsLoad(): void {
       const id = Number(s.serie_id);
       if (id > 0) _encKnownSerieIds.add(id);
     }
+    for (const sid of _tmdbToSerieIdMap.values()) {
+      if (sid > 0) _encKnownSerieIds.add(sid);
+    }
     for (const mv of cat?.movies || []) {
       const id = Number(mv.video_id);
       if (id > 0) _encKnownMovieIds.add(id);
@@ -883,11 +963,11 @@ function encKnownSetsLoad(): void {
   } catch { /* snapshot indisponível — segue com sets vazios */ }
 }
 
-/** HTML GET no encontrei.me com cookie + breaker (redirect = cookie morto, 10min). */
+/** HTML GET no encontrei.me com cookie + detector de challenge HTML (preserva AJAX). */
 async function encontreiGetHtml(path: string): Promise<string | null> {
   const cookie = (process.env.ENCONTREI_COOKIE || "").trim();
   if (!cookie) return null;
-  if (Date.now() < _encCookieDownUntil) return null;
+  if (Date.now() < _encCookieDownUntil || Date.now() < _encHtmlChallengeUntil) return null;
   try {
     const res = await fetchWithTimeout(`${ENC_BASE}${path}`, {
       headers: {
@@ -904,7 +984,13 @@ async function encontreiGetHtml(path: string): Promise<string | null> {
       return null;
     }
     if (!res.ok) return null;
-    return await res.text();
+    const html = await res.text();
+    if (isEncontreiHtmlChallenge(html)) {
+      console.warn("[encontrei-fresh] listagem HTML bloqueada por wcchallenge/Discord — usando fallback Vizer (AJAX preservado)");
+      _encHtmlChallengeUntil = Date.now() + ENC_BREAKER_MS;
+      return null;
+    }
+    return html;
   } catch {
     return null;
   }
@@ -920,94 +1006,121 @@ function encNormTitle(s: string): string {
     .trim();
 }
 
-/** Slug da listagem casa com o título pedido? (sem título = aceita, bounded) */
-function encSlugMatchesTitle(slug: string, title?: string): boolean {
+/** Slug da listagem casa com o título pedido? (inclui comparação sem espaços: VisionQuest vs vision-quest) */
+export function encSlugMatchesTitle(slug: string, title?: string): boolean {
   if (!title) return true;
   const cleanTitle = title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim();
   const s = encNormTitle(slug.replace(/-(dublado|legendado|nacional)$/i, ""));
   const t = encNormTitle(cleanTitle || title);
   if (!t) return true;
-  return s.includes(t) || t.includes(s);
+  if (s.includes(t) || t.includes(s)) return true;
+  const sCompact = s.replace(/\s+/g, "");
+  const tCompact = t.replace(/\s+/g, "");
+  return Math.min(sCompact.length, tCompact.length) >= 3 &&
+    (sCompact.includes(tCompact) || tCompact.includes(sCompact));
 }
 
 /** Varrer listagens recentes de séries e filmes (cache de 10min). */
 async function ensureEncontreiFreshListing(): Promise<void> {
+  if (Date.now() < _encHtmlChallengeUntil) return;
   if (_encFreshListing && Date.now() - _encFreshListing.at < ENC_FRESH_LISTING_TTL_MS) return;
   const series: Array<{ slug: string; id: number }> = [];
   const movies: Array<{ slug: string; id: number }> = [];
-  for (const p of ["/series/online/", "/series/online/page/2/", "/filmes/online/", "/filmes/online/page/2/"]) {
+  for (const p of ["/series/online/", "/filmes/online/"]) {
+    if (Date.now() < _encHtmlChallengeUntil) break;
     const html = await encontreiGetHtml(p);
     if (!html) continue;
-    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/series\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
-      const id = parseInt(m[2], 10);
-      if (id > 0 && !series.some(x => x.id === id)) series.push({ slug: m[1], id });
+    for (const item of parseVideoboxSearchLinks(html, "series")) {
+      if (!series.some(x => x.id === item.id)) series.push(item);
     }
-    for (const m of html.matchAll(/href="(?:https:\/\/encontrei\.me)?\/filmes\/online\/([a-z0-9-]+)-(\d+)\/"/gi)) {
-      const id = parseInt(m[2], 10);
-      if (id > 0 && !movies.some(x => x.id === id)) movies.push({ slug: m[1], id });
+    for (const item of parseVideoboxSearchLinks(html, "movies")) {
+      if (!movies.some(x => x.id === item.id)) movies.push(item);
     }
   }
-  _encFreshListing = { series, movies, at: Date.now() };
+  if (series.length > 0 || movies.length > 0) {
+    _encFreshListing = { series, movies, at: Date.now() };
+  }
 }
 
 /**
  * Descobre conteúdo NOVO (pós-snapshot) e popula os índices:
  * séries → _tmdbToSerieIdMap (tmdb → serie_id);
- * filmes → _encontreiMovieIndex (entrada com video_id; servers resolvidos depois
- * pelo resolveEncontreiMovie via playerData). `title` filtra candidatos pelo slug.
+ * filmes → _encontreiMovieIndex (entrada com video_id; servers resolvidos depois).
+ * Se HTML do encontrei.me estiver bloqueado por wcchallenge ou sem match, usa o
+ * espelho Vizer (do=buscarContent) para mapear o mesmo ID IPS e liberar o AJAX.
  */
 async function ensureEncontreiFreshContent(kind: "series" | "movies", title?: string): Promise<void> {
-  try {
-    encKnownSetsLoad();
-    await ensureEncontreiFreshListing();
-    if (!_encFreshListing) return;
+  const tag = kind === "series" ? "s" : "f";
+  const normKey = `${tag}:${encNormTitle(title || "")}`;
+  const inflight = _encFreshInflight.get(normKey);
+  if (inflight) return inflight;
 
-    const known = kind === "series" ? _encKnownSerieIds : _encKnownMovieIds;
-    const items = kind === "series" ? _encFreshListing.series : _encFreshListing.movies;
-    const tag = kind === "series" ? "s" : "f";
-
-    const candidates = items.filter(it => {
-      if (known.has(it.id)) return false;                           // já no snapshot
-      if (_encFreshTmdbCache.has(`${tag}:${it.slug}`)) return false; // já resolvido antes
-      return encSlugMatchesTitle(it.slug, title);                   // sem título: bounded
-    }).slice(0, ENC_FRESH_MAX_CANDIDATES);
-
-    for (const it of candidates) {
-      const cacheKey = `${tag}:${it.slug}`;
-      const pagePath = kind === "series"
-        ? `/series/online/${it.slug}-${it.id}/`
-        : `/filmes/online/${it.slug}-${it.id}/`;
-      const html = await encontreiGetHtml(pagePath);
-      if (!html) {
-        _encFreshTmdbCache.set(cacheKey, null);
-        continue;
+  const work = (async () => {
+    let mappedCount = 0;
+    try {
+      encKnownSetsLoad();
+      if (Date.now() >= _encHtmlChallengeUntil) {
+        await ensureEncontreiFreshListing();
       }
-      const tm = html.match(/data-tmdb-id="(\d+)"/);
-      const tmdb = tm ? parseInt(tm[1], 10) : 0;
-      _encFreshTmdbCache.set(cacheKey, tmdb || null);
-      if (!tmdb) continue;
 
-      if (kind === "series") {
-        if (!_tmdbToSerieIdMap.has(tmdb)) {
-          _tmdbToSerieIdMap.set(tmdb, it.id);
-          console.log(`[encontrei-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
-        }
-      } else {
-        if (!_encontreiMovieIndex.has(tmdb)) {
-          _encontreiMovieIndex.set(tmdb, {
-            video_id: it.id,
-            tmdb_id: tmdb,
-            title: it.slug.replace(/-/g, " "),
-            servers: {},
-            _fetchedAt: Date.now(),
-          } as any);
-          console.log(`[encontrei-fresh] Filme novo mapeado: tmdb=${tmdb} → video_id=${it.id} (${it.slug})`);
+      if (_encFreshListing && Date.now() >= _encHtmlChallengeUntil) {
+        const known = kind === "series" ? _encKnownSerieIds : _encKnownMovieIds;
+        const items = kind === "series" ? _encFreshListing.series : _encFreshListing.movies;
+
+        const candidates = items.filter(it => {
+          if (known.has(it.id)) return false;                           // já no snapshot
+          if (_encFreshTmdbCache.has(`${tag}:${it.slug}`)) return false; // já resolvido antes
+          return encSlugMatchesTitle(it.slug, title);                   // sem título: bounded
+        }).slice(0, ENC_FRESH_MAX_CANDIDATES);
+
+        for (const it of candidates) {
+          const cacheKey = `${tag}:${it.slug}`;
+          const pagePath = kind === "series"
+            ? `/series/online/${it.slug}-${it.id}/`
+            : `/filmes/online/${it.slug}-${it.id}/`;
+          const html = await encontreiGetHtml(pagePath);
+          if (!html) {
+            _encFreshTmdbCache.set(cacheKey, null);
+            continue;
+          }
+          const tm = html.match(/data-tmdb-id="(\d+)"/);
+          const tmdb = tm ? parseInt(tm[1], 10) : 0;
+          _encFreshTmdbCache.set(cacheKey, tmdb || null);
+          if (!tmdb) continue;
+          mappedCount++;
+
+          if (kind === "series") {
+            if (!_tmdbToSerieIdMap.has(tmdb)) {
+              _tmdbToSerieIdMap.set(tmdb, it.id);
+              console.log(`[encontrei-fresh] Série nova mapeada: tmdb=${tmdb} → serie_id=${it.id} (${it.slug})`);
+            }
+          } else {
+            if (!_encontreiMovieIndex.has(tmdb)) {
+              _encontreiMovieIndex.set(tmdb, {
+                video_id: it.id,
+                tmdb_id: tmdb,
+                title: it.slug.replace(/-/g, " "),
+                servers: {},
+                _fetchedAt: Date.now(),
+              } as any);
+              console.log(`[encontrei-fresh] Filme novo mapeado: tmdb=${tmdb} → video_id=${it.id} (${it.slug})`);
+            }
+          }
         }
       }
+
+      if (mappedCount === 0 && title) {
+        await ensureVizerFreshContent(kind, title);
+      }
+    } catch (e: any) {
+      console.warn("[encontrei-fresh] Erro no scan incremental:", e?.message || e);
+    } finally {
+      _encFreshInflight.delete(normKey);
     }
-  } catch (e: any) {
-    console.warn("[encontrei-fresh] Erro no scan incremental:", e?.message || e);
-  }
+  })();
+
+  _encFreshInflight.set(normKey, work);
+  return work;
 }
 
 /** Resolve episódio no encontrei.me live (cookie necessário). */
@@ -1059,7 +1172,7 @@ export async function resolveEncontreiEpisode(
       episode,
       tmdb_id: tmdbId,
       audio: picked.audio,
-      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "" },
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "", byse: picked.byse || "" },
       source_url: `${ENC_BASE}/episodios/online/`,
       _fetchedAt: Date.now(),
     });
@@ -1074,6 +1187,7 @@ export async function resolveEncontreiEpisode(
       mixdrop: picked.mixdrop,
       streamtape: picked.streamtape || null,
       doodstream: picked.doodstream || null,
+      byse: picked.byse || null,
       mixdrop_encontrei: picked.mixdrop,
       mixdrop_vizer: null,
       audio: picked.audio,
@@ -1093,6 +1207,7 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
   mixdrop_vizer: null;
   streamtape?: string | null;
   doodstream?: string | null;
+  byse?: string | null;
   audio: string;
   server_name: string;
   source: string;
@@ -1118,7 +1233,7 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
     _encontreiMovieIndex.set(tmdbId, {
       ...entry,
       audio: picked.audio,
-      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "", ...(entry.servers || {}) },
+      servers: { mixdrop: picked.mixdrop, streamtape: picked.streamtape || "", doodstream: picked.doodstream || "", byse: picked.byse || "", ...(entry.servers || {}) },
       _fetchedAt: Date.now(),
     });
 
@@ -1126,6 +1241,7 @@ export async function resolveEncontreiMovie(tmdbId: number, name?: string): Prom
       mixdrop: picked.mixdrop,
       streamtape: picked.streamtape || null,
       doodstream: picked.doodstream || null,
+      byse: picked.byse || null,
       mixdrop_encontrei: picked.mixdrop,
       mixdrop_vizer: null,
       audio: picked.audio,
@@ -2117,6 +2233,7 @@ router.get("/api/encontrei-lookup", async (req, res) => {
       if(byse) result={byse:byse.fileId,audio:byse.audio,source:byse.source};
     }
     if (!result) {
+      res.setHeader("Cache-Control", "no-store");
       return res.status(200).json({ error: "Não encontrado nos catálogos (vizer + encontrei) nem nos resolvers live", tmdb_id: tmdbId });
     }
     
@@ -2329,7 +2446,7 @@ async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: 
       try {
         const entry = refresh ? null : lookup.entry;
         const live = entry?.servers?.[provider] ? null : await Promise.race([
-          lookup.live(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 4000); }),
+          lookup.live(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 7000); }),
         ]);
         const fileId = entry?.servers?.[provider] || live?.[provider];
         return /^[a-zA-Z0-9_-]{1,100}$/.test(fileId || '') ? { fileId: String(fileId), source: lookup.source, audio: entry?.audio || live?.audio || 'Dublado' } : null;
@@ -2406,7 +2523,7 @@ export async function getByseSources(id: number, season?: number, episode?: numb
       }
       return null;
     };
-    try { return await Promise.race([work(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 8000); })]); }
+    try { return await Promise.race([work(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 9000); })]); }
     catch { return null; } finally { clearTimeout(timer); }
   }))).filter((x): x is NonNullable<typeof x> => !!x).sort((a,b) => Number(a.audio !== 'Dublado') - Number(b.audio !== 'Dublado'));
 }

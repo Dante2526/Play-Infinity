@@ -17,15 +17,17 @@ router.get('/api/playback-candidates',async(req,res)=>{
   if(!Number.isInteger(id)||id<1||!['movie','tv'].includes(type)||(type==='tv'&&(!Number.isInteger(s)||s<1||s>999||!Number.isInteger(e)||e<1||e>9999)))return res.status(400).json({error:'Invalid content'});
   let hints=getPlaybackCataloguePresence(id,type==='tv'?s:undefined,type==='tv'?e:undefined);
   const name=String(req.query.name||'').slice(0,160),key=`${type}:${id}:${s}:${e}`;
-  if(name&&(req.query.refresh==='1'||!Object.values(hints).some(v=>v.listed))){
-    const cached=discovery.get(key);let task=cached&&cached.expires>Date.now()?cached.promise:undefined;
+  const forceRefresh=req.query.refresh==='1';
+  const hasCatalogueHoster=['srv_byse','srv_mixdrop','srv_streamtape'].some(k=>hints[k]?.listed);
+  if(name&&(forceRefresh||!hasCatalogueHoster)){
+    const cached=discovery.get(key);let task=!forceRefresh&&cached&&cached.expires>Date.now()?cached.promise:undefined;
     if(!task&&discovery.size<500&&activeDiscovery<4){
       activeDiscovery++;
-      task=getByseSources(id,type==='tv'?s:undefined,type==='tv'?e:undefined,name,true).catch(()=>[]).finally(()=>{activeDiscovery--});
+      task=getByseSources(id,type==='tv'?s:undefined,type==='tv'?e:undefined,name,forceRefresh).catch(()=>[]).finally(()=>{activeDiscovery--});
       discovery.set(key,{expires:Date.now()+30000,promise:task});
     }
     let timer:ReturnType<typeof setTimeout>|undefined;
-    try{const sources=await Promise.race([task||Promise.resolve([]),new Promise<any[]>(r=>{timer=setTimeout(()=>r([]),800)})]);
+    try{const sources=await Promise.race([task||Promise.resolve([]),new Promise<any[]>(r=>{timer=setTimeout(()=>r([]),4500)})]);
       hints=getPlaybackCataloguePresence(id,type==='tv'?s:undefined,type==='tv'?e:undefined);
       if(sources.length)hints.srv_byse={audioPriority:sources.some((v:any)=>/dublad|pt[-_ ]?br|nacional/i.test(v.audio||''))?0:1,listed:true,fileIds:sources.map((v:any)=>v.fileId)};
     }finally{clearTimeout(timer);}

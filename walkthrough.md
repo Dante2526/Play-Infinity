@@ -1,3 +1,16 @@
+## 13/11/2026 — Descoberta Live Pós-Snapshot (VisionQuest & Catálogos SQLite)
+
+- **Causa Raiz (`VisionQuest` TMDB `213375`):** Os bancos SQLite locais (`encontrei-catalog.db` de `2026-09-22` e `vizer-catalog.db` de `2026-09-25`) são anteriores à estreia da série. Na busca live, o `encontrei.me` retornava HTML com challenge Discord (`wcchallenge` / `"Entre no nosso Discord - ETV"`), a página `/series/online/page/2/` da Vizer repetia a página 1, e `/api/playback-candidates` pulava a descoberta live quando apenas `srv_saimo` constava listado (além de usar janela curta de `800ms`).
+- **Descoberta Live Vizer + Compartilhamento IPS (`server/routes/encontreiLookup.ts`):**
+  - Adicionado `vizerSearchLive` usando `do=buscarContent&q=...&type=series|filmes` (`parseVideoboxSearchLinks`) com single-flight (`_vizerFreshInflight`) e cache negativo (`_vizerFreshTitleNeg`), hidratando `known` sets a partir do SQLite (`vizerKnownSetsLoad`) e compartilhando IDs IPS descobertos com o índice do Encontrei (`_encontreiMovieIndex`).
+  - Atualizado `encSlugMatchesTitle()` para comparação compacta sem espaços/hífens (`VisionQuest` vs `vision-quest`) e `pickMixdrop()` para priorizar estritamente PT-BR (`servers_dub` antes de `servers_leg`) e extrair `byse` (também persistido em `resolveEncontreiEpisode`/`resolveEncontreiMovie`).
+  - Adicionado `isEncontreiHtmlChallenge()` e cooldown (`_encHtmlChallengeUntil`) em `encontreiGetHtml()` sem bloquear os endpoints AJAX (`episodesList`/`playerData`), além de fallback direto via Vizer em `ensureEncontreiFreshContent()`.
+  - Ajustados timeouts de `getCatalogueMediaSources` (`4000ms` ➔ `7000ms`) e `getByseSources` (`8000ms` ➔ `9000ms`), e adicionado `Cache-Control: no-store` na resposta de erro em `/api/encontrei-lookup`.
+- **Orquestração & Janela de Descoberta (`server/routes/playbackHealth.ts`, `src/services/playbackStartup.ts`):**
+  - `/api/playback-candidates` agora verifica hosters de catálogo (`srv_byse`, `srv_mixdrop`, `srv_streamtape`), respeita `?refresh=1` e eleva o timeout da corrida de descoberta de `800ms` para `4500ms`.
+  - Timeout de `meta` em `playbackStartup.ts` ampliado de `2500ms` para `5000ms`.
+- **Verificação:** `npx tsc --noEmit` (exit 0) e `node --test tests/encontrei-live-discovery.test.cjs tests/playback-health.test.cjs tests/playback-startup.test.cjs tests/byse-sources.test.cjs tests/byse-routes.test.cjs tests/byse-shared-cache.test.cjs` (**51/51 passaram, 0 falhas**).
+
 ## 12/11/2026 — Borda Laranja Sob Demanda (Somente Voz Humana Acordada) & Anti-Eco no Assistente "Infinity"
 
 - **Indicador Visual Sem Distração (`NetflixPlayerSkin.tsx`):** A aura laranja nas bordas do player e o brilho laranja intenso do botão no cabeçalho agora aparecem exclusivamente quando `voiceAwake` está ativo (ou quando `voiceFeedback.visible && voiceFeedback.type === 'listening'`). Em escuta passiva contínua durante a reprodução, o botão permanece discreto em estilo neutro translúcido com apenas um ponto verde indicador.
