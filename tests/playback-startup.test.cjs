@@ -11,9 +11,9 @@ test('content exists on 3 and 4: skip 1 and 2, probe only listed and open fastes
  assert.equal(plan.selected,'srv_watchplay');assert.deepEqual(new Set(plan.candidates),new Set(['srv_mixdrop','srv_watchplay']));assert.equal(f.calls.length,3);assert.ok(f.calls.slice(1).every(x=>['srv_mixdrop','srv_watchplay'].includes(x.searchParams.get('servers'))));
  await new Promise(r=>setTimeout(r,40));assert.equal(results.at(-1).srv_mixdrop.state,'available');
 });
-test('cold BYSE does not spawn a PoW probe; both cold and warm BYSE stay preferred #1',async()=>{
+test('cold BYSE never blocks startup: other dubbed hosts first, BYSE kept as fallback; warm BYSE stays #1',async()=>{
  const cold=fixture({srv_byse:hint(true,false),srv_streamtape:hint(true),srv_mixdrop:hint(true)},{});
- const p=await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},cold.fetch);assert.equal(p.selected,'srv_byse');assert.equal(p.candidates[0],'srv_byse');assert.ok(!cold.calls.slice(1).some(x=>x.searchParams.get('servers')==='srv_byse'));
+ const p=await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},cold.fetch);assert.notEqual(p.selected,'srv_byse');assert.notEqual(p.candidates[0],'srv_byse');assert.equal(p.candidates.at(-1),'srv_byse');assert.ok(!cold.calls.slice(1).some(x=>x.searchParams.get('servers')==='srv_byse'));
  const warm=fixture({srv_byse:hint(true,true),srv_streamtape:hint(true)},{});assert.equal((await api.preparePlaybackStartup(input,new AbortController().signal,()=>{},warm.fetch)).selected,'srv_byse');
 });
 test('empty stale catalogue remains eligible, failures are not proof of missing content',async()=>{

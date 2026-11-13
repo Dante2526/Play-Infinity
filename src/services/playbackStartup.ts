@@ -26,9 +26,11 @@ export function startupOrder(keys: string[], hints: Record<string, CatalogueHint
   const eligible = listed.length ? listed : keys;
   const usable = eligible.some(k => hints[k]?.audioPriority === 0) ? eligible.filter(k => hints[k]?.audioPriority !== 2) : eligible;
   return [...usable].sort((a, b) => {
-    // BYSE é o player homologado primário (same-origin, HLS 1080p sem anúncios).
-    // Sempre recebe prioridade máxima sobre servidores secundários (Mixdrop, Streamtape).
-    const providerWeight = (k: string) => (k === 'srv_byse' ? 0 : k === preferred ? 1 : 2);
+    // BYSE é o player primário SOMENTE quando está morno (stream já resolvido em
+    // cache, abre em ~1-2s). Frio, a resolução leva 20-30s: começa por outro
+    // servidor com a mesma prioridade de áudio e deixa o BYSE como fallback.
+    const byseWarm = !!hints.srv_byse?.warm;
+    const providerWeight = (k: string) => (k === 'srv_byse' ? (byseWarm ? 0 : 3) : k === preferred ? 1 : 2);
     const score = (k: string) => (hints[k]?.audioPriority ?? 1) * 100 + providerWeight(k);
     return score(a) - score(b);
   });
