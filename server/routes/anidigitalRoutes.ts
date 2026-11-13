@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
+import { RedirectBlockedError, fetchWithValidatedRedirects, readTextWithCap } from "../utils/httpSecurity";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import {
@@ -40,7 +41,7 @@ anidigitalRouter.get("/api/anidigital-lookup", async (req: Request, res: Respons
     type,
     season,
     episode,
-    audio: String(req.query.audio || "leg").toLowerCase() === "dub" ? "dub" : "leg",
+    audio: String(req.query.audio || "dub").toLowerCase() === "leg" ? "leg" : "dub",
     tmdbId,
   });
 
@@ -95,10 +96,15 @@ anidigitalRouter.get("/api/anidigital-stream", async (req: Request, res: Respons
   req.once("close", () => controller.abort());
 
   try {
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetchWithValidatedRedirects(targetUrl, {
       headers: { "User-Agent": STREAM_USER_AGENT },
-      redirect: "follow",
       signal: controller.signal,
+      maxRedirects: 4,
+      checkPrivateHost: isPrivateOrLocalHost,
+      validateUrl: (u) => {
+        const s = u.toString();
+        return isAnidigitalCdnUrl(s) && !isServerBlacklisted(s);
+      },
     });
     clearTimeout(timer);
 
@@ -106,20 +112,27 @@ anidigitalRouter.get("/api/anidigital-stream", async (req: Request, res: Respons
       return res.status(502).send(`Upstream HTTP ${upstream.status}`);
     }
 
-    const text = await upstream.text();
+    const { text, exceeded } = await readTextWithCap(upstream, 2 * 1024 * 1024);
+    if (exceeded) {
+      return res.status(502).send("Manifesto HLS excedeu limite de tamanho");
+    }
     const trimmed = text.trimStart();
     if (!trimmed.startsWith("#EXTM3U") || trimmed.startsWith("<")) {
       return res.status(502).send("Manifesto HLS inválido");
     }
 
-    const rewritten = rewriteAnidigitalPlaylist(text, targetUrl);
+    const rewritten = rewriteAnidigitalPlaylist(text, upstream.url || targetUrl);
     res.status(200);
     res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Cache-Control", "no-cache");
     return res.send(rewritten);
-  } catch {
+  } catch (err: any) {
     clearTimeout(timer);
+    if (err instanceof RedirectBlockedError) {
+      if (!res.headersSent) return res.status(err.statusCode).send(err.message);
+      return;
+    }
     if (!res.headersSent) {
       return res.status(502).send("Manifest fetch error");
     }
@@ -137,7 +150,7 @@ anidigitalRouter.get("/api/anidigital-proxy-iframe", async (req: Request, res: R
   const type = String(req.query.type || "movie") === "tv" ? "tv" : "movie";
   const season = req.query.s !== undefined ? Number(req.query.s) : undefined;
   const episode = req.query.e !== undefined ? Number(req.query.e) : undefined;
-  const audio = String(req.query.audio || "leg").toLowerCase() === "dub" ? "dub" : "leg";
+  const audio = String(req.query.audio || "dub").toLowerCase() === "leg" ? "leg" : "dub";
   const tmdbId = req.query.tmdb_id !== undefined ? Number(req.query.tmdb_id) : undefined;
   const rawT = Number(req.query.t);
   const initialTime = Number.isFinite(rawT) && rawT > 0 ? rawT : 0;

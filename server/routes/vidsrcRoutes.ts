@@ -193,10 +193,26 @@ function rewriteM3u8(m3u8Text: string, origin: string, token: string): string {
 
   for (let line of lines) {
     line = line.trim();
-    if (!line || line.startsWith("#")) {
-      // Comment line — pode ter URL dentro de #EXT-X-KEY ou #EXT-X-MAP
-      // Pra simplicidade, manter como-is por agora
+    if (!line) {
       result.push(line);
+      continue;
+    }
+    if (line.startsWith("#")) {
+      const rewrittenTag = line.replace(/URI="([^"]+)"/gi, (_m, uri) => {
+        let fullUri: string;
+        if (uri.startsWith("http")) {
+          fullUri = uri;
+        } else if (uri.startsWith("/")) {
+          fullUri = origin + uri;
+        } else {
+          fullUri = origin + "/" + uri;
+        }
+        if (!fullUri.includes("token=") && token) {
+          fullUri += (fullUri.includes("?") ? "&" : "?") + "token=" + token;
+        }
+        return `URI="/api/vidsrc-proxy?url=${encodeURIComponent(Buffer.from(fullUri).toString("base64"))}"`;
+      });
+      result.push(rewrittenTag);
       continue;
     }
 
@@ -233,8 +249,10 @@ router.get("/api/vidsrc-stream", async (req, res) => {
 
   if (parseInt(episode) > 50) {
     try {
-      const fetch = require("node-fetch");
-      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbRes = await fetch(
+        `https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`,
+        { signal: AbortSignal.timeout(8000) }
+      );
       const tmdbData = await tmdbRes.json();
       if (tmdbData.episodes) {
         const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === parseInt(episode));
@@ -360,8 +378,10 @@ router.get("/api/vidsrc-player", async (req, res) => {
 
   if (parseInt(episode) > 50) {
     try {
-      const fetch = require("node-fetch");
-      const tmdbRes = await fetch(`https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`);
+      const tmdbRes = await fetch(
+        `https://api.themoviedb.org/3/tv/${tmdb}/season/${season}?api_key=${process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY}&language=pt-BR`,
+        { signal: AbortSignal.timeout(8000) }
+      );
       const tmdbData = await tmdbRes.json();
       if (tmdbData.episodes) {
         const idx = tmdbData.episodes.findIndex((ep: any) => ep.episode_number === parseInt(episode));

@@ -433,6 +433,9 @@ process.on("uncaughtException", (err) => {
     if (
       req.path.startsWith("/live-stream-proxy") ||
       req.path.startsWith("/anime/hls-proxy") ||
+      req.path.startsWith("/saimo-hls-segment") ||
+      req.path.startsWith("/nixplay-proxy") ||
+      req.path.startsWith("/anidigital-stream") ||
       req.path.startsWith("/md-proxy") ||
       req.path.startsWith("/byse-stream") ||
       req.path.startsWith("/byse-hls.js") ||
@@ -579,8 +582,8 @@ app.use(saimoLiveRouter);
       // Sanitiza opções para garantir apenas servidores permitidos
       if (data && data.data && Array.isArray(data.data.options)) {
         data.data.options = data.data.options.filter((opt: any) => {
-          const embedUrl = (opt.embed || "").toLowerCase();
-          return !embedUrl.includes("superflix") && !embedUrl.includes("sfapi") && !embedUrl.includes("byse");
+          const embedUrl = String(opt?.embed || "").toLowerCase();
+          return !!embedUrl && !isServerBlacklisted(embedUrl) && !embedUrl.includes("byse") && !embedUrl.includes("streamberry") && !embedUrl.includes("embedmovies");
         });
       }
 

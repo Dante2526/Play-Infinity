@@ -6,6 +6,7 @@ import crypto from "crypto";
 import * as cheerio from "cheerio";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain, signProxyUrl, verifyProxySignature } from "../utils/helpers";
+import { readTextWithCap } from "../utils/httpSecurity";
 import { resolveVixsrcStream, resolveDirectAnimeStream } from "./diagnostics";
 import { animeDirectStreamCache, vixsrcStreamCache, liveChunkCache, liveVariantRefreshCache, seasonAvailabilityCache } from "../utils/caches";
 import { Readable } from "stream";
@@ -88,7 +89,8 @@ const router = Router();
       const isM3U8 = rawUrl.includes(".m3u8") || contentType.includes("mpegurl") || contentType.includes("application/x-mpegURL");
 
       if (isM3U8) {
-        const text = await upstreamRes.text();
+        const { text, exceeded } = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+        if (exceeded) return res.status(502).send("Manifesto HLS excedeu limite");
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         const basePath = rawUrl.substring(0, rawUrl.lastIndexOf("/") + 1);
 
@@ -415,16 +417,29 @@ const router = Router();
                       break;
                     case "SEEK":
                     case "SEEK_ABSOLUTE":
-                  case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                      var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                       if (typeof t === "number" && !isNaN(t)) {
                         if (art) art.currentTime = t;
                         else if (v) v.currentTime = t;
                         sendStatus();
                       }
                       break;
+                    case "SEEK_RELATIVE":
+                      var deltaRel = Number(e.data.seconds);
+                      var curRel = (art ? art.currentTime : (v ? v.currentTime : 0)) || 0;
+                      var maxRel = (v && v.duration > 0 ? v.duration : (art && art.duration > 0 ? art.duration : 99999));
+                      var tRel = typeof e.data.time === "number" && !isNaN(e.data.time)
+                        ? Math.max(0, Math.min(e.data.time, maxRel))
+                        : (Number.isFinite(deltaRel) ? Math.max(0, Math.min(curRel + deltaRel, maxRel)) : NaN);
+                      if (!isNaN(tRel)) {
+                        if (art) art.currentTime = tRel;
+                        else if (v) v.currentTime = tRel;
+                        sendStatus();
+                      }
+                      break;
                     case "SKIP_INTRO":
-                      var sec = Number(e.data.seconds) || 85;
+                      var rawSec = Number(e.data.seconds);
+                      var sec = Number.isFinite(rawSec) ? rawSec : 85;
                       var cur = (v ? v.currentTime : 0) || 0;
                       var maxD = (v && v.duration > 0 ? v.duration : 99999);
                       var target = Math.max(0, Math.min(cur + sec, maxD - 5));
@@ -620,15 +635,26 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                  case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           curTime = Math.max(0, Math.min(t, dur));
                           sendStatus();
                         }
                         break;
+                      case "SEEK_RELATIVE":
+                        var deltaRel = Number(e.data.seconds);
+                        var tRel = typeof e.data.time === "number" && !isNaN(e.data.time)
+                          ? e.data.time
+                          : (Number.isFinite(deltaRel) ? curTime + deltaRel : NaN);
+                        if (typeof tRel === "number" && !isNaN(tRel)) {
+                          curTime = Math.max(0, Math.min(tRel, dur));
+                          sendStatus();
+                        }
+                        break;
                       case "SKIP_INTRO":
-                        curTime = Math.min(curTime + 85, dur - 5);
+                        var rawSec = Number(e.data.seconds);
+                        var skipSec = Number.isFinite(rawSec) ? rawSec : 85;
+                        curTime = Math.max(0, Math.min(curTime + skipSec, dur - 5));
                         sendStatus();
                         break;
                       case "REQUEST_STATUS":
@@ -922,16 +948,29 @@ const router = Router();
                         break;
                       case "SEEK":
                       case "SEEK_ABSOLUTE":
-                  case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                        var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                         if (typeof t === "number" && !isNaN(t)) {
                           if (art) art.currentTime = t;
                           else if (v) v.currentTime = t;
                           sendStatus();
                         }
                         break;
+                      case "SEEK_RELATIVE":
+                        var deltaRel = Number(e.data.seconds);
+                        var curRel = (art ? art.currentTime : (v ? v.currentTime : 0)) || 0;
+                        var maxRel = (v && v.duration > 0 ? v.duration : 99999);
+                        var tRel = typeof e.data.time === "number" && !isNaN(e.data.time)
+                          ? Math.max(0, Math.min(e.data.time, maxRel))
+                          : (Number.isFinite(deltaRel) ? Math.max(0, Math.min(curRel + deltaRel, maxRel)) : NaN);
+                        if (!isNaN(tRel)) {
+                          if (art) art.currentTime = tRel;
+                          else if (v) v.currentTime = tRel;
+                          sendStatus();
+                        }
+                        break;
                       case "SKIP_INTRO":
-                        var sec = Number(e.data.seconds) || 85;
+                        var rawSec = Number(e.data.seconds);
+                        var sec = Number.isFinite(rawSec) ? rawSec : 85;
                         var cur = (v ? v.currentTime : 0) || 0;
                         var maxD = (v && v.duration > 0 ? v.duration : 99999);
                         var target = Math.max(0, Math.min(cur + sec, maxD - 5));
@@ -2092,8 +2131,7 @@ const router = Router();
 
                 case "SEEK":
                 case "SEEK_ABSOLUTE":
-                  case "SEEK_RELATIVE":
-                    var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
+                  var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
                   if (typeof t === "number" && !isNaN(t)) {
                     var maxDur = (v && v.duration > 0) ? v.duration : ((window.artInstance && window.artInstance.duration > 0) ? window.artInstance.duration : 99999);
                     var targetTime = Math.max(0, Math.min(t, maxDur - 0.5));
@@ -2944,11 +2982,16 @@ const router = Router();
            const cType = upstreamRes.headers.get("content-type") || "";
            const isReqM3U8 = req.query.is_manifest === "true" || currentUrl.includes(".m3u8") || cType.includes("mpegurl");
            if (isReqM3U8) {
-              const text = await upstreamRes.text();
-              upstreamText = text;
-              if (!text.includes("#EXTM3U")) {
+              const { text, exceeded } = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+              if (exceeded) {
                  isInvalidManifest = true;
-                 console.log(`[Proxy] Upstream 200 mas manifesto inválido. Tentando renovar mestre para variante ${vidx}`);
+                 console.log(`[Proxy] Upstream excedeu limite de tamanho para variante ${vidx}`);
+              } else {
+                 upstreamText = text;
+                 if (!text.includes("#EXTM3U")) {
+                    isInvalidManifest = true;
+                    console.log(`[Proxy] Upstream 200 mas manifesto inválido. Tentando renovar mestre para variante ${vidx}`);
+                 }
               }
            }
         }
@@ -2959,8 +3002,8 @@ const router = Router();
            try {
              const mRes = await fetch(masterUrl, { headers, redirect: "follow", signal: AbortSignal.timeout(8000) });
              if (mRes.ok) {
-               const mTxt = await mRes.text();
-               if (mTxt.includes("#EXTM3U")) {
+               const { text: mTxt, exceeded: mExceeded } = await readTextWithCap(mRes, 2 * 1024 * 1024);
+               if (!mExceeded && mTxt.includes("#EXTM3U")) {
                  let vIdxCounter = 0;
                  let newVariant = "";
                  const mLines = mTxt.split("\n").map(l => l.trim());
@@ -3040,20 +3083,99 @@ const router = Router();
         contentType.includes("vnd.apple.mpegurl")
       );
 
-      if (!isExplicitSegment && upstreamText === null && (isM3U8 || rawUrl.includes("up.kiwi") || (!contentType.includes("mp2t") && !new URL(finalUrl).pathname.toLowerCase().endsWith(".ts")))) {
-        try {
-          const peekText = await upstreamRes.text();
-          if (peekText.includes("#EXTM3U")) {
-            isM3U8 = true;
-            upstreamText = peekText;
-          } else {
-            upstreamText = peekText;
+      let sniffedPassthroughStream: Readable | null = null;
+      const upstreamContentLength = Number(upstreamRes.headers.get("content-length") || "0");
+      const shouldInspectText =
+        !isExplicitSegment &&
+        upstreamText === null &&
+        (!Number.isFinite(upstreamContentLength) || upstreamContentLength <= 2 * 1024 * 1024) &&
+        (isM3U8 ||
+          rawUrl.includes("up.kiwi") ||
+          (!contentType.includes("mp2t") &&
+            !contentType.startsWith("video/") &&
+            !new URL(finalUrl).pathname.toLowerCase().endsWith(".ts")));
+
+      if (shouldInspectText) {
+        if (isM3U8) {
+          const { text: cappedText, exceeded } = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+          if (exceeded) {
+            return res.status(502).send("Manifesto excedeu limite máximo");
           }
-        } catch (_) {}
+          upstreamText = cappedText;
+        } else if (upstreamRes.body && typeof (upstreamRes.body as any).getReader === "function") {
+          try {
+            const reader = (upstreamRes.body as any).getReader();
+            const chunks: Buffer[] = [];
+            let total = 0;
+            let treatedAsBinary = false;
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              if (!value || value.byteLength === 0) continue;
+              const buf = Buffer.from(value);
+              if (chunks.length === 0 && (buf[0] === 0x47 || buf.includes(0x00))) {
+                treatedAsBinary = true;
+                let firstPending: Buffer | null = buf;
+                sniffedPassthroughStream = new Readable({
+                  async read() {
+                    try {
+                      if (firstPending) {
+                        const out = firstPending;
+                        firstPending = null;
+                        this.push(out);
+                        return;
+                      }
+                      const next = await reader.read();
+                      if (next.done) this.push(null);
+                      else this.push(Buffer.from(next.value));
+                    } catch (err) {
+                      this.destroy(err as Error);
+                    }
+                  },
+                  destroy(err, cb) {
+                    reader.cancel().catch(() => {}).finally(() => cb(err));
+                  },
+                });
+                break;
+              }
+              total += buf.byteLength;
+              if (total > 2 * 1024 * 1024) {
+                try { await reader.cancel(); } catch {}
+                return res.status(502).send("Resposta upstream excedeu limite máximo");
+              }
+              chunks.push(buf);
+            }
+            if (!treatedAsBinary) {
+              const peekText = Buffer.concat(chunks).toString("utf-8");
+              if (peekText.includes("#EXTM3U")) {
+                isM3U8 = true;
+              }
+              upstreamText = peekText;
+            }
+          } catch (_) {}
+        } else {
+          try {
+            const { text: peekText, exceeded } = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+            if (exceeded) {
+              return res.status(502).send("Resposta upstream excedeu limite máximo");
+            }
+            if (peekText.includes("#EXTM3U")) {
+              isM3U8 = true;
+            }
+            upstreamText = peekText;
+          } catch (_) {}
+        }
       }
 
       if (isM3U8) {
-        const text = upstreamText !== null ? upstreamText : await upstreamRes.text();
+        let text = upstreamText;
+        if (text === null) {
+          const capped = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+          if (capped.exceeded) {
+            return res.status(502).send("Manifesto excedeu limite máximo");
+          }
+          text = capped.text;
+        }
         if (!text.includes("#EXTM3U")) {
           return res.status(502).send("Manifesto inválido recebido da fonte original");
         }
@@ -3169,7 +3291,12 @@ const router = Router();
       // gera uma playlist HLS sob demanda para que reprodutores HLS/Hls.js no navegador possam reproduzir o stream MPEG-TS
       if (!isExplicitSegment && (rawUrl.includes("up.kiwi") || contentType.includes("mp2t") || new URL(finalUrl).pathname.toLowerCase().endsWith(".ts"))) {
         // Libera explicitamente o corpo upstream se ainda não foi lido
-        if (upstreamText === null) {
+        if (sniffedPassthroughStream) {
+          try {
+            sniffedPassthroughStream.destroy();
+          } catch (_) {}
+          sniffedPassthroughStream = null;
+        } else if (upstreamText === null) {
           try {
             upstreamRes.body?.cancel().catch(() => {});
           } catch (_) {}
@@ -3198,9 +3325,9 @@ const router = Router();
 
       if (upstreamText !== null) {
         return res.send(Buffer.from(upstreamText, "utf-8"));
-      } else if (upstreamRes.body) {
+      } else if (sniffedPassthroughStream || upstreamRes.body) {
         // Transmite o segmento de vídeo de forma contínua e eficiente sem cortes artificiais
-        const stream = Readable.fromWeb(upstreamRes.body as any);
+        const stream = sniffedPassthroughStream || Readable.fromWeb(upstreamRes.body as any);
         
         res.on("close", () => {
           try {
@@ -3210,8 +3337,7 @@ const router = Router();
 
         return stream.pipe(res);
       } else {
-        const buffer = Buffer.from(await upstreamRes.arrayBuffer());
-        return res.send(buffer);
+        return res.end();
       }
     } catch (err: any) {
       console.warn("[Live Stream Proxy Warning]:", err?.message || err, "URL:", req.query?.url);
@@ -3280,13 +3406,11 @@ const router = Router();
               .filter((opt: any) => {
                 const u = (opt.embed || "").toLowerCase();
                 return (
-                  !u.includes("superflix") &&
-                  !u.includes("sfapi") &&
+                  !!u &&
+                  !isServerBlacklisted(u) &&
                   !u.includes("byse") &&
                   !u.includes("streamberry") &&
-                  !u.includes("embedmovies") &&
-                  !u.includes("videasy") &&
-                  !u.includes("vidlink")
+                  !u.includes("embedmovies")
                 );
               })
               .sort((a: any, b: any) => {
@@ -3353,7 +3477,7 @@ const router = Router();
                 const m3u8Source = vidData.securedLink || vidData.videoSource;
                 if (!m3u8Source || typeof m3u8Source !== "string" || !m3u8Source.startsWith("http")) continue;
 
-                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}`;
+                const proxiedStreamUrl = `/api/live-stream-proxy?url=${encodeURIComponent(m3u8Source)}&referer=${encodeURIComponent(`https://${host}/`)}&sig=${signProxyUrl(m3u8Source)}`;
 
                 res.setHeader("Content-Type", "text/html; charset=utf-8");
                 res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
@@ -3731,7 +3855,6 @@ const router = Router();
           case "SEEK":
           case "seek":
           case "SEEK_ABSOLUTE":
-                  case "SEEK_RELATIVE":
                     var t = typeof e.data.time === "number" ? e.data.time : e.data.targetTime;
             if (typeof t === "number" && !isNaN(t)) {
               if (art) {

@@ -39,6 +39,11 @@ export function createByseRouter(deps = { resolve: resolveByseStream, sources: g
   };
   router.get(['/api/byse-resolve','/api/byse-proxy-iframe'], async (req,res) => {
     res.setHeader('Cache-Control','no-store');
+    req.setTimeout(50000, () => {
+      if (!res.headersSent) res.status(504).send('BYSE resolution timeout');
+      req.destroy();
+    });
+    res.once('finish', () => { req.socket?.setTimeout(30000); });
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       // Cold resolution includes catalogue selection, provider authentication

@@ -613,12 +613,12 @@ export async function resolveExternalChannel(
     ssrfOk: boolean;
   }
   const candidates: Candidate[] = [];
-  const hasAnyReferer = channel.fontes.some((f) => Boolean(f.referer));
+  // Todas as fontes passam pela corrida (com ou sem referer)
   for (let i = 0; i < channel.fontes.length; i++) {
     const fonte = channel.fontes[i];
     if (fonte.chave) continue; // DASH ClearKey — incompatível
     // Se o canal possui fontes com referer, prioriza estritamente as fontes com referer
-    if (hasAnyReferer && !fonte.referer) continue;
+    // fallback sem referer liberado
     const url = buildFonteUrl(fonte, bases);
     if (!url) continue;
     candidates.push({ index: i, url, fonte, ssrfOk: false });

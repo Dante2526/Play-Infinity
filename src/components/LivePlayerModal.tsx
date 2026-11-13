@@ -370,9 +370,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     ? `${serverUrl}&retry=${reloadNonce}&_cb=${reloadNonce}`
     : serverUrl;
   const isInternalApi = rawUrl.startsWith('/api/');
+  const cacheBustSuffix = reloadNonce > 0 && rawUrl && !currentServer?.isEmbed && !serverUrl.startsWith('/api/external-channel?')
+    ? `${currentServer?.isProxy || rawUrl.includes('?') ? '&' : '?'}_cb=${reloadNonce}`
+    : '';
   const streamUrl = currentServer?.isProxy 
-    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}`
-    : (isInternalApi ? `${proxyBase}${rawUrl}` : rawUrl);
+    ? `${proxyBase}/api/live-stream-proxy?url=${encodeURIComponent(rawUrl)}${cacheBustSuffix}`
+    : (isInternalApi ? `${proxyBase}${rawUrl}${cacheBustSuffix}` : rawUrl);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Probe de vida dos servidores embed — dispara em paralelo quando o canal
@@ -474,11 +477,32 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
 
     // Se for stream DASH (bolodechocolate), usa dash.js com ClearKey DRM
     if (isDashStream) {
+      let dashFailed = false;
+      const triggerDashError = (reason: string, fallbackMsg: string) => {
+        if (!isMounted || dashFailed) return;
+        dashFailed = true;
+        if (channel.servers.length > 1) {
+          switchToNextServer(reason);
+        } else {
+          setHasError(true);
+          setIsLoading(false);
+          setIsBuffering(false);
+          setStreamHealth('error');
+          setErrorMessage(fallbackMsg);
+        }
+      };
+
+      const handleDashWaiting = () => { if (isMounted) setIsBuffering(true); };
+      const handleDashPlaying = () => { if (!isMounted) return; setIsBuffering(false); setIsLoading(false); setStreamHealth('online'); };
+      const handleDashTimeUpdate = () => { if (!isMounted) return; setIsLoading(false); setIsBuffering(false); };
+      const handleDashCanPlay = () => { if (!isMounted) return; setIsLoading(false); setStreamHealth('online'); };
+
       const startDash = async () => {
         try {
           // 1. Busca o MPD URL + ClearKey do backend
           const canal = new URLSearchParams(streamUrl.split('?')[1] || '').get('canal') || 'premiereclubes';
-          const res = await fetch(`/api/bolodechocolate?canal=${canal}`);
+          const cbSuffix = reloadNonce > 0 ? `&_cb=${reloadNonce}` : '';
+          const res = await fetch(`${proxyBase}/api/bolodechocolate?canal=${encodeURIComponent(canal)}${cbSuffix}`);
           if (!res.ok) throw new Error(`Backend retornou ${res.status}`);
           const data = await res.json();
           if (!data.mpd_url) throw new Error('MPD URL não encontrado');
@@ -532,22 +556,31 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           player.on('error', (e: any) => {
             if (!isMounted) return;
             console.warn('[LivePlayer] DASH error:', e);
+            triggerDashError('erro dash stream', 'Não foi possível reproduzir o stream DASH.');
           });
 
-          video.addEventListener('waiting', () => setIsBuffering(true));
-          video.addEventListener('playing', () => { setIsBuffering(false); setIsLoading(false); setStreamHealth('online'); });
-          video.addEventListener('timeupdate', () => { setIsLoading(false); setIsBuffering(false); });
-          video.addEventListener('canplay', () => { setIsLoading(false); setStreamHealth('online'); });
+          video.addEventListener('waiting', handleDashWaiting);
+          video.addEventListener('playing', handleDashPlaying);
+          video.addEventListener('timeupdate', handleDashTimeUpdate);
+          video.addEventListener('canplay', handleDashCanPlay);
         } catch (err: any) {
           if (!isMounted) return;
           console.error('[LivePlayer] DASH init error:', err);
-          setHasError(true);
-          setStreamHealth('error');
-          setErrorMessage('Não foi possível carregar o stream DASH.');
+          triggerDashError('erro init dash', 'Não foi possível carregar o stream DASH.');
         }
       };
       startDash();
-      return;
+      return () => {
+        isMounted = false;
+        video.removeEventListener('waiting', handleDashWaiting);
+        video.removeEventListener('playing', handleDashPlaying);
+        video.removeEventListener('timeupdate', handleDashTimeUpdate);
+        video.removeEventListener('canplay', handleDashCanPlay);
+        if ((video as any)._dashPlayer) {
+          try { (video as any)._dashPlayer.reset(); } catch (e) { console.warn("Falha ao resetar dashPlayer:", e); }
+          delete (video as any)._dashPlayer;
+        }
+      };
     }
 
     const startHls = () => {

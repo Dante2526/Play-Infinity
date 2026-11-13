@@ -4,6 +4,7 @@ import { getSaimoStore } from "../services/saimoSqliteStore";
 import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
+import { RedirectBlockedError, fetchWithValidatedRedirects, readTextWithCap } from "../utils/httpSecurity";
 
 export const saimoRouter = Router();
 
@@ -203,10 +204,12 @@ export async function handleSaimoHlsSegment(req: Request, res: Response): Promis
       try { headers["Origin"] = new URL(referer).origin; } catch {}
     }
 
-    const upstream = await fetch(targetUrl, {
+    const upstream = await fetchWithValidatedRedirects(targetUrl, {
       headers,
       signal: controller.signal,
-      redirect: "follow",
+      maxRedirects: 4,
+      checkPrivateHost: isPrivateOrLocalHost,
+      validateUrl: (u) => isSaimoUrlAllowed(u.toString()),
     });
     clearTimeout(timer);
 
@@ -215,11 +218,16 @@ export async function handleSaimoHlsSegment(req: Request, res: Response): Promis
     }
 
     const contentType = upstream.headers.get("content-type") || "";
+    const contentLen = Number(upstream.headers.get("content-length") || "0");
     // Playlist? Hint por extensão/CT — o FirePlayer serve sub-playlists
     // (/m3/<base64>) como text/plain SEM extensão, então text/plain entra.
     // A prova final é o conteúdo (#EXTM3U) lido do buffer.
-    const maybePlaylist = targetUrl.includes(".m3u8") || targetUrl.includes(".txt")
-      || contentType.includes("mpegurl") || contentType.includes("text/plain");
+    const maybePlaylist = (
+      targetUrl.includes(".m3u8") ||
+      targetUrl.includes(".txt") ||
+      contentType.includes("mpegurl") ||
+      contentType.includes("text/plain")
+    ) && (!Number.isFinite(contentLen) || contentLen <= 4 * 1024 * 1024);
     if (maybePlaylist) {
       const buf = Buffer.from(await upstream.arrayBuffer());
       const head = buf.subarray(0, 512).toString("utf-8").trimStart();
@@ -227,7 +235,8 @@ export async function handleSaimoHlsSegment(req: Request, res: Response): Promis
         const text = buf.toString("utf-8");
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");
         res.setHeader("Access-Control-Allow-Origin", "*");
-        const rewritten = rewriteHlsPlaylist(text, targetUrl, referer);
+        const effectiveUrl = upstream.url || targetUrl;
+        const rewritten = rewriteHlsPlaylist(text, effectiveUrl, referer);
         return res.send(rewritten);
       }
       // Não é playlist (página de erro, binário com CT textual...) — serve
@@ -255,6 +264,12 @@ export async function handleSaimoHlsSegment(req: Request, res: Response): Promis
     }
   } catch (err: any) {
     clearTimeout(timer);
+    if (err instanceof RedirectBlockedError) {
+      if (!res.headersSent) {
+        return res.status(err.statusCode).send(err.message);
+      }
+      return;
+    }
     if (!res.headersSent) {
       res.status(502).send("Segment fetch error");
     }
@@ -709,10 +724,12 @@ export async function handleSaimoStream(req: Request, res: Response): Promise<vo
         headers["Range"] = req.headers.range;
       }
 
-      const upstreamRes = await fetch(streamUrl, {
+      const upstreamRes = await fetchWithValidatedRedirects(streamUrl, {
         headers,
-        redirect: "follow",
         signal: timeoutCtrl.signal,
+        maxRedirects: 4,
+        checkPrivateHost: isPrivateOrLocalHost,
+        validateUrl: (u) => isSaimoUrlAllowed(u.toString()),
       });
 
       clearTimeout(timer);
@@ -726,8 +743,13 @@ export async function handleSaimoStream(req: Request, res: Response): Promise<vo
 
       // Verifica se é manifesto HLS (.m3u8 ou .txt começando com #EXTM3U)
       const isHlsUrl = isHlsSourceUrl(streamUrl);
-      if (isHlsUrl || contentType.includes("mpegurl") || contentType.includes("text/plain")) {
-        const text = await upstreamRes.text();
+      const contentLen = Number(upstreamRes.headers.get("content-length") || "0");
+      const withinTextLimit = !Number.isFinite(contentLen) || contentLen <= 2 * 1024 * 1024;
+      if (withinTextLimit && (isHlsUrl || contentType.includes("mpegurl") || contentType.includes("text/plain"))) {
+        const { text, exceeded } = await readTextWithCap(upstreamRes, 2 * 1024 * 1024);
+        if (exceeded) {
+          continue;
+        }
         const trimmed = text.trimStart();
         // Se for HTML de erro (404, nginx, etc) ou security error
         if (trimmed.startsWith("<") || trimmed.includes("security error") || !trimmed.startsWith("#EXTM3U")) {
@@ -737,8 +759,9 @@ export async function handleSaimoStream(req: Request, res: Response): Promise<vo
         // Manifesto HLS válido! Reescreve URLs para o proxy de segmento do Saimo
         // (rewriteHlsPlaylist também registra hosts dinâmicos de segmento no
         // allowlist — CDNs FirePlayer tipo cincloud1.xyz).
-        const referer = streamUrl.includes("embedplayer2.xyz") ? "https://embedplayer2.xyz/" : streamUrl;
-        const rewritten = rewriteHlsPlaylist(text, streamUrl, referer);
+        const effectiveStreamUrl = upstreamRes.url || streamUrl;
+        const referer = effectiveStreamUrl.includes("embedplayer2.xyz") ? "https://embedplayer2.xyz/" : effectiveStreamUrl;
+        const rewritten = rewriteHlsPlaylist(text, effectiveStreamUrl, referer);
 
         res.status(200);
         res.setHeader("Content-Type", "application/vnd.apple.mpegurl; charset=utf-8");

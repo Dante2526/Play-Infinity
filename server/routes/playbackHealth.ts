@@ -113,7 +113,7 @@ router.get('/api/playback-health' , async (req, res) => {
       // AnimesDigital: anime FHD via busca textual (sem catálogo tmdb_id).
       // O lookup resolve nome→episódio→m3u8 (com cache) e devolve o
       // streamUrl assinado; o probe de mídia valida o manifesto de fato.
-      const anidigitalParams = new URLSearchParams({ name, type });
+      const anidigitalParams = new URLSearchParams({ name, type, audio: 'dub' });
       if (type === 'tv') {
         anidigitalParams.set('s', String(season));
         anidigitalParams.set('e', String(episode));
@@ -159,7 +159,7 @@ router.get('/api/playback-health' , async (req, res) => {
     if (/type:\s*["'](?:WATCHPLAY_UNAVAILABLE|VIP_UNAVAILABLE)["']/.test(html)) return { state: 'unavailable', reason: 'resolver_unavailable' };
     const source = html.match(/var hlsUrl\s*=\s*["']([^"']+)["']/)?.[1];
     if (!source) return { state: 'unknown', reason: 'requires_player' };
-    return probeHealthMedia(localMedia(source, ['/api/stream-proxy', '/api/hls-proxy', '/api/watchplayer-proxy', '/api/anime/hls-proxy', '/api/live-stream-proxy']), signal);
+    return probeHealthMedia(localMedia(source, ['/api/anime/hls-proxy', '/api/live-stream-proxy', '/api/vidsrc-proxy', '/api/byse-stream']), signal);
   })]));
   res.setHeader('Cache-Control', 'no-store');
   res.json({ identity: `${type}:${id}:${type === 'tv' ? `${season}:${episode}` : ''}`, servers: Object.fromEntries(entries) });

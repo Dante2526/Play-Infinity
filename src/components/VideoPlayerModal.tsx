@@ -1349,7 +1349,7 @@ export function VideoPlayerModal({
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string, s?: number, e?: number) =>
             `/api/watchplay-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}`,
-          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
+          isMatch: (u: string) => u.includes("/api/watchplay-proxy-iframe") || (u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream")),
           name: "WatchPlayer"
         },
         {
@@ -1365,7 +1365,7 @@ export function VideoPlayerModal({
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
             return `/api/vip-proxy-iframe?id=${id}&s=${s || 1}&e=${e || 1}${nixId ? `&nixId=${nixId}` : ""}${nameParam}`;
           },
-          isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
+          isMatch: (u: string) => u.includes("/api/vip-proxy-iframe") || u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"
         },
         {
@@ -1430,7 +1430,7 @@ export function VideoPlayerModal({
           label: "WatchPlayer",
           badge: "WatchPlayer Oficial • Dublado em Português (Brasil)",
           buildUrl: (id: string) => `https://v1.watchplay.shop/movie/${imdbId || effectiveMovieId || id}?cb=${Date.now()}`,
-          isMatch: (u: string) => u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream"),
+          isMatch: (u: string) => u.includes("/api/watchplay-proxy-iframe") || (u.includes("watchplay.shop") && !u.includes("/api/watchplayer-stream")),
           name: "WatchPlayer"
         },
         {
@@ -1439,7 +1439,7 @@ export function VideoPlayerModal({
           badge: "VIP Player HD • Áudio Dublado PT-BR • Sem Anúncios",
           buildUrl: (id: string) =>
             `/api/myembed-stream?id=${imdbId || effectiveMovieId || id}&type=movie&cb=${Date.now()}`,
-          isMatch: (u: string) => u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
+          isMatch: (u: string) => u.includes("/api/vip-proxy-iframe") || u.includes("myembed.biz") || u.includes("playerflix") || u.includes("/api/myembed-stream"),
           name: "VIP Player"
         },
         {
@@ -1586,7 +1586,7 @@ export function VideoPlayerModal({
     list = list.filter(s => !isServerBlacklisted(s.key));
 
     return list;
-  }, [isSeries, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title, buildMixdropFallbackUrl, buildBalancedMixdropUrl]);
+  }, [isSeries, isAnimeMedia, imdbId, defaultUrl, mixdropFileId, streamtapeFileId, doodstreamFileId, tmdbId, resolvedId, season, episode, nixplayAvailable, nixplaySeriesId, blockedServerKeys, effectiveMovieId, title, buildMixdropFallbackUrl, buildBalancedMixdropUrl]);
   const healthContentId = String(effectiveMovieId || tmdbId || resolvedId || '');
   const healthIdentity = `${isSeries ? 'tv' : 'movie'}:${healthContentId}:${isSeries ? `${season}:${episode}` : ''}`;
   const healthIdentityRef = useRef(healthIdentity);
@@ -2119,9 +2119,6 @@ export function VideoPlayerModal({
       "https://mxdrop.top",
       "https://mixdrop.co",
       "https://mixdrop.to",
-      "https://player.videasy.to",
-      "https://videasy.to",
-      "https://superflixapi.top",
     ];
     if (allowedOrigins.includes(event.origin)) return true;
     if (event.origin === "null" && iframeRef.current?.contentWindow && event.source === iframeRef.current.contentWindow) {

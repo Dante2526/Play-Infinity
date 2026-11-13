@@ -75,8 +75,8 @@ export async function preparePlaybackStartup(
 
   const candidates = startupOrder(input.keys, hints, input.preferred);
 
-  // Fast-Path: se BYSE é o candidato #1 e está listado, inicia direto nele sem disputa de probe com hosts lentos
-  if (candidates[0] === 'srv_byse' && hints.srv_byse?.listed !== false) {
+  // Fast-Path: se BYSE é o candidato #1 e está explicitamente listado, inicia direto nele sem disputa de probe com hosts lentos
+  if (candidates[0] === 'srv_byse' && hints.srv_byse?.listed === true) {
     return { selected: 'srv_byse', candidates, hints, urls: {} };
   }
 

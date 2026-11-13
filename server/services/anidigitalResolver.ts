@@ -363,6 +363,7 @@ export interface AnidigitalResolveOptions {
 function resolveByTmdbId(
   tmdbId: number,
   type: "movie" | "tv",
+  season: number | undefined,
   episode: number | undefined,
   wantAudio: "dub" | "leg",
 ): AnidigitalResolution | null {
@@ -372,15 +373,16 @@ function resolveByTmdbId(
     // episodeIndex.get / movieIndex.get JÁ parseiam o payload (vizerSqliteStore)
     // e retornam o objeto diretamente (null se ausente).
     if (type === "tv") {
+      const s = Math.max(1, season || 1);
       const ep = Math.max(1, episode || 1);
-      const p = store.episodeIndex.get(`${tmdbId}:1:${ep}`);
+      const p = store.episodeIndex.get(`${tmdbId}:${s}:${ep}`) || (s <= 1 ? store.episodeIndex.get(`${tmdbId}:1:${ep}`) : undefined);
       if (!p) return null;
       const choice = p[wantAudio] || p.dub || p.leg;
       if (!choice || !choice.streamUrl || !isAnidigitalCdnUrl(choice.streamUrl)) return null;
       return {
         m3u8: choice.streamUrl,
         title: p.title,
-        audio: p.dub ? "dub" : "leg",
+        audio: p.dub && choice === p.dub ? "dub" : "leg",
         dub: !!p.dub,
         leg: !!p.leg,
         resolvedAt: Date.now(),
@@ -393,7 +395,7 @@ function resolveByTmdbId(
       return {
         m3u8: choice.streamUrl,
         title: p.title,
-        audio: p.dub ? "dub" : "leg",
+        audio: p.dub && choice === p.dub ? "dub" : "leg",
         dub: !!p.dub,
         leg: !!p.leg,
         resolvedAt: Date.now(),
@@ -407,8 +409,8 @@ function resolveByTmdbId(
 export async function resolveAnidigitalStream(opts: AnidigitalResolveOptions): Promise<AnidigitalResolution> {
   // ---- SQLite-first: se tmdb_id disponível, consulta o catálogo antes do live search ----
   if (opts.tmdbId && Number.isFinite(opts.tmdbId)) {
-    const wantAudio: "dub" | "leg" = opts.audio === "dub" ? "dub" : "leg";
-    const hit = resolveByTmdbId(opts.tmdbId, opts.type, opts.episode, wantAudio);
+    const sqliteWantAudio: "dub" | "leg" = opts.audio === "leg" ? "leg" : "dub";
+    const hit = resolveByTmdbId(opts.tmdbId, opts.type, opts.season, opts.episode, sqliteWantAudio);
     if (hit) return hit;
     // senão: cai pro live search abaixo (fallback)
   }

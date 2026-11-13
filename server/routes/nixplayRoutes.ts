@@ -4,6 +4,7 @@
 import { Router } from "express";
 import { isNixplayAvailable, loadNixplayCatalog, resolveNixplaySeriesId } from "../services/nixplayCatalog";
 import { isPrivateOrLocalHost } from "../utils/helpers";
+import { RedirectBlockedError, fetchWithValidatedRedirects } from "../utils/httpSecurity";
 import { requireAdminAuth } from "../middlewares/requireAdminAuth";
 
 const router = Router();
@@ -649,7 +650,13 @@ router.get("/api/nixplay-proxy", async (req, res) => {
     const timeoutId = setTimeout(() => controller.abort(), 15000);
     req.on("close", () => controller.abort());
 
-    const upstream = await fetch(targetUrl, { signal: controller.signal, headers });
+    const upstream = await fetchWithValidatedRedirects(targetUrl, {
+      signal: controller.signal,
+      headers,
+      maxRedirects: 4,
+      checkPrivateHost: isPrivateOrLocalHost,
+      validateUrl: (u) => isAllowedNixplayProxyHost(u.hostname),
+    });
     clearTimeout(timeoutId);
 
     res.status(upstream.status);
@@ -683,6 +690,10 @@ router.get("/api/nixplay-proxy", async (req, res) => {
     res.on("close", () => controller.abort());
     res.on("error", () => controller.abort());
   } catch (err: any) {
+    if (err instanceof RedirectBlockedError) {
+      if (!res.headersSent) return res.status(err.statusCode).send(err.message);
+      return;
+    }
     if ((err as any)?.name === "AbortError") {
       if (!res.headersSent) res.end();
       return;

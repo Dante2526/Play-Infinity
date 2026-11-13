@@ -476,7 +476,26 @@ app.get("/api/download", async (req, res) => {
       headers["Range"] = req.headers.range;
     }
 
-    const mediaRes = await fetch(videoDirectUrl, { headers });
+    const downloadController = new AbortController();
+    const connectTimeout = setTimeout(() => downloadController.abort(), 15000);
+    let requestClosed = false;
+    res.on("close", () => {
+      requestClosed = true;
+      clearTimeout(connectTimeout);
+      downloadController.abort();
+    });
+
+    let mediaRes;
+    try {
+      mediaRes = await fetch(videoDirectUrl, { headers, signal: downloadController.signal });
+    } finally {
+      clearTimeout(connectTimeout);
+    }
+
+    if (requestClosed) {
+      try { await mediaRes.body?.cancel(); } catch (_) {}
+      return;
+    }
 
     res.status(mediaRes.status);
     res.setHeader("Content-Type", "video/mp4");
@@ -499,7 +518,7 @@ app.get("/api/download", async (req, res) => {
     const stream = Readable.fromWeb(mediaRes.body);
     stream.pipe(res);
 
-    res.on("close", () => {
+    res.once("close", () => {
       try {
         stream.destroy();
       } catch (_) {}
