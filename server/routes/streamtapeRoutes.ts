@@ -314,6 +314,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         }
         if (d.type === "MUTE" && v) v.muted = true;
         if (d.type === "UNMUTE" && v) v.muted = false;
+        if (d.type === "SET_MUTED" && v) v.muted = !!d.muted;
         if (d.type === "SET_VOLUME" && v && typeof d.volume === "number") v.volume = d.volume;
         if (d.type === "SET_PLAYBACK_RATE" && v && typeof d.rate === "number") v.playbackRate = d.rate;
       });

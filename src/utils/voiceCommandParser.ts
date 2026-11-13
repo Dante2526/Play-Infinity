@@ -23,6 +23,7 @@ export interface ParsedVoiceCommand {
 }
 
 const WAKE_WORD_REGEX = /\b(infinity|infiniti|infinito|infinit)\b/i;
+const WAKE_WORD_GLOBAL_REGEX = /\b(infinity|infiniti|infinito|infinit)\b/gi;
 
 export function hasWakeWord(text: string): boolean {
   return WAKE_WORD_REGEX.test(text || '');
@@ -42,19 +43,32 @@ export function normalizeVoiceText(text: string): string {
 }
 
 /**
+ * Quando o wake-word aparece no meio de um segmento contínuo, descarta todo
+ * texto anterior ao último wake-word para evitar falsos comandos vindos de
+ * diálogos anteriores capturados no mesmo resultado.
+ */
+export function extractCommandAfterWakeWord(normalizedText: string): string {
+  if (!normalizedText) return '';
+  let lastMatchEnd = -1;
+  WAKE_WORD_GLOBAL_REGEX.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = WAKE_WORD_GLOBAL_REGEX.exec(normalizedText)) !== null) {
+    lastMatchEnd = match.index + match[0].length;
+  }
+  if (lastMatchEnd === -1) return normalizedText;
+  return normalizedText.slice(lastMatchEnd).trim();
+}
+
+/**
  * Analisa a frase dita e extrai a ação do player correspondente.
- * Se o wake-word "infinity" estiver presente, analisa o comando que o acompanha.
+ * Se o wake-word "infinity" estiver presente, avalia apenas o trecho posterior a ele.
  */
 export function parseVoiceCommand(rawText: string): ParsedVoiceCommand | null {
   const normalized = normalizeVoiceText(rawText);
   if (!normalized) return null;
 
-  // Remove o wake-word "infinity" (ou variantes) do início da frase se presente
-  const cleanCmd = normalized
-    .replace(/^(infinity|infiniti|infinito|infinit)\s*/, '')
-    .trim();
-
-  const target = cleanCmd || normalized;
+  const target = extractCommandAfterWakeWord(normalized);
+  if (!target) return null;
 
   // 1. Pause / Pausar / Parar
   if (/\b(pause|pausar|pausa|pare|parar|para aí|espera)\b/.test(target)) {

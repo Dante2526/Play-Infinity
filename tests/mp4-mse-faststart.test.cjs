@@ -505,6 +505,16 @@ test('streamtape proxy-iframe defers autoplay until canplay when MSE attaches, e
     assert.equal(env.getPlayCalls(), 0);
   }
 
+  // Cenário A4: SET_MUTED enviado pelo comando de voz/skin muta e desmuta corretamente
+  {
+    const env = runPlayerHtmlScript({ mseAvailable: true });
+    assert.equal(env.video.muted, false);
+    env.sandboxWindow.dispatchMessage({ type: 'SET_MUTED', muted: true });
+    assert.equal(env.video.muted, true);
+    env.sandboxWindow.dispatchMessage({ type: 'SET_MUTED', muted: false });
+    assert.equal(env.video.muted, false);
+  }
+
   // Cenário B: Sem MSE, atribui streamUrl direto e chama play() imediatamente
   {
     const env = runPlayerHtmlScript({ mseAvailable: false });

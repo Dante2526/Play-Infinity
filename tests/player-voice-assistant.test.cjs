@@ -78,3 +78,15 @@ test('parses screen adjust and seek commands', async () => {
   assert.equal(parseVoiceCommand('avançar 10 segundos')?.action, 'SEEK_FORWARD');
   assert.equal(parseVoiceCommand('voltar 10 segundos')?.action, 'SEEK_REWIND');
 });
+
+test('ignores movie dialogue preceding wake-word in continuous segments', async () => {
+  const { parseVoiceCommand, extractCommandAfterWakeWord, normalizeVoiceText } = await compileParser();
+
+  assert.equal(
+    extractCommandAfterWakeWord(normalizeVoiceText('para o carro agora infinity aumentar volume')),
+    'aumentar volume'
+  );
+  assert.equal(parseVoiceCommand('para o carro agora infinity aumentar volume')?.action, 'VOLUME_UP');
+  assert.equal(parseVoiceCommand('pular cena infiniti pause')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('infinity'), null);
+});

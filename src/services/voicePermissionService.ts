@@ -10,30 +10,44 @@ const CONTINUOUS_VOICE_KEY = 'playinfinity_voice_continuous';
 
 export type MicPermissionState = 'granted' | 'prompt' | 'denied' | 'unsupported';
 
+function emitPermissionChanged(status: 'granted' | 'denied', error?: string) {
+  try {
+    window.dispatchEvent(
+      new CustomEvent('playinfinity:mic_permission_changed', {
+        detail: error ? { status, error } : { status }
+      })
+    );
+  } catch {}
+}
+
+/**
+ * Sincroniza o estado persistido da permissão de microfone no localStorage.
+ */
+export function syncMicrophonePermission(status: 'granted' | 'denied' | 'prompt') {
+  if (typeof window === 'undefined') return;
+  if (status === 'prompt') {
+    localStorage.removeItem(PERM_KEY);
+    return;
+  }
+  localStorage.setItem(PERM_KEY, status);
+}
+
 /**
  * Verifica o status atual da permissão de microfone.
+ * Consulta a Permissions API primeiro para não confiar em cache obsoleto.
  */
 export async function checkMicrophonePermissionStatus(): Promise<MicPermissionState> {
   if (typeof window === 'undefined') return 'unsupported';
 
-  if (localStorage.getItem(PERM_KEY) === 'granted') {
-    return 'granted';
-  }
-
   if (navigator.permissions && navigator.permissions.query) {
     try {
       const status = await navigator.permissions.query({ name: 'microphone' as any });
-      if (status.state === 'granted') {
-        localStorage.setItem(PERM_KEY, 'granted');
-        return 'granted';
+      if (status.state === 'granted' || status.state === 'denied' || status.state === 'prompt') {
+        syncMicrophonePermission(status.state);
+        return status.state;
       }
-      if (status.state === 'denied') {
-        localStorage.setItem(PERM_KEY, 'denied');
-        return 'denied';
-      }
-      return 'prompt';
     } catch {
-      // Navegadores sem suporte a query de microfone
+      // Navegadores/WebViews sem suporte a query de microfone caem no cache local
     }
   }
 
@@ -73,36 +87,24 @@ export async function requestMicrophonePermission(): Promise<boolean> {
       } catch {}
     });
 
-    localStorage.setItem(PERM_KEY, 'granted');
+    syncMicrophonePermission('granted');
     localStorage.setItem(PROMPTED_KEY, Date.now().toString());
     // Ativa por padrão o modo contínuo se a permissão foi concedida
     if (localStorage.getItem(CONTINUOUS_VOICE_KEY) === null) {
       localStorage.setItem(CONTINUOUS_VOICE_KEY, 'true');
     }
 
-    try {
-      window.dispatchEvent(
-        new CustomEvent('playinfinity:mic_permission_changed', {
-          detail: { status: 'granted' }
-        })
-      );
-    } catch {}
+    emitPermissionChanged('granted');
 
     return true;
   } catch (err: any) {
     console.warn('[VoicePermission] Permissão de microfone não concedida:', err?.name || err);
     if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
-      localStorage.setItem(PERM_KEY, 'denied');
+      syncMicrophonePermission('denied');
     }
     localStorage.setItem(PROMPTED_KEY, Date.now().toString());
 
-    try {
-      window.dispatchEvent(
-        new CustomEvent('playinfinity:mic_permission_changed', {
-          detail: { status: 'denied', error: err?.name }
-        })
-      );
-    } catch {}
+    emitPermissionChanged('denied', err?.name);
 
     return false;
   }

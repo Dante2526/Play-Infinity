@@ -1805,9 +1805,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 triggerPushToTalk();
               }}
-              className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center justify-center border backdrop-blur-md min-h-[40px] min-w-[40px] sm:min-h-[44px] sm:min-w-[44px] ${
+              className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center justify-center border backdrop-blur-md min-h-[44px] min-w-[44px] ${
                 voiceAwake
                   ? "text-amber-300 bg-gradient-to-r from-orange-600/40 via-amber-600/35 to-orange-600/40 border-orange-500/70 shadow-[0_0_20px_rgba(249,115,22,0.65)] scale-105"
                   : voiceContinuous

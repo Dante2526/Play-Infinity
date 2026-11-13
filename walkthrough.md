@@ -1,3 +1,15 @@
+## 13/11/2026 — Blindagem de Longo Prazo do Assistente de Voz "Infinity"
+
+- **Ciclo de Vida e Reconexão (`src/hooks/usePlayerVoiceAssistant.ts`):**
+  - Pausa segura pós-`abort()` (`ABORT_COOLDOWN_MS = 150ms`) antes do próximo `rec.start()` em vez de colisão síncrona no mesmo tick; limpeza de `recognitionRef` e backoff quando `rec.start()` lança exceção.
+  - Backoff exponencial (`computeVoiceBackoffMs`: `1s → 30s`) para erros contínuos (`network`, `audio-capture`, `service-not-allowed`), eliminando loops de `80ms`; reset automático em `onstart`/`onresult`; `window.focus`/`visibilitychange` não reiniciam sessões saudáveis já ativas.
+  - Gating `interim`/`isFinal`: wake-word desperta no máximo 1x por `resultIndex` já no `interim` (pausando o filme rápido), enquanto comandos executam apenas no `isFinal` encerrando `isAwake` imediatamente (`deactivateAwake(0)`).
+- **Permissões e Busca (`src/services/voicePermissionService.ts`, `src/hooks/useVoiceSearch.ts`):**
+  - `checkMicrophonePermissionStatus()` agora consulta `navigator.permissions.query({ name: 'microphone' })` antes do cache `localStorage` (`syncMicrophonePermission`), evitando cache obsoleto; `useVoiceSearch` reaproveita `requestMicrophonePermission()` em vez de reabrir `getUserMedia` toda vez.
+- **Parser, StreamTape & Mobile (`src/utils/voiceCommandParser.ts`, `server/routes/streamtapeRoutes.ts`, `src/components/NetflixPlayerSkin.tsx`):**
+  - `extractCommandAfterWakeWord()` descarta texto anterior ao último `"Infinity"` em segmentos concatenados; StreamTape iframe passa a aceitar `SET_MUTED`; botão de voz padronizado com `min-h-[44px] min-w-[44px]` e `e.stopPropagation()` no `onContextMenu`.
+- **Verificação:** `npx tsc --noEmit` (exit 0) e `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs tests/mp4-mse-faststart.test.cjs tests/streamtape.test.cjs` (**30/30 passaram, 0 falhas**, testando o hook real via shim React + relógio controlado).
+
 ## 13/11/2026 — Arranque Rápido MSE (MixDrop & StreamTape), Autoplay Pós-MSE e Fallback de BYSE Frio
 
 - **BYSE Frio vs Morno (`src/services/playbackStartup.ts` — commit local `37b2a60`):**

@@ -1,4 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import {
+  isMicrophonePermissionGranted,
+  requestMicrophonePermission,
+  syncMicrophonePermission
+} from '../services/voicePermissionService';
 
 // Declarations for Web Speech API
 interface SpeechRecognitionEvent extends Event {
@@ -62,8 +67,14 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
     return () => {
       if (recognitionRef.current) {
         try {
-          recognitionRef.current.abort();
+          const current = recognitionRef.current;
+          current.onstart = null;
+          current.onresult = null;
+          current.onerror = null;
+          current.onend = null;
+          current.abort();
         } catch {}
+        recognitionRef.current = null;
       }
     };
   }, []);
@@ -119,6 +130,7 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
         isStartingRef.current = false;
         isListeningRef.current = false;
         if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          if (event.error === 'not-allowed') syncMicrophonePermission('denied');
           setError('Permissão de microfone negada. Permita o acesso nas configurações do navegador.');
         } else if (event.error === 'no-speech') {
           setError('Nenhuma voz detectada. Tente falar novamente mais próximo ao microfone.');
@@ -161,27 +173,26 @@ export function useVoiceSearch({ onResult, lang = 'pt-BR' }: UseVoiceSearchOptio
     setInterimTranscript('');
     isStartingRef.current = true;
 
-    // Garante solicitação explícita de permissão do microfone no Android/WebView
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Libera as faixas de áudio imediatamente para que o SpeechRecognition possa usá-las
-        stream.getTracks().forEach(track => track.stop());
-      } catch (micErr: any) {
-        console.warn('Microphone permission request error:', micErr);
-        if (micErr?.name === 'NotAllowedError' || micErr?.name === 'PermissionDeniedError') {
-          setError('Permissão de microfone negada. Permita o microfone nas configurações do app.');
-          isStartingRef.current = false;
-          setIsListening(false);
-          return;
-        }
+    // Garante permissão sem reabrir getUserMedia a cada toque quando já concedida
+    if (!isMicrophonePermissionGranted()) {
+      const granted = await requestMicrophonePermission();
+      if (!granted && !isMicrophonePermissionGranted()) {
+        setError('Permissão de microfone negada. Permita o microfone nas configurações do app.');
+        isStartingRef.current = false;
+        setIsListening(false);
+        return;
       }
     }
 
-    // Se já havia uma instância anterior, aborta silenciosamente
+    // Se já havia uma instância anterior, limpa handlers antes de abortar
     if (recognitionRef.current) {
       try {
-        recognitionRef.current.abort();
+        const prev = recognitionRef.current;
+        prev.onstart = null;
+        prev.onresult = null;
+        prev.onerror = null;
+        prev.onend = null;
+        prev.abort();
       } catch {}
       recognitionRef.current = null;
     }
