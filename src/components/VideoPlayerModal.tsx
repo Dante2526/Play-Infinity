@@ -1671,7 +1671,7 @@ export function VideoPlayerModal({
         ? buildBalancedMixdropUrl(fid) || buildMixdropFallbackUrl()
         : buildMixdropFallbackUrl();
     } else {
-      if (serverKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(season, episode));
+      if (serverKey === "srv_streamtape" && tmdbId && !startupPlanRef.current) await waitForPlayerLookup(lookupMixdropFileId(season, episode));
       newUrl = isSeries
         ? srv.buildUrl(resolvedId, season, episode)
         : srv.buildUrl(resolvedId);
@@ -1820,7 +1820,16 @@ export function VideoPlayerModal({
         handleSilentFallback();
       }
     }, timeoutDuration);
-    return () => clearTimeout(timer);
+    const fastMetaTimer = alternative && timeoutDuration > 8000 ? setTimeout(() => {
+      if (!metadataStartedRef.current && !(plan?healthPlaybackStartedRef.current:playbackConfirmedRef.current) && !error) {
+        console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) sem metadados após 8s. Acionando fallback rápido.`);
+        handleSilentFallback();
+      }
+    }, 8000) : undefined;
+    return () => {
+      clearTimeout(timer);
+      if (fastMetaTimer) clearTimeout(fastMetaTimer);
+    };
   }, [activeIframeUrl, selectedServerKey, error, isAnimeMedia, handleSilentFallback]);
 
   // Um novo iframe commitado começa limpo: sincroniza a URL commitada (usada

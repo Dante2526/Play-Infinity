@@ -708,6 +708,7 @@
 
   const DEFAULTS = {
     segmentSeconds: 6,
+    initialSegmentSeconds: 1.5,
     bufferAhead: 36,
     keepBehind: 120,
     maxRetries: 3,
@@ -733,6 +734,7 @@
       stats: { resets: 0, seekEvents: 0, windows: 0, lastAction: 'created' } };
 
     let parsed = null, mime = null;
+    let totalFileBytes = null;
     let ms = null, sb = null, objectUrl = null;
     let appendQueue = [], eosQueued = false;
     let nextWindowStart = Math.max(0, Number(opts.initialTime) || 0);
@@ -770,10 +772,16 @@
           cache: 'no-store',
         });
         if (!response.ok) throw new Error('mse_http_' + response.status);
+        const cr = response.headers.get('content-range');
+        if (cr) {
+          const m = cr.match(/\/(\d+)\s*$/);
+          if (m) totalFileBytes = Number(m[1]);
+        }
         if (response.status === 200) {
           // range ignorado? (exigimos 206 para qualquer start; para start=0 testamos content-length)
           const cl = Number(response.headers.get('content-length') || 0);
           if (start > 0 || cl > (end - start + 1)) throw new Error('mse_range_unsupported');
+          if (!totalFileBytes && cl > 0) totalFileBytes = cl;
         }
         return await readWithIdle(response, controller);
       } finally {
@@ -824,7 +832,7 @@
 
     // ---------- fase 1: headers (ftyp + moov) ----------
     async function loadHeader() {
-      const PROLOGUE = 64 * 1024;
+      const PROLOGUE = 256 * 1024;
       const first = await fetchRange(0, PROLOGUE - 1, opts.headerTimeoutMs);
       const boxes = walkBoxes(first, 0, first.length);
       const ftyp = boxes.find(function (b) { return b.type === 'ftyp' && !b.truncated; });
@@ -844,8 +852,18 @@
         if (truncatedMoov.start < 65536 && moovSize > 2 * 1024 * 1024) {
           throw new Error('mse_moov_faststart_native');
         }
-        const buf = await fetchRange(truncatedMoov.start, truncatedMoov.start + moovSize - 1, opts.headerTimeoutMs);
-        return { parsed: parseMp4(buf.subarray(0, moovSize), truncatedMoov.start), ftypBytes: ftypBytes };
+        const moovEnd = truncatedMoov.start + moovSize;
+        let moovBytes;
+        if (first.length > truncatedMoov.start) {
+          const already = first.subarray(truncatedMoov.start);
+          const rest = await fetchRange(first.length, moovEnd - 1, opts.headerTimeoutMs);
+          moovBytes = new Uint8Array(already.length + rest.length);
+          moovBytes.set(already, 0);
+          moovBytes.set(rest, already.length);
+        } else {
+          moovBytes = await fetchRange(truncatedMoov.start, moovEnd - 1, opts.headerTimeoutMs);
+        }
+        return { parsed: parseMp4(moovBytes.subarray(0, moovSize), truncatedMoov.start), ftypBytes: ftypBytes };
       }
 
       // Caso 3: box grande (mdat/free) cortado → moov vem depois dele
@@ -885,6 +903,7 @@
     }
 
     async function fileSize() {
+      if (totalFileBytes && totalFileBytes > 0) return totalFileBytes;
       const response = await fetch(url, { headers: { Range: 'bytes=0-0' }, cache: 'no-store' });
       const cr = response.headers.get('content-range');
       try { if (response.body) await response.body.cancel(); } catch (e) {}
@@ -966,7 +985,7 @@
           if (engine.destroyed || !sb || resetting) return;
           if (result) {
             try {
-              const frag = buildFragment(parsed, result.bytes, result.spanStart, rp.startAt, rp.startAt + opts.segmentSeconds, seqNum++);
+              const frag = buildFragment(parsed, result.bytes, result.spanStart, rp.startAt, rp.startAt + rp.winSec, seqNum++);
               if (frag) {
                 engine.stats.windows++;
                 appendQueue.push(frag.data);
@@ -1114,8 +1133,11 @@
       if (fetchingWindow || engine.destroyed || !sb) return;
       fetchingWindow = true;
       const epoch = ++fetchEpoch;
+      const winSec = (engine.stats.windows === 0 && opts.initialSegmentSeconds > 0)
+        ? Math.min(opts.segmentSeconds, opts.initialSegmentSeconds)
+        : opts.segmentSeconds;
       const t0 = nextWindowStart;
-      const t1 = t0 + opts.segmentSeconds;
+      const t1 = t0 + winSec;
       try {
         const span = computeSpan(t0, t1);
         if (!span) { eosQueued = true; maybeEos(); return; }
@@ -1242,18 +1264,21 @@
      *  currentTime é restaurado pro INÍCIO REAL do buffer (o keyframe), não pro
      *  alvo cru, porque o browser reverte seeks pra regiões sem dados. */
     function beginReset(t0) {
-      const plan = planWindow(parsed, t0, t0 + opts.segmentSeconds);
+      const winSec = (engine.stats.windows === 0 && opts.initialSegmentSeconds > 0)
+        ? Math.min(opts.segmentSeconds, opts.initialSegmentSeconds)
+        : opts.segmentSeconds;
+      const plan = planWindow(parsed, t0, t0 + winSec);
       const restoreTime = plan ? plan.startSec : t0;
       const preFetch = (async function () {
         try {
           if (!plan) return null;
-          const span = computeSpan(t0, t0 + opts.segmentSeconds);
+          const span = computeSpan(t0, t0 + winSec);
           if (!span) return null;
           const bytes = await fetchRange(span.spanStart, span.spanEnd - 1, opts.segmentTimeoutMs);
           return { bytes: bytes, spanStart: span.spanStart };
         } catch (e) { return null; }
       })();
-      resetPending = { startAt: t0, restoreTime: restoreTime, preFetch: preFetch };
+      resetPending = { startAt: t0, winSec: winSec, restoreTime: restoreTime, preFetch: preFetch };
     }
 
     function evictAndWatchdog() {

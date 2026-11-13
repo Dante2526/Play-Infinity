@@ -1,3 +1,18 @@
+## 13/11/2026 — Arranque Rápido MSE (MixDrop & StreamTape), Autoplay Pós-MSE e Fallback de BYSE Frio
+
+- **BYSE Frio vs Morno (`src/services/playbackStartup.ts` — commit local `37b2a60`):**
+  - Quando o BYSE está frio (`warm: false`), deixa de bloquear a fila #1 e passa para trás dos outros provedores com mesmo áudio; quando `warm: true`, continua #1.
+- **MP4 MSE Faststart (`public/mp4-mse-engine.js`):**
+  - `PROLOGUE` ampliado de `64 KB` para `256 KB`, reaproveitando os bytes já baixados em `truncatedMoov` (`first.subarray(truncatedMoov.start)` + fetch apenas do restante).
+  - `fetchRange()` memoriza `totalFileBytes` via header `Content-Range`/`Content-Length` e `fileSize()` evita `Range: bytes=0-0` extra em arquivos sem faststart (`moov` no fim).
+  - Adicionado `initialSegmentSeconds: 1.5` (aplica janela curta de ~1,5s na 1ª janela e no `beginReset`, mantendo `segmentSeconds: 6` nas janelas seguintes) para exibir o 1º quadro abaixo do watchdog de 12s.
+- **Autoplay e Prontidão StreamTape (`server/routes/streamtapeRoutes.ts`):**
+  - Substituído `v.play()` imediato em `t=0` (que falhava com `<video>` ainda sem `src` durante boot MSE) por `tryAutoPlay()` nos eventos `loadeddata` e `canplay`, respeitando `PAUSE` (`userPaused`) e emitindo `WATCHPLAY_READY` + `WATCHPLAY_STATUS` no `loadedmetadata` e `WATCHPLAY_AUTOPLAY_MUTED` quando mutado.
+- **Watchdog e Troca para StreamTape (`src/components/VideoPlayerModal.tsx`):**
+  - Evita aguardar `waitForPlayerLookup(lookupMixdropFileId(...))` ao abrir `srv_streamtape` quando `startupPlanRef.current` já existe.
+  - Adicionado `fastMetaTimer` de `8000ms` (ativo quando há alternativa disponível e sem metadados) preservando os `12000ms` totais após metadados.
+- **Verificação:** `node --check public/mp4-mse-engine.js` (exit 0), `npx tsc --noEmit` (exit 0) e `node --test tests/mp4-mse-faststart.test.cjs tests/streamtape.test.cjs tests/streamtape-sources.test.cjs tests/mixdrop.test.cjs tests/playback-startup.test.cjs` (**78/78 passaram, 0 falhas**). Nota local: `tests/mp4-mse-engine.test.cjs` depende de `ffmpeg`/`ffprobe` ausentes no Windows.
+
 ## 13/11/2026 — Descoberta Live Pós-Snapshot (VisionQuest & Catálogos SQLite)
 
 - **Causa Raiz (`VisionQuest` TMDB `213375`):** Os bancos SQLite locais (`encontrei-catalog.db` de `2026-09-22` e `vizer-catalog.db` de `2026-09-25`) são anteriores à estreia da série. Na busca live, o `encontrei.me` retornava HTML com challenge Discord (`wcchallenge` / `"Entre no nosso Discord - ETV"`), a página `/series/online/page/2/` da Vizer repetia a página 1, e `/api/playback-candidates` pulava a descoberta live quando apenas `srv_saimo` constava listado (além de usar janela curta de `800ms`).

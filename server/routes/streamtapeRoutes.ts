@@ -157,8 +157,23 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
     (function() {
       var v = document.getElementById("video");
       var hasEverPlayed = false;
+      var userPaused = false;
+      var readySent = false;
       var initialSeek = ${initialTime};
       var streamUrl = ${JSON.stringify(streamUrl)};
+
+      function tryAutoPlay() {
+        if (!v || userPaused || hasEverPlayed || !(v.currentSrc || v.src)) return;
+        var p = v.play();
+        if (p && typeof p.catch === "function") {
+          p.catch(function() {
+            if (userPaused) return;
+            v.muted = true;
+            try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {}
+            v.play().catch(function(){});
+          });
+        }
+      }
 
       // Opção A: transmuxing MP4 → fMP4 via MSE (janelas de ~6s com fetch Range).
       // Fallback gracioso pro <video> nativo em qualquer falha do engine.
@@ -178,10 +193,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
             if (pos > 1) {
               try { v.currentTime = pos; } catch (e) {}
             }
-            v.play().catch(function () {
-              v.muted = true;
-              v.play().catch(function () {});
-            });
+            tryAutoPlay();
           };
           v.addEventListener('loadedmetadata', startPlayback, { once: true });
           v.addEventListener('canplay', startPlayback, { once: true });
@@ -243,6 +255,15 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
 
       setInterval(sendStatus, 300);
 
+      v.addEventListener("loadedmetadata", function() {
+        if (!readySent) {
+          readySent = true;
+          try { window.parent.postMessage({ type: "WATCHPLAY_READY" }, "*"); } catch(e) {}
+          sendStatus();
+        }
+      });
+      v.addEventListener("loadeddata", tryAutoPlay);
+      v.addEventListener("canplay", tryAutoPlay);
       v.addEventListener("play", function() {
         hasEverPlayed = true;
         try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PLAYING" }, "*"); } catch(e) {}
@@ -268,8 +289,8 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
       window.addEventListener("message", function(event) {
         if (!event.data) return;
         var d = event.data;
-        if (d.type === "PAUSE" && v) { recovery.setPaused(true); v.pause(); }
-        if (d.type === "PLAY" && v) { recovery.setPaused(false); v.play().catch(function(err){ if(err && err.name === "NotAllowedError") { v.muted = true; v.play().catch(function(){}); } }); }
+        if (d.type === "PAUSE" && v) { userPaused = true; recovery.setPaused(true); v.pause(); }
+        if (d.type === "PLAY" && v) { userPaused = false; recovery.setPaused(false); v.play().catch(function(err){ if(err && err.name === "NotAllowedError") { v.muted = true; try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch(e) {} v.play().catch(function(){}); } }); }
         if (d.type === "SEEK" && v && typeof d.targetTime === "number") {
           recovery.seek(d.targetTime);
           if (v.readyState >= 1) {
@@ -297,14 +318,8 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         if (d.type === "SET_PLAYBACK_RATE" && v && typeof d.rate === "number") v.playbackRate = d.rate;
       });
 
-      // Autoplay com fallback para muted se bloqueado pelo browser
-      var playPromise = v.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(function() {
-          v.muted = true;
-          v.play().catch(function(){});
-        });
-      }
+      // Quando não usa MSE (src direto), inicia imediatamente; com MSE, loadeddata/canplay inicia ao chegar o 1º GOP.
+      if (!engineAttached) tryAutoPlay();
     })();
   </script>
 </body>
