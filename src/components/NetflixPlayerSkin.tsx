@@ -646,21 +646,36 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   );
 
   // Assistente de Voz Nativo Infinity (Zero API Key)
+  const pausedByWakeRef = useRef(false);
+  const isPausedRef = useRef(playerStatus.paused);
+  isPausedRef.current = playerStatus.paused;
+
+  const resumeIfPausedByWake = useCallback(() => {
+    if (pausedByWakeRef.current) {
+      pausedByWakeRef.current = false;
+      sendCommand({ type: "PLAY" });
+      setPlayerStatus((p) => ({ ...p, paused: false }));
+    }
+  }, [sendCommand]);
+
   const handleVoiceCommand = useCallback((action: PlayerVoiceAction, _label: string) => {
     switch (action) {
       case 'PLAY':
+        pausedByWakeRef.current = false;
         sendCommand({ type: "PLAY" });
         setPlayerStatus(p => ({ ...p, paused: false }));
-        break;
+        return;
       case 'PAUSE':
+        pausedByWakeRef.current = false;
         sendCommand({ type: "PAUSE" });
         setPlayerStatus(p => ({ ...p, paused: true }));
-        break;
+        return;
       case 'NEXT_EPISODE':
+        pausedByWakeRef.current = false;
         if (isSeries && onEpisodeChange && typeof episode === 'number') {
           onEpisodeChange(episode + 1);
         }
-        break;
+        return;
       case 'SKIP_INTRO':
         onSkipIntro();
         break;
@@ -700,12 +715,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         onToggleAspectRatio?.();
         break;
     }
-  }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onToggleAspectRatio]);
+
+    resumeIfPausedByWake();
+  }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onToggleAspectRatio, resumeIfPausedByWake]);
 
   const handleWakeWord = useCallback(() => {
     // Pausa imediatamente ao detectar "Infinity" para evitar interferência do som do filme no microfone
-    sendCommand({ type: "PAUSE" });
-    setPlayerStatus(p => ({ ...p, paused: true }));
+    if (!isPausedRef.current) {
+      pausedByWakeRef.current = true;
+      sendCommand({ type: "PAUSE" });
+      setPlayerStatus(p => ({ ...p, paused: true }));
+    }
   }, [sendCommand]);
 
   const {
@@ -719,6 +739,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   } = usePlayerVoiceAssistant({
     onCommand: handleVoiceCommand,
     onWakeWordDetected: handleWakeWord,
+    onWakeExpired: resumeIfPausedByWake,
     isPlaying: !playerStatus.paused
   });
 
@@ -1026,6 +1047,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   const handleTogglePlay = () => {
     if (isLocked) return;
+    pausedByWakeRef.current = false;
     if (playerStatus.paused) {
       sendCommand({ type: "PLAY" });
       setPlayerStatus((p) => ({ ...p, paused: false }));
@@ -1801,24 +1823,35 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                toggleContinuousMode();
+                if (voiceAwake) {
+                  toggleContinuousMode();
+                } else {
+                  triggerPushToTalk();
+                }
               }}
               onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                triggerPushToTalk();
+                toggleContinuousMode();
               }}
               className={`p-1.5 sm:p-2 transition-all duration-300 cursor-pointer rounded-full relative flex items-center justify-center min-h-[44px] min-w-[44px] ${
                 voiceAwake
                   ? "text-amber-300 border border-orange-500/70 backdrop-blur-md bg-gradient-to-r from-orange-600/40 via-amber-600/35 to-orange-600/40 shadow-[0_0_20px_rgba(249,115,22,0.65)] scale-105"
                   : "text-white/90 hover:text-white hover:bg-white/10"
               }`}
+              aria-label={
+                voiceAwake
+                  ? "Ouvindo comando de voz. Clique para desativar"
+                  : voiceContinuous && voiceListening
+                  ? "Falar comando de voz ou dizer Infinity"
+                  : "Ativar assistente de voz"
+              }
               title={
                 voiceAwake
-                  ? "Assistente Infinity OUVINDO seu comando..."
-                  : voiceContinuous
-                  ? "Assistente Infinity ATIVO em segundo plano (Diga 'Infinity' para pausar e comandar). Clique para desligar."
-                  : "Assistente de Voz Infinity (Clique para ativar ou segure para falar direto)"
+                  ? "Ouvindo comando agora! (Clique para desativar o assistente de voz)"
+                  : voiceContinuous && voiceListening
+                  ? 'Clique para falar um comando ou diga "Infinity" (Botão direito: Desativar)'
+                  : "Clique para ativar e falar comando de voz"
               }
             >
               {voiceAwake ? (

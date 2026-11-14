@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const path = require('node:path');
 const esbuild = require('esbuild');
 const Module = require('node:module');
@@ -89,4 +90,35 @@ test('ignores movie dialogue preceding wake-word in continuous segments', async 
   assert.equal(parseVoiceCommand('para o carro agora infinity aumentar volume')?.action, 'VOLUME_UP');
   assert.equal(parseVoiceCommand('pular cena infiniti pause')?.action, 'PAUSE');
   assert.equal(parseVoiceCommand('infinity'), null);
+});
+
+test('handles PT-BR natural variations, "pula 10" vs "pular abertura", and wake-resume wiring', async () => {
+  const { hasWakeWord, parseVoiceCommand } = await compileParser();
+
+  // Wake word phonetic variant "infinite" + accented "para aí"
+  assert.equal(hasWakeWord('infinite pausar'), true);
+  assert.equal(parseVoiceCommand('infinite pausar')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('para aí')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('segura')?.action, 'PAUSE');
+
+  // "pula 10" / "pular 10" não pode cair em SKIP_INTRO
+  assert.equal(parseVoiceCommand('pula 10 segundos')?.action, 'SEEK_FORWARD');
+  assert.equal(parseVoiceCommand('pular 10')?.action, 'SEEK_FORWARD');
+  assert.equal(parseVoiceCommand('pular para frente')?.action, 'SEEK_FORWARD');
+  assert.equal(parseVoiceCommand('pular abertura')?.action, 'SKIP_INTRO');
+  assert.equal(parseVoiceCommand('pula intro')?.action, 'SKIP_INTRO');
+
+  // Play e Mudo naturais
+  assert.equal(parseVoiceCommand('continua')?.action, 'PLAY');
+  assert.equal(parseVoiceCommand('toca')?.action, 'PLAY');
+  assert.equal(parseVoiceCommand('tirar do mudo')?.action, 'MUTE');
+  assert.equal(parseVoiceCommand('ativar som')?.action, 'MUTE');
+  assert.equal(parseVoiceCommand('voltar o som')?.action, 'MUTE');
+
+  const root = path.resolve(__dirname, '..');
+  const skinSrc = fs.readFileSync(path.join(root, 'src/components/NetflixPlayerSkin.tsx'), 'utf8');
+  const hookSrc = fs.readFileSync(path.join(root, 'src/hooks/usePlayerVoiceAssistant.ts'), 'utf8');
+  assert.match(skinSrc, /pausedByWakeRef/);
+  assert.match(skinSrc, /onWakeExpired/);
+  assert.match(hookSrc, /onWakeExpired/);
 });

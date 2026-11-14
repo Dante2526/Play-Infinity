@@ -1,3 +1,11 @@
+## 13/11/2026 — Correção do Clique, Retomada de Reprodução, Sessão Sem Corte e Comandos PT-BR do Botão de Voz
+
+- **Clique & Ativação Laranja (`src/components/NetflixPlayerSkin.tsx`):** `onClick` agora aciona `triggerPushToTalk()` quando o assistente está desligado ou em standby (acendendo `voiceAwake` laranja e ouvindo comandos diretos na hora), e chama `toggleContinuousMode()` para desativar ao clicar já acordado (ou via `onContextMenu`).
+- **Auto-Retomada Pós-Comando/Timeout (`src/components/NetflixPlayerSkin.tsx`, `src/hooks/usePlayerVoiceAssistant.ts`):** `pausedByWakeRef` + `resumeIfPausedByWake()` + `onWakeExpired` retomam `PLAY` automaticamente após comandos não-pausa (`VOLUME_*`, `MUTE`, `SKIP_INTRO`, `SEEK_*`, `FULLSCREEN`, `ASPECT_RATIO`) ou timeout sem comando, respeitando pausas manuais anteriores (`handleTogglePlay`) e `PAUSE`.
+- **Escuta Sem Cortes (`src/hooks/usePlayerVoiceAssistant.ts`):** `triggerPushToTalk()` preserva sessões `SpeechRecognition` ativas sem `abort()`, aguarda `120ms` pós-`getUserMedia` quando solicita permissão pela 1ª vez, renova `activateAwake` durante fala parcial (`!isFinal`), protege a renovação de 45s quando `isAwake` está ativo e limpa feedback `'listening'` ao expirar.
+- **Parser PT-BR (`src/utils/voiceCommandParser.ts`):** tabela `VOICE_COMMAND_RULES` avalia `SEEK_FORWARD` antes de `SKIP_INTRO` (`"pula 10"` não engole abertura nem `"voltar 10 segundos"`), corrige `"para aí"` pós-normalização, inclui `"infinite"` nas wake words e adiciona variações naturais (`"continua"`, `"toca"`, `"segura"`, `"tirar do mudo"`, `"ativar som"`).
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**13/13 passaram, 0 falhas**) e `tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Botão do Assistente de Voz sem Camada Circular em Repouso
 
 - **Limpeza Visual (`src/components/NetflixPlayerSkin.tsx`):** removidos `border`, `backdrop-blur-md`, `bg-white/5` e `bg-white/10` nos estados desligado e passivo do botão de voz para alinhar aos demais ícones do cabeçalho (mantendo área de toque `min-h-[44px] min-w-[44px]`, ponto verde discreto em escuta contínua e a cor/animação laranja `voiceAwake` apenas ao acordar ouvindo).

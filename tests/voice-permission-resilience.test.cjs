@@ -557,7 +557,60 @@ test('voicePermissionService requests echoCancellation, falls back to audio:true
   );
   assert.match(
     skinSource,
-    /onContextMenu=\{\(e\) => \{\s*e\.preventDefault\(\);\s*e\.stopPropagation\(\);\s*triggerPushToTalk\(\);\s*\}\}[\s\S]*?min-h-\[44px\] min-w-\[44px\]/,
-    'Voice button must stop propagation on contextmenu and use 44x44px mobile touch target'
+    /onClick=\{\(e\) => \{\s*e\.stopPropagation\(\);\s*if \(voiceAwake\) \{\s*toggleContinuousMode\(\);\s*\} else \{\s*triggerPushToTalk\(\);\s*\}\s*\}\}[\s\S]*?onContextMenu=\{\(e\) => \{\s*e\.preventDefault\(\);\s*e\.stopPropagation\(\);\s*toggleContinuousMode\(\);\s*\}\}[\s\S]*?min-h-\[44px\] min-w-\[44px\]/,
+    'Voice button must trigger awake listening on click, toggle on contextmenu/awake-click, and use 44x44px touch target'
   );
+});
+
+test('triggerPushToTalk keeps active recognition session, interim extends awake window, and onWakeExpired fires on timeout', async () => {
+  let wakeCalls = 0;
+  let expiredCalls = 0;
+  const commands = [];
+  const harness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onWakeWordDetected: () => { wakeCalls++; },
+      onWakeExpired: () => { expiredCalls++; },
+      onCommand: (action) => { commands.push(action); }
+    }
+  });
+  try {
+    assert.equal(harness.instances.length, 1);
+    const rec = harness.instances[0];
+    assert.equal(harness.getHook().isListening, true);
+
+    // 1. Clique em triggerPushToTalk NÃO aborta sessão saudável já ouvindo e acorda o botão (laranja)
+    await harness.getHook().triggerPushToTalk();
+    await Promise.resolve();
+    assert.equal(harness.instances.length, 1, 'Must keep live recognition session without creating blind gap');
+    assert.equal(rec.aborted, false, 'Must NOT abort active recognition session on click');
+    assert.equal(harness.getHook().isAwake, true);
+    assert.equal(wakeCalls, 1);
+
+    // 2. Interim aos 4s estende a janela de awake para não perder comando finalizado aos 6.5s
+    await harness.clock.advance(4000);
+    assert.equal(harness.getHook().isAwake, true);
+    rec.emitResult('aumentar', false, 0);
+    await harness.clock.advance(2500);
+    assert.equal(harness.getHook().isAwake, true, 'Interim speech must extend awake timeout beyond initial 6s');
+
+    rec.emitResult('aumentar volume', true, 0);
+    await Promise.resolve();
+    assert.deepEqual(commands, ['VOLUME_UP']);
+    assert.equal(harness.getHook().isAwake, false);
+
+    // 3. Se acordar e expirar sem comando, dispara onWakeExpired para retomar reprodução
+    rec.emitResult('Infinity', true, 1);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, true);
+    await harness.clock.advance(4500);
+    assert.equal(harness.getHook().isAwake, false);
+    assert.equal(expiredCalls, 1, 'Must fire onWakeExpired when awake window times out without a command');
+  } finally {
+    harness.unmount();
+  }
 });
