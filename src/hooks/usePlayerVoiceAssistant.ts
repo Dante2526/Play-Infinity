@@ -29,7 +29,9 @@ export interface VoiceAssistantFeedback {
 
 const ABORT_COOLDOWN_MS = 150;
 const PREVENTIVE_RENEW_MS = 45000;
-const SPEECH_SILENCE_GUARD_MS = 3500;
+const HARD_RENEW_CAP_MS = 50000;
+const IDLE_GUARD_WHEN_SLEEPING_MS = 600;
+const MAX_SESSION_RESULTS = 18;
 const MAX_BACKOFF_MS = 30000;
 
 /** Calcula backoff exponencial (1s, 2s, 4s... máx 30s) para falhas consecutivas. */
@@ -201,7 +203,9 @@ export function usePlayerVoiceAssistant({
 
   const registerFailure = useCallback((reason: string, notifyAtThird = false) => {
     consecutiveFailuresRef.current += 1;
-    const backoff = computeVoiceBackoffMs(consecutiveFailuresRef.current);
+    const rawBackoff = computeVoiceBackoffMs(consecutiveFailuresRef.current);
+    // Queda de socket ocioso na Web Speech API ('network') reconecta em no máximo 2s
+    const backoff = reason === 'network' ? Math.min(rawBackoff, 2000) : rawBackoff;
     nextRetryAtRef.current = Date.now() + backoff;
     if (notifyAtThird && consecutiveFailuresRef.current === 3) {
       showFeedback('Microfone ocupado ou indisponível. Tentando reconectar...', 'error', 3500);
@@ -307,6 +311,16 @@ export function usePlayerVoiceAssistant({
             alternatives.push(res[0].transcript);
           }
           handleTranscript(alternatives, !!res?.isFinal, i);
+        }
+
+        // Recicla sessão dormente com muitos resultados acumulados (áudio do filme) para renovar VAD/AGC
+        if (
+          isContinuousRef.current &&
+          !isAwakeRef.current &&
+          event.results &&
+          event.results.length >= MAX_SESSION_RESULTS
+        ) {
+          startSessionRef.current();
         }
       };
 
@@ -488,13 +502,15 @@ export function usePlayerVoiceAssistant({
         return;
       }
 
-      // 2. Renovação preventiva aos 45s quando ocioso e não acordado, usando cooldown seguro pós-abort()
+      // 2. Renovação preventiva aos 45s (brecha de 600ms) ou teto duro aos 50s quando não acordado
+      const sessionAge = now - sessionStartedAtRef.current;
+      const silenceAge = now - lastResultAtRef.current;
       if (
         isListeningRef.current &&
         !isAwakeRef.current &&
         sessionStartedAtRef.current > 0 &&
-        now - sessionStartedAtRef.current >= PREVENTIVE_RENEW_MS &&
-        now - lastResultAtRef.current > SPEECH_SILENCE_GUARD_MS
+        ((sessionAge >= PREVENTIVE_RENEW_MS && silenceAge > IDLE_GUARD_WHEN_SLEEPING_MS) ||
+          sessionAge >= HARD_RENEW_CAP_MS)
       ) {
         startSessionRef.current();
       }

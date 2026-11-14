@@ -1,3 +1,22 @@
+## 13/11/2026 — Correção de Sessão Zumbi Pós-Ociosidade e Cold-Start no Assistente de Voz
+
+- **Causa Raiz:** O `SPEECH_SILENCE_GUARD_MS` (`3500ms`) impedia a renovação de `45s` quando o áudio do filme mantinha `onresult` ativo sem pausas longas (gerando sessão zumbi após ~60s no Chromium), o acúmulo longo de `event.results` degradava o VAD/AGC do navegador, reconexões de `'network'` escalavam até `30s` e a perda da sílaba inicial `"In-"` após longa pausa exigia repetir `"Infinity"` várias vezes.
+- **Watchdog Duplo & Reciclagem de Buffer (`src/hooks/usePlayerVoiceAssistant.ts`):**
+  - Substituído o bloqueio de `3.5s` por folga curta de `600ms` aos `45s` (`PREVENTIVE_RENEW_MS` + `IDLE_GUARD_WHEN_SLEEPING_MS`) combinada com **teto duro aos `50s`** (`HARD_RENEW_CAP_MS`) quando não acordado.
+  - Reciclagem automática em `onresult` ao atingir `MAX_SESSION_RESULTS = 18` resultados enquanto dormente (`!isAwakeRef.current`).
+  - Backoff de erro `'network'` limitado a no máximo **`2000ms`** em `registerFailure` (mantendo exponencial até `30s` para falhas de hardware/permissão).
+- **Recuperação de Cold-Start (`src/utils/voiceCommandParser.ts`):** adicionadas variações com corte da sílaba inicial (`finite`, `finito`, `finita`, `vinity`, `viniti`, `piniti`, `miniti`, `minity`) ao `STRICT_WAKE_PATTERN`, sem afetar a proteção anti-diálogo de `"infinito"`/`"infinita"`.
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**16/16 passaram, 0 falhas**) e `.\node_modules\.bin\tsc.cmd --noEmit` (exit `0`).
+- **Android Versioning (`android/app/build.gradle`):** incrementado para `versionCode 107` / `versionName "1.4.75"`.
+
+## 13/11/2026 — Blindagem Anti-Conflito com Áudio de Filmes no Assistente de Voz
+
+- **Parser Anti-Falso Positivo (`src/utils/voiceCommandParser.ts`):**
+  - Removidas palavras comuns em diálogos dublados (`enfim`, `em fim`, `infante`, `internet`).
+  - Separado `STRICT_WAKE_WORD_REGEX` (fonemas exclusivos de `"Infinity"`) de `PT_TRANSLATED_WAKE_REGEX` (`infinito`, `infinita`, `infinidade`), que agora só acordam se ditas sozinhas ou seguidas de comando curto válido (`1–4` palavras).
+  - Aplicada trava `MAX_COMMAND_WORDS = 5` em `matchVoiceCommandRules()` para bloquear frases longas de filmes.
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**15/15 passaram, 0 falhas**) e `tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Alcance Far-Field (Quarto) e Reconhecimento Multitom do Assistente de Voz
 
 - **Múltiplas Hipóteses (`src/hooks/usePlayerVoiceAssistant.ts`, `src/utils/voiceCommandParser.ts`):** `recognition.maxAlternatives` aumentado de `1` para `5`, avaliando todas as transcrições candidatas via `parseBestVoiceAlternative()` para capturar `"Infinity"` e comandos mesmo quando a 1ª hipótese falha por distância ou variação de timbre.

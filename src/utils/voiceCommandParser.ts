@@ -22,11 +22,16 @@ export interface ParsedVoiceCommand {
   matchedText: string;
 }
 
-const WAKE_WORD_PATTERN =
-  '\\b(infinity|infinite|infiniti|infinito|infinita|infinitos|infinitas|infinit|infinidade|infinitude|infindo|infinda|enfinete|infinete|inffinity|ifinity|ifiniti|efinity|efiniti|afiniti|affinity|finiti|finity|onfinity|unfiniti|in\\s+finit[yiwuoae]*|em\\s+finit[yiwuoae]*|um\\s+finit[yiwuoae]*)\\b';
-const WAKE_WORD_REGEX = new RegExp(WAKE_WORD_PATTERN, 'i');
-const WAKE_WORD_GLOBAL_REGEX = new RegExp(WAKE_WORD_PATTERN, 'gi');
-const SOFT_WAKE_PREFIX_REGEX = /^(?:ei\s+|oi\s+|hey\s+|ok\s+|ola\s+)?(enfim|em\s+fim|infante|internet)\s+(.+)$/i;
+const STRICT_WAKE_PATTERN =
+  '\\b(infinity|infinite|infiniti|infinit|enfinete|infinete|inffinity|ifinity|ifiniti|efinity|efiniti|afiniti|affinity|finiti|finity|finite|finito|finita|vinity|viniti|piniti|miniti|minity|onfinity|unfiniti|in\\s+finit[yiwue]*|em\\s+finit[yiwue]*|um\\s+finit[yiwue]*)\\b';
+const STRICT_WAKE_WORD_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'i');
+const STRICT_WAKE_GLOBAL_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'gi');
+
+// Palavras existentes em português ("infinito", "infinita", "infinidade") só acordam
+// o assistente quando ditas sozinhas ou seguidas diretamente por um comando curto (<= 4 palavras).
+const PT_TRANSLATED_WAKE_REGEX = /\b(infinito|infinita|infinidade)\b/gi;
+const PT_ALONE_WAKE_REGEX = /^(?:(?:ei|oi|hey|ok|ola)\s+)?(infinito|infinita|infinidade)$/i;
+const MAX_COMMAND_WORDS = 5;
 
 /**
  * Remove acentuação e pontuação para comparação fonética resiliente.
@@ -41,17 +46,30 @@ export function normalizeVoiceText(text: string): string {
     .trim();
 }
 
-export function hasSoftWakeWithCommand(text: string): boolean {
-  const normalized = normalizeVoiceText(text);
-  const match = normalized.match(SOFT_WAKE_PREFIX_REGEX);
-  if (!match || !match[2]) return false;
-  return matchVoiceCommandRules(match[2].trim()) !== null;
+function getLastPtWakeMatch(normalized: string): { matched: boolean; afterText: string } {
+  PT_TRANSLATED_WAKE_REGEX.lastIndex = 0;
+  let lastEnd = -1;
+  let match: RegExpExecArray | null;
+  while ((match = PT_TRANSLATED_WAKE_REGEX.exec(normalized)) !== null) {
+    lastEnd = match.index + match[0].length;
+  }
+  if (lastEnd === -1) return { matched: false, afterText: '' };
+  return { matched: true, afterText: normalized.slice(lastEnd).trim() };
+}
+
+function isValidPtWakeAfterText(afterText: string): boolean {
+  if (!afterText) return false;
+  const wordCount = afterText.split(' ').filter(Boolean).length;
+  return wordCount >= 1 && wordCount <= 4 && matchVoiceCommandRules(afterText) !== null;
 }
 
 export function hasWakeWord(text: string): boolean {
   const normalized = normalizeVoiceText(text);
   if (!normalized) return false;
-  return WAKE_WORD_REGEX.test(normalized) || hasSoftWakeWithCommand(normalized);
+  if (STRICT_WAKE_WORD_REGEX.test(normalized)) return true;
+  if (PT_ALONE_WAKE_REGEX.test(normalized)) return true;
+  const ptMatch = getLastPtWakeMatch(normalized);
+  return ptMatch.matched && isValidPtWakeAfterText(ptMatch.afterText);
 }
 
 /**
@@ -62,17 +80,20 @@ export function hasWakeWord(text: string): boolean {
 export function extractCommandAfterWakeWord(normalizedText: string): string {
   if (!normalizedText) return '';
   let lastMatchEnd = -1;
-  WAKE_WORD_GLOBAL_REGEX.lastIndex = 0;
+  STRICT_WAKE_GLOBAL_REGEX.lastIndex = 0;
   let match: RegExpExecArray | null;
-  while ((match = WAKE_WORD_GLOBAL_REGEX.exec(normalizedText)) !== null) {
+  while ((match = STRICT_WAKE_GLOBAL_REGEX.exec(normalizedText)) !== null) {
     lastMatchEnd = match.index + match[0].length;
   }
   if (lastMatchEnd !== -1) {
     return normalizedText.slice(lastMatchEnd).trim();
   }
-  const softMatch = normalizedText.match(SOFT_WAKE_PREFIX_REGEX);
-  if (softMatch && softMatch[2] && matchVoiceCommandRules(softMatch[2].trim()) !== null) {
-    return softMatch[2].trim();
+  if (PT_ALONE_WAKE_REGEX.test(normalizedText)) {
+    return '';
+  }
+  const ptMatch = getLastPtWakeMatch(normalizedText);
+  if (ptMatch.matched && isValidPtWakeAfterText(ptMatch.afterText)) {
+    return ptMatch.afterText;
   }
   return normalizedText;
 }
@@ -158,6 +179,10 @@ const VOICE_COMMAND_RULES: VoiceCommandRule[] = [
 ];
 
 function matchVoiceCommandRules(normalizedTarget: string): Omit<ParsedVoiceCommand, 'matchedText'> | null {
+  const wordCount = normalizedTarget.split(' ').filter(Boolean).length;
+  if (wordCount === 0 || wordCount > MAX_COMMAND_WORDS) {
+    return null;
+  }
   for (const rule of VOICE_COMMAND_RULES) {
     if (rule.matches(normalizedTarget)) {
       return { action: rule.action, label: rule.label };

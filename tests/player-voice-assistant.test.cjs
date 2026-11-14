@@ -123,20 +123,26 @@ test('handles PT-BR natural variations, "pula 10" vs "pular abertura", and wake-
   assert.match(hookSrc, /onWakeExpired/);
 });
 
-test('recognizes vocal pitch variations (deep/high/soft) and far-field short PT-BR commands', async () => {
+test('recognizes vocal pitch variations (deep/high/soft), ignores movie dialogue false triggers, and parses far-field short commands', async () => {
   const { hasWakeWord, parseVoiceCommand, parseBestVoiceAlternative } = await compileParser();
 
   // Variações de timbre grave, agudo e distante para "Infinity"
   assert.equal(hasWakeWord('infinita pausar'), true);
   assert.equal(parseVoiceCommand('infinita pausar')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('Infinito aumentar volume')?.action, 'VOLUME_UP');
   assert.equal(parseVoiceCommand('in finity aumentar volume')?.action, 'VOLUME_UP');
   assert.equal(parseVoiceCommand('finiti pula 10')?.action, 'SEEK_FORWARD');
   assert.equal(parseVoiceCommand('affinity mudo')?.action, 'MUTE');
-  assert.equal(parseVoiceCommand('infindo continuar')?.action, 'PLAY');
+  assert.equal(hasWakeWord('onfinity pause'), true);
+  assert.equal(parseVoiceCommand('onfinity pause')?.action, 'PAUSE');
+  assert.equal(hasWakeWord('ei infinito'), true);
 
-  // Quase-homófona grave apenas quando seguida de comando válido (não dispara com diálogo solto)
-  assert.equal(hasWakeWord('enfim pausar'), true);
-  assert.equal(parseVoiceCommand('enfim pausar')?.action, 'PAUSE');
+  // Proteção anti-conflito: diálogos comuns de filmes em PT-BR NÃO podem acordar o assistente
+  assert.equal(hasWakeWord('ao infinito e alem vamos continuar correndo'), false);
+  assert.equal(parseVoiceCommand('ao infinito e alem vamos continuar correndo'), null);
+  assert.equal(hasWakeWord('guerra infinita foi um filme incrivel'), false);
+  assert.equal(parseVoiceCommand('guerra infinita foi um filme incrivel'), null);
+  assert.equal(hasWakeWord('enfim continua a historia'), false);
   assert.equal(hasWakeWord('enfim para o carro agora'), false);
 
   // Comandos curtos em quarto distante
@@ -155,4 +161,17 @@ test('recognizes vocal pitch variations (deep/high/soft) and far-field short PT-
   ]);
   assert.equal(best.wakeDetected, true);
   assert.equal(best.command?.action, 'VOLUME_UP');
+
+  // Recuperação de cold-start: silaba inicial "In-" cortada após pausa longa
+  assert.equal(hasWakeWord('finito pausar'), true);
+  assert.equal(parseVoiceCommand('finito pausar')?.action, 'PAUSE');
+  assert.equal(hasWakeWord('finite continuar'), true);
+  assert.equal(parseVoiceCommand('finite continuar')?.action, 'PLAY');
+  assert.equal(hasWakeWord('viniti aumentar volume'), true);
+  assert.equal(parseVoiceCommand('viniti aumentar volume')?.action, 'VOLUME_UP');
+  assert.equal(hasWakeWord('finita silenciar'), true);
+  assert.equal(parseVoiceCommand('finita silenciar')?.action, 'MUTE');
+  assert.equal(hasWakeWord('piniti avancar'), true);
+  assert.equal(hasWakeWord('minity pular abertura'), true);
+  assert.equal(parseVoiceCommand('minity pular abertura')?.action, 'SKIP_INTRO');
 });

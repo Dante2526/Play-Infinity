@@ -662,3 +662,87 @@ test('maxAlternatives=5 captures secondary phonetic matches and flushes distant 
     harness.unmount();
   }
 });
+
+test('prevents long-idle zombie sessions via 50s hard cap, >=18 results recycle, and 2s network backoff cap', async () => {
+  const harness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    }
+  });
+  try {
+    assert.equal(harness.instances.length, 1);
+    const rec1 = harness.instances[0];
+
+    // 1. Diálogo contínuo de filme até 49.5s não deixa o guard de silêncio prender além do teto duro de 50s
+    for (let t = 500; t <= 49500; t += 500) {
+      await harness.clock.advance(500);
+      rec1.emitResult('fala continua do filme sem wake', false, 0);
+    }
+    assert.equal(rec1.aborted, false, 'Continuous chatter before 50s avoids abrupt 45s mid-speech cut');
+
+    await harness.clock.advance(500);
+    rec1.emitResult('mais fala do filme', false, 0);
+    await harness.clock.advance(1000);
+    assert.equal(rec1.aborted, true, 'Hard cap at 50s must force renewal even under continuous movie audio');
+    assert.equal(harness.instances.length, 1);
+
+    await harness.clock.advance(150);
+    assert.equal(harness.instances.length, 2);
+
+    // 2. Acúmulo >= 18 resultados enquanto dormente recicla sessão imediatamente para renovar VAD/AGC
+    const rec2 = harness.instances[1];
+    rec2.emitResult('frase aleatoria do filme', true, 17);
+    await Promise.resolve();
+    assert.equal(rec2.aborted, true, 'Accumulating >= 18 results while asleep must recycle session');
+
+    await harness.clock.advance(150);
+    assert.equal(harness.instances.length, 3);
+
+    // Mas se o índice 17 trouxe wake word (acordou!), NÃO deve reciclar no meio da janela de comando
+    const rec3 = harness.instances[2];
+    rec3.emitResult('infinity', true, 17);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, true);
+    assert.equal(rec3.aborted, false, 'Wake word at result >= 18 must NOT abort active awake window');
+  } finally {
+    harness.unmount();
+  }
+
+  // 3. Quedas consecutivas de rede ('network') limitam backoff a no máximo 2000ms (nunca 4s/8s/30s)
+  const netHarness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    autoStart: false
+  });
+  try {
+    assert.equal(netHarness.instances.length, 1);
+    // Falha 1 -> 1000ms
+    netHarness.instances[0].emitError('network');
+    netHarness.instances[0].emitEnd();
+    await netHarness.clock.advance(1050);
+    assert.equal(netHarness.instances.length, 2);
+
+    // Falha 2 -> 2000ms
+    netHarness.instances[1].emitError('network');
+    netHarness.instances[1].emitEnd();
+    await netHarness.clock.advance(2050);
+    assert.equal(netHarness.instances.length, 3);
+
+    // Falha 3 -> deveria ser 4000ms sem teto, mas para 'network' fica travado em <= 2000ms
+    netHarness.instances[2].emitError('network');
+    netHarness.instances[2].emitEnd();
+    await netHarness.clock.advance(2050);
+    assert.equal(netHarness.instances.length, 4, '3rd network failure must reconnect within <= 2s');
+
+    // Falha 4 -> também travada em <= 2000ms
+    netHarness.instances[3].emitError('network');
+    netHarness.instances[3].emitEnd();
+    await netHarness.clock.advance(2050);
+    assert.equal(netHarness.instances.length, 5, '4th network failure must also reconnect within <= 2s');
+  } finally {
+    netHarness.unmount();
+  }
+});
