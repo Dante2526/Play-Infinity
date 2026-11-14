@@ -649,6 +649,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const pausedByWakeRef = useRef(false);
   const isPausedRef = useRef(playerStatus.paused);
   isPausedRef.current = playerStatus.paused;
+  const lastVoicePlayAtRef = useRef(0);
 
   const resumeIfPausedByWake = useCallback(() => {
     if (pausedByWakeRef.current) {
@@ -661,6 +662,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const handleVoiceCommand = useCallback((action: PlayerVoiceAction, _label: string) => {
     switch (action) {
       case 'PLAY':
+        lastVoicePlayAtRef.current = Date.now();
         pausedByWakeRef.current = false;
         sendCommand({ type: "PLAY" });
         setPlayerStatus(p => ({ ...p, paused: false }));
@@ -720,7 +722,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onToggleAspectRatio, resumeIfPausedByWake]);
 
   const handleWakeWord = useCallback(() => {
-    // Pausa imediatamente ao detectar "Infinity" para evitar interferência do som do filme no microfone
+    // Não pausa se o vídeo já está pausado, ou se acabou de dar PLAY por voz (proteção anti-eco/duplicata de navegadores mobile)
+    if (Date.now() - lastVoicePlayAtRef.current < 2500) {
+      return;
+    }
     if (!isPausedRef.current) {
       pausedByWakeRef.current = true;
       sendCommand({ type: "PAUSE" });

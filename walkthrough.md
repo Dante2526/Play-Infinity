@@ -1,3 +1,23 @@
+## 14/11/2026 — Fim do Loop Play/Pause no Samsung Internet & iOS, Proteção Anti-Pausa Fantasma e Auto-Heal por Toque
+
+- **Causa Raiz do Loop Play/Pause & Pausa Fantasma:**
+  1. No Samsung Internet e em celulares, o motor de fala re-emitia eventos duplicados ou tardios após o `PLAY`, que acionavam `onWakeWordDetected` (**pausando o vídeo recém-iniciado**), enquanto o 2º `PLAY` era barrado pelo debounce de `1500ms`.
+  2. Com `maxAlternatives = 5`, alternativas secundárias geravam hipóteses de áudio do filme/ruído (como `finito`, `finita`, `finite`), marcando `wakeDetected` isolado e pausando o vídeo sem ninguém chamar.
+  3. No Samsung Internet e Safari iOS, chamar `rec.start()` imediatamente após o `PLAY` roubava o `AudioFocus` do elemento `<video>`.
+  4. Quando `rec.start()` era chamado por timer/background sem User Gesture recente, o navegador emitia `onerror('not-allowed')`, que desligava o assistente de forma permanente (`isContinuous = false`) até haver clique físico no Play.
+- **Blindagem do Parser (`src/utils/voiceCommandParser.ts`):**
+  - Hipóteses secundárias (`alternatives[1..4]`) agora exigem a presença de comando válido junto com a wake word (`hasWake && (isPrimary || cmd !== null)`), impedindo que ruídos ou falas aleatórias em 4ª/5ª hipótese pausem o vídeo.
+  - Palavras como `finito`, `finita`, `finite` foram movidas para `PT_TRANSLATED_WAKE_REGEX`, exigindo comando explícito (`finito pausar`, `finite continuar`) e ignorando ocorrências soltas em diálogos de filmes.
+- **Proteção da Sessão e AudioFocus (`src/hooks/usePlayerVoiceAssistant.ts`, `src/components/NetflixPlayerSkin.tsx`):**
+  - `handleTranscript`: não dispara `onWakeRef` (`PAUSE`) se a transcrição já contém o comando `PLAY`, descarta índices já consumidos (`resultIndex <= consumedResultIdxRef.current`) e ativa `inPostPlayCooldown` de `2200ms`.
+  - `executeVoiceCommand`: ao receber comando duplicado no debounce de `1500ms`, chama `deactivateAwake(0)` para não deixar a janela awake pendurada.
+  - `recognition.onend`: aguarda `800ms` (`PLAY_AUDIO_FOCUS_GUARD_MS`) após o `PLAY` antes de reconectar o microfone no mobile.
+  - `recognition.onerror`: se `err === 'not-allowed'` mas a permissão já foi concedida pelo usuário, não desativa o modo contínuo (`not_allowed_transient`).
+  - Auto-Heal por Toque: listeners passivos de interação do usuário (`pointerdown`, `touchstart`, `click`, `keydown`) reativam a sessão pendente no primeiro toque físico na tela.
+  - `NetflixPlayerSkin.tsx`: `handleWakeWord` ignora comandos de pausa se `Date.now() - lastVoicePlayAtRef.current < 2500ms`.
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**17/17 passaram, 0 falhas**) e `.\node_modules\.bin\tsc.cmd --noEmit` (exit `0`).
+- **Android Versioning (`android/app/build.gradle`):** incrementado para `versionCode 108` / `versionName "1.4.76"`.
+
 ## 13/11/2026 — Correção de Sessão Zumbi Pós-Ociosidade e Cold-Start no Assistente de Voz
 
 - **Causa Raiz:** O `SPEECH_SILENCE_GUARD_MS` (`3500ms`) impedia a renovação de `45s` quando o áudio do filme mantinha `onresult` ativo sem pausas longas (gerando sessão zumbi após ~60s no Chromium), o acúmulo longo de `event.results` degradava o VAD/AGC do navegador, reconexões de `'network'` escalavam até `30s` e a perda da sílaba inicial `"In-"` após longa pausa exigia repetir `"Infinity"` várias vezes.

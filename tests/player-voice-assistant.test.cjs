@@ -172,6 +172,17 @@ test('recognizes vocal pitch variations (deep/high/soft), ignores movie dialogue
   assert.equal(hasWakeWord('finita silenciar'), true);
   assert.equal(parseVoiceCommand('finita silenciar')?.action, 'MUTE');
   assert.equal(hasWakeWord('piniti avancar'), true);
-  assert.equal(hasWakeWord('minity pular abertura'), true);
-  assert.equal(parseVoiceCommand('minity pular abertura')?.action, 'SKIP_INTRO');
+  // Proteção anti-pausa fantasma: "finito/finita/finite" sozinhos ou em falas de filme NÃO acordam sem comando
+  assert.equal(hasWakeWord('ele disse que tudo e finito'), false);
+  assert.equal(hasWakeWord('finito'), false);
+  assert.equal(hasWakeWord('recurso finito do planeta'), false);
+
+  // Hipóteses secundárias com ruído fonético sem comando NÃO disparam wake
+  const noiseBest = parseBestVoiceAlternative([
+    'dialogo qualquer do filme tocando no alto falante',
+    'algo parecido com infinity mas sem comando',
+    'finiti'
+  ]);
+  assert.equal(noiseBest.wakeDetected, false, 'Secondary phonetic noise without command must NOT wake');
+  assert.equal(noiseBest.command, null);
 });

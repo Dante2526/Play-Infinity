@@ -33,6 +33,8 @@ const HARD_RENEW_CAP_MS = 50000;
 const IDLE_GUARD_WHEN_SLEEPING_MS = 600;
 const MAX_SESSION_RESULTS = 18;
 const MAX_BACKOFF_MS = 30000;
+const POST_COMMAND_WAKE_COOLDOWN_MS = 2200;
+const PLAY_AUDIO_FOCUS_GUARD_MS = 800;
 
 /** Calcula backoff exponencial (1s, 2s, 4s... máx 30s) para falhas consecutivas. */
 export function computeVoiceBackoffMs(consecutiveFailures: number): number {
@@ -66,6 +68,7 @@ export function usePlayerVoiceAssistant({
   const isAwakeRef = useRef(false);
   const awakeTimerRef = useRef<any>(null);
   const lastExecutedRef = useRef<{ action: string; at: number }>({ action: '', at: 0 });
+  const lastCommandExecutedAtRef = useRef(0);
   const wakeFiredResultIdxRef = useRef(-1);
   const consumedResultIdxRef = useRef(-1);
   const pendingInterimRef = useRef<{ command: ParsedVoiceCommand; resultIndex: number } | null>(null);
@@ -144,11 +147,13 @@ export function usePlayerVoiceAssistant({
   const executeVoiceCommand = useCallback((command: ParsedVoiceCommand, resultIndex = -1): boolean => {
     const now = Date.now();
     if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
+      deactivateAwake(0);
       return false;
     }
     if (resultIndex >= 0) consumedResultIdxRef.current = resultIndex;
     pendingInterimRef.current = null;
     lastExecutedRef.current = { action: command.action, at: now };
+    lastCommandExecutedAtRef.current = now;
 
     showFeedback(`✓ ${command.label}`, 'success', 2200);
     onCommandRef.current(command.action, command.label);
@@ -216,6 +221,9 @@ export function usePlayerVoiceAssistant({
   }, [showFeedback, scheduleSessionStart]);
 
   const handleTranscript = useCallback((rawInput: string | string[], isFinal = true, resultIndex = -1) => {
+    // Se o resultado já foi consumido por um comando anterior ou é duplicata tardia, descarta imediatamente
+    if (resultIndex >= 0 && resultIndex <= consumedResultIdxRef.current) return;
+
     const alternatives = (Array.isArray(rawInput) ? rawInput : [rawInput])
       .map(s => (typeof s === 'string' ? s.trim() : ''))
       .filter(Boolean);
@@ -226,17 +234,21 @@ export function usePlayerVoiceAssistant({
     }
 
     const { wakeDetected, command } = parseBestVoiceAlternative(alternatives);
+    const inPostPlayCooldown =
+      lastExecutedRef.current.action === 'PLAY' &&
+      Date.now() - lastCommandExecutedAtRef.current < POST_COMMAND_WAKE_COOLDOWN_MS;
 
     let wakeJustActivated = false;
 
     // 1. Acorda rapidamente mesmo no interim (no máximo 1x por segmento) para pausar o filme na hora
-    if (wakeDetected) {
+    if (wakeDetected && !inPostPlayCooldown) {
       const alreadyWoke = resultIndex >= 0 && wakeFiredResultIdxRef.current === resultIndex;
       if (!alreadyWoke) {
         if (resultIndex >= 0) wakeFiredResultIdxRef.current = resultIndex;
         wakeJustActivated = true;
         activateAwake(4500);
-        if (isPlayingRef.current) {
+        // Não pausa o filme se a mesma transcrição já contém o comando PLAY!
+        if (isPlayingRef.current && command?.action !== 'PLAY') {
           onWakeRef.current?.();
         }
         showFeedback('🎤 Ouvindo comando...', 'listening', 4500);
@@ -334,6 +346,13 @@ export function usePlayerVoiceAssistant({
         }
 
         if (err === 'not-allowed') {
+          // No Chrome Android e Samsung Internet, 'not-allowed' pode ser disparado quando start()
+          // roda via timer sem User Gesture recente, mesmo com permissão já concedida.
+          if (isMicrophonePermissionGranted()) {
+            console.warn('[VoiceAssistant] not-allowed transitório no mobile (aguardando toque físico).');
+            registerFailure('not_allowed_transient', false);
+            return;
+          }
           syncMicrophonePermission('denied');
           showFeedback('Permissão de microfone negada.', 'error', 3000);
           setIsContinuous(false);
@@ -362,7 +381,13 @@ export function usePlayerVoiceAssistant({
           const now = Date.now();
           const sinceAbort = lastAbortAtRef.current > 0 ? now - lastAbortAtRef.current : ABORT_COOLDOWN_MS;
           const abortWait = Math.max(30, ABORT_COOLDOWN_MS - sinceAbort);
-          const waitMs = Math.max(abortWait, nextRetryAtRef.current - now);
+          let waitMs = Math.max(abortWait, nextRetryAtRef.current - now);
+          // Se o último comando foi PLAY há menos de 800ms, dá folga para o áudio do player inicializar
+          // sem que o SpeechRecognition dispute AudioFocus no Samsung Internet / Safari iOS
+          const sincePlay = now - lastCommandExecutedAtRef.current;
+          if (lastExecutedRef.current.action === 'PLAY' && sincePlay < PLAY_AUDIO_FOCUS_GUARD_MS) {
+            waitMs = Math.max(waitMs, PLAY_AUDIO_FOCUS_GUARD_MS - sincePlay);
+          }
           scheduleSessionStart(waitMs);
         }
       };
@@ -536,6 +561,33 @@ export function usePlayerVoiceAssistant({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
       window.removeEventListener('focus', handleVisibilityOrFocus);
+    };
+  }, [isSupported, scheduleSessionStart]);
+
+  // Auto-recuperação com User Gesture: quando o usuário toca na tela (ex: clique no Play, scrubber, toque no vídeo),
+  // se a escuta contínua estiver ativada mas a sessão estiver inativa/pendente, reativa na hora!
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      if (!isContinuousRef.current || !isSupported) return;
+      if (recognitionRef.current && isListeningRef.current) return;
+      if (isStartingRef.current) return;
+
+      // Aproveita o contexto de gesto do usuário para ligar o microfone
+      nextRetryAtRef.current = 0;
+      consecutiveFailuresRef.current = 0;
+      scheduleSessionStart(0);
+    };
+
+    window.addEventListener('pointerdown', handleUserInteraction, { passive: true });
+    window.addEventListener('touchstart', handleUserInteraction, { passive: true });
+    window.addEventListener('click', handleUserInteraction, { passive: true });
+    window.addEventListener('keydown', handleUserInteraction, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleUserInteraction);
+      window.removeEventListener('touchstart', handleUserInteraction);
+      window.removeEventListener('click', handleUserInteraction);
+      window.removeEventListener('keydown', handleUserInteraction);
     };
   }, [isSupported, scheduleSessionStart]);
 

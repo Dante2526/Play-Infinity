@@ -23,13 +23,14 @@ export interface ParsedVoiceCommand {
 }
 
 const STRICT_WAKE_PATTERN =
-  '\\b(infinity|infinite|infiniti|infinit|enfinete|infinete|inffinity|ifinity|ifiniti|efinity|efiniti|afiniti|affinity|finiti|finity|finite|finito|finita|vinity|viniti|piniti|miniti|minity|onfinity|unfiniti|in\\s+finit[yiwue]*|em\\s+finit[yiwue]*|um\\s+finit[yiwue]*)\\b';
+  '\\b(infinity|infinite|infiniti|infinit|enfinete|infinete|inffinity|ifinity|ifiniti|efinity|efiniti|afiniti|affinity|finiti|finity|vinity|viniti|piniti|miniti|minity|onfinity|unfiniti|in\\s+finit[yiwue]*|em\\s+finit[yiwue]*|um\\s+finit[yiwue]*)\\b';
 const STRICT_WAKE_WORD_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'i');
 const STRICT_WAKE_GLOBAL_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'gi');
 
-// Palavras existentes em português ("infinito", "infinita", "infinidade") só acordam
-// o assistente quando ditas sozinhas ou seguidas diretamente por um comando curto (<= 4 palavras).
-const PT_TRANSLATED_WAKE_REGEX = /\b(infinito|infinita|infinidade)\b/gi;
+// Palavras existentes em português ("infinito", "infinita", "infinidade") ou quase-homófonas ("finito", "finita", "finite")
+// só acordam o assistente quando seguidas diretamente por um comando curto (<= 4 palavras).
+// Palavras isoladas só acordam se forem "infinito/infinita/infinidade".
+const PT_TRANSLATED_WAKE_REGEX = /\b(infinito|infinita|infinidade|finito|finita|finite)\b/gi;
 const PT_ALONE_WAKE_REGEX = /^(?:(?:ei|oi|hey|ok|ola)\s+)?(infinito|infinita|infinidade)$/i;
 const MAX_COMMAND_WORDS = 5;
 
@@ -222,17 +223,23 @@ export function parseBestVoiceAlternative(alternatives: string[]): BestVoiceAlte
   let fallbackCommand: ParsedVoiceCommand | null = null;
   let fallbackTranscript = '';
 
-  for (const raw of alternatives) {
+  for (let i = 0; i < alternatives.length; i++) {
+    const raw = alternatives[i];
     const trimmed = (raw || '').trim();
     if (!trimmed) continue;
+    const isPrimary = i === 0;
 
     const hasWake = hasWakeWord(trimmed);
-    if (hasWake) {
+    const cmd = parseVoiceCommand(trimmed);
+
+    // Na hipótese primária (i === 0), hasWake acorda sozinho ou com comando.
+    // Em hipóteses secundárias (i > 0), NUNCA dispara wake isolado sem comando, pois
+    // alternativas 2..5 frequentemente contêm ruído fonético de diálogos do filme.
+    if (hasWake && (isPrimary || cmd !== null)) {
       wakeDetected = true;
       if (!wakeTranscript) wakeTranscript = trimmed;
     }
 
-    const cmd = parseVoiceCommand(trimmed);
     if (cmd) {
       if (hasWake) {
         return { wakeDetected: true, bestTranscript: trimmed, command: cmd };

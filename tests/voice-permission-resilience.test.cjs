@@ -746,3 +746,61 @@ test('prevents long-idle zombie sessions via 50s hard cap, >=18 results recycle,
     netHarness.unmount();
   }
 });
+
+test('mobile browsers (Samsung Internet/iOS): does not loop play/pause on duplicate results, respects audioFocus guard, and auto-heals on physical touch', async () => {
+  const commands = [];
+  let wakeCalls = 0;
+  let expiredCalls = 0;
+  const harness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onCommand: (action) => commands.push(action),
+      onWakeWordDetected: () => wakeCalls++,
+      onWakeExpired: () => expiredCalls++
+    }
+  });
+  try {
+    assert.equal(harness.instances.length, 1);
+    const rec1 = harness.instances[0];
+
+    // 1. "infinity reproduzir" executa PLAY sem pausar antes (wakeCalls === 0)
+    rec1.emitResult('infinity reproduzir', true, 0);
+    await Promise.resolve();
+    assert.deepEqual(commands, ['PLAY']);
+    assert.equal(wakeCalls, 0, 'Must NOT trigger pause onWakeWordDetected when command is PLAY');
+    assert.equal(harness.getHook().isAwake, false, 'Awake must deactivate immediately upon executing command');
+
+    // 2. Pacote duplicado tardio do Samsung Internet não dispara wake nem pause
+    rec1.emitResult('infinity reproduzir', true, 0);
+    await Promise.resolve();
+    assert.equal(wakeCalls, 0, 'Duplicate packet within cooldown must NOT trigger wake');
+    assert.deepEqual(commands, ['PLAY']);
+
+    // 3. Após PLAY, onend aguarda pelo menos 800ms (PLAY_AUDIO_FOCUS_GUARD_MS) antes de reconectar
+    rec1.emitEnd();
+    await harness.clock.advance(300);
+    assert.equal(harness.instances.length, 1, 'Must NOT reconnect immediately to avoid AudioFocus collision');
+    await harness.clock.advance(550);
+    assert.equal(harness.instances.length, 2, 'Reconnects after 800ms AudioFocus guard');
+
+    // 4. Erro transitório 'not-allowed' em mobile com permissão concedida não desliga o modo contínuo
+    const rec2 = harness.instances[1];
+    rec2.emitError('not-allowed');
+    await Promise.resolve();
+    assert.equal(harness.getHook().isContinuous, true, 'Must preserve continuous mode on transient not-allowed');
+    assert.equal(harness.storage.getItem('playinfinity_mic_permission'), 'granted');
+
+    // 5. Toque físico na tela (User Gesture do clique em Play/skin) acorda a escuta na hora
+    rec2.emitEnd();
+    await harness.clock.advance(50);
+    harness.mockWindow.dispatch('pointerdown');
+    await harness.clock.advance(50);
+    assert.equal(harness.instances.length, 3, 'User interaction (pointerdown) immediately auto-heals idle/blocked session');
+  } finally {
+    harness.unmount();
+  }
+});
