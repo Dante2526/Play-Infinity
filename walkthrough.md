@@ -1,3 +1,8 @@
+## 13/11/2026 — Pular Abertura Reduzido para 35s
+
+- **Duração Padrão (`src/components/VideoPlayerModal.tsx`, `src/components/NetflixPlayerSkin.tsx`, `server/routes/videoScrapers.ts`, `server/routes/streamtapeRoutes.ts`):** padrão e fallbacks de `SKIP_INTRO` / `skipDurationSeconds` reduzidos de `45s` para `35s`.
+- **Verificação:** `tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Filtro de Conteúdos Sem Capa no Catálogo e Provedores
 
 - **Causa Raiz:** Itens recentes ou sem arte no TMDB (`poster_path: null` e `backdrop_path: null`, como `"Alan's Universe"` TMDB `341602`) entravam sem filtro em `ProviderPage` e `GlobalCatalogPage`, caindo no `FALLBACK_POSTER_IMAGE` (foto genérica de cinema).

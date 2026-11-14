@@ -459,9 +459,9 @@ export function VideoPlayerModal({
   const [skipDurationSeconds, setSkipDurationSeconds] = useState<number>(() => {
     try {
       localStorage.removeItem("playinfinity_autoskip_intro");
-      return parseInt(localStorage.getItem("playinfinity_skip_duration") || "45", 10);
+      return parseInt(localStorage.getItem("playinfinity_skip_duration") || "35", 10);
     } catch {
-      return 45;
+      return 35;
     }
   });
   const [isIntroActive, setIsIntroActive] = useState<boolean>(false);
@@ -2439,7 +2439,7 @@ export function VideoPlayerModal({
             break;
           }
           case "SKIP_INTRO": {
-            const sec = typeof cmd.seconds === "number" ? cmd.seconds : 45;
+            const sec = typeof cmd.seconds === "number" ? cmd.seconds : 35;
             video.currentTime = Math.max(0, Math.min(video.currentTime + sec, (video.duration || 99999) - 5));
             sendLocalStatus();
             break;
@@ -2550,7 +2550,7 @@ export function VideoPlayerModal({
 
   // Função para desfazer o salto caso tenha passado do ponto
   const handleUndoSkip = () => {
-    const secToRewind = -(lastSkippedSeconds || skipDurationSeconds || 45);
+    const secToRewind = -(lastSkippedSeconds || skipDurationSeconds || 35);
     if (iframeRef.current?.contentWindow) {
       try {
         iframeRef.current.contentWindow.postMessage({ type: "SKIP_INTRO", seconds: secToRewind }, "*");
