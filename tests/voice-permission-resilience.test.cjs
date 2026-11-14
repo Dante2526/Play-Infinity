@@ -182,7 +182,9 @@ async function createVoiceHookHarness(options = {}) {
   };
 
   const mockWindow = {
-    SpeechRecognition: MockSpeechRecognition,
+    SpeechRecognition: options.SpeechRecognition !== undefined ? options.SpeechRecognition : MockSpeechRecognition,
+    AudioContext: options.AudioContext,
+    fetch: options.fetch,
     navigator: mockNavigator,
     dispatchEvent() {},
     addEventListener(type, fn) {
@@ -924,6 +926,115 @@ test('Samsung Internet simulation: 2-step cumulative speech, mic abort before PL
     await Promise.resolve();
     assert.equal(harness.getHook().isAwake, false);
     assert.deepEqual(events, ['PLAY', 'AUDIO_FOCUS_RESUME_PLAY', 'WAKE_PAUSE', 'PAUSE']);
+  } finally {
+    harness.unmount();
+  }
+});
+
+test('Microsoft Edge simulation: network error switches to WebAudio /api/voice-stt fallback and executes commands without loop', async () => {
+  const events = [];
+  const sttRequests = [];
+  let activeProcessor = null;
+
+  class MockAudioContext {
+    constructor() {
+      this.sampleRate = 48000;
+      this.state = 'running';
+      this.destination = {};
+    }
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createScriptProcessor() {
+      activeProcessor = {
+        onaudioprocess: null,
+        connect() {},
+        disconnect() {}
+      };
+      return activeProcessor;
+    }
+    createGain() {
+      return { gain: { value: 1 }, connect() {}, disconnect() {} };
+    }
+    async close() {
+      this.state = 'closed';
+    }
+  }
+
+  const harness = await createVoiceHookHarness({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0',
+    AudioContext: MockAudioContext,
+    fetch: async (url, init) => {
+      sttRequests.push({ url, byteLength: init?.body?.byteLength || 0 });
+      return {
+        ok: true,
+        async json() {
+          return {
+            success: true,
+            alternatives: sttRequests.length === 1 ? ['Infinity'] : ['pausar']
+          };
+        }
+      };
+    },
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onCommand: (action) => events.push(action),
+      onWakeWordDetected: () => events.push('WAKE_PAUSE')
+    }
+  });
+
+  try {
+    assert.equal(harness.instances.length, 1);
+    const rec1 = harness.instances[0];
+
+    // 1. Edge dispara 'network' logo após onstart
+    rec1.emitError('network');
+    rec1.emitEnd();
+
+    // Avança 200ms -> em vez de criar nova instância de SpeechRecognition em loop,
+    // ativa o motor WebAudio + /api/voice-stt
+    await harness.clock.advance(200);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(harness.instances.length, 1, 'Edge must NOT loop new SpeechRecognition instances after network error');
+    assert.ok(activeProcessor && typeof activeProcessor.onaudioprocess === 'function', 'WebAudio ScriptProcessor must be active');
+    assert.equal(harness.getHook().isListening, true, 'WebAudio fallback must mark assistant as listening');
+
+    // Helper para simular quadros de áudio (4096 amostras a 48kHz)
+    const feedFrames = (amplitude, count) => {
+      const buf = new Float32Array(4096);
+      buf.fill(amplitude);
+      for (let i = 0; i < count; i++) {
+        activeProcessor.onaudioprocess({
+          inputBuffer: { getChannelData: () => buf }
+        });
+      }
+    };
+
+    // 2. Simula silêncio inicial (pre-roll), depois fala "Infinity" (4 quadros) + silêncio (5 quadros)
+    feedFrames(0.002, 3);
+    feedFrames(0.08, 4);
+    feedFrames(0.002, 5);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    assert.equal(sttRequests.length, 1, 'VAD must send 1st utterance to /api/voice-stt');
+    assert.ok(sttRequests[0].byteLength > 4800, 'Sent PCM 16kHz buffer must include pre-roll + speech');
+    assert.equal(harness.getHook().isAwake, true, 'Wake word from /api/voice-stt must wake assistant in Edge');
+    assert.deepEqual(events, ['WAKE_PAUSE']);
+
+    // 3. Simula usuário falando "pausar" (4 quadros) + silêncio (5 quadros)
+    feedFrames(0.08, 4);
+    feedFrames(0.002, 5);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    assert.equal(sttRequests.length, 2, 'VAD must send 2nd utterance to /api/voice-stt');
+    assert.equal(harness.getHook().isAwake, false);
+    assert.deepEqual(events, ['WAKE_PAUSE', 'PAUSE']);
   } finally {
     harness.unmount();
   }

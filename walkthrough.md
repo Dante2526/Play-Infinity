@@ -1,3 +1,14 @@
+## 14/11/2026 — Suporte Completo a Comando de Voz no Microsoft Edge, Brave e Firefox (`WebAudio VAD` + `/api/voice-stt`)
+
+- **Causa Raiz (`[VoiceAssistant] Falha na voz (network)` no Microsoft Edge):**
+  - No Microsoft Edge (Windows), a implementação nativa da `webkitSpeechRecognition` depende do serviço de fala online da Microsoft/Windows e retorna `onerror({ error: 'network' })` imediatamente após `onstart` quando bloqueada pelo sistema ou por proxy, entrando em loop de reconexão a cada 1–2s.
+- **Correção (`server/routes/subtitlesRoutes.ts`, `src/hooks/usePlayerVoiceAssistant.ts`):**
+  - Criado o endpoint `POST /api/voice-stt` no backend que recebe áudio PCM 16-bit mono a `16000 Hz` (`audio/l16; rate=16000`, limite de `384 KB`) e retorna até 5 alternativas de transcrição via API Speech v2.
+  - Em `usePlayerVoiceAssistant.ts`: ao detectar erro `'network'` no Microsoft Edge (`/\bEdg\//i`) — ou 2 falhas consecutivas de `'network'` em qualquer navegador com `AudioContext` (ou ausência de `SpeechRecognition` no Firefox) — o hook encerra o loop de `webkitSpeechRecognition` e ativa automaticamente o motor **`WebAudio VAD` + `/api/voice-stt`** (`startWebAudioSttSession`), com *pre-roll* de `425ms` (para nunca cortar o início de `"Infinity"`), piso de ruído adaptativo e envio automático de segmentos de voz.
+- **Verificação:**
+  - `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs`: **19/19 passaram, 0 falhas** (incluindo simulação completa do `Edg/131.0.0.0`).
+  - `.\node_modules\.bin\tsc.cmd --noEmit`: **exit `0`**.
+
 ## 14/11/2026 — Correção do Despertar `"Infinity"`, Fim do Falso Engasgo no MixDrop (26s Buffer) e Reprodução de Episódios Longos (`O Senhor dos Anéis: Os Anéis de Poder` S2E1)
 
 - **1. Despertar da Wake Word `"Infinity"` com Microfone Ativo no Celular (`src/hooks/usePlayerVoiceAssistant.ts`, `src/utils/voiceCommandParser.ts`):**

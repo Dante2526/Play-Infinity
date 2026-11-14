@@ -43,6 +43,50 @@ function isMobileAudioFocusSensitive(): boolean {
   return /SamsungBrowser|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
+function isEdgeBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /\bEdg\//i.test(navigator.userAgent || '');
+}
+
+function hasWebAudioSttSupport(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+  return !!AudioCtx && !!navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function';
+}
+
+export function downsampleTo16kPcm(input: Float32Array, inputRate: number): Int16Array {
+  const targetRate = 16000;
+  if (!input || input.length === 0) return new Int16Array(0);
+  if (inputRate <= targetRate) {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+      const s = Math.max(-1, Math.min(1, input[i]));
+      out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+    }
+    return out;
+  }
+  const ratio = inputRate / targetRate;
+  const newLen = Math.max(1, Math.round(input.length / ratio));
+  const out = new Int16Array(newLen);
+  let offsetResult = 0;
+  let offsetBuffer = 0;
+  while (offsetResult < newLen) {
+    const nextOffsetBuffer = Math.min(input.length, Math.round((offsetResult + 1) * ratio));
+    let accum = 0;
+    let count = 0;
+    for (let i = offsetBuffer; i < nextOffsetBuffer; i++) {
+      accum += input[i];
+      count++;
+    }
+    const sample = count > 0 ? accum / count : input[Math.min(offsetBuffer, input.length - 1)] || 0;
+    const clamped = Math.max(-1, Math.min(1, sample));
+    out[offsetResult] = clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff;
+    offsetResult++;
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return out;
+}
+
 /** Calcula backoff exponencial (1s, 2s, 4s... máx 30s) para falhas consecutivas. */
 export function computeVoiceBackoffMs(consecutiveFailures: number): number {
   if (consecutiveFailures <= 0) return 0;
@@ -87,6 +131,9 @@ export function usePlayerVoiceAssistant({
   const nextRetryAtRef = useRef(0);
   const oneShotPendingRef = useRef(false);
   const lastAudioFocusResumeAtRef = useRef(0);
+  const useWebAudioFallbackRef = useRef(false);
+  const networkErrorStreakRef = useRef(0);
+  const webAudioSessionRef = useRef<{ stop: () => void } | null>(null);
   const prevIsPlayingRef = useRef(isPlaying);
   const onCommandRef = useRef(onCommand);
   const onWakeRef = useRef(onWakeWordDetected);
@@ -122,6 +169,14 @@ export function usePlayerVoiceAssistant({
   // Encerra a instância atual limpando handlers; retorna true se havia sessão ativa abortada.
   const safeStopCurrentRecognition = useCallback((): boolean => {
     let hadActive = false;
+    if (webAudioSessionRef.current) {
+      hadActive = true;
+      try {
+        webAudioSessionRef.current.stop();
+      } catch {}
+      webAudioSessionRef.current = null;
+      lastAbortAtRef.current = Date.now();
+    }
     if (recognitionRef.current) {
       hadActive = true;
       try {
@@ -130,7 +185,7 @@ export function usePlayerVoiceAssistant({
         old.onresult = null;
         old.onerror = null;
         old.onend = null;
-        old.abort();
+        if (typeof old.abort === 'function') old.abort();
       } catch {}
       recognitionRef.current = null;
       lastAbortAtRef.current = Date.now();
@@ -367,6 +422,7 @@ export function usePlayerVoiceAssistant({
       recognition.onresult = (event: any) => {
         lastResultAtRef.current = Date.now();
         consecutiveFailuresRef.current = 0;
+        networkErrorStreakRef.current = 0;
         nextRetryAtRef.current = 0;
         const totalResults = event.results ? event.results.length : 0;
         const startIdx = typeof event.resultIndex === 'number' ? event.resultIndex : 0;
@@ -435,6 +491,16 @@ export function usePlayerVoiceAssistant({
         }
 
         if (err === 'network' || err === 'audio-capture' || err === 'service-not-allowed') {
+          if (err === 'network' || err === 'service-not-allowed') {
+            networkErrorStreakRef.current += 1;
+            if (hasWebAudioSttSupport() && (isEdgeBrowser() || networkErrorStreakRef.current >= 2)) {
+              console.info(`[VoiceAssistant] Web Speech nativa indisponível (${err}). Ativando motor WebAudio (/api/voice-stt)...`);
+              useWebAudioFallbackRef.current = true;
+              safeStopCurrentRecognition();
+              scheduleSessionStart(80);
+              return;
+            }
+          }
           console.warn(`[VoiceAssistant] Falha na voz (${err}), aplicando backoff...`);
           registerFailure(err, err === 'audio-capture' || err === 'service-not-allowed');
         }
@@ -476,6 +542,175 @@ export function usePlayerVoiceAssistant({
     }
   }, [lang, handleTranscript, showFeedback, safeStopCurrentRecognition, registerFailure, scheduleSessionStart, flushPendingInterim]);
 
+  // Motor WebAudio + /api/voice-stt para Microsoft Edge / Firefox / Brave quando Web Speech nativa falha com 'network'
+  const startWebAudioSttSession = useCallback(async () => {
+    if (!hasWebAudioSttSupport()) {
+      setIsSupported(false);
+      isStartingRef.current = false;
+      return;
+    }
+
+    isStartingRef.current = true;
+    startingAtRef.current = Date.now();
+
+    let stream: MediaStream | null = null;
+    try {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+        });
+      } catch (err: any) {
+        if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+          throw err;
+        }
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } catch (err: any) {
+      isStartingRef.current = false;
+      if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
+        syncMicrophonePermission('denied');
+        showFeedback('Permissão de microfone negada.', 'error', 3000);
+        setIsContinuous(false);
+        isContinuousRef.current = false;
+        return;
+      }
+      registerFailure('audio-capture', true);
+      if (isContinuousRef.current) {
+        scheduleSessionStart(Math.max(1000, nextRetryAtRef.current - Date.now()));
+      }
+      return;
+    }
+
+    if (!isContinuousRef.current && !oneShotPendingRef.current) {
+      try { stream.getTracks().forEach(t => t.stop()); } catch {}
+      isStartingRef.current = false;
+      return;
+    }
+
+    try {
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      const ctx: AudioContext = new AudioCtx();
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const muteGain = ctx.createGain();
+      muteGain.gain.value = 0;
+
+      const preRoll: Int16Array[] = [];
+      let utteranceChunks: Int16Array[] = [];
+      let speechFrames = 0;
+      let silenceFrames = 0;
+      let noiseFloor = 0.006;
+      let inFlightRequests = 0;
+      let stopped = false;
+
+      const sendUtterance = (chunks: Int16Array[]) => {
+        if (stopped || chunks.length === 0 || inFlightRequests >= 2) return;
+        let totalSamples = 0;
+        for (const c of chunks) totalSamples += c.length;
+        if (totalSamples < 2400) return; // < 150ms a 16kHz
+        const merged = new Int16Array(totalSamples);
+        let offset = 0;
+        for (const c of chunks) {
+          merged.set(c, offset);
+          offset += c.length;
+        }
+        inFlightRequests++;
+        const fetchFn = (window as any).fetch || fetch;
+        fetchFn(`/api/voice-stt?lang=${encodeURIComponent(lang)}&rate=16000`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'audio/l16; rate=16000' },
+          body: new Uint8Array(merged.buffer, merged.byteOffset, merged.byteLength)
+        })
+          .then((r: Response) => (r.ok ? r.json() : null))
+          .then((data: any) => {
+            if (stopped || !data || !Array.isArray(data.alternatives) || data.alternatives.length === 0) return;
+            lastResultAtRef.current = Date.now();
+            consecutiveFailuresRef.current = 0;
+            handleTranscript(data.alternatives, true, 0);
+          })
+          .catch(() => {})
+          .finally(() => {
+            inFlightRequests = Math.max(0, inFlightRequests - 1);
+          });
+      };
+
+      processor.onaudioprocess = (e: AudioProcessingEvent) => {
+        if (stopped) return;
+        const input = e.inputBuffer.getChannelData(0);
+        let sumSq = 0;
+        for (let i = 0; i < input.length; i++) {
+          sumSq += input[i] * input[i];
+        }
+        const rms = Math.sqrt(sumSq / Math.max(1, input.length));
+        const pcm16 = downsampleTo16kPcm(input, ctx.sampleRate || 48000);
+        const threshold = Math.max(0.013, noiseFloor * 2.2);
+        const isSpeech = rms > threshold;
+
+        if (isSpeech) {
+          if (utteranceChunks.length === 0) {
+            for (const p of preRoll) utteranceChunks.push(p);
+            preRoll.length = 0;
+          }
+          utteranceChunks.push(pcm16);
+          speechFrames++;
+          silenceFrames = 0;
+
+          if (utteranceChunks.length >= 36) {
+            const toSend = utteranceChunks;
+            utteranceChunks = [];
+            speechFrames = 0;
+            silenceFrames = 0;
+            sendUtterance(toSend);
+          }
+        } else {
+          if (utteranceChunks.length > 0) {
+            utteranceChunks.push(pcm16);
+            silenceFrames++;
+            if (silenceFrames >= 5) {
+              const toSend = speechFrames >= 3 ? utteranceChunks : [];
+              utteranceChunks = [];
+              speechFrames = 0;
+              silenceFrames = 0;
+              if (toSend.length > 0) sendUtterance(toSend);
+            }
+          } else {
+            noiseFloor = Math.max(0.003, Math.min(0.035, noiseFloor * 0.95 + rms * 0.05));
+            preRoll.push(pcm16);
+            if (preRoll.length > 5) preRoll.shift();
+          }
+        }
+      };
+
+      source.connect(processor);
+      processor.connect(muteGain);
+      muteGain.connect(ctx.destination);
+
+      const stopSession = () => {
+        if (stopped) return;
+        stopped = true;
+        try { processor.onaudioprocess = null as any; } catch {}
+        try { source.disconnect(); } catch {}
+        try { processor.disconnect(); } catch {}
+        try { muteGain.disconnect(); } catch {}
+        try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+        try { if (ctx.state !== 'closed') void ctx.close(); } catch {}
+      };
+
+      webAudioSessionRef.current = { stop: stopSession };
+      recognitionRef.current = { isWebAudioFallback: true, abort: stopSession };
+      isStartingRef.current = false;
+      isListeningRef.current = true;
+      setIsListening(true);
+      consecutiveFailuresRef.current = 0;
+      nextRetryAtRef.current = 0;
+      sessionStartedAtRef.current = Date.now();
+    } catch (err) {
+      try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+      isStartingRef.current = false;
+      registerFailure('start_error', false);
+    }
+  }, [lang, handleTranscript, showFeedback, registerFailure, scheduleSessionStart]);
+
   // Inicia uma sessão de reconhecimento limpa respeitando cooldown pós-abort() e backoff
   const startRecognitionSession = useCallback((allowOneShot = false) => {
     if (!isSupported) return;
@@ -509,6 +744,11 @@ export function usePlayerVoiceAssistant({
       return;
     }
 
+    if (useWebAudioFallbackRef.current) {
+      void startWebAudioSttSession();
+      return;
+    }
+
     const rec = createRecognition();
     if (!rec) return;
 
@@ -532,7 +772,7 @@ export function usePlayerVoiceAssistant({
       isStartingRef.current = false;
       registerFailure('start_error', false);
     }
-  }, [isSupported, safeStopCurrentRecognition, scheduleSessionStart, createRecognition, registerFailure]);
+  }, [isSupported, safeStopCurrentRecognition, scheduleSessionStart, createRecognition, registerFailure, startWebAudioSttSession]);
 
   useEffect(() => {
     startSessionRef.current = startRecognitionSession;
@@ -542,22 +782,27 @@ export function usePlayerVoiceAssistant({
   useEffect(() => {
     let cancelled = false;
     const SpeechClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechClass) {
+    if (!SpeechClass && !hasWebAudioSttSupport()) {
       setIsSupported(false);
-    } else if (isContinuousVoiceEnabledByDefault()) {
-      checkMicrophonePermissionStatus()
-        .then((status) => {
-          if (cancelled) return;
-          if (status === 'granted' && !isContinuousRef.current) {
-            isContinuousRef.current = true;
-            setIsContinuous(true);
-          } else if (status === 'denied' && isContinuousRef.current) {
-            isContinuousRef.current = false;
-            setIsContinuous(false);
-            safeStopCurrentRecognition();
-          }
-        })
-        .catch(() => {});
+    } else {
+      if (!SpeechClass && hasWebAudioSttSupport()) {
+        useWebAudioFallbackRef.current = true;
+      }
+      if (isContinuousVoiceEnabledByDefault()) {
+        checkMicrophonePermissionStatus()
+          .then((status) => {
+            if (cancelled) return;
+            if (status === 'granted' && !isContinuousRef.current) {
+              isContinuousRef.current = true;
+              setIsContinuous(true);
+            } else if (status === 'denied' && isContinuousRef.current) {
+              isContinuousRef.current = false;
+              setIsContinuous(false);
+              safeStopCurrentRecognition();
+            }
+          })
+          .catch(() => {});
+      }
     }
 
     return () => {
@@ -608,12 +853,13 @@ export function usePlayerVoiceAssistant({
       }
 
       // 2. Renovação preventiva aos 45s (brecha de 600ms) ou teto duro aos 50s quando não acordado
-      // (Em mobile durante reprodução, preserva a sessão ativa sem abortar para não disputar AudioFocus)
+      // (Em mobile durante reprodução ou no motor WebAudio contínuo, preserva a sessão ativa sem abortar)
       const sessionAge = now - sessionStartedAtRef.current;
       const silenceAge = now - lastResultAtRef.current;
       if (
         isListeningRef.current &&
         !isAwakeRef.current &&
+        !useWebAudioFallbackRef.current &&
         !(isMobileAudioFocusSensitive() && isPlayingRef.current) &&
         sessionStartedAtRef.current > 0 &&
         ((sessionAge >= PREVENTIVE_RENEW_MS && silenceAge > IDLE_GUARD_WHEN_SLEEPING_MS) ||

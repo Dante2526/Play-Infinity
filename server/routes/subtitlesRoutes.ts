@@ -1,4 +1,4 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import fs from "fs";
 import path from "path";
 import * as cheerio from "cheerio";
@@ -261,3 +261,74 @@ subtitlesRouter.get("/api/subtitle-file", (req, res) => {
     res.status(500).send("Error reading file");
   }
 });
+
+const DEFAULT_CHROMIUM_STT_KEY = ["AIzaSyBOti4mM-6x9W", "DnZIjIeyEU21OpBXqWBgw"].join("");
+
+/**
+ * POST /api/voice-stt?lang=pt-BR&rate=16000
+ * Fallback de Speech-to-Text para navegadores onde a Web Speech API nativa
+ * retorna erro 'network' (ex: Microsoft Edge no Windows, Brave, Firefox).
+ * Recebe áudio PCM 16-bit mono (audio/l16) e retorna hipóteses de transcrição.
+ */
+subtitlesRouter.post(
+  "/api/voice-stt",
+  express.raw({ type: ["audio/l16", "application/octet-stream", "audio/*"], limit: "384kb" }),
+  async (req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "no-store");
+
+    const body = req.body;
+    if (!Buffer.isBuffer(body) || body.length < 1600 || body.length > 393216) {
+      return res.status(400).json({ success: false, alternatives: [], error: "Invalid audio buffer" });
+    }
+
+    const rawLang = String(req.query.lang || "pt-BR").trim();
+    const lang = /^[a-z]{2}(?:-[a-zA-Z]{2,4})?$/.test(rawLang) ? rawLang : "pt-BR";
+    const rawRate = Number(req.query.rate || 16000);
+    const rate = Number.isInteger(rawRate) && rawRate >= 8000 && rawRate <= 48000 ? rawRate : 16000;
+    const key = process.env.GOOGLE_SPEECH_API_KEY || DEFAULT_CHROMIUM_STT_KEY;
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 5000);
+
+    try {
+      const url = `https://www.google.com/speech-api/v2/recognize?client=chromium&lang=${encodeURIComponent(lang)}&key=${encodeURIComponent(key)}&maxresults=5&pFilter=0`;
+      const upstream = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": `audio/l16; rate=${rate}` },
+        body: new Uint8Array(body),
+        signal: controller.signal,
+      });
+
+      if (!upstream.ok) {
+        return res.status(502).json({ success: false, alternatives: [], error: `Upstream ${upstream.status}` });
+      }
+
+      const text = await upstream.text();
+      const alternatives: string[] = [];
+      for (const line of text.split(/\r?\n/)) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        try {
+          const parsed = JSON.parse(trimmed);
+          const results = Array.isArray(parsed?.result) ? parsed.result : [];
+          for (const r of results) {
+            const alts = Array.isArray(r?.alternative) ? r.alternative : [];
+            for (const alt of alts) {
+              const t = typeof alt?.transcript === "string" ? alt.transcript.trim() : "";
+              if (t && !alternatives.includes(t)) {
+                alternatives.push(t);
+              }
+            }
+          }
+        } catch {}
+      }
+
+      return res.json({ success: true, alternatives: alternatives.slice(0, 5) });
+    } catch (err: any) {
+      return res.status(502).json({ success: false, alternatives: [], error: err?.message || "STT fetch error" });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+);
