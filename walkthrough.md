@@ -1,3 +1,10 @@
+## 13/11/2026 — Alcance Far-Field (Quarto) e Reconhecimento Multitom do Assistente de Voz
+
+- **Múltiplas Hipóteses (`src/hooks/usePlayerVoiceAssistant.ts`, `src/utils/voiceCommandParser.ts`):** `recognition.maxAlternatives` aumentado de `1` para `5`, avaliando todas as transcrições candidatas via `parseBestVoiceAlternative()` para capturar `"Infinity"` e comandos mesmo quando a 1ª hipótese falha por distância ou variação de timbre.
+- **Timbres Grave/Agudo/Baixo/Alto (`src/utils/voiceCommandParser.ts`):** `WAKE_WORD_PATTERN` expandido para variações graves, agudas e separadas (`infinita`, `infindo`, `in finity`, `finiti`, `affinity`, etc.), suporte seguro a quase-homófonas com comando (`hasSoftWakeWithCommand`: `"enfim pausar"`) e comandos curtos de ambiente (`"sobe"`, `"ta muito baixo"`, `"ta muito alto"`, `"da uma pausa"`, `"tira a abertura"`, `"mais 10"`).
+- **Resgate de Fala Distante & Reconexão Rápida (`src/hooks/usePlayerVoiceAssistant.ts`):** comandos ouvidos de longe em `!isFinal` são salvos em `pendingInterimRef` e resgatados via `flushPendingInterim()` caso `onend` ou o timeout disparem antes de fechar o `isFinal`; reconexão após `onend` natural (silêncio `no-speech`) reduzida de `150ms` para `30ms` preservando o cooldown de `150ms` pós-`abort()`.
+- **Verificação:** `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**15/15 passaram, 0 falhas**) e `tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Pular Abertura Reduzido para 35s
 
 - **Duração Padrão (`src/components/VideoPlayerModal.tsx`, `src/components/NetflixPlayerSkin.tsx`, `server/routes/videoScrapers.ts`, `server/routes/streamtapeRoutes.ts`):** padrão e fallbacks de `SKIP_INTRO` / `skipDurationSeconds` reduzidos de `45s` para `35s`.

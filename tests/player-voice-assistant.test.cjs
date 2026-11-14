@@ -122,3 +122,37 @@ test('handles PT-BR natural variations, "pula 10" vs "pular abertura", and wake-
   assert.match(skinSrc, /onWakeExpired/);
   assert.match(hookSrc, /onWakeExpired/);
 });
+
+test('recognizes vocal pitch variations (deep/high/soft) and far-field short PT-BR commands', async () => {
+  const { hasWakeWord, parseVoiceCommand, parseBestVoiceAlternative } = await compileParser();
+
+  // Variações de timbre grave, agudo e distante para "Infinity"
+  assert.equal(hasWakeWord('infinita pausar'), true);
+  assert.equal(parseVoiceCommand('infinita pausar')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('in finity aumentar volume')?.action, 'VOLUME_UP');
+  assert.equal(parseVoiceCommand('finiti pula 10')?.action, 'SEEK_FORWARD');
+  assert.equal(parseVoiceCommand('affinity mudo')?.action, 'MUTE');
+  assert.equal(parseVoiceCommand('infindo continuar')?.action, 'PLAY');
+
+  // Quase-homófona grave apenas quando seguida de comando válido (não dispara com diálogo solto)
+  assert.equal(hasWakeWord('enfim pausar'), true);
+  assert.equal(parseVoiceCommand('enfim pausar')?.action, 'PAUSE');
+  assert.equal(hasWakeWord('enfim para o carro agora'), false);
+
+  // Comandos curtos em quarto distante
+  assert.equal(parseVoiceCommand('sobe')?.action, 'VOLUME_UP');
+  assert.equal(parseVoiceCommand('tá muito baixo')?.action, 'VOLUME_UP');
+  assert.equal(parseVoiceCommand('tá muito alto')?.action, 'VOLUME_DOWN');
+  assert.equal(parseVoiceCommand('dá uma pausa')?.action, 'PAUSE');
+  assert.equal(parseVoiceCommand('tira a abertura')?.action, 'SKIP_INTRO');
+  assert.equal(parseVoiceCommand('mais 10')?.action, 'SEEK_FORWARD');
+
+  // Seleção da melhor alternativa quando a 1ª hipótese vem errada
+  const best = parseBestVoiceAlternative([
+    'em fim de semana',
+    'infinidade nada a ver',
+    'infinity aumentar volume'
+  ]);
+  assert.equal(best.wakeDetected, true);
+  assert.equal(best.command?.action, 'VOLUME_UP');
+});

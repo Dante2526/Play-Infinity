@@ -125,7 +125,10 @@ async function createVoiceHookHarness(options = {}) {
     emitResult(transcript, isFinal = true, resultIndex = 0) {
       if (!this.onresult) return;
       const results = [];
-      results[resultIndex] = Object.assign([{ transcript }], { isFinal });
+      const alts = Array.isArray(transcript)
+        ? transcript.map(t => ({ transcript: t }))
+        : [{ transcript }];
+      results[resultIndex] = Object.assign(alts, { isFinal });
       this.onresult({ resultIndex, results });
     }
     emitError(error) {
@@ -610,6 +613,51 @@ test('triggerPushToTalk keeps active recognition session, interim extends awake 
     await harness.clock.advance(4500);
     assert.equal(harness.getHook().isAwake, false);
     assert.equal(expiredCalls, 1, 'Must fire onWakeExpired when awake window times out without a command');
+  } finally {
+    harness.unmount();
+  }
+});
+
+test('maxAlternatives=5 captures secondary phonetic matches and flushes distant interim commands on natural onend', async () => {
+  const commands = [];
+  let expiredCalls = 0;
+  const harness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onWakeExpired: () => { expiredCalls++; },
+      onCommand: (action) => { commands.push(action); }
+    }
+  });
+  try {
+    const rec1 = harness.instances[0];
+    assert.equal(rec1.maxAlternatives, 5);
+
+    // 1. Alternativa[0] veio errada pela distância/timbre, mas alternativa[2] trouxe "infinity aumentar volume"
+    rec1.emitResult(['fim de semana', 'infinito nada', 'infinity aumentar volume'], true, 0);
+    await Promise.resolve();
+    assert.deepEqual(commands, ['VOLUME_UP']);
+    assert.equal(harness.getHook().isAwake, false);
+
+    // 2. Comando falado baixo no quarto captado apenas no interim (!isFinal) quando onend dispara por corte
+    await harness.getHook().triggerPushToTalk();
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, true);
+    rec1.emitResult('pausar', false, 1);
+    await Promise.resolve();
+    assert.deepEqual(commands, ['VOLUME_UP'], 'Interim must wait for isFinal while active');
+
+    rec1.emitEnd();
+    await Promise.resolve();
+    assert.deepEqual(commands, ['VOLUME_UP', 'PAUSE'], 'Natural onend while awake must flush pending interim command');
+    assert.equal(expiredCalls, 0, 'Must NOT treat flushed command as wake timeout');
+
+    // 3. Reconexão após onend natural leva ~30ms (sem abort) em vez de 150ms
+    await harness.clock.advance(40);
+    assert.equal(harness.instances.length, 2, 'Natural onend reconnects in <= 40ms');
   } finally {
     harness.unmount();
   }

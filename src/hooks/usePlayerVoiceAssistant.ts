@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { parseVoiceCommand, hasWakeWord, PlayerVoiceAction } from '../utils/voiceCommandParser';
+import {
+  parseBestVoiceAlternative,
+  ParsedVoiceCommand,
+  PlayerVoiceAction
+} from '../utils/voiceCommandParser';
 import {
   isContinuousVoiceEnabledByDefault,
   setContinuousVoiceEnabled,
@@ -62,6 +66,7 @@ export function usePlayerVoiceAssistant({
   const lastExecutedRef = useRef<{ action: string; at: number }>({ action: '', at: 0 });
   const wakeFiredResultIdxRef = useRef(-1);
   const consumedResultIdxRef = useRef(-1);
+  const pendingInterimRef = useRef<{ command: ParsedVoiceCommand; resultIndex: number } | null>(null);
   const sessionStartedAtRef = useRef(0);
   const lastResultAtRef = useRef(0);
   const lastAbortAtRef = useRef(0);
@@ -120,23 +125,9 @@ export function usePlayerVoiceAssistant({
     return hadActive;
   }, []);
 
-  const activateAwake = useCallback((durationMs = 4500) => {
-    if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
-    isAwakeRef.current = true;
-    setIsAwake(true);
-    awakeTimerRef.current = setTimeout(() => {
-      isAwakeRef.current = false;
-      setIsAwake(false);
-      setFeedback(prev => (prev.type === 'listening' ? { ...prev, visible: false, type: 'info' } : prev));
-      onWakeExpiredRef.current?.();
-      if (!isContinuousRef.current) {
-        safeStopCurrentRecognition();
-      }
-    }, durationMs);
-  }, [safeStopCurrentRecognition]);
-
   const deactivateAwake = useCallback((delayMs = 0) => {
     if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
+    pendingInterimRef.current = null;
     if (delayMs > 0) {
       awakeTimerRef.current = setTimeout(() => {
         isAwakeRef.current = false;
@@ -147,6 +138,49 @@ export function usePlayerVoiceAssistant({
       setIsAwake(false);
     }
   }, []);
+
+  const executeVoiceCommand = useCallback((command: ParsedVoiceCommand, resultIndex = -1): boolean => {
+    const now = Date.now();
+    if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
+      return false;
+    }
+    if (resultIndex >= 0) consumedResultIdxRef.current = resultIndex;
+    pendingInterimRef.current = null;
+    lastExecutedRef.current = { action: command.action, at: now };
+
+    showFeedback(`✓ ${command.label}`, 'success', 2200);
+    onCommandRef.current(command.action, command.label);
+    deactivateAwake(0);
+    return true;
+  }, [showFeedback, deactivateAwake]);
+
+  const flushPendingInterim = useCallback((): boolean => {
+    const pending = pendingInterimRef.current;
+    if (!pending) return false;
+    pendingInterimRef.current = null;
+    if (pending.resultIndex >= 0 && consumedResultIdxRef.current === pending.resultIndex) {
+      return false;
+    }
+    return executeVoiceCommand(pending.command, pending.resultIndex);
+  }, [executeVoiceCommand]);
+
+  const activateAwake = useCallback((durationMs = 4500) => {
+    if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
+    isAwakeRef.current = true;
+    setIsAwake(true);
+    awakeTimerRef.current = setTimeout(() => {
+      if (flushPendingInterim()) {
+        return;
+      }
+      isAwakeRef.current = false;
+      setIsAwake(false);
+      setFeedback(prev => (prev.type === 'listening' ? { ...prev, visible: false, type: 'info' } : prev));
+      onWakeExpiredRef.current?.();
+      if (!isContinuousRef.current) {
+        safeStopCurrentRecognition();
+      }
+    }, durationMs);
+  }, [flushPendingInterim, safeStopCurrentRecognition]);
 
   const scheduleSessionStart = useCallback((delayMs = 0, allowOneShot = false) => {
     clearRestartTimer();
@@ -177,11 +211,17 @@ export function usePlayerVoiceAssistant({
     }
   }, [showFeedback, scheduleSessionStart]);
 
-  const handleTranscript = useCallback((transcript: string, isFinal = true, resultIndex = -1) => {
-    const trimmed = transcript.trim();
-    if (!trimmed) return;
+  const handleTranscript = useCallback((rawInput: string | string[], isFinal = true, resultIndex = -1) => {
+    const alternatives = (Array.isArray(rawInput) ? rawInput : [rawInput])
+      .map(s => (typeof s === 'string' ? s.trim() : ''))
+      .filter(Boolean);
+    if (alternatives.length === 0) return;
 
-    const wakeDetected = hasWakeWord(trimmed);
+    if (pendingInterimRef.current && pendingInterimRef.current.resultIndex !== resultIndex) {
+      flushPendingInterim();
+    }
+
+    const { wakeDetected, command } = parseBestVoiceAlternative(alternatives);
 
     let wakeJustActivated = false;
 
@@ -199,12 +239,19 @@ export function usePlayerVoiceAssistant({
       }
     }
 
-    // 2. Enquanto fala (!isFinal) e já está acordado, renova a janela para não expirar antes do isFinal
+    // 2. Enquanto fala (!isFinal): guarda comando como fallback e renova janela para não cortar de longe
     if (!isFinal) {
+      if ((wakeDetected || isAwakeRef.current) && command) {
+        pendingInterimRef.current = { command, resultIndex };
+      }
       if (isAwakeRef.current && !wakeJustActivated) {
         activateAwake(4500);
       }
       return;
+    }
+
+    if (pendingInterimRef.current?.resultIndex === resultIndex) {
+      pendingInterimRef.current = null;
     }
     if (resultIndex >= 0 && consumedResultIdxRef.current === resultIndex) return;
 
@@ -213,20 +260,10 @@ export function usePlayerVoiceAssistant({
       return;
     }
 
-    const command = parseVoiceCommand(trimmed);
     if (command) {
-      const now = Date.now();
-      if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
-        return;
-      }
-      if (resultIndex >= 0) consumedResultIdxRef.current = resultIndex;
-      lastExecutedRef.current = { action: command.action, at: now };
-
-      showFeedback(`✓ ${command.label}`, 'success', 2200);
-      onCommandRef.current(command.action, command.label);
-      deactivateAwake(0);
+      executeVoiceCommand(command, resultIndex);
     }
-  }, [showFeedback, activateAwake, deactivateAwake]);
+  }, [showFeedback, activateAwake, executeVoiceCommand, flushPendingInterim]);
 
   // Cria sempre uma nova instância limpa de reconhecimento
   const createRecognition = useCallback(() => {
@@ -238,7 +275,7 @@ export function usePlayerVoiceAssistant({
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = lang;
-      recognition.maxAlternatives = 1;
+      recognition.maxAlternatives = 5;
 
       recognition.onstart = () => {
         isListeningRef.current = true;
@@ -248,6 +285,7 @@ export function usePlayerVoiceAssistant({
         nextRetryAtRef.current = 0;
         wakeFiredResultIdxRef.current = -1;
         consumedResultIdxRef.current = -1;
+        pendingInterimRef.current = null;
         sessionStartedAtRef.current = Date.now();
       };
 
@@ -257,8 +295,18 @@ export function usePlayerVoiceAssistant({
         nextRetryAtRef.current = 0;
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const res = event.results[i];
-          const text = res[0]?.transcript || '';
-          handleTranscript(text, !!res.isFinal, i);
+          const alternatives: string[] = [];
+          const len = typeof res?.length === 'number' ? res.length : 1;
+          for (let k = 0; k < len; k++) {
+            const text = res[k]?.transcript;
+            if (typeof text === 'string' && text.trim()) {
+              alternatives.push(text.trim());
+            }
+          }
+          if (alternatives.length === 0 && res?.[0]?.transcript) {
+            alternatives.push(res[0].transcript);
+          }
+          handleTranscript(alternatives, !!res?.isFinal, i);
         }
       };
 
@@ -291,10 +339,16 @@ export function usePlayerVoiceAssistant({
         setIsListening(false);
         recognitionRef.current = null;
         isStartingRef.current = false;
-        lastAbortAtRef.current = Date.now();
+
+        if (pendingInterimRef.current && isAwakeRef.current) {
+          flushPendingInterim();
+        }
 
         if (isContinuousRef.current) {
-          const waitMs = Math.max(ABORT_COOLDOWN_MS, nextRetryAtRef.current - Date.now());
+          const now = Date.now();
+          const sinceAbort = lastAbortAtRef.current > 0 ? now - lastAbortAtRef.current : ABORT_COOLDOWN_MS;
+          const abortWait = Math.max(30, ABORT_COOLDOWN_MS - sinceAbort);
+          const waitMs = Math.max(abortWait, nextRetryAtRef.current - now);
           scheduleSessionStart(waitMs);
         }
       };
@@ -306,7 +360,7 @@ export function usePlayerVoiceAssistant({
       isStartingRef.current = false;
       return null;
     }
-  }, [lang, handleTranscript, showFeedback, safeStopCurrentRecognition, registerFailure, scheduleSessionStart]);
+  }, [lang, handleTranscript, showFeedback, safeStopCurrentRecognition, registerFailure, scheduleSessionStart, flushPendingInterim]);
 
   // Inicia uma sessão de reconhecimento limpa respeitando cooldown pós-abort() e backoff
   const startRecognitionSession = useCallback((allowOneShot = false) => {
@@ -500,6 +554,7 @@ export function usePlayerVoiceAssistant({
     nextRetryAtRef.current = 0;
     wakeFiredResultIdxRef.current = -1;
     consumedResultIdxRef.current = -1;
+    pendingInterimRef.current = null;
     lastResultAtRef.current = Date.now();
 
     activateAwake(6000);
