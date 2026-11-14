@@ -1806,8 +1806,8 @@ export function VideoPlayerModal({
     if (selectedServerKey === 'srv_consumet' || activeIframeUrl.includes('anime-stream')) return;
     const isWatchplay = selectedServerKey === 'srv_watchplay' || activeIframeUrl.includes('watchplay');
     const isMixdrop = selectedServerKey === 'srv_mixdrop' || activeIframeUrl.includes('md-stream') || activeIframeUrl.includes('mixdrop') || activeIframeUrl.includes('mxdrop');
-    // Allow bounded source selection, token renewal and one alternate file.
-    const providerTimeout = selectedServerKey === "srv_byse" ? 7000 : selectedServerKey === "srv_streamtape" ? 8000 : (isWatchplay ? 8000 : (isMixdrop ? 8500 : 7000));
+    // Allow bounded source selection, token renewal and one alternate file (and 1.3MB–3.1MB faststart moov headers on 1h episodes).
+    const providerTimeout = selectedServerKey === "srv_byse" ? 11500 : selectedServerKey === "srv_streamtape" ? 11000 : (isWatchplay ? 10000 : (isMixdrop ? 11500 : 10500));
     const plan=startupPlanRef.current;
     const health=healthRef.current.identity===healthIdentityRef.current?healthRef.current.servers:{};
     const alternative=plan?.candidates.some(key=>key!==selectedServerKey&&!fallbackAttemptsRef.current.has(key)&&playbackHealthState(health,key)!=='unavailable')||false;
@@ -1820,12 +1820,12 @@ export function VideoPlayerModal({
         handleSilentFallback();
       }
     }, timeoutDuration);
-    const fastMetaTimer = alternative && timeoutDuration > 8000 ? setTimeout(() => {
+    const fastMetaTimer = alternative && timeoutDuration > 10500 ? setTimeout(() => {
       if (!metadataStartedRef.current && !(plan?healthPlaybackStartedRef.current:playbackConfirmedRef.current) && !error) {
-        console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) sem metadados após 8s. Acionando fallback rápido.`);
+        console.warn(`[VideoPlayerModal] Player atual (${selectedServerKey}) sem metadados após 10.5s. Acionando fallback rápido.`);
         handleSilentFallback();
       }
-    }, 8000) : undefined;
+    }, 10500) : undefined;
     return () => {
       clearTimeout(timer);
       if (fastMetaTimer) clearTimeout(fastMetaTimer);

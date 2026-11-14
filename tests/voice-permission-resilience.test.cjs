@@ -902,19 +902,28 @@ test('Samsung Internet simulation: 2-step cumulative speech, mic abort before PL
     await Promise.resolve();
 
     assert.equal(audioFocusResumes, 1, 'Must detect unexpected pause after rec.start() and resume PLAY');
-    assert.equal(rec2.aborted, true, 'Must abort SpeechRecognition immediately upon AudioFocus conflict');
+    assert.equal(rec2.aborted, false, 'Must keep SpeechRecognition listening so user can still call Infinity');
     assert.deepEqual(events, ['PLAY', 'AUDIO_FOCUS_RESUME_PLAY']);
 
-    // 5. Enquanto o vídeo toca após detecção do conflito, microfone fica suspenso sem ficar pausando o vídeo
-    await harness.clock.advance(10000);
-    harness.mockWindow.dispatch('pointerdown');
-    await harness.clock.advance(500);
-    assert.equal(harness.instances.length, 2, 'Must stay paused during playback on AudioFocus-conflicting browser');
+    // 5. Após o cooldown de 2.2s pós-PLAY, diálogos do filme em resultIndex = 0 (isFinal: true)
+    // NÃO bloqueiam chamadas futuras de "Infinity" reutilizando resultIndex = 0 no Android!
+    await harness.clock.advance(2500);
+    rec2.emitResult('vamos correr para casa agora', true, 0);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, false);
 
-    // 6. Quando o usuário pausa o vídeo, o microfone religa automaticamente em 250ms
-    harness.setProps({ isPlaying: false });
-    await harness.clock.advance(300);
-    assert.equal(harness.instances.length, 3, 'Must re-enable continuous voice automatically when video is paused');
+    // 6. Usuário fala "Infinity" (mesmo se STT PT-BR colocar "enfim" na 1ª alternativa e "infinity" na 2ª em resultIndex = 0)
+    rec2.emitResult(['enfim', 'infinity'], true, 0);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, true, 'Saying Infinity at reused resultIndex = 0 must wake assistant');
+    assert.equal(wakeCalls, 1, 'Waking while video is playing must pause video to listen');
+    assert.match(harness.getHook().feedback.text, /Ouvindo comando/);
+
+    // 7. Em seguida usuário diz "pausar" em resultIndex = 0 e o comando é executado
+    rec2.emitResult('pausar', true, 0);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, false);
+    assert.deepEqual(events, ['PLAY', 'AUDIO_FOCUS_RESUME_PLAY', 'WAKE_PAUSE', 'PAUSE']);
   } finally {
     harness.unmount();
   }

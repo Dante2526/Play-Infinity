@@ -849,7 +849,7 @@
       if (truncatedMoov) {
         const moovSize = truncatedMoov.size;
         if (moovSize > 64 * 1024 * 1024) throw new Error('mse_moov_huge');
-        if (truncatedMoov.start < 65536 && moovSize > 2 * 1024 * 1024) {
+        if (truncatedMoov.start < 65536 && moovSize > 512 * 1024) {
           throw new Error('mse_moov_faststart_native');
         }
         const moovEnd = truncatedMoov.start + moovSize;

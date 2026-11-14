@@ -26,12 +26,16 @@ const STRICT_WAKE_PATTERN =
   '\\b(infinity|infinite|infiniti|infinit|enfinete|infinete|inffinity|ifinity|ifiniti|efinity|efiniti|afiniti|affinity|finiti|finity|vinity|viniti|piniti|miniti|minity|onfinity|unfiniti|in\\s+finit[yiwue]*|em\\s+finit[yiwue]*|um\\s+finit[yiwue]*)\\b';
 const STRICT_WAKE_WORD_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'i');
 const STRICT_WAKE_GLOBAL_REGEX = new RegExp(STRICT_WAKE_PATTERN, 'gi');
+const STANDALONE_STRICT_WAKE_REGEX = new RegExp(
+  `^(?:(?:ei|oi|hey|ok|ola)\\s+)?${STRICT_WAKE_PATTERN}$`,
+  'i'
+);
 
 // Palavras existentes em português ("infinito", "infinita", "infinidade") ou quase-homófonas ("finito", "finita", "finite")
 // só acordam o assistente quando seguidas diretamente por um comando curto (<= 4 palavras).
-// Palavras isoladas só acordam se forem "infinito/infinita/infinidade".
-const PT_TRANSLATED_WAKE_REGEX = /\b(infinito|infinita|infinidade|finito|finita|finite)\b/gi;
-const PT_ALONE_WAKE_REGEX = /^(?:(?:ei|oi|hey|ok|ola)\s+)?(infinito|infinita|infinidade)$/i;
+// Palavras isoladas só acordam se forem "infinito/infinita/infinitos/infinitas/infinidade".
+const PT_TRANSLATED_WAKE_REGEX = /\b(infinito|infinita|infinitos|infinitas|infinidade|finito|finita|finite)\b/gi;
+const PT_ALONE_WAKE_REGEX = /^(?:(?:ei|oi|hey|ok|ola)\s+)?(infinito|infinita|infinitos|infinitas|infinidade)$/i;
 const MAX_COMMAND_WORDS = 5;
 
 /**
@@ -71,6 +75,12 @@ export function hasWakeWord(text: string): boolean {
   if (PT_ALONE_WAKE_REGEX.test(normalized)) return true;
   const ptMatch = getLastPtWakeMatch(normalized);
   return ptMatch.matched && isValidPtWakeAfterText(ptMatch.afterText);
+}
+
+export function isStandaloneWakeWord(text: string): boolean {
+  const normalized = normalizeVoiceText(text);
+  if (!normalized) return false;
+  return STANDALONE_STRICT_WAKE_REGEX.test(normalized) || PT_ALONE_WAKE_REGEX.test(normalized);
 }
 
 /**
@@ -223,6 +233,9 @@ export function parseBestVoiceAlternative(alternatives: string[]): BestVoiceAlte
   let fallbackCommand: ParsedVoiceCommand | null = null;
   let fallbackTranscript = '';
 
+  const primaryNormalized = normalizeVoiceText(alternatives[0] || '');
+  const primaryWordCount = primaryNormalized ? primaryNormalized.split(' ').filter(Boolean).length : 0;
+
   for (let i = 0; i < alternatives.length; i++) {
     const raw = alternatives[i];
     const trimmed = (raw || '').trim();
@@ -233,9 +246,13 @@ export function parseBestVoiceAlternative(alternatives: string[]): BestVoiceAlte
     const cmd = parseVoiceCommand(trimmed);
 
     // Na hipótese primária (i === 0), hasWake acorda sozinho ou com comando.
-    // Em hipóteses secundárias (i > 0), NUNCA dispara wake isolado sem comando, pois
-    // alternativas 2..5 frequentemente contêm ruído fonético de diálogos do filme.
-    if (hasWake && (isPrimary || cmd !== null)) {
+    // Em hipóteses secundárias (i > 0), acorda se houver comando OU se a fala capturada
+    // for curta (1-2 palavras, ex: usuário disse apenas "Infinity" e o STT PT-BR colocou
+    // "enfim"/"finito" na 1ª alternativa e "infinity" na 2ª).
+    const isShortStandaloneWakeAlt =
+      !isPrimary && primaryWordCount >= 1 && primaryWordCount <= 2 && isStandaloneWakeWord(trimmed);
+
+    if (hasWake && (isPrimary || cmd !== null || isShortStandaloneWakeAlt)) {
       wakeDetected = true;
       if (!wakeTranscript) wakeTranscript = trimmed;
     }

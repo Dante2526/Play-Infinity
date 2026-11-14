@@ -85,7 +85,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     if (isMseActive()) return;
     if (!wantsPlay || video.paused && !holding || video.seeking || video.ended) return;
     if ((hasPlayed || video.currentTime > 0) &&
-        (bufferedAhead() < 0.5 || video.readyState < 3)) hold();
+        (bufferedAhead() < 0.5 || video.readyState < 3 && bufferedAhead() < target())) hold();
   }
   function playing() {
     hasPlayed = true;
@@ -133,7 +133,7 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     if (!holding && hasPlayed && wantsPlay && !video.paused && !video.seeking) {
       stableSeconds = current > lastTime + 0.1 ? stableSeconds + 1 : 0;
       if (stableSeconds >= 30) reloads = 0;
-      if (current <= lastTime + 0.01 && (bufferedAhead() < 0.5 || video.readyState < 3)) hold();
+      if (current <= lastTime + 0.01 && (bufferedAhead() < 0.5 || video.readyState < 3 && bufferedAhead() < target())) hold();
     }
     lastTime = current;
     if (!holding || !wantsPlay || fatalSent) return;
@@ -144,16 +144,17 @@ export function createMixdropRecovery(video: HTMLVideoElement, options: {
     if (video.seeking) return;
     stableSeconds = 0;
     // Some mobile browsers stop reading ahead while paused. If the network is
-    // explicitly idle with enough decoded data, accept a smaller reserve.
+    // explicitly idle with enough decoded data, or if >= 2s is buffered after 3s, accept a smaller reserve.
     const enoughBuffer = bufferedAhead() >= target() ||
-      video.networkState === 1 && video.readyState === 4 && bufferedAhead() >= 2;
-    if (!restore && enoughBuffer && video.readyState >= 3) {
+      video.networkState === 1 && video.readyState === 4 && bufferedAhead() >= 2 ||
+      duration >= 3000 && bufferedAhead() >= 2 && video.readyState >= 2;
+    if (!restore && enoughBuffer && (video.readyState >= 3 || duration >= 3000 && bufferedAhead() >= 2 && video.readyState >= 2)) {
       holding = false;
       stalledAt = 0;
       video.play().catch(() => fail("mixdrop_resume_blocked"));
       return;
     }
-    if (duration >= (options.reloadAfterMs ?? 6000)) reloadSource();
+    if (duration >= (options.reloadAfterMs ?? 6000) && bufferedAhead() < 2) reloadSource();
   }, 1000);
 
   return {

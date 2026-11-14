@@ -470,3 +470,24 @@ test('catalogue-backed recovery uses a shorter bounded retry window before tryin
   b.video.emit('waiting'); b.tick(4); assert.equal(b.loads, 1);
   b.tick(6); assert.equal(b.messages.filter(message => message.type === 'FATAL').length, 1);
 });
+
+test('does not enter hold or wipe 26s buffer on transient readyState=2, and resumes after 3s with 2.5s reserve', () => {
+  const b = browser();
+  b.context.options.reloadAfterMs = 4000; b.context.options.stallTimeoutMs = 10000; b.context.options.retryWindowMs = 6000;
+  b.setBuffer(26.38); b.video.readyState = 2;
+  b.video.emit('waiting');
+  assert.equal(b.controller.holding, false);
+  assert.equal(b.video.paused, false);
+  b.tick(5);
+  assert.equal(b.loads, 0);
+
+  // If holding started on empty buffer and then buffered 2.5s while paused, resumes at 3s without reloading
+  b.setBuffer(0); b.video.readyState = 2;
+  b.video.emit('waiting');
+  assert.equal(b.controller.holding, true);
+  b.setBuffer(2.5); b.video.readyState = 2; b.video.networkState = 2;
+  b.tick(3);
+  assert.equal(b.controller.holding, false);
+  assert.equal(b.plays, 1);
+  assert.equal(b.loads, 0);
+});

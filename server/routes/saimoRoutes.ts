@@ -247,7 +247,12 @@ export async function handleSaimoHlsSegment(req: Request, res: Response): Promis
       return res.end(buf);
     }
 
-    // Segmento binário de vídeo/áudio
+    // Segmento binário de vídeo/áudio: nunca repassa páginas HTML de erro (200 OK text/html)
+    // como segmento para o hls.js, pois o demuxer descarta os bytes e trava sem disparar NETWORK_ERROR.
+    if (contentType.toLowerCase().includes("text/html")) {
+      try { if (upstream.body && typeof (upstream.body as any).cancel === "function") await (upstream.body as any).cancel(); } catch {}
+      return res.status(502).send("Upstream returned HTML instead of media segment");
+    }
     res.status(upstream.status);
     res.setHeader("Content-Type", contentType || "video/MP2T");
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -451,7 +456,10 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
           lowLatencyMode: true,
           manifestLoadingTimeOut: 8000,
           levelLoadingTimeOut: 8000,
-          fragLoadingTimeOut: 12000
+          fragLoadingTimeOut: 10000,
+          manifestLoadingMaxRetry: 1,
+          levelLoadingMaxRetry: 1,
+          fragLoadingMaxRetry: 1
         });
         hls.loadSource(streamUrl);
         hls.attachMedia(v);
@@ -461,20 +469,24 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
         });
         hls.on(window.Hls.Events.AUDIO_TRACKS_UPDATED, function() { pickTracks(); });
         hls.on(window.Hls.Events.ERROR, function(event, data) {
-          if (!data || !data.fatal) return;
+          if (!data) return;
           var details = data.details || "";
-          /* Manifesto inválido/MP4 entregue: o servidor caiu numa fonte MP4
-             (HLS morto) — hls.js não parseia MP4. Tenta o modo nativo com
-             prefer=mp4 UMA vez antes de desistir. */
-          if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && /manifest/i.test(details) && !triedNative) {
-            triedNative = true;
-            try { hls.destroy(); } catch(e) {} hls = null;
-            streamUrl = swapPrefer(streamUrl, "mp4");
-            v.src = streamUrl;
-            v.load();
-            autoPlay();
+          /* Falha de rede inicial (manifesto, sub-playlist de áudio/vídeo ou 1º segmento retornando 502/HTML)
+             antes de iniciar a reprodução: tenta prefer=mp4 imediatamente sem aguardar múltiplos retries. */
+          if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && v.readyState < 2 && /manifest|fragLoadError|levelLoadError|levelParsingError|audioTrackLoadError/i.test(details)) {
+            if (!triedNative) {
+              triedNative = true;
+              try { hls.destroy(); } catch(e) {} hls = null;
+              streamUrl = swapPrefer(streamUrl, "mp4");
+              v.src = streamUrl;
+              v.load();
+              autoPlay();
+              return;
+            }
+            reportFatal("HLS rede: " + details);
             return;
           }
+          if (!data.fatal) return;
           switch (data.type) {
             case window.Hls.ErrorTypes.NETWORK_ERROR:
               reportFatal("HLS rede: " + details);

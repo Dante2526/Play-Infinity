@@ -2427,14 +2427,19 @@ const catalogueMediaSourcePending = new Map<string, Promise<Array<{ fileId: stri
 const catalogueMediaSourceCache = new Map<string, { expires: number; sources: Array<{ fileId: string; source: 'encontrei' | 'vizer'; audio: string }> }>();
 async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: number, season?: number, episode?: number, name?: string, refresh = false) {
   loadCatalogs();
-  const key = `${provider}:${season === undefined ? 'movie' : 'tv'}:${id}:${season || 0}:${episode || 0}:${name || ''}`;
+  const tv = season !== undefined && episode !== undefined;
+  const epKey = `${id}:${season}:${episode}`;
+  const key = `${provider}:${ !tv ? 'movie' : 'tv'}:${id}:${season || 0}:${episode || 0}:${name || ''}`;
   const cached = catalogueMediaSourceCache.get(key);
-  if (!refresh && cached && cached.expires > Date.now()) return cached.sources;
+  if (!refresh && cached && cached.expires > Date.now()) {
+    const encId = (tv ? _encontreiEpisodeIndex.get(epKey) : _encontreiMovieIndex.get(id))?.servers?.[provider];
+    const vizId = (tv ? _vizerEpisodeIndex.get(epKey) : _vizerMovieIndex.get(id))?.servers?.[provider];
+    const hasNew = (encId && !cached.sources.some(s => s.fileId === encId)) || (vizId && !cached.sources.some(s => s.fileId === vizId));
+    if (!hasNew) return cached.sources;
+  }
   if (catalogueMediaSourcePending.has(key)) return catalogueMediaSourcePending.get(key)!;
   if (catalogueMediaSourcePending.size >= 6) return [];
   const pending = (async () => {
-    const tv = season !== undefined && episode !== undefined;
-    const epKey = `${id}:${season}:${episode}`;
     const lookups = [
       { source: 'encontrei' as const, entry: tv ? _encontreiEpisodeIndex.get(epKey) : _encontreiMovieIndex.get(id),
         live: () => tv ? resolveEncontreiEpisode(id, season!, episode!, name) : resolveEncontreiMovie(id, name) },
@@ -2448,8 +2453,8 @@ async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: 
         const live = entry?.servers?.[provider] ? null : await Promise.race([
           lookup.live(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 7000); }),
         ]);
-        const fileId = entry?.servers?.[provider] || live?.[provider];
-        return /^[a-zA-Z0-9_-]{1,100}$/.test(fileId || '') ? { fileId: String(fileId), source: lookup.source, audio: entry?.audio || live?.audio || 'Dublado' } : null;
+        const fileId = entry?.servers?.[provider] || live?.[provider] || lookup.entry?.servers?.[provider];
+        return /^[a-zA-Z0-9_-]{1,100}$/.test(fileId || '') ? { fileId: String(fileId), source: lookup.source, audio: entry?.audio || live?.audio || lookup.entry?.audio || 'Dublado' } : null;
       } catch { return null; }
       finally { clearTimeout(timer); }
     }));
@@ -2521,6 +2526,7 @@ export async function getByseSources(id: number, season?: number, episode?: numb
         const fileId = String(raw?.[field] || '').replace(/&amp;/g, '&').match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1];
         if (fileId) return { fileId, audio, source };
       }
+      if (entry?.servers?.byse) return { fileId: String(entry.servers.byse), audio: entry.audio || 'Dublado', source };
       return null;
     };
     try { return await Promise.race([work(), new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 9000); })]); }

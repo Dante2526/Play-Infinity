@@ -437,3 +437,16 @@ test('saimo-hls-segment: body text/plain NÃO-playlist é servido byte a byte (s
   assert.equal(String(res._sent), errBody, 'corpo servido íntegro (não vazio)');
   assert.equal(res._headers['content-type'], 'text/plain');
 });
+
+test('saimo-hls-segment: segmento binário retornando 200 OK text/html (página de erro em CDN de áudio) → 502', async () => {
+  let cancelled = false;
+  installFetch(() => ({
+    ok: true, status: 200,
+    headers: { get: (h) => (h === 'content-type' ? 'text/html; charset=UTF-8' : null) },
+    body: { cancel: async () => { cancelled = true; }, pipe() {}, on() {} },
+  }));
+  const res = mockRes();
+  await routes.handleSaimoHlsSegment(mockReq(segQuery('https://embedvip4.xyz/cdn/down/deadsegment')), res);
+  assert.equal(res._status, 502, 'segmento binário com text/html deve retornar 502 para acionar fallback');
+  assert.equal(cancelled, true, 'stream upstream deve ser cancelado');
+});

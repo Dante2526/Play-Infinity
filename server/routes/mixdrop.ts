@@ -112,9 +112,15 @@ const router = Router();
         const exclude = String(req.query.exclude || '').split(',').filter(Boolean).slice(0, 4);
         if (exclude.some(value => !/^[a-zA-Z0-9_-]{1,100}$/.test(value))) return res.status(400).json({ error: 'Arquivo inválido' });
         let timer: ReturnType<typeof setTimeout> | undefined;
+        const urlFileMatch = rawUrl.match(/\/(?:f|e)\/([a-zA-Z0-9_-]{6,100})/);
+        const explicitUrlFileId = urlFileMatch ? urlFileMatch[1] : "";
+        const mergeExplicitCandidate = (list: Awaited<ReturnType<typeof getMixdropSources>>) => {
+          if (!explicitUrlFileId || list.some(item => item.fileId === explicitUrlFileId)) return list;
+          return [{ fileId: explicitUrlFileId, source: 'vizer' as const, audio: 'Dublado' }, ...list];
+        };
         const work = (async () => {
-          const first = await mixdropPool.select(await getMixdropSources(id, season, episode, context!.name), exclude);
-          return first || mixdropPool.select(await getMixdropSources(id, season, episode, context!.name, true), exclude);
+          const first = await mixdropPool.select(mergeExplicitCandidate(await getMixdropSources(id, season, episode, context!.name)), exclude);
+          return first || mixdropPool.select(mergeExplicitCandidate(await getMixdropSources(id, season, episode, context!.name, true)), exclude);
         })();
         try { selected = await Promise.race([work, new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 18000); })]); }
         finally { clearTimeout(timer); }
@@ -626,8 +632,8 @@ const router = Router();
                   if (!v || v._mdTelemetry) return;
                   v._mdTelemetry = true;
                   v.addEventListener("loadedmetadata", function() { push("metadata", "dur=" + Math.round(v.duration || 0) + "s " + v.videoWidth + "x" + v.videoHeight); });
-                  v.addEventListener("waiting", function() { stall("waiting (buffer esgotado)"); });
-                  v.addEventListener("stalled", function() { stall("stalled (proxy/CDN parou de enviar dados)"); });
+                  v.addEventListener("waiting", function() { if (bufAhead(v) < 5) stall("waiting (buffer esgotado)"); });
+                  v.addEventListener("stalled", function() { if (bufAhead(v) < 2) stall("stalled (proxy/CDN parou de enviar dados)"); });
                   v.addEventListener("playing", function() { if (!bufferRecovery.holding) recovered(); });
                   v.addEventListener("play", function() { push("play"); });
                   v.addEventListener("seeking", function() { push("seeking", "alvo=" + (+(v.currentTime || 0).toFixed(1)) + "s"); });
@@ -636,7 +642,7 @@ const router = Router();
                   v.addEventListener("ended", function() { push("ended"); notifyEnded(); });
                   v.addEventListener("emptied", function() { warn("EMPTIED", "elemento de video foi esvaziado/reiniciado"); });
                   v.addEventListener("pause", function() {
-                    if (v.ended) return;
+                    if (v.ended || bufferRecovery.holding) return;
                     if (Date.now() - lastCmdAt > 1500) {
                       warn("PAUSA NAO SOLICITADA", "o navegador/player pausou sozinho (aba oculta, autoplay, erro?)");
                     } else {
