@@ -1,3 +1,20 @@
+## 14/11/2026 — Correção Definitiva e Simulação do Samsung Internet (Conflito `AudioFocus` + Lock Pós-Play + Iframe `PLAY`)
+
+- **Causa Raiz Comprovada na Simulação (`SamsungBrowser` / Mobile):**
+  1. No Samsung Internet e iOS, chamar `SpeechRecognition` com o microfone aberto durante o comando `PLAY` ou reiniciar o `rec.start()` em background fazia o Android solicitar `AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE`, forçando `video.pause()` no `<video>` (enquanto o iframe tratava como pausa manual em `byse/core.ts` / `mixdropRecovery.ts`).
+  2. Em fala em 2 etapas (`"Infinity"` → `"reproduz"` / `"reproduzir"`) com re-emissão cumulativa de `results[0..N]` no Android, índices finais sem comando (`"Infinity"`) não eram marcados como consumidos e `"reproduz"` / `"reproduza"` / `"rodar"` / `"iniciar"` faltavam na regex de `PLAY`.
+  3. A `NetflixPlayerSkin` disparava 3 mensagens síncronas de `PLAY` (`PLAY`, `play`, `action: "play"`) para iframes same-origin (causando `AbortError` em chamadas simultâneas de `v.play()`) e não tinha lock pós-`PLAY` para ignorar pacotes `WATCHPLAY_STATUS` transitórios (`paused: true`), enquanto iframes sem toque prévio ignoravam `PLAY` (`if (_playBlocked) return;` no MixDrop e `NotAllowedError` sem fallback mudo no Byse / VideoScrapers / NixPlay).
+- **Correções Implementadas:**
+  - `src/utils/voiceCommandParser.ts`: regex de `PLAY` expandida para incluir `reproduz`, `reproduza`, `reproduzindo`, `rodar`, `iniciar`, `inicia`, `comecar`, `comeca`, `assistir`, `volta ai`.
+  - `src/hooks/usePlayerVoiceAssistant.ts`: liberação imediata do microfone (`safeStopCurrentRecognition()`) **antes** do `onCommand('PLAY')` no mobile (`isMobileAudioFocusSensitive()`) com guarda de `2500ms` (`MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS`) e atraso de `350ms` no gesto físico; detecção automática de conflito de `AudioFocus` (`wasPlaying && !isPlaying` `< 1800ms` após `onstart` sem pausa intencional), abortando o microfone em background, acionando `onAudioFocusConflict` (retomando `PLAY`) e religando o microfone automaticamente ao pausar; consumo rigoroso de `resultIndex` em `isFinal` e trava de eco por `3000ms` (`lastConsumedTranscriptRef`).
+  - `src/components/NetflixPlayerSkin.tsx`: envio único canônico de `PLAY`/`PAUSE`/`TOGGLE_PLAY` para iframes same-origin; `playLockUntilRef` (`2800ms` no voice `PLAY` e `1800ms` no toggle) com re-disparo automático throttled (`400ms`) enquanto `paused: true` durante o lock, além de `manualPauseAtRef` para nunca desfazer pausas manuais.
+  - `server/routes/mixdrop.ts`, `server/services/byse/core.ts`, `server/routes/videoScrapers.ts`, `server/routes/nixplayRoutes.ts`: remoção de `if (_playBlocked) return;` no `case "PLAY"` do MixDrop, fallback automático para mudo (`WATCHPLAY_AUTOPLAY_MUTED`) em `NotAllowedError`, envio de `sendStatus()` após resolução de `play()`, e proteção anti-pausa transitória de `AudioFocus` (`2200ms`) no `pause` listener do Byse.
+- **Simulação & Verificação (`tests/voice-permission-resilience.test.cjs`):**
+  - Simulação determinística para `SamsungBrowser/25.0 Android` adicionada validando fala em 2 etapas com array cumulativo, abort pré-`PLAY` do microfone e detecção/auto-retomada pós-conflito de `AudioFocus`.
+  - `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs`: **18/18 passaram, 0 falhas**.
+  - `node --test tests/mixdrop.test.cjs tests/byse-routes.test.cjs tests/byse-simulation.test.cjs`: **51/51 passaram, 0 falhas**.
+  - `.\node_modules\.bin\tsc.cmd --noEmit`: **exit `0`**.
+
 ## 14/11/2026 — Fim do Loop Play/Pause no Samsung Internet & iOS, Proteção Anti-Pausa Fantasma e Auto-Heal por Toque
 
 - **Causa Raiz do Loop Play/Pause & Pausa Fantasma:**

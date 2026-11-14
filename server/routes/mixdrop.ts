@@ -806,9 +806,13 @@ const router = Router();
                 bufferRecovery.command(String(e.data.type || ""));
                 switch (e.data.type) {
                   case "PLAY":
-                    if (_playBlocked) return;
+                    _playBlocked = false;
+                    var existingOv = document.getElementById("mixdrop-play-overlay");
+                    if (existingOv) existingOv.remove();
                     if (v) {
-                      v.play().catch(function(err) {
+                      v.play().then(function() {
+                        sendStatus();
+                      }).catch(function(err) {
                         if (!err || err.name !== "NotAllowedError") return;
                         v.muted = true;
                         return v.play().then(function() {

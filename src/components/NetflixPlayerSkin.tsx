@@ -595,6 +595,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     };
   }, [iframeRef]);
 
+  const currentTimeRef = useRef(playerStatus.currentTime);
+  currentTimeRef.current = playerStatus.currentTime;
+
   // Envia comandos universais para o iframe (compatível com WatchPlayer, EmbedSU, VidSrc e players HTML5)
   const sendCommand = useCallback(
     (command: Record<string, any>) => {
@@ -602,14 +605,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         try {
           iframeRef.current.contentWindow.postMessage(command, "*");
 
-          // Variantes de compatibilidade universal
-          if (command.type === "PLAY") {
+          // Variantes de compatibilidade apenas para embeds externos; iframes same-origin homologados
+          // tratam o comando canônico e evitam chamadas triplas de v.play() no mesmo tick (AbortError no mobile)
+          if (isEffectiveExternal && command.type === "PLAY") {
             iframeRef.current.contentWindow.postMessage({ type: "play" }, "*");
             iframeRef.current.contentWindow.postMessage({ action: "play" }, "*");
-          } else if (command.type === "PAUSE") {
+          } else if (isEffectiveExternal && command.type === "PAUSE") {
             iframeRef.current.contentWindow.postMessage({ type: "pause" }, "*");
             iframeRef.current.contentWindow.postMessage({ action: "pause" }, "*");
-          } else if (command.type === "TOGGLE_PLAY") {
+          } else if (isEffectiveExternal && command.type === "TOGGLE_PLAY") {
             iframeRef.current.contentWindow.postMessage({ type: "togglePlay" }, "*");
             iframeRef.current.contentWindow.postMessage({ action: "togglePlay" }, "*");
           } else if (
@@ -623,7 +627,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                 : typeof command.targetTime === "number"
                 ? command.targetTime
                 : typeof command.seconds === "number"
-                ? playerStatus.currentTime + command.seconds
+                ? currentTimeRef.current + command.seconds
                 : undefined;
             if (typeof t === "number" && !isNaN(t)) {
               iframeRef.current.contentWindow.postMessage({ type: "SEEK", targetTime: t }, "*");
@@ -642,7 +646,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       }
       window.postMessage(command, "*");
     },
-    [iframeRef, playerStatus.currentTime]
+    [iframeRef, isEffectiveExternal]
   );
 
   // Assistente de Voz Nativo Infinity (Zero API Key)
@@ -650,10 +654,17 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const isPausedRef = useRef(playerStatus.paused);
   isPausedRef.current = playerStatus.paused;
   const lastVoicePlayAtRef = useRef(0);
+  const playLockUntilRef = useRef(0);
+  const lastPlayRetryAtRef = useRef(0);
+  const manualPauseAtRef = useRef(0);
 
   const resumeIfPausedByWake = useCallback(() => {
     if (pausedByWakeRef.current) {
+      const now = Date.now();
       pausedByWakeRef.current = false;
+      lastVoicePlayAtRef.current = now;
+      playLockUntilRef.current = now + 2800;
+      lastPlayRetryAtRef.current = now;
       sendCommand({ type: "PLAY" });
       setPlayerStatus((p) => ({ ...p, paused: false }));
     }
@@ -661,13 +672,19 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   const handleVoiceCommand = useCallback((action: PlayerVoiceAction, _label: string) => {
     switch (action) {
-      case 'PLAY':
-        lastVoicePlayAtRef.current = Date.now();
+      case 'PLAY': {
+        const now = Date.now();
+        lastVoicePlayAtRef.current = now;
+        playLockUntilRef.current = now + 2800;
+        lastPlayRetryAtRef.current = now;
         pausedByWakeRef.current = false;
         sendCommand({ type: "PLAY" });
         setPlayerStatus(p => ({ ...p, paused: false }));
         return;
+      }
       case 'PAUSE':
+        playLockUntilRef.current = 0;
+        lastVoicePlayAtRef.current = 0;
         pausedByWakeRef.current = false;
         sendCommand({ type: "PAUSE" });
         setPlayerStatus(p => ({ ...p, paused: true }));
@@ -727,10 +744,22 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       return;
     }
     if (!isPausedRef.current) {
+      playLockUntilRef.current = 0;
       pausedByWakeRef.current = true;
       sendCommand({ type: "PAUSE" });
       setPlayerStatus(p => ({ ...p, paused: true }));
     }
+  }, [sendCommand]);
+
+  const handleAudioFocusConflict = useCallback(() => {
+    const now = Date.now();
+    if (now - manualPauseAtRef.current < 1500) return;
+    lastVoicePlayAtRef.current = now;
+    playLockUntilRef.current = now + 2800;
+    lastPlayRetryAtRef.current = now;
+    pausedByWakeRef.current = false;
+    sendCommand({ type: "PLAY" });
+    setPlayerStatus(p => ({ ...p, paused: false }));
   }, [sendCommand]);
 
   const {
@@ -745,6 +774,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     onCommand: handleVoiceCommand,
     onWakeWordDetected: handleWakeWord,
     onWakeExpired: resumeIfPausedByWake,
+    onAudioFocusConflict: handleAudioFocusConflict,
     isPlaying: !playerStatus.paused
   });
 
@@ -854,9 +884,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           }
         }
 
+        const nowMs = Date.now();
+        const isPlayLocked = nowMs < playLockUntilRef.current;
+        if (data.paused === true && isPlayLocked && nowMs - lastPlayRetryAtRef.current >= 400) {
+          lastPlayRetryAtRef.current = nowMs;
+          sendCommand({ type: "PLAY" });
+        }
+
         setPlayerStatus((prev) => {
           let updatedTime = prev.currentTime;
-          const isSeekingLock = Date.now() - lastSeekTimeRef.current < 1500;
+          const isSeekingLock = nowMs - lastSeekTimeRef.current < 1500;
 
           if (incomingTime !== null) {
             if (isSeekingLock) {
@@ -880,7 +917,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           }
 
           const resolvedPaused = typeof data.paused === "boolean"
-            ? data.paused
+            ? (data.paused && isPlayLocked ? false : data.paused)
             : prev.paused;
 
           return {
@@ -1053,10 +1090,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const handleTogglePlay = () => {
     if (isLocked) return;
     pausedByWakeRef.current = false;
+    const now = Date.now();
     if (playerStatus.paused) {
+      playLockUntilRef.current = now + 1800;
+      lastPlayRetryAtRef.current = now;
       sendCommand({ type: "PLAY" });
       setPlayerStatus((p) => ({ ...p, paused: false }));
     } else {
+      manualPauseAtRef.current = now;
+      playLockUntilRef.current = 0;
+      lastVoicePlayAtRef.current = 0;
       sendCommand({ type: "PAUSE" });
       setPlayerStatus((p) => ({ ...p, paused: true }));
     }

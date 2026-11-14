@@ -413,7 +413,13 @@ router.get("/api/native-player", async (req, res) => {
       if (!cmd || !cmd.type) return;
       try {
         if (cmd.type === 'PLAY' || cmd.type === 'play') {
-          video.play().catch(function(){});
+          video.play().then(sendStatus).catch(function(){
+            video.muted = true;
+            video.play().then(function(){
+              try { window.parent.postMessage({ type: 'WATCHPLAY_AUTOPLAY_MUTED' }, '*'); } catch(e){}
+              sendStatus();
+            }).catch(function(){ sendStatus(); });
+          });
         }
         else if (cmd.type === 'PAUSE' || cmd.type === 'pause') {
           video.pause();

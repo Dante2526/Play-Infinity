@@ -131,6 +131,13 @@ async function createVoiceHookHarness(options = {}) {
       results[resultIndex] = Object.assign(alts, { isFinal });
       this.onresult({ resultIndex, results });
     }
+    emitCumulativeResults(items, eventResultIndex = 0) {
+      if (!this.onresult) return;
+      const results = items.map(item =>
+        Object.assign([{ transcript: item.text }], { isFinal: !!item.isFinal })
+      );
+      this.onresult({ resultIndex: eventResultIndex, results });
+    }
     emitError(error) {
       if (this.onerror) this.onerror({ error });
     }
@@ -146,6 +153,7 @@ async function createVoiceHookHarness(options = {}) {
   };
 
   const mockNavigator = {
+    userAgent: options.userAgent || 'Mozilla/5.0',
     permissions: options.hasPermissionsApi === false ? undefined : {
       async query() {
         return { state: permissionState };
@@ -305,6 +313,10 @@ async function createVoiceHookHarness(options = {}) {
     mockDocument,
     storage,
     setPermissionState: (next) => { permissionState = next; },
+    setProps(nextProps) {
+      hookProps = { ...hookProps, ...nextProps };
+      render();
+    },
     getHook: () => hookResult,
     unmount() {
       mounted = false;
@@ -800,6 +812,109 @@ test('mobile browsers (Samsung Internet/iOS): does not loop play/pause on duplic
     harness.mockWindow.dispatch('pointerdown');
     await harness.clock.advance(50);
     assert.equal(harness.instances.length, 3, 'User interaction (pointerdown) immediately auto-heals idle/blocked session');
+  } finally {
+    harness.unmount();
+  }
+});
+
+test('Samsung Internet simulation: 2-step cumulative speech, mic abort before PLAY, AudioFocus guard and self-heal without play/pause loop', async () => {
+  const SAMSUNG_UA =
+    'Mozilla/5.0 (Linux; Android 14; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/25.0 Chrome/121.0.0.0 Mobile Safari/537.36';
+  const events = [];
+  let wakeCalls = 0;
+  let audioFocusResumes = 0;
+  let abortedBeforePlay = false;
+  let harness;
+
+  harness = await createVoiceHookHarness({
+    userAgent: SAMSUNG_UA,
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: false,
+      onWakeWordDetected: () => {
+        wakeCalls++;
+        events.push('WAKE_PAUSE');
+      },
+      onAudioFocusConflict: () => {
+        audioFocusResumes++;
+        events.push('AUDIO_FOCUS_RESUME_PLAY');
+        harness.setProps({ isPlaying: true });
+      },
+      onCommand: (action) => {
+        if (action === 'PLAY') {
+          abortedBeforePlay = harness.instances[0]?.aborted === true;
+          harness.setProps({ isPlaying: true });
+        } else if (action === 'PAUSE') {
+          harness.setProps({ isPlaying: false });
+        }
+        events.push(action);
+      }
+    }
+  });
+
+  try {
+    assert.equal(harness.instances.length, 1);
+    const rec1 = harness.instances[0];
+
+    // 1. Etapa 1 da fala no Android: usuário chama "Infinity" com o vídeo pausado
+    rec1.emitCumulativeResults([{ text: 'Infinity', isFinal: true }], 0);
+    await Promise.resolve();
+    assert.equal(harness.getHook().isAwake, true);
+    assert.equal(wakeCalls, 0);
+
+    // 2. Etapa 2: Android re-emite array cumulativo começando em resultIndex = 0 com [0: "Infinity", 1: "reproduz"]
+    rec1.emitCumulativeResults(
+      [
+        { text: 'Infinity', isFinal: true },
+        { text: 'reproduz', isFinal: true }
+      ],
+      0
+    );
+    await Promise.resolve();
+    assert.deepEqual(events, ['PLAY']);
+    assert.equal(abortedBeforePlay, true, 'Mic session must be aborted BEFORE calling PLAY to release OS AudioFocus');
+    assert.equal(harness.getHook().isAwake, false);
+
+    // Re-emissão tardia ou eco do mesmo texto em < 3s é ignorada e não dispara wake/pause
+    rec1.emitResult('infinity reproduz', true, 1);
+    await Promise.resolve();
+    assert.deepEqual(events, ['PLAY']);
+    assert.equal(wakeCalls, 0);
+
+    // 3. Watchdog e pointerdown dentro dos 2.5s pós-PLAY NÃO reiniciam o microfone prematuramente
+    await harness.clock.advance(1000);
+    harness.mockWindow.dispatch('pointerdown');
+    await harness.clock.advance(500);
+    assert.equal(harness.instances.length, 1, 'Must hold SpeechRecognition off for 2500ms after mobile PLAY');
+
+    // Aos 2500ms, rec2 inicia normalmente
+    await harness.clock.advance(1050);
+    assert.equal(harness.instances.length, 2, 'Reconnects cleanly after 2500ms AudioFocus guard');
+
+    // 4. Simula Samsung Internet roubando AudioFocus e pausando o <video> quando rec2.onstart roda
+    await harness.clock.advance(200);
+    const rec2 = harness.instances[1];
+    harness.setProps({ isPlaying: false });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    assert.equal(audioFocusResumes, 1, 'Must detect unexpected pause after rec.start() and resume PLAY');
+    assert.equal(rec2.aborted, true, 'Must abort SpeechRecognition immediately upon AudioFocus conflict');
+    assert.deepEqual(events, ['PLAY', 'AUDIO_FOCUS_RESUME_PLAY']);
+
+    // 5. Enquanto o vídeo toca após detecção do conflito, microfone fica suspenso sem ficar pausando o vídeo
+    await harness.clock.advance(10000);
+    harness.mockWindow.dispatch('pointerdown');
+    await harness.clock.advance(500);
+    assert.equal(harness.instances.length, 2, 'Must stay paused during playback on AudioFocus-conflicting browser');
+
+    // 6. Quando o usuário pausa o vídeo, o microfone religa automaticamente em 250ms
+    harness.setProps({ isPlaying: false });
+    await harness.clock.advance(300);
+    assert.equal(harness.instances.length, 3, 'Must re-enable continuous voice automatically when video is paused');
   } finally {
     harness.unmount();
   }

@@ -117,7 +117,7 @@ const VOICE_COMMAND_RULES: VoiceCommandRule[] = [
     action: 'PLAY',
     label: 'Continuar reprodução',
     matches: (t) =>
-      /\b(play|reproduzir|continuar|continua|continue|continuando|pode continuar|despausar|despausa|roda|dar play|da play|de play|voltar a passar|volta o filme|volta o video|voltar o video|tocar|toca|solta o play|solta o filme|solta o video|solta)\b/.test(t)
+      /\b(play|reproduzir|reproduz|reproduza|reproduzindo|continuar|continua|continue|continuando|pode continuar|despausar|despausa|roda|rodar|dar play|da play|de play|voltar a passar|volta o filme|volta o video|voltar o video|tocar|toca|solta o play|solta o filme|solta o video|solta|iniciar|inicia|comecar|comeca|assistir|volta ai)\b/.test(t)
   },
   {
     action: 'NEXT_EPISODE',

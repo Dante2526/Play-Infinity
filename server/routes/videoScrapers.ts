@@ -401,9 +401,20 @@ const router = Router();
 
                   switch (e.data.type) {
                     case "PLAY":
-                      if (art) art.play().catch(function() {});
-                      else if (v) v.play().catch(function() {});
-                      sendStatus();
+                      if (v) {
+                        var playTarget = (art && typeof art.play === "function") ? art.play() : v.play();
+                        if (playTarget && typeof playTarget.then === "function") {
+                          playTarget.then(sendStatus).catch(function() {
+                            v.muted = true;
+                            v.play().then(function() {
+                              try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch (e) {}
+                              sendStatus();
+                            }).catch(function() { sendStatus(); });
+                          });
+                        } else {
+                          sendStatus();
+                        }
+                      }
                       break;
                     case "PAUSE":
                       if (art) art.pause();
@@ -3836,9 +3847,20 @@ const router = Router();
         switch (msgType) {
           case "PLAY":
           case "play":
-            if (art) art.play().catch(function() {});
-            else if (v) v.play().catch(function() {});
-            sendStatus();
+            if (v) {
+              var playRes = (art && typeof art.play === "function") ? art.play() : v.play();
+              if (playRes && typeof playRes.then === "function") {
+                playRes.then(sendStatus).catch(function() {
+                  v.muted = true;
+                  v.play().then(function() {
+                    try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch (e) {}
+                    sendStatus();
+                  }).catch(function() { sendStatus(); });
+                });
+              } else {
+                sendStatus();
+              }
+            }
             break;
           case "PAUSE":
           case "pause":
@@ -4349,12 +4371,17 @@ const router = Router();
             if (!v) return;
             var msgType = e.data.type || e.data.action;
             switch(msgType) {
-              case 'PLAY': case 'play': 
+              case 'PLAY': case 'play':
                 if (window.artInstance && typeof window.artInstance.play === "function") {
                   try { window.artInstance.play(); } catch(err) {}
                 }
-                v.play().catch(function(){}); 
-                sendStatus(); 
+                v.play().then(sendStatus).catch(function(){
+                  v.muted = true;
+                  v.play().then(function(){
+                    try { window.parent.postMessage({ type: 'WATCHPLAY_AUTOPLAY_MUTED' }, '*'); } catch(e){}
+                    sendStatus();
+                  }).catch(function(){ sendStatus(); });
+                });
                 break;
               case 'PAUSE': case 'pause': 
                 if (window.artInstance && typeof window.artInstance.pause === "function") {

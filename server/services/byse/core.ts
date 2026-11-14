@@ -965,7 +965,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
     var appliedInitial = false;
 
-    var pausedAt = null, pausedPosition = initialSeek, renewing = false, desiredPaused = false;
+    var pausedAt = null, pausedPosition = initialSeek, renewing = false, desiredPaused = false, lastPlayCmdAt = 0;
 
     function requestPlay() {
 
@@ -981,7 +981,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
       }
 
-      pausedAt = null; v.play().catch(function() {});
+      pausedAt = null; lastPlayCmdAt = Date.now(); var p = v.play(); if (p !== undefined) { p.then(function() { sendStatus(); }).catch(function() { v.muted = true; v.play().then(function() { try { window.parent.postMessage({ type: "WATCHPLAY_AUTOPLAY_MUTED" }, "*"); } catch (e) {} sendStatus(); }).catch(function() {}); }); }
 
     }
 
@@ -1076,7 +1076,7 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
     v.addEventListener("pause", function() {
 
-      if (!renewing) { if (pausedAt === null) pausedAt = Date.now(); pausedPosition = v.currentTime || initialSeek || 0; desiredPaused = true; }
+      if (!renewing && !v.ended && !desiredPaused && lastPlayCmdAt > 0 && Date.now() - lastPlayCmdAt < 2200) { setTimeout(function() { if (!desiredPaused && v.paused) requestPlay(); }, 180); return; } if (!renewing) { if (pausedAt === null) pausedAt = Date.now(); pausedPosition = v.currentTime || initialSeek || 0; desiredPaused = true; }
 
       try { window.parent.postMessage({ type: "WATCHPLAY_VIDEO_PAUSED" }, "*"); } catch (e) {}
 

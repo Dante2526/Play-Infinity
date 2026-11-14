@@ -17,6 +17,7 @@ export interface UsePlayerVoiceAssistantOptions {
   onCommand: (action: PlayerVoiceAction, label: string) => void;
   onWakeWordDetected?: () => void;
   onWakeExpired?: () => void;
+  onAudioFocusConflict?: () => void;
   isPlaying?: boolean;
   lang?: string;
 }
@@ -35,6 +36,12 @@ const MAX_SESSION_RESULTS = 18;
 const MAX_BACKOFF_MS = 30000;
 const POST_COMMAND_WAKE_COOLDOWN_MS = 2200;
 const PLAY_AUDIO_FOCUS_GUARD_MS = 800;
+const MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS = 2500;
+
+function isMobileAudioFocusSensitive(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /SamsungBrowser|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
 
 /** Calcula backoff exponencial (1s, 2s, 4s... máx 30s) para falhas consecutivas. */
 export function computeVoiceBackoffMs(consecutiveFailures: number): number {
@@ -46,6 +53,7 @@ export function usePlayerVoiceAssistant({
   onCommand,
   onWakeWordDetected,
   onWakeExpired,
+  onAudioFocusConflict,
   isPlaying = false,
   lang = 'pt-BR'
 }: UsePlayerVoiceAssistantOptions) {
@@ -69,6 +77,7 @@ export function usePlayerVoiceAssistant({
   const awakeTimerRef = useRef<any>(null);
   const lastExecutedRef = useRef<{ action: string; at: number }>({ action: '', at: 0 });
   const lastCommandExecutedAtRef = useRef(0);
+  const lastConsumedTranscriptRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const wakeFiredResultIdxRef = useRef(-1);
   const consumedResultIdxRef = useRef(-1);
   const pendingInterimRef = useRef<{ command: ParsedVoiceCommand; resultIndex: number } | null>(null);
@@ -78,9 +87,12 @@ export function usePlayerVoiceAssistant({
   const consecutiveFailuresRef = useRef(0);
   const nextRetryAtRef = useRef(0);
   const oneShotPendingRef = useRef(false);
+  const audioFocusConflictModeRef = useRef(false);
+  const prevIsPlayingRef = useRef(isPlaying);
   const onCommandRef = useRef(onCommand);
   const onWakeRef = useRef(onWakeWordDetected);
   const onWakeExpiredRef = useRef(onWakeExpired);
+  const onAudioFocusConflictRef = useRef(onAudioFocusConflict);
   const isPlayingRef = useRef(isPlaying);
   const isContinuousRef = useRef(isContinuous);
   const startSessionRef = useRef<(allowOneShot?: boolean) => void>(() => {});
@@ -90,7 +102,7 @@ export function usePlayerVoiceAssistant({
   useEffect(() => { onCommandRef.current = onCommand; }, [onCommand]);
   useEffect(() => { onWakeRef.current = onWakeWordDetected; }, [onWakeWordDetected]);
   useEffect(() => { onWakeExpiredRef.current = onWakeExpired; }, [onWakeExpired]);
-  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { onAudioFocusConflictRef.current = onAudioFocusConflict; }, [onAudioFocusConflict]);
   useEffect(() => { isContinuousRef.current = isContinuous; }, [isContinuous]);
 
   const showFeedback = useCallback((text: string, type: VoiceAssistantFeedback['type'] = 'info', durationMs = 3000) => {
@@ -144,22 +156,53 @@ export function usePlayerVoiceAssistant({
     }
   }, []);
 
+  const scheduleSessionStart = useCallback((delayMs = 0, allowOneShot = false) => {
+    clearRestartTimer();
+    if (allowOneShot) oneShotPendingRef.current = true;
+    const waitMs = Math.max(0, delayMs);
+    restartTimerRef.current = setTimeout(() => {
+      restartTimerRef.current = null;
+      const canRun = isContinuousRef.current || oneShotPendingRef.current;
+      if (!canRun) return;
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible' && !oneShotPendingRef.current) {
+        return;
+      }
+      const oneShot = oneShotPendingRef.current;
+      oneShotPendingRef.current = false;
+      startSessionRef.current(oneShot);
+    }, waitMs);
+  }, [clearRestartTimer]);
+
   const executeVoiceCommand = useCallback((command: ParsedVoiceCommand, resultIndex = -1): boolean => {
     const now = Date.now();
     if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
       deactivateAwake(0);
       return false;
     }
-    if (resultIndex >= 0) consumedResultIdxRef.current = resultIndex;
+    if (resultIndex >= 0) consumedResultIdxRef.current = Math.max(consumedResultIdxRef.current, resultIndex);
     pendingInterimRef.current = null;
     lastExecutedRef.current = { action: command.action, at: now };
     lastCommandExecutedAtRef.current = now;
+
+    if (command.action === 'PLAY' && (isMobileAudioFocusSensitive() || audioFocusConflictModeRef.current)) {
+      const mobileGuardMs = isMobileAudioFocusSensitive() ? MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS : PLAY_AUDIO_FOCUS_GUARD_MS;
+      nextRetryAtRef.current = Math.max(nextRetryAtRef.current, now + mobileGuardMs);
+      clearRestartTimer();
+      safeStopCurrentRecognition();
+      showFeedback(`✓ ${command.label}`, 'success', 2200);
+      onCommandRef.current(command.action, command.label);
+      deactivateAwake(0);
+      if (isContinuousRef.current && !audioFocusConflictModeRef.current) {
+        scheduleSessionStart(mobileGuardMs);
+      }
+      return true;
+    }
 
     showFeedback(`✓ ${command.label}`, 'success', 2200);
     onCommandRef.current(command.action, command.label);
     deactivateAwake(0);
     return true;
-  }, [showFeedback, deactivateAwake]);
+  }, [showFeedback, deactivateAwake, clearRestartTimer, safeStopCurrentRecognition, scheduleSessionStart]);
 
   const flushPendingInterim = useCallback((): boolean => {
     const pending = pendingInterimRef.current;
@@ -189,22 +232,45 @@ export function usePlayerVoiceAssistant({
     }, durationMs);
   }, [flushPendingInterim, safeStopCurrentRecognition]);
 
-  const scheduleSessionStart = useCallback((delayMs = 0, allowOneShot = false) => {
-    clearRestartTimer();
-    if (allowOneShot) oneShotPendingRef.current = true;
-    const waitMs = Math.max(0, delayMs);
-    restartTimerRef.current = setTimeout(() => {
-      restartTimerRef.current = null;
-      const canRun = isContinuousRef.current || oneShotPendingRef.current;
-      if (!canRun) return;
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible' && !oneShotPendingRef.current) {
-        return;
-      }
-      const oneShot = oneShotPendingRef.current;
-      oneShotPendingRef.current = false;
-      startSessionRef.current(oneShot);
-    }, waitMs);
-  }, [clearRestartTimer]);
+  useEffect(() => {
+    const wasPlaying = prevIsPlayingRef.current;
+    prevIsPlayingRef.current = isPlaying;
+    isPlayingRef.current = isPlaying;
+
+    const now = Date.now();
+    // Se o vídeo estava tocando e pausou sozinho logo após o SpeechRecognition iniciar (< 1800ms),
+    // sem wake-word ativo e sem comando PAUSE recente: o navegador mobile (ex: Samsung Internet)
+    // roubou o AudioFocus do vídeo.
+    if (
+      isMobileAudioFocusSensitive() &&
+      wasPlaying &&
+      !isPlaying &&
+      !isAwakeRef.current &&
+      lastExecutedRef.current.action !== 'PAUSE' &&
+      sessionStartedAtRef.current > 0 &&
+      now - sessionStartedAtRef.current < 1800
+    ) {
+      audioFocusConflictModeRef.current = true;
+      clearRestartTimer();
+      safeStopCurrentRecognition();
+      lastExecutedRef.current = { action: 'PLAY', at: now };
+      lastCommandExecutedAtRef.current = now;
+      nextRetryAtRef.current = now + MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS;
+      onAudioFocusConflictRef.current?.();
+      return;
+    }
+
+    if (
+      !isPlaying &&
+      audioFocusConflictModeRef.current &&
+      isContinuousRef.current &&
+      !recognitionRef.current &&
+      !isListeningRef.current &&
+      !isStartingRef.current
+    ) {
+      scheduleSessionStart(250);
+    }
+  }, [isPlaying, clearRestartTimer, safeStopCurrentRecognition, scheduleSessionStart]);
 
   const registerFailure = useCallback((reason: string, notifyAtThird = false) => {
     consecutiveFailuresRef.current += 1;
@@ -229,6 +295,17 @@ export function usePlayerVoiceAssistant({
       .filter(Boolean);
     if (alternatives.length === 0) return;
 
+    const primaryNorm = alternatives[0].toLowerCase().trim();
+    const now = Date.now();
+    if (
+      isFinal &&
+      primaryNorm &&
+      lastConsumedTranscriptRef.current.text === primaryNorm &&
+      now - lastConsumedTranscriptRef.current.at < 3000
+    ) {
+      return;
+    }
+
     if (pendingInterimRef.current && pendingInterimRef.current.resultIndex !== resultIndex) {
       flushPendingInterim();
     }
@@ -236,15 +313,15 @@ export function usePlayerVoiceAssistant({
     const { wakeDetected, command } = parseBestVoiceAlternative(alternatives);
     const inPostPlayCooldown =
       lastExecutedRef.current.action === 'PLAY' &&
-      Date.now() - lastCommandExecutedAtRef.current < POST_COMMAND_WAKE_COOLDOWN_MS;
+      now - lastCommandExecutedAtRef.current < POST_COMMAND_WAKE_COOLDOWN_MS;
 
     let wakeJustActivated = false;
 
     // 1. Acorda rapidamente mesmo no interim (no máximo 1x por segmento) para pausar o filme na hora
     if (wakeDetected && !inPostPlayCooldown) {
-      const alreadyWoke = resultIndex >= 0 && wakeFiredResultIdxRef.current === resultIndex;
+      const alreadyWoke = resultIndex >= 0 && resultIndex <= wakeFiredResultIdxRef.current;
       if (!alreadyWoke) {
-        if (resultIndex >= 0) wakeFiredResultIdxRef.current = resultIndex;
+        if (resultIndex >= 0) wakeFiredResultIdxRef.current = Math.max(wakeFiredResultIdxRef.current, resultIndex);
         wakeJustActivated = true;
         activateAwake(4500);
         // Não pausa o filme se a mesma transcrição já contém o comando PLAY!
@@ -269,7 +346,10 @@ export function usePlayerVoiceAssistant({
     if (pendingInterimRef.current?.resultIndex === resultIndex) {
       pendingInterimRef.current = null;
     }
-    if (resultIndex >= 0 && consumedResultIdxRef.current === resultIndex) return;
+    if (resultIndex >= 0 && resultIndex <= consumedResultIdxRef.current) return;
+    if (resultIndex >= 0) {
+      consumedResultIdxRef.current = Math.max(consumedResultIdxRef.current, resultIndex);
+    }
 
     // 3. Só executa quando acordado por "Infinity" ou Push-to-Talk
     if (!wakeDetected && !isAwakeRef.current) {
@@ -277,6 +357,9 @@ export function usePlayerVoiceAssistant({
     }
 
     if (command) {
+      if (primaryNorm) {
+        lastConsumedTranscriptRef.current = { text: primaryNorm, at: now };
+      }
       executeVoiceCommand(command, resultIndex);
     }
   }, [showFeedback, activateAwake, executeVoiceCommand, flushPendingInterim]);
@@ -378,15 +461,20 @@ export function usePlayerVoiceAssistant({
         }
 
         if (isContinuousRef.current) {
+          if (audioFocusConflictModeRef.current && isPlayingRef.current && !isAwakeRef.current) {
+            return;
+          }
           const now = Date.now();
           const sinceAbort = lastAbortAtRef.current > 0 ? now - lastAbortAtRef.current : ABORT_COOLDOWN_MS;
           const abortWait = Math.max(30, ABORT_COOLDOWN_MS - sinceAbort);
           let waitMs = Math.max(abortWait, nextRetryAtRef.current - now);
-          // Se o último comando foi PLAY há menos de 800ms, dá folga para o áudio do player inicializar
-          // sem que o SpeechRecognition dispute AudioFocus no Samsung Internet / Safari iOS
+          const playGuardMs = isMobileAudioFocusSensitive()
+            ? MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS
+            : PLAY_AUDIO_FOCUS_GUARD_MS;
+          // Dá folga para o áudio do player inicializar sem que o SpeechRecognition dispute AudioFocus
           const sincePlay = now - lastCommandExecutedAtRef.current;
-          if (lastExecutedRef.current.action === 'PLAY' && sincePlay < PLAY_AUDIO_FOCUS_GUARD_MS) {
-            waitMs = Math.max(waitMs, PLAY_AUDIO_FOCUS_GUARD_MS - sincePlay);
+          if (lastExecutedRef.current.action === 'PLAY' && sincePlay < playGuardMs) {
+            waitMs = Math.max(waitMs, playGuardMs - sincePlay);
           }
           scheduleSessionStart(waitMs);
         }
@@ -404,6 +492,9 @@ export function usePlayerVoiceAssistant({
   // Inicia uma sessão de reconhecimento limpa respeitando cooldown pós-abort() e backoff
   const startRecognitionSession = useCallback((allowOneShot = false) => {
     if (!isSupported) return;
+    if (audioFocusConflictModeRef.current && isPlayingRef.current && !allowOneShot && !isAwakeRef.current) {
+      return;
+    }
     const now = Date.now();
 
     if (isStartingRef.current) {
@@ -516,8 +607,15 @@ export function usePlayerVoiceAssistant({
     const watchdogInterval = setInterval(() => {
       if (!isContinuousRef.current) return;
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      if (audioFocusConflictModeRef.current && isPlayingRef.current && !isAwakeRef.current) return;
 
       const now = Date.now();
+      const playGuardMs = isMobileAudioFocusSensitive()
+        ? MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS
+        : PLAY_AUDIO_FOCUS_GUARD_MS;
+      if (lastExecutedRef.current.action === 'PLAY' && now - lastCommandExecutedAtRef.current < playGuardMs) {
+        return;
+      }
       if (now < nextRetryAtRef.current) return;
 
       // 1. Se caiu fora de um agendamento ativo (ou start ficou preso > 2s), reanima
@@ -549,6 +647,7 @@ export function usePlayerVoiceAssistant({
     const handleVisibilityOrFocus = () => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       if (!isContinuousRef.current || !isSupported) return;
+      if (audioFocusConflictModeRef.current && isPlayingRef.current) return;
       // Preserva sessão saudável já ativa ao clicar entre iframe do player e janela
       if (recognitionRef.current && isListeningRef.current) return;
 
@@ -571,6 +670,20 @@ export function usePlayerVoiceAssistant({
       if (!isContinuousRef.current || !isSupported) return;
       if (recognitionRef.current && isListeningRef.current) return;
       if (isStartingRef.current) return;
+
+      if (isMobileAudioFocusSensitive()) {
+        if (audioFocusConflictModeRef.current && isPlayingRef.current) return;
+        if (
+          lastExecutedRef.current.action === 'PLAY' &&
+          Date.now() - lastCommandExecutedAtRef.current < MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS
+        ) {
+          return;
+        }
+        nextRetryAtRef.current = 0;
+        consecutiveFailuresRef.current = 0;
+        scheduleSessionStart(350);
+        return;
+      }
 
       // Aproveita o contexto de gesto do usuário para ligar o microfone
       nextRetryAtRef.current = 0;
