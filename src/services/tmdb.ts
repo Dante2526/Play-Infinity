@@ -612,6 +612,28 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
     }
   }
 
+  const catalogNums = (catalog.ok && Array.isArray(catalog.data?.episodes) ? catalog.data.episodes : [])
+    .filter(n => Number.isInteger(n) && n > 0 && n <= 9999);
+  if (catalogNums.length > 0) {
+    const uniqueNums = [...new Set(catalogNums)].sort((a, b) => a - b);
+    return {
+      ...DEFAULT_SEASON,
+      season_number: seasonNumber,
+      name: `Temporada ${seasonNumber}`,
+      catalogEpisodes: true,
+      episode_count: uniqueNums.length,
+      episodes: uniqueNums.map(n => ({
+        id: 0,
+        name: `Episódio ${n}`,
+        episode_number: n,
+        season_number: seasonNumber,
+        overview: '',
+        still_path: '',
+        air_date: '',
+      })),
+    };
+  }
+
   // Nada deu certo: avisa uma única vez (status 0 = timeout/rede, que o
   // fetchTmdbRaw já registrou no catch — evita warn duplicado).
   if (direct.status !== 0) {

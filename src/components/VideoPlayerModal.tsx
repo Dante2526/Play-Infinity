@@ -1126,7 +1126,7 @@ export function VideoPlayerModal({
   useEffect(() => {
     // Só busca depois que loadSeries confirmou a identidade: evita /tv/<id>/season
     // → 404 quando o item está catalogado como série mas o id é de um filme.
-    if (!isOpen || !isSeries || !seriesDetails) return;
+    if (!isOpen || !isSeries || resolvedAsMovie || (!tmdbId && !seriesDetails)) return;
     const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
     if (!numericId) return;
 
@@ -1143,7 +1143,8 @@ export function VideoPlayerModal({
             setIsCheckingEpisodes(false);
             return;
           }
-          const totalEpCount = data.episodes?.length || 24;
+          const sInfo = seriesDetails?.seasons?.find(s => s.season_number === season);
+          const totalEpCount = data.episodes?.length || sInfo?.episode_count || 24;
 
           // Consulta em tempo real quais episódios realmente possuem stream ativo no servidor
           getAvailableEpisodes(numericId, season, totalEpCount)
@@ -1192,7 +1193,7 @@ export function VideoPlayerModal({
     if (filteredSeasonEpisodes.length > 0) {
       return filteredSeasonEpisodes.length;
     }
-    if (episodeAvailabilityInfo?.episodes && episodeAvailabilityInfo.episodes.length > 0) {
+    if (episodeAvailabilityInfo?.verifiedFromCatalog && episodeAvailabilityInfo.episodes && episodeAvailabilityInfo.episodes.length > 0) {
       return episodeAvailabilityInfo.episodes.length;
     }
     if (seasonData?.episodes && seasonData.episodes.length > 0) {
@@ -1201,6 +1202,9 @@ export function VideoPlayerModal({
     const sInfo = seriesDetails?.seasons?.find(s => s.season_number === season);
     if (sInfo?.episode_count && sInfo.episode_count > 0) {
       return sInfo.episode_count;
+    }
+    if (episodeAvailabilityInfo?.episodes && episodeAvailabilityInfo.episodes.length > 0) {
+      return episodeAvailabilityInfo.episodes.length;
     }
     return 8;
   }, [filteredSeasonEpisodes, episodeAvailabilityInfo, seasonData, seriesDetails, season]);
@@ -2585,6 +2589,39 @@ export function VideoPlayerModal({
   // Handler to switch episode
   const handleEpisodeChange = async (newEpisode: number) => {
     if (newEpisode < 1) return;
+    const currentSeasonData = seasonData?.season_number === season ? seasonData : null;
+    const hasConfirmedSeasonLimit = Boolean(
+      currentSeasonData?.catalogEpisodes ||
+      (currentSeasonData?.episodes && currentSeasonData.episodes.length > 0) ||
+      (episodeAvailabilityInfo?.verifiedFromCatalog && episodeAvailabilityInfo.episodes?.length) ||
+      seriesDetails?.seasons?.some(s => s.season_number === season && s.episode_count > 0)
+    );
+    if (
+      isSeries &&
+      hasConfirmedSeasonLimit &&
+      totalSeasonEpisodes > 0 &&
+      newEpisode > totalSeasonEpisodes &&
+      !episodeNumbers.includes(newEpisode)
+    ) {
+      const nextSeason = availableSeasons.find(s => s > season);
+      if (nextSeason) {
+        return handleSeasonChange(nextSeason);
+      }
+      return;
+    }
+    if (isSeries && !hasConfirmedSeasonLimit && newEpisode > 1) {
+      const numericId = tmdbId || (resolvedId && !isNaN(Number(resolvedId)) ? Number(resolvedId) : null);
+      if (numericId) {
+        try {
+          const freshSeason = await getSeasonDetails(numericId, season);
+          const freshCount = freshSeason?.episodes?.length || freshSeason?.episode_count || 0;
+          if (freshCount > 0 && newEpisode > freshCount) {
+            const nextSeason = availableSeasons.find(s => s > season) || (season + 1);
+            return handleSeasonChange(nextSeason);
+          }
+        } catch {}
+      }
+    }
     const selectionEpoch = ++serverSelectionEpochRef.current;
     // Marca o episódio atual como assistido ao avançar
     if (isSeries && resolvedId) {
@@ -2696,6 +2733,26 @@ export function VideoPlayerModal({
     setActiveIframeUrl(resolveStreamIframeUrl(newUrl));
     setExtractedSource(newUrl);
   };
+
+  // Auto-corrige quando um episódio além do limite da temporada (ex: S1E11 em temporada de 10 eps)
+  // foi solicitado antes dos metadados da temporada carregarem ou veio salvo do Continue Assistindo
+  useEffect(() => {
+    if (!isOpen || !isSeries || isCheckingEpisodes) return;
+    const currentSeasonData = seasonData?.season_number === season ? seasonData : null;
+    const hasConfirmedSeasonLimit = Boolean(
+      currentSeasonData?.catalogEpisodes ||
+      (currentSeasonData?.episodes && currentSeasonData.episodes.length > 0) ||
+      (episodeAvailabilityInfo?.verifiedFromCatalog && episodeAvailabilityInfo.episodes?.length) ||
+      seriesDetails?.seasons?.some(s => s.season_number === season && s.episode_count > 0)
+    );
+    if (!hasConfirmedSeasonLimit || totalSeasonEpisodes <= 0) return;
+    if (episode > totalSeasonEpisodes && !episodeNumbers.includes(episode)) {
+      const nextSeason = availableSeasons.find(s => s > season);
+      if (nextSeason) {
+        void handleSeasonChange(nextSeason);
+      }
+    }
+  }, [isOpen, isSeries, isCheckingEpisodes, seasonData, episodeAvailabilityInfo, seriesDetails, season, episode, totalSeasonEpisodes, episodeNumbers, availableSeasons]);
 
   const handleExtract = async (rawInput: string) => {
     const cleanUrl = extractSrcFromInput(rawInput);

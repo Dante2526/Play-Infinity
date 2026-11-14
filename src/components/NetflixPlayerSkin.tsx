@@ -691,8 +691,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         return;
       case 'NEXT_EPISODE':
         pausedByWakeRef.current = false;
-        if (isSeries && onEpisodeChange && typeof episode === 'number') {
-          onEpisodeChange(episode + 1);
+        if (isSeries) {
+          handlePlayNextRef.current();
         }
         return;
       case 'SKIP_INTRO':
@@ -1593,12 +1593,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     } else if (isSeries) {
       if (nextEpisode?.isNextSeason && onSeasonChange) {
         onSeasonChange(nextEpisode.seasonNumber);
-        onEpisodeChange?.(1);
       } else if (nextEpisode && onEpisodeChange) {
         onEpisodeChange(nextEpisode.episode_number);
+      } else if (!nextEpisode && (!episodesList || episodesList.length === 0) && onEpisodeChange && typeof episode === 'number') {
+        onEpisodeChange(episode + 1);
       }
     }
-  }, [isMovieContinuation, nextMovieInfo, onPlayNextMovie, isSeries, nextEpisode, onSeasonChange, onEpisodeChange]);
+  }, [isMovieContinuation, nextMovieInfo, onPlayNextMovie, isSeries, nextEpisode, episodesList, episode, onSeasonChange, onEpisodeChange]);
   handlePlayNextRef.current = handlePlayNext;
 
   // Handler para dispensar o prompt e ver os créditos completos

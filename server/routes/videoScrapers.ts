@@ -2761,6 +2761,9 @@ const router = Router();
         const fallbackCheck = async (): Promise<boolean> => {
           const nix = await checkNixplay();
           if (nix) return true;
+          if (catalogEpisodeNumbers.size > 0 && !catalogEpisodeNumbers.has(episode)) {
+            return false;
+          }
           try {
             const vizerOk = await checkVizerSeason(numericId, season);
             if (vizerOk) return true;

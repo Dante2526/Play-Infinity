@@ -107,3 +107,18 @@ test('cenário 5: quando não é série (filmes), computeNextEpisode retorna nul
 
   assert.equal(result, null);
 });
+
+test('cenário 6: transição de fim de temporada (ex: Você S1E10 -> S2E1) via voz, botão e handleEpisodeChange', () => {
+  const fs = require('node:fs');
+  const skinSrc = fs.readFileSync(path.join(__dirname, '../src/components/NetflixPlayerSkin.tsx'), 'utf8');
+  const modalSrc = fs.readFileSync(path.join(__dirname, '../src/components/VideoPlayerModal.tsx'), 'utf8');
+
+  // 1. Comando de voz NEXT_EPISODE deve delegar para handlePlayNextRef (que respeita nextEpisode.isNextSeason)
+  assert.match(skinSrc, /case 'NEXT_EPISODE':[\s\S]*?handlePlayNextRef\.current\(\)/);
+
+  // 2. handlePlayNext em mudança de temporada chama apenas onSeasonChange(nextEpisode.seasonNumber)
+  assert.match(skinSrc, /if \(nextEpisode\?\.isNextSeason && onSeasonChange\)\s*\{\s*onSeasonChange\(nextEpisode\.seasonNumber\);\s*\}/);
+
+  // 3. VideoPlayerModal redireciona automaticamente newEpisode > totalSeasonEpisodes para handleSeasonChange(nextSeason)
+  assert.match(modalSrc, /newEpisode > totalSeasonEpisodes &&[\s\S]*?return handleSeasonChange\(nextSeason\)/);
+});

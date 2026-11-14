@@ -1,3 +1,16 @@
+## 14/11/2026 — Correção da Transição de Fim de Temporada (`Você` S1E10 ➔ T2:E1 em vez de Episódio 11 Fantasma)
+
+- **Causa Raiz (`Carregando Episódio 11...` na série *Você*, `tmdbId=78191`, Temporada 1):**
+  1. Em `src/components/NetflixPlayerSkin.tsx`, o comando de voz `NEXT_EPISODE` (`"Infinity próximo episódio"`) chamava diretamente `onEpisodeChange(episode + 1)` (`10 + 1 = 11`) em vez de `handlePlayNextRef.current()`, ignorando o cálculo de mudança de temporada (`nextEpisode.isNextSeason`). Além disso, `handlePlayNext` chamava `onSeasonChange(nextEpisode.seasonNumber)` e logo em seguida `onEpisodeChange?.(1)` no mesmo ciclo de renderização, cancelando o `selectionEpoch` da mudança de temporada.
+  2. Em `src/services/tmdb.ts` (`getSeasonDetails`) e `src/components/VideoPlayerModal.tsx` (`totalSeasonEpisodes`), quando `/api/tmdb/tv/:id/season/:s` atrasava ou falhava, `getSeasonDetails` descartava os episódios já retornados por `/api/catalog-season` (`[1..10]`) e caía em `DEFAULT_SEASON` (`0` episódios ➔ fallback `count=24` em `/api/check-season`, onde `checkVizerSeason` aprovava a temporada inteira e inflava `totalSeasonEpisodes` para `24` sobrepondo `sInfo.episode_count = 10`).
+- **Correção (`src/components/NetflixPlayerSkin.tsx`, `src/components/VideoPlayerModal.tsx`, `src/services/tmdb.ts`, `server/routes/videoScrapers.ts`):**
+  - `NetflixPlayerSkin.tsx`: `NEXT_EPISODE` delega para `handlePlayNextRef.current()`, e `handlePlayNext` em transição de temporada (`nextEpisode.isNextSeason`) aciona exclusivamente `onSeasonChange(nextEpisode.seasonNumber)` (que já define `season = nextSeason` e `episode = 1`).
+  - `VideoPlayerModal.tsx`: `handleEpisodeChange(newEpisode)` e um `useEffect` de auto-correção redirecionam automaticamente qualquer `newEpisode > totalSeasonEpisodes` (como `S1E11` salvo no histórico ou acionado por atalho) para `handleSeasonChange(nextSeason)` (`Temporada 2, Episódio 1`); `totalSeasonEpisodes` prioriza `seasonData.episodes` e `seriesDetails.seasons.episode_count` (`10`) antes de sondagens não verificadas (`verifiedFromCatalog === false`).
+  - `src/services/tmdb.ts` & `server/routes/videoScrapers.ts`: `getSeasonDetails` usa a listagem de `/api/catalog-season` (`[1..10]`) como fallback quando o TMDB falha, e `/api/check-season` não usa checks apenas de temporada (`checkVizerSeason`/`checkVipSeason`/`checkVidsrcSeason`) para aprovar números de episódio inexistentes além do catálogo local.
+- **Verificação:**
+  - `node --test tests/player-next-episode-guard.test.cjs tests/tmdb-season-remap.test.cjs tests/player-integration.test.cjs`: **20/20 passaram, 0 falhas**.
+  - `.\node_modules\.bin\tsc.cmd --noEmit`: **exit `0`**.
+
 ## 14/11/2026 — Suporte Completo a Comando de Voz no Microsoft Edge, Brave e Firefox (`WebAudio VAD` + `/api/voice-stt`)
 
 - **Causa Raiz (`[VoiceAssistant] Falha na voz (network)` no Microsoft Edge):**
