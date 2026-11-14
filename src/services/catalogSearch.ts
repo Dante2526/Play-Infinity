@@ -9,7 +9,9 @@ const apiBase = getApiBaseUrl;
 
 function formatResult(item: TMDBItem): CatalogItem {
   const tv = item.media_type === 'tv' || (!item.media_type && !!(item.name && !item.title));
-  const poster = formatImageUrl(item.poster_path, 'w500');
+  const poster = item.poster_path
+    ? formatImageUrl(item.poster_path, 'w500')
+    : formatImageUrl(item.backdrop_path, 'w780');
   return {
     id: item.id, tmdbId: item.id, title: item.title || item.name || 'Sem título',
     imageUrl: poster, posterUrl: poster,

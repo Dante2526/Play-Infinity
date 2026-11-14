@@ -44,7 +44,9 @@ import {
   searchMulti, 
   getDetails, 
   getSeasonDetails, 
-  formatImageUrl, 
+  formatImageUrl,
+  formatPosterUrl,
+  hasTmdbArtwork,
   getGenreNames, 
   getProviderSeries,
   getProviderMovies,
@@ -175,26 +177,35 @@ export function ProviderPage({
         const moviesSortBy = isReleases ? 'primary_release_date.desc' : sortBy;
         const releaseDateParam = isReleases ? today : undefined;
 
+        const mapProviderTmdbItem = (item: TMDBItem, itemType: 'movie' | 'series'): CatalogItem => {
+          const poster = formatPosterUrl(item);
+          return {
+            id: item.id,
+            tmdbId: item.id,
+            title: (itemType === 'movie' ? item.title || item.name : item.name || item.title) || "Sem título",
+            imageUrl: poster,
+            posterUrl: poster,
+            backdropUrl: formatImageUrl(item.backdrop_path || item.poster_path, 'original'),
+            type: itemType,
+            genres: getGenreNames(item.genre_ids || []),
+            synopsis: item.overview || "Sinopse não disponível.",
+            year: parseInt(((itemType === 'movie' ? item.release_date : item.first_air_date) || '').substring(0, 4) || '2024'),
+            rating: `${item.vote_average ? item.vote_average.toFixed(1) : '8.0'} ★`,
+            duration: itemType === 'movie' ? "Filme" : "Série",
+            match: Math.min(99, Math.round((item.vote_average || 7.5) * 10) + 5),
+            playerUrl: itemType === 'movie'
+              ? `https://v1.watchplay.shop/movie/${item.id}`
+              : `https://v1.watchplay.shop/tvshow/${item.id}/1/1`
+          };
+        };
+
         if (filterType === 'movie') {
           const res = await getProviderMovies(provider, currentPage, moviesSortBy, releaseDateParam);
           if (!isMounted) return;
           if (res && res.results && res.results.length > 0) {
-            const formatted: CatalogItem[] = res.results.map((m: TMDBItem) => ({
-              id: m.id,
-              tmdbId: m.id,
-              title: m.title || m.name || "Sem título",
-              imageUrl: formatImageUrl(m.poster_path, 'w500'),
-              posterUrl: formatImageUrl(m.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-              type: 'movie',
-              genres: getGenreNames(m.genre_ids || []),
-              synopsis: m.overview || "Sinopse não disponível.",
-              year: parseInt(m.release_date?.substring(0, 4) || '2024'),
-              rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
-              duration: "Filme",
-              match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
-              playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
-            }));
+            const formatted: CatalogItem[] = res.results
+              .filter((m: TMDBItem) => hasTmdbArtwork(m) && (m.title || m.name))
+              .map((m: TMDBItem) => mapProviderTmdbItem(m, 'movie'));
             setItems(formatted);
             setTotalPages(Math.min(res.total_pages || 1, 500));
             setTotalCount(res.total_results || formatted.length);
@@ -206,22 +217,9 @@ export function ProviderPage({
           const res = await getProviderSeries(provider, currentPage, sortBy, releaseDateParam);
           if (!isMounted) return;
           if (res && res.results && res.results.length > 0) {
-            const formatted: CatalogItem[] = res.results.map((s: TMDBItem) => ({
-              id: s.id,
-              tmdbId: s.id,
-              title: s.name || s.title || "Sem título",
-              imageUrl: formatImageUrl(s.poster_path, 'w500'),
-              posterUrl: formatImageUrl(s.poster_path, 'w500'),
-              backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-              type: 'series',
-              genres: getGenreNames(s.genre_ids || []),
-              synopsis: s.overview || "Sinopse não disponível.",
-              year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
-              rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
-              duration: "Série",
-              match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
-              playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
-            }));
+            const formatted: CatalogItem[] = res.results
+              .filter((s: TMDBItem) => hasTmdbArtwork(s) && (s.name || s.title))
+              .map((s: TMDBItem) => mapProviderTmdbItem(s, 'series'));
             setItems(formatted);
             setTotalPages(Math.min(res.total_pages || 1, 500));
             setTotalCount(res.total_results || formatted.length);
@@ -239,45 +237,15 @@ export function ProviderPage({
 
           const combined: CatalogItem[] = [];
           if (seriesRes && seriesRes.results) {
-            seriesRes.results.forEach((s: TMDBItem) => {
-              combined.push({
-                id: s.id,
-                tmdbId: s.id,
-                title: s.name || s.title || "Sem título",
-                imageUrl: formatImageUrl(s.poster_path, 'w500'),
-                posterUrl: formatImageUrl(s.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
-                type: 'series',
-                genres: getGenreNames(s.genre_ids || []),
-                synopsis: s.overview || "Sinopse não disponível.",
-                year: parseInt(s.first_air_date?.substring(0, 4) || '2024'),
-                rating: `${s.vote_average ? s.vote_average.toFixed(1) : '8.0'} ★`,
-                duration: "Série",
-                match: Math.min(99, Math.round((s.vote_average || 7.5) * 10) + 5),
-                playerUrl: `https://v1.watchplay.shop/tvshow/${s.id}/1/1`
-              });
-            });
+            seriesRes.results
+              .filter((s: TMDBItem) => hasTmdbArtwork(s) && (s.name || s.title))
+              .forEach((s: TMDBItem) => combined.push(mapProviderTmdbItem(s, 'series')));
           }
 
           if (moviesRes && moviesRes.results) {
-            moviesRes.results.forEach((m: TMDBItem) => {
-              combined.push({
-                id: m.id,
-                tmdbId: m.id,
-                title: m.title || m.name || "Sem título",
-                imageUrl: formatImageUrl(m.poster_path, 'w500'),
-                posterUrl: formatImageUrl(m.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
-                type: 'movie',
-                genres: getGenreNames(m.genre_ids || []),
-                synopsis: m.overview || "Sinopse não disponível.",
-                year: parseInt(m.release_date?.substring(0, 4) || '2024'),
-                rating: `${m.vote_average ? m.vote_average.toFixed(1) : '8.0'} ★`,
-                duration: "Filme",
-                match: Math.min(99, Math.round((m.vote_average || 7.5) * 10) + 5),
-                playerUrl: `https://v1.watchplay.shop/movie/${m.id}`
-              });
-            });
+            moviesRes.results
+              .filter((m: TMDBItem) => hasTmdbArtwork(m) && (m.title || m.name))
+              .forEach((m: TMDBItem) => combined.push(mapProviderTmdbItem(m, 'movie')));
           }
 
           if (combined.length > 0) {

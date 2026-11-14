@@ -1,3 +1,11 @@
+## 13/11/2026 — Filtro de Conteúdos Sem Capa no Catálogo e Provedores
+
+- **Causa Raiz:** Itens recentes ou sem arte no TMDB (`poster_path: null` e `backdrop_path: null`, como `"Alan's Universe"` TMDB `341602`) entravam sem filtro em `ProviderPage` e `GlobalCatalogPage`, caindo no `FALLBACK_POSTER_IMAGE` (foto genérica de cinema).
+- **Correção (`src/services/tmdb.ts`, `src/pages/ProviderPage.tsx`, `src/pages/GlobalCatalogPage.tsx`, `src/services/catalogSearch.ts`):**
+  - Adicionados `hasTmdbArtwork()` e `formatPosterUrl()` em `tmdb.ts` (usando `backdrop_path` em `w780` quando `poster_path` estiver ausente).
+  - Filtrados itens sem nenhuma arte em `ProviderPage.tsx` (com helper único `mapProviderTmdbItem`) e `GlobalCatalogPage.tsx`; `catalogSearch.ts` passa a aproveitar `backdrop_path` antes do fallback.
+- **Verificação:** `node --test tests/catalog-search.test.cjs` (**10/10 passaram, 0 falhas**) e `tsc --noEmit` (exit `0`).
+
 ## 13/11/2026 — Correção do Clique, Retomada de Reprodução, Sessão Sem Corte e Comandos PT-BR do Botão de Voz
 
 - **Clique & Ativação Laranja (`src/components/NetflixPlayerSkin.tsx`):** `onClick` agora aciona `triggerPushToTalk()` quando o assistente está desligado ou em standby (acendendo `voiceAwake` laranja e ouvindo comandos diretos na hora), e chama `toggleContinuousMode()` para desativar ao clicar já acordado (ou via `onContextMenu`).

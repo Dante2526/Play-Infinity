@@ -105,6 +105,17 @@ export const formatImageUrl = (path: string | null | undefined, size: string = '
   return `https://image.tmdb.org/t/p/${size}${cleanPath}`;
 };
 
+const isValidImagePath = (path: string | null | undefined): path is string =>
+  typeof path === 'string' && path.trim() !== '' && path !== 'null' && path !== 'undefined';
+
+export const hasTmdbArtwork = (item: { poster_path?: string | null; backdrop_path?: string | null }): boolean =>
+  isValidImagePath(item.poster_path) || isValidImagePath(item.backdrop_path);
+
+export const formatPosterUrl = (item: { poster_path?: string | null; backdrop_path?: string | null }): string =>
+  isValidImagePath(item.poster_path)
+    ? formatImageUrl(item.poster_path, 'w500')
+    : formatImageUrl(item.backdrop_path, 'w780');
+
 // Fallbacks seguros para evitar crashes se a API falhar
 const DEFAULT_EMPTY_RESPONSE: TMDBResponse = {
   page: 1,
