@@ -13,7 +13,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
-import { isExternalIframePlayer, preferredPlaybackServer, isEpisodeUpcoming, normalizeVisibleServerKey, filterVisibleServers } from "../utils/playerIntegration";
+import { isExternalIframePlayer, preferredPlaybackServer, isSeasonEpisodeReleased, normalizeVisibleServerKey, filterVisibleServers } from "../utils/playerIntegration";
 import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
@@ -1215,10 +1215,17 @@ export function VideoPlayerModal({
     if (!seasonData?.episodes) return [];
     const eav = episodeAvailabilityInfo;
     if (eav && eav.verifiedFromCatalog && Array.isArray(eav.episodes)) {
-      return seasonData.episodes.filter(e => eav.episodes.includes(e.episode_number));
+      return seasonData.episodes.filter(
+        e =>
+          e.episode_number === episode ||
+          eav.episodes.includes(e.episode_number) ||
+          Boolean(seasonData.catalogVerifiedEpisodes?.includes(e.episode_number))
+      );
     }
-    const unreleased = (ep) => isEpisodeUpcoming(ep?.air_date); return seasonData.episodes.filter(e => !unreleased(e));
-  }, [seasonData, episodeAvailabilityInfo]);
+    return seasonData.episodes.filter(e =>
+      isSeasonEpisodeReleased(e?.air_date, e.episode_number, seasonData.catalogVerifiedEpisodes, episode)
+    );
+  }, [seasonData, episodeAvailabilityInfo, episode]);
 
   // Total de episódios da temporada selecionada com streaming comprovado
   const totalSeasonEpisodes = useMemo(() => {
@@ -3610,6 +3617,7 @@ export function VideoPlayerModal({
                 serversList={filterVisibleServers(servers, selectedServerKey).map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
                 onSeasonChange={handleSeasonChange}
                 episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
+                catalogVerifiedEpisodes={seasonData?.catalogVerifiedEpisodes}
                 onClose={handleCloseModal}
                 onCastRequest={handleCastRequest}
                 onEpisodeChange={handleEpisodeChange}

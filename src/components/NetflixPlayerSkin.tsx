@@ -69,6 +69,7 @@ interface NetflixPlayerSkinProps {
     overview?: string;
     still_path?: string;
   }>;
+  catalogVerifiedEpisodes?: number[];
   onClose: () => void;
   onCastRequest?: () => void;
   onEpisodeChange?: (newEpisode: number) => void;
@@ -148,6 +149,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   availableSeasons,
   onSeasonChange,
   episodesList,
+  catalogVerifiedEpisodes,
   onClose,
   onCastRequest,
   onEpisodeChange,
@@ -1571,8 +1573,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       episodesList,
       availableSeasons,
       totalEpisodes,
+      catalogVerifiedEpisodes,
     });
-  }, [isSeries, episodesList, episode, season, availableSeasons, totalEpisodes]);
+  }, [isSeries, episodesList, episode, season, availableSeasons, totalEpisodes, catalogVerifiedEpisodes]);
 
   // Galeria local instantânea de cenas dos episódios da temporada (já em memória via episodesList)
   const seasonEpisodeStills = useMemo(() => {

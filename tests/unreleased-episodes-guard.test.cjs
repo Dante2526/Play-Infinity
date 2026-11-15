@@ -13,7 +13,7 @@ const compiled = esbuild.buildSync({
 });
 const m = new Module(__filename + '.fixture', module);
 m._compile(compiled.outputFiles[0].text, __filename + '.fixture');
-const { isEpisodeUpcoming, formatEpisodeAirDate, getLocalTodayDateString, computeNextEpisode } = m.exports;
+const { isEpisodeUpcoming, isSeasonEpisodeReleased, formatEpisodeAirDate, getLocalTodayDateString, computeNextEpisode } = m.exports;
 
 test('funções existem em playerIntegration', () => {
   assert.equal(typeof isEpisodeUpcoming, 'function');
@@ -71,4 +71,37 @@ test('computeNextEpisode: não avança para episódio inédito cujo air_date é 
   });
 
   assert.equal(result, null, 'Episódio futuro ainda não transmitido não deve ser sugerido no player');
+});
+
+test('isSeasonEpisodeReleased: mantém episódio confirmado no catálogo ou ativo mesmo com air_date futuro', () => {
+  const ref = new Date(2026, 10, 14, 22, 33, 0);
+  // Dexter T2:E3 — air_date futuro no TMDB, mas já presente em /api/catalog-season
+  assert.equal(isSeasonEpisodeReleased('2026-11-15', 3, [1, 2, 3], undefined, ref), true);
+  // Episódio atualmente reproduzido nunca pode sumir da barra (garante highlight laranja)
+  assert.equal(isSeasonEpisodeReleased('2026-11-15', 3, undefined, 3, ref), true);
+  // Episódio futuro fora do catálogo e fora do foco continua bloqueado
+  assert.equal(isSeasonEpisodeReleased('2026-11-22', 4, [1, 2, 3], 3, ref), false);
+  assert.equal(isSeasonEpisodeReleased('2026-11-15', 3, [], 2, ref), false);
+});
+
+test('computeNextEpisode: avança para episódio futuro SE já confirmado em catalogVerifiedEpisodes', () => {
+  const episodesList = [
+    { episode_number: 1, name: 'Ep 1', air_date: '2026-11-01' },
+    { episode_number: 2, name: 'Ep 2', air_date: '2026-11-08' },
+    { episode_number: 3, name: 'Viva Livre e Morra', air_date: '2099-11-15' },
+  ];
+  assert.equal(
+    computeNextEpisode({ isSeries: true, season: 2, episode: 2, episodesList, availableSeasons: [1, 2] }),
+    null
+  );
+  const next = computeNextEpisode({
+    isSeries: true,
+    season: 2,
+    episode: 2,
+    episodesList,
+    availableSeasons: [1, 2],
+    catalogVerifiedEpisodes: [1, 2, 3],
+  });
+  assert.equal(next?.episode_number, 3);
+  assert.equal(next?.name, 'Viva Livre e Morra');
 });

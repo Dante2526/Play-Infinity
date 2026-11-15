@@ -1,3 +1,12 @@
+## 14/11/2026 — Correção do Highlight Laranja e Exibição de Episódios Liberados no Catálogo (`Dexter T2:E3`)
+- **Causa raiz confirmada:** No player aberto em *Dexter: Ressurreição* (`tmdbId=259909`, `T2:E3 "Viva Livre e Morra"`), o TMDB informava `air_date: "2026-11-15"` (dia seguinte no horário local) enquanto o catálogo (`/api/catalog-season?tmdb_id=259909&season=2`) já confirmava `[1, 2, 3]` e `/api/check-season?...&count=10` expirava (>8s) tentando sondar episódios futuros. Com isso, `filteredSeasonEpisodes` ocultava o Ep 3 (`[1 ✓, 2]`), deixando o pill `3` ausente (nenhum botão ficava laranja para o episódio ativo), `Marcar T2 1/2` errado e `Próximo >` bloqueado.
+- **Mudanças aplicadas:**
+  - `src/utils/playerIntegration.ts`: adicionado o helper compartilhado `isSeasonEpisodeReleased(airDate, episodeNumber, catalogVerifiedEpisodes, currentEpisode)` e suporte a `catalogVerifiedEpisodes` em `computeNextEpisode`.
+  - `src/services/tmdb.ts`: adicionado `catalogVerifiedEpisodes?: number[]` em `Season` e preenchimento unificado a partir de `/api/catalog-season` em `getSeasonDetails`.
+  - `src/components/VideoPlayerModal.tsx` + `src/components/NetflixPlayerSkin.tsx` + `src/pages/DetailsPage.tsx`: mantidos visíveis/jogáveis os episódios já confirmados no catálogo e o episódio atualmente reproduzido (`episode`), garantindo o botão ativo em laranja (`T2:E3`), contagem `1/3` e liberação do card na página de detalhes.
+  - `tests/unreleased-episodes-guard.test.cjs`: adicionados testes de regressão para `isSeasonEpisodeReleased` e `computeNextEpisode` com `catalogVerifiedEpisodes`.
+- **Verificação pós-edição final:** `npx tsc --noEmit` (**exit 0**) e `node --test tests/unreleased-episodes-guard.test.cjs tests/player-integration.test.cjs tests/player-next-episode-guard.test.cjs tests/playback-startup.test.cjs` (**35 passed, 0 failed**).
+
 ## 14/11/2026 — Correção Completa do Pipeline de Legendas (Sincronia, Capacitor, Parser VTT e Scraper SubtitleCat)
 - **Bugs corrigidos:**
   - `src/utils/vttParser.ts` + `src/components/NetflixPlayerSkin.tsx`: invertida a direção corrigida de sincronia via `findActiveSubtitleText(cues, currentTime, offset)` (`+0.5s Adiantar` agora realmente adianta e `-0.5s Atrasar` realmente atrasa), combinação de falas simultâneas, reset automático de `subtitleOffset` ao trocar episódio, botão `Zerar`, checagem de `r.ok` + `AbortController`, suporte a `\r\n`, limpeza de tags ASS (`{\an8}`) e entidades HTML, além de feedback na UI (`Buscando...`, `PT-BR pronta`, `Indisponível` + `Tentar buscar novamente`).

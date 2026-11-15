@@ -49,6 +49,8 @@ export interface Episode {
 export interface Season {
   // Source episode numbering, independent of TMDB grouping; not a media probe.
   catalogEpisodes?: boolean;
+  // Números de episódios confirmados no catálogo local (/api/catalog-season).
+  catalogVerifiedEpisodes?: number[];
   id: number;
   name: string;
   season_number: number;
@@ -588,17 +590,24 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
     fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${seasonNumber}?language=pt-BR`, { silent: true }),
     fetchTmdbRaw<{ episodes: number[] }>(`${getApiBaseUrl()}/api/catalog-season?tmdb_id=${seriesId}&season=${seasonNumber}`, { silent: true }),
   ]);
+  const catalogVerified = [...new Set(
+    (catalog.ok && Array.isArray(catalog.data?.episodes) ? catalog.data.episodes : [])
+      .filter((n): n is number => Number.isInteger(n) && n > 0 && n <= 9999)
+  )].sort((a, b) => a - b);
+
   if (direct.ok && direct.data) {
     // TMDB costuma atrasar o cadastro de episódios novos; completa com os do catálogo.
     const eps = direct.data.episodes || [];
     const have = new Set(eps.map(e => e.episode_number));
-    const extra = (catalog.ok && Array.isArray(catalog.data?.episodes) ? catalog.data.episodes : [])
-      .filter(n => Number.isInteger(n) && n > 0 && n <= 9999 && !have.has(n));
-    if (!extra.length) return direct.data;
+    const extra = catalogVerified.filter(n => !have.has(n));
+    const baseSeason = catalogVerified.length > 0
+      ? { ...direct.data, catalogVerifiedEpisodes: catalogVerified }
+      : direct.data;
+    if (!extra.length) return baseSeason;
     const merged = [...eps, ...extra.map(n => ({ id: 0, name: `Episódio ${n}`, episode_number: n,
       season_number: seasonNumber, overview: '', still_path: '', air_date: '' }))]
       .sort((a, b) => a.episode_number - b.episode_number);
-    return { ...direct.data, episodes: merged, episode_count: Math.max(direct.data.episode_count || 0, merged.length) };
+    return { ...baseSeason, episodes: merged, episode_count: Math.max(direct.data.episode_count || 0, merged.length) };
   }
 
   if (direct.status === 404) {
@@ -607,22 +616,22 @@ export const getSeasonDetails = async (seriesId: number, seasonNumber: number): 
       const remapped = await fetchTmdbRaw<Season>(`${BASE_URL}/tv/${seriesId}/season/${mapped}?language=pt-BR`);
       if (remapped.ok && remapped.data) {
         console.info(`[TMDB Service] tv/${seriesId}: temporada ${seasonNumber} não existe no TMDB; exibindo dados da temporada ${mapped} (numeração da fonte difere do TMDB).`);
-        return remapped.data;
+        return catalogVerified.length > 0
+          ? { ...remapped.data, catalogVerifiedEpisodes: catalogVerified }
+          : remapped.data;
       }
     }
   }
 
-  const catalogNums = (catalog.ok && Array.isArray(catalog.data?.episodes) ? catalog.data.episodes : [])
-    .filter(n => Number.isInteger(n) && n > 0 && n <= 9999);
-  if (catalogNums.length > 0) {
-    const uniqueNums = [...new Set(catalogNums)].sort((a, b) => a - b);
+  if (catalogVerified.length > 0) {
     return {
       ...DEFAULT_SEASON,
       season_number: seasonNumber,
       name: `Temporada ${seasonNumber}`,
       catalogEpisodes: true,
-      episode_count: uniqueNums.length,
-      episodes: uniqueNums.map(n => ({
+      catalogVerifiedEpisodes: catalogVerified,
+      episode_count: catalogVerified.length,
+      episodes: catalogVerified.map(n => ({
         id: 0,
         name: `Episódio ${n}`,
         episode_number: n,

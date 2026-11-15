@@ -100,6 +100,7 @@ export interface ComputeNextEpisodeOptions {
   episodesList?: EpisodeItem[] | null;
   availableSeasons?: number[] | null;
   totalEpisodes?: number | null;
+  catalogVerifiedEpisodes?: readonly number[] | null;
 }
 
 /**
@@ -108,7 +109,7 @@ export interface ComputeNextEpisodeOptions {
  * ou se não for uma série.
  */
 export function computeNextEpisode(options: ComputeNextEpisodeOptions): NextEpisodeResult | null {
-  const { isSeries, episode, season, episodesList, availableSeasons, totalEpisodes } = options;
+  const { isSeries, episode, season, episodesList, availableSeasons, totalEpisodes, catalogVerifiedEpisodes } = options;
   if (!isSeries || !episode) return null;
 
   const currentEpNum = Number(episode);
@@ -118,7 +119,10 @@ export function computeNextEpisode(options: ComputeNextEpisodeOptions): NextEpis
   if (episodesList && episodesList.length > 0) {
     const nextInSameSeason = episodesList.find((e) => Number(e.episode_number) === currentEpNum + 1);
     if (nextInSameSeason) {
-      if (nextInSameSeason.air_date && isEpisodeUpcoming(nextInSameSeason.air_date)) {
+      if (
+        nextInSameSeason.air_date &&
+        !isSeasonEpisodeReleased(nextInSameSeason.air_date, nextInSameSeason.episode_number, catalogVerifiedEpisodes)
+      ) {
         return null;
       }
       return {
@@ -180,6 +184,35 @@ export function isEpisodeUpcoming(airDate?: string | null, referenceDate = new D
   if (!/^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) return false;
   const todayStr = getLocalTodayDateString(referenceDate);
   return cleanDate > todayStr;
+}
+
+/**
+ * Determina se um episódio da temporada já está liberado para exibição/reprodução.
+ * Episódios confirmados no catálogo local (ou o episódio atualmente ativo no player)
+ * permanecem acessíveis mesmo quando o TMDB ainda informa data futura.
+ */
+export function isSeasonEpisodeReleased(
+  airDate?: string | null,
+  episodeNumber?: number | null,
+  catalogVerifiedEpisodes?: readonly number[] | null,
+  currentEpisode?: number | null,
+  referenceDate = new Date()
+): boolean {
+  if (
+    typeof episodeNumber === 'number' &&
+    typeof currentEpisode === 'number' &&
+    episodeNumber === currentEpisode
+  ) {
+    return true;
+  }
+  if (
+    typeof episodeNumber === 'number' &&
+    Array.isArray(catalogVerifiedEpisodes) &&
+    catalogVerifiedEpisodes.includes(episodeNumber)
+  ) {
+    return true;
+  }
+  return !isEpisodeUpcoming(airDate, referenceDate);
 }
 
 /**

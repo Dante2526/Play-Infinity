@@ -37,7 +37,7 @@ import {
   Cast,
   Bug
 } from "lucide-react";
-import { isEpisodeUpcoming, formatEpisodeAirDate } from "../utils/playerIntegration";
+import { isSeasonEpisodeReleased, formatEpisodeAirDate } from "../utils/playerIntegration";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { ReportBugModal } from "../components/ReportBugModal";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
@@ -571,7 +571,11 @@ export function DetailsPage({
       // Nixplay/HxH) não significa que o episódio não existe.
       const eav = episodeAvailabilityInfo;
       if (eav && eav.verifiedFromCatalog && Array.isArray(eav.episodes)) {
-        eps = eps.filter(ep => eav.episodes.includes(ep.episode_number));
+        eps = eps.filter(
+          ep =>
+            eav.episodes.includes(ep.episode_number) ||
+            Boolean(seasonData.catalogVerifiedEpisodes?.includes(ep.episode_number))
+        );
       }
       return eps.map(ep => ({
         ep: ep.episode_number,
@@ -621,7 +625,11 @@ export function DetailsPage({
       let targetEp = 1;
       if (isSeries) {
         if (!seasonData?.episodes || seasonData.episodes.length === 0) return;
-        const releasedEpisodes = currentEpisodes.filter(ep => ep.airDate && !isEpisodeUpcoming(ep.airDate));
+        const releasedEpisodes = currentEpisodes.filter(
+          ep =>
+            (ep.airDate || seasonData.catalogVerifiedEpisodes?.includes(ep.ep)) &&
+            isSeasonEpisodeReleased(ep.airDate, ep.ep, seasonData.catalogVerifiedEpisodes)
+        );
         if (releasedEpisodes.length === 0) return;
         const firstUnwatched = releasedEpisodes.find(ep => !isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep));
         targetEp = firstUnwatched ? firstUnwatched.ep : releasedEpisodes[releasedEpisodes.length - 1].ep;
@@ -1142,7 +1150,7 @@ export function DetailsPage({
               <div className="space-y-3">
                 {currentEpisodes.map(ep => {
                   const watched = isEpisodeWatched(effectiveTmdbId, selectedSeason, ep.ep);
-                  const isUpcoming = isEpisodeUpcoming(ep.airDate);
+                  const isUpcoming = !isSeasonEpisodeReleased(ep.airDate, ep.ep, seasonData?.catalogVerifiedEpisodes);
                   const airDateFormatted = formatEpisodeAirDate(ep.airDate);
                   const fullEpTitle = `T${selectedSeason}:E${ep.ep} ${ep.name}`;
                   return (
