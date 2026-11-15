@@ -14,6 +14,9 @@ export type PlayerVoiceAction =
   | 'SEEK_FORWARD'
   | 'SEEK_REWIND'
   | 'FULLSCREEN'
+  | 'EXIT_FULLSCREEN'
+  | 'MINI_PLAYER'
+  | 'EXIT_MINI_PLAYER'
   | 'ASPECT_RATIO';
 
 export interface ParsedVoiceCommand {
@@ -124,6 +127,20 @@ const VOICE_COMMAND_RULES: VoiceCommandRule[] = [
       t === 'para'
   },
   {
+    // Avaliado antes de MINI_PLAYER e SEEK_REWIND para "sair do mini player" / "voltar do mini player" restaurarem corretamente
+    action: 'EXIT_MINI_PLAYER',
+    label: 'Sair do mini-player',
+    matches: (t) =>
+      /\b(sair do mini player|sair do miniplayer|sair do pip|fechar mini player|fechar o mini player|fechar miniplayer|restaurar player|voltar do mini player|voltar do miniplayer|tirar do mini player|tirar mini player)\b/.test(t)
+  },
+  {
+    // Avaliado antes de PLAY para "mini play" / "mini player" / "mine play" nunca caírem em PLAY
+    action: 'MINI_PLAYER',
+    label: 'Mini-player',
+    matches: (t) =>
+      /\b(mini player|miniplayer|mini play|minha player|mine player|modo mini player|modo miniplayer|abrir mini player|colocar em mini player|coloca em mini player|picture in picture|pip|janela flutuante|player flutuante|player pequeno|mini tela|telinha|tela pequena)\b/.test(t)
+  },
+  {
     action: 'PLAY',
     label: 'Continuar reprodução',
     matches: (t) =>
@@ -151,6 +168,20 @@ const VOICE_COMMAND_RULES: VoiceCommandRule[] = [
       /\b(pular abertura|pula abertura|pular a abertura|pula a abertura|tira a abertura|tirar abertura|tirar a abertura|passa a abertura|passar abertura|pula essa parte|pular intro|pula intro|skip intro|pular|pula|pule|abertura)\b/.test(t)
   },
   {
+    // Avaliado antes de FULLSCREEN, VOLUME_DOWN e SEEK_REWIND para "sair da tela cheia", "diminuir a tela" e "voltar para o cartao" não colidirem
+    action: 'EXIT_FULLSCREEN',
+    label: 'Sair da tela cheia',
+    matches: (t) =>
+      /\b(sair da tela cheia|sair de tela cheia|sair do fullscreen|sair da tela inteira|fechar tela cheia|tirar tela cheia|tirar da tela cheia|desativar tela cheia|minimizar|tela normal|modo normal|modo cartao|voltar ao normal|voltar para o cartao|voltar pro cartao|volta pro cartao|volta ao normal|diminuir tela|diminuir a tela|reduzir tela|reduzir a tela|encolher|sair do modo cinema)\b/.test(t)
+  },
+  {
+    // Avaliado antes de VOLUME_UP para "aumentar tela" / "aumentar a tela" ir para tela cheia do player em vez de subir volume
+    action: 'FULLSCREEN',
+    label: 'Tela cheia',
+    matches: (t) =>
+      /\b(tela cheia|tela cheio|telas cheias|maximizar|fullscreen|expandir tela|expandir a tela|expandir player|expandir o player|tela inteira|tela grande|modo tela cheia|modo cinema|ir para tela cheia|ir pra tela cheia|ir para a tela cheia|ir pra a tela cheia|entrar em tela cheia|entrar na tela cheia|colocar em tela cheia|coloca em tela cheia|abrir tela cheia|abrir em tela cheia|aumentar tela|aumentar a tela|aumenta tela|aumenta a tela|ampliar tela|ampliar a tela|expandir)\b/.test(t)
+  },
+  {
     action: 'VOLUME_UP',
     label: 'Volume +10%',
     matches: (t) =>
@@ -174,12 +205,6 @@ const VOICE_COMMAND_RULES: VoiceCommandRule[] = [
     label: 'Voltar 10s',
     matches: (t) =>
       /\b(voltar 10|volta 10|voltar dez|volta dez|menos 10|menos dez|voltar 10 segundos|retroceder|retrocede|recuar|recua|voltar um pouco|volta um pouco|voltar um pouquinho|volta um pouquinho|voltar atras|10 segundos atras|repetir cena|voltar|volta)\b/.test(t)
-  },
-  {
-    action: 'FULLSCREEN',
-    label: 'Tela cheia',
-    matches: (t) =>
-      /\b(tela cheia|maximizar|fullscreen|expandir tela|tela inteira|expandir|sair da tela cheia|minimizar|tela normal)\b/.test(t)
   },
   {
     action: 'ASPECT_RATIO',

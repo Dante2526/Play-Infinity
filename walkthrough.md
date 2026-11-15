@@ -1,3 +1,16 @@
+## 14/11/2026 — Ajuste Estético no Botão Play do Card "Continue Assistindo" (`ContinueWatchingRow.tsx`)
+- **Ajuste:** Reduzido o círculo central de Play do hover em `src/components/ContinueWatchingRow.tsx` de `w-12 h-12` (`48px`, ícone `w-5 h-5`) para `w-7 h-7 sm:w-8 sm:h-8` (`28px` mobile / `32px` desktop, ícone `w-3 h-3 sm:w-3.5 sm:h-3.5`), mantendo o botão centralizado sem sobrepor o título do conteúdo.
+- **Verificação:** `.\node_modules\.bin\tsc.cmd --noEmit` (**exit 0**).
+
+## 14/11/2026 — Comandos de Voz Explícitos para Tela Cheia (`FULLSCREEN` / `EXIT_FULLSCREEN`) e Mini-Player (`MINI_PLAYER` / `EXIT_MINI_PLAYER`)
+- **Problema corrigido:** O comando `"Infinity tela cheia"` usava toggle simples (invertendo se já estivesse em tela cheia) e colidia com `"sair da tela cheia"`, `"aumentar a tela"` (`VOLUME_UP`), `"diminuir a tela"` (`VOLUME_DOWN`) e `"voltar para o cartão"` (`SEEK_REWIND`); além disso, não existiam comandos idempotentes para entrar/sair do Mini-Player por voz.
+- **Mudanças aplicadas:**
+  - `src/utils/voiceCommandParser.ts`: adicionadas as ações `EXIT_FULLSCREEN`, `MINI_PLAYER` e `EXIT_MINI_PLAYER`, avaliadas antes de `PLAY`, `VOLUME_UP`/`VOLUME_DOWN` e `SEEK_REWIND` (cobrindo `"Infinity tela cheia"`, `"ir para tela cheia"`, `"Infinity mini player"`, `"miniplayer"`, `"mini play"`, `"janela flutuante"`, `"pip"`, `"sair da tela cheia"`, `"sair do mini player"`, `"restaurar player"`, etc.).
+  - `src/components/VideoPlayerModal.tsx` + `src/components/NetflixPlayerSkin.tsx`: extraídos `setPlayerExpanded(expand)` / `onSetFullscreen` e `setMiniPlayerEnabled(enable)` / `onSetMiniPlayer` + `applyMiniPlayerState` (inclui `PiP.enter()` no Android Capacitor e Mini-Player flutuante no navegador).
+  - `src/hooks/usePlayerVoiceAssistant.ts`: atualizada a dica de escuta para destacar `"Tela cheia"`.
+  - `tests/player-voice-assistant.test.cjs`: adicionados testes para `FULLSCREEN`, `EXIT_FULLSCREEN`, `MINI_PLAYER`, `EXIT_MINI_PLAYER`, ausência de colisões e integração `NetflixPlayerSkin` ↔ `VideoPlayerModal`.
+- **Verificação pós-edição final:** `.\node_modules\.bin\tsc.cmd --noEmit` (**exit 0**) e `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs` (**21 passed, 0 failed**).
+
 ## 14/11/2026 — Correção do Highlight Laranja e Exibição de Episódios Liberados no Catálogo (`Dexter T2:E3`)
 - **Causa raiz confirmada:** No player aberto em *Dexter: Ressurreição* (`tmdbId=259909`, `T2:E3 "Viva Livre e Morra"`), o TMDB informava `air_date: "2026-11-15"` (dia seguinte no horário local) enquanto o catálogo (`/api/catalog-season?tmdb_id=259909&season=2`) já confirmava `[1, 2, 3]` e `/api/check-season?...&count=10` expirava (>8s) tentando sondar episódios futuros. Com isso, `filteredSeasonEpisodes` ocultava o Ep 3 (`[1 ✓, 2]`), deixando o pill `3` ausente (nenhum botão ficava laranja para o episódio ativo), `Marcar T2 1/2` errado e `Próximo >` bloqueado.
 - **Mudanças aplicadas:**

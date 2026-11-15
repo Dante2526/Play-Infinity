@@ -2985,10 +2985,8 @@ export function VideoPlayerModal({
     }
   };
 
-  const handleFullScreen = async () => {
-    const isCurrentlyFull = isExpanded || !!document.fullscreenElement;
-
-    if (isCurrentlyFull) {
+  const setPlayerExpanded = async (expand: boolean) => {
+    if (!expand) {
       setIsWidescreen(false);
       setIsRotated(false);
       if (document.fullscreenElement) {
@@ -3001,87 +2999,99 @@ export function VideoPlayerModal({
           (screen.orientation as any).unlock();
         } catch (e) { console.warn("Silenced error:", e); }
       }
-    } else {
-      setIsWidescreen(true);
+      return;
+    }
 
-      // 1. Tenta tela cheia nativa do navegador IMEDIATAMENTE no clique síncrono com navigationUI: 'hide'
-      const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
-      const elem = document.documentElement;
-      const requestFS =
-        elem.requestFullscreen ||
-        (elem as any).webkitRequestFullscreen ||
-        (elem as any).mozRequestFullScreen ||
-        (elem as any).msRequestFullscreen;
+    setIsMiniPlayer(false);
+    setIsWidescreen(true);
 
-      if (requestFS && !isSmartTV) {
+    // 1. Tenta tela cheia nativa do navegador com navigationUI: 'hide'
+    const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
+    const elem = document.documentElement;
+    const requestFS =
+      elem.requestFullscreen ||
+      (elem as any).webkitRequestFullscreen ||
+      (elem as any).mozRequestFullScreen ||
+      (elem as any).msRequestFullscreen;
+
+    if (requestFS && !isSmartTV && !document.fullscreenElement) {
+      try {
+        await requestFS.call(elem, { navigationUI: "hide" });
+      } catch {
         try {
-          await requestFS.call(elem, { navigationUI: "hide" });
-        } catch {
-          try {
-            await requestFS.call(elem);
-          } catch (err) {
-            console.warn("Fullscreen request fallback:", err);
-          }
-        }
-      }
-
-      // 3. Se a tela estiver na vertical, ativa o fallback de rotação CSS
-      const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-      if (isPortrait) {
-        setIsRotated(true);
-      } else {
-        setIsRotated(false);
-      }
-
-      // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
-      if (Capacitor.isNativePlatform()) {
-        ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
-          setIsRotated(false);
-        }).catch(() => { });
-      } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
-        try {
-          const lockPromise = (screen.orientation as any).lock("landscape");
-          if (lockPromise && typeof lockPromise.then === "function") {
-            lockPromise.then(() => {
-              setIsRotated(false);
-            }).catch(() => { });
-          }
+          await requestFS.call(elem);
         } catch (err) {
-          // Fallback
+          console.warn("Fullscreen request fallback:", err);
         }
       }
     }
+
+    // 3. Se a tela estiver na vertical, ativa o fallback de rotação CSS
+    const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+    if (isPortrait) {
+      setIsRotated(true);
+    } else {
+      setIsRotated(false);
+    }
+
+    // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
+    if (Capacitor.isNativePlatform()) {
+      ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
+        setIsRotated(false);
+      }).catch(() => { });
+    } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
+      try {
+        const lockPromise = (screen.orientation as any).lock("landscape");
+        if (lockPromise && typeof lockPromise.then === "function") {
+          lockPromise.then(() => {
+            setIsRotated(false);
+          }).catch(() => { });
+        }
+      } catch (err) {
+        // Fallback
+      }
+    }
+  };
+
+  const handleFullScreen = () => {
+    const isCurrentlyFull = isExpanded || !!document.fullscreenElement;
+    void setPlayerExpanded(!isCurrentlyFull);
   };
 
   const handleCastRequest = () => {
     setShowCastModal(true);
   };
 
-  const handleToggleMiniPlayer = () => {
-    if (isMiniPlayer) {
+  const setMiniPlayerEnabled = (enable: boolean) => {
+    if (!enable) {
       // Ao sair do modo mini-player para crescer de novo, vai DIRETO para tela cheia
       setIsMiniPlayer(false);
-      handleFullScreen();
-    } else {
-      if (isExpanded) {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => { });
-        }
-        setIsWidescreen(false);
-        setIsRotated(false);
-      }
-      if (miniPosition) {
-        const width = miniContainerRef.current?.offsetWidth || 340;
-        const height = miniContainerRef.current?.offsetHeight || 220;
-        const maxX = Math.max(8, window.innerWidth - width - 8);
-        const maxY = Math.max(8, window.innerHeight - height - 8);
-        setMiniPosition({
-          x: Math.max(8, Math.min(maxX, miniPosition.x)),
-          y: Math.max(8, Math.min(maxY, miniPosition.y)),
-        });
-      }
-      setIsMiniPlayer(true);
+      void setPlayerExpanded(true);
+      return;
     }
+
+    if (isExpanded) {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => { });
+      }
+      setIsWidescreen(false);
+      setIsRotated(false);
+    }
+    if (miniPosition) {
+      const width = miniContainerRef.current?.offsetWidth || 340;
+      const height = miniContainerRef.current?.offsetHeight || 220;
+      const maxX = Math.max(8, window.innerWidth - width - 8);
+      const maxY = Math.max(8, window.innerHeight - height - 8);
+      setMiniPosition({
+        x: Math.max(8, Math.min(maxX, miniPosition.x)),
+        y: Math.max(8, Math.min(maxY, miniPosition.y)),
+      });
+    }
+    setIsMiniPlayer(true);
+  };
+
+  const handleToggleMiniPlayer = () => {
+    setMiniPlayerEnabled(!isMiniPlayer);
   };
 
   const handleToggleRotate = () => {
@@ -3626,6 +3636,7 @@ export function VideoPlayerModal({
                 isIntroActive={isIntroActive}
                 isFullscreen={isExpanded}
                 onToggleFullscreen={handleFullScreen}
+                onSetFullscreen={(expand) => { void setPlayerExpanded(expand); }}
                 iframeRef={iframeRef}
                 isRotated={isRotated}
                 onToggleRotate={handleToggleRotate}
@@ -3638,6 +3649,7 @@ export function VideoPlayerModal({
                 aspectRatio={aspectRatio}
                 onToggleAspectRatio={handleToggleAspectRatio}
                 onTogglePiP={handleToggleMiniPlayer}
+                onSetMiniPlayer={setMiniPlayerEnabled}
                 isMiniPlayer={isMiniPlayer}
                 passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
                 subtitleUrl={subtitleUrl}

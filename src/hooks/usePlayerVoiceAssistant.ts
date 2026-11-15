@@ -966,7 +966,7 @@ export function usePlayerVoiceAssistant({
     lastResultAtRef.current = Date.now();
 
     activateAwake(6000);
-    showFeedback('🎤 Ouvindo comando... (Ex: "Pausar", "Pular abertura")', 'listening', 5500);
+    showFeedback('🎤 Ouvindo comando... (Ex: "Tela cheia", "Pausar", "Pular abertura")', 'listening', 5500);
 
     // Preserva sessão já ouvindo ou inicialização já em curso sem abrir janela surda
     if (recognitionRef.current && isListeningRef.current) {

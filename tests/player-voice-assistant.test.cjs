@@ -186,3 +186,68 @@ test('recognizes vocal pitch variations (deep/high/soft), ignores movie dialogue
   assert.equal(noiseBest.wakeDetected, false, 'Secondary phonetic noise without command must NOT wake');
   assert.equal(noiseBest.command, null);
 });
+
+test('handles explicit FULLSCREEN (card -> fullscreen) and EXIT_FULLSCREEN without volume/rewind collisions', async () => {
+  const { parseVoiceCommand } = await compileParser();
+
+  // Entrar em tela cheia a partir do cartão (idempotente)
+  assert.equal(parseVoiceCommand('Infinity tela cheia')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinito tela cheia')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity ir para tela cheia')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity entrar em tela cheia')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity colocar em tela cheia')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity aumentar a tela')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity tela grande')?.action, 'FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity modo cinema')?.action, 'FULLSCREEN');
+
+  // Sair da tela cheia sem colidir com "tela cheia", "voltar" (SEEK_REWIND) ou "diminuir" (VOLUME_DOWN)
+  assert.equal(parseVoiceCommand('Infinity sair da tela cheia')?.action, 'EXIT_FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity fechar tela cheia')?.action, 'EXIT_FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity minimizar')?.action, 'EXIT_FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity voltar para o cartao')?.action, 'EXIT_FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity diminuir a tela')?.action, 'EXIT_FULLSCREEN');
+  assert.equal(parseVoiceCommand('Infinity tela normal')?.action, 'EXIT_FULLSCREEN');
+
+  // Garante que comandos de volume e retrocesso originais seguem intactos
+  assert.equal(parseVoiceCommand('Infinity aumentar volume')?.action, 'VOLUME_UP');
+  assert.equal(parseVoiceCommand('Infinity diminuir volume')?.action, 'VOLUME_DOWN');
+  assert.equal(parseVoiceCommand('Infinity voltar 10')?.action, 'SEEK_REWIND');
+
+  const root = path.resolve(__dirname, '..');
+  const skinSrc = fs.readFileSync(path.join(root, 'src/components/NetflixPlayerSkin.tsx'), 'utf8');
+  const modalSrc = fs.readFileSync(path.join(root, 'src/components/VideoPlayerModal.tsx'), 'utf8');
+  assert.match(skinSrc, /case 'EXIT_FULLSCREEN':/);
+  assert.match(skinSrc, /onSetFullscreen/);
+  assert.match(modalSrc, /onSetFullscreen=\{\(expand\) => \{ void setPlayerExpanded\(expand\); \}\}/);
+});
+
+test('handles MINI_PLAYER and EXIT_MINI_PLAYER without colliding with PLAY or SEEK_REWIND', async () => {
+  const { parseVoiceCommand } = await compileParser();
+
+  // Entrar em Mini-Player (inclui variações fonéticas PT-BR do STT como "mini play")
+  assert.equal(parseVoiceCommand('Infinity mini player')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinito mini player')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity miniplayer')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity mini play')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity janela flutuante')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity pip')?.action, 'MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity picture in picture')?.action, 'MINI_PLAYER');
+
+  // Sair do Mini-Player sem cair em MINI_PLAYER ou SEEK_REWIND
+  assert.equal(parseVoiceCommand('Infinity sair do mini player')?.action, 'EXIT_MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity fechar mini player')?.action, 'EXIT_MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity restaurar player')?.action, 'EXIT_MINI_PLAYER');
+  assert.equal(parseVoiceCommand('Infinity voltar do mini player')?.action, 'EXIT_MINI_PLAYER');
+
+  // "play" isolado e "voltar 10" continuam funcionando normalmente
+  assert.equal(parseVoiceCommand('Infinity play')?.action, 'PLAY');
+  assert.equal(parseVoiceCommand('Infinity dar play')?.action, 'PLAY');
+  assert.equal(parseVoiceCommand('Infinity voltar 10')?.action, 'SEEK_REWIND');
+
+  const root = path.resolve(__dirname, '..');
+  const skinSrc = fs.readFileSync(path.join(root, 'src/components/NetflixPlayerSkin.tsx'), 'utf8');
+  const modalSrc = fs.readFileSync(path.join(root, 'src/components/VideoPlayerModal.tsx'), 'utf8');
+  assert.match(skinSrc, /case 'MINI_PLAYER':/);
+  assert.match(skinSrc, /case 'EXIT_MINI_PLAYER':/);
+  assert.match(modalSrc, /onSetMiniPlayer=\{setMiniPlayerEnabled\}/);
+});

@@ -78,6 +78,7 @@ interface NetflixPlayerSkinProps {
   isIntroActive: boolean;
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
+  onSetFullscreen?: (expand: boolean) => void;
   activeServerKey?: string;
   onServerChange?: (serverKey: string) => void;
   serversList?: Array<{
@@ -102,6 +103,7 @@ interface NetflixPlayerSkinProps {
   aspectRatio?: 'contain' | 'cover' | 'stretch';
   onToggleAspectRatio?: () => void;
   onTogglePiP?: () => void;
+  onSetMiniPlayer?: (enable: boolean) => void;
   isMiniPlayer?: boolean;
   passThroughClicks?: boolean;
   isAnime?: boolean;
@@ -158,6 +160,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   isIntroActive,
   isFullscreen,
   onToggleFullscreen,
+  onSetFullscreen,
   iframeRef,
   onBrightnessChange,
   isRotated = false,
@@ -174,6 +177,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   aspectRatio = 'contain',
   onToggleAspectRatio,
   onTogglePiP,
+  onSetMiniPlayer,
   isMiniPlayer = false,
   passThroughClicks = false,
   isAnime = false,
@@ -585,15 +589,29 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   };
 
   // Picture-in-Picture: Prioriza o PiP nativo do Android quando no APK; fallback para in-app no navegador
-  const handleTogglePiP = () => {
-    if (Capacitor.isNativePlatform()) {
-      PiP.enter()
-        .catch(() => {
-          if (onTogglePiP) onTogglePiP();
+  const applyMiniPlayerState = useCallback((enable: boolean) => {
+    if (enable) {
+      if (isMiniPlayer) return;
+      if (Capacitor.isNativePlatform()) {
+        PiP.enter().catch(() => {
+          if (onSetMiniPlayer) onSetMiniPlayer(true);
+          else onTogglePiP?.();
         });
-    } else if (onTogglePiP) {
-      onTogglePiP();
+      } else if (onSetMiniPlayer) {
+        onSetMiniPlayer(true);
+      } else {
+        onTogglePiP?.();
+      }
+      return;
     }
+
+    if (!isMiniPlayer) return;
+    if (onSetMiniPlayer) onSetMiniPlayer(false);
+    else onTogglePiP?.();
+  }, [isMiniPlayer, onSetMiniPlayer, onTogglePiP]);
+
+  const handleTogglePiP = () => {
+    applyMiniPlayerState(!isMiniPlayer);
   };
 
   // Salvamento contínuo do progresso para a fileira "Continue Assistindo"
@@ -768,7 +786,24 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         sendCommand({ type: "SEEK_RELATIVE", seconds: -10 });
         break;
       case 'FULLSCREEN':
-        onToggleFullscreen();
+        if (onSetFullscreen) {
+          onSetFullscreen(true);
+        } else if (!isFullscreen) {
+          onToggleFullscreen();
+        }
+        break;
+      case 'EXIT_FULLSCREEN':
+        if (onSetFullscreen) {
+          onSetFullscreen(false);
+        } else if (isFullscreen) {
+          onToggleFullscreen();
+        }
+        break;
+      case 'MINI_PLAYER':
+        applyMiniPlayerState(true);
+        break;
+      case 'EXIT_MINI_PLAYER':
+        applyMiniPlayerState(false);
         break;
       case 'ASPECT_RATIO':
         onToggleAspectRatio?.();
@@ -776,7 +811,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     }
 
     resumeIfPausedByWake();
-  }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onToggleAspectRatio, resumeIfPausedByWake]);
+  }, [sendCommand, isSeries, onEpisodeChange, episode, onSkipIntro, onToggleFullscreen, onSetFullscreen, isFullscreen, applyMiniPlayerState, onToggleAspectRatio, resumeIfPausedByWake]);
 
   const handleWakeWord = useCallback(() => {
     // Não pausa se o vídeo já está pausado, ou se acabou de dar PLAY por voz (proteção anti-eco/duplicata de navegadores mobile)
