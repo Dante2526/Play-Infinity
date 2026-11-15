@@ -13,7 +13,7 @@ export type { NextMovieInfo } from "./NetflixPlayerSkin";
 import { CastModal } from "./CastModal";
 import { checkIsCam } from "../utils/mediaUtils";
 import { detectConnectionQuality } from "../services/networkQuality";
-import { isExternalIframePlayer, preferredPlaybackServer, isEpisodeUpcoming } from "../utils/playerIntegration";
+import { isExternalIframePlayer, preferredPlaybackServer, isEpisodeUpcoming, normalizeVisibleServerKey, filterVisibleServers } from "../utils/playerIntegration";
 import { isCurrentPlayerMessageSource, waitForPlayerLookup } from "../utils/playerFrameMessages";
 import {
   isEpisodeWatched,
@@ -799,35 +799,68 @@ export function VideoPlayerModal({
   // NOVO: total de episódios do Nixplay (pra override do TMDB quando Nixplay tem mais)
   const [nixplayTotalEpisodes, setNixplayTotalEpisodes] = useState<number | null>(null);
 
-  // Legenda PT-BR: URL do arquivo VTT gerado pelo backend
+  // Legenda PT-BR: URL do arquivo VTT gerado pelo backend e status para feedback da UI
   const [subtitleUrl, setSubtitleUrl] = useState<string | null>(null);
+  const [subtitleStatus, setSubtitleStatus] = useState<'idle' | 'loading' | 'ready' | 'unavailable'>('idle');
+  const [subtitleRetrySeq, setSubtitleRetrySeq] = useState(0);
+  const subtitleRefreshRef = useRef(false);
 
-  const fetchSubtitleUrl = useCallback(async (currentSeason: number, currentEpisode: number) => {
-    if (!tmdbId) return;
+  const handleRetrySubtitle = useCallback(() => {
+    subtitleRefreshRef.current = true;
+    setSubtitleRetrySeq((n) => n + 1);
+  }, []);
+
+  // Busca legenda PT-BR do backend sempre que o modal abre, o episódio muda ou há retry manual
+  useEffect(() => {
+    const targetTmdbId = effectiveMovieId || tmdbId || (resolvedId && /^\d+$/.test(String(resolvedId)) ? Number(resolvedId) : null);
+    if (!isOpen || !targetTmdbId) {
+      setSubtitleUrl(null);
+      setSubtitleStatus('idle');
+      return;
+    }
+
+    const forceRefresh = subtitleRefreshRef.current;
+    subtitleRefreshRef.current = false;
+    const controller = new AbortController();
+    let cancelled = false;
+
+    const apiBase = getApiBaseUrl();
     const type = isSeries ? "tv" : "movie";
     const params = new URLSearchParams({
-      tmdb: String(effectiveMovieId || tmdbId),
+      tmdb: String(targetTmdbId),
       type,
       lang: "pt-BR",
-      ...(isSeries ? { season: String(currentSeason), episode: String(currentEpisode) } : {})
+      ...(isSeries ? { season: String(season), episode: String(episode) } : {}),
+      ...(forceRefresh ? { refresh: "1" } : {})
     });
-    try {
-      const res = await fetch(`/api/subtitles?${params}`);
-      if (!res.ok) { setSubtitleUrl(null); return; }
-      const data = await res.json();
-      if (data?.url) setSubtitleUrl(data.url);
-      else setSubtitleUrl(null);
-    } catch {
-      setSubtitleUrl(null);
-    }
-  }, [tmdbId, isSeries, effectiveMovieId]);
 
-  // Busca legenda PT-BR do backend sempre que o modal abre ou o episódio muda
-  useEffect(() => {
-    if (!isOpen || !tmdbId) return;
     setSubtitleUrl(null);
-    fetchSubtitleUrl(season, episode);
-  }, [isOpen, tmdbId, season, episode, fetchSubtitleUrl]);
+    setSubtitleStatus('loading');
+
+    fetch(`${apiBase}/api/subtitles?${params}`, { signal: controller.signal })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.url && typeof data.url === 'string') {
+          const fullUrl = data.url.startsWith('/') ? `${apiBase}${data.url}` : data.url;
+          setSubtitleUrl(fullUrl);
+          setSubtitleStatus('ready');
+        } else {
+          setSubtitleUrl(null);
+          setSubtitleStatus('unavailable');
+        }
+      })
+      .catch((err) => {
+        if (cancelled || err?.name === 'AbortError') return;
+        setSubtitleUrl(null);
+        setSubtitleStatus('unavailable');
+      });
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [isOpen, tmdbId, effectiveMovieId, resolvedId, isSeries, season, episode, subtitleRetrySeq]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -1289,42 +1322,20 @@ export function VideoPlayerModal({
   // Servidores oficiais homologados: MixDrop PRIMÁRIO (MP4 direto, mais robusto contra A/V desync)
   // seguido por WatchPlayer/VIP Player/Nixplay como fallbacks.
   // v2: trocou ordem — antes era WatchPlayer primeiro (HLS propenso a freeze), agora MixDrop primeiro.
-  const servers = useMemo(() => {
-    let list: Array<{
-      key: string;
-      label: string;
-      badge?: string;
-      buildUrl: (id: string, s?: number, e?: number) => string;
-      isMatch: (u: string) => boolean;
-      name: string;
-      internalOnly?: boolean;
-    }> = [];
+  type PlayerServerItem = {
+    key: string;
+    label: string;
+    badge?: string;
+    buildUrl: (id: string, s?: number, e?: number) => string;
+    isMatch: (u: string) => boolean;
+    name: string;
+    internalOnly?: boolean;
+  };
+  const servers: PlayerServerItem[] = useMemo((): PlayerServerItem[] => {
+    let list: PlayerServerItem[] = [];
 
     if (isSeries) {
       list = [
-        {
-          key: "srv_streamtape",
-          label: "StreamTape HD",
-          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string, s?: number, e?: number) => {
-            const epS = s ?? season ?? 1;
-            const epE = e ?? episode ?? 1;
-            const lookupId = effectiveMovieId || tmdbId || id;
-            const targetKey = `tv:${lookupId}:${epS}:${epE}`;
-            const fidVal = streamtapeFileIdsRef.current[targetKey];
-            const isSameEp = epS === season && epE === episode;
-            const fid = (fidVal || (isSameEp ? streamtapeFileId : null)) ? `&fileId=${encodeURIComponent(fidVal || streamtapeFileId || "")}` : "";
-            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
-            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            const tParam = (isSameEp && lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${id}&s=${epS}&e=${epE}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
-          },
-          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
-          name: "StreamTape HD",
-          // Servidor de fallback interno: nunca aparece na UI do usuário
-          // (acionado automaticamente quando o servidor primário falha).
-          internalOnly: true
-        },
         {
           key: "srv_mixdrop",
           label: "MixDrop",
@@ -1388,27 +1399,33 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
-        }
-      ];
-    } else {
-      list = [
+        },
         {
           key: "srv_streamtape",
           label: "StreamTape HD",
           badge: "StreamTape • MP4 direto • Skin Netflix 100%",
-          buildUrl: (id: string) => {
-            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+          buildUrl: (id: string, s?: number, e?: number) => {
+            const epS = s ?? season ?? 1;
+            const epE = e ?? episode ?? 1;
+            const lookupId = effectiveMovieId || tmdbId || id;
+            const targetKey = `tv:${lookupId}:${epS}:${epE}`;
+            const fidVal = streamtapeFileIdsRef.current[targetKey];
+            const isSameEp = epS === season && epE === episode;
+            const fid = (fidVal || (isSameEp ? streamtapeFileId : null)) ? `&fileId=${encodeURIComponent(fidVal || streamtapeFileId || "")}` : "";
             const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
             const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
-            const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
-            return `/api/streamtape-proxy-iframe?id=${effectiveMovieId || tmdbId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
+            const tParam = (isSameEp && lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${id}&s=${epS}&e=${epE}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
           },
           isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
           name: "StreamTape HD",
           // Servidor de fallback interno: nunca aparece na UI do usuário
           // (acionado automaticamente quando o servidor primário falha).
           internalOnly: true
-        },
+        }
+      ];
+    } else {
+      list = [
         {
           key: "srv_mixdrop",
           label: "MixDrop",
@@ -1459,6 +1476,23 @@ export function VideoPlayerModal({
           },
           isMatch: (u: string) => u.includes("nixplay.lat"),
           name: "Nixplay"
+        },
+        {
+          key: "srv_streamtape",
+          label: "StreamTape HD",
+          badge: "StreamTape • MP4 direto • Skin Netflix 100%",
+          buildUrl: (id: string) => {
+            const fid = streamtapeFileId ? `&fileId=${encodeURIComponent(streamtapeFileId)}` : "";
+            const cleanTitle = title ? title.split(/\s*-\s*(?:T\d|Temporada|\d+ª\s*Temp)/i)[0].trim() : "";
+            const nameParam = cleanTitle ? `&name=${encodeURIComponent(cleanTitle)}` : "";
+            const tParam = (lastKnownTimeRef.current && lastKnownTimeRef.current > 2) ? `&t=${Math.floor(lastKnownTimeRef.current)}` : "";
+            return `/api/streamtape-proxy-iframe?id=${effectiveMovieId || tmdbId || id}${fid}${nameParam}${tParam}&cb=${Date.now()}`;
+          },
+          isMatch: (u: string) => u.includes("/api/streamtape-proxy-iframe") || u.includes("streamtape"),
+          name: "StreamTape HD",
+          // Servidor de fallback interno: nunca aparece na UI do usuário
+          // (acionado automaticamente quando o servidor primário falha).
+          internalOnly: true
         }
       ];
     }
@@ -1977,9 +2011,7 @@ export function VideoPlayerModal({
 
         const eligibleServerList = serversRef.current.filter(s => !isBlockedByAdmin(s.key, activeBlockedKeys));
         const eligibleKeys = eligibleServerList.map(s => s.key);
-        const safeInitialServerKey = initialServerKey && !isBlockedByAdmin(initialServerKey, activeBlockedKeys)
-          ? initialServerKey
-          : undefined;
+        const safeInitialServerKey = normalizeVisibleServerKey(initialServerKey, eligibleServerList);
 
         const isMixdropTarget =
           (defaultUrl && (defaultUrl.includes("mixdrop.") || defaultUrl.includes("mxdrop.") || defaultUrl.includes("/api/md-stream"))) ||
@@ -1987,13 +2019,13 @@ export function VideoPlayerModal({
           imdbId === "tt22084616" ||
           (title && title.toUpperCase().includes("HOMEM-ARANHA: UM NOVO DIA"));
 
-        let prefServer = null;
+        let prefServer: string | undefined = undefined;
         if (isSeries && tmdbId) {
           try {
-            prefServer = localStorage.getItem(`preferred_server_${tmdbId}`);
-            if (prefServer && (!eligibleServerList.find(s => s.key === prefServer) || isBlockedByAdmin(prefServer, activeBlockedKeys))) {
-              prefServer = null;
-            }
+            prefServer = normalizeVisibleServerKey(
+              localStorage.getItem(`preferred_server_${tmdbId}`),
+              eligibleServerList
+            );
           } catch (e) { }
         }
 
@@ -2244,9 +2276,10 @@ export function VideoPlayerModal({
             // Keep exhausted sources for this content session. A short-lived
             // play signal must not reopen the failed fallback chain.
 
-            if (isSeries && tmdbId && !wasFallback) {
+            const persistableServerKey = normalizeVisibleServerKey(selectedServerKey, serversRef.current);
+            if (isSeries && tmdbId && !wasFallback && persistableServerKey) {
               try {
-                localStorage.setItem(`preferred_server_${tmdbId}`, selectedServerKey);
+                localStorage.setItem(`preferred_server_${tmdbId}`, persistableServerKey);
               } catch (e) { }
             }
 
@@ -3574,7 +3607,7 @@ export function VideoPlayerModal({
                 availableSeasons={availableSeasons}
                 activeServerKey={selectedServerKey}
                 onServerChange={handleServerSwitch}
-                serversList={servers.filter(server => !server.internalOnly).map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
+                serversList={filterVisibleServers(servers, selectedServerKey).map(server => ({ ...server, label: server.label + (serverHealth.identity === healthIdentity && playbackHealthState(serverHealth.servers, server.key) === 'unavailable' ? ' • Indisponível' : '') }))}
                 onSeasonChange={handleSeasonChange}
                 episodesList={filteredSeasonEpisodes.length > 0 ? filteredSeasonEpisodes : seasonData?.episodes}
                 onClose={handleCloseModal}
@@ -3600,6 +3633,8 @@ export function VideoPlayerModal({
                 isMiniPlayer={isMiniPlayer}
                 passThroughClicks={isExternalPlayer || !playerSkinReady || !iframeVisible}
                 subtitleUrl={subtitleUrl}
+                subtitleStatus={subtitleStatus}
+                onRetrySubtitle={handleRetrySubtitle}
                 nextMovieInfo={nextMovieInfo}
                 onPlayNextMovie={handlePlayNextMovie}
               />

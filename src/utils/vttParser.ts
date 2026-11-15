@@ -43,7 +43,10 @@ function timeToSeconds(t: string): number {
  */
 export function parseVtt(vttText: string): VttCue[] {
   const cues: VttCue[] = [];
-  const text = vttText.replace(/^\uFEFF/, "").replace(/^WEBVTT[^\n]*\n/, "");
+  const text = vttText
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n|\r/g, "\n")
+    .replace(/^WEBVTT[^\n]*\n/, "");
   const blocks = text.split(/\n\n+/);
   for (const block of blocks) {
     const lines = block.trim().split("\n");
@@ -53,13 +56,46 @@ export function parseVtt(vttText: string): VttCue[] {
     if (!match) continue;
     const start = timeToSeconds(match[1].replace(",", "."));
     const end = timeToSeconds(match[2].replace(",", "."));
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) continue;
     const textLines = lines.slice(arrowIdx + 1).filter(l => !l.startsWith("NOTE") && l.trim() !== "");
     if (textLines.length === 0) continue;
     // Stripa TODAS as tags HTML <...> (superset do regex antigo que so pegava
     // timestamps VTT <\d{2}:\d{2}[^>]*>). Preven XSS via legendas externas
     // do SubtitleCat injetadas no DOM via dangerouslySetInnerHTML.
-    const rawText = textLines.join("\n").replace(/<[^>]+>/g, "");
+    const rawText = textLines
+      .join("\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\{\\[^}]+\}/g, "")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;|&apos;/gi, "'")
+      .replace(/&amp;/gi, "&")
+      .trim();
+    if (!rawText) continue;
     cues.push({ start, end, text: rawText });
   }
   return cues;
+}
+
+/**
+ * Retorna o texto das falas ativas no instante `currentTime + offsetSeconds`.
+ * Offset positivo adianta a legenda (exibe mais cedo quando a voz vem antes);
+ * offset negativo atrasa a legenda. Cues simultâneos são combinados.
+ */
+export function findActiveSubtitleText(
+  cues: readonly VttCue[],
+  currentTime: number,
+  offsetSeconds = 0,
+): string | null {
+  if (!cues.length || !Number.isFinite(currentTime)) return null;
+  const lookupTime = currentTime + (Number.isFinite(offsetSeconds) ? offsetSeconds : 0);
+  const seen = new Set<string>();
+  const activeLines: string[] = [];
+  for (const cue of cues) {
+    if (lookupTime >= cue.start && lookupTime <= cue.end && !seen.has(cue.text)) {
+      seen.add(cue.text);
+      activeLines.push(cue.text);
+    }
+  }
+  return activeLines.length > 0 ? activeLines.join("\n") : null;
 }

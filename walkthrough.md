@@ -1,3 +1,19 @@
+## 14/11/2026 — Correção Completa do Pipeline de Legendas (Sincronia, Capacitor, Parser VTT e Scraper SubtitleCat)
+- **Bugs corrigidos:**
+  - `src/utils/vttParser.ts` + `src/components/NetflixPlayerSkin.tsx`: invertida a direção corrigida de sincronia via `findActiveSubtitleText(cues, currentTime, offset)` (`+0.5s Adiantar` agora realmente adianta e `-0.5s Atrasar` realmente atrasa), combinação de falas simultâneas, reset automático de `subtitleOffset` ao trocar episódio, botão `Zerar`, checagem de `r.ok` + `AbortController`, suporte a `\r\n`, limpeza de tags ASS (`{\an8}`) e entidades HTML, além de feedback na UI (`Buscando...`, `PT-BR pronta`, `Indisponível` + `Tentar buscar novamente`).
+  - `src/components/VideoPlayerModal.tsx`: uso de `getApiBaseUrl()` em `/api/subtitles` e `subtitleUrl` (compatibilidade total com APK Capacitor), `AbortController` contra race condition em troca rápida de episódio e estado `subtitleStatus` / `handleRetrySubtitle`.
+  - `server/utils/subtitleHelpers.ts` + `server/routes/subtitlesRoutes.ts`: decodificação UTF-8 com fallback `windows-1252` (sem `` em acentos PT-BR), `srtToVtt` tolerante a BOM/`\r\n`/1-dígito de hora/ponto, queries de busca com fallback para título inglês em obras não-latinas, `rankSubtitleCatResults` filtrando série/episódio exatos, priorização de `-pt-BR.srt` antes de `-pt.srt`, cache negativo em memória (10 min, retornando HTTP 200 `{ found: false, url: null }` sem poluir console com 404), e URL de cache portável `/api/subtitle-file?key=...` (mantendo compatibilidade `?path=...` e guardas CWE-22).
+- **Verificação pós-edição final:** `npx tsc --noEmit` (exit 0) e `node --test tests/subtitles-xss-validation.test.cjs tests/player-integration.test.cjs tests/playback-startup.test.cjs tests/playback-health.test.cjs` (**75 passed, 0 failed**).
+
+## 14/11/2026 — Correção do Seletor `Áudio + Servidor` Sem Item Selecionado & Prioridade do `StreamTape`
+- **Causa raiz confirmada:** O servidor interno `srv_streamtape` (`internalOnly: true`) estava listado antes de `srv_mixdrop` e ganhava o startup silencioso em títulos como *Dexter: Ressurreição T2:E3*, enquanto `VideoPlayerModal.tsx` removia todos os servidores `internalOnly` de `serversList`. Com isso, `activeServerKey === "srv_streamtape"` não batia com nenhum botão visível e o console ainda mostrava logs do lookup paralelo do MixDrop (`lookupMixdropFileId`).
+- **Mudanças aplicadas:**
+  - `src/utils/playerIntegration.ts`: adicionados os helpers `normalizeVisibleServerKey` (ignora `internalOnly` e normaliza legado `srv_saimo` para `srv_saimo_hls`/`srv_saimo_mp4`) e `filterVisibleServers` (mantém `internalOnly` oculto, exceto quando ativamente em reprodução).
+  - `src/components/VideoPlayerModal.tsx`: reposicionado `srv_streamtape` após `srv_nixplay` nas listas de séries e filmes; aplicados `normalizeVisibleServerKey` no carregamento (`initialServerKey`, `preferred_server_*`) e salvamento de `preferred_server_*`; aplicado `filterVisibleServers` em `serversList` e tipagem explícita em `servers` (`PlayerServerItem[]`).
+  - `src/components/NetflixPlayerSkin.tsx`: adicionado `selectedServerBtnRef` + `scrollIntoView` ao abrir o modal `Áudio + Servidor`, além de alvo de toque `min-h-[44px]` e `min-w-0`/`truncate` nos botões de servidor.
+  - `tests/player-integration.test.cjs`: adicionados 3 testes de regressão cobrindo `normalizeVisibleServerKey`, `filterVisibleServers`, ordem dos servidores e scroll do seletor.
+- **Verificação pós-edição final:** `npx tsc --noEmit` (exit 0) e `node --test tests/player-integration.test.cjs tests/playback-startup.test.cjs tests/playback-health.test.cjs` (**39 passed, 0 failed**).
+
 ## 14/11/2026 — Correção da Transição de Fim de Temporada (`Você` S1E10 ➔ T2:E1 em vez de Episódio 11 Fantasma)
 
 - **Causa Raiz (`Carregando Episódio 11...` na série *Você*, `tmdbId=78191`, Temporada 1):**

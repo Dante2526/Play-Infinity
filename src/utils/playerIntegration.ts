@@ -39,6 +39,43 @@ export function preferredPlaybackServer(keys: string[], explicit?: string | null
   return [explicit,saved,'srv_byse',...keys].find(key=>!!key&&keys.includes(key)) || 'srv_byse';
 }
 
+export interface SelectableServerItem {
+  key: string;
+  internalOnly?: boolean;
+}
+
+/**
+ * Normaliza chave de servidor vinda de preferências salvas / Continuar Assistindo,
+ * convertendo chave legada (`srv_saimo`) para variante visível e ignorando
+ * servidores marcados como `internalOnly` (ex: fallback interno StreamTape).
+ */
+export function normalizeVisibleServerKey<T extends SelectableServerItem>(
+  key: string | null | undefined,
+  servers: readonly T[],
+): string | undefined {
+  if (!key) return undefined;
+  const candidate =
+    key === 'srv_saimo'
+      ? (servers.find((s) => s.key === 'srv_saimo_hls')?.key
+        ?? servers.find((s) => s.key === 'srv_saimo_mp4')?.key
+        ?? key)
+      : key;
+  const match = servers.find((s) => s.key === candidate);
+  if (!match || match.internalOnly) return undefined;
+  return candidate;
+}
+
+/**
+ * Mantém servidores `internalOnly` ocultos no seletor, exceto quando um deles
+ * está ativamente em reprodução, evitando seletor sem nenhum item destacado.
+ */
+export function filterVisibleServers<T extends SelectableServerItem>(
+  servers: readonly T[],
+  activeKey?: string | null,
+): T[] {
+  return servers.filter((server) => !server.internalOnly || server.key === activeKey);
+}
+
 export interface EpisodeItem {
   episode_number: number;
   name?: string;

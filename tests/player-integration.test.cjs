@@ -27,3 +27,73 @@ test('episode advancement remains available independently of the removed Vizer p
  const next=m.exports.computeNextEpisode({isSeries:true,season:1,episode:1,totalEpisodes:7,availableSeasons:[1],episodesList:Array.from({length:7},(_,i)=>({episode_number:i+1,name:`Episódio ${i+1}`}))});
  assert.equal(next.episode_number,2);assert.equal(next.seasonNumber,1);assert.equal(next.isNextSeason,false);
 });
+
+
+{
+  const nodeTest = require('node:test');
+  const assertStrict = require('node:assert/strict');
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const esbuild = require('esbuild');
+
+  const integrationPath = path.resolve(__dirname, '../src/utils/playerIntegration.ts');
+  const compiled = esbuild.buildSync({
+    entryPoints: [integrationPath],
+    bundle: false,
+    write: false,
+    format: 'cjs',
+    platform: 'node',
+  });
+  const mod = { exports: {} };
+  vm.runInNewContext(compiled.outputFiles[0].text, {
+    module: mod,
+    exports: mod.exports,
+    require,
+    console,
+  });
+  const { normalizeVisibleServerKey, filterVisibleServers } = mod.exports;
+
+  const sampleServers = [
+    { key: 'srv_mixdrop', internalOnly: false },
+    { key: 'srv_saimo_hls', internalOnly: false },
+    { key: 'srv_saimo_mp4', internalOnly: false },
+    { key: 'srv_streamtape', internalOnly: true },
+  ];
+
+  nodeTest('normalizeVisibleServerKey rejeita internalOnly e normaliza srv_saimo legado', () => {
+    assertStrict.equal(normalizeVisibleServerKey('srv_streamtape', sampleServers), undefined);
+    assertStrict.equal(normalizeVisibleServerKey('srv_saimo', sampleServers), 'srv_saimo_hls');
+    assertStrict.equal(
+      normalizeVisibleServerKey('srv_saimo', [{ key: 'srv_saimo_mp4' }, { key: 'srv_streamtape', internalOnly: true }]),
+      'srv_saimo_mp4'
+    );
+    assertStrict.equal(normalizeVisibleServerKey('srv_mixdrop', sampleServers), 'srv_mixdrop');
+    assertStrict.equal(normalizeVisibleServerKey('srv_blocked', sampleServers), undefined);
+  });
+
+  nodeTest('filterVisibleServers oculta internalOnly normalmente, mas exibe quando está ativo', () => {
+    const withMixdropActive = filterVisibleServers(sampleServers, 'srv_mixdrop').map((s) => s.key);
+    assertStrict.deepEqual(withMixdropActive, ['srv_mixdrop', 'srv_saimo_hls', 'srv_saimo_mp4']);
+
+    const withStreamtapeActive = filterVisibleServers(sampleServers, 'srv_streamtape').map((s) => s.key);
+    assertStrict.deepEqual(withStreamtapeActive, ['srv_mixdrop', 'srv_saimo_hls', 'srv_saimo_mp4', 'srv_streamtape']);
+  });
+
+  nodeTest('VideoPlayerModal e NetflixPlayerSkin mantêm StreamTape após MixDrop e seletor visível', () => {
+    const modalSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/VideoPlayerModal.tsx'), 'utf8');
+    const skinSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/NetflixPlayerSkin.tsx'), 'utf8');
+
+    const seriesMixdropIdx = modalSrc.indexOf('key: "srv_mixdrop"');
+    const seriesStreamtapeIdx = modalSrc.indexOf('key: "srv_streamtape"');
+    assertStrict.ok(seriesMixdropIdx !== -1 && seriesStreamtapeIdx !== -1 && seriesMixdropIdx < seriesStreamtapeIdx);
+
+    const movieMixdropIdx = modalSrc.indexOf('key: "srv_mixdrop"', seriesMixdropIdx + 1);
+    const movieStreamtapeIdx = modalSrc.indexOf('key: "srv_streamtape"', seriesStreamtapeIdx + 1);
+    assertStrict.ok(movieMixdropIdx !== -1 && movieStreamtapeIdx !== -1 && movieMixdropIdx < movieStreamtapeIdx);
+
+    assertStrict.match(modalSrc, /filterVisibleServers\(servers,\s*selectedServerKey\)/);
+    assertStrict.match(modalSrc, /normalizeVisibleServerKey\(selectedServerKey,\s*serversRef\.current\)/);
+    assertStrict.match(skinSrc, /selectedServerBtnRef\.current\?\.scrollIntoView/);
+  });
+}

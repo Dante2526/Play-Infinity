@@ -42,7 +42,7 @@ function loadModuleFromBundle(stdoutContents, filename) {
 
 async function loadVttParser() {
   const output = await esbuild.build({
-    stdin: { contents: "export {parseVtt, VttCue} from './src/utils/vttParser';", resolveDir: root, loader: 'ts' },
+    stdin: { contents: "export {parseVtt, findActiveSubtitleText, VttCue} from './src/utils/vttParser';", resolveDir: root, loader: 'ts' },
     bundle: true, platform: 'node', format: 'cjs', packages: 'external', write: false,
   });
   return loadModuleFromBundle(output.outputFiles[0].text, path.join(root, 'tests/virtual-vtt-parser.cjs'));
@@ -304,3 +304,131 @@ test('guarda de fonte: subtitleValidation.ts tem regex estrito para cada campo',
   assert.ok(/\\d\{1,3\}/.test(src), 'regex de season/episode deve exigir 1-3 digitos');
   assert.ok(/\[a-zA-Z\]\{2\}/.test(src), 'lang deve ter regex que exige 2 letras iniciais');
 });
+
+
+// ============================================================
+// Regressões funcionais de legendas (CRLF, sincronia, APK, SubtitleCat)
+// ============================================================
+
+{
+  async function loadSubtitleHelpers() {
+    const output = await esbuild.build({
+      stdin: {
+        contents:
+          "export { decodeSubtitleBuffer, srtToVtt, buildSubtitleSearchQueries, rankSubtitleCatResults, pickSubtitleCatDownloadLinks } from './server/utils/subtitleHelpers';",
+        resolveDir: root,
+        loader: 'ts',
+      },
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      packages: 'external',
+      write: false,
+    });
+    return loadModuleFromBundle(
+      output.outputFiles[0].text,
+      path.join(root, 'tests/virtual-subtitle-helpers.cjs')
+    );
+  }
+
+  test('parseVtt suporta CRLF (\\r\\n), remove tags ASS e decodifica entidades sem quebrar XSS', async () => {
+    const { parseVtt } = await loadVttParser();
+    const vtt =
+      '\uFEFFWEBVTT\r\n\r\n00:00:01.000 --> 00:00:03.000\r\n{\\an8}&quot;Ol&quot; &amp; bem-vindo\r\n\r\n00:00:04.000 --> 00:00:06.000\r\nSegunda fala';
+    const cues = parseVtt(vtt);
+    assert.equal(cues.length, 2);
+    assert.equal(cues[0].text, '"Ol" & bem-vindo');
+    assert.equal(cues[1].text, 'Segunda fala');
+  });
+
+  test('findActiveSubtitleText adianta (+offset) e atrasa (-offset) na direção correta e combina cues simultâneos', async () => {
+    const { findActiveSubtitleText } = await loadVttParser();
+    const cues = [
+      { start: 8.0, end: 9.0, text: 'Fala adiantada no arquivo' },
+      { start: 12.0, end: 13.5, text: 'Fala atrasada no arquivo' },
+      { start: 12.2, end: 13.0, text: 'Placa na tela' },
+    ];
+
+    // Voz em 10.0s, legenda em 12.0s -> usuário clica +2.0s Adiantar -> aparece em 10.0s
+    assert.equal(
+      findActiveSubtitleText(cues, 10.0, 2.0),
+      'Fala atrasada no arquivo'
+    );
+
+    // Voz em 10.0s, legenda em 8.0s -> usuário clica -2.0s Atrasar -> aparece em 10.0s
+    assert.equal(
+      findActiveSubtitleText(cues, 10.0, -2.0),
+      'Fala adiantada no arquivo'
+    );
+
+    // Cues simultâneos combinados em múltiplas linhas
+    assert.equal(
+      findActiveSubtitleText(cues, 12.5, 0),
+      'Fala atrasada no arquivo\nPlaca na tela'
+    );
+  });
+
+  test('decodeSubtitleBuffer preserva acentos PT-BR em Windows-1252 e UTF-8', async () => {
+    const { decodeSubtitleBuffer } = await loadSubtitleHelpers();
+    const win1252 = Buffer.from([0x43, 0x6f, 0x72, 0x61, 0xe7, 0xe3, 0x6f]); // "Coração" em Windows-1252
+    assert.equal(decodeSubtitleBuffer(win1252), 'Coração');
+    const utf8 = Buffer.from('Atenção: não falhar!', 'utf8');
+    assert.equal(decodeSubtitleBuffer(utf8), 'Atenção: não falhar!');
+  });
+
+  test('srtToVtt aceita BOM, hora de 1 dígito e milissegundos com ponto', async () => {
+    const { srtToVtt } = await loadSubtitleHelpers();
+    const srt = '\uFEFF 1 \r\n0:01:02,500 --> 0:01:05.750\r\nLinha única\r\n\r\n';
+    const vtt = srtToVtt(srt);
+    assert.match(vtt, /^WEBVTT\n\n00:01:02\.500 --> 00:01:05\.750\nLinha única/m);
+  });
+
+  test('buildSubtitleSearchQueries usa título inglês quando original é não-latino (animes/doramas)', async () => {
+    const { buildSubtitleSearchQueries } = await loadSubtitleHelpers();
+    const squid = buildSubtitleSearchQueries(
+      { original_name: '오징어 게임', name: 'Squid Game' },
+      'tv',
+      '1',
+      '1'
+    );
+    assert.deepEqual(squid, ['Squid Game S01E01']);
+
+    const casa = buildSubtitleSearchQueries(
+      { original_name: 'La casa de papel', name: 'Money Heist' },
+      'tv',
+      '1',
+      '2'
+    );
+    assert.deepEqual(casa, ['La casa de papel S01E02', 'Money Heist S01E02']);
+  });
+
+  test('rankSubtitleCatResults rejeita séries parecidas (Lost You Found You / Our Flag Means Death) ao buscar You S01E10', async () => {
+    const { rankSubtitleCatResults } = await loadSubtitleHelpers();
+    const results = [
+      { href: 'subs/972/Lost.You.Found.You.S01E10.html', text: 'Lost.You.Found.You.S01E10.x264.1080p' },
+      { href: 'subs/375/Our.Flag.Means.Death.S01E10.html', text: 'Our Flag Means Death - S01E10 - Wherever You Go, There You Are' },
+      { href: 'subs/1784/Tag.Sale.Youre.It.html', text: "S01E10.Tag.Sale.-.You're.It.1080p" },
+      { href: 'subs/1765/YOU.S01E10.1080p.html', text: 'YOU.S01E10.1080p.WEBRip.x265-RARBG' },
+    ];
+    const ranked = rankSubtitleCatResults(results, 'You', 'tv', '1', '10');
+    assert.deepEqual(ranked.map((r) => r.href), ['subs/1765/YOU.S01E10.1080p.html']);
+  });
+
+  test('pickSubtitleCatDownloadLinks prioriza -pt-BR antes de -pt e remove barra inicial dupla', async () => {
+    const { pickSubtitleCatDownloadLinks } = await loadSubtitleHelpers();
+    const links = pickSubtitleCatDownloadLinks([
+      { id: 'download_en', href: '/subs/1/show-en.srt' },
+      { id: 'download_pt', href: '/subs/1/show-pt.srt' },
+      { id: 'download_pt-BR', href: '/subs/1/show-pt-BR.srt' },
+    ]);
+    assert.deepEqual(links, ['subs/1/show-pt-BR.srt', 'subs/1/show-pt.srt']);
+  });
+
+  test('guarda de fonte: VideoPlayerModal usa getApiBaseUrl e AbortController; NetflixPlayerSkin usa findActiveSubtitleText', () => {
+    const modal = read('src/components/VideoPlayerModal.tsx');
+    const skin = read('src/components/NetflixPlayerSkin.tsx');
+    assert.match(modal, /\$\{apiBase\}\/api\/subtitles\?/);
+    assert.match(modal, /new AbortController\(\)/);
+    assert.match(skin, /findActiveSubtitleText\(/);
+  });
+}

@@ -3,6 +3,13 @@ import fs from "fs";
 import path from "path";
 import * as cheerio from "cheerio";
 import { validateSubtitleParams } from "../utils/subtitleValidation";
+import {
+  buildSubtitleSearchQueries,
+  decodeSubtitleBuffer,
+  pickSubtitleCatDownloadLinks,
+  rankSubtitleCatResults,
+  srtToVtt,
+} from "../utils/subtitleHelpers";
 
 export const subtitlesRouter = Router();
 
@@ -13,32 +20,18 @@ if (!fs.existsSync(CACHE_DIR)) {
 
 // Mínimo de cues para considerar uma legenda válida (evita intertítulos/abertura)
 const MIN_VALID_CUES = 20;
+const SUBTITLE_MISS_TTL_MS = 10 * 60 * 1000;
+const subtitleMissCache = new Map<string, { expires: number; reason: string }>();
 
-// Helper para converter SRT em VTT na memória
-function srtToVtt(srt: string): string {
-  let vtt = "WEBVTT\n\n";
-  const lines = srt.replace(/\r\n|\r/g, "\n").split("\n");
-  let i = 0;
-  while (i < lines.length) {
-    let line = lines[i];
-    if (line.match(/^\d+$/)) {
-      i++;
-      continue;
-    }
-    if (line.match(/\d{2}:\d{2}:\d{2},\d{3}/)) {
-      line = line.replace(/,/g, ".");
-      vtt += line + "\n";
-      i++;
-      while (i < lines.length && lines[i].trim() !== "") {
-        vtt += lines[i] + "\n";
-        i++;
-      }
-      vtt += "\n";
-    } else {
-      i++;
-    }
+function buildSubtitleKeyUrl(cacheKey: string): string {
+  return `/api/subtitle-file?key=${encodeURIComponent(cacheKey)}`;
+}
+
+function recordSubtitleMiss(cacheKey: string, reason: string): void {
+  if (subtitleMissCache.size >= 500) {
+    subtitleMissCache.delete(subtitleMissCache.keys().next().value!);
   }
-  return vtt;
+  subtitleMissCache.set(cacheKey, { expires: Date.now() + SUBTITLE_MISS_TTL_MS, reason });
 }
 
 // Conta o número de cues num VTT — usado para validar a legenda
@@ -95,36 +88,30 @@ function stripCreditCues(vtt: string): string {
 // Tenta baixar a legenda PT-BR de um resultado específico do SubtitleCat
 async function tryFetchSubtitleFromResult(resultHref: string): Promise<string | null> {
   try {
-    const detailUrl = `https://www.subtitlecat.com/${resultHref}`;
+    const cleanHref = resultHref.replace(/^\/+/, "");
+    const detailUrl = `https://www.subtitlecat.com/${cleanHref}`;
     const detailRes = await fetch(detailUrl, { signal: AbortSignal.timeout(8000) });
     if (!detailRes.ok) return null;
     const detailHtml = await detailRes.text();
     const $detail = cheerio.load(detailHtml);
 
-    let downloadHref = "";
+    const anchors: Array<{ href: string; id?: string }> = [];
     $detail("a").each((_, el) => {
       const href = $detail(el).attr("href");
-      if (
-        href &&
-        !href.startsWith("javascript:") &&
-        href.endsWith(".srt") &&
-        (href.includes("-pt-BR") || href.includes("-pt") || href.toLowerCase().includes("portuguese") || href.toLowerCase().includes("brasil"))
-      ) {
-        if (!downloadHref) downloadHref = href;
-      }
+      if (href) anchors.push({ href, id: $detail(el).attr("id") });
     });
 
-    if (!downloadHref) return null;
-
-    const downloadUrl = `https://www.subtitlecat.com/${downloadHref}`;
-    const srtRes = await fetch(downloadUrl, { signal: AbortSignal.timeout(10000) });
-    if (!srtRes.ok) return null;
-    const srtBuffer = await srtRes.arrayBuffer();
-    const srtText = new TextDecoder("utf-8").decode(srtBuffer);
-    const vttText = stripCreditCues(srtToVtt(srtText));
-
-    if (countVttCues(vttText) < MIN_VALID_CUES) return null;
-    return vttText;
+    const candidateLinks = pickSubtitleCatDownloadLinks(anchors);
+    for (const downloadHref of candidateLinks) {
+      const downloadUrl = `https://www.subtitlecat.com/${downloadHref}`;
+      const srtRes = await fetch(downloadUrl, { signal: AbortSignal.timeout(10000) });
+      if (!srtRes.ok) continue;
+      const srtBuffer = await srtRes.arrayBuffer();
+      const srtText = decodeSubtitleBuffer(srtBuffer);
+      const vttText = stripCreditCues(srtToVtt(srtText));
+      if (countVttCues(vttText) >= MIN_VALID_CUES) return vttText;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -132,7 +119,7 @@ async function tryFetchSubtitleFromResult(resultHref: string): Promise<string | 
 
 subtitlesRouter.get("/api/subtitles", async (req, res) => {
   try {
-    const { tmdb, type, season, episode, lang } = req.query;
+    const { tmdb, type, season, episode, lang, refresh } = req.query;
     // Validação estrita de formato (relatório #12): previne path traversal em
     // cacheKey (que vira filename via path.join — path.join normaliza '..') e
     // injeção em URLs externas (TMDB, SubtitleCat). Antes, lang="../../etc/passwd"
@@ -163,68 +150,82 @@ subtitlesRouter.get("/api/subtitles", async (req, res) => {
       if (!isExpired) {
         const cached = fs.readFileSync(cachePath, "utf-8");
         if (countVttCues(cached) >= MIN_VALID_CUES) {
-          const b64 = Buffer.from(cachePath).toString("base64");
-          return res.json({ success: true, url: `/api/subtitle-file?path=${b64}` });
+          return res.json({ success: true, found: true, url: buildSubtitleKeyUrl(cacheKey) });
         }
         console.warn(`[Subtitles] Cache inválido para ${cacheKey} (${countVttCues(cached)} cues < ${MIN_VALID_CUES}), rebuscando...`);
         fs.unlinkSync(cachePath);
       }
     }
 
-    // 2. Busca TMDB em inglês — usa original_title para garantir que o SubtitleCat encontre
+    const forceRefresh = refresh === "1";
+    if (!forceRefresh) {
+      const miss = subtitleMissCache.get(cacheKey);
+      if (miss && miss.expires > Date.now()) {
+        return res.json({ success: false, found: false, url: null, reason: miss.reason });
+      }
+    } else {
+      subtitleMissCache.delete(cacheKey);
+    }
+
+    // 2. Busca TMDB em inglês para montar queries ordenadas (ASCII/inglês para obras não-latinas)
     const TMDB_KEY = process.env.TMDB_API_KEY || process.env.VITE_TMDB_API_KEY;
+    if (!TMDB_KEY) {
+      return res.json({ success: false, found: false, url: null, reason: "Chave TMDB não configurada." });
+    }
     const tmdbUrl = `https://api.themoviedb.org/3/${mediaType === "movie" ? "movie" : "tv"}/${tmdbId}?api_key=${TMDB_KEY}&language=en-US`;
     const tmdbRes = await fetch(tmdbUrl, { signal: AbortSignal.timeout(8000) });
     if (!tmdbRes.ok) throw new Error(`TMDB failed: ${tmdbRes.status}`);
     const tmdbData = await tmdbRes.json();
 
-    // Usa original_title (inglês) como termo principal de busca no SubtitleCat
-    let searchTitle = tmdbData.original_title || tmdbData.original_name || tmdbData.title || tmdbData.name;
-    searchTitle = searchTitle.replace(/[:,\.\(\)\[\]\-]/g, " ").replace(/\s+/g, " ").trim();
-
-    if (mediaType === "tv") {
-      const sStr = s.padStart(2, "0");
-      const eStr = e.padStart(2, "0");
-      searchTitle += ` S${sStr}E${eStr}`;
+    const searchQueries = buildSubtitleSearchQueries(tmdbData, mediaType, s, e);
+    if (searchQueries.length === 0) {
+      const reason = "Título indisponível para busca de legendas.";
+      recordSubtitleMiss(cacheKey, reason);
+      return res.json({ success: false, found: false, url: null, reason });
     }
 
-    console.log(`[Subtitles] Buscando: "${searchTitle}" (TMDB ${tmdbId})`);
-
-    // 3. Busca no SubtitleCat — coleta os primeiros 5 resultados
-    const query = encodeURIComponent(searchTitle);
-    const searchUrl = `https://www.subtitlecat.com/index.php?search=${query}`;
-    const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10000) });
-    const searchHtml = await searchRes.text();
-    const $ = cheerio.load(searchHtml);
-
-    const resultLinks: string[] = [];
-    $("tbody tr td a").each((_, el) => {
-      const href = $(el).attr("href");
-      if (href && resultLinks.length < 5) resultLinks.push(href);
-    });
-
-    if (resultLinks.length === 0) {
-      return res.status(404).json({ error: "Nenhum resultado encontrado no SubtitleCat." });
-    }
-
-    // 4. Tenta cada resultado até encontrar uma legenda PT-BR válida (>= MIN_VALID_CUES)
+    // 3. Busca no SubtitleCat com filtragem estrita de título + episódio exato
     let vttText: string | null = null;
-    for (const link of resultLinks) {
-      vttText = await tryFetchSubtitleFromResult(link);
-      if (vttText) {
-        console.log(`[Subtitles] Legenda válida (${countVttCues(vttText)} cues): ${link}`);
-        break;
+    for (const searchTitle of searchQueries) {
+      console.log(`[Subtitles] Buscando: "${searchTitle}" (TMDB ${tmdbId})`);
+      const searchUrl = `https://www.subtitlecat.com/index.php?search=${encodeURIComponent(searchTitle)}`;
+      const searchRes = await fetch(searchUrl, { signal: AbortSignal.timeout(10000) });
+      if (!searchRes.ok) continue;
+      const searchHtml = await searchRes.text();
+      const $ = cheerio.load(searchHtml);
+
+      const rawResults: Array<{ href: string; text: string }> = [];
+      $("tbody tr td a").each((_, el) => {
+        const href = $(el).attr("href");
+        const text = $(el).text().trim();
+        if (href && rawResults.length < 15) rawResults.push({ href, text });
+      });
+
+      const targetShowTitle = mediaType === "tv"
+        ? searchTitle.replace(/\s+S\d{2}E\d{2}$/i, "")
+        : searchTitle;
+      const rankedLinks = rankSubtitleCatResults(rawResults, targetShowTitle, mediaType, s, e).slice(0, 5);
+
+      for (const item of rankedLinks) {
+        vttText = await tryFetchSubtitleFromResult(item.href);
+        if (vttText) {
+          console.log(`[Subtitles] Legenda válida (${countVttCues(vttText)} cues): ${item.href}`);
+          break;
+        }
       }
+      if (vttText) break;
     }
 
     if (!vttText) {
-      return res.status(404).json({ error: "Legenda PT-BR com conteúdo suficiente não encontrada." });
+      const reason = "Legenda PT-BR com conteúdo suficiente não encontrada.";
+      recordSubtitleMiss(cacheKey, reason);
+      return res.json({ success: false, found: false, url: null, reason });
     }
 
-    // 5. Salvar em cache e retornar
+    // 4. Salvar em cache e retornar URL estável independente de deploy
     fs.writeFileSync(cachePath, vttText, "utf-8");
-    const b64 = Buffer.from(cachePath).toString("base64");
-    return res.json({ success: true, url: `/api/subtitle-file?path=${b64}` });
+    subtitleMissCache.delete(cacheKey);
+    return res.json({ success: true, found: true, url: buildSubtitleKeyUrl(cacheKey) });
 
   } catch (err: any) {
     console.error("[Subtitles] Error:", err.message);
@@ -233,28 +234,39 @@ subtitlesRouter.get("/api/subtitles", async (req, res) => {
 });
 
 subtitlesRouter.get("/api/subtitle-file", (req, res) => {
-  const b64Path = req.query.path as string;
-  if (!b64Path) return res.status(400).send("Path missing");
+  const safeKey = typeof req.query.key === "string" ? req.query.key.trim() : "";
+  const b64Path = typeof req.query.path === "string" ? req.query.path : "";
+  if (!safeKey && !b64Path) return res.status(400).send("Key or path missing");
 
   try {
-    const decoded = Buffer.from(b64Path, "base64").toString("utf-8");
-    const resolvedPath = path.resolve(decoded);
+    let targetPath = "";
+    if (safeKey) {
+      if (!/^[a-zA-Z0-9_-]{1,120}\.vtt$/.test(safeKey)) {
+        return res.status(400).send("Invalid subtitle key");
+      }
+      targetPath = path.join(CACHE_DIR, safeKey);
+    } else {
+      targetPath = Buffer.from(b64Path, "base64").toString("utf-8");
+    }
+
+    const resolvedPath = path.resolve(targetPath);
     const resolvedCacheDir = path.resolve(CACHE_DIR);
 
     // Proteção rigorosa contra Path Traversal / LFI (CWE-22)
     // Garante que o arquivo solicitado resida estritamente dentro de CACHE_DIR
-    const isWithinCache = resolvedPath.startsWith(resolvedCacheDir + path.sep) || resolvedPath === resolvedCacheDir;
+    const isWithinCache = resolvedPath.startsWith(resolvedCacheDir + path.sep);
     if (!isWithinCache) {
-      console.warn(`[Subtitles] Tentativa de Path Traversal bloqueada: ${decoded}`);
+      console.warn(`[Subtitles] Tentativa de Path Traversal bloqueada: ${targetPath}`);
       return res.status(403).send("Acesso negado.");
     }
 
-    if (!fs.existsSync(resolvedPath)) {
+    if (!fs.existsSync(resolvedPath) || !fs.statSync(resolvedPath).isFile()) {
       return res.status(404).send("File not found");
     }
 
     res.setHeader("Content-Type", "text/vtt; charset=utf-8");
     res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Cache-Control", "public, max-age=86400");
     res.setHeader("X-Content-Type-Options", "nosniff");
     fs.createReadStream(resolvedPath).pipe(res);
   } catch (e) {

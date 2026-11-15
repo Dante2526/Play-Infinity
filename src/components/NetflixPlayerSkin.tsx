@@ -38,7 +38,7 @@ import type { PlayerVoiceAction } from "../utils/voiceCommandParser";
 import { savePlaybackProgress } from "../services/playbackHistory";
 import { getTimelinePreviewImages } from "../services/tmdb";
 import { Capacitor, registerPlugin } from "@capacitor/core";
-import { parseVtt, type VttCue } from "../utils/vttParser";
+import { parseVtt, findActiveSubtitleText, type VttCue } from "../utils/vttParser";
 import { computeNextEpisode } from "../utils/playerIntegration";
 
 const PiP = registerPlugin<any>("PiP");
@@ -105,6 +105,8 @@ interface NetflixPlayerSkinProps {
   passThroughClicks?: boolean;
   isAnime?: boolean;
   subtitleUrl?: string | null;
+  subtitleStatus?: 'idle' | 'loading' | 'ready' | 'unavailable';
+  onRetrySubtitle?: () => void;
   nextMovieInfo?: NextMovieInfo | null;
   onPlayNextMovie?: (movie: NextMovieInfo) => void;
 }
@@ -174,6 +176,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   passThroughClicks = false,
   isAnime = false,
   subtitleUrl = null,
+  subtitleStatus = 'idle',
+  onRetrySubtitle,
   activeServerKey = "srv_watchplay",
   onServerChange,
   serversList,
@@ -281,31 +285,65 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [showSpeedMenu, setShowSpeedMenu] = useState<boolean>(false);
   const [showEpisodeDrawer, setShowEpisodeDrawer] = useState<boolean>(false);
   const [showAudioSubtitleModal, setShowAudioSubtitleModal] = useState<boolean>(false);
+  const selectedServerBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!showAudioSubtitleModal) return;
+    const rafId = requestAnimationFrame(() => {
+      selectedServerBtnRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, [showAudioSubtitleModal]);
 
   // Preferências selecionadas no modal de áudio/legendas (derivado do servidor)
   const selectedAudio = ["srv_saimo", "srv_saimo_hls", "srv_saimo_mp4"].includes(activeServerKey) ? "saimo" : activeServerKey === "srv_vip" ? "vip" : activeServerKey === "srv_nixplay" ? "nixplay" : activeServerKey === "srv_mixdrop" ? "mixdrop" : activeServerKey === "srv_byse" ? "byse" : activeServerKey === "srv_streamtape" ? "streamtape" : activeServerKey === "srv_doodstream" ? "doodstream" : activeServerKey === "srv_vidsrc" ? "vidsrc" : activeServerKey === "srv_watchplay" ? "watchplay" : "en-US";
     const [selectedSubtitle, setSelectedSubtitle] = useState<string>(isAnime ? "on" : "off");
 
-  // Estado dos cues VTT e cue ativa
+  // Estado dos cues VTT, carregamento e cue ativa
   const [vttCues, setVttCues] = useState<VttCue[]>([]);
+  const [vttFetching, setVttFetching] = useState<boolean>(false);
+  const [vttLoadFailed, setVttLoadFailed] = useState<boolean>(false);
   const [activeCue, setActiveCue] = useState<string | null>(null);
   const [subtitleOffset, setSubtitleOffset] = useState<number>(0);
 
-  // Carrega e parseia o arquivo VTT quando subtitleUrl muda
+  // Carrega e parseia o arquivo VTT quando subtitleUrl muda (zera offset ao trocar episódio)
   useEffect(() => {
-    if (!subtitleUrl) { setVttCues([]); setActiveCue(null); return; }
-    fetch(subtitleUrl)
-      .then(r => r.text())
-      .then(text => setVttCues(parseVtt(text)))
-      .catch(() => setVttCues([]));
+    setSubtitleOffset(0);
+    if (!subtitleUrl) {
+      setVttCues([]);
+      setActiveCue(null);
+      setVttFetching(false);
+      setVttLoadFailed(false);
+      return;
+    }
+    const controller = new AbortController();
+    setVttFetching(true);
+    setVttLoadFailed(false);
+    fetch(subtitleUrl, { signal: controller.signal })
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.text();
+      })
+      .then((text) => {
+        if (controller.signal.aborted) return;
+        const parsed = parseVtt(text);
+        setVttCues(parsed);
+        setVttLoadFailed(parsed.length === 0);
+        setVttFetching(false);
+      })
+      .catch((err) => {
+        if (controller.signal.aborted || err?.name === "AbortError") return;
+        setVttCues([]);
+        setVttLoadFailed(true);
+        setVttFetching(false);
+      });
+    return () => controller.abort();
   }, [subtitleUrl]);
 
-  // Atualiza cue ativa com base no currentTime do player
+  // Atualiza cue ativa com base no currentTime + subtitleOffset
   useEffect(() => {
     if (!vttCues.length || selectedSubtitle !== "on") { setActiveCue(null); return; }
-    const t = playerStatus.currentTime - subtitleOffset;
-    const cue = vttCues.find(c => t >= c.start && t <= c.end);
-    setActiveCue(cue ? cue.text : null);
+    setActiveCue(findActiveSubtitleText(vttCues, playerStatus.currentTime, subtitleOffset));
   }, [playerStatus.currentTime, vttCues, selectedSubtitle, subtitleOffset]);
 
   useEffect(() => {
@@ -2646,15 +2684,16 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                     return (
                       <button
                         key={srv.key}
+                        ref={isSelected ? selectedServerBtnRef : null}
                         onClick={() => onServerChange?.(srv.key)}
-                        className={`w-full text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
+                        className={`w-full min-h-[44px] text-left px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border ${
                           isSelected
                             ? "bg-white text-black font-bold border-white shadow-lg shadow-white/20"
                             : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
                         }`}
                       >
-                        <div className="flex flex-col pr-2">
-                          <span className="font-medium">{srv.label || srv.name || srv.key}</span>
+                        <div className="flex flex-col pr-2 min-w-0">
+                          <span className="font-medium truncate">{srv.label || srv.name || srv.key}</span>
                           {srv.badge && (
                             <span className={`text-[10px] line-clamp-1 ${isSelected ? "text-neutral-700" : "text-neutral-400"}`}>
                               {srv.badge}
@@ -2669,15 +2708,24 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
               </div>
 
               {/* Coluna de Legendas */}
-              <div className="space-y-2">
-                <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5 px-0.5">
-                  <Subtitles className="w-3.5 h-3.5 text-neutral-400" />
-                  Legendas
-                </h4>
+              <div className="space-y-2 min-w-0">
+                <div className="flex items-center justify-between gap-2 px-0.5">
+                  <h4 className="text-xs uppercase font-bold text-neutral-400 tracking-wider flex items-center gap-1.5">
+                    <Subtitles className="w-3.5 h-3.5 text-neutral-400" />
+                    Legendas
+                  </h4>
+                  {(subtitleStatus === 'loading' || vttFetching) ? (
+                    <span className="text-[10px] text-neutral-400 font-medium">Buscando...</span>
+                  ) : vttCues.length > 0 && !vttLoadFailed ? (
+                    <span className="text-[10px] text-emerald-400 font-semibold">PT-BR pronta</span>
+                  ) : (subtitleStatus === 'unavailable' || vttLoadFailed) ? (
+                    <span className="text-[10px] text-amber-400/90 font-medium">Indisponível</span>
+                  ) : null}
+                </div>
                 <div className="space-y-1.5">
                   <button
                     onClick={() => setSelectedSubtitle("on")}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
+                    className={`w-full min-h-[44px] text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
                       selectedSubtitle === "on"
                         ? "bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 text-emerald-400 font-bold border-emerald-500/50 shadow-lg shadow-emerald-500/10"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
@@ -2689,7 +2737,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
                   <button
                     onClick={() => setSelectedSubtitle("off")}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
+                    className={`w-full min-h-[44px] text-left px-4 py-3 rounded-xl text-xs sm:text-sm flex items-center justify-between transition-all cursor-pointer border relative ${
                       selectedSubtitle === "off"
                         ? "bg-gradient-to-r from-rose-500/10 to-rose-500/5 text-rose-400 font-bold border-rose-500/50 shadow-lg shadow-rose-500/10"
                         : "bg-white/5 hover:bg-white/10 text-neutral-300 border-white/10 hover:border-white/20"
@@ -2699,16 +2747,40 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                     {selectedSubtitle === "off" && <Check className="w-4 h-4 shrink-0 text-rose-400" />}
                   </button>
 
+                  {selectedSubtitle === "on" && (!subtitleUrl || vttLoadFailed) && subtitleStatus !== 'loading' && !vttFetching && (
+                    <div className="mt-2 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-[11px] text-amber-300 space-y-2">
+                      <p className="leading-snug">Legenda PT-BR não encontrada para este título.</p>
+                      {onRetrySubtitle && (
+                        <button
+                          onClick={onRetrySubtitle}
+                          className="w-full min-h-[44px] px-3 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-200 text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Tentar buscar novamente
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Controles de Sincronia de Legenda */}
-                  {selectedSubtitle === "on" && (
+                  {selectedSubtitle === "on" && subtitleUrl && !vttLoadFailed && (
                     <div className="mt-4 pt-3 border-t border-white/10">
-                      <p className="text-[10px] text-neutral-400 font-medium mb-2 uppercase tracking-wide">
-                        Sincronizar Legenda ({(subtitleOffset > 0 ? "+" : "") + subtitleOffset.toFixed(1)}s)
-                      </p>
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <p className="text-[10px] text-neutral-400 font-medium uppercase tracking-wide">
+                          Sincronizar Legenda ({(subtitleOffset > 0 ? "+" : "") + subtitleOffset.toFixed(1)}s)
+                        </p>
+                        {subtitleOffset !== 0 && (
+                          <button
+                            onClick={() => setSubtitleOffset(0)}
+                            className="text-[10px] text-orange-400 hover:text-orange-300 font-semibold cursor-pointer px-1.5 py-0.5"
+                          >
+                            Zerar
+                          </button>
+                        )}
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setSubtitleOffset(prev => prev - 0.5)}
-                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                          className="flex-1 min-h-[44px] py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
                           title="Atrasar Legenda (-0.5s)"
                         >
                           <span className="text-sm font-bold">-0.5s</span>
@@ -2716,7 +2788,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
                         </button>
                         <button
                           onClick={() => setSubtitleOffset(prev => prev + 0.5)}
-                          className="flex-1 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
+                          className="flex-1 min-h-[44px] py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-neutral-300 transition-colors flex flex-col items-center justify-center gap-0.5 cursor-pointer"
                           title="Adiantar Legenda (+0.5s)"
                         >
                           <span className="text-sm font-bold">+0.5s</span>
