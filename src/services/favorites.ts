@@ -1,4 +1,4 @@
-import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas } from "../data";;
+import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas, lgbtContent } from "../data";;
 import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";;
 import { getDetails, formatImageUrl, TMDBDetails, FALLBACK_POSTER_IMAGE, FALLBACK_BACKDROP_IMAGE } from "./tmdb";
 import { db, auth } from "./firebase";
@@ -75,6 +75,7 @@ export const getAllCatalogItems = (): CatalogItem[] => {
   addItems(newest);
   addItems(animes);
   addItems(doramas);
+  addItems(lgbtContent);
 
   Object.entries(providerCatalogs).forEach(([_, items]) => {
     items.forEach(item => {

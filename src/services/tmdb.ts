@@ -806,6 +806,210 @@ export const getKidsSeries = async (page: number = 1): Promise<TMDBResponse> => 
   return res;
 };
 
+// Seed verificada diretamente no dataset TMDB: 1862 ("coming out").
+// Demais IDs oficiais (lgbt, gay, lesbian, queer, transgender, bisexual, etc.)
+// são resolvidos dinamicamente via /api/tmdb/search/keyword e filtrados por allowlist
+// para evitar qualquer ID chutado ou ruído (ex.: "enola gay").
+export const VERIFIED_LGBT_SEED_KEYWORD_IDS = [1862] as const;
+const LGBT_KEYWORDS_CACHE_KEY = 'play-infinity:tmdb-lgbt-keywords:v1';
+const LGBT_KEYWORDS_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const LGBT_KEYWORD_QUERY_TERMS = [
+  'lgbt',
+  'gay',
+  'lesbian',
+  'queer',
+  'transgender',
+  'bisexual',
+  'homosexuality',
+  'coming out',
+] as const;
+
+const ALLOWED_LGBT_KEYWORD_NAMES = new Set([
+  'lgbt',
+  'lgbtq',
+  'lgbtq+',
+  'lgbtqia',
+  'lgbtqia+',
+  'lgbt teen',
+  'lgbt romance',
+  'gay',
+  'gay man',
+  'gay men',
+  'gay couple',
+  'gay relationship',
+  'gay romance',
+  'gay interest',
+  'gay theme',
+  'gay love',
+  'gay teenager',
+  'gay kiss',
+  'gay marriage',
+  'gay pride',
+  'gay rights',
+  'gay subtext',
+  'gay bar',
+  'lesbian',
+  'lesbian couple',
+  'lesbian relationship',
+  'lesbian romance',
+  'lesbian love',
+  'lesbian interest',
+  'lesbian kiss',
+  'lesbian teenager',
+  'queer',
+  'queer cinema',
+  'queer romance',
+  'queer identity',
+  'transgender',
+  'transgender woman',
+  'transgender man',
+  'transgender girl',
+  'transgender boy',
+  'bisexual',
+  'bisexual woman',
+  'bisexual man',
+  'coming out',
+  'homosexual',
+  'homosexuality',
+  'male homosexuality',
+  'female homosexuality',
+  'same-sex relationship',
+  'same-sex romance',
+  'same-sex marriage',
+  'same-sex love',
+  'drag queen',
+  'non-binary',
+  'nonbinary',
+]);
+
+let _lgbtKeywordCache: { ids: number[]; expiresAt: number } | null = null;
+let _lgbtKeywordInflight: Promise<number[]> | null = null;
+
+export const resetLgbtKeywordCacheForTests = () => {
+  _lgbtKeywordCache = null;
+  _lgbtKeywordInflight = null;
+};
+
+/**
+ * Resolve IDs oficiais de keywords LGBTQIA+ diretamente via proxy /api/tmdb/search/keyword,
+ * com cache em memória/localStorage e fallback seguro para a seed verificada (1862).
+ */
+export const resolveLgbtKeywordIds = async (): Promise<number[]> => {
+  const now = Date.now();
+  if (_lgbtKeywordCache && now < _lgbtKeywordCache.expiresAt) {
+    return _lgbtKeywordCache.ids;
+  }
+
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(LGBT_KEYWORDS_CACHE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed &&
+          Array.isArray(parsed.ids) &&
+          parsed.ids.length > VERIFIED_LGBT_SEED_KEYWORD_IDS.length &&
+          typeof parsed.expiresAt === 'number' &&
+          now < parsed.expiresAt
+        ) {
+          const cleanIds = parsed.ids.map(Number).filter((n: number) => Number.isInteger(n) && n > 0);
+          if (cleanIds.length > 0) {
+            _lgbtKeywordCache = { ids: cleanIds, expiresAt: parsed.expiresAt };
+            return cleanIds;
+          }
+        }
+      }
+    }
+  } catch {
+    // Sem acesso a localStorage ou JSON inválido — segue para busca ao vivo
+  }
+
+  if (_lgbtKeywordInflight) {
+    return _lgbtKeywordInflight;
+  }
+
+  _lgbtKeywordInflight = (async (): Promise<number[]> => {
+    try {
+      const resolvedSet = new Set<number>(VERIFIED_LGBT_SEED_KEYWORD_IDS);
+      const responses = await Promise.all(
+        LGBT_KEYWORD_QUERY_TERMS.map((term) =>
+          fetchTmdbSafe<{ results?: { id?: number; name?: string }[] }>(
+            `${BASE_URL}/search/keyword?query=${encodeURIComponent(term)}&page=1`,
+            { results: [] }
+          )
+        )
+      );
+
+      for (const resp of responses) {
+        for (const entry of resp?.results || []) {
+          const id = Number(entry?.id);
+          const name = String(entry?.name || '').trim().toLowerCase();
+          if (Number.isInteger(id) && id > 0 && ALLOWED_LGBT_KEYWORD_NAMES.has(name)) {
+            resolvedSet.add(id);
+          }
+        }
+      }
+
+      const seedSet = new Set<number>(VERIFIED_LGBT_SEED_KEYWORD_IDS);
+      const extraSorted = Array.from(resolvedSet)
+        .filter((id) => !seedSet.has(id))
+        .sort((a, b) => a - b);
+      const finalIds = [...VERIFIED_LGBT_SEED_KEYWORD_IDS, ...extraSorted].slice(0, 35);
+
+      const resolvedDynamically = finalIds.length > VERIFIED_LGBT_SEED_KEYWORD_IDS.length;
+      const expiresAt = Date.now() + (resolvedDynamically ? LGBT_KEYWORDS_CACHE_TTL : 60 * 1000);
+      _lgbtKeywordCache = { ids: finalIds, expiresAt };
+
+      if (resolvedDynamically && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(
+            LGBT_KEYWORDS_CACHE_KEY,
+            JSON.stringify({ ids: finalIds, expiresAt })
+          );
+        } catch {
+          // Falha silenciosa de quota/privacidade
+        }
+      }
+
+      return finalIds;
+    } finally {
+      _lgbtKeywordInflight = null;
+    }
+  })();
+
+  return _lgbtKeywordInflight;
+};
+
+/**
+ * Busca filmes com temática LGBTQIA+ ordenados por popularidade em PT-BR
+ */
+export const getLgbtMovies = async (page: number = 1): Promise<TMDBResponse> => {
+  const keywordIds = await resolveLgbtKeywordIds();
+  const withKeywords = keywordIds.join('|');
+  const url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_keywords=${withKeywords}&include_adult=false&vote_count.gte=5`;
+  const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  if (!res.results || res.results.length === 0) {
+    const fallbackUrl = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=popularity.desc&page=${page}&with_keywords=${withKeywords}&include_adult=false&vote_count.gte=1`;
+    return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
+  }
+  return res;
+};
+
+/**
+ * Busca séries com temática LGBTQIA+ ordenadas por popularidade em PT-BR
+ */
+export const getLgbtSeries = async (page: number = 1): Promise<TMDBResponse> => {
+  const keywordIds = await resolveLgbtKeywordIds();
+  const withKeywords = keywordIds.join('|');
+  const url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_keywords=${withKeywords}&include_adult=false&vote_count.gte=5`;
+  const res = await fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
+  if (!res.results || res.results.length === 0) {
+    const fallbackUrl = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=popularity.desc&page=${page}&with_keywords=${withKeywords}&include_adult=false&vote_count.gte=1`;
+    return fetchTmdbSafe<TMDBResponse>(fallbackUrl, DEFAULT_EMPTY_RESPONSE);
+  }
+  return res;
+};
+
 
 export interface TrailerVideo {
   id: string;

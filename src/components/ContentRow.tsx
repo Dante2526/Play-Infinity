@@ -312,6 +312,10 @@ const ContentCardInner = ({ item, idx, startNumber, isTop10, aspect, onItemClick
 
 export const ContentCard = React.memo(ContentCardInner, (prev, next) => {
   return prev.item.id === next.item.id &&
+         prev.item.type === next.item.type &&
+         prev.item.title === next.item.title &&
+         prev.item.imageUrl === next.item.imageUrl &&
+         prev.item.posterUrl === next.item.posterUrl &&
          prev.idx === next.idx &&
          prev.isTop10 === next.isTop10 &&
          prev.aspect === next.aspect &&

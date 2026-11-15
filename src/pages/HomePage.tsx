@@ -39,8 +39,14 @@ import {
   MicOff
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
-import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, providerCatalogs } from "../data";;
+import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, lgbtContent, providerCatalogs } from "../data";;
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe, checkLiveAvailability, quickAvailabilityCheck } from "../utils/mediaUtils";;
+import {
+  buildDisplayedLgbtItems,
+  getLgbtItemKey,
+  mapTmdbToLgbtCard,
+  needsLgbtPosterHydration
+} from "../utils/lgbtUtils";
 import { 
   searchMulti, 
   getDetails, 
@@ -56,6 +62,9 @@ import {
   getDoramas,
   getKidsContent,
   getKidsSeries,
+  getLgbtMovies,
+  getLgbtSeries,
+  hasTmdbArtwork,
   FALLBACK_POSTER_IMAGE,
   FALLBACK_BACKDROP_IMAGE,
   TMDBItem, 
@@ -276,6 +285,20 @@ export function HomePage({
     return rawList.filter(item => item && isKidsSafe(item));
   }, [kidsReleases, kidsSeriesReleases]);
 
+  // Seção LGBT+ (Filmes e Séries sobre a temática LGBTQIA+)
+  const [lgbtMovieReleases, setLgbtMovieReleases] = useState<CatalogItem[]>([]);
+  const [lgbtSeriesReleases, setLgbtSeriesReleases] = useState<CatalogItem[]>([]);
+  const [hydratedLgbtDetails, setHydratedLgbtDetails] = useState<Record<string, TMDBDetails>>({});
+
+  const displayedLgbtItems = React.useMemo(() => {
+    return buildDisplayedLgbtItems({
+      tmdbMovies: lgbtMovieReleases,
+      tmdbSeries: lgbtSeriesReleases,
+      fallbackItems: lgbtContent,
+      hydratedDetailsMap: hydratedLgbtDetails,
+    });
+  }, [lgbtMovieReleases, lgbtSeriesReleases, hydratedLgbtDetails]);
+
   // Função auxiliar para mapear itens do histórico garantindo a capa/backdrop real
   const formatHistoryItem = (item: PlaybackHistoryItem) => {
     const catalogMap = getCatalogByIdMap();
@@ -493,13 +516,25 @@ export function HomePage({
           getAnimes().catch(() => null),
           getDoramas().catch(() => null),
           getKidsContent().catch(() => null),
-          getKidsSeries().catch(() => null)
+          getKidsSeries().catch(() => null),
+          getLgbtMovies(1).catch(() => null),
+          getLgbtMovies(2).catch(() => null),
+          getLgbtSeries(1).catch(() => null),
+          getLgbtSeries(2).catch(() => null)
         ]);
 
         const animesRes = results[0];
         const doramasRes = results[1];
         const kidsMoviesRes = results[2];
         const kidsSeriesRes = results[3];
+        const lgbtMoviesRaw = [
+          ...(results[4]?.results || []),
+          ...(results[5]?.results || [])
+        ];
+        const lgbtSeriesRaw = [
+          ...(results[6]?.results || []),
+          ...(results[7]?.results || [])
+        ];
 
         if (isMounted) {
           // Processamento dinâmico de Animes
@@ -604,6 +639,79 @@ export function HomePage({
             if (tmdbKidsSeries.length > 0) {
               setKidsSeriesReleases(tmdbKidsSeries);
             }
+          }
+
+          // Processamento dinâmico de Filmes e Séries LGBT+
+          const seenLgbtMovies = new Set<number>();
+          const tmdbLgbtMovies = lgbtMoviesRaw
+            .filter((m: TMDBItem) => {
+              if (!m?.id || seenLgbtMovies.has(m.id)) return false;
+              seenLgbtMovies.add(m.id);
+              return (
+                hasTmdbArtwork(m) &&
+                !!(m.title || m.name) &&
+                isMediaAvailable({ id: m.id, title: m.title || m.name })
+              );
+            })
+            .map((m: TMDBItem) => mapTmdbToLgbtCard(m, 'movie'))
+            .filter((x): x is CatalogItem => x !== null);
+
+          const seenLgbtSeries = new Set<number>();
+          const tmdbLgbtSeries = lgbtSeriesRaw
+            .filter((s: TMDBItem) => {
+              if (!s?.id || seenLgbtSeries.has(s.id)) return false;
+              seenLgbtSeries.add(s.id);
+              return (
+                hasTmdbArtwork(s) &&
+                !!(s.name || s.title) &&
+                isMediaAvailable({ id: s.id, title: s.name || s.title })
+              );
+            })
+            .map((s: TMDBItem) => mapTmdbToLgbtCard(s, 'tv'))
+            .filter((x): x is CatalogItem => x !== null);
+
+          if (tmdbLgbtMovies.length > 0) {
+            setLgbtMovieReleases(tmdbLgbtMovies);
+          }
+          if (tmdbLgbtSeries.length > 0) {
+            setLgbtSeriesReleases(tmdbLgbtSeries);
+          }
+
+          // Hidrata pôsteres portrait oficiais (w500) do catálogo curado LGBT+ que não veio no Discover
+          const liveLgbtKeys = new Set<string>([
+            ...tmdbLgbtMovies.map((item) => getLgbtItemKey(item)),
+            ...tmdbLgbtSeries.map((item) => getLgbtItemKey(item))
+          ]);
+          const fallbackToHydrate = lgbtContent
+            .filter(
+              (item) =>
+                isMediaAvailable(item) &&
+                !liveLgbtKeys.has(getLgbtItemKey(item)) &&
+                needsLgbtPosterHydration(item)
+            )
+            .slice(0, 14);
+
+          if (fallbackToHydrate.length > 0) {
+            Promise.all(
+              fallbackToHydrate.map(async (item) => {
+                const mediaType: 'movie' | 'tv' = item.type === 'series' ? 'tv' : 'movie';
+                const details = await getDetails(item.tmdbId || item.id, mediaType).catch(() => null);
+                return { key: getLgbtItemKey(item), details };
+              })
+            )
+              .then((hydratedEntries) => {
+                if (!isMounted) return;
+                const nextMap: Record<string, TMDBDetails> = {};
+                for (const entry of hydratedEntries) {
+                  if (entry.details && entry.details.id && hasTmdbArtwork(entry.details)) {
+                    nextMap[entry.key] = entry.details;
+                  }
+                }
+                if (Object.keys(nextMap).length > 0) {
+                  setHydratedLgbtDetails((prev) => ({ ...prev, ...nextMap }));
+                }
+              })
+              .catch(() => {});
           }
         }
       } catch (err) {
@@ -1046,6 +1154,9 @@ export function HomePage({
 
         {/* Doramas */}
         <ContentRow title="Doramas" items={doramaReleases} aspect="portait" onItemClick={onItemClick} />
+
+        {/* LGBT+ */}
+        <ContentRow title="LGBT+" items={displayedLgbtItems} aspect="portait" onItemClick={onItemClick} />
       </main>
     </>
   );
