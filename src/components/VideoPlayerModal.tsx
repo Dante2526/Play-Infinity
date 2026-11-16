@@ -479,8 +479,73 @@ export function VideoPlayerModal({
   // Fullscreen & Widescreen state tracking
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [isWidescreen, setIsWidescreen] = useState<boolean>(false);
+  const [nativeFsPending, setNativeFsPending] = useState<boolean>(false);
   const [isRotated, setIsRotated] = useState<boolean>(false);
   const isExpanded = isFullscreen || isWidescreen;
+
+  const isSmartTvDevice =
+    typeof navigator !== "undefined" &&
+    /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
+
+  const tryRequestDocumentFullscreen = async (): Promise<boolean> => {
+    if (Capacitor.isNativePlatform() || isSmartTvDevice) return true;
+    if (typeof document === "undefined") return false;
+    if (document.fullscreenElement) return true;
+    if ((document as any).fullscreenEnabled === false) return true;
+    const elem = document.documentElement;
+    const requestFS =
+      elem.requestFullscreen ||
+      (elem as any).webkitRequestFullscreen ||
+      (elem as any).mozRequestFullScreen ||
+      (elem as any).msRequestFullscreen;
+    if (!requestFS) return true;
+    try {
+      await requestFS.call(elem, { navigationUI: "hide" });
+      return true;
+    } catch {
+      try {
+        await requestFS.call(elem);
+        return true;
+      } catch (err) {
+        console.warn("Fullscreen request fallback:", err);
+        return Boolean(document.fullscreenElement);
+      }
+    }
+  };
+
+  const enterExpandedLandscape = async (): Promise<boolean> => {
+    setIsMiniPlayer(false);
+    setIsWidescreen(true);
+
+    const nativeActive = await tryRequestDocumentFullscreen();
+    setNativeFsPending(!nativeActive);
+
+    const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
+    if (isPortrait) {
+      setIsRotated(true);
+    } else {
+      setIsRotated(false);
+    }
+
+    if (Capacitor.isNativePlatform()) {
+      ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
+        setIsRotated(false);
+      }).catch(() => { });
+    } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTvDevice) {
+      try {
+        const lockPromise = (screen.orientation as any).lock("landscape");
+        if (lockPromise && typeof lockPromise.then === "function") {
+          lockPromise.then(() => {
+            setIsRotated(false);
+          }).catch(() => { });
+        }
+      } catch {
+        // Fallback CSS já aplicado se portrait
+      }
+    }
+
+    return nativeActive;
+  };
   const [isMiniPlayer, setIsMiniPlayer] = useState<boolean>(false);
   const [miniPosition, setMiniPosition] = useState<{ x: number; y: number } | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -556,9 +621,12 @@ export function VideoPlayerModal({
       );
       setIsFullscreen(isCurrentlyFullscreen);
 
-      if (!isCurrentlyFullscreen) {
+      if (isCurrentlyFullscreen) {
+        setNativeFsPending(false);
+      } else {
         setIsWidescreen(false);
         setIsRotated(false);
+        setNativeFsPending(false);
         if (Capacitor.isNativePlatform()) {
           ScreenOrientation.unlock().catch(() => { });
         } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
@@ -1933,57 +2001,7 @@ export function VideoPlayerModal({
 
       // Se solicitado abertura direta em tela cheia (ex: vindo do card "Continue Assistindo")
       if (autoFullscreen) {
-        setIsWidescreen(true);
-        const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
-        const elem = document.documentElement;
-        const requestFS =
-          elem.requestFullscreen ||
-          (elem as any).webkitRequestFullscreen ||
-          (elem as any).mozRequestFullScreen ||
-          (elem as any).msRequestFullscreen;
-
-        if (requestFS && !document.fullscreenElement && !isSmartTV) {
-          try {
-            const fsPromise = requestFS.call(elem, { navigationUI: "hide" });
-            if (fsPromise && typeof fsPromise.catch === "function") {
-              fsPromise.catch(() => {
-                try {
-                  const fallbackPromise = requestFS.call(elem);
-                  if (fallbackPromise && typeof fallbackPromise.catch === "function") {
-                    fallbackPromise.catch(() => { });
-                  }
-                } catch (_) { console.warn("Silenced error:", _); }
-              });
-            }
-          } catch (_) {
-            try {
-              const fallbackPromise = requestFS.call(elem);
-              if (fallbackPromise && typeof fallbackPromise.catch === "function") {
-                fallbackPromise.catch(() => { });
-              }
-            } catch (_) { console.warn("Silenced error:", _); }
-          }
-        }
-
-        const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-        if (isPortrait) {
-          setIsRotated(true);
-        } else {
-          setIsRotated(false);
-        }
-
-        if (Capacitor.isNativePlatform()) {
-          ScreenOrientation.lock({ orientation: 'landscape' }).then(() => setIsRotated(false)).catch(() => { });
-        } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
-          try {
-            const lockPromise = (screen.orientation as any).lock("landscape");
-            if (lockPromise && typeof lockPromise.then === "function") {
-              lockPromise.then(() => {
-                setIsRotated(false);
-              }).catch(() => { });
-            }
-          } catch (_) { console.warn("Silenced error:", _); }
-        }
+        void enterExpandedLandscape();
       }
 
       // Inicialização do servidor: prioriza MixDrop para links dedicados, e WatchPlayer como padrão
@@ -2892,6 +2910,7 @@ export function VideoPlayerModal({
         (screen.orientation as any).unlock();
       } catch (e) { console.warn("Silenced error:", e); }
     }
+    setNativeFsPending(false);
     setIsWidescreen(false);
     setIsRotated(false);
     setIsMiniPlayer(false);
@@ -2902,6 +2921,7 @@ export function VideoPlayerModal({
 
   useEffect(() => {
     if (!isOpen) {
+      setNativeFsPending(false);
       setIsMiniPlayer(false);
       setMiniPosition(null);
       setIsDragging(false);
@@ -2987,6 +3007,7 @@ export function VideoPlayerModal({
 
   const setPlayerExpanded = async (expand: boolean) => {
     if (!expand) {
+      setNativeFsPending(false);
       setIsWidescreen(false);
       setIsRotated(false);
       if (document.fullscreenElement) {
@@ -3002,55 +3023,7 @@ export function VideoPlayerModal({
       return;
     }
 
-    setIsMiniPlayer(false);
-    setIsWidescreen(true);
-
-    // 1. Tenta tela cheia nativa do navegador com navigationUI: 'hide'
-    const isSmartTV = /Tizen|Web0S|WebOS|SmartTV|SMART-TV|Roku|AOSP|BRAVIA|Vizio|NetCast|TCL|BrowseHere|Android TV|GoogleTV|AppleTV|Vidaa|Hisense|Philips/i.test(navigator.userAgent);
-    const elem = document.documentElement;
-    const requestFS =
-      elem.requestFullscreen ||
-      (elem as any).webkitRequestFullscreen ||
-      (elem as any).mozRequestFullScreen ||
-      (elem as any).msRequestFullscreen;
-
-    if (requestFS && !isSmartTV && !document.fullscreenElement) {
-      try {
-        await requestFS.call(elem, { navigationUI: "hide" });
-      } catch {
-        try {
-          await requestFS.call(elem);
-        } catch (err) {
-          console.warn("Fullscreen request fallback:", err);
-        }
-      }
-    }
-
-    // 3. Se a tela estiver na vertical, ativa o fallback de rotação CSS
-    const isPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth;
-    if (isPortrait) {
-      setIsRotated(true);
-    } else {
-      setIsRotated(false);
-    }
-
-    // 2. Se o dispositivo tiver suporte a travar orientação em tela cheia (Android/Samsung Internet/Chrome)
-    if (Capacitor.isNativePlatform()) {
-      ScreenOrientation.lock({ orientation: 'landscape' }).then(() => {
-        setIsRotated(false);
-      }).catch(() => { });
-    } else if (screen.orientation && typeof (screen.orientation as any).lock === "function" && !isSmartTV) {
-      try {
-        const lockPromise = (screen.orientation as any).lock("landscape");
-        if (lockPromise && typeof lockPromise.then === "function") {
-          lockPromise.then(() => {
-            setIsRotated(false);
-          }).catch(() => { });
-        }
-      } catch (err) {
-        // Fallback
-      }
-    }
+    await enterExpandedLandscape();
   };
 
   const handleFullScreen = () => {
@@ -3103,6 +3076,7 @@ export function VideoPlayerModal({
     if (!isOpen) return;
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       // Não intercepta se estiver digitando em campo de texto
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -3637,6 +3611,12 @@ export function VideoPlayerModal({
                 isFullscreen={isExpanded}
                 onToggleFullscreen={handleFullScreen}
                 onSetFullscreen={(expand) => { void setPlayerExpanded(expand); }}
+                needsNativeFullscreenPrompt={nativeFsPending && isExpanded && !isFullscreen && !isMiniPlayer && !isNativePiP}
+                onRequestNativeFullscreen={() => {
+                  setNativeFsPending(false);
+                  void tryRequestDocumentFullscreen();
+                }}
+                onDismissNativeFullscreenPrompt={() => setNativeFsPending(false)}
                 iframeRef={iframeRef}
                 isRotated={isRotated}
                 onToggleRotate={handleToggleRotate}

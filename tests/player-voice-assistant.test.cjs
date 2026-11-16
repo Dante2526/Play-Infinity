@@ -251,3 +251,18 @@ test('handles MINI_PLAYER and EXIT_MINI_PLAYER without colliding with PLAY or SE
   assert.match(skinSrc, /case 'EXIT_MINI_PLAYER':/);
   assert.match(modalSrc, /onSetMiniPlayer=\{setMiniPlayerEnabled\}/);
 });
+
+test('promotes widescreen -> native browser fullscreen on F, doubleClick or prompt pill without double keydown toggle', () => {
+  const root = path.resolve(__dirname, '..');
+  const modalSrc = fs.readFileSync(path.join(root, 'src/components/VideoPlayerModal.tsx'), 'utf8');
+  const skinSrc = fs.readFileSync(path.join(root, 'src/components/NetflixPlayerSkin.tsx'), 'utf8');
+
+  // Impede disparo duplicado da tecla F/S/N entre VideoPlayerModal e NetflixPlayerSkin
+  assert.match(modalSrc, /const handleKeyDown = \(e: KeyboardEvent\) => \{\s*if \(e\.defaultPrevented\) return;/);
+  // Propaga fallback de tela cheia nativa bloqueada sem gesto do usuário
+  assert.match(modalSrc, /setNativeFsPending\(!nativeActive\)/);
+  assert.match(modalSrc, /needsNativeFullscreenPrompt=\{nativeFsPending && isExpanded && !isFullscreen/);
+  // Skin promove para tela cheia real do navegador em F, doubleClick ou clique no aviso
+  assert.match(skinSrc, /if \(needsNativeFullscreenPrompt && onRequestNativeFullscreen\)/);
+  assert.match(skinSrc, /Clique aqui ou aperte F para Tela Cheia real/);
+});

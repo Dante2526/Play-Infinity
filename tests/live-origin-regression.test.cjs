@@ -28,3 +28,15 @@ test('Byte accepts a working backup and stops checking after success',async()=>{
  });
  assert.equal(recovered.online,true);
 });
+
+test('SBT HD uses dynamic /api/saimo-source servers instead of expired hardcoded embedTV hash or 403 source=1',()=>{
+ const channelsSrc=fs.readFileSync('src/data/liveChannels.ts','utf8');
+ const sbtBlockMatch=channelsSrc.match(/id:\s*'sbt'[\s\S]*?servers:\s*\[([\s\S]*?)\]\s*\}/);
+ assert.ok(sbtBlockMatch,'Bloco do canal sbt deve existir em liveChannels.ts');
+ const sbtServers=sbtBlockMatch[1];
+ assert.ok(!sbtServers.includes('8f246fdcdd11e03e7750ed4f8e050161'),'Hash morto do embedTV não deve voltar para SBT HD');
+ assert.ok(!sbtServers.includes('channel=sbt&source=1'),'source=1 (138.204.86.4) retorna 403 na VPS Oracle');
+ assert.ok(sbtServers.includes('/api/saimo-source?channel=sbt&source=2'),'Deve incluir sbt oficial via /api/saimo-source');
+ assert.ok(sbtServers.includes('/api/saimo-source?channel=sbtsp&source=2'),'Deve incluir sbtsp FHD via /api/saimo-source');
+ assert.ok(sbtServers.includes('/api/saimo-source?channel=sbtsp&source=1'),'Deve incluir sbtsp embedTV rotativo via /api/saimo-source');
+});

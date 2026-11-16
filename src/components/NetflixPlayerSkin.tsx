@@ -79,6 +79,9 @@ interface NetflixPlayerSkinProps {
   isFullscreen: boolean;
   onToggleFullscreen: () => void;
   onSetFullscreen?: (expand: boolean) => void;
+  needsNativeFullscreenPrompt?: boolean;
+  onRequestNativeFullscreen?: () => void;
+  onDismissNativeFullscreenPrompt?: () => void;
   activeServerKey?: string;
   onServerChange?: (serverKey: string) => void;
   serversList?: Array<{
@@ -161,6 +164,9 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   isFullscreen,
   onToggleFullscreen,
   onSetFullscreen,
+  needsNativeFullscreenPrompt = false,
+  onRequestNativeFullscreen,
+  onDismissNativeFullscreenPrompt,
   iframeRef,
   onBrightnessChange,
   isRotated = false,
@@ -1551,7 +1557,11 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           break;
         case "f":
           e.preventDefault();
-          onToggleFullscreen();
+          if (needsNativeFullscreenPrompt && onRequestNativeFullscreen) {
+            onRequestNativeFullscreen();
+          } else {
+            onToggleFullscreen();
+          }
           break;
         case "s":
           if (isSeries) {
@@ -1583,6 +1593,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     playerStatus.muted,
     sendCommand,
     onToggleFullscreen,
+    needsNativeFullscreenPrompt,
+    onRequestNativeFullscreen,
     isSeries,
     onSkipIntro,
     onEpisodeChange,
@@ -1747,7 +1759,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         className={`absolute inset-0 z-0 touch-none ${
           isEffectiveExternal ? "pointer-events-none" : "cursor-default pointer-events-auto"
         }`}
-        onDoubleClick={isEffectiveExternal ? undefined : onToggleFullscreen}
+        onDoubleClick={
+          isEffectiveExternal
+            ? undefined
+            : needsNativeFullscreenPrompt && onRequestNativeFullscreen
+            ? onRequestNativeFullscreen
+            : onToggleFullscreen
+        }
       />
 
       {/* HUD Flutuante de Gestos Touch (Brilho & Volume) */}
@@ -1998,12 +2016,27 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
           {/* Botão de Transmitir removido e movido para a interface principal (DetailsPage) */}
 
+          {isFullscreen && needsNativeFullscreenPrompt && onRequestNativeFullscreen && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRequestNativeFullscreen();
+              }}
+              className="p-1.5 sm:p-2 text-orange-400 hover:text-orange-300 bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/40 transition-colors cursor-pointer rounded-full min-h-[44px] min-w-[44px] flex items-center justify-center"
+              title="Ativar Tela Cheia Real do Navegador (F)"
+              aria-label="Ativar Tela Cheia Real do Navegador"
+            >
+              <Maximize2 className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2]" />
+            </button>
+          )}
+
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleFullscreen();
             }}
-            className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10"
+            className="p-1.5 sm:p-2 text-white/90 hover:text-white transition-colors cursor-pointer rounded-full hover:bg-white/10 min-h-[44px] min-w-[44px] flex items-center justify-center"
             title={isFullscreen ? "Sair da Tela Cheia / Widescreen (F)" : "Tela Cheia / Modo Widescreen (F)"}
           >
             {isFullscreen ? (
@@ -2030,6 +2063,36 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       {/* Aura Neon de Cinema no Perímetro do Player APENAS quando o Assistente desperta para a voz humana */}
       {(voiceAwake || (voiceFeedback.visible && voiceFeedback.type === 'listening')) && (
         <div className="absolute inset-0 pointer-events-none z-40 transition-opacity duration-300 ring-2 ring-inset ring-orange-500/60 shadow-[inset_0_0_50px_rgba(249,115,22,0.28)] rounded-none sm:rounded-2xl animate-pulse" />
+      )}
+
+      {/* Aviso clicável quando o navegador bloqueia requestFullscreen automático em comando de voz */}
+      {isFullscreen && needsNativeFullscreenPrompt && !isLocked && !isMiniPlayer && onRequestNativeFullscreen && (
+        <div className="absolute bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-50 pointer-events-auto flex items-center gap-1.5 max-w-[calc(100vw-2rem)] rounded-full bg-neutral-950/92 backdrop-blur-xl border border-orange-500/50 shadow-[0_10px_35px_rgba(0,0,0,0.9),0_0_20px_rgba(249,115,22,0.3)] p-1 pl-3 animate-in fade-in zoom-in-95">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequestNativeFullscreen();
+            }}
+            className="flex items-center gap-2 text-xs sm:text-sm font-bold text-white hover:text-orange-300 transition-colors cursor-pointer min-h-[44px] pr-1 min-w-0"
+          >
+            <Maximize2 className="w-4 h-4 text-orange-400 shrink-0" />
+            <span className="truncate">Clique aqui ou aperte F para Tela Cheia real</span>
+          </button>
+          {onDismissNativeFullscreenPrompt && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDismissNativeFullscreenPrompt();
+              }}
+              aria-label="Fechar aviso de tela cheia"
+              className="w-11 h-11 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       )}
 
       {/* Feedback Visual Futurista do Assistente de Voz Infinity */}

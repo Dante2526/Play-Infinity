@@ -1,3 +1,20 @@
+## 16/11/2026 — Promoção para Tela Cheia Real no Navegador + Fix Duplo Keydown (`F`/`S`/`N`)
+- **Causa raiz confirmada:** Ao dizer `"Infinity tela cheia"` sem clique recente no navegador desktop (Chrome/Edge), a API `document.documentElement.requestFullscreen()` é bloqueada por segurança pelo navegador (exige `userActivation` síncrona). O player expandia para *widescreen* dentro da aba (`isWidescreen = true`), sem avisar ou oferecer promoção com 1 clique/tecla `F`; além disso, `VideoPlayerModal` e `NetflixPlayerSkin` disparavam `keydown` duplicado para `F`, `S` e `N` (o `F` ligava e desligava na mesma tecla) e o botão superior `Minimize2` só encolhia de volta ao cartão.
+- **Mudanças aplicadas:**
+  - `src/components/VideoPlayerModal.tsx`: extraído `tryRequestDocumentFullscreen()` + `enterExpandedLandscape()` (removendo duplicação de `autoFullscreen` vs `setPlayerExpanded`), adicionado estado `nativeFsPending` limpo ao entrar/sair do fullscreen nativo e adicionado `if (e.defaultPrevented) return;` no `handleKeyDown` para evitar disparo duplo de `F`/`S`/`N`.
+  - `src/components/NetflixPlayerSkin.tsx`: adicionados `needsNativeFullscreenPrompt`, `onRequestNativeFullscreen` e `onDismissNativeFullscreenPrompt` — quando o navegador bloqueia o fullscreen nativo na voz, exibe o aviso clicável `"Clique aqui ou aperte F para Tela Cheia real"` (e botão `Maximize2` destacado no topo), além de promover direto para tela cheia do sistema ao pressionar `F` ou dar duplo clique.
+  - `tests/player-voice-assistant.test.cjs`: adicionado teste validando guarda anti-duplo-keydown (`e.defaultPrevented`) e promoção para tela cheia real.
+- **Verificação:** `.\node_modules\.bin\tsc.cmd --noEmit` (**exit 0**) e `node --test tests/player-voice-assistant.test.cjs tests/voice-permission-resilience.test.cjs tests/live-origin-regression.test.cjs` (**25 passed, 0 failed**).
+
+## 16/11/2026 — Correção do Canal `SBT HD` (`OFF 404`) + Pull de `e57d667` (`LGBT+`)
+- **Atualização do GitHub puxada:** `git merge --ff-only origin/main` trouxe `e57d667` (`feat(home,catalog): add LGBT+ movies and series row with PT-BR curation (v1.4.83)`).
+- **Causa raiz do `SBT HD` fora do ar (`OFF 404`):** Em `src/data/liveChannels.ts`, o canal `id: 'sbt'` estava preso a uma única URL estática vencida (`8f246fdcdd11e03e7750ed4f8e050161.s25-cloudfront-net.lat` + `w7.embedtv.cc`), que foi desativada pelo upstream. Além disso, `channel=sbt&source=1` (`138.204.86.4:8080`) retorna **HTTP 403** do IP da **VPS Oracle**.
+- **Mudanças aplicadas:**
+  - `src/data/liveChannels.ts`: substituído o servidor único estático de `SBT HD` por 3 fontes dinâmicas validadas na **VPS Oracle** (HTTP 200 + `#EXTM3U` + segmentos `.ts` reais): `/api/saimo-source?channel=sbt&source=2` (`aovivo.maissbt.com` oficial ABR), `/api/saimo-source?channel=sbtsp&source=2` (`cdn8embed` FHD) e `/api/saimo-source?channel=sbtsp&source=1` (`embedTV` rotativo via `saimoLiveTokenWatcher`).
+  - `src/components/AdminLiveChannels.tsx`: corrigida a heurística dos badges `Saimo HD` vs `embedTV` para URLs `/api/saimo-source` (`sbt&source=2` e `sbtsp&source=2` exibem `Saimo HD`; `sbtsp&source=1` e `band&source=2` exibem `embedTV`).
+  - `tests/live-origin-regression.test.cjs`: adicionado teste de regressão para garantir que `SBT HD` mantenha apenas as fontes dinâmicas válidas.
+- **Verificação:** `.\node_modules\.bin\tsc.cmd --noEmit` (**exit 0**) e `node --test tests/live-origin-regression.test.cjs tests/external-catalog.test.cjs tests/admin-probe-all-sources.test.cjs` (**66 passed, 0 failed**).
+
 ## 15/11/2026 — Seção "LGBT+" na Tela Inicial (`HomePage.tsx`, `tmdb.ts`, `lgbtUtils.ts`, `data.ts`) (v1.4.83)
 - **Implementação:** Adicionada a fileira `<ContentRow title="LGBT+" items={displayedLgbtItems} aspect="portait" onItemClick={onItemClick} />` logo após `Doramas` em `src/pages/HomePage.tsx`, exibindo filmes e séries com temática LGBTQIA+ priorizando títulos disponíveis e dublados em PT-BR (`android/app/build.gradle`: `versionCode 115`, `versionName "1.4.83"`).
 - **Mudanças aplicadas:**

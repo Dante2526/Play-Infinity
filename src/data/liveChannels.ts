@@ -382,11 +382,25 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Programa Silvio Santos / Novelas & UEFA Champions League',
     quality: '720p',
     description: 'A TV mais querida do Brasil com auditório, novelas e grandes torneios esportivos.',
+    // Hash estático antigo (8f246fdcdd11e03e7750ed4f8e050161 + w7.embedtv.cc) morreu com 404.
+    // Fonte 1 de "sbt" (138.204.86.4:8080) retorna 403 do IP da VPS Oracle.
+    // Usamos fontes dinâmicas via /api/saimo-source (renovadas automaticamente):
+    // oficial aovivo.maissbt.com (sbt source=2), cdn8embed FHD (sbtsp source=2) e embedTV rotativo (sbtsp source=1).
     lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F8f246fdcdd11e03e7750ed4f8e050161.s25-cloudfront-net.lat%2Fstream%2F490cc63080757904d5fd8a95fd1f34f6%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=ab71a48d6e34750c0b7b1cc7d7359800e0e9e02d8318657a5e105cdd6f30addb',
+        url: '/api/saimo-source?channel=sbt&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=sbtsp&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/saimo-source?channel=sbtsp&source=1',
         isProxy: false
       }
     ]
