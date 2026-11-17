@@ -1,3 +1,7 @@
+## 16/11/2026 — Telemetria de Voz no Console F12 (`usePlayerVoiceAssistant.ts`)
+- **Mudança:** Adicionados `describeVoiceUnmatchedReason` e `logVoiceTranscriptDiagnostic` em `src/hooks/usePlayerVoiceAssistant.ts` (registrando no F12 com `[VoiceAssistant]` o motor ativo `WebSpeech`/`WebAudio/STT`, frase ouvida, todas as hipóteses `alternatives`, texto normalizado, trecho após `"Infinity"`, status do wake-word, ação reconhecida/motivo da rejeição e confirmação `✅ Executado` / anti-eco).
+- **Verificação:** `.\node_modules\.bin\tsc.cmd --noEmit` (**exit 0**) e `node --test tests/voice-permission-resilience.test.cjs tests/player-voice-assistant.test.cjs` (**23 passed, 0 failed**).
+
 ## 16/11/2026 — Promoção para Tela Cheia Real no Navegador + Fix Duplo Keydown (`F`/`S`/`N`)
 - **Causa raiz confirmada:** Ao dizer `"Infinity tela cheia"` sem clique recente no navegador desktop (Chrome/Edge), a API `document.documentElement.requestFullscreen()` é bloqueada por segurança pelo navegador (exige `userActivation` síncrona). O player expandia para *widescreen* dentro da aba (`isWidescreen = true`), sem avisar ou oferecer promoção com 1 clique/tecla `F`; além disso, `VideoPlayerModal` e `NetflixPlayerSkin` disparavam `keydown` duplicado para `F`, `S` e `N` (o `F` ligava e desligava na mesma tecla) e o botão superior `Minimize2` só encolhia de volta ao cartão.
 - **Mudanças aplicadas:**

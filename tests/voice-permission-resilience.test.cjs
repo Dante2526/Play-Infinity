@@ -1039,3 +1039,39 @@ test('Microsoft Edge simulation: network error switches to WebAudio /api/voice-s
     harness.unmount();
   }
 });
+
+test('logs heard speech, wake status, understood action and rejection reason to F12 console', async () => {
+  const logs = [];
+  const origLog = console.log;
+  console.log = (...args) => logs.push(args);
+
+  const harness = await createVoiceHookHarness({
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onCommand: () => {}
+    }
+  });
+
+  try {
+    const rec = harness.instances[0];
+    // 1. Fala sem wake-word válido -> registra no F12 o que ouviu + motivo da rejeição
+    rec.emitResult('enfinite nada', true, 0);
+    // 2. Fala "Infinity" seguido de comando não mapeado -> registra trecho após wake
+    rec.emitResult('Infinity abre menu secreto', true, 1);
+    // 3. Fala reconhecida -> registra comando entendido e execução
+    rec.emitResult(['Infinity tela cheia', 'infiniti tela cheia'], true, 2);
+
+    const flat = logs.map((entry) => String(entry[0] || ''));
+    assert.ok(flat.some((s) => s.includes('Ouviu: "enfinite nada"') && s.includes('Wake "Infinity": NÃO')));
+    assert.ok(flat.some((s) => s.includes('Ouviu: "Infinity abre menu secreto"') && s.includes('não casou')));
+    assert.ok(flat.some((s) => s.includes('Ouviu: "Infinity tela cheia"') && s.includes('Entendeu: FULLSCREEN')));
+    assert.ok(flat.some((s) => s.includes('Executado') && s.includes('FULLSCREEN')));
+  } finally {
+    console.log = origLog;
+    harness.unmount();
+  }
+});

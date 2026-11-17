@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   parseBestVoiceAlternative,
+  extractCommandAfterWakeWord,
+  normalizeVoiceText,
   ParsedVoiceCommand,
   PlayerVoiceAction
 } from '../utils/voiceCommandParser';
@@ -87,6 +89,52 @@ export function downsampleTo16kPcm(input: Float32Array, inputRate: number): Int1
   return out;
 }
 
+function describeVoiceUnmatchedReason(
+  wakeDetected: boolean,
+  alreadyAwake: boolean,
+  afterWake: string
+): string {
+  if (!wakeDetected && !alreadyAwake) return 'sem wake-word "Infinity"';
+  if (!afterWake) return 'apenas wake-word "Infinity" (aguardando comando)';
+  const words = afterWake.split(' ').filter(Boolean).length;
+  if (words > 5) return `trecho após "Infinity" tem ${words} palavras (máx 5)`;
+  return `trecho "${afterWake}" não casou com nenhum comando`;
+}
+
+function logVoiceTranscriptDiagnostic(params: {
+  engine: 'WebSpeech' | 'WebAudio/STT';
+  isFinal: boolean;
+  alternatives: string[];
+  bestTranscript: string;
+  wakeDetected: boolean;
+  alreadyAwake: boolean;
+  command: ParsedVoiceCommand | null;
+}): void {
+  const { engine, isFinal, alternatives, bestTranscript, wakeDetected, alreadyAwake, command } = params;
+  const sample = bestTranscript || alternatives[0] || '';
+  const normalized = normalizeVoiceText(sample);
+  const afterWake = normalized ? extractCommandAfterWakeWord(normalized) : '';
+  const reason = command ? 'ok' : describeVoiceUnmatchedReason(wakeDetected, alreadyAwake, afterWake);
+  const wakeLabel = wakeDetected ? 'SIM' : alreadyAwake ? 'JÁ ACORDADO' : 'NÃO';
+  const understoodLabel = command ? `${command.action} ("${command.label}")` : `nenhum (${reason})`;
+
+  console.log(
+    `%c[VoiceAssistant] 🎙️ ${engine} (${isFinal ? 'final' : 'parcial'})%c Ouviu: "${alternatives[0] || ''}" | Wake "Infinity": ${wakeLabel} | Entendeu: ${understoodLabel}`,
+    'background:#ea580c;color:#fff;font-weight:bold;padding:1px 6px;border-radius:3px;',
+    'color:inherit;',
+    {
+      ouviu: alternatives[0] || '',
+      hipoteses: alternatives,
+      normalizado: normalized,
+      trechoAposInfinity: afterWake,
+      wakeDetectado: wakeDetected,
+      jaEstavaAcordado: alreadyAwake,
+      entendeu: command ? { acao: command.action, label: command.label } : null,
+      motivo: reason,
+    }
+  );
+}
+
 /** Calcula backoff exponencial (1s, 2s, 4s... máx 30s) para falhas consecutivas. */
 export function computeVoiceBackoffMs(consecutiveFailures: number): number {
   if (consecutiveFailures <= 0) return 0;
@@ -124,6 +172,7 @@ export function usePlayerVoiceAssistant({
   const lastConsumedTranscriptRef = useRef<{ text: string; at: number }>({ text: '', at: 0 });
   const finalizedIndicesRef = useRef<Set<number>>(new Set());
   const pendingInterimRef = useRef<{ command: ParsedVoiceCommand; resultIndex: number } | null>(null);
+  const lastLoggedInterimRef = useRef('');
   const sessionStartedAtRef = useRef(0);
   const lastResultAtRef = useRef(0);
   const lastAbortAtRef = useRef(0);
@@ -230,12 +279,20 @@ export function usePlayerVoiceAssistant({
   const executeVoiceCommand = useCallback((command: ParsedVoiceCommand): boolean => {
     const now = Date.now();
     if (lastExecutedRef.current.action === command.action && now - lastExecutedRef.current.at < 1500) {
+      console.info('[VoiceAssistant] ⏭️ Comando ignorado (cooldown anti-eco <1.5s):', command.action);
       deactivateAwake(0);
       return false;
     }
     pendingInterimRef.current = null;
     lastExecutedRef.current = { action: command.action, at: now };
     lastCommandExecutedAtRef.current = now;
+
+    console.log(
+      `%c[VoiceAssistant] ✅ Executado%c ${command.action} — ${command.label}`,
+      'background:#16a34a;color:#fff;font-weight:bold;padding:1px 6px;border-radius:3px;',
+      'color:inherit;',
+      { frase: command.matchedText }
+    );
 
     if (command.action === 'PLAY' && isMobileAudioFocusSensitive()) {
       nextRetryAtRef.current = Math.max(nextRetryAtRef.current, now + MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS);
@@ -334,7 +391,7 @@ export function usePlayerVoiceAssistant({
       flushPendingInterim();
     }
 
-    const { wakeDetected, command } = parseBestVoiceAlternative(alternatives);
+    const { wakeDetected, bestTranscript, command } = parseBestVoiceAlternative(alternatives);
 
     // Deduplica apenas eco imediato da mesma frase de comando em < 1500ms
     if (
@@ -345,6 +402,33 @@ export function usePlayerVoiceAssistant({
       now - lastConsumedTranscriptRef.current.at < 1500
     ) {
       return;
+    }
+
+    const engine = useWebAudioFallbackRef.current ? 'WebAudio/STT' : 'WebSpeech';
+    const wasAlreadyAwake = isAwakeRef.current;
+
+    if (isFinal) {
+      lastLoggedInterimRef.current = '';
+      logVoiceTranscriptDiagnostic({
+        engine,
+        isFinal: true,
+        alternatives,
+        bestTranscript,
+        wakeDetected,
+        alreadyAwake: wasAlreadyAwake,
+        command,
+      });
+    } else if ((wakeDetected || wasAlreadyAwake) && alternatives[0] && lastLoggedInterimRef.current !== alternatives[0]) {
+      lastLoggedInterimRef.current = alternatives[0];
+      logVoiceTranscriptDiagnostic({
+        engine,
+        isFinal: false,
+        alternatives,
+        bestTranscript,
+        wakeDetected,
+        alreadyAwake: wasAlreadyAwake,
+        command,
+      });
     }
 
     const inPostPlayCooldown =
