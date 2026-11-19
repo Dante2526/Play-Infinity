@@ -123,6 +123,7 @@ export const ALLOWED_LIVE_STREAMING_DOMAINS: string[] = [
   "fshd.link",
   "vizer.best",
   "vizer.food",
+  "vizer.locker",
   "cdn8embed.xyz",
   "playerembedcanais.site",
   "cdn10embed.xyz",

@@ -1,3 +1,11 @@
+## 19/11/2026 — Atualização do Domínio do Catálogo Vizer (`www.vizer.food` → `www.vizer.locker`) (v1.4.87)
+- **Diagnóstico ao vivo:** Todos os domínios anteriores (`vizer.food`, `vizer.date`, `vizer.host`, `vizer.press`, `vizer.reisen`) passaram a responder `HTTP 301` para `https://www.vizer.locker/series/online/`. Validado `https://www.vizer.locker/series/online/` com `HTTP 200`, `55.354 bytes`, listagem real do catálogo (`catalogue: true`, `blocked: false`, título `"Series Online Grátis - Vizer"`).
+- **Mudanças aplicadas:**
+  - `server/services/vizerDomains.ts`: adicionados `'https://www.vizer.locker'` e `'https://vizer.locker'` na frente de `VIZER_DOMAINS`.
+  - `src/data/streamingAllowlist.ts`: adicionado `"vizer.locker"` em `ALLOWED_LIVE_STREAMING_DOMAINS`.
+  - `tests/vizer.test.cjs`: atualizados os testes de ordem primária e fallback para `www.vizer.locker` → `www.vizer.food`.
+- **Verificação:** `npx tsc --noEmit` (**exit 0**) e `node --test tests/vizer.test.cjs tests/admin-health-providers.test.cjs tests/encontrei-live-discovery.test.cjs tests/blacklist-allowlist-guard.test.cjs` (**27 passed, 0 failed**).
+
 ## 19/11/2026 — Vistoria Geral de TV Ao Vivo (139 Canais) e Correção de 11 Canais Offline + Band (`liveChannels.ts`) (v1.4.86)
 - **Vistoria em produção (`https://play-infinity.stream/api/live-channels`):** Auditados todos os 139 canais (156 servidores) validando `#EXTM3U`, download real de segmento e codec de áudio. Resultado inicial: **124/139 online (89,2%)**, 0 canais com áudio apenas AC-3 e 15 offline (11 canais principais em `src/data/liveChannels.ts` com hash expirado `92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat` retornando HTTP 404 + 4 canais dinâmicos externos PPV/Anime Channel TV), além do `Servidor 2` da Band (`source=3`) retornando HTTP 404.
 - **Mudanças aplicadas:**
