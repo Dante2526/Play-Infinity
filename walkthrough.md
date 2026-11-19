@@ -1,3 +1,10 @@
+## 19/11/2026 — Correção do Aviso da Google Play Console (`android.hardware.wifi` opcional) (v1.4.90 / versionCode 122)
+- **Causa raiz:** As permissões `ACCESS_WIFI_STATE` e `CHANGE_WIFI_MULTICAST_STATE` em `android/app/src/main/AndroidManifest.xml` (usadas na descoberta de Roku via SSDP em `RokuDiscoveryPlugin.java`, que já trata `wifi == null`) fazem o Android declarar implicitamente `android.hardware.wifi` como obrigatório (`required="true"`), bloqueando dispositivos sem Wi-Fi (TV Box/Desktop via Ethernet, celulares/tablets/XR específicos) na revisão da Google Play Console.
+- **Mudanças aplicadas:**
+  - `android/app/src/main/AndroidManifest.xml`: adicionado `<uses-feature android:name="android.hardware.wifi" android:required="false" />`.
+  - `android/app/build.gradle`: incrementado `versionCode` `121 → 122` e `versionName` `"1.4.89" → "1.4.90"`.
+  - `tests/graphify-bugs-regression.test.cjs`: adicionado teste de regressão garantindo `android:required="false"` para `wifi`, `microphone` e `touchscreen`.
+
 ## 19/11/2026 — Correção dos Controles Fantasmas do Player no Celular com Comando de Voz Contínuo (`NetflixPlayerSkin.tsx`, `usePlayerVoiceAssistant.ts`)
 - **Causa raiz confirmada:**
   1. No celular (Android Chrome / Samsung Internet / WebView do Capacitor), o `webkitSpeechRecognition` encerra a sessão (`onend`) a cada ~5–10 segundos de áudio/silêncio e chama `rec.start()` novamente para manter a escuta contínua.

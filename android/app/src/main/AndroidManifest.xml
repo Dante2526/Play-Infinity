@@ -40,6 +40,7 @@
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
     <uses-feature android:name="android.hardware.audio.output" android:required="false" />
     <uses-feature android:name="android.hardware.sensors.accelerometer" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
 
     <!-- Permissions -->
     <uses-permission android:name="android.permission.INTERNET" />

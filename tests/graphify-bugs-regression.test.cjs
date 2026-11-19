@@ -142,3 +142,18 @@ test('Capacitor Plugins & OfflineStorage: @capacitor/filesystem registrado em ca
   );
 });
 
+test('AndroidManifest: recursos de hardware implícitos (wifi, microphone, touchscreen) declarados como required="false" para Play Store', () => {
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  for (const feature of [
+    'android.hardware.wifi',
+    'android.hardware.microphone',
+    'android.hardware.touchscreen',
+  ]) {
+    assert.ok(
+      manifest.includes(`<uses-feature android:name="${feature}" android:required="false" />`),
+      `AndroidManifest.xml deve declarar ${feature} como android:required="false"`
+    );
+  }
+});
+
+
