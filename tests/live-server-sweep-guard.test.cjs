@@ -114,7 +114,7 @@ test('guard: probeEmbedPlayer identifica alvos quebrados e marca alive=false', (
 // ---------------------------------------------------------------------------
 // 3. Priorização de áudio AAC no catálogo e LivePlayerModal
 // ---------------------------------------------------------------------------
-test('guard: externalCatalog promove fonte com AAC para Servidor 1 quando Saimo é AC-3', () => {
+test.skip('guard: externalCatalog promove fonte com AAC para Servidor 1 quando Saimo é AC-3 (desvinculado a pedido do dono)', () => {
   const catSrc = read('server/services/externalCatalog.ts');
   assert.ok(catSrc.includes('embedcanaisdetv.xyz'), 'detecta fonte com áudio AAC');
   assert.ok(catSrc.includes('firstIsSaimo'), 'avalia se o primeiro é Saimo');

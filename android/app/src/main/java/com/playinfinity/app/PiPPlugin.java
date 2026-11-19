@@ -18,6 +18,11 @@ public class PiPPlugin extends Plugin {
     }
 
     @PluginMethod
+    public void setVideoPlaying(PluginCall call) {
+        setPlayingStatus(call);
+    }
+
+    @PluginMethod
     public void enter(PluginCall call) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (getActivity() != null) {

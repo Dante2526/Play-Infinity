@@ -27,6 +27,7 @@ import { detectConnectionQuality } from '../services/networkQuality';
 import { Capacitor, registerPlugin } from '@capacitor/core';
 const PiP = registerPlugin<any>('PiP');
 import { ScreenOrientation } from '@capacitor/screen-orientation';
+import { StatusBar } from '../utils/statusBar';
 
 interface LivePlayerModalProps {
   channel: LiveChannel;
@@ -218,9 +219,30 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
     }
   };
 
+  // Sincroniza status de reprodução com o plugin nativo Android PiP (para auto-PiP no botão Home)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    PiP.setPlayingStatus({ isPlaying: Boolean(isPlaying && !hasError) }).catch(() => {});
+  }, [isPlaying, hasError]);
+
+  // Oculta as barras de sistema do Android em tela cheia e restaura no miniplayer / fechamento
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    if (isMiniPlayer) {
+      StatusBar.show().catch(() => {});
+    } else {
+      StatusBar.hide().catch(() => {});
+    }
+    return () => {
+      PiP.setPlayingStatus({ isPlaying: false }).catch(() => {});
+      StatusBar.show().catch(() => {});
+    };
+  }, [isMiniPlayer]);
+
   const handleClose = () => {
     if (Capacitor.isNativePlatform()) {
-      PiP.setVideoPlaying({ isPlaying: false }).catch(() => {});
+      PiP.setPlayingStatus({ isPlaying: false }).catch(() => {});
+      StatusBar.show().catch(() => {});
       ScreenOrientation.unlock().catch(() => {});
     }
     onClose();
@@ -229,11 +251,13 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const toggleInAppMiniPlayer = () => {
     if (isMiniPlayer) {
       if (Capacitor.isNativePlatform()) {
+        StatusBar.hide().catch(() => {});
         ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
       }
       setIsMiniPlayer(false);
     } else {
       if (Capacitor.isNativePlatform()) {
+        StatusBar.show().catch(() => {});
         ScreenOrientation.unlock().catch(() => {});
       }
       // Some da tela cheia nativa antes de encolher, senão o navegador mantém o vídeo preso em tela cheia

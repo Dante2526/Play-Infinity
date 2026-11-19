@@ -8,6 +8,7 @@ const RokuDiscovery = registerPlugin<any>('RokuDiscovery');
 
 import { findMovieByTmdbId, findEpisode, buildMixdropStreamUrl } from '../services/encontreiCatalog';
 import { loadCastFramework, isChromiumBrowser, buildWebCastLoadRequest, isCastUserCancel } from '../services/webCastSdk';
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
 
 export interface CastMediaDetails {
   mediaType: 'movie' | 'series';
@@ -236,6 +237,30 @@ export const CastModal: React.FC<CastModalProps> = ({ onClose, streamUrl, title,
           } catch (mediaErr: any) {
             console.error("Chromecast loadMedia error", mediaErr);
             setStatusMsg("A TV não conseguiu reproduzir este canal. Tente outro servidor do canal ou use o App Externo de Transmissão.");
+            return;
+          }
+        } else {
+          setStatusMsg("Preparando vídeo para a TV...");
+          const directUrl = await resolveCastStreamUrl();
+          if (!directUrl) {
+            setStatusMsg("Não foi possível obter o link direto de transmissão para este título.");
+            return;
+          }
+          const baseOrigin = getApiBaseUrl() || window.location.origin;
+          const absoluteUrl = new URL(directUrl, baseOrigin).href;
+          const isHls = /\.m3u8(\?|#|$)/i.test(absoluteUrl);
+          setStatusMsg("Iniciando transmissão na TV...");
+          try {
+            await anyCast.loadMedia({
+              contentId: absoluteUrl,
+              contentType: isHls ? 'application/x-mpegURL' : 'video/mp4',
+              streamType: 'buffered',
+              autoPlay: true,
+              metadata: { title: title || 'Play Infinity' }
+            });
+          } catch (mediaErr: any) {
+            console.error("Chromecast VOD loadMedia error", mediaErr);
+            setStatusMsg("A TV não conseguiu reproduzir este conteúdo. Tente outro servidor ou use o App Externo de Transmissão.");
             return;
           }
         }

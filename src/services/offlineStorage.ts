@@ -101,8 +101,9 @@ async function saveBlobWeb(
 }
 
 /**
- * Em Capacitor nativo: escreve o arquivo no Filesystem.
- * Caminho: Directory.Data/downloads/<id>.mp4
+ * Em Capacitor nativo: escreve o arquivo no Filesystem em chunks de 3MB
+ * (evita OOM/RangeError no V8 e na bridge Java ao converter vídeos grandes para base64).
+ * Caminho: Directory.Data/downloads/<safeId>_<safeFileName>
  * Converte o caminho pra webviewUrl usando Capacitor.convertFileSrc.
  */
 async function saveBlobNative(
@@ -111,17 +112,37 @@ async function saveBlobNative(
   fileName: string
 ): Promise<void> {
   try {
-    // Converte blob pra base64 (Filesystem.writeFile exige base64 em mobile)
-    const base64 = await blobToBase64(blob);
-    const safeFileName = (fileName || `${id}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
-    const filePath = `downloads/${id}_${safeFileName}`;
+    const safeId = id.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeFileName = (fileName || `${safeId}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `downloads/${safeId}_${safeFileName}`;
 
-    await Filesystem.writeFile({
-      path: filePath,
-      data: base64,
-      directory: Directory.Data,
-      recursive: true,
-    });
+    // Multiplo de 3 bytes (3 MB) para alinhamento exato de blocos base64 no appendFile
+    const CHUNK_SIZE = 3 * 1024 * 1024;
+    let offset = 0;
+    let isFirstChunk = true;
+
+    while (offset < blob.size || isFirstChunk) {
+      const slice = blob.slice(offset, offset + CHUNK_SIZE);
+      const chunkBase64 = await blobToBase64(slice);
+
+      if (isFirstChunk) {
+        await Filesystem.writeFile({
+          path: filePath,
+          data: chunkBase64,
+          directory: Directory.Data,
+          recursive: true,
+        });
+        isFirstChunk = false;
+      } else {
+        await Filesystem.appendFile({
+          path: filePath,
+          data: chunkBase64,
+          directory: Directory.Data,
+        });
+      }
+
+      offset += CHUNK_SIZE;
+    }
 
     // Pega o URI do arquivo e converte pra URL acessível no webview
     const uriResult = await Filesystem.getUri({
@@ -161,8 +182,8 @@ async function saveBlobNative(
     console.log(`[offlineStorage] Blob salvo no filesystem nativo: ${fileUri}`);
     console.log(`[offlineStorage] WebView URL: ${webviewUrl}`);
   } catch (err) {
-    console.warn("[offlineStorage] Erro ao salvar blob (native):", err);
-    throw err;
+    console.warn("[offlineStorage] Erro ao salvar blob no Filesystem nativo, fazendo fallback para IndexedDB:", err);
+    return saveBlobWeb(id, blob, fileName);
   }
 }
 
@@ -213,10 +234,9 @@ export async function deleteBlob(id: string): Promise<void> {
   const stored = await getBlob(id);
   if (stored?.fileUri) {
     try {
-      // Extrai o path do fileUri (formato: file:///data/user/0/.../downloads/...)
-      // Filesystem.delete usa o path relativo, então precisamos recriar do fileName
-      const safeFileName = (stored.fileName || `${id}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
-      const filePath = `downloads/${id}_${safeFileName}`;
+      const safeId = id.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const safeFileName = (stored.fileName || `${safeId}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
+      const filePath = `downloads/${safeId}_${safeFileName}`;
       await Filesystem.deleteFile({
         path: filePath,
         directory: Directory.Data,

@@ -106,7 +106,8 @@ import {
 } from "../services/favorites";
 import {
   getFavoriteEpisodeNotifications,
-  getReadNotificationIds
+  getReadNotificationIds,
+  syncNotificationsInBackground
 } from "../services/notifications";
 import {
   isEpisodeWatched,
@@ -467,6 +468,7 @@ export function UserProfilePage({
   const userInitial = (userName.trim() || 'N').charAt(0).toUpperCase();
 
   const [favoriteItems, setFavoriteItems] = useState<CatalogItem[]>(() => getStaticFavoriteItems(getFavoriteIds()));
+  const [scheduleTick, setScheduleTick] = useState<number>(0);
 
   // Resolve favoritos completos (catálogo estático + cache local + TMDB para itens fora do catálogo local)
   useEffect(() => {
@@ -474,6 +476,9 @@ export function UserProfilePage({
     resolveFavoriteItems(favoriteIds).then(items => {
       if (mounted) setFavoriteItems(items);
     });
+    if (favoriteIds.length > 0) {
+      syncNotificationsInBackground(favoriteIds);
+    }
     return () => { mounted = false; };
   }, [favoriteIds]);
 
@@ -487,16 +492,25 @@ export function UserProfilePage({
         if (mounted) setFavoriteItems(items);
       });
     };
+    const handleScheduleUpdate = () => {
+      if (mounted) setScheduleTick(t => t + 1);
+    };
     window.addEventListener("playinfinity:favorites_updated", handleFavUpdate);
+    window.addEventListener("playinfinity:notifications_updated", handleScheduleUpdate);
     return () => {
       mounted = false;
       window.removeEventListener("playinfinity:favorites_updated", handleFavUpdate);
+      window.removeEventListener("playinfinity:notifications_updated", handleScheduleUpdate);
     };
   }, []);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const nextWeekStr = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
   const followedSeries = favoriteItems.filter(item => item.type === 'series');
-  const scheduledEpisodes = getScheduleForFavorites(favoriteIds);
-  const thisWeekEpisodes = scheduledEpisodes.filter(e => e.airDate >= '2026-09-08' && e.airDate <= '2026-09-15');
+  const scheduledEpisodes = React.useMemo(() => getScheduleForFavorites(favoriteIds), [favoriteIds, scheduleTick]);
+  const thisWeekEpisodes = scheduledEpisodes.filter(
+    e => e.status === 'today' || (e.status !== 'season_ended' && e.status !== 'series_ended' && e.airDate >= todayStr && e.airDate <= nextWeekStr)
+  );
 
   return (
     <div className="flex-1 w-full flex flex-col z-20 relative min-h-screen pt-28 md:pt-32 px-4 md:px-12 bg-[#0a0a0a] pb-24 text-white">

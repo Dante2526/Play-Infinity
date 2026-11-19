@@ -54,6 +54,10 @@ export function GlobalCatalogPage({
   const gridSectionRef = useRef<HTMLDivElement>(null);
   const isInitialMount = useRef<boolean>(true);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [type]);
+
   const scrollToGrid = () => {
     if (gridSectionRef.current) {
       const navOffset = 65;

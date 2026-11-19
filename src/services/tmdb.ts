@@ -726,16 +726,37 @@ export const getProviderMovies = async (provider: string, page: number = 1, sort
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
+const TV_GENRE_REMAP: Record<number, string> = {
+  28: '10759', // Ação -> Action & Adventure (TV)
+  12: '10759', // Aventura -> Action & Adventure (TV)
+  14: '10765', // Fantasia -> Sci-Fi & Fantasy (TV)
+  878: '10765', // Ficção científica -> Sci-Fi & Fantasy (TV)
+  53: '9648|80', // Thriller -> Mystery | Crime (TV)
+  27: '9648|10765', // Terror -> Mystery | Sci-Fi & Fantasy (TV)
+};
+
 export const discoverMovies = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
   let url = `${BASE_URL}/discover/movie?language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  if (sortBy === 'primary_release_date.desc') {
+    const today = new Date().toISOString().split('T')[0];
+    url += `&primary_release_date.lte=${today}`;
+  }
   if (genreId) url += `&with_genres=${genreId}`;
   if (year) url += `&primary_release_year=${year}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };
 
 export const discoverSeries = async (page: number = 1, genreId?: number, sortBy: string = 'popularity.desc', year?: number): Promise<TMDBResponse> => {
-  let url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=${sortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
-  if (genreId) url += `&with_genres=${genreId}`;
+  const tvSortBy = sortBy === 'primary_release_date.desc' ? 'first_air_date.desc' : sortBy;
+  let url = `${BASE_URL}/discover/tv?language=pt-BR&sort_by=${tvSortBy}&page=${page}&include_adult=false&vote_count.gte=10`;
+  if (tvSortBy === 'first_air_date.desc') {
+    const today = new Date().toISOString().split('T')[0];
+    url += `&first_air_date.lte=${today}`;
+  }
+  if (genreId) {
+    const tvGenre = TV_GENRE_REMAP[genreId] || String(genreId);
+    url += `&with_genres=${tvGenre}`;
+  }
   if (year) url += `&first_air_date_year=${year}`;
   return fetchTmdbSafe<TMDBResponse>(url, DEFAULT_EMPTY_RESPONSE);
 };

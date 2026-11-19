@@ -6,6 +6,8 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 export interface EpisodeNotification {
   id: string;
   seriesId: number;
+  tmdbId?: number;
+  imdbId?: string;
   seriesTitle: string;
   seriesPoster: string;
   seriesBackdrop?: string;
@@ -173,14 +175,14 @@ export const getFavoriteEpisodeNotifications = (favoriteIds: number[]): EpisodeN
   allScheduled.forEach(ep => {
     // Apenas episódios que já lançaram (data <= hoje)
     if (ep.airDate <= todayStr) {
-      // Pula séries já concluídas (Ended)
-      if (ep.status === 'series_ended' || ep.seriesStatus === 'Ended') {
+      // Pula séries já concluídas (Ended) ou resumos sintéticos de temporada encerrada
+      if (ep.status === 'series_ended' || ep.status === 'season_ended' || ep.seriesStatus === 'Ended') {
         return;
       }
       
       // Regra de Ouro (Pedido do Usuário): 
       // Não notificar episódios que foram lançados ANTES do usuário começar a seguir a série.
-      const favTimestamp = favoriteTimestamps[ep.seriesId];
+      const favTimestamp = favoriteTimestamps[ep.seriesId] || (ep.tmdbId ? favoriteTimestamps[ep.tmdbId] : undefined);
       if (favTimestamp) {
         const favDateStr = new Date(favTimestamp).toISOString().split('T')[0];
         // Se o episódio lançou antes do dia que ele favoritou, ignora.
@@ -197,13 +199,18 @@ export const getFavoriteEpisodeNotifications = (favoriteIds: number[]): EpisodeN
 
       // Só mostra se for recente (até 30 dias atrás)
       if (diffDays <= 30) {
-        const isWatched = isEpisodeWatched(ep.seriesId, ep.seasonNumber, ep.episodeNumber);
+        const resolvedTmdbId = ep.tmdbId || ep.seriesId;
+        const isWatched =
+          isEpisodeWatched(resolvedTmdbId, ep.seasonNumber, ep.episodeNumber) ||
+          isEpisodeWatched(ep.seriesId, ep.seasonNumber, ep.episodeNumber);
         const isToday = ep.airDate === todayStr;
         const isRead = readIds.has(ep.id);
 
         notifications.push({
           id: ep.id,
           seriesId: ep.seriesId,
+          tmdbId: resolvedTmdbId,
+          imdbId: ep.imdbId,
           seriesTitle: ep.seriesTitle,
           seriesPoster: ep.seriesPoster,
           seriesBackdrop: ep.seriesBackdrop,

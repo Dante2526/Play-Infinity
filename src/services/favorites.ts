@@ -1,5 +1,5 @@
-import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas, lgbtContent } from "../data";;
-import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";;
+import { providerCatalogs, featured, featuredCarousel, top10, releases, newest, animes, doramas, lgbtContent, kidsContent } from "../data";
+import { CatalogItem, isMediaAvailable } from "../utils/mediaUtils";
 import { getDetails, formatImageUrl, TMDBDetails, FALLBACK_POSTER_IMAGE, FALLBACK_BACKDROP_IMAGE } from "./tmdb";
 import { db, auth } from "./firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
@@ -45,7 +45,17 @@ export const getAllCatalogItems = (): CatalogItem[] => {
     if (!items) return;
     items.forEach(item => {
       if (item.id) {
-         map.set(item.id, { ...item, type: item.type || 'movie' } as CatalogItem);
+        const prev = map.get(item.id);
+        map.set(item.id, {
+          ...prev,
+          ...item,
+          type: item.type || prev?.type || 'movie',
+          tmdbId: item.tmdbId ?? prev?.tmdbId,
+          imdbId: item.imdbId ?? prev?.imdbId,
+          isAnime: Boolean(item.isAnime || prev?.isAnime),
+          isDorama: Boolean(item.isDorama || prev?.isDorama),
+          isLgbt: Boolean(item.isLgbt || prev?.isLgbt),
+        } as CatalogItem);
       }
     });
   };
@@ -76,11 +86,10 @@ export const getAllCatalogItems = (): CatalogItem[] => {
   addItems(animes);
   addItems(doramas);
   addItems(lgbtContent);
+  addItems(kidsContent);
 
   Object.entries(providerCatalogs).forEach(([_, items]) => {
-    items.forEach(item => {
-      map.set(item.id, item as CatalogItem);
-    });
+    addItems(items);
   });
 
   cachedCatalogItems = Array.from(map.values()).filter(isMediaAvailable);
@@ -386,12 +395,27 @@ export async function resolveFavoriteItems(ids: number[]): Promise<CatalogItem[]
   );
 
   const resultMap = new Map<number, CatalogItem>();
-  initialItems.forEach(item => resultMap.set(Number(item.id), item));
+  initialItems.forEach(item => {
+    resultMap.set(Number(item.id), item);
+    if (item.tmdbId) resultMap.set(Number(item.tmdbId), item);
+  });
   dynamic.forEach(item => {
-    if (item) resultMap.set(Number(item.id), item);
+    if (item) {
+      resultMap.set(Number(item.id), item);
+      if (item.tmdbId) resultMap.set(Number(item.tmdbId), item);
+    }
   });
 
-  return idsNum.map(id => resultMap.get(id)).filter((i): i is CatalogItem => !!i);
+  const seenIds = new Set<number>();
+  const resolved: CatalogItem[] = [];
+  for (const id of idsNum) {
+    const item = resultMap.get(id);
+    if (item && !seenIds.has(Number(item.id))) {
+      seenIds.add(Number(item.id));
+      resolved.push(item);
+    }
+  }
+  return resolved;
 }
 
 // Cronograma de episódios estáticos (apenas séries com episódios futuros confirmados oficialmente)
@@ -601,12 +625,15 @@ export const getScheduleForFavorites = (favoriteIds: number[]): SeriesScheduleEp
       const dynamicList: SeriesScheduleEpisode[] = JSON.parse(cached);
       if (Array.isArray(dynamicList)) {
         dynamicList.forEach(ep => {
-          if (favoriteIds.includes(ep.seriesId) && !addedIds.has(ep.id)) {
-            let status: 'released' | 'today' | 'upcoming' = ep.status as any || 'upcoming';
-            if (ep.airDate === todayStr) {
-              status = 'today';
-            } else if (ep.airDate < todayStr) {
-              status = 'released';
+          const isFav = favoriteIds.includes(ep.seriesId) || (ep.tmdbId ? favoriteIds.includes(ep.tmdbId) : false);
+          if (isFav && !addedIds.has(ep.id)) {
+            let status: SeriesScheduleEpisode['status'] = ep.status || 'upcoming';
+            if (status !== 'season_ended' && status !== 'series_ended') {
+              if (ep.airDate === todayStr) {
+                status = 'today';
+              } else if (ep.airDate < todayStr) {
+                status = 'released';
+              }
             }
             episodes.push({
               ...ep,

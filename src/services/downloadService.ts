@@ -143,7 +143,8 @@ export async function checkMovieDownloadAvailability(tmdbId: number, title: stri
     const data = await findMovieByTmdbId(tmdbId);
     if (data && data.mixdrop) {
       const fileName = sanitizeDownloadFileName(title);
-      const directDownloadUrl = `${ORACLE_PROXY_BASE}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
+      const apiBase = getApiBaseUrl() || ORACLE_PROXY_BASE;
+      const directDownloadUrl = `${apiBase}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
       return {
         available: true,
         mixdropUrl: data.mixdrop,
@@ -170,7 +171,8 @@ export async function checkEpisodeDownloadAvailability(
     const data = await findEpisode(tmdbId, season, episode);
     if (data && data.mixdrop) {
       const fileName = sanitizeDownloadFileName(seriesTitle, season, episode);
-      const directDownloadUrl = `${ORACLE_PROXY_BASE}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
+      const apiBase = getApiBaseUrl() || ORACLE_PROXY_BASE;
+      const directDownloadUrl = `${apiBase}/api/download?url=${encodeURIComponent(data.mixdrop)}&filename=${encodeURIComponent(fileName)}`;
       return {
         available: true,
         mixdropUrl: data.mixdrop,
@@ -407,7 +409,10 @@ export function triggerDirectDownload(
         }
 
         console.log(`[downloadService] Baixando blob offline pra "${meta.title}" (id=${id})`);
-        const response = await fetch(url);
+        const resolvedUrl = (isNative && url.startsWith('/'))
+          ? `${getApiBaseUrl() || 'https://play-infinity.stream'}${url}`
+          : url;
+        const response = await fetch(resolvedUrl);
         if (!response.ok) {
           console.warn(`[downloadService] Fetch do blob falhou: HTTP ${response.status}`);
           // Marca erro no progresso

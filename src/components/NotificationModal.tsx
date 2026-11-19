@@ -97,8 +97,8 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
       `${notif.seriesTitle} - T${notif.seasonNumber}:E${notif.episodeNumber} "${notif.episodeTitle}"`,
       notif.playerUrl,
       'series',
-      notif.seriesId,
-      undefined,
+      notif.tmdbId || notif.seriesId,
+      notif.imdbId,
       notif.seasonNumber,
       notif.episodeNumber,
       '1080p',
@@ -113,7 +113,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
 
   const handleToggleWatched = (e: React.MouseEvent, notif: EpisodeNotification) => {
     e.stopPropagation();
-    toggleEpisodeWatched(notif.seriesId, notif.seasonNumber, notif.episodeNumber);
+    toggleEpisodeWatched(notif.tmdbId || notif.seriesId, notif.seasonNumber, notif.episodeNumber);
     markNotificationAsRead(notif.id);
     loadNotifications();
   };
@@ -253,9 +253,11 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                       onClick={(e) => {
                         e.stopPropagation();
                         onClose();
+                        const resolvedTmdbId = notif.tmdbId || notif.seriesId;
                         onNavigateToSeries(notif.seriesId, {
                           id: notif.seriesId,
-                          tmdbId: notif.seriesId,
+                          tmdbId: resolvedTmdbId,
+                          imdbId: notif.imdbId,
                           title: notif.seriesTitle,
                           imageUrl: notif.seriesPoster,
                           posterUrl: notif.seriesPoster,
@@ -265,7 +267,7 @@ export const NotificationModal: React.FC<NotificationModalProps> = ({
                           synopsis: '',
                           year: new Date().getFullYear(),
                           rating: '★',
-                          playerUrl: notif.playerUrl || `https://v1.watchplay.shop/tvshow/${notif.seriesId}/1/1`
+                          playerUrl: notif.playerUrl || `https://v1.watchplay.shop/tvshow/${resolvedTmdbId}/1/1`
                         });
                       }}
                       className="text-[11px] text-neutral-400 hover:text-white flex items-center gap-1 transition-colors cursor-pointer"

@@ -4,6 +4,10 @@
 		"classpath": "io.capawesome.capacitorjs.plugins.firebase.messaging.FirebaseMessagingPlugin"
 	},
 	{
+		"pkg": "@capacitor/filesystem",
+		"classpath": "com.capacitorjs.plugins.filesystem.FilesystemPlugin"
+	},
+	{
 		"pkg": "@capacitor/screen-orientation",
 		"classpath": "com.capacitorjs.plugins.screenorientation.ScreenOrientationPlugin"
 	},

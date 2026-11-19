@@ -32,7 +32,8 @@ import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
 import { rankPlaybackServers, playbackHealthState, ServerHealthMap } from "../services/playbackHealth";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+const PiP = registerPlugin<any>('PiP');
 import { StatusBar } from '../utils/statusBar';
 import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { Chromecast } from '@caprockapps/capacitor-chromecast';
@@ -581,6 +582,9 @@ export function VideoPlayerModal({
         enforceInterval = setInterval(enforceStatusBarHidden, 2500);
       } else {
         StatusBar.show().catch(() => { });
+        if (!isOpen) {
+          PiP.setPlayingStatus({ isPlaying: false }).catch(() => { });
+        }
       }
     }
     return () => {
@@ -590,6 +594,9 @@ export function VideoPlayerModal({
 
       if (Capacitor.isNativePlatform()) {
         StatusBar.show().catch(() => { });
+        if (!isOpen) {
+          PiP.setPlayingStatus({ isPlaying: false }).catch(() => { });
+        }
       }
     };
   }, [isOpen, isExpanded, isMiniPlayer]);
@@ -2904,6 +2911,8 @@ export function VideoPlayerModal({
       } catch (e) { console.warn("Silenced error:", e); }
     }
     if (Capacitor.isNativePlatform()) {
+      PiP.setPlayingStatus({ isPlaying: false }).catch(() => { });
+      StatusBar.show().catch(() => { });
       ScreenOrientation.unlock().catch(() => { });
     } else if (screen.orientation && typeof (screen.orientation as any).unlock === "function") {
       try {

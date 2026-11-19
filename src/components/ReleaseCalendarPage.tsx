@@ -15,11 +15,14 @@ import {
   Bell,
   AlertCircle
 } from "lucide-react";
-import { CatalogItem } from "../utils/mediaUtils";;
+import { CatalogItem } from "../utils/mediaUtils";
 import {
   SeriesScheduleEpisode,
   getFavoriteIds,
   toggleFavorite,
+  isItemFavorite,
+  getStaticFavoriteItems,
+  resolveFavoriteItems,
   fetchDynamicScheduleForFavorites,
   getAllCatalogItems,
   SERIES_EPISODE_SCHEDULE
@@ -36,7 +39,12 @@ interface ReleaseCalendarPageProps {
     season?: number,
     episode?: number,
     quality?: string,
-    isCam?: boolean
+    isCam?: boolean,
+    initialTime?: number,
+    forceStartFromBeginning?: boolean,
+    backdropUrl?: string,
+    customCoverUrl?: string,
+    posterUrl?: string
   ) => void;
   onNavigateToSeries?: () => void;
 }
@@ -49,6 +57,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
   const CACHE_KEY = "playinfinity_schedule_cache_v2";
 
   const [favoriteIds, setFavoriteIds] = useState<number[]>(getFavoriteIds());
+  const [favoriteItems, setFavoriteItems] = useState<CatalogItem[]>(() => getStaticFavoriteItems(getFavoriteIds()));
   const [filterTab, setFilterTab] = useState<'all' | 'week' | 'today' | 'upcoming' | 'ended'>('all');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [dynamicEpisodes, setDynamicEpisodes] = useState<SeriesScheduleEpisode[]>(() => {
@@ -65,7 +74,9 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
   // Sincroniza estado de favoritos via evento
   useEffect(() => {
     const handleFavoritesUpdate = (e: any) => {
-      setFavoriteIds(e.detail || getFavoriteIds());
+      const nextIds = e.detail || getFavoriteIds();
+      setFavoriteIds(nextIds);
+      setFavoriteItems(getStaticFavoriteItems(nextIds));
     };
 
     window.addEventListener("playinfinity:favorites_updated", handleFavoritesUpdate);
@@ -73,6 +84,20 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
       window.removeEventListener("playinfinity:favorites_updated", handleFavoritesUpdate);
     };
   }, []);
+
+  // Resolve itens favoritos dinâmicos (TMDB / busca / catálogos de provedores)
+  useEffect(() => {
+    let isMounted = true;
+    setFavoriteItems(getStaticFavoriteItems(favoriteIds));
+    if (favoriteIds.length > 0) {
+      resolveFavoriteItems(favoriteIds)
+        .then(items => {
+          if (isMounted) setFavoriteItems(items);
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [favoriteIds]);
 
   // Busca o status real oficial de cada série diretamente no TMDB
   useEffect(() => {
@@ -104,12 +129,73 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
 
   const allCatalog = getAllCatalogItems();
   const allSeries = allCatalog.filter(item => item.type === 'series');
-  
-  // Séries atualmente favoritadas pelo usuário
-  const followedSeries = allSeries.filter(series => favoriteIds.includes(series.id));
-  
-  // Episódios com dados reais do TMDB
-  const scheduledEpisodes = dynamicEpisodes;
+
+  // Episódios com dados reais do TMDB filtrados pelos favoritos ativos
+  const scheduledEpisodes = dynamicEpisodes.filter(
+    ep => favoriteIds.includes(ep.seriesId) || (ep.tmdbId ? favoriteIds.includes(ep.tmdbId) : false)
+  );
+
+  // Séries atualmente favoritadas pelo usuário (estáticas + dinâmicas/TMDB + presentes na agenda)
+  const followedSeries = React.useMemo(() => {
+    const map = new Map<number, CatalogItem>();
+    for (const s of allSeries) {
+      if (favoriteIds.includes(s.id) || (s.tmdbId && favoriteIds.includes(s.tmdbId))) {
+        map.set(Number(s.tmdbId || s.id), s);
+      }
+    }
+    for (const item of favoriteItems) {
+      if (item.type === 'series') {
+        map.set(Number(item.tmdbId || item.id), item);
+      }
+    }
+    for (const ep of scheduledEpisodes) {
+      const key = Number(ep.tmdbId || ep.seriesId);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: ep.seriesId,
+          tmdbId: ep.tmdbId || ep.seriesId,
+          imdbId: ep.imdbId,
+          title: ep.seriesTitle,
+          imageUrl: ep.seriesPoster,
+          posterUrl: ep.seriesPoster,
+          backdropUrl: ep.seriesBackdrop || ep.seriesPoster,
+          type: 'series',
+          genres: [],
+          synopsis: ep.synopsis || '',
+          year: parseInt(ep.airDate?.substring(0, 4)) || new Date().getFullYear(),
+          rating: '8.5 ★',
+          duration: 'Série',
+          provider: ep.provider,
+          playerUrl: ep.playerUrl
+        });
+      }
+    }
+    return Array.from(map.values());
+  }, [allSeries, favoriteIds, favoriteItems, scheduledEpisodes]);
+
+  const handleSeriesClick = (ep: SeriesScheduleEpisode) => {
+    const existing =
+      followedSeries.find(s => s.id === ep.seriesId || (ep.tmdbId && (s.tmdbId === ep.tmdbId || s.id === ep.tmdbId))) ||
+      allSeries.find(s => s.id === ep.seriesId || (ep.tmdbId && (s.tmdbId === ep.tmdbId || s.id === ep.tmdbId)));
+    const itemData: CatalogItem = existing || {
+      id: ep.tmdbId || ep.seriesId,
+      tmdbId: ep.tmdbId || ep.seriesId,
+      imdbId: ep.imdbId,
+      title: ep.seriesTitle,
+      imageUrl: ep.seriesPoster,
+      posterUrl: ep.seriesPoster,
+      backdropUrl: ep.seriesBackdrop || ep.seriesPoster,
+      type: 'series',
+      genres: [],
+      synopsis: ep.synopsis || '',
+      year: parseInt(ep.airDate?.substring(0, 4)) || new Date().getFullYear(),
+      rating: '8.5 ★',
+      duration: 'Série',
+      provider: ep.provider,
+      playerUrl: ep.playerUrl
+    };
+    onItemClick(itemData.id, itemData);
+  };
 
   // Datas calculadas em tempo real (data real de hoje)
   const todayDate = new Date();
@@ -134,7 +220,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
       return ep.status === 'upcoming';
     }
     if (filterTab === 'week') {
-      return ep.status === 'today' || (ep.airDate >= todayStr && ep.airDate <= nextWeekStr);
+      return ep.status === 'today' || (ep.status !== 'season_ended' && ep.status !== 'series_ended' && ep.airDate >= todayStr && ep.airDate <= nextWeekStr);
     }
     if (filterTab === 'ended') {
       return ep.status === 'season_ended' || ep.status === 'series_ended';
@@ -142,14 +228,16 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
     return true;
   });
 
-  const handleToggleFav = (id: number) => {
-    toggleFavorite(id);
+  const handleToggleFav = (id: number, meta?: Partial<CatalogItem>) => {
+    toggleFavorite(id, meta);
     setFavoriteIds(getFavoriteIds());
   };
 
   // Contadores dinâmicos
   const todayCount = scheduledEpisodes.filter(e => e.status === 'today').length;
-  const thisWeekCount = scheduledEpisodes.filter(e => e.status === 'today' || (e.airDate >= todayStr && e.airDate <= nextWeekStr)).length;
+  const thisWeekCount = scheduledEpisodes.filter(
+    e => e.status === 'today' || (e.status !== 'season_ended' && e.status !== 'series_ended' && e.airDate >= todayStr && e.airDate <= nextWeekStr)
+  ).length;
   const endedCount = scheduledEpisodes.filter(e => e.status === 'season_ended' || e.status === 'series_ended').length;
 
   return (
@@ -354,7 +442,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                           <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
                             {/* Poster da Série */}
                             <div
-                              onClick={() => onItemClick(ep.seriesId)}
+                              onClick={() => handleSeriesClick(ep)}
                               className="w-16 sm:w-20 aspect-[2/3] rounded-xl overflow-hidden shadow-lg border border-neutral-800 shrink-0 cursor-pointer group-hover:scale-105 transition-transform bg-[#1a1a1a]"
                             >
                               <img
@@ -415,7 +503,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                               </div>
 
                               <h3
-                                onClick={() => onItemClick(ep.seriesId)}
+                                onClick={() => handleSeriesClick(ep)}
                                 className="font-black text-base sm:text-lg text-white hover:text-orange-400 transition-colors cursor-pointer truncate"
                               >
                                 {ep.seriesTitle}
@@ -468,7 +556,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                                     `${ep.seriesTitle} - T${ep.seasonNumber}:E${ep.episodeNumber}`,
                                     ep.playerUrl,
                                     'series',
-                                    ep.tmdbId,
+                                    ep.tmdbId || ep.seriesId,
                                     ep.imdbId,
                                     ep.seasonNumber,
                                     ep.episodeNumber,
@@ -499,7 +587,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onItemClick(ep.seriesId);
+                                handleSeriesClick(ep);
                               }}
                               className="px-3.5 py-2.5 rounded-full bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs font-semibold border border-white/10 transition-colors cursor-pointer"
                               title="Ver detalhes da série"
@@ -511,13 +599,13 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleToggleFav(ep.seriesId);
+                                handleToggleFav(favoriteIds.includes(ep.seriesId) ? ep.seriesId : (ep.tmdbId || ep.seriesId));
                               }}
                               className="p-2.5 rounded-full bg-white/5 hover:bg-white/10 text-orange-500 border border-white/10 transition-colors cursor-pointer"
-                              title={favoriteIds.includes(ep.seriesId) ? "Remover série dos favoritos" : "Marcar como favorito"}
-                              aria-label={favoriteIds.includes(ep.seriesId) ? "Remover série dos favoritos" : "Marcar como favorito"}
+                              title={isItemFavorite(ep.seriesId, ep.tmdbId) ? "Remover série dos favoritos" : "Marcar como favorito"}
+                              aria-label={isItemFavorite(ep.seriesId, ep.tmdbId) ? "Remover série dos favoritos" : "Marcar como favorito"}
                             >
-                              {favoriteIds.includes(ep.seriesId) ? (
+                              {isItemFavorite(ep.seriesId, ep.tmdbId) ? (
                                 <BookmarkCheck className="w-4 h-4 fill-current" />
                               ) : (
                                 <Bookmark className="w-4 h-4" />
@@ -585,7 +673,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                 {allSeries.map(series => {
-                  const isFav = favoriteIds.includes(series.id);
+                  const isFav = isItemFavorite(series.id, series.tmdbId);
                   const hasSchedule = !!SERIES_EPISODE_SCHEDULE[series.id];
 
                   return (
@@ -632,7 +720,7 @@ export const ReleaseCalendarPage: React.FC<ReleaseCalendarPageProps> = ({
                         </div>
 
                         <button
-                          onClick={() => handleToggleFav(series.id)}
+                          onClick={() => handleToggleFav(series.id, series)}
                           className={`mt-3 w-full py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
                             isFav
                               ? 'bg-orange-600/20 text-orange-400 border border-orange-500/40'

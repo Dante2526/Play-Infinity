@@ -741,13 +741,15 @@ export async function probeEmbedPlayer(url: string): Promise<EmbedProbeResult> {
   try {
     const parsedUrl = new URL(url);
     if (
+      !fellBack &&
       parsedUrl.hostname.toLowerCase().endsWith("meuplayeronlinehd.com") &&
-      /\/myplay\/watch2?\.html$/i.test(parsedUrl.pathname)
+      /\/myplay\/watch2?\.html$/i.test(parsedUrl.pathname) &&
+      /\bid\s*===?\s*["'][a-z0-9_-]+["']/i.test(probeHtml)
     ) {
       const chId = parsedUrl.searchParams.get("id");
       if (chId) {
         const escapedId = chId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-        const idBranchRe = new RegExp(`id\\s*===?\\s*["']${escapedId}["']`);
+        const idBranchRe = new RegExp(`\\bid\\s*===?\\s*["']${escapedId}["']`);
         const match = idBranchRe.exec(probeHtml);
         if (!match) {
           return {

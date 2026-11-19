@@ -20,6 +20,7 @@ export type CatalogItem = {
   provider?: string;
   isAnime?: boolean;
   isDorama?: boolean;
+  isLgbt?: boolean;
 };
 
 // Set O(1) de todos os tmdb_ids disponíveis no catálogo encontrei (movies + episodes).

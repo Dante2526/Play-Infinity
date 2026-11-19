@@ -102,12 +102,21 @@ export function AppUpdateBanner() {
     }
   };
 
-  const openExternal = (url: string) => {
-    if (StatusBar.openExternalUrl) {
-      StatusBar.openExternalUrl({ url }).catch(() => {});
+  const openExternal = (url: string, e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+    }
+    if (Capacitor.isNativePlatform() && StatusBar.openExternalUrl) {
+      StatusBar.openExternalUrl({ url }).catch(() => {
+        try {
+          window.open(url, "_blank");
+        } catch {}
+      });
+      return;
     }
     try {
-      window.open(url, "_blank");
+      const opened = window.open(url, "_blank");
+      if (opened) return;
     } catch {}
     try {
       window.location.href = url;
@@ -141,8 +150,8 @@ export function AppUpdateBanner() {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => {
-              // Também abre no JS para garantir disparo imediato
-              openExternal(EXTERNAL_DOWNLOAD_URL);
+              // Abre no navegador externo via Intent nativo sem destruir o WebView do app
+              openExternal(EXTERNAL_DOWNLOAD_URL, e);
               setShowModal(true);
             }}
             className="px-3 py-1.5 rounded-full bg-white text-orange-700 hover:bg-neutral-100 font-black text-[11px] sm:text-xs uppercase tracking-wider flex items-center gap-1 shadow-md active:scale-95 transition-all cursor-pointer no-underline min-h-[36px]"
@@ -195,7 +204,7 @@ export function AppUpdateBanner() {
                 href={EXTERNAL_DOWNLOAD_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => openExternal(EXTERNAL_DOWNLOAD_URL)}
+                onClick={(e) => openExternal(EXTERNAL_DOWNLOAD_URL, e)}
                 className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 hover:from-orange-500 hover:to-amber-500 text-white font-black text-sm text-center flex items-center justify-center gap-2 shadow-xl active:scale-98 transition-all cursor-pointer no-underline min-h-[48px]"
               >
                 <ExternalLink className="w-4 h-4" />
@@ -207,7 +216,7 @@ export function AppUpdateBanner() {
                 href={FALLBACK_DOWNLOAD_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => openExternal(FALLBACK_DOWNLOAD_URL)}
+                onClick={(e) => openExternal(FALLBACK_DOWNLOAD_URL, e)}
                 className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/15 text-neutral-200 hover:text-white font-bold text-xs text-center flex items-center justify-center gap-1.5 border border-white/10 transition-colors cursor-pointer no-underline min-h-[42px]"
               >
                 <Download className="w-3.5 h-3.5 text-amber-400" />

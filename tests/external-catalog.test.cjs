@@ -923,18 +923,48 @@ test('guard: liveChannels.ts migrou os canais esportivos principais para externa
 });
 
 test('guard: getPublicLiveChannels publica somente canais com fonte com referer', () => {
-  const channels = catalog.getPublicLiveChannels();
-  const saimoChannels = channels.filter(c => c.id.startsWith('saimo-'));
-  assert.ok(saimoChannels.length > 0, 'deve conter canais saimo');
-  // Nenhum canal saimo publicado pode vir de canal sem fonte com referer no catalogo
-  const allParsed = catalog.loadExternalChannels();
-  const refererMap = new Map();
-  for (const c of allParsed) {
-    refererMap.set(catalog.normalizeChannelName(c.name), c.fontes.some(f => Boolean(f.referer)));
+  const hasRealFile = fs.existsSync(path.join(root, 'data/external-channels.txt'));
+  let tmpDir = null;
+  if (!hasRealFile) {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'extcat-pub-'));
+    writeFixtures(
+      tmpDir,
+      [
+        'canal: Canal Com Referer',
+        'categoria: Esportes',
+        'fonte: https://8.8.8.8/ok.m3u8',
+        'referer: https://exemplo-referer.com/',
+        '',
+        'canal: Canal Sem Referer',
+        'categoria: Esportes',
+        'fonte: https://8.8.4.4/sem-ref.m3u8',
+        '',
+      ].join('\n'),
+      FIXTURE_BASES
+    );
+    process.env.EXTERNAL_CATALOG_DIR = tmpDir;
+    catalog.clearExternalCatalogCache();
   }
-  for (const sc of saimoChannels) {
-    const rawName = catalog.normalizeChannelName(sc.name);
-    assert.equal(refererMap.get(rawName), true, `canal saimo ${sc.name} deve ter fonte com referer`);
+  try {
+    const channels = catalog.getPublicLiveChannels();
+    const saimoChannels = channels.filter(c => c.id.startsWith('saimo-'));
+    assert.ok(saimoChannels.length > 0, 'deve conter canais saimo');
+    // Nenhum canal saimo publicado pode vir de canal sem fonte com referer no catalogo
+    const allParsed = catalog.loadExternalChannels();
+    const refererMap = new Map();
+    for (const c of allParsed) {
+      refererMap.set(catalog.normalizeChannelName(c.name), c.fontes.some(f => Boolean(f.referer)));
+    }
+    for (const sc of saimoChannels) {
+      const rawName = catalog.normalizeChannelName(sc.name);
+      assert.equal(refererMap.get(rawName), true, `canal saimo ${sc.name} deve ter fonte com referer`);
+    }
+  } finally {
+    if (tmpDir) {
+      delete process.env.EXTERNAL_CATALOG_DIR;
+      catalog.clearExternalCatalogCache();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   }
 });
 

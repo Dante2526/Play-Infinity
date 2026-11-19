@@ -126,7 +126,7 @@ test('VideoPlayerModal: erro do frame NOVO (playerFrameUrl === URL commitada) pa
     'bypass compara playerFrameUrl do erro com a URL commitada do iframe atual'
   );
   assert.ok(
-    /if \(!\(fromCommittedFrame \|\| \(isSaimoServerKey/.test(branch),
+    /if \(!\(fromCommittedFrame \|\| [\s\S]*?\(isSaimoServerKey/.test(branch),
     'iframe antigo em descarte (URL divergente) segue ignorado — contrato original preservado'
   );
 });
