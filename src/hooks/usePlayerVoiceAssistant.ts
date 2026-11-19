@@ -20,6 +20,7 @@ export interface UsePlayerVoiceAssistantOptions {
   onWakeWordDetected?: () => void;
   onWakeExpired?: () => void;
   onAudioFocusConflict?: () => void;
+  onSessionStarting?: () => void;
   isPlaying?: boolean;
   lang?: string;
 }
@@ -146,6 +147,7 @@ export function usePlayerVoiceAssistant({
   onWakeWordDetected,
   onWakeExpired,
   onAudioFocusConflict,
+  onSessionStarting,
   isPlaying = false,
   lang = 'pt-BR'
 }: UsePlayerVoiceAssistantOptions) {
@@ -188,6 +190,7 @@ export function usePlayerVoiceAssistant({
   const onWakeRef = useRef(onWakeWordDetected);
   const onWakeExpiredRef = useRef(onWakeExpired);
   const onAudioFocusConflictRef = useRef(onAudioFocusConflict);
+  const onSessionStartingRef = useRef(onSessionStarting);
   const isPlayingRef = useRef(isPlaying);
   const isContinuousRef = useRef(isContinuous);
   const startSessionRef = useRef<(allowOneShot?: boolean) => void>(() => {});
@@ -198,6 +201,7 @@ export function usePlayerVoiceAssistant({
   useEffect(() => { onWakeRef.current = onWakeWordDetected; }, [onWakeWordDetected]);
   useEffect(() => { onWakeExpiredRef.current = onWakeExpired; }, [onWakeExpired]);
   useEffect(() => { onAudioFocusConflictRef.current = onAudioFocusConflict; }, [onAudioFocusConflict]);
+  useEffect(() => { onSessionStartingRef.current = onSessionStarting; }, [onSessionStarting]);
   useEffect(() => { isContinuousRef.current = isContinuous; }, [isContinuous]);
 
   const showFeedback = useCallback((text: string, type: VoiceAssistantFeedback['type'] = 'info', durationMs = 3000) => {
@@ -839,7 +843,12 @@ export function usePlayerVoiceAssistant({
     finalizedIndicesRef.current.clear();
     isStartingRef.current = true;
     startingAtRef.current = now;
+    sessionStartedAtRef.current = now;
     recognitionRef.current = rec;
+
+    if (isMobileAudioFocusSensitive() && isPlayingRef.current) {
+      onSessionStartingRef.current?.();
+    }
 
     try {
       rec.start();

@@ -266,3 +266,24 @@ test('promotes widescreen -> native browser fullscreen on F, doubleClick or prom
   assert.match(skinSrc, /if \(needsNativeFullscreenPrompt && onRequestNativeFullscreen\)/);
   assert.match(skinSrc, /Clique aqui ou aperte F para Tela Cheia real/);
 });
+
+test('prevents phantom player controls popup on mobile while continuous voice assistant is listening', () => {
+  const root = path.resolve(__dirname, '..');
+  const hookSrc = fs.readFileSync(path.join(root, 'src/hooks/usePlayerVoiceAssistant.ts'), 'utf8');
+  const skinSrc = fs.readFileSync(path.join(root, 'src/components/NetflixPlayerSkin.tsx'), 'utf8');
+
+  // 1. Hook notifica onSessionStarting antes de rec.start() no mobile enquanto o vídeo está tocando
+  assert.match(hookSrc, /onSessionStarting\?: \(\) => void;/);
+  assert.match(hookSrc, /if \(isMobileAudioFocusSensitive\(\) && isPlayingRef\.current\) \{\s*onSessionStartingRef\.current\?\.\(\);\s*\}/);
+
+  // 2. Skin pré-arma playLockUntilRef e suppressControlsUntilRef antes do rec.start() e ignora ciclos silenciosos de voz
+  assert.match(skinSrc, /const handleVoiceSessionStarting = useCallback/);
+  assert.match(skinSrc, /onSessionStarting: handleVoiceSessionStarting/);
+  assert.match(skinSrc, /if \(!isVoiceSilentCycle\) \{\s*setControlsVisible\(true\);/);
+
+  // 3. Ignora mousemove sintético em dispositivos touch (isTouchDevice) para não despertar os controles sozinho
+  assert.match(skinSrc, /const handleMouseMoveActivity = useCallback/);
+  assert.match(skinSrc, /if \(isTouchDevice\) return;/);
+  assert.match(skinSrc, /onMouseMove=\{handleMouseMoveActivity\}/);
+});
+

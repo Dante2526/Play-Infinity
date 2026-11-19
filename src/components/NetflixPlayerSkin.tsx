@@ -719,6 +719,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   isPausedRef.current = playerStatus.paused;
   const lastVoicePlayAtRef = useRef(0);
   const playLockUntilRef = useRef(0);
+  const suppressControlsUntilRef = useRef(0);
   const lastPlayRetryAtRef = useRef(0);
   const manualPauseAtRef = useRef(0);
 
@@ -728,6 +729,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       pausedByWakeRef.current = false;
       lastVoicePlayAtRef.current = now;
       playLockUntilRef.current = now + 2800;
+      suppressControlsUntilRef.current = now + 3000;
       lastPlayRetryAtRef.current = now;
       sendCommand({ type: "PLAY" });
       setPlayerStatus((p) => ({ ...p, paused: false }));
@@ -740,6 +742,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         const now = Date.now();
         lastVoicePlayAtRef.current = now;
         playLockUntilRef.current = now + 2800;
+        suppressControlsUntilRef.current = now + 3000;
         lastPlayRetryAtRef.current = now;
         pausedByWakeRef.current = false;
         sendCommand({ type: "PLAY" });
@@ -827,16 +830,27 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (!isPausedRef.current) {
       playLockUntilRef.current = 0;
       pausedByWakeRef.current = true;
+      suppressControlsUntilRef.current = Date.now() + 5000;
       sendCommand({ type: "PAUSE" });
       setPlayerStatus(p => ({ ...p, paused: true }));
     }
   }, [sendCommand]);
+
+  const handleVoiceSessionStarting = useCallback(() => {
+    const now = Date.now();
+    if (isPausedRef.current || now - manualPauseAtRef.current < 1500) return;
+    // Pré-arma o lock de reprodução antes do rec.start() no mobile para que a perda
+    // transitória de AudioFocus não faça playerStatus.paused piscar para true nem exibir os controles.
+    playLockUntilRef.current = Math.max(playLockUntilRef.current, now + 2600);
+    suppressControlsUntilRef.current = Math.max(suppressControlsUntilRef.current, now + 3000);
+  }, []);
 
   const handleAudioFocusConflict = useCallback(() => {
     const now = Date.now();
     if (now - manualPauseAtRef.current < 1500) return;
     lastVoicePlayAtRef.current = now;
     playLockUntilRef.current = now + 2800;
+    suppressControlsUntilRef.current = now + 3000;
     lastPlayRetryAtRef.current = now;
     pausedByWakeRef.current = false;
     sendCommand({ type: "PLAY" });
@@ -856,6 +870,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     onWakeWordDetected: handleWakeWord,
     onWakeExpired: resumeIfPausedByWake,
     onAudioFocusConflict: handleAudioFocusConflict,
+    onSessionStarting: handleVoiceSessionStarting,
     isPlaying: !playerStatus.paused
   });
 
@@ -1119,18 +1134,62 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       handleUserActivity();
       return;
     }
+    const now = Date.now();
+    const isVoiceSilentCycle =
+      now < suppressControlsUntilRef.current ||
+      now < playLockUntilRef.current ||
+      pausedByWakeRef.current;
+
     if (playerStatus.paused) {
-      setControlsVisible(true);
-      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (!isVoiceSilentCycle) {
+        setControlsVisible(true);
+        if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      }
     } else {
-      handleUserActivity();
+      // Quando o vídeo está em reprodução, agenda apenas o auto-hide dos controles
+      // sem forçar setControlsVisible(true) ao recuperar AudioFocus do microfone no celular.
+      if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (
+        !isScrubbing &&
+        !isDraggingBrightness &&
+        !isDraggingVolume &&
+        !showSpeedMenu &&
+        !showEpisodeDrawer &&
+        !showAudioSubtitleModal
+      ) {
+        hideTimerRef.current = setTimeout(() => {
+          setControlsVisible(false);
+        }, 2800);
+      }
     }
-  }, [playerStatus.paused, handleUserActivity, isEffectiveExternal]);
+  }, [
+    playerStatus.paused,
+    isEffectiveExternal,
+    isScrubbing,
+    isDraggingBrightness,
+    isDraggingVolume,
+    showSpeedMenu,
+    showEpisodeDrawer,
+    showAudioSubtitleModal,
+  ]);
+
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  const handleMouseMoveActivity = useCallback((e: MouseEvent | React.MouseEvent) => {
+    if (isTouchDevice) return;
+    const nativeEvt = (e as React.MouseEvent).nativeEvent || (e as MouseEvent);
+    if ((nativeEvt as any)?.sourceCapabilities?.firesTouchEvents) return;
+    const x = e.clientX;
+    const y = e.clientY;
+    if (lastMousePosRef.current) {
+      const dx = Math.abs(x - lastMousePosRef.current.x);
+      const dy = Math.abs(y - lastMousePosRef.current.y);
+      if (dx < 3 && dy < 3) return;
+    }
+    lastMousePosRef.current = { x, y };
+    handleUserActivity();
+  }, [handleUserActivity]);
 
   useEffect(() => {
-    const handleWindowMouseMove = () => {
-      handleUserActivity();
-    };
     const handleWindowTouch = (e: TouchEvent) => {
       const touch = e.touches[0];
       if (touch) {
@@ -1141,13 +1200,15 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
         }
       }
     };
-    window.addEventListener("mousemove", handleWindowMouseMove, { passive: true });
+    if (!isTouchDevice) {
+      window.addEventListener("mousemove", handleMouseMoveActivity, { passive: true });
+    }
     window.addEventListener("touchstart", handleWindowTouch, { passive: true });
     return () => {
-      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mousemove", handleMouseMoveActivity);
       window.removeEventListener("touchstart", handleWindowTouch);
     };
-  }, [handleUserActivity]);
+  }, [handleUserActivity, handleMouseMoveActivity]);
 
   // Play / Pause
   // Atualiza o estado local de forma otimista (resposta instantânea na UI),
@@ -1733,7 +1794,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   return (
     <div
-      onMouseMove={handleUserActivity}
+      onMouseMove={handleMouseMoveActivity}
       onClick={handleUserActivity}
       className={`absolute inset-0 z-30 select-none overflow-hidden transition-all duration-300 pointer-events-none ${
         controlsVisible && !isLocked ? "cursor-default" : "cursor-none"
