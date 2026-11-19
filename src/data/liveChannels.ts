@@ -198,7 +198,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F6d42cfb0a7106e953bc582f1b9a6763a%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=541140cf0017f08ae75d6142e4e541836f0e512391906fefaf7001d997d49a72',
+        url: '/api/saimo-source?channel=sportv&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=sportv&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/external-channel?name=SporTV',
         isProxy: false
       }
     ]
@@ -233,18 +243,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Automobilismo, Tênis e Ligas Internacionais',
     quality: '720p',
     description: 'Esportes radicais, automobilismo, lutas e futebol.',
-    // Fonte única curada: embedTV (mesmo operador/host do Premiere Clubes),
-    // Fonte 2 do catalogo saimo-tv para SporTV 3 — mesma cadeia: playlist HLS
-    // live disfarçada de error.txt em s25-cloudfront-net.lat, segmentos .png
-    // (MPEG-TS) em lb02 sem CORS → proxy. Referer https://w7.embedtv.cc/ +
-    // UA Chrome/126 exigidos pelo WAF do Cloudflare. Sig = HMAC-SHA256 do
-    // PROXY_SECRET (determinístico, não expira; regerar com
-    // scripts/vps_sign_premiere_fonte2.py <url> se rotacionado).
+    // Fontes dinâmicas via /api/saimo-source (resolve rotação de hash automaticamente)
+    // com fallback em /api/external-channel.
     lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fe7e4de42b3bcdff4ea97933dcadf207f%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=5f07ea9f7348bee5516de7c98cca37a05642cb12f7907d2a8bbf5ba0ae1e5249',
+        url: '/api/saimo-source?channel=sportv3&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=sportv3&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/external-channel?name=SporTV%203',
         isProxy: false
       }
     ]
@@ -261,7 +276,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fedfeb9b7a050b21ff86fd4e14d4df830%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=21dbc1c8413f18e9816858459291570bdb5ccddb5d3cd07afefff569a369f3a7',
+        url: '/api/saimo-source?channel=espn&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=ESPN',
         isProxy: false
       }
     ]
@@ -417,7 +437,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fee45560b3bf960ee39cc94fd34fa03d4%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=eadfd6fc1e40ae881a1387e0aa58d98afd2ffe12413a9b950b9b246e0030efb4',
+        url: '/api/saimo-source?channel=record&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Record',
         isProxy: false
       }
     ]
@@ -430,23 +455,23 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     currentProgram: 'Jogo Aberto / Os Donos da Bola / Fórmula 1',
     quality: '720p',
     description: 'O canal do esporte com o Craque Neto, Renata Fan e as melhores coberturas.',
-    // Upstream embedTV morto (HTTP 404 desde nov/2026 — stream hash
-    // 41f3ad648b8590ca219cf5e28b908b0b foi removido do s25-cloudfront-net.lat).
-    // Substituído pela fonte Saimo (138.204.86.4:8080/BAND_HD/index.m3u8, 720p 30fps),
-    // acessível via /api/saimo-source que assina a URL proxy server-side com o
-    // PROXY_SECRET real (não depende do fallback). Site embedtv.cc também está
-    // com player quebrado: as 145 páginas ww0.embedtv.cc/<id> servem todas o
-    // mesmo stream de teste Akamai (cph-p2p-msl.akamaized.net/hls/live/2000341/test).
+    // Fontes dinâmicas via /api/saimo-source + fallback /api/external-channel
+    // (source=3 retornava HTTP 404 na vistoria de 19/11/2026; source=2 e external OK).
     lockServers: true,
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/saimo-source?channel=band&source=1',
+        url: '/api/saimo-source?channel=band&source=2',
         isProxy: false
       },
       {
         name: 'Servidor 2',
-        url: '/api/saimo-source?channel=band&source=3',
+        url: '/api/external-channel?name=Band',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/saimo-source?channel=band&source=1',
         isProxy: false
       }
     ]
@@ -602,7 +627,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F61c168a5c8e93c396f48e9c0d5d255c5%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=b022c523067fd4aff7588266d47518d41f6349f58785663ae9af04e604a869e5',
+        url: '/api/saimo-source?channel=espn2&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=espn2&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/external-channel?name=ESPN%202',
         isProxy: false
       }
     ]
@@ -635,7 +670,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F510d20496dc6bb017304d125c737f16c%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=24ca543027e82ca53f1c45a594531dba7b8a5c762616e7aff235b99fa7cdeb94',
+        url: '/api/saimo-source?channel=espn4&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=ESPN%204',
         isProxy: false
       }
     ]
@@ -707,7 +747,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F60436cfbd0a47c5ffcb9074298b97fbc%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=2f24ac5393d4427a287861acdd7ad67a2818bfa7c7bad3461c11d7039f0517d1',
+        url: '/api/saimo-source?channel=combate&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=Combate',
         isProxy: false
       }
     ]
@@ -724,7 +769,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fe28bf0fed83f4889c7d23224dbecdfa1%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=eb4ae0b1587b7292e3c78ae29f615b754236c1c28756ad49a1239cf662edf5c0',
+        url: '/api/saimo-source?channel=discoverychannel&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=discoverychannel&source=2',
         isProxy: false
       }
     ]
@@ -741,7 +791,12 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F81cd1c0411b55bbfbd05c17d4de8ed1b%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=34b525e6d2cf48a687f9e9d7f2c56227dd481d7f3806316dc40952819747a43e',
+        url: '/api/saimo-source?channel=history&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/external-channel?name=History',
         isProxy: false
       }
     ]
@@ -758,7 +813,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2Fb9d136b917437d532bd57a8e05d536de%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=067be0661e735b670496328003e21adb4f41f97a149d8c6123a095a923a99426',
+        url: '/api/saimo-source?channel=animalplanet&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=animalplanet&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/external-channel?name=Animal%20Planet',
         isProxy: false
       }
     ]
@@ -775,7 +840,17 @@ export const INITIAL_LIVE_CHANNELS: LiveChannel[] = [
     servers: [
       {
         name: 'Servidor 1',
-        url: '/api/live-stream-proxy?url=https%3A%2F%2F92ef03b0a53c20499bcde22fe03440c5.s25-cloudfront-net.lat%2Fstream%2F18b4fefcddfce3fd86d84079bfca5ee1%2Ferror.txt&referer=https%3A%2F%2Fw7.embedtv.cc%2F&agente=Mozilla%2F5.0+%28Windows+NT+10.0%3B+Win64%3B+x64%29+AppleWebKit%2F537.36+%28KHTML%2C+like+Gecko%29+Chrome%2F126.0+Safari%2F537.36&sig=dab4a1285bf946dc1a5c342f69427124af2a9877c2666d59dbac3891de9d95ae',
+        url: '/api/saimo-source?channel=discoveryid&source=1',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 2',
+        url: '/api/saimo-source?channel=discoveryid&source=2',
+        isProxy: false
+      },
+      {
+        name: 'Servidor 3',
+        url: '/api/external-channel?name=Discovery%20ID',
         isProxy: false
       }
     ]

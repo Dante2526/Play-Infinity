@@ -40,3 +40,28 @@ test('SBT HD uses dynamic /api/saimo-source servers instead of expired hardcoded
  assert.ok(sbtServers.includes('/api/saimo-source?channel=sbtsp&source=2'),'Deve incluir sbtsp FHD via /api/saimo-source');
  assert.ok(sbtServers.includes('/api/saimo-source?channel=sbtsp&source=1'),'Deve incluir sbtsp embedTV rotativo via /api/saimo-source');
 });
+
+test('liveChannels.ts does not embed expired s25-cloudfront-net.lat URLs and migrates 11 channels + Band to dynamic sources',()=>{
+ const channelsSrc=fs.readFileSync('src/data/liveChannels.ts','utf8');
+ assert.ok(!/url:\s*'[^']*s25-cloudfront-net\.lat/.test(channelsSrc),'Nenhum canal deve manter hash hardcoded em s25-cloudfront-net.lat');
+ assert.ok(!channelsSrc.includes('channel=band&source=3'),'Band não deve apontar para source=3 (HTTP 404)');
+ const expected=[
+  ['sportv','/api/saimo-source?channel=sportv&source=1'],
+  ['sportv-3','/api/saimo-source?channel=sportv3&source=1'],
+  ['espn-brasil','/api/saimo-source?channel=espn&source=2'],
+  ['espn-2','/api/saimo-source?channel=espn2&source=2'],
+  ['espn-4','/api/saimo-source?channel=espn4&source=2'],
+  ['combate','/api/saimo-source?channel=combate&source=2'],
+  ['record-tv','/api/saimo-source?channel=record&source=1'],
+  ['band','/api/saimo-source?channel=band&source=2'],
+  ['discovery-channel','/api/saimo-source?channel=discoverychannel&source=1'],
+  ['history','/api/saimo-source?channel=history&source=1'],
+  ['animal-planet','/api/saimo-source?channel=animalplanet&source=1'],
+  ['discovery-id','/api/saimo-source?channel=discoveryid&source=1'],
+ ];
+ for (const [id, expectedUrl] of expected) {
+  const match=channelsSrc.match(new RegExp(`id:\\s*'${id}'[\\s\\S]*?servers:\\s*\\[([\\s\\S]*?)\\]\\s*\\}`));
+  assert.ok(match,`Bloco do canal ${id} deve existir em liveChannels.ts`);
+  assert.ok(match[1].includes(expectedUrl),`Canal ${id} deve incluir ${expectedUrl}`);
+ }
+});
