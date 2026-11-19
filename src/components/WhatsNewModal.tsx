@@ -32,8 +32,8 @@ const SLIDES = [
   },
   {
     id: 'playstore',
-    title: 'Na Play Store em Breve!',
-    description: 'É oficial: O Play Infinity está chegando na Google Play Store. Uma experiência muito mais fluida e segura nativa para o seu Android.',
+    title: 'Disponível na Google Play Store!',
+    description: 'É oficial: O Play Infinity já está na Google Play Store. Baixe e atualize direto pela loja oficial para uma experiência muito mais fluida e segura no seu Android.',
     icon: <PlaySquare className="w-8 h-8 text-white" />,
     color: 'from-emerald-600 to-green-500',
     glow: 'shadow-emerald-500/50'

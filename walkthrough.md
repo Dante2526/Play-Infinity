@@ -1,3 +1,13 @@
+## 19/11/2026 — Detecção Automática de Atualizações da Google Play Store (`Play In-App Updates`) + Remoção de APK Externo (v1.4.91 / versionCode 123)
+- **Mudanças aplicadas:**
+  - `android/app/build.gradle`: adicionada a biblioteca oficial `com.google.android.play:app-update:2.1.0` e incrementada a versão para `versionCode 123` / `versionName "1.4.91"`.
+  - `android/app/proguard-rules.pro`: adicionadas regras `-keep`/`-dontwarn` para `com.google.android.play.core.**`.
+  - `android/app/src/main/java/com/playinfinity/app/StatusBarPlugin.java` & `src/utils/statusBar.ts`: expostos `checkPlayStoreUpdate()` (consulta `AppUpdateManagerFactory` diretamente à Play Store do aparelho comparando `availableVersionCode > installedVersionCode`) e `startPlayStoreUpdate()` (abre o fluxo nativo de atualização da Play Store dentro do app, com fallback seguro para abrir a loja).
+  - `src/components/AppUpdateBanner.tsx`: removidos todos os links externos de APK do site (`tinyurl.com/2dcbdnor`, `is.gd/Sj8LpJ`, `play-infinity.stream/app.apk`); agora usa `StatusBar.checkPlayStoreUpdate()` como fonte automática primária (zero falso positivo e zero edição manual de versão) com fallback para `/api/app-version` em builds antigas, iniciando o fluxo nativo da Play Store ou abrindo `market://details?id=com.playinfinity.app` / `https://play.google.com/store/apps/details?id=com.playinfinity.app`.
+  - `server.ts`: `/api/app-version` passou a retornar `playStoreUrl` (em vez de `apkUrl`) e a rota legada `GET /app.apk` agora redireciona (`302`) qualquer link antigo direto para `https://play.google.com/store/apps/details?id=com.playinfinity.app`.
+  - `src/components/WhatsNewModal.tsx`: atualizado o card `"Na Play Store em Breve!"` para `"Disponível na Google Play Store!"`.
+  - `tests/graphify-bugs-regression.test.cjs`: adicionadas asserções para `com.google.android.play:app-update:2.1.0`, `checkPlayStoreUpdate`, `startPlayStoreUpdate`, ausência de links de APK/tinyurl/is.gd no `AppUpdateBanner.tsx` e redirecionamento `302` da rota `/app.apk`.
+
 ## 19/11/2026 — Correção do Aviso da Google Play Console (`android.hardware.wifi` opcional) (v1.4.90 / versionCode 122)
 - **Causa raiz:** As permissões `ACCESS_WIFI_STATE` e `CHANGE_WIFI_MULTICAST_STATE` em `android/app/src/main/AndroidManifest.xml` (usadas na descoberta de Roku via SSDP em `RokuDiscoveryPlugin.java`, que já trata `wifi == null`) fazem o Android declarar implicitamente `android.hardware.wifi` como obrigatório (`required="true"`), bloqueando dispositivos sem Wi-Fi (TV Box/Desktop via Ethernet, celulares/tablets/XR específicos) na revisão da Google Play Console.
 - **Mudanças aplicadas:**

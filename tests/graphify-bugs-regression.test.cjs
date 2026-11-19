@@ -137,8 +137,20 @@ test('Capacitor Plugins & OfflineStorage: @capacitor/filesystem registrado em ca
   );
   assert.ok(
     updateBannerSrc.includes('if (Capacitor.isNativePlatform() && StatusBar.openExternalUrl)') &&
-    updateBannerSrc.includes('e.preventDefault()'),
-    'AppUpdateBanner abre URL externa via Intent nativo sem navegar o WebView do app'
+    updateBannerSrc.includes('e.preventDefault()') &&
+    updateBannerSrc.includes('market://details?id=com.playinfinity.app') &&
+    updateBannerSrc.includes('https://play.google.com/store/apps/details?id=com.playinfinity.app') &&
+    !updateBannerSrc.includes('tinyurl.com') &&
+    !updateBannerSrc.includes('is.gd') &&
+    !updateBannerSrc.includes('/app.apk'),
+    'AppUpdateBanner abre a Google Play Store via Intent nativo sem navegar o WebView e sem links de APK externo'
+  );
+  const serverSrc = read('server.ts');
+  assert.ok(
+    serverSrc.includes('playStoreUrl: PLAY_STORE_APP_URL') &&
+    serverSrc.includes('return res.redirect(302, PLAY_STORE_APP_URL);') &&
+    !serverSrc.includes('PlayInfinity.apk'),
+    'server.ts aponta /api/app-version para Play Store e redireciona /app.apk legado para a Play Store'
   );
 });
 
@@ -154,6 +166,31 @@ test('AndroidManifest: recursos de hardware implícitos (wifi, microphone, touch
       `AndroidManifest.xml deve declarar ${feature} como android:required="false"`
     );
   }
+});
+
+test('Play In-App Updates: detecção automática via com.google.android.play:app-update no StatusBarPlugin e AppUpdateBanner', () => {
+  const gradle = read('android/app/build.gradle');
+  const statusBarJava = read('android/app/src/main/java/com/playinfinity/app/StatusBarPlugin.java');
+  const updateBannerSrc = read('src/components/AppUpdateBanner.tsx');
+
+  assert.ok(
+    gradle.includes('com.google.android.play:app-update:2.1.0'),
+    'android/app/build.gradle deve incluir a biblioteca oficial com.google.android.play:app-update:2.1.0'
+  );
+  assert.ok(
+    statusBarJava.includes('public void checkPlayStoreUpdate(PluginCall call)') &&
+    statusBarJava.includes('public void startPlayStoreUpdate(PluginCall call)') &&
+    statusBarJava.includes('AppUpdateManagerFactory.create') &&
+    statusBarJava.includes('UpdateAvailability.UPDATE_AVAILABLE') &&
+    statusBarJava.includes('availableVersionCode > installedVersionCode'),
+    'StatusBarPlugin.java deve expor checkPlayStoreUpdate e startPlayStoreUpdate via AppUpdateManagerFactory'
+  );
+  assert.ok(
+    updateBannerSrc.includes('StatusBar.checkPlayStoreUpdate') &&
+    updateBannerSrc.includes('StatusBar.startPlayStoreUpdate') &&
+    updateBannerSrc.includes('if (playInfo && playInfo.supported)'),
+    'AppUpdateBanner.tsx deve consultar a Google Play Store automaticamente antes de recorrer ao fallback do servidor'
+  );
 });
 
 

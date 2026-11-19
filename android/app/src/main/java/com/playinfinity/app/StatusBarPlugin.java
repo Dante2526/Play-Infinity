@@ -1,5 +1,6 @@
 package com.playinfinity.app;
 
+import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
@@ -17,6 +18,13 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.google.android.play.core.appupdate.AppUpdateInfo;
+import com.google.android.play.core.appupdate.AppUpdateManager;
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory;
+import com.google.android.play.core.appupdate.AppUpdateOptions;
+import com.google.android.play.core.install.model.AppUpdateType;
+import com.google.android.play.core.install.model.InstallStatus;
+import com.google.android.play.core.install.model.UpdateAvailability;
 
 /**
  * Plugin de StatusBar e Controle de Janela compatível com Android 15/16 (SDK 35/36).
@@ -212,7 +220,7 @@ public class StatusBarPlugin extends Plugin {
     }
 
     /**
-     * Abre uma URL no navegador padrão do Android (usado para download direto do APK).
+     * Abre uma URL externa no Android (ex.: página da Google Play Store ou navegador padrão).
      */
     @PluginMethod
     public void openExternalUrl(PluginCall call) {
@@ -231,6 +239,230 @@ public class StatusBarPlugin extends Plugin {
         }
     }
 
+    private long getInstalledVersionCode() {
+        try {
+            android.content.pm.PackageInfo pInfo = getContext()
+                .getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                return pInfo.getLongVersionCode();
+            }
+            return pInfo.versionCode;
+        } catch (Exception e) {
+            return 0;
+        }
+    }
+
+    private String getInstalledVersionName() {
+        try {
+            android.content.pm.PackageInfo pInfo = getContext()
+                .getPackageManager()
+                .getPackageInfo(getContext().getPackageName(), 0);
+            return pInfo.versionName != null ? pInfo.versionName : "unknown";
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
+
+    /**
+     * Consulta diretamente a Google Play Store instalada no aparelho (Play In-App Updates API)
+     * para detectar automaticamente se existe uma versão mais recente publicada do que a instalada.
+     */
+    @PluginMethod
+    public void checkPlayStoreUpdate(PluginCall call) {
+        if (getContext() == null) {
+            JSObject ret = new JSObject();
+            ret.put("supported", false);
+            ret.put("updateAvailable", false);
+            ret.put("availableVersionCode", 0);
+            ret.put("installedVersionCode", 0);
+            ret.put("installedVersionName", "unknown");
+            ret.put("error", "context_unavailable");
+            call.resolve(ret);
+            return;
+        }
+
+        final long installedVersionCode = getInstalledVersionCode();
+        final String installedVersionName = getInstalledVersionName();
+
+        try {
+            AppUpdateManager appUpdateManager = AppUpdateManagerFactory.create(getContext().getApplicationContext());
+            appUpdateManager
+                .getAppUpdateInfo()
+                .addOnSuccessListener(appUpdateInfo -> {
+                    int availability = appUpdateInfo.updateAvailability();
+                    int installStatus = appUpdateInfo.installStatus();
+                    boolean downloaded = installStatus == InstallStatus.DOWNLOADED;
+                    boolean statusHasUpdate =
+                        availability == UpdateAvailability.UPDATE_AVAILABLE ||
+                        availability == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS;
+                    int availableVersionCode = (statusHasUpdate || downloaded) ? appUpdateInfo.availableVersionCode() : 0;
+                    boolean isNewer = (statusHasUpdate && availableVersionCode > installedVersionCode) || downloaded;
+                    boolean immediateAllowed =
+                        statusHasUpdate &&
+                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateOptions.defaultOptions(AppUpdateType.IMMEDIATE));
+                    boolean flexibleAllowed =
+                        statusHasUpdate &&
+                        appUpdateInfo.isUpdateTypeAllowed(AppUpdateOptions.defaultOptions(AppUpdateType.FLEXIBLE));
+
+                    JSObject ret = new JSObject();
+                    ret.put("supported", true);
+                    ret.put("updateAvailable", isNewer);
+                    ret.put("availableVersionCode", availableVersionCode);
+                    ret.put("installedVersionCode", installedVersionCode);
+                    ret.put("installedVersionName", installedVersionName);
+                    ret.put("immediateAllowed", immediateAllowed);
+                    ret.put("flexibleAllowed", flexibleAllowed);
+                    ret.put("downloaded", downloaded);
+                    ret.put("updateAvailability", availability);
+                    ret.put("installStatus", installStatus);
+                    call.resolve(ret);
+                })
+                .addOnFailureListener(e -> {
+                    JSObject ret = new JSObject();
+                    ret.put("supported", false);
+                    ret.put("updateAvailable", false);
+                    ret.put("availableVersionCode", 0);
+                    ret.put("installedVersionCode", installedVersionCode);
+                    ret.put("installedVersionName", installedVersionName);
+                    ret.put("error", e != null && e.getMessage() != null ? e.getMessage() : "play_store_unavailable");
+                    call.resolve(ret);
+                });
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("supported", false);
+            ret.put("updateAvailable", false);
+            ret.put("availableVersionCode", 0);
+            ret.put("installedVersionCode", installedVersionCode);
+            ret.put("installedVersionName", installedVersionName);
+            ret.put("error", e.getMessage() != null ? e.getMessage() : "play_store_exception");
+            call.resolve(ret);
+        }
+    }
+
+    /**
+     * Inicia o fluxo nativo de atualização da Google Play Store dentro do app.
+     * Caso o aparelho não permita o fluxo nativo, retorna fallbackRequired=true para abrir a página da loja.
+     */
+    @PluginMethod
+    public void startPlayStoreUpdate(PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity == null || getContext() == null) {
+            JSObject ret = new JSObject();
+            ret.put("started", false);
+            ret.put("fallbackRequired", true);
+            ret.put("error", "activity_unavailable");
+            call.resolve(ret);
+            return;
+        }
+
+        final String mode = call.getString("mode", "immediate");
+
+        try {
+            final AppUpdateManager appUpdateManager = AppUpdateManagerFactory.create(getContext().getApplicationContext());
+            appUpdateManager
+                .getAppUpdateInfo()
+                .addOnSuccessListener(appUpdateInfo -> {
+                    if (appUpdateInfo.installStatus() == InstallStatus.DOWNLOADED) {
+                        appUpdateManager
+                            .completeUpdate()
+                            .addOnSuccessListener(unused -> {
+                                JSObject ret = new JSObject();
+                                ret.put("started", true);
+                                ret.put("completed", true);
+                                ret.put("fallbackRequired", false);
+                                call.resolve(ret);
+                            })
+                            .addOnFailureListener(err -> {
+                                JSObject ret = new JSObject();
+                                ret.put("started", false);
+                                ret.put("fallbackRequired", true);
+                                ret.put("error", err != null && err.getMessage() != null ? err.getMessage() : "complete_failed");
+                                call.resolve(ret);
+                            });
+                        return;
+                    }
+
+                    int availability = appUpdateInfo.updateAvailability();
+                    boolean statusHasUpdate =
+                        availability == UpdateAvailability.UPDATE_AVAILABLE ||
+                        availability == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS;
+                    if (!statusHasUpdate) {
+                        JSObject ret = new JSObject();
+                        ret.put("started", false);
+                        ret.put("fallbackRequired", true);
+                        ret.put("error", "no_update_available");
+                        call.resolve(ret);
+                        return;
+                    }
+
+                    int primaryType = "flexible".equalsIgnoreCase(mode)
+                        ? AppUpdateType.FLEXIBLE
+                        : AppUpdateType.IMMEDIATE;
+                    int secondaryType = primaryType == AppUpdateType.IMMEDIATE
+                        ? AppUpdateType.FLEXIBLE
+                        : AppUpdateType.IMMEDIATE;
+
+                    AppUpdateOptions chosenOptions = AppUpdateOptions.defaultOptions(primaryType);
+                    if (!appUpdateInfo.isUpdateTypeAllowed(chosenOptions)) {
+                        AppUpdateOptions altOptions = AppUpdateOptions.defaultOptions(secondaryType);
+                        chosenOptions = appUpdateInfo.isUpdateTypeAllowed(altOptions) ? altOptions : null;
+                    }
+
+                    if (chosenOptions == null) {
+                        JSObject ret = new JSObject();
+                        ret.put("started", false);
+                        ret.put("fallbackRequired", true);
+                        ret.put("error", "update_type_not_allowed");
+                        call.resolve(ret);
+                        return;
+                    }
+
+                    final AppUpdateOptions finalOptions = chosenOptions;
+                    activity.runOnUiThread(() -> {
+                        try {
+                            appUpdateManager
+                                .startUpdateFlow(appUpdateInfo, activity, finalOptions)
+                                .addOnSuccessListener(resultCode -> {
+                                    JSObject ret = new JSObject();
+                                    ret.put("started", true);
+                                    ret.put("resultCode", resultCode != null ? resultCode : Activity.RESULT_CANCELED);
+                                    ret.put("accepted", resultCode != null && resultCode == Activity.RESULT_OK);
+                                    ret.put("fallbackRequired", false);
+                                    call.resolve(ret);
+                                })
+                                .addOnFailureListener(err -> {
+                                    JSObject ret = new JSObject();
+                                    ret.put("started", false);
+                                    ret.put("fallbackRequired", true);
+                                    ret.put("error", err != null && err.getMessage() != null ? err.getMessage() : "flow_failed");
+                                    call.resolve(ret);
+                                });
+                        } catch (Exception ex) {
+                            JSObject ret = new JSObject();
+                            ret.put("started", false);
+                            ret.put("fallbackRequired", true);
+                            ret.put("error", ex.getMessage() != null ? ex.getMessage() : "flow_exception");
+                            call.resolve(ret);
+                        }
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    JSObject ret = new JSObject();
+                    ret.put("started", false);
+                    ret.put("fallbackRequired", true);
+                    ret.put("error", e != null && e.getMessage() != null ? e.getMessage() : "play_store_unavailable");
+                    call.resolve(ret);
+                });
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("started", false);
+            ret.put("fallbackRequired", true);
+            ret.put("error", e.getMessage() != null ? e.getMessage() : "play_store_exception");
+            call.resolve(ret);
+        }
+    }
+
     @PluginMethod
     public void getInfo(PluginCall call) {
         JSObject ret = new JSObject();
@@ -238,23 +470,8 @@ public class StatusBarPlugin extends Plugin {
         ret.put("style", "DARK");
         ret.put("color", "#000000");
         ret.put("overlays", true);
-
-        // Retorna versionCode e versionName do binário Android instalado
-        try {
-            android.content.pm.PackageInfo pInfo = getContext().getPackageManager().getPackageInfo(getContext().getPackageName(), 0);
-            long versionCode;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                versionCode = pInfo.getLongVersionCode();
-            } else {
-                versionCode = pInfo.versionCode;
-            }
-            ret.put("versionCode", versionCode);
-            ret.put("versionName", pInfo.versionName);
-        } catch (Exception e) {
-            ret.put("versionCode", 0);
-            ret.put("versionName", "unknown");
-        }
-
+        ret.put("versionCode", getInstalledVersionCode());
+        ret.put("versionName", getInstalledVersionName());
         call.resolve(ret);
     }
 }

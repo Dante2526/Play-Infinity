@@ -30,11 +30,13 @@
 -keep class androidx.core.view.WindowCompat { *; }
 -keep class androidx.core.view.ViewCompat { *; }
 
-# Firebase & Google Play Services
+# Firebase & Google Play Services / Play In-App Updates
 -keep class com.google.firebase.** { *; }
 -keep class com.google.android.gms.** { *; }
+-keep class com.google.android.play.core.** { *; }
 -dontwarn com.google.firebase.**
 -dontwarn com.google.android.gms.**
+-dontwarn com.google.android.play.core.**
 
 # Line numbers for crash traces in Play Console
 -keepattributes SourceFile,LineNumberTable

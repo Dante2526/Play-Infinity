@@ -85,52 +85,34 @@ process.on("uncaughtException", (err) => {
       timestamp: new Date().toISOString() });
   });
 
-  // Rota de Informações de Versão do App Nativo (usada pelo AppUpdateBanner para detectar APKs antigos)
+  const PLAY_STORE_APP_URL = "https://play.google.com/store/apps/details?id=com.playinfinity.app";
+
+  // Rota de Informações de Versão do App Nativo (usada pelo AppUpdateBanner para avisar atualizações na Google Play Store)
   app.get("/api/app-version", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     let versionData = {
       minNativeVersionCode: 87, // versões abaixo de 87 ainda têm a ActionBar nativa duplicada
-      latestVersionCode: 99,
-      latestVersionName: "1.4.67",
-      apkUrl: "https://play-infinity.stream/app.apk",
-      changelog: "Correção de layout nativo, downloads otimizados e novos canais esportivos."
+      latestVersionCode: 121,
+      latestVersionName: "1.4.89",
+      playStoreUrl: PLAY_STORE_APP_URL,
+      changelog: "Melhorias no player, comando de voz no celular, Chromecast, downloads offline e novos canais ao vivo."
     };
 
     try {
       const versionFile = path.join(process.cwd(), "uploads", "releases", "version.json");
       if (fs.existsSync(versionFile)) {
         const parsed = JSON.parse(fs.readFileSync(versionFile, "utf8"));
-        versionData = { ...versionData, ...parsed };
+        versionData = { ...versionData, ...parsed, playStoreUrl: parsed.playStoreUrl || PLAY_STORE_APP_URL };
       }
     } catch {}
 
     res.json(versionData);
   });
 
-  // Rota para Download Direto do APK assinado mais recente (sem esperar a Google Play Store)
+  // Rota legada /app.apk: redireciona links antigos direto para a Google Play Store oficial
   app.get("/app.apk", (_req, res) => {
-    const possiblePaths = [
-      path.join(process.cwd(), "uploads", "releases", "PlayInfinity-latest.apk"),
-      path.join(process.cwd(), "uploads", "releases", "app-release.apk"),
-      path.join(process.cwd(), "android", "app", "build", "outputs", "apk", "release", "app-release.apk")
-    ];
-
-    let foundPath: string | null = null;
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        foundPath = p;
-        break;
-      }
-    }
-
-    if (!foundPath) {
-      return res.status(404).send("O APK atualizado está sendo preparado pelo servidor. Tente novamente em instantes.");
-    }
-
-    res.setHeader("Content-Disposition", 'attachment; filename="PlayInfinity.apk"');
-    res.setHeader("Content-Type", "application/vnd.android.package-archive");
-    res.setHeader("Cache-Control", "public, max-age=300");
-    res.sendFile(foundPath);
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    return res.redirect(302, PLAY_STORE_APP_URL);
   });
 
   // Configuração necessária para ambientes atrás de proxy/Load Balancer (como Cloud Run)
