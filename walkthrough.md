@@ -1,3 +1,7 @@
+## 20/11/2026 — Ajuste de Altura do Cabeçalho Superior Mobile no App Android (`src/App.tsx`)
+- **Causa:** O `MainActivity.java` já aplica padding nativo da barra de status no container do WebView, e a barra superior mobile em `src/App.tsx` adicionava um segundo deslocamento `top-10` (`40px`) em `Capacitor.isNativePlatform()`, deixando o logo `Play Infinity` e os ícones (Downloads, Notificações, Perfil) muito baixos.
+- **Mudança:** Alterado de `${Capacitor.isNativePlatform() ? 'top-10' : 'top-4'}` para `top-3` (`12px`), subindo a barra superior em `28px` no app Android.
+
 ## 19–20/11/2026 — Detecção Automática de Atualizações da Google Play Store (`Play In-App Updates`), Eliminação de Falso Positivo e Remoção de APK Externo (v1.4.92 / versionCode 124)
 - **Causa do falso positivo no celular:** A versão instalada pela Play Store no aparelho ainda não possuía o método nativo `StatusBar.checkPlayStoreUpdate()` (adicionado no build `123`), fazendo o `AppUpdateBanner.tsx` cair no fallback de `/api/app-version` (`installedVersionCode < data.latestVersionCode`, que estava hardcoded como `121` no `server.ts`). Como a release `121`/`123` ainda não era a versão ativa publicada na loja, o app exibia o card de atualização mesmo com a última versão disponível na Play Store já instalada.
 - **Mudanças aplicadas:**
