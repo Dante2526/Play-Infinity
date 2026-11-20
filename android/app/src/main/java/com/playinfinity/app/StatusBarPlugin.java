@@ -293,11 +293,11 @@ public class StatusBarPlugin extends Plugin {
                     int availability = appUpdateInfo.updateAvailability();
                     int installStatus = appUpdateInfo.installStatus();
                     boolean downloaded = installStatus == InstallStatus.DOWNLOADED;
-                    boolean statusHasUpdate =
-                        availability == UpdateAvailability.UPDATE_AVAILABLE ||
-                        availability == UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS;
+                    boolean statusHasUpdate = availability == UpdateAvailability.UPDATE_AVAILABLE;
                     int availableVersionCode = (statusHasUpdate || downloaded) ? appUpdateInfo.availableVersionCode() : 0;
-                    boolean isNewer = (statusHasUpdate && availableVersionCode > installedVersionCode) || downloaded;
+                    boolean isNewer =
+                        (statusHasUpdate && installedVersionCode > 0 && availableVersionCode > installedVersionCode) ||
+                        downloaded;
                     boolean immediateAllowed =
                         statusHasUpdate &&
                         appUpdateInfo.isUpdateTypeAllowed(AppUpdateOptions.defaultOptions(AppUpdateType.IMMEDIATE));

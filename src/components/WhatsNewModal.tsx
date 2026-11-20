@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { motion, AnimatePresence } from 'motion/react';
 import { Download, Wifi, Tv, PlaySquare, ChevronRight, X, Sparkles, CheckCircle2 } from 'lucide-react';
 import { safeLocalStorage } from '../utils/safeStorage';
 
 const WHATS_NEW_VERSION = 'v1.0.0-launch';
 
-const SLIDES = [
+const ALL_SLIDES = [
   {
     id: 'downloads',
     title: 'Baixe e Assista Offline',
@@ -43,6 +44,9 @@ const SLIDES = [
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
+  const slides = Capacitor.isNativePlatform()
+    ? ALL_SLIDES.filter((s) => s.id !== 'playstore')
+    : ALL_SLIDES;
 
   useEffect(() => {
     // Nunca exibir na rota de administração (/adm ou /admin)
@@ -65,7 +69,7 @@ export function WhatsNewModal() {
   };
 
   const handleNext = () => {
-    if (currentSlide < SLIDES.length - 1) {
+    if (currentSlide < slides.length - 1) {
       setCurrentSlide(prev => prev + 1);
     } else {
       handleClose();
@@ -74,7 +78,7 @@ export function WhatsNewModal() {
 
   if (!isOpen) return null;
 
-  const slide = SLIDES[currentSlide];
+  const slide = slides[currentSlide];
 
   return (
     <AnimatePresence>
@@ -134,7 +138,7 @@ export function WhatsNewModal() {
           {/* Content */}
           <div className="p-6 flex flex-col flex-1">
             <div className="flex justify-center gap-1.5 mb-6">
-              {SLIDES.map((_, i) => (
+              {slides.map((_, i) => (
                 <div 
                   key={i} 
                   className={`h-1.5 rounded-full transition-all duration-300 ${i === currentSlide ? 'w-6 bg-white' : 'w-1.5 bg-white/20'}`} 
@@ -161,7 +165,7 @@ export function WhatsNewModal() {
               onClick={handleNext}
               className={`mt-8 w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-bold text-white transition-all bg-gradient-to-r ${slide.color} shadow-lg ${slide.glow}`}
             >
-              {currentSlide === SLIDES.length - 1 ? (
+              {currentSlide === slides.length - 1 ? (
                 <>
                   <CheckCircle2 size={20} />
                   <span>Entendido!</span>

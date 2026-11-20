@@ -188,8 +188,14 @@ test('Play In-App Updates: detecção automática via com.google.android.play:ap
   assert.ok(
     updateBannerSrc.includes('StatusBar.checkPlayStoreUpdate') &&
     updateBannerSrc.includes('StatusBar.startPlayStoreUpdate') &&
-    updateBannerSrc.includes('if (playInfo && playInfo.supported)'),
-    'AppUpdateBanner.tsx deve consultar a Google Play Store automaticamente antes de recorrer ao fallback do servidor'
+    updateBannerSrc.includes('playInfo.availableVersionCode > playInfo.installedVersionCode') &&
+    !updateBannerSrc.includes('installedVersionCode < data.latestVersionCode'),
+    'AppUpdateBanner.tsx só exibe aviso quando a Google Play Store confirma availableVersionCode > installedVersionCode (sem fallback que gera falso positivo)'
+  );
+  const serverSrc = read('server.ts');
+  assert.ok(
+    serverSrc.includes('latestVersionCode: 0'),
+    'server.ts mantém latestVersionCode: 0 em /api/app-version para evitar falsos positivos em bundles antigos em cache'
   );
 });
 

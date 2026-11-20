@@ -10,7 +10,7 @@ interface AppVersionInfo {
   latestVersionName?: string;
   playStoreUrl?: string;
   changelog?: string;
-  source?: "play_store" | "server";
+  source?: "play_store" | "test";
   nativeInAppSupported?: boolean;
   downloaded?: boolean;
 }
@@ -40,71 +40,66 @@ export function AppUpdateBanner() {
           StatusBar.hideActionBar().catch(() => {});
         }
 
-        // 1. Consulta automática oficial via Google Play In-App Updates API (sem depender de número hardcoded no servidor)
+        // Consulta exclusivamente a Google Play Store oficial do aparelho (Play In-App Updates API).
+        // Se a Play Store não reportar explicitamente que há um versionCode maior publicado e disponível
+        // para este dispositivo, nenhum card/banner é exibido (evitando falso positivo quando a versão
+        // instalada já é a última disponível na Play Store).
         if (Capacitor.isNativePlatform() && StatusBar.checkPlayStoreUpdate) {
           const playInfo = await StatusBar.checkPlayStoreUpdate().catch(() => null);
-          if (playInfo && playInfo.supported) {
-            if (!playInfo.updateAvailable && !isTestMode) {
-              // Play Store confirmou que o aparelho já está na versão mais recente publicada
-              return;
-            }
+          const hasConfirmedStoreUpdate = Boolean(
+            playInfo &&
+              playInfo.supported &&
+              playInfo.updateAvailable &&
+              ((playInfo.installedVersionCode > 0 &&
+                playInfo.availableVersionCode > playInfo.installedVersionCode) ||
+                playInfo.downloaded)
+          );
 
-            if (playInfo.updateAvailable) {
-              let serverMeta: Partial<AppVersionInfo> | null = null;
-              try {
-                const res = await fetch("/api/app-version", { cache: "no-store" });
-                if (res.ok) {
-                  serverMeta = await res.json();
-                }
-              } catch {}
-
-              const availableCode = playInfo.availableVersionCode || serverMeta?.latestVersionCode || 0;
-              const matchedVersionName =
-                serverMeta && serverMeta.latestVersionCode === availableCode
-                  ? serverMeta.latestVersionName
-                  : undefined;
-
-              if (isMounted) {
-                setUpdateAvailable({
-                  minNativeVersionCode: serverMeta?.minNativeVersionCode || 0,
-                  latestVersionCode: availableCode,
-                  latestVersionName: matchedVersionName,
-                  playStoreUrl: serverMeta?.playStoreUrl || PLAY_STORE_WEB_URL,
-                  changelog: serverMeta?.changelog,
-                  source: "play_store",
-                  nativeInAppSupported: Boolean(
-                    playInfo.immediateAllowed || playInfo.flexibleAllowed || playInfo.downloaded
-                  ),
-                  downloaded: Boolean(playInfo.downloaded),
-                });
+          if (hasConfirmedStoreUpdate && playInfo) {
+            let serverMeta: Partial<AppVersionInfo> | null = null;
+            try {
+              const res = await fetch("/api/app-version", { cache: "no-store" });
+              if (res.ok) {
+                serverMeta = await res.json();
               }
-              return;
+            } catch {}
+
+            const availableCode = playInfo.availableVersionCode || 0;
+            const matchedVersionName =
+              serverMeta &&
+              availableCode > 0 &&
+              serverMeta.latestVersionCode === availableCode
+                ? serverMeta.latestVersionName
+                : undefined;
+
+            if (isMounted) {
+              setUpdateAvailable({
+                minNativeVersionCode: serverMeta?.minNativeVersionCode || 0,
+                latestVersionCode: availableCode,
+                latestVersionName: matchedVersionName,
+                playStoreUrl: serverMeta?.playStoreUrl || PLAY_STORE_WEB_URL,
+                changelog: serverMeta?.changelog,
+                source: "play_store",
+                nativeInAppSupported: Boolean(
+                  playInfo.immediateAllowed || playInfo.flexibleAllowed || playInfo.downloaded
+                ),
+                downloaded: Boolean(playInfo.downloaded),
+              });
             }
+            return;
           }
         }
 
-        // 2. Fallback para builds antigas (antes do SDK Play Core), APKs fora da Play Store ou modo de teste
-        let installedVersionCode = 0;
-        if (StatusBar.getInfo) {
-          const info = await StatusBar.getInfo().catch(() => null);
-          if (info && typeof info.versionCode === "number") {
-            installedVersionCode = info.versionCode;
-          }
-        }
-
-        const res = await fetch("/api/app-version", { cache: "no-store" });
-        if (!res.ok) return;
-        const data: AppVersionInfo = await res.json();
-
-        if (installedVersionCode < data.latestVersionCode || isTestMode) {
-          if (isMounted) {
-            setUpdateAvailable({
-              ...data,
-              playStoreUrl: data.playStoreUrl || PLAY_STORE_WEB_URL,
-              source: "server",
-              nativeInAppSupported: false,
-            });
-          }
+        // Modo de teste manual explícito via URL (?test_update=1)
+        if (isTestMode && isMounted) {
+          setUpdateAvailable({
+            minNativeVersionCode: 0,
+            latestVersionCode: 999,
+            latestVersionName: "Teste",
+            playStoreUrl: PLAY_STORE_WEB_URL,
+            source: "test",
+            nativeInAppSupported: false,
+          });
         }
       } catch (err) {
         console.warn("[AppUpdateBanner] Falha ao verificar versão:", err);

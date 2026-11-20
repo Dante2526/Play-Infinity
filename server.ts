@@ -87,24 +87,19 @@ process.on("uncaughtException", (err) => {
 
   const PLAY_STORE_APP_URL = "https://play.google.com/store/apps/details?id=com.playinfinity.app";
 
-  // Rota de Informações de Versão do App Nativo (usada pelo AppUpdateBanner para avisar atualizações na Google Play Store)
+  // Rota de Informações de Versão do App Nativo
+  // Nota: latestVersionCode fica em 0 para impedir que bundles antigos em cache no WebView
+  // disparem falso positivo (installedVersionCode < latestVersionCode) antes da Play Store
+  // aprovar uma nova release. A detecção real é feita pela Play In-App Updates API no aparelho.
   app.get("/api/app-version", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-    let versionData = {
-      minNativeVersionCode: 87, // versões abaixo de 87 ainda têm a ActionBar nativa duplicada
-      latestVersionCode: 121,
-      latestVersionName: "1.4.89",
+    const versionData = {
+      minNativeVersionCode: 0,
+      latestVersionCode: 0,
+      latestVersionName: "",
       playStoreUrl: PLAY_STORE_APP_URL,
       changelog: "Melhorias no player, comando de voz no celular, Chromecast, downloads offline e novos canais ao vivo."
     };
-
-    try {
-      const versionFile = path.join(process.cwd(), "uploads", "releases", "version.json");
-      if (fs.existsSync(versionFile)) {
-        const parsed = JSON.parse(fs.readFileSync(versionFile, "utf8"));
-        versionData = { ...versionData, ...parsed, playStoreUrl: parsed.playStoreUrl || PLAY_STORE_APP_URL };
-      }
-    } catch {}
 
     res.json(versionData);
   });
