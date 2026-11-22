@@ -1,3 +1,14 @@
+## 22/11/2026 — Controle de Histórico de Assinaturas e Renovações no Painel Admin (`src/utils/subscriptionHistory.ts`, `src/pages/AdminPage.tsx`, `server/routes/payments.ts`)
+- **Funcionalidades implementadas:**
+  1. **Mês de Entrada e Tempo no App (`No App Desde`):** Mostra desde qual mês/ano o cliente está no app (ex.: `Setembro de 2026`), a data exata de entrada e há quantos meses está cadastrado.
+  2. **Quando Assinou (`1ª Assinatura`):** Registra e reconstrói a data exata da primeira assinatura e se foi feita pelo App ou manualmente pelo Admin.
+  3. **Meses que Não Renovou & Quando Renovou Novamente:** Gera uma **Linha do Tempo Mês a Mês** desde o mês em que o cliente entrou no app até o mês atual, destacando os meses em que a assinatura venceu sem renovação (`Não Renovou`) e a data exata de quando o cliente voltou e `Renovou Novamente`.
+  4. **Origem do Pagamento (`📱 Pago pelo App (Asaas)` vs `🛠️ Renovação Manual (Admin)`):**
+     - No webhook do Asaas (`server/routes/payments.ts`), toda confirmação de pagamento (`PAYMENT_RECEIVED` / `PAYMENT_CONFIRMED`) grava automaticamente o evento em `subscriptionHistory` com `origin: "app"`, método (`PIX pelo App` / `Cartão pelo App`), `firstSubscribedAt`, `lastRenewalAt` e `lastPaymentOrigin: "app"`, além de registrar `not_renewed` em `PAYMENT_OVERDUE`.
+     - No Painel Admin (`src/pages/AdminPage.tsx`), todo cadastro manual (`handleCreateUser`), extensão rápida (`handleQuickExtend`, incluindo novo botão `+1Mês`), edição de vencimento (`handleSaveEdit`) e expiração automática grava o evento em `subscriptionHistory` com `origin: "manual_admin"`.
+     - Cada cartão de cliente exibe badges rápidos (`No app desde`, `Assinou`, `Não renovou`, `Renovou novamente`, `Pago pelo App` / `Renovação Manual`) e o botão **`Histórico`**, que abre a gaveta completa com 4 KPIs, calendário mês a mês, log cronológico detalhado e formulário para adicionar/remover registros históricos manualmente.
+- **Verificação:** `npx tsc --noEmit` (**exit 0**) e `node --test tests/subscription-history.test.cjs tests/payments.test.cjs` (**21 passed, 0 failed**).
+
 ## 22/11/2026 — Correção do Falso Positivo de Áudio Dolby (AC-3) nos Canais de TV no Safari do iPhone (`src/components/LivePlayerModal.tsx`)
 - **Causa raiz confirmada:**
   1. A partir do iOS 17.1+ / iOS 18, a Apple adicionou `window.ManagedMediaSource` no Safari do iPhone, mas manteve `window.MediaSource === undefined`. Com isso, `Hls.isSupported()` passou a retornar `true` no iPhone (entrando no `hls.js` em vez do player HLS nativo do iOS).

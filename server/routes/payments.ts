@@ -288,15 +288,72 @@ router.post("/api/webhook/asaas", async (req, res) => {
           expires.setUTCDate(Math.min(day, lastDay));
           const existingExpiry = new Date(user.dataExpiracao || 0).getTime();
           const isPlus = !!reference[2];
+          const newExpIso = new Date(Math.max(expires.getTime(), Number.isFinite(existingExpiry) ? existingExpiry : 0)).toISOString();
+          const prevHistory: any[] = Array.isArray(user.subscriptionHistory) ? [...user.subscriptionHistory] : [];
+          const hadPreviousSub = Boolean(
+            user.firstSubscribedAt ||
+            user.asaasPaymentDate ||
+            user.dataPagamento ||
+            prevHistory.some((e: any) => e && (e.type === "first_subscription" || e.type === "renewal" || e.type === "reactivation"))
+          );
+          const wasInactiveOrExpired =
+            hadPreviousSub &&
+            (user.assinatura === "INATIVA" ||
+              user.assinatura === "EXPIRADA" ||
+              (Number.isFinite(existingExpiry) && existingExpiry > 0 && existingExpiry < paidDate.getTime() - 3 * 24 * 3600 * 1000));
+          const historyType = !hadPreviousSub
+            ? "first_subscription"
+            : wasInactiveOrExpired
+              ? "reactivation"
+              : "renewal";
+          const billingLabel =
+            realPayment.billingType === "PIX"
+              ? "PIX pelo App (Asaas)"
+              : realPayment.billingType === "CREDIT_CARD"
+                ? "Cartão pelo App (Asaas)"
+                : "Pagamento pelo App (Asaas)";
+          const paidMonthKey = `${paidDate.getUTCFullYear()}-${String(paidDate.getUTCMonth() + 1).padStart(2, "0")}`;
+          const amountStr = isPlus
+            ? "17,00"
+            : typeof user.valor === "string"
+              ? user.valor
+              : user.valorMensalidade === 9.9
+                ? "9,90"
+                : "13,00";
+          const entryId = `asaas_${payment.id}`;
+          if (!prevHistory.some((e: any) => e && e.id === entryId)) {
+            prevHistory.push({
+              id: entryId,
+              type: historyType,
+              origin: "app",
+              paymentMethod: billingLabel,
+              date: paidDate.toISOString(),
+              monthKey: paidMonthKey,
+              expirationDate: newExpIso,
+              plan: isPlus ? "plus" : "mensal",
+              amount: amountStr,
+              note:
+                historyType === "first_subscription"
+                  ? `1ª assinatura confirmada pelo App (${billingLabel})`
+                  : historyType === "reactivation"
+                    ? `Cliente voltou e renovou novamente pelo App (${billingLabel})`
+                    : `Renovação confirmada pelo App (${billingLabel})`,
+            });
+          }
           transaction.set(userRef, {
             assinatura: "ATIVA",
             subscriptionId: realPayment.subscription || "",
             asaasPaymentId: payment.id,
             asaasPaymentDate: paidDate.toISOString(),
             dataPagamento: paidDate.toISOString(),
-            dataExpiracao: new Date(Math.max(expires.getTime(), Number.isFinite(existingExpiry) ? existingExpiry : 0)).toISOString(),
+            dataExpiracao: newExpIso,
             plano: isPlus ? "plus" : "standard",
             ...(isPlus ? { valorMensalidade: 17.00, valor: "17,00" } : {}),
+            firstSubscribedAt: user.firstSubscribedAt || paidDate.toISOString(),
+            lastRenewalAt: paidDate.toISOString(),
+            lastPaymentOrigin: "app",
+            lastPaymentMethod: billingLabel,
+            subscriptionHistory: prevHistory,
             ultimoAcesso: new Date().toISOString()
           }, { merge: true });
         }
@@ -309,7 +366,30 @@ router.post("/api/webhook/asaas", async (req, res) => {
           ? sameSubscription && expired
           : user.asaasPaymentId === payment.id;
         if (shouldRevoke) {
-          transaction.set(userRef, { assinatura: "INATIVA", updatedAt: new Date().toISOString() }, { merge: true });
+          const nowIso = new Date().toISOString();
+          const nowDate = new Date(nowIso);
+          const revokeMonthKey = `${nowDate.getUTCFullYear()}-${String(nowDate.getUTCMonth() + 1).padStart(2, "0")}`;
+          const prevHistory: any[] = Array.isArray(user.subscriptionHistory) ? [...user.subscriptionHistory] : [];
+          const revokeId = `asaas_revoke_${payment.id}_${event}`;
+          if (!prevHistory.some((e: any) => e && e.id === revokeId)) {
+            prevHistory.push({
+              id: revokeId,
+              type: event === "PAYMENT_OVERDUE" ? "not_renewed" : "revoked",
+              origin: "app",
+              paymentMethod: event === "PAYMENT_OVERDUE" ? "Fatura Vencida (Asaas)" : "Estorno/Cancelamento (Asaas)",
+              date: nowIso,
+              monthKey: revokeMonthKey,
+              note:
+                event === "PAYMENT_OVERDUE"
+                  ? "Cliente não renovou a assinatura no vencimento (fatura em atraso no Asaas)"
+                  : `Pagamento estornado ou removido no Asaas (${event})`,
+            });
+          }
+          transaction.set(userRef, {
+            assinatura: "INATIVA",
+            updatedAt: nowIso,
+            subscriptionHistory: prevHistory,
+          }, { merge: true });
         }
         // Impede que a confirmação atrasada de uma cobrança estornada a reative.
         if (event !== "PAYMENT_OVERDUE") {

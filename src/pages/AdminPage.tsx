@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronDown, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop } from "lucide-react";
+import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronDown, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop, History } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus, KNOWN_ACQUISITION_SOURCES, type AcquisitionSource } from "../services/referralService";
+import {
+  buildClientSubscriptionHistory,
+  createSubscriptionHistoryEntry,
+  formatDatePtBr,
+  isShortTrialPlan,
+  toMonthKey,
+  type ClientHistorySummary,
+  type PaymentOrigin,
+  type SubscriptionEventType,
+  type SubscriptionHistoryEntry,
+} from "../utils/subscriptionHistory";
 import { collection, getDocs, query, where, doc, setDoc, deleteDoc, updateDoc, deleteField } from "firebase/firestore";
 import { createUserWithEmailAndPassword, signOut, updateProfile, getAuth, signInWithEmailAndPassword, updateEmail, updatePassword } from "firebase/auth";
 import { initializeApp, deleteApp } from "firebase/app";
@@ -50,6 +61,18 @@ export interface ClientUser {
   devicesCount?: number;
   devicesList?: DeviceSession[];
   isDevicesEstimated?: boolean;
+  // Controle de Histórico de Assinatura e Renovação
+  paymentDate?: string;
+  asaasPaymentId?: string;
+  asaasPaymentDate?: string;
+  subscriptionId?: string;
+  createdByAdmin?: boolean;
+  firstSubscribedAt?: string;
+  lastRenewalAt?: string;
+  lastPaymentOrigin?: PaymentOrigin | null;
+  lastPaymentMethod?: string;
+  subscriptionHistory?: SubscriptionHistoryEntry[];
+  historySummary?: ClientHistorySummary;
 }
 
 interface AdminPageProps {
@@ -139,6 +162,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
     totalDevices: 0
   });
   const [selectedDevicesUser, setSelectedDevicesUser] = useState<ClientUser | null>(null);
+  const [selectedHistoryUserId, setSelectedHistoryUserId] = useState<string | null>(null);
+  const [manualHistType, setManualHistType] = useState<SubscriptionEventType>("renewal");
+  const [manualHistOrigin, setManualHistOrigin] = useState<PaymentOrigin>("manual_admin");
+  const [manualHistDate, setManualHistDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [manualHistNote, setManualHistNote] = useState<string>("");
+  const [manualHistSavingId, setManualHistSavingId] = useState<string | null>(null);
 
   // Client List State
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -216,7 +245,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
         (u.accessType && u.accessType.toLowerCase().includes(q)) ||
         (u.referredByName && u.referredByName.toLowerCase().includes(q)) ||
         (u.rootReferrerName && u.rootReferrerName.toLowerCase().includes(q)) ||
-        (u.referralCode && u.referralCode.toLowerCase().includes(q))
+        (u.referralCode && u.referralCode.toLowerCase().includes(q)) ||
+        (u.historySummary?.joinedMonthLabel && u.historySummary.joinedMonthLabel.toLowerCase().includes(q)) ||
+        (u.historySummary?.lastPaymentOriginLabel && u.historySummary.lastPaymentOriginLabel.toLowerCase().includes(q)) ||
+        (u.historySummary?.monthsWithoutRenewal?.some(m => m.toLowerCase().includes(q)))
       );
       if (!matchesSearch) return false;
 
@@ -469,11 +501,35 @@ export function AdminPage({ onBack }: AdminPageProps) {
           inactive++;
         }
 
+        let currentRawHistory: SubscriptionHistoryEntry[] = Array.isArray(data.subscriptionHistory)
+          ? [...data.subscriptionHistory]
+          : Array.isArray(data.historicoAssinatura)
+            ? [...data.historicoAssinatura]
+            : [];
+
         if (isExplicitlyActive && isExpired) {
           try {
+            const expIso = expDateStr || new Date().toISOString();
+            const expMKey = toMonthKey(expIso);
+            const hasNotRenewedForMonth = currentRawHistory.some(
+              (h: any) => h && (h.type === "not_renewed" || h.type === "revoked") && h.monthKey === expMKey
+            );
+            if (!hasNotRenewedForMonth && !isShortTrialPlan(data.tipoAcesso || data.accessType)) {
+              const expiredEntry = createSubscriptionHistoryEntry({
+                type: "not_renewed",
+                origin: "system",
+                date: expIso,
+                monthKey: expMKey,
+                expirationDate: expIso,
+                paymentMethod: "Vencimento sem renovação",
+                note: `Assinatura venceu em ${formatDatePtBr(expIso)} sem renovação no prazo`,
+              });
+              currentRawHistory = [...currentRawHistory, expiredEntry];
+            }
             updateDoc(doc(db, "usuarios", docSnap.id), {
               assinatura: "EXPIRADA",
-              subscription: "INACTIVE"
+              subscription: "INACTIVE",
+              subscriptionHistory: currentRawHistory,
             });
           } catch(e){console.warn("Silenced error:", e);}
         }
@@ -494,10 +550,10 @@ export function AdminPage({ onBack }: AdminPageProps) {
         let feeFormatted: string | undefined = undefined;
         if (rawFee !== undefined && rawFee !== null && rawFee !== "") {
           if (typeof rawFee === "number") {
-            feeFormatted = rawFee === 13 ? "13,00" : "9,90";
+            feeFormatted = rawFee === 17 ? "17,00" : rawFee === 13 ? "13,00" : "9,90";
           } else {
             const str = String(rawFee);
-            feeFormatted = str.includes("13") ? "13,00" : "9,90";
+            feeFormatted = str.includes("17") ? "17,00" : str.includes("13") ? "13,00" : "9,90";
           }
         } else if ((data.tipoAcesso || data.accessType || "mensal") === "mensal") {
           const createdDate = data.criadoEm || data.createdAt;
@@ -520,6 +576,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
           : (typeof data.fcmToken === "string" && data.fcmToken.trim() ? 1 : 0);
         const resolvedDevs = resolveUserDevices(data.devices, fcmTokensCount, data.ultimoAcesso || data.lastActive);
         totalDevices += resolvedDevs.count;
+
+        const historySummary = buildClientSubscriptionHistory({
+          ...data,
+          monthlyFee: feeFormatted,
+          subscriptionHistory: currentRawHistory,
+        });
 
         list.push({
           id: docSnap.id,
@@ -550,7 +612,18 @@ export function AdminPage({ onBack }: AdminPageProps) {
           isDevicesEstimated: resolvedDevs.isEstimated,
           acquisitionSource: (data.acquisitionSource === "saimon" || data.acquisitionSource === "embedtv")
             ? data.acquisitionSource
-            : null
+            : null,
+          paymentDate: data.dataPagamento || data.paymentDate,
+          asaasPaymentId: data.asaasPaymentId,
+          asaasPaymentDate: data.asaasPaymentDate,
+          subscriptionId: data.subscriptionId,
+          createdByAdmin: Boolean(data.criadoPorAdmin),
+          firstSubscribedAt: historySummary.firstSubscribedAt || undefined,
+          lastRenewalAt: historySummary.lastRenewalAt || undefined,
+          lastPaymentOrigin: historySummary.lastPaymentOrigin,
+          lastPaymentMethod: historySummary.lastPaymentMethodLabel,
+          subscriptionHistory: currentRawHistory,
+          historySummary,
         });
       });
 
@@ -703,6 +776,29 @@ export function AdminPage({ onBack }: AdminPageProps) {
       // 4. Salva no banco de dados na coleção 'usuarios' com campos limpos em português
       const valorNum = monthlyPrice === "13.00" ? 13.00 : 9.90;
       const valorTxt = monthlyPrice === "13.00" ? "13,00" : "9,90";
+      const createdNowIso = new Date().toISOString();
+      const isTrialCreate = isShortTrialPlan(accessType);
+      const initialHistory: SubscriptionHistoryEntry[] = [
+        createSubscriptionHistoryEntry({
+          type: "joined",
+          origin: "manual_admin",
+          date: createdNowIso,
+          paymentMethod: "Cadastro Manual (Admin)",
+          note: "Cliente cadastrado manualmente pelo administrador",
+        }),
+        createSubscriptionHistoryEntry({
+          type: isTrialCreate ? "trial" : "first_subscription",
+          origin: "manual_admin",
+          date: payDate.toISOString(),
+          expirationDate: expirationDate.toISOString(),
+          plan: accessType,
+          amount: accessType === "mensal" ? valorTxt : undefined,
+          paymentMethod: isTrialCreate ? "Teste Manual (Admin)" : "Ativação Manual (Admin)",
+          note: isTrialCreate
+            ? `Período de teste liberado manualmente pelo Admin (${accessType})`
+            : `1ª assinatura ativada manualmente pelo Admin (${accessType}${accessType === "mensal" ? ` - R$ ${valorTxt}` : ""})`,
+        }),
+      ];
 
       await setDoc(doc(db, "usuarios", userUid), {
         email: cleanEmail,
@@ -715,8 +811,13 @@ export function AdminPage({ onBack }: AdminPageProps) {
         valorMensalidade: accessType === "mensal" ? valorNum : null,
         valor: accessType === "mensal" ? valorTxt : null,
         senha: newPassword,
-        criadoEm: new Date().toISOString(),
-        acquisitionSource: newAcquisitionSource === "none" ? null : newAcquisitionSource
+        criadoEm: createdNowIso,
+        acquisitionSource: newAcquisitionSource === "none" ? null : newAcquisitionSource,
+        firstSubscribedAt: isTrialCreate ? null : payDate.toISOString(),
+        lastRenewalAt: payDate.toISOString(),
+        lastPaymentOrigin: "manual_admin",
+        lastPaymentMethod: isTrialCreate ? "Teste Manual (Admin)" : "Ativação Manual (Admin)",
+        subscriptionHistory: initialHistory,
       });
 
       setCreateSuccess(`Cliente "${newName.trim()}" criado com sucesso!${accessType === 'mensal' ? ` Mensalidade: R$ ${valorTxt}.` : ''} O acesso expira em: ${expireStr}`);
@@ -874,7 +975,9 @@ export function AdminPage({ onBack }: AdminPageProps) {
     setQuickExtendLoadingId(client.id);
     try {
       const now = Date.now();
+      const nowIso = new Date(now).toISOString();
       let baseTime = now;
+      const wasExpired = getClientExpirationStatus(client, now) === "expired";
       if (client.expirationDate) {
         const prev = new Date(client.expirationDate).getTime();
         // Se ainda não expirou, soma ao tempo restante; se já expirou, renova a partir de agora
@@ -883,14 +986,74 @@ export function AdminPage({ onBack }: AdminPageProps) {
         }
       }
 
-      const targetDate = new Date(baseTime + hoursToAdd * 60 * 60 * 1000);
+      let targetDate: Date;
+      if (newType === "mensal" && hoursToAdd >= 720) {
+        targetDate = new Date(baseTime);
+        targetDate.setMonth(targetDate.getMonth() + 1);
+      } else {
+        targetDate = new Date(baseTime + hoursToAdd * 60 * 60 * 1000);
+      }
+
+      const durationLabel =
+        newType === "mensal" && hoursToAdd >= 720
+          ? "1 mês"
+          : hoursToAdd === 0.5
+            ? "30 minutos"
+            : hoursToAdd === 1
+              ? "1 hora"
+              : hoursToAdd === 4
+                ? "4 horas"
+                : hoursToAdd === 24
+                  ? "1 dia"
+                  : hoursToAdd === 168
+                    ? "7 dias"
+                    : `${hoursToAdd} horas`;
+
+      const isTrialExtend = isShortTrialPlan(newType);
+      const hadFirstSub = Boolean(client.historySummary?.firstSubscribedAt || client.firstSubscribedAt);
+      const eventType: SubscriptionEventType = isTrialExtend
+        ? "trial"
+        : !hadFirstSub
+          ? "first_subscription"
+          : wasExpired
+            ? "reactivation"
+            : "renewal";
+
+      const prevHistory: SubscriptionHistoryEntry[] = Array.isArray(client.subscriptionHistory)
+        ? [...client.subscriptionHistory]
+        : [];
+      const historyEntry = createSubscriptionHistoryEntry({
+        type: eventType,
+        origin: "manual_admin",
+        date: nowIso,
+        expirationDate: targetDate.toISOString(),
+        plan: newType,
+        amount: newType === "mensal" ? (client.monthlyFee || "13,00") : undefined,
+        paymentMethod: "Renovação Manual (Admin)",
+        note:
+          eventType === "reactivation"
+            ? `Cliente voltou e foi renovado manualmente pelo Admin (+${durationLabel})`
+            : eventType === "first_subscription"
+              ? `1ª assinatura ativada manualmente pelo Admin (+${durationLabel})`
+              : isTrialExtend
+                ? `Tempo de teste estendido manualmente pelo Admin (+${durationLabel})`
+                : `Renovação manual realizada pelo Admin (+${durationLabel})`,
+      });
+      const updatedHistory = [...prevHistory, historyEntry];
+
       const updates: any = {
         assinatura: "ATIVA",
         subscription: "ACTIVE",
+        dataPagamento: nowIso,
         dataExpiracao: targetDate.toISOString(),
         expirationDate: targetDate.toISOString(),
         tipoAcesso: newType,
         accessType: newType,
+        lastRenewalAt: nowIso,
+        lastPaymentOrigin: "manual_admin",
+        lastPaymentMethod: "Renovação Manual (Admin)",
+        subscriptionHistory: updatedHistory,
+        ...(!isTrialExtend && !hadFirstSub ? { firstSubscribedAt: nowIso } : {}),
       };
 
       await updateDoc(doc(db, "usuarios", client.id), updates);
@@ -898,8 +1061,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
         await updateDoc(doc(db, "users", client.id), updates);
       } catch(e){console.warn("Silenced error:", e);}
 
-      const durationLabel = hoursToAdd === 0.5 ? "30 minutos" : hoursToAdd === 1 ? "1 hora" : hoursToAdd === 4 ? "4 horas" : hoursToAdd === 24 ? "1 dia" : hoursToAdd === 168 ? "7 dias" : `${hoursToAdd} horas`;
-      setActionSuccessToast(`Acesso de "${client.name || client.email}" renovado com sucesso por mais ${durationLabel}!`);
+      setActionSuccessToast(`Acesso de "${client.name || client.email}" renovado manualmente por mais ${durationLabel}!`);
       setTimeout(() => setActionSuccessToast(null), 4000);
 
       await loadStats();
@@ -909,6 +1071,113 @@ export function AdminPage({ onBack }: AdminPageProps) {
       setTimeout(() => setActionErrorToast(null), 5000);
     } finally {
       setQuickExtendLoadingId(null);
+    }
+  };
+
+  const handleAddManualHistoryEntry = async (client: ClientUser) => {
+    setManualHistSavingId(client.id);
+    try {
+      const parsedDate = manualHistDate
+        ? new Date(`${manualHistDate}T12:00:00`)
+        : new Date();
+      const validIso = !isNaN(parsedDate.getTime())
+        ? parsedDate.toISOString()
+        : new Date().toISOString();
+
+      const prevHistory: SubscriptionHistoryEntry[] = Array.isArray(client.subscriptionHistory)
+        ? [...client.subscriptionHistory]
+        : [];
+
+      const defaultNoteMap: Record<SubscriptionEventType, string> = {
+        joined: "Entrada do cliente no aplicativo",
+        first_subscription:
+          manualHistOrigin === "app"
+            ? "1ª assinatura paga pelo App (Asaas)"
+            : "1ª assinatura liberada manualmente pelo Admin",
+        renewal:
+          manualHistOrigin === "app"
+            ? "Renovação paga pelo App (Asaas)"
+            : "Renovação feita manualmente pelo Admin",
+        reactivation:
+          manualHistOrigin === "app"
+            ? "Voltou a assinar e pagou pelo App"
+            : "Voltou a assinar com renovação manual do Admin",
+        not_renewed: "Mês em que o cliente não renovou a assinatura",
+        revoked: "Assinatura cancelada/revogada",
+        trial: "Período de teste liberado",
+      };
+
+      const entry = createSubscriptionHistoryEntry({
+        type: manualHistType,
+        origin: manualHistType === "not_renewed" ? "system" : manualHistOrigin,
+        date: validIso,
+        plan: client.accessType || "mensal",
+        amount: client.monthlyFee,
+        paymentMethod:
+          manualHistType === "not_renewed"
+            ? "Não renovou no mês"
+            : manualHistOrigin === "app"
+              ? "Pagamento pelo App (Asaas)"
+              : "Renovação Manual (Admin)",
+        note: manualHistNote.trim() || defaultNoteMap[manualHistType],
+      });
+
+      const updatedHistory = [...prevHistory, entry];
+      const updates: any = {
+        subscriptionHistory: updatedHistory,
+      };
+      if (
+        manualHistType === "first_subscription" ||
+        manualHistType === "renewal" ||
+        manualHistType === "reactivation"
+      ) {
+        updates.lastPaymentOrigin = manualHistOrigin;
+        updates.lastRenewalAt = validIso;
+        if (manualHistType === "first_subscription" || !client.firstSubscribedAt) {
+          updates.firstSubscribedAt = validIso;
+        }
+      }
+
+      await updateDoc(doc(db, "usuarios", client.id), updates);
+      try {
+        await updateDoc(doc(db, "users", client.id), updates);
+      } catch {}
+
+      setManualHistNote("");
+      setActionSuccessToast(`Registro histórico adicionado para "${client.name || client.email}"!`);
+      setTimeout(() => setActionSuccessToast(null), 4000);
+      await loadStats();
+    } catch (err: any) {
+      setActionErrorToast(getFriendlyErrorMessage(err, "Erro ao salvar registro no histórico."));
+      setTimeout(() => setActionErrorToast(null), 5000);
+    } finally {
+      setManualHistSavingId(null);
+    }
+  };
+
+  const handleDeleteHistoryEntry = async (client: ClientUser, entryId: string) => {
+    setManualHistSavingId(client.id);
+    try {
+      const prevHistory: SubscriptionHistoryEntry[] = Array.isArray(client.subscriptionHistory)
+        ? client.subscriptionHistory
+        : [];
+      const updatedHistory = prevHistory.filter((h) => h && h.id !== entryId);
+      await updateDoc(doc(db, "usuarios", client.id), {
+        subscriptionHistory: updatedHistory,
+      });
+      try {
+        await updateDoc(doc(db, "users", client.id), {
+          subscriptionHistory: updatedHistory,
+        });
+      } catch {}
+      setActionSuccessToast("Registro removido do histórico.");
+      setTimeout(() => setActionSuccessToast(null), 3500);
+      await loadStats();
+    } catch (err: any) {
+      setActionErrorToast(getFriendlyErrorMessage(err, "Erro ao remover registro do histórico."));
+      setTimeout(() => setActionErrorToast(null), 5000);
+    } finally {
+      setManualHistSavingId(null);
     }
   };
 
@@ -954,6 +1223,12 @@ export function AdminPage({ onBack }: AdminPageProps) {
         updates.senha = trimmedPass;
       }
 
+      const nowMs = Date.now();
+      const nowIso = new Date(nowMs).toISOString();
+      const prevExpMs = editingUser.expirationDate ? new Date(editingUser.expirationDate).getTime() : 0;
+      const wasExpiredBeforeEdit = getClientExpirationStatus(editingUser, nowMs) === "expired";
+      let newExpIsoForHistory: string | null = null;
+
       if (editAccessType === "vitalicio") {
         const vit = new Date();
         vit.setFullYear(2099);
@@ -961,14 +1236,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
         updates.expirationDate = vit.toISOString();
         updates.assinatura = "ATIVA";
         updates.subscription = "ACTIVE";
+        if (editingUser.accessType !== "vitalicio") {
+          newExpIsoForHistory = vit.toISOString();
+        }
       } else if (editExpirationDate) {
         const expDate = new Date(editExpirationDate);
         if (!isNaN(expDate.getTime())) {
           updates.dataExpiracao = expDate.toISOString();
           updates.expirationDate = expDate.toISOString();
-          if (expDate.getTime() > Date.now()) {
+          if (expDate.getTime() > nowMs) {
             updates.assinatura = "ATIVA";
             updates.subscription = "ACTIVE";
+            // Se estendeu o vencimento em relação ao anterior (ou reativou conta expirada), registra renovação manual
+            if (!prevExpMs || isNaN(prevExpMs) || expDate.getTime() > prevExpMs + 60 * 60 * 1000 || wasExpiredBeforeEdit) {
+              newExpIsoForHistory = expDate.toISOString();
+            }
           } else {
             updates.assinatura = "EXPIRADA";
             updates.subscription = "INACTIVE";
@@ -982,6 +1264,45 @@ export function AdminPage({ onBack }: AdminPageProps) {
       } else {
         updates.valorMensalidade = null;
         updates.valor = null;
+      }
+
+      if (newExpIsoForHistory) {
+        const isTrialEdit = isShortTrialPlan(editAccessType);
+        const hadFirstSub = Boolean(editingUser.historySummary?.firstSubscribedAt || editingUser.firstSubscribedAt);
+        const evType: SubscriptionEventType = isTrialEdit
+          ? "trial"
+          : !hadFirstSub
+            ? "first_subscription"
+            : wasExpiredBeforeEdit
+              ? "reactivation"
+              : "renewal";
+        const feeTxt = editAccessType === "mensal" ? (editMonthlyPrice === "13.00" ? "13,00" : "9,90") : undefined;
+        const prevHistory: SubscriptionHistoryEntry[] = Array.isArray(editingUser.subscriptionHistory)
+          ? [...editingUser.subscriptionHistory]
+          : [];
+        const newEntry = createSubscriptionHistoryEntry({
+          type: evType,
+          origin: "manual_admin",
+          date: nowIso,
+          expirationDate: newExpIsoForHistory,
+          plan: editAccessType,
+          amount: feeTxt,
+          paymentMethod: "Renovação Manual (Admin)",
+          note:
+            evType === "reactivation"
+              ? `Cliente voltou e teve o vencimento renovado manualmente pelo Admin (até ${formatDatePtBr(newExpIsoForHistory)})`
+              : evType === "first_subscription"
+                ? `1ª assinatura definida manualmente pelo Admin (até ${formatDatePtBr(newExpIsoForHistory)})`
+                : `Vencimento renovado manualmente pelo Admin (até ${formatDatePtBr(newExpIsoForHistory)})`,
+        });
+        updates.subscriptionHistory = [...prevHistory, newEntry];
+        updates.dataPagamento = nowIso;
+        updates.lastRenewalAt = nowIso;
+        updates.lastPaymentOrigin = "manual_admin";
+        updates.lastPaymentMethod = "Renovação Manual (Admin)";
+        if (!isTrialEdit && !hadFirstSub) {
+          updates.firstSubscribedAt = nowIso;
+        }
       }
 
       await updateDoc(doc(db, "usuarios", editingUser.id), updates);
@@ -1773,6 +2094,26 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               </span>
                               <ChevronDown className={`w-3 h-3 shrink-0 transition-transform duration-200 ${selectedDevicesUser?.id === client.id ? 'rotate-180 text-cyan-200' : 'text-cyan-400/70'}`} />
                             </button>
+
+                            {/* Badge de Origem do Último Pagamento / Renovação (Pelo App vs Manual Admin) */}
+                            {client.historySummary?.lastPaymentOrigin === 'app' && (
+                              <span
+                                title={`Pagamento realizado pelo cliente dentro do App (${client.historySummary.lastPaymentMethodLabel})`}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 shrink-0"
+                              >
+                                <CreditCard className="w-3 h-3 text-emerald-400 shrink-0" />
+                                <span>Pago pelo App</span>
+                              </span>
+                            )}
+                            {client.historySummary?.lastPaymentOrigin === 'manual_admin' && (
+                              <span
+                                title="Acesso ou última renovação feita manualmente pelo Administrador no painel"
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-violet-500/20 text-violet-300 border border-violet-500/40 shrink-0"
+                              >
+                                <User className="w-3 h-3 text-violet-400 shrink-0" />
+                                <span>Renovação Manual</span>
+                              </span>
+                            )}
                           </div>
 
                           {/* E-mail com cópia */}
@@ -1791,6 +2132,50 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               )}
                             </button>
                           </div>
+
+                          {/* Resumo Rápido de Histórico do Cliente (Mês de entrada, Quando assinou, Mês sem renovar, Quando renovou novamente) */}
+                          {client.historySummary && (
+                            <div className="flex items-center gap-1.5 flex-wrap text-[10px] sm:text-[11px] mt-1.5">
+                              <span
+                                title={`Data de entrada no app: ${client.historySummary.joinedDateLabel}`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-white/10 text-white/75"
+                              >
+                                <Calendar className="w-3 h-3 text-orange-400 shrink-0" />
+                                <span>No app desde:</span>
+                                <strong className="text-white font-semibold">{client.historySummary.joinedMonthLabel}</strong>
+                              </span>
+
+                              {client.historySummary.firstSubscribedAt && (
+                                <span
+                                  title="Data da 1ª assinatura do cliente"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/[0.04] border border-white/10 text-white/75"
+                                >
+                                  <span>Assinou:</span>
+                                  <strong className="text-emerald-300 font-semibold">{client.historySummary.firstSubscribedLabel}</strong>
+                                </span>
+                              )}
+
+                              {client.historySummary.monthsWithoutRenewal.length > 0 && (
+                                <span
+                                  title={`Meses sem renovação: ${client.historySummary.monthsWithoutRenewal.join(', ')}`}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-red-500/15 border border-red-500/30 text-red-300 font-semibold"
+                                >
+                                  <AlertCircle className="w-3 h-3 text-red-400 shrink-0" />
+                                  <span>Não renovou: {client.historySummary.monthsWithoutRenewal.slice(-3).join(', ')}</span>
+                                </span>
+                              )}
+
+                              {client.historySummary.lastRenewedAgainLabel && (
+                                <span
+                                  title="Cliente voltou e renovou novamente após período sem renovar"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-semibold"
+                                >
+                                  <RotateCcw className="w-3 h-3 text-amber-400 shrink-0" />
+                                  <span>Renovou novamente: {client.historySummary.lastRenewedAgainLabel}</span>
+                                </span>
+                              )}
+                            </div>
+                          )}
 
                           {/* Linhagem de Indicação / Rede */}
                           {client.referredBy && (
@@ -1829,7 +2214,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                       </div>
 
                       {/* Coluna 2: Credenciais & Ações (Largura fixa uniforme em desktop para alinhamento vertical estrito) */}
-                      <div className="flex flex-col gap-2 w-full xl:w-[320px] 2xl:w-[340px] shrink-0 text-xs text-white/70">
+                      <div className="flex flex-col gap-2 w-full xl:w-[360px] 2xl:w-[380px] shrink-0 text-xs text-white/70">
                         {/* Linha 1: Senha e Vencimento */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full">
                           {/* Senha */}
@@ -1878,13 +2263,32 @@ export function AdminPage({ onBack }: AdminPageProps) {
                         </div>
 
                         {/* Linha 2: Botões de Ação */}
-                        <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full">
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 w-full">
+                          {/* Botão de Controle de Histórico */}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setSelectedHistoryUserId(
+                                selectedHistoryUserId === client.id ? null : client.id
+                              )
+                            }
+                            title="Ver histórico completo do cliente (mês de entrada, assinaturas, meses sem renovar e origem do pagamento)"
+                            className={`px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border flex-1 sm:flex-initial ${
+                              selectedHistoryUserId === client.id
+                                ? 'bg-violet-500/25 text-violet-200 border-violet-400/60 shadow-[0_0_14px_rgba(139,92,246,0.3)]'
+                                : 'bg-violet-500/10 hover:bg-violet-500/20 text-violet-300 border-violet-500/25'
+                            }`}
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            <span>Histórico</span>
+                          </button>
+
                           {/* Botão de Copiar Link de Indicação */}
                           <button
                             type="button"
                             onClick={() => handleCopyClientReferralLink(client)}
                             title="Copiar link de indicação deste cliente"
-                            className="px-3 py-2 bg-orange-600/15 hover:bg-orange-600/25 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/30 flex-1 sm:flex-initial"
+                            className="px-2.5 py-2 bg-orange-600/15 hover:bg-orange-600/25 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 font-bold cursor-pointer text-xs border border-orange-500/30 flex-1 sm:flex-initial"
                           >
                             {copiedKey === `ref-${client.id}` ? (
                               <>
@@ -1904,7 +2308,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             type="button"
                             onClick={() => handleOpenEdit(client)}
                             title="Editar e-mail e senha do cliente"
-                            className="px-3.5 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-orange-500/20 flex-1 sm:flex-initial"
+                            className="px-3 py-2 bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 font-bold cursor-pointer text-xs border border-orange-500/20 flex-1 sm:flex-initial"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                             <span>Editar</span>
@@ -1916,7 +2320,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                               type="button"
                               onClick={() => setExpandedNotesId(expandedNotesId === client.id ? null : client.id)}
                               title="Ver anotações do cliente"
-                              className={`px-3.5 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border ${
+                              className={`px-3 py-2 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 font-bold cursor-pointer text-xs border ${
                                 expandedNotesId === client.id 
                                   ? 'bg-blue-500/20 text-blue-300 border-blue-500/40' 
                                   : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border-blue-500/20'
@@ -1932,7 +2336,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             type="button"
                             onClick={() => handleRevokeDirect(client)}
                             title="Revogar acesso do cliente"
-                            className="px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 font-bold cursor-pointer text-xs border border-red-500/20 flex-1 sm:flex-initial"
+                            className="px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 font-bold cursor-pointer text-xs border border-red-500/20 flex-1 sm:flex-initial"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>Revogar</span>
@@ -1947,7 +2351,7 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             <Timer className="w-3.5 h-3.5 text-orange-400 shrink-0" />
                             Tempo:
                           </span>
-                          <div className="grid grid-cols-5 sm:flex sm:flex-wrap items-center gap-1 w-full sm:w-auto">
+                          <div className="grid grid-cols-6 sm:flex sm:flex-wrap items-center gap-1 w-full sm:w-auto">
                             <button
                               type="button"
                               disabled={quickExtendLoadingId === client.id}
@@ -1993,6 +2397,15 @@ export function AdminPage({ onBack }: AdminPageProps) {
                             >
                               +7d
                             </button>
+                            <button
+                              type="button"
+                              disabled={quickExtendLoadingId === client.id}
+                              onClick={() => handleQuickExtend(client, 720, "mensal")}
+                              title="Renovar manualmente +1 Mês (registra renovação manual do Admin no histórico)"
+                              className="px-1.5 sm:px-2 py-1.5 sm:py-1 bg-violet-500/20 hover:bg-violet-500/35 text-violet-200 rounded-lg text-[10px] sm:text-[11px] font-bold border border-violet-500/40 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-1 disabled:opacity-50 cursor-pointer text-center"
+                            >
+                              +1Mês
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -2007,6 +2420,318 @@ export function AdminPage({ onBack }: AdminPageProps) {
                           </strong>
                           <p className="leading-relaxed">{client.notes}</p>
                        </div>
+                    )}
+
+                    {/* Drawer de Controle de Histórico do Cliente */}
+                    {selectedHistoryUserId === client.id && client.historySummary && (
+                      <div className="bg-gradient-to-b from-violet-950/35 via-[#15151a]/95 to-[#101014]/95 border border-violet-500/35 backdrop-blur-xl rounded-2xl p-4 sm:p-5 -mt-0.5 space-y-4 text-xs mx-1 sm:mx-2 shadow-[0_10px_32px_rgba(139,92,246,0.15)] animate-fade-in">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3 gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="p-2 bg-violet-500/20 border border-violet-500/30 rounded-xl text-violet-300 shrink-0">
+                              <History className="w-4 h-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-bold text-white text-sm sm:text-base truncate">
+                                Controle de Histórico — {client.name || client.email}
+                              </h4>
+                              <p className="text-[11px] text-white/50">
+                                Linha do tempo desde a entrada no app, assinaturas, meses sem renovar e origem do pagamento
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setSelectedHistoryUserId(null)}
+                            className="text-white/40 hover:text-white p-1.5 rounded-lg hover:bg-white/10 cursor-pointer shrink-0"
+                            title="Fechar histórico"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* 4 Cards Principais do Histórico */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                          {/* 1. Desde que mês está no app */}
+                          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-3 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-orange-400" />
+                              No App Desde
+                            </span>
+                            <p className="text-sm font-black text-white">
+                              {client.historySummary.joinedMonthLabel}
+                            </p>
+                            <p className="text-[11px] text-white/60">
+                              Entrada: {client.historySummary.joinedDateLabel} • {client.historySummary.tenureLabel}
+                            </p>
+                          </div>
+
+                          {/* 2. Quando assinou pela 1ª vez */}
+                          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-3 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                              Quando Assinou (1ª Vez)
+                            </span>
+                            <p className="text-sm font-black text-emerald-300">
+                              {client.historySummary.firstSubscribedLabel}
+                            </p>
+                            <p className="text-[11px] text-white/60">
+                              {client.historySummary.firstSubscribedOrigin === "app"
+                                ? "Assinou pelo App (Asaas)"
+                                : client.historySummary.firstSubscribedOrigin === "manual_admin"
+                                  ? "Ativado manualmente pelo Admin"
+                                  : "Sem assinatura mensal registrada"}
+                            </p>
+                          </div>
+
+                          {/* 3. Meses que não renovou */}
+                          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-3 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-red-400" />
+                              Meses que Não Renovou
+                            </span>
+                            {client.historySummary.monthsWithoutRenewal.length > 0 ? (
+                              <>
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  {client.historySummary.monthsWithoutRenewal.map((mLabel) => (
+                                    <span
+                                      key={mLabel}
+                                      className="px-2 py-0.5 rounded-md bg-red-500/20 border border-red-500/40 text-red-300 font-bold text-[11px]"
+                                    >
+                                      {mLabel}
+                                    </span>
+                                  ))}
+                                </div>
+                                <p className="text-[11px] text-red-300/80">
+                                  {client.historySummary.monthsWithoutRenewal.length}{" "}
+                                  {client.historySummary.monthsWithoutRenewal.length === 1
+                                    ? "mês sem renovar"
+                                    : "meses sem renovar"}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm font-black text-emerald-400">
+                                  Nenhum mês em aberto
+                                </p>
+                                <p className="text-[11px] text-white/60">
+                                  Renovação em dia desde a assinatura
+                                </p>
+                              </>
+                            )}
+                          </div>
+
+                          {/* 4. Quando renovou novamente & Origem do pagamento (App vs Manual) */}
+                          <div className="bg-white/[0.04] border border-white/10 rounded-xl p-3 space-y-1">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-white/40 flex items-center gap-1">
+                              <RotateCcw className="w-3 h-3 text-violet-400" />
+                              Última Renovação & Origem
+                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-black text-white">
+                                {client.historySummary.lastRenewalLabel}
+                              </span>
+                              {client.historySummary.lastPaymentOrigin === "app" && (
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[10px]">
+                                  Pelo App
+                                </span>
+                              )}
+                              {client.historySummary.lastPaymentOrigin === "manual_admin" && (
+                                <span className="px-2 py-0.5 rounded-md bg-violet-500/25 border border-violet-500/40 text-violet-200 font-bold text-[10px]">
+                                  Manual (Admin)
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-white/60">
+                              {client.historySummary.lastRenewedAgainLabel
+                                ? `Voltou a renovar em ${client.historySummary.lastRenewedAgainLabel}`
+                                : `${client.historySummary.totalAppRenewals} pelo App • ${client.historySummary.totalManualRenewals} manual`}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Linha do Tempo Mês a Mês */}
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-white/60 block">
+                            Histórico Mês a Mês (Desde a Entrada no App)
+                          </span>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                            {client.historySummary.monthlyTimeline.map((m) => {
+                              const cardStyle =
+                                m.status === "first_subscription"
+                                  ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-200"
+                                  : m.status === "renewed"
+                                    ? "bg-green-500/10 border-green-500/30 text-green-200"
+                                    : m.status === "reactivated"
+                                      ? "bg-amber-500/15 border-amber-500/40 text-amber-200"
+                                      : m.status === "not_renewed"
+                                        ? "bg-red-500/15 border-red-500/40 text-red-200"
+                                        : m.status === "active_coverage"
+                                          ? "bg-blue-500/10 border-blue-500/30 text-blue-200"
+                                          : "bg-white/5 border-white/10 text-white/60";
+                              return (
+                                <div
+                                  key={m.monthKey}
+                                  className={`border rounded-xl p-2.5 flex flex-col justify-between gap-1 ${cardStyle}`}
+                                >
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="font-black text-xs">{m.monthLabel}</span>
+                                    {m.origin === "app" && (
+                                      <span className="px-1.5 py-0.2 rounded bg-emerald-500/25 text-emerald-200 text-[9px] font-bold">
+                                        App
+                                      </span>
+                                    )}
+                                    {m.origin === "manual_admin" && (
+                                      <span className="px-1.5 py-0.2 rounded bg-violet-500/25 text-violet-200 text-[9px] font-bold">
+                                        Manual
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="font-bold text-[11px] leading-tight">
+                                    {m.statusLabel}
+                                  </span>
+                                  {m.eventDate && (
+                                    <span className="text-[10px] opacity-75">
+                                      {formatDatePtBr(m.eventDate)}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Lista Cronológica de Eventos Registrados */}
+                        <div className="space-y-2">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-white/60 block">
+                            Registro Detalhado de Assinaturas e Renovações ({client.historySummary.events.length})
+                          </span>
+                          <div className="max-h-56 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                            {client.historySummary.events.map((ev) => {
+                              const isPersisted = Array.isArray(client.subscriptionHistory) &&
+                                client.subscriptionHistory.some((h) => h && h.id === ev.id);
+                              const typeBadge =
+                                ev.type === "first_subscription"
+                                  ? { label: "1ª Assinatura", cls: "bg-emerald-500/20 text-emerald-300 border-emerald-500/40" }
+                                  : ev.type === "renewal"
+                                    ? { label: "Renovou", cls: "bg-green-500/20 text-green-300 border-green-500/40" }
+                                    : ev.type === "reactivation"
+                                      ? { label: "Renovou Novamente", cls: "bg-amber-500/20 text-amber-300 border-amber-500/40" }
+                                      : ev.type === "not_renewed"
+                                        ? { label: "Não Renovou", cls: "bg-red-500/20 text-red-300 border-red-500/40" }
+                                        : ev.type === "revoked"
+                                          ? { label: "Cancelado/Estornado", cls: "bg-red-500/20 text-red-300 border-red-500/40" }
+                                          : ev.type === "trial"
+                                            ? { label: "Teste", cls: "bg-cyan-500/20 text-cyan-300 border-cyan-500/40" }
+                                            : { label: "Entrou no App", cls: "bg-white/10 text-white/80 border-white/20" };
+
+                              return (
+                                <div
+                                  key={ev.id}
+                                  className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                >
+                                  <div className="flex items-start sm:items-center gap-2 flex-wrap min-w-0">
+                                    <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold shrink-0 ${typeBadge.cls}`}>
+                                      {typeBadge.label}
+                                    </span>
+                                    <span className="font-mono text-[11px] text-white/80 shrink-0">
+                                      {formatDatePtBr(ev.date, true)}
+                                    </span>
+                                    {ev.origin === "app" && (
+                                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-[10px] font-bold shrink-0">
+                                        📱 Pelo App (Asaas)
+                                      </span>
+                                    )}
+                                    {ev.origin === "manual_admin" && (
+                                      <span className="px-2 py-0.5 rounded-md bg-violet-500/15 border border-violet-500/30 text-violet-300 text-[10px] font-bold shrink-0">
+                                        🛠️ Manual (Admin)
+                                      </span>
+                                    )}
+                                    {ev.amount && (
+                                      <span className="text-emerald-400 font-bold text-[11px] shrink-0">
+                                        R$ {ev.amount}
+                                      </span>
+                                    )}
+                                    <span className="text-white/70 text-xs truncate">
+                                      {ev.note || ev.paymentMethod}
+                                    </span>
+                                  </div>
+                                  {isPersisted && (
+                                    <button
+                                      type="button"
+                                      disabled={manualHistSavingId === client.id}
+                                      onClick={() => handleDeleteHistoryEntry(client, ev.id)}
+                                      title="Remover este registro do histórico"
+                                      className="text-white/30 hover:text-red-400 p-1 rounded-lg hover:bg-red-500/10 transition-colors self-end sm:self-auto shrink-0 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Formulário Rápido para Registrar Evento Manual/Retroativo no Histórico */}
+                        <div className="bg-black/40 border border-white/10 rounded-xl p-3 space-y-2.5">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-violet-300 flex items-center gap-1.5">
+                            <Plus className="w-3.5 h-3.5" />
+                            Adicionar Registro ao Histórico do Cliente
+                          </span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+                            <select
+                              value={manualHistType}
+                              onChange={(e) => setManualHistType(e.target.value as SubscriptionEventType)}
+                              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            >
+                              <option value="renewal" className="bg-[#1c1c1e]">Renovou Assinatura</option>
+                              <option value="reactivation" className="bg-[#1c1c1e]">Renovou Novamente (Voltou)</option>
+                              <option value="not_renewed" className="bg-[#1c1c1e]">Mês que Não Renovou</option>
+                              <option value="first_subscription" className="bg-[#1c1c1e]">1ª Assinatura</option>
+                              <option value="joined" className="bg-[#1c1c1e]">Data que Entrou no App</option>
+                            </select>
+
+                            <select
+                              value={manualHistOrigin}
+                              onChange={(e) => setManualHistOrigin(e.target.value as PaymentOrigin)}
+                              disabled={manualHistType === "not_renewed"}
+                              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-violet-500 disabled:opacity-40"
+                            >
+                              <option value="manual_admin" className="bg-[#1c1c1e]">🛠️ Renovação Manual (Admin)</option>
+                              <option value="app" className="bg-[#1c1c1e]">📱 Pago pelo App (Asaas)</option>
+                            </select>
+
+                            <input
+                              type="date"
+                              value={manualHistDate}
+                              onChange={(e) => setManualHistDate(e.target.value)}
+                              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            />
+
+                            <input
+                              type="text"
+                              value={manualHistNote}
+                              onChange={(e) => setManualHistNote(e.target.value)}
+                              placeholder="Observação (opcional)"
+                              className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2 text-white placeholder-white/30 text-xs focus:outline-none focus:ring-1 focus:ring-violet-500"
+                            />
+
+                            <button
+                              type="button"
+                              disabled={manualHistSavingId === client.id}
+                              onClick={() => handleAddManualHistoryEntry(client)}
+                              className="bg-violet-600 hover:bg-violet-500 active:scale-95 text-white font-bold text-xs rounded-lg px-3 py-2 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                            >
+                              {manualHistSavingId === client.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Plus className="w-3.5 h-3.5" />
+                              )}
+                              <span>Registrar</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
                     )}
 
                     {/* Drawer de Dispositivos Conectados do Cliente */}
