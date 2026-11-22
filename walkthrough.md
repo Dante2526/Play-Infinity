@@ -1,3 +1,13 @@
+## 22/11/2026 — Desconto Fidelidade de R$ 1,00 no Cartão de Crédito + Card Explicativo no Checkout (`server/routes/payments.ts`, `src/components/PaywallModal.tsx`)
+- **Backend (`server/routes/payments.ts`):**
+  - Adicionado `CREDIT_CARD_DISCOUNT = 1.00` em `/api/create-subscription`: quando `billingType === "CREDIT_CARD"` (validado junto aos dados obrigatórios do cartão), o servidor aplica automaticamente R$ 1,00 de desconto sobre o valor base (Padrão `R$ 13,00 → R$ 12,00`, Legado `R$ 9,90 → R$ 8,90`, Plus `R$ 17,00 → R$ 16,00`), mantendo o valor integral no PIX.
+  - No webhook `/api/webhook/asaas`, o histórico (`subscriptionHistory.amount`) passa a registrar o valor real pago (`realPayment.value`) quando informado pelo Asaas.
+- **Frontend (`src/components/PaywallModal.tsx`):**
+  - Adicionado card explicativo em destaque no checkout (**`Desconto Fidelidade • -R$ 1,00/mês`**) mostrando o preço riscado (`R$ 13,00` → `R$ 12,00/mês`), explicando a vantagem do desconto recorrente + renovação automática no cartão de crédito (com cancelamento livre) e oferecendo botão de 1 clique na aba Pix para trocar para o Cartão.
+  - Adicionado badge `-R$ 1` na aba `Cartão`, chamada na tela inicial do Paywall e botão de confirmação exibindo o valor com desconto aplicado (`R$ 12,00/mês` para novos usuários, ou `R$ 8,90/mês` exclusivamente para clientes antigos que já possuem `9,90` salvo no Firestore).
+  - **Isolamento do pacote legado (`R$ 9,90`):** `PaywallModal.tsx` vincula `9,90` estritamente ao UID autenticado (`legacyFeeUid === currentUid`), garantindo que visitantes e novos usuários **nunca** vejam qualquer menção a `R$ 9,90` (nem em troca de conta sem reload) — entram direto em `R$ 13,00` (`R$ 12,00/mês` no Cartão).
+- **Verificação:** `npx tsc --noEmit` (**exit 0**) e testes `tests/payments.test.cjs`, `tests/ghost-paywall.test.cjs`, `tests/paywall-status-check.test.cjs`, `tests/subscription-history.test.cjs` (**100% passing**).
+
 ## 22/11/2026 — Controle de Histórico de Assinaturas e Renovações no Painel Admin (`src/utils/subscriptionHistory.ts`, `src/pages/AdminPage.tsx`, `server/routes/payments.ts`)
 - **Funcionalidades implementadas:**
   1. **Mês de Entrada e Tempo no App (`No App Desde`):** Mostra desde qual mês/ano o cliente está no app (ex.: `Setembro de 2026`), a data exata de entrada e há quantos meses está cadastrado.

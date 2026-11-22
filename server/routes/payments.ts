@@ -13,6 +13,8 @@ export const getAsaasHeaders = () => ({
 
 export const getAsaasBaseUrl = () => process.env.ASAAS_ENVIRONMENT === "sandbox" ? "https://sandbox.asaas.com/api/v3" : "https://api.asaas.com/v3";
 
+export const CREDIT_CARD_DISCOUNT = 1.00;
+
 // Criar Assinatura e retornar link de pagamento (Seguro: Preço e userId definidos exclusivamente pelo servidor)
 router.post("/api/create-subscription", async (req, res) => {
   try {
@@ -60,7 +62,7 @@ router.post("/api/create-subscription", async (req, res) => {
       return res.status(400).json({ success: false, error: "Plano inválido." });
     }
     const isPlusPlan = requestedPlan === "plus";
-    let finalPrice = isPlusPlan ? 17.00 : 13.00;
+    let basePrice = isPlusPlan ? 17.00 : 13.00;
     const externalReference = isPlusPlan ? `${userId}|PLUS` : userId;
 
     // A assinatura mensal sempre cobra o plano completo. Valores arbitrários e
@@ -75,11 +77,16 @@ router.post("/api/create-subscription", async (req, res) => {
       existingSubscriptionId = typeof userData?.subscriptionId === "string" ? userData.subscriptionId : "";
       const rawValue = userData?.valorMensalidade ?? userData?.valor ?? userData?.monthlyFee;
       // Tarifa legada explícita, protegida pelas regras do Firestore.
-      if (!isPlusPlan && (rawValue === 9.90 || rawValue === "9,90" || rawValue === "9.90")) finalPrice = 9.90;
+      if (!isPlusPlan && (rawValue === 9.90 || rawValue === "9,90" || rawValue === "9.90")) basePrice = 9.90;
     } catch (error) {
       return res.status(503).json({ success: false, error: "Não foi possível consultar a assinatura atual." });
     }
-    const description = `Play Infinity ${isPlusPlan ? "Plus" : "Premium"} (R$ ${finalPrice.toFixed(2).replace('.', ',')})`;
+
+    // Desconto fidelidade de R$ 1,00 exclusivo para assinatura recorrente no Cartão de Crédito
+    const isCreditCard = billingType === "CREDIT_CARD";
+    const appliedDiscount = isCreditCard ? CREDIT_CARD_DISCOUNT : 0;
+    const finalPrice = Number(Math.max(1, basePrice - appliedDiscount).toFixed(2));
+    const description = `Play Infinity ${isPlusPlan ? "Plus" : "Premium"}${isCreditCard ? " (Cartão - Desconto Fidelidade)" : ""} (R$ ${finalPrice.toFixed(2).replace('.', ',')})`;
 
     // 2. Busca ou cria cliente no Asaas
     let customerId = "";
@@ -116,7 +123,7 @@ router.post("/api/create-subscription", async (req, res) => {
       externalReference // MANDATÓRIO: Definido pelo servidor a partir do UID autenticado!
     };
 
-    if (billingType === "CREDIT_CARD") {
+    if (isCreditCard) {
       if (!creditCard || !creditCardHolderInfo) {
         throw new Error("Dados do cartão e do titular são obrigatórios para pagamento via cartão de crédito.");
       }
@@ -313,13 +320,16 @@ router.post("/api/webhook/asaas", async (req, res) => {
                 ? "Cartão pelo App (Asaas)"
                 : "Pagamento pelo App (Asaas)";
           const paidMonthKey = `${paidDate.getUTCFullYear()}-${String(paidDate.getUTCMonth() + 1).padStart(2, "0")}`;
-          const amountStr = isPlus
-            ? "17,00"
-            : typeof user.valor === "string"
-              ? user.valor
-              : user.valorMensalidade === 9.9
-                ? "9,90"
-                : "13,00";
+          const amountStr =
+            typeof realPayment.value === "number" && Number.isFinite(realPayment.value) && realPayment.value > 0
+              ? realPayment.value.toFixed(2).replace(".", ",")
+              : isPlus
+                ? "17,00"
+                : typeof user.valor === "string"
+                  ? user.valor
+                  : user.valorMensalidade === 9.9
+                    ? "9,90"
+                    : "13,00";
           const entryId = `asaas_${payment.id}`;
           if (!prevHistory.some((e: any) => e && e.id === entryId)) {
             prevHistory.push({

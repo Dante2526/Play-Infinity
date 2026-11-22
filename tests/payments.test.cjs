@@ -88,6 +88,9 @@ before(async () => {
     if (url.pathname.endsWith('/payments')) {
       return Response.json({ data: [{ id: 'pay_test', invoiceUrl: 'https://example.invalid/invoice' }] });
     }
+    if (url.pathname.endsWith('/payments/pay_test/pixQrCode')) {
+      return Response.json({ success: true, encodedImage: 'iVBORw0KGgo=', payload: '000201PIX' });
+    }
     if (url.pathname.endsWith('/payments/pay_test')) {
       if (providerUnavailable) throw new Error('Simulated Asaas outage');
       return Response.json(providerPayment);
@@ -286,4 +289,61 @@ test('database unavailability returns retryable errors instead of acknowledging 
   assert.equal((await subscribe({ plan: 'plus' })).status, 503);
   assert.equal(writes.length, 0);
   assert.equal(subscriptionCalls.length, 0);
+});
+
+test('credit card loyalty discount subtracts R$ 1,00 on standard, legacy and plus while PIX keeps full price', async () => {
+  const cardFields = {
+    billingType: 'CREDIT_CARD',
+    creditCard: { holderName: 'TESTE', number: '4111111111111111', expiryMonth: '12', expiryYear: '2030', ccv: '123' },
+    creditCardHolderInfo: { name: 'TESTE', email: 'test@example.invalid', cpfCnpj: '12345678901', postalCode: '01001000', addressNumber: '10', mobilePhone: '11999999999' },
+  };
+
+  // Standard: 13 -> 12 no Cartão, 13 no PIX
+  documents.set(userPath, { valorMensalidade: 13 });
+  assert.equal((await subscribe({ plan: 'standard', ...cardFields })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 12);
+  assert.equal((await subscribe({ plan: 'standard', billingType: 'PIX' })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 13);
+
+  // Legacy: 9.90 -> 8.90 no Cartão, 9.90 no PIX
+  documents.set(userPath, { valorMensalidade: 9.9 });
+  assert.equal((await subscribe({ plan: 'standard', ...cardFields })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 8.9);
+  assert.equal((await subscribe({ plan: 'standard', billingType: 'PIX' })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 9.9);
+
+  // Plus: 17 -> 16 no Cartão, 17 no PIX
+  documents.set(userPath, { valorMensalidade: 13 });
+  assert.equal((await subscribe({ plan: 'plus', ...cardFields })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 16);
+  assert.equal((await subscribe({ plan: 'plus', billingType: 'PIX' })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 17);
+
+  // Novo usuário sem valorMensalidade definido entra direto no pacote de R$ 13,00 (nunca 9,90)
+  documents.set(userPath, { assinatura: 'INATIVA', criadoEm: '2026-11-22T10:00:00.000Z' });
+  assert.equal((await subscribe({ plan: 'standard', ...cardFields })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 12);
+  assert.equal((await subscribe({ plan: 'standard', billingType: 'PIX' })).status, 200);
+  assert.equal(subscriptionCalls.at(-1).payload.value, 13);
+
+  // Não permite desconto de cartão sem enviar os dados do cartão
+  assert.equal((await subscribe({ plan: 'standard', billingType: 'CREDIT_CARD' })).status, 500);
+});
+
+test('new users and visitors never see 9,90 pricing anywhere in client checkout UI', () => {
+  const fs = require('node:fs');
+  const paywallSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/PaywallModal.tsx'), 'utf8');
+  const authSrc = fs.readFileSync(path.resolve(__dirname, '../src/components/AuthModal.tsx'), 'utf8');
+
+  // Cadastro de novos usuários entra direto no valor de R$ 13,00
+  assert.match(authSrc, /valorMensalidade:\s*13\.00/);
+  assert.match(authSrc, /valor:\s*"13,00"/);
+
+  // PaywallModal isola o 9,90 estritamente ao UID legado confirmado no Firestore e nunca renderiza 9,90 fixo na UI
+  assert.match(paywallSrc, /const baseFee = currentUid && legacyFeeUid === currentUid \? 9\.90 : 13\.00;/);
+  const paywallJsx = paywallSrc.slice(paywallSrc.indexOf('return ('));
+  assert.ok(paywallJsx.length > 0, 'JSX section should exist in PaywallModal.tsx');
+  assert.doesNotMatch(paywallJsx, /9[,.]90|8[,.]90/);
+  // Card de desconto fidelidade no cartão aparece para todos (novos em 13->12 e legados em 9,90->8,90)
+  assert.match(paywallJsx, /Desconto Fidelidade/);
 });

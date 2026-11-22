@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy } from 'lucide-react';
+import { Check, X, Crown, ShieldCheck, Zap, Lock, CreditCard, ArrowLeft, QrCode, Copy, Sparkles } from 'lucide-react';
 import { auth, db } from '../services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { useSubscription, startTrial, TRIAL_DURATION_MS } from '../hooks/useSubscription';
@@ -12,6 +12,12 @@ import {
   isMicrophonePermissionGranted
 } from '../services/voicePermissionService';
 
+const CREDIT_CARD_DISCOUNT = 1.00;
+
+function formatBrl(value: number): string {
+  return value.toFixed(2).replace('.', ',');
+}
+
 interface PaywallModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -21,7 +27,9 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   const [step, setStep] = useState<'intro' | 'checkout'>('intro');
   const [activeTab, setActiveTab] = useState<'CREDIT_CARD' | 'PIX'>('CREDIT_CARD');
   const [loading, setLoading] = useState(false);
-  const [monthlyFeeText, setMonthlyFeeText] = useState<string>("13,00");
+  // Guarda apenas o UID explicitamente vinculado ao pacote legado de R$ 9,90 no Firestore.
+  // Visitantes e novos usuários SEMPRE ficam em R$ 13,00 e nunca veem menção a R$ 9,90.
+  const [legacyFeeUid, setLegacyFeeUid] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -43,7 +51,12 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   });
 
   const { isPremium, trial, loading: subscriptionLoading } = useSubscription();
-  const canUseTrial = trial.canUseTrial && !!auth.currentUser;
+  const currentUid = auth.currentUser?.uid ?? null;
+  const canUseTrial = trial.canUseTrial && !!currentUid;
+  const baseFee = currentUid && legacyFeeUid === currentUid ? 9.90 : 13.00;
+  const monthlyFeeText = formatBrl(baseFee);
+  const cardFee = Number(Math.max(1, baseFee - CREDIT_CARD_DISCOUNT).toFixed(2));
+  const cardFeeText = formatBrl(cardFee);
 
   // Anti "cobrança fantasma": só confirma/re-carrega quando o status saiu do
   // loading (Firestore já respondeu). Se o modal abrir durante o boot da
@@ -57,6 +70,8 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
   }, [isOpen, isPremium, subscriptionLoading]);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (isOpen && auth.currentUser) {
       const user = auth.currentUser;
       setFormData((prev) => ({
@@ -65,27 +80,35 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
         email: prev.email || user.email || ''
       }));
 
-      // Carrega o valor configurado para este usuário (9,90 para clientes antigos ou 13,00 para novos)
+      // Verifica no Firestore se o cliente autenticado pertence ao pacote legado (9,90).
+      // Novos usuários (13,00 ou sem registro legado) permanecem estritamente em R$ 13,00.
       getDoc(doc(db, "usuarios", user.uid)).then((docSnap) => {
         if (!docSnap.exists()) {
           return getDoc(doc(db, "users", user.uid));
         }
         return docSnap;
       }).then((docSnap) => {
+        if (cancelled) return;
         if (docSnap && docSnap.exists()) {
           const data = docSnap.data();
           const rawVal = data.valorMensalidade ?? data.valor ?? data.monthlyFee;
           const isLegacyFee = rawVal === 9.90 || rawVal === "9,90" || rawVal === "9.90";
-          setMonthlyFeeText(isLegacyFee ? "9,90" : "13,00");
+          setLegacyFeeUid(isLegacyFee ? user.uid : null);
+        } else {
+          setLegacyFeeUid(null);
         }
       }).catch((err) => {
+        if (!cancelled) setLegacyFeeUid(null);
         console.warn("[Paywall] Erro ao buscar valor do cliente:", err);
       });
-    } else if (isOpen) {
-      // Visitante não logado vê o novo preço padrão de R$ 13,00
-      setMonthlyFeeText("13,00");
+    } else if (!currentUid) {
+      setLegacyFeeUid(null);
     }
-  }, [isOpen]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, currentUid]);
 
   // Solicita proativamente a permissão do microfone no primeiro toque no Paywall
   // para deixar o comando de voz "Infinity" pronto para quando o usuário ativar a conta
@@ -380,6 +403,13 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                   </span>
                 </button>
 
+                <div className="mt-2.5 w-full rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-2 flex items-center justify-center gap-2 text-[11px] sm:text-xs text-emerald-300 font-medium">
+                  <Sparkles size={14} className="text-emerald-400 shrink-0" />
+                  <span>
+                    No <strong>Cartão de Crédito</strong> sai por <strong className="text-emerald-200">R$ {cardFeeText}/mês</strong> (R$ 1,00 de desconto todo mês)
+                  </span>
+                </div>
+
                 {canUseTrial && (
                   <div className="w-full mt-4 sm:mt-5">
                     <div className="w-full h-px bg-white/10 mb-4 sm:mb-5" />
@@ -418,7 +448,7 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                   <ArrowLeft size={16} className="sm:w-4 sm:h-4" /> Voltar
                 </button>
                 
-                <h2 className="text-lg sm:text-2xl font-black text-white mb-4 sm:mb-6 flex items-center gap-2">
+                <h2 className="text-lg sm:text-2xl font-black text-white mb-4 sm:mb-5 flex items-center gap-2">
                   <Lock className="text-purple-400 w-5 h-5 sm:w-6 sm:h-6" /> Pagamento Seguro
                 </h2>
 
@@ -461,19 +491,68 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                   </div>
                 ) : (
                   <>
+                    {/* Card Explicativo de Desconto Fidelidade no Cartão de Crédito */}
+                    <div className="mb-4 sm:mb-5 rounded-2xl bg-gradient-to-br from-emerald-500/15 via-emerald-950/30 to-zinc-900 border border-emerald-500/35 p-3.5 sm:p-4 shadow-lg shadow-emerald-950/30">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 shrink-0 mt-0.5">
+                          <Sparkles size={18} />
+                        </div>
+                        <div className="min-w-0 flex-1 text-left">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/25 border border-emerald-400/40 text-emerald-200 text-[10px] font-black uppercase tracking-wider">
+                              Desconto Fidelidade • -R$ 1,00/mês
+                            </span>
+                          </div>
+                          <p className="text-white font-bold text-xs sm:text-sm leading-snug">
+                            Pague{' '}
+                            <span className="text-zinc-400 line-through font-medium mr-1">
+                              R$ {monthlyFeeText}
+                            </span>
+                            <span className="text-emerald-300 font-black">
+                              R$ {cardFeeText}/mês
+                            </span>{' '}
+                            no Cartão de Crédito
+                          </p>
+                          <p className="text-zinc-300 text-[11px] sm:text-xs mt-1 leading-relaxed">
+                            Assinando no cartão de crédito, você ganha <strong>R$ 1,00 de desconto todo mês</strong> e sua assinatura renova automaticamente sem precisar gerar código nem correr risco de perder o acesso. Cancele quando quiser.
+                          </p>
+                          {activeTab === 'CREDIT_CARD' ? (
+                            <div className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-300">
+                              <Check size={13} className="text-emerald-400 shrink-0" />
+                              <span>Desconto de R$ 1,00 aplicado automaticamente no cartão</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('CREDIT_CARD')}
+                              className="mt-2.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 font-bold text-[11px] transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <CreditCard size={13} />
+                              <span>Trocar para Cartão e pagar R$ {cardFeeText}/mês</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
                     {/* Tabs de Seleção de Método */}
                     <div className="flex bg-black/40 rounded-xl p-1 mb-4 sm:mb-6 border border-white/10">
                       <button
                         onClick={() => setActiveTab('CREDIT_CARD')}
                         className={`flex-1 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 transition-colors ${activeTab === 'CREDIT_CARD' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                       >
-                        <CreditCard size={16} className="sm:w-4 sm:h-4" /> Cartão
+                        <CreditCard size={16} className="sm:w-4 sm:h-4" />
+                        <span>Cartão</span>
+                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black">
+                          -R$ 1
+                        </span>
                       </button>
                       <button
                         onClick={() => setActiveTab('PIX')}
                         className={`flex-1 py-2 sm:py-2.5 rounded-lg text-xs sm:text-sm font-medium flex items-center justify-center gap-1.5 sm:gap-2 transition-colors ${activeTab === 'PIX' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-400 hover:text-white'}`}
                       >
-                        <QrCode size={16} className="sm:w-4 sm:h-4" /> Pix Nativo
+                        <QrCode size={16} className="sm:w-4 sm:h-4" />
+                        <span>Pix Nativo</span>
                       </button>
                     </div>
 
@@ -625,9 +704,17 @@ export function PaywallModal({ isOpen, onClose }: PaywallModalProps) {
                       <span className="relative flex items-center justify-center gap-2 text-white">
                         {loading ? (
                           <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : activeTab === 'PIX' ? (
+                          <>
+                            Gerar PIX de R$ {monthlyFeeText} <Check size={18} className="sm:w-5 sm:h-5" />
+                          </>
                         ) : (
                           <>
-                            {activeTab === 'PIX' ? `Gerar PIX de R$ ${monthlyFeeText}` : `Pagar R$ ${monthlyFeeText}`} <Check size={18} className="sm:w-5 sm:h-5" />
+                            <span className="text-white/60 line-through text-xs sm:text-sm font-medium">
+                              R$ {monthlyFeeText}
+                            </span>
+                            <span>Pagar R$ {cardFeeText}/mês</span>
+                            <Check size={18} className="sm:w-5 sm:h-5" />
                           </>
                         )}
                       </span>
