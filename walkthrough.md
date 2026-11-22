@@ -1,3 +1,15 @@
+## 22/11/2026 — Correção do Falso Positivo de Áudio Dolby (AC-3) nos Canais de TV no Safari do iPhone (`src/components/LivePlayerModal.tsx`)
+- **Causa raiz confirmada:**
+  1. A partir do iOS 17.1+ / iOS 18, a Apple adicionou `window.ManagedMediaSource` no Safari do iPhone, mas manteve `window.MediaSource === undefined`. Com isso, `Hls.isSupported()` passou a retornar `true` no iPhone (entrando no `hls.js` em vez do player HLS nativo do iOS).
+  2. Dentro de `checkAudioCodecSupport()`, o código lia apenas `const mediaSourceCtor = (window as any).MediaSource;` e executava `!!mediaSourceCtor?.isTypeSupported?.(...)`. Como `window.MediaSource` é `undefined` no iPhone, o *optional chaining* retornava `undefined` (sem lançar exceção no `try/catch`) e `!!undefined` virava `false` para **todos os codecs de áudio** — inclusive áudio AAC padrão (`mp4a.40.2`), disparando a mensagem `"Este servidor usa áudio Dolby (AC-3) que este aparelho não reproduz — mudando de servidor..."` em todos os canais.
+  3. Além disso, no `handleTimeUpdate`, o decoder de hardware AudioToolbox do Safari/iOS não incrementa `webkitAudioDecodedByteCount` (que permanece `0` mesmo com áudio normal), podendo causar segundo falso positivo após 1.5s.
+- **Mudanças aplicadas:**
+  - `src/components/LivePlayerModal.tsx`:
+    - Priorizado o player HLS nativo do Safari no iOS (`preferNativeAppleHls = isIosDevice && Boolean(video.canPlayType('application/vnd.apple.mpegurl'))`), que decodifica tanto AAC quanto Dolby AC-3/E-AC-3 nativamente em hardware.
+    - Em `checkAudioCodecSupport()`, incluído fallback `(window as any).MediaSource || (window as any).ManagedMediaSource || (window as any).WebKitMediaSource`, guarda `typeof mediaSourceCtor?.isTypeSupported !== 'function'` retornando `true`, e reconhecimento explícito de AAC/MP3 (`/^mp4a\.(40|6[79b])/i`).
+    - Em `handleTimeUpdate()`, desativada a heurística `webkitAudioDecodedByteCount === 0` em dispositivos iOS/Safari e quando o demux já confirmou codec de áudio decodificável (`hasConfirmedDecodableAudio`).
+  - `tests/live-ac3-audio-guard.test.cjs`: adicionado teste de regressão `'guard: Safari iPhone (iOS 17.1+ ManagedMediaSource / native HLS) não dispara falso positivo de áudio Dolby AC-3'`.
+
 ## 20/11/2026 — Ajuste de Altura do Cabeçalho Superior Mobile no App Android (`src/App.tsx`)
 - **Causa:** O `MainActivity.java` já aplica padding nativo da barra de status no container do WebView, e a barra superior mobile em `src/App.tsx` adicionava um segundo deslocamento `top-10` (`40px`) em `Capacitor.isNativePlatform()`, deixando o logo `Play Infinity` e os ícones (Downloads, Notificações, Perfil) muito baixos.
 - **Mudança:** Alterado de `${Capacitor.isNativePlatform() ? 'top-10' : 'top-4'}` para `top-3` (`12px`), subindo a barra superior em `28px` no app Android.

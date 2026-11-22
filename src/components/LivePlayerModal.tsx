@@ -607,10 +607,22 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       };
     }
 
+    const isIosDevice =
+      typeof navigator !== 'undefined' &&
+      (/iPad|iPhone|iPod/i.test(navigator.userAgent || '') ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+    const isSafariBrowser =
+      typeof navigator !== 'undefined' &&
+      /Safari/i.test(navigator.userAgent || '') &&
+      !/Chrome|CriOS|Chromium|Android|Edg|OPR|FxiOS/i.test(navigator.userAgent || '');
+    const preferNativeAppleHls =
+      isIosDevice && Boolean(video.canPlayType('application/vnd.apple.mpegurl'));
+    let hasConfirmedDecodableAudio = false;
+
     const startHls = () => {
       const currentLowBandwidth = isLowBandwidthMode;
 
-      if (Hls.isSupported()) {
+      if (Hls.isSupported() && !preferNativeAppleHls) {
         // Configuração de Alta Resiliência Contínua (Anti-Travamento / Continuous Live Streaming)
         // ANTI-TELA-PRETA: ABR automático, buffers equilibrados, sem força de nível fixo
         const hls = new Hls({
@@ -667,15 +679,27 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
         const checkAudioCodecSupport = (codecs: Iterable<string>, origin: string): boolean => {
           const list = Array.from(codecs).filter(Boolean);
           if (list.length === 0) return false;
-          const mediaSourceCtor = (window as any).MediaSource;
+          // No iPhone/iPad (iOS 17.1+), window.MediaSource é undefined e o Safari usa ManagedMediaSource.
+          // Se apenas window.MediaSource fosse lido, mediaSourceCtor?.isTypeSupported retornaria undefined
+          // e !!undefined viraria false para TODOS os codecs (inclusive AAC mp4a.40.2).
+          const mediaSourceCtor =
+            (window as any).MediaSource ||
+            (window as any).ManagedMediaSource ||
+            (window as any).WebKitMediaSource;
           const canDecodeAudio = (codec: string) => {
             try {
+              const normalized = codec.trim();
+              if (/^mp4a\.(40|6[79b])/i.test(normalized)) return true;
+              if (typeof mediaSourceCtor?.isTypeSupported !== 'function') return true;
               return !!mediaSourceCtor?.isTypeSupported?.(`audio/mp4; codecs="${codec}"`);
             } catch {
               return true; // sem MSE confiável p/ testar — não decide nada
             }
           };
-          if (list.some(canDecodeAudio)) return false;
+          if (list.some(canDecodeAudio)) {
+            hasConfirmedDecodableAudio = true;
+            return false;
+          }
           const codecList = list.join(', ');
           console.warn(`[LivePlayer] Áudio não suportado neste aparelho (${codecList}, detectado via ${origin}) — o vídeo ficaria mudo.`);
           if (channel.servers.length > 1) {
@@ -904,8 +928,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           }
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-        // Fallback nativo do Safari / WebKit iOS
+        // Reprodução HLS nativa do Safari / WebKit iOS (decodifica AAC e Dolby AC-3/E-AC-3 em hardware)
+        hasConfirmedDecodableAudio = true;
         video.src = streamUrl;
+        try {
+          video.load();
+        } catch {}
         
         const handleNativeLoadedMetadata = () => {
           if (!isMounted) return;
@@ -956,7 +984,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
           setIsBuffering(false);
           setIsPlaying(true);
         }
-        if (v.paused && hlsRef.current) {
+        if (v.paused && (hlsRef.current || preferNativeAppleHls)) {
           console.log('[LivePlayer] Disparando playback pelo watchdog inicial...');
           v.play().catch(() => {
             v.muted = true;
@@ -971,7 +999,7 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       if (!isMounted) return;
       const v = videoRef.current;
       const hls = hlsRef.current;
-      const hasLevels = hls && hls.levels && hls.levels.length > 0;
+      const hasLevels = (hls && hls.levels && hls.levels.length > 0) || (v && v.readyState >= 1);
       // Dá tempo suficiente (18s) para conexões mais lentas antes de considerar servidor inoperante
       if (v && v.readyState === 0 && v.currentTime === 0 && !hasLevels) {
         if (channel.servers.length > 1) {
@@ -1055,8 +1083,21 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
       setStreamHealth('online');
 
       // Guarda de segurança em runtime: se o vídeo tocar por >1.5s mas o browser
-      // acusar 0 bytes decodificados de áudio (ou mozHasAudio=false), força troca
-      if (!audioDecodedCheckPassed && !isEmbedStream && video.currentTime >= 1.5 && !video.paused && !video.muted && video.volume > 0) {
+      // acusar 0 bytes decodificados de áudio (ou mozHasAudio=false), força troca.
+      // Nota: no Safari/iOS o decoder de hardware AudioToolbox não incrementa
+      // webkitAudioDecodedByteCount (fica 0 mesmo com som normal), e quando o demux
+      // já confirmou codec AAC suportado (hasConfirmedDecodableAudio), não deve acusar AC-3.
+      if (
+        !audioDecodedCheckPassed &&
+        !isEmbedStream &&
+        !isIosDevice &&
+        !isSafariBrowser &&
+        !hasConfirmedDecodableAudio &&
+        video.currentTime >= 1.5 &&
+        !video.paused &&
+        !video.muted &&
+        video.volume > 0
+      ) {
         const webkitBytes = (video as any).webkitAudioDecodedByteCount;
         const mozHasAudio = (video as any).mozHasAudio;
         if (typeof webkitBytes === 'number' && webkitBytes === 0) {

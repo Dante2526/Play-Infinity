@@ -128,3 +128,23 @@ test('guard: pill de aviso renderizada no player e timer limpo no desmonte', () 
   assert.ok(src.includes('serverNoticeTimer.current) clearTimeout(serverNoticeTimer.current)'), 'cleanup do timer');
   assert.ok(/useEffect\(\(\) => \{\s*return \(\) => \{\s*if \(serverNoticeTimer\.current\)/.test(src), 'cleanup no desmonte do modal');
 });
+
+test('guard: Safari iPhone (iOS 17.1+ ManagedMediaSource / native HLS) não dispara falso positivo de áudio Dolby AC-3', () => {
+  assert.ok(
+    src.includes('preferNativeAppleHls') &&
+    src.includes('if (Hls.isSupported() && !preferNativeAppleHls)'),
+    'iOS prioriza reprodução HLS nativa do Safari (que decodifica AAC e AC-3 em hardware)'
+  );
+  assert.ok(
+    src.includes('(window as any).ManagedMediaSource') &&
+    src.includes("typeof mediaSourceCtor?.isTypeSupported !== 'function'"),
+    'checkAudioCodecSupport suporta ManagedMediaSource e não retorna !!undefined (false) quando window.MediaSource é undefined no iPhone'
+  );
+  assert.ok(
+    src.includes('!isIosDevice') &&
+    src.includes('!isSafariBrowser') &&
+    src.includes('!hasConfirmedDecodableAudio'),
+    'handleTimeUpdate não dispara falso positivo de webkitAudioDecodedByteCount === 0 no Safari/iOS'
+  );
+});
+
