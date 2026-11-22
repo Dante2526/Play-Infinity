@@ -227,4 +227,50 @@ describe("Admin Sentinel & Guardião Byte Tests", () => {
     assert.match(content, /notifiedAt/, "Histórico anti-spam deve ser persistido");
     assert.match(content, /lastBatteryAt/, "Hora da última bateria deve ser persistida");
   });
+
+  test("17. Isolamento estrito: alertas do Painel Admin NUNCA vão para o aplicativo de conta comum de assistir (mesmo compartilhando o e-mail naylanmoreira350@gmail.com)", () => {
+    const sentinelFile = path.join(__dirname, "..", "server", "services", "adminSentinel.ts");
+    const sentinel = fs.readFileSync(sentinelFile, "utf-8");
+
+    // getAdminPushTokens deve ler exclusivamente de system_settings/admin_push_tokens
+    // e NUNCA consultar a coleção "usuarios" para puxar fcmToken/fcmTokens da conta de assistir
+    const getTokensBlock = sentinel.slice(
+      sentinel.indexOf("export async function getAdminPushTokens"),
+      sentinel.indexOf("export async function sendPushToAdmins")
+    );
+    assert.match(getTokensBlock, /admin_push_tokens/, "getAdminPushTokens deve ler system_settings/admin_push_tokens");
+    assert.strictEqual(
+      getTokensBlock.includes('collection("usuarios")'),
+      false,
+      "getAdminPushTokens NUNCA deve puxar fcmToken/fcmTokens da coleção usuarios (conta de assistir)"
+    );
+
+    // sendPushToAdmins deve enviar apenas webpush.notification + data (sem notification top-level nativo Android)
+    const sendPushBlock = sentinel.slice(
+      sentinel.indexOf("export async function sendPushToAdmins"),
+      sentinel.indexOf("export async function runSentinelCheck")
+    );
+    assert.match(sendPushBlock, /webpush:\s*\{\s*notification:/s, "sendPushToAdmins deve usar webpush.notification para o Painel Admin");
+    assert.strictEqual(
+      /const message\s*=\s*\{\s*notification:/s.test(sendPushBlock),
+      false,
+      "sendPushToAdmins não deve ter notification top-level que acione o APK nativo de assistir"
+    );
+
+    // Frontend: registerAdminFcmToken bloqueia Capacitor.isNativePlatform() e não escreve fcmTokens em usuarios
+    const pushFile = path.join(__dirname, "..", "src", "services", "pushNotifications.ts");
+    const pushSrc = fs.readFileSync(pushFile, "utf-8");
+    const regAdminBlock = pushSrc.slice(pushSrc.indexOf("export async function registerAdminFcmToken"));
+    assert.match(
+      regAdminBlock,
+      /if\s*\(Capacitor\.isNativePlatform\(\)\)\s*\{\s*return null;\s*\}/s,
+      "registerAdminFcmToken deve retornar null imediatamente no app nativo de assistir"
+    );
+    assert.match(regAdminBlock, /FCM_ADMIN_LOCAL_TOKEN_KEY/, "Deve usar chave local separada para o token do Painel Admin");
+    assert.strictEqual(
+      regAdminBlock.includes('doc(db, "usuarios"'),
+      false,
+      "registerAdminFcmToken não deve gravar token do Painel Admin no documento usuarios da conta de assistir"
+    );
+  });
 });

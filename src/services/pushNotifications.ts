@@ -5,6 +5,7 @@ import { doc, updateDoc, getDoc, arrayUnion, arrayRemove } from "firebase/firest
 import { auth, db, app } from "./firebase";
 
 const FCM_LOCAL_TOKEN_KEY = "playinfinity_fcm_token";
+const FCM_ADMIN_LOCAL_TOKEN_KEY = "playinfinity_admin_fcm_token";
 
 let registerInFlight = false;
 
@@ -320,39 +321,37 @@ export function setupFcmTokenRefreshListener(): () => void {
 
 
 /**
- * Registra o dispositivo do administrador especificamente no Guardião (Sentinel).
- * - Gera/recupera o token Web Push ou nativo.
- * - Envia para /api/admin/sentinel/register-token.
- * - Marca isAdminDevice: true no Firestore do usuário.
+ * Registra o navegador do Painel Admin (/admin) especificamente no Guardião (Sentinel).
+ * IMPORTANTE:
+ * - Nunca registra o aplicativo nativo de assistir (Capacitor/APK), mesmo que o admin
+ *   use o mesmo e-mail (ex: naylanmoreira350@gmail.com) na conta comum de assistir.
+ * - Não grava em `usuarios/{uid}.fcmTokens` / `fcmToken` (que são exclusivos das
+ *   notificações de catálogo/filmes/séries do app de assistir).
+ * - Envia exclusivamente para /api/admin/sentinel/register-token (`system_settings/admin_push_tokens`).
  */
-export async function registerAdminFcmToken(userId: string, userEmail?: string): Promise<string | null> {
+export async function registerAdminFcmToken(_userId: string, userEmail?: string): Promise<string | null> {
   try {
-    let token = localStorage.getItem(FCM_LOCAL_TOKEN_KEY);
-
+    // O aplicativo Android nativo (APK) é exclusivo para assistir conteúdos.
+    // Alertas administrativos (Vizer, Encontrei, Canais, Bugs) só devem ir para o Painel Admin Web.
     if (Capacitor.isNativePlatform()) {
-      const result = await FirebaseMessaging.requestPermissions();
-      if (result?.receive === "granted") {
-        const tokenResult = await FirebaseMessaging.getToken();
-        if (tokenResult?.token) {
-          token = tokenResult.token;
-          localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
-        }
-      }
-    } else {
-      // Navegador Web (Samsung Internet, Chrome, etc)
-      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
-      if (vapidKey && typeof Notification !== "undefined" && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          const { getMessaging, getToken, isSupported } = await import("firebase/messaging");
-          if (await isSupported()) {
-            const swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
-            const messaging = getMessaging(app);
-            const webToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swRegistration });
-            if (webToken) {
-              token = webToken;
-              localStorage.setItem(FCM_LOCAL_TOKEN_KEY, token);
-            }
+      return null;
+    }
+
+    let token = localStorage.getItem(FCM_ADMIN_LOCAL_TOKEN_KEY);
+
+    // Navegador Web do Painel Admin (Samsung Internet, Chrome, etc.)
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
+    if (vapidKey && typeof Notification !== "undefined" && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        const { getMessaging, getToken, isSupported } = await import("firebase/messaging");
+        if (await isSupported()) {
+          const swRegistration = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+          const messaging = getMessaging(app);
+          const webToken = await getToken(messaging, { vapidKey, serviceWorkerRegistration: swRegistration });
+          if (webToken) {
+            token = webToken;
+            localStorage.setItem(FCM_ADMIN_LOCAL_TOKEN_KEY, token);
           }
         }
       }
@@ -360,25 +359,13 @@ export async function registerAdminFcmToken(userId: string, userEmail?: string):
 
     if (!token) return null;
 
-    // 1. Marca dispositivo no Firestore do admin
-    try {
-      await updateDoc(doc(db, "usuarios", userId), {
-        isAdminDevice: true,
-        fcmTokens: arrayUnion(token),
-        fcmToken: token,
-        fcmTokenUpdatedAt: Date.now()
-      });
-    } catch (e) {
-      console.warn("[Push] Falha ao atualizar doc de admin no Firestore:", e);
-    }
-
-    // 2. Registra na VPS / Sentinela
+    // Registra exclusivamente no cofre do Sentinela (system_settings/admin_push_tokens)
     try {
       const { adminFetch } = await import("./adminApi");
       await adminFetch("/api/admin/sentinel/register-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, email: userEmail })
+        body: JSON.stringify({ token, email: userEmail, source: "admin_panel_web" })
       });
     } catch (e) {
       console.warn("[Push] Falha ao registrar token no Sentinela da VPS:", e);

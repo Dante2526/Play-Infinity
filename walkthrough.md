@@ -1,3 +1,16 @@
+## 22/11/2026 — Isolamento Estrito das Notificações do Sentinela (Painel Admin vs Aplicativo de Assistir) (`server/services/adminSentinel.ts`, `src/services/pushNotifications.ts`)
+- **Causa raiz confirmada:**
+  1. Nenhum usuário comum recebeu a notificação (`⚠️ Catálogo do Vizer Inacessível!`), pois `getAdminPushTokens()` filtrava apenas `MASTER_ADMIN_EMAILS = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"]`.
+  2. Porém, `getAdminPushTokens()` em `server/services/adminSentinel.ts` fazia uma busca na coleção `usuarios` por `where("email", "in", MASTER_ADMIN_EMAILS)` e puxava os campos `fcmToken` e `fcmTokens` da conta comum de assistir! Como o administrador usa o mesmo e-mail (`naylanmoreira350@gmail.com`) para logar no **aplicativo Android de assistir**, o Sentinela puxava o token do aplicativo de assistir e enviava os alertas administrativos com `notification` top-level para o APK.
+- **Mudanças aplicadas:**
+  - `server/services/adminSentinel.ts`:
+    - Removida de `getAdminPushTokens()` a leitura de `fcmToken`/`fcmTokens` da coleção `usuarios` — agora lê **exclusivamente** de `system_settings/admin_push_tokens` (onde apenas o Painel Admin `/admin` registra tokens Web Push).
+    - Em `registerAdminPushToken()`, deixado de gravar em `usuarios.fcmTokens`/`fcmToken` e adicionada remoção automática (`arrayRemove`) caso código legado tenha copiado o token do painel para o documento `usuarios`.
+    - Em `sendPushToAdmins()`, movido `notification` exclusivamente para dentro de `webpush.notification` + `data` (sem `notification` top-level nativo Android), garantindo que apenas o Service Worker Web Push do Painel Admin (`/admin`) exiba alertas do Sentinela e nunca o APK nativo de assistir.
+  - `src/services/pushNotifications.ts`:
+    - `registerAdminFcmToken()` agora retorna `null` imediatamente em `Capacitor.isNativePlatform()`, usa chave local própria (`FCM_ADMIN_LOCAL_TOKEN_KEY = "playinfinity_admin_fcm_token"`) e não escreve mais no documento `usuarios/{uid}`.
+  - `tests/admin-sentinel.test.cjs`: adicionado teste 17 garantindo o isolamento completo entre o Painel Admin e a conta comum de assistir.
+
 ## 22/11/2026 — Desconto Fidelidade de R$ 1,00 no Cartão de Crédito + Card Explicativo no Checkout (`server/routes/payments.ts`, `src/components/PaywallModal.tsx`)
 - **Backend (`server/routes/payments.ts`):**
   - Adicionado `CREDIT_CARD_DISCOUNT = 1.00` em `/api/create-subscription`: quando `billingType === "CREDIT_CARD"` (validado junto aos dados obrigatórios do cartão), o servidor aplica automaticamente R$ 1,00 de desconto sobre o valor base (Padrão `R$ 13,00 → R$ 12,00`, Legado `R$ 9,90 → R$ 8,90`, Plus `R$ 17,00 → R$ 16,00`), mantendo o valor integral no PIX.

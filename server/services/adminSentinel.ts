@@ -182,7 +182,12 @@ export function getSentinelStatus(): SentinelStatus {
 }
 
 /**
- * Registra o token FCM de um dispositivo administrador para push do mascote
+ * Registra o token Web Push do Painel Admin (/admin) para alertas do Guardião (Byte).
+ * IMPORTANTE:
+ * - Salva EXCLUSIVAMENTE em `system_settings/admin_push_tokens`.
+ * - NUNCA grava em `usuarios/{uid}.fcmTokens` ou `fcmToken`, pois a coleção `usuarios`
+ *   pertence à conta comum de assistir (aplicativo Android/TV), que pode compartilhar
+ *   o mesmo e-mail (ex: naylanmoreira350@gmail.com).
  */
 export async function registerAdminPushToken(token: string, userEmail?: string): Promise<boolean> {
   if (!token || typeof token !== "string" || !token.trim()) return false;
@@ -194,31 +199,39 @@ export async function registerAdminPushToken(token: string, userEmail?: string):
     const FieldValue = getAdminFieldValue();
     const arrayUnion = FieldValue ? FieldValue.arrayUnion : (val: any) => [val];
 
-    // 1. Salva no documento global de tokens administrativos
+    // 1. Salva exclusivamente no documento global de tokens do Painel Admin
     const settingsRef = db.collection("system_settings").doc("admin_push_tokens");
     await settingsRef.set(
       {
         tokens: arrayUnion(cleanToken),
+        webTokens: arrayUnion(cleanToken),
         updatedAt: Date.now(),
         lastAdminEmail: userEmail || "unknown",
       },
       { merge: true }
     );
 
-    // 2. Se temos o e-mail do admin, marca também no documento do usuário
-    if (userEmail) {
+    // 2. Desvincula este token do Painel Admin caso código legado o tenha copiado
+    // para `usuarios.fcmTokens` (mantendo a conta de assistir 100% separada do Painel Admin).
+    if (userEmail && FieldValue?.arrayRemove) {
       const snap = await db.collection("usuarios").where("email", "==", userEmail.toLowerCase().trim()).limit(1).get();
       if (!snap.empty) {
-        await snap.docs[0].ref.update({
-          isAdminDevice: true,
-          fcmTokens: arrayUnion(cleanToken),
-          fcmToken: cleanToken,
-          fcmTokenUpdatedAt: Date.now(),
-        });
+        const userDoc = snap.docs[0];
+        const userData = userDoc.data() || {};
+        const updatePayload: Record<string, any> = {
+          fcmTokens: FieldValue.arrayRemove(cleanToken),
+        };
+        if (userData.fcmToken === cleanToken) {
+          const remaining = Array.isArray(userData.fcmTokens)
+            ? userData.fcmTokens.filter((t: any) => typeof t === "string" && t.trim() && t.trim() !== cleanToken)
+            : [];
+          updatePayload.fcmToken = remaining.length > 0 ? remaining[remaining.length - 1] : null;
+        }
+        await userDoc.ref.update(updatePayload).catch(() => {});
       }
     }
 
-    console.log(`[AdminSentinel] Token de push do administrador registrado com sucesso (${cleanToken.slice(0, 15)}...)`);
+    console.log(`[AdminSentinel] Token de push do Painel Admin registrado com sucesso (${cleanToken.slice(0, 15)}...)`);
     return true;
   } catch (err: any) {
     console.warn("[AdminSentinel] Falha ao registrar token push de admin:", err?.message || err);
@@ -227,7 +240,10 @@ export async function registerAdminPushToken(token: string, userEmail?: string):
 }
 
 /**
- * Coleta todos os tokens FCM exclusivos dos administradores
+ * Coleta exclusivamente os tokens Web Push registrados pelo Painel Admin (`/admin`).
+ * NUNCA puxa `fcmToken`/`fcmTokens` da coleção `usuarios` (mesmo quando o e-mail é
+ * `naylanmoreira350@gmail.com`), garantindo que o aplicativo de conta comum de assistir
+ * nunca receba alertas técnicos do Painel Admin (Vizer, Encontrei, Canais, Bugs).
  */
 export async function getAdminPushTokens(): Promise<string[]> {
   const db = getAdminDb();
@@ -236,47 +252,31 @@ export async function getAdminPushTokens(): Promise<string[]> {
   const tokens = new Set<string>();
 
   try {
-    // 1. Documento centralizado de tokens de admin
+    // Lê EXCLUSIVAMENTE do cofre do Painel Admin (registrado ao abrir /admin no navegador)
     const settingsDoc = await db.collection("system_settings").doc("admin_push_tokens").get();
     if (settingsDoc.exists) {
       const data = settingsDoc.data();
-      if (Array.isArray(data?.tokens)) {
-        for (const t of data.tokens) {
-          if (typeof t === "string" && t.trim()) tokens.add(t.trim());
-        }
+      const rawList = Array.isArray(data?.webTokens) && data.webTokens.length > 0
+        ? data.webTokens
+        : Array.isArray(data?.tokens)
+          ? data.tokens
+          : [];
+      for (const t of rawList) {
+        if (typeof t === "string" && t.trim()) tokens.add(t.trim());
       }
     }
   } catch (err: any) {
     console.warn("[AdminSentinel] Falha ao ler system_settings/admin_push_tokens:", err?.message);
   }
 
-  try {
-    // 2. Busca também nos documentos dos usuários administradores cadastrados
-    const snap = await db.collection("usuarios")
-      .where("email", "in", MASTER_ADMIN_EMAILS)
-      .select("fcmToken", "fcmTokens", "isAdminDevice")
-      .get();
-
-    snap.forEach((docSnap: any) => {
-      const data = docSnap.data();
-      if (typeof data?.fcmToken === "string" && data.fcmToken.trim()) {
-        tokens.add(data.fcmToken.trim());
-      }
-      if (Array.isArray(data?.fcmTokens)) {
-        for (const t of data.fcmTokens) {
-          if (typeof t === "string" && t.trim()) tokens.add(t.trim());
-        }
-      }
-    });
-  } catch (err: any) {
-    console.warn("[AdminSentinel] Falha ao ler tokens de usuarios admin:", err?.message);
-  }
-
   return Array.from(tokens);
 }
 
 /**
- * Dispara uma notificação Web Push aos administradores através do Firebase Cloud Messaging
+ * Dispara uma notificação Web Push exclusiva para o Painel Admin através do Firebase Cloud Messaging.
+ * Usa `webpush.notification` + `data` (sem `notification` top-level nativo Android) para que
+ * apenas o Service Worker do navegador do Painel Admin (`/admin`) exiba o alerta,
+ * jamais o aplicativo APK de conta comum de assistir.
  */
 export async function sendPushToAdmins(alert: SentinelAlert): Promise<number> {
   const messaging = getAdminMessaging();
@@ -287,24 +287,25 @@ export async function sendPushToAdmins(alert: SentinelAlert): Promise<number> {
 
   const tokens = await getAdminPushTokens();
   if (tokens.length === 0) {
-    console.info("[AdminSentinel] Nenhum token de administrador registrado para envio de push.");
+    console.info("[AdminSentinel] Nenhum token do Painel Admin registrado para envio de push.");
     return 0;
   }
 
   try {
     const message = {
-      notification: {
+      data: {
         title: alert.title,
         body: alert.message,
-      },
-      data: {
         url: alert.actionUrl,
         tab: alert.actionTab,
         tag: alert.id,
         level: alert.level,
+        source: "admin_sentinel",
       },
       webpush: {
         notification: {
+          title: alert.title,
+          body: alert.message,
           icon: "/logo.png",
           badge: "/favicon.png",
           vibrate: [200, 100, 200],
@@ -318,7 +319,29 @@ export async function sendPushToAdmins(alert: SentinelAlert): Promise<number> {
     };
 
     const response = await messaging.sendEachForMulticast(message);
-    console.log(`[AdminSentinel] Push enviado com sucesso: ${response.successCount}/${tokens.length} dispositivos alcançados.`);
+    console.log(`[AdminSentinel] Push enviado ao Painel Admin: ${response.successCount}/${tokens.length} dispositivos alcançados.`);
+
+    // Limpa automaticamente tokens inválidos/expirados do cofre admin_push_tokens
+    const invalidTokens: string[] = [];
+    response.responses?.forEach((r: any, idx: number) => {
+      if (!r?.success && r?.error) {
+        const errCode = String(r.error?.code || r.error?.message || "");
+        if (/unregistered|invalid/i.test(errCode) && tokens[idx]) {
+          invalidTokens.push(tokens[idx]);
+        }
+      }
+    });
+    if (invalidTokens.length > 0) {
+      const db = getAdminDb();
+      const FieldValue = getAdminFieldValue();
+      if (db && FieldValue?.arrayRemove) {
+        await db.collection("system_settings").doc("admin_push_tokens").update({
+          tokens: FieldValue.arrayRemove(...invalidTokens),
+          webTokens: FieldValue.arrayRemove(...invalidTokens),
+        }).catch(() => {});
+      }
+    }
+
     return response.successCount;
   } catch (err: any) {
     console.error("[AdminSentinel] Erro ao disparar push aos administradores:", err);
