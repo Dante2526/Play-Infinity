@@ -128,26 +128,49 @@ const DELETED_STORAGE_KEY = "playinfinity_deleted_history";
 const MAX_HISTORY_ITEMS = 25;
 const GHOST_HISTORY_IDS = new Set(['1101412']);
 
+let cachedDeletedRaw: string | null | undefined = undefined;
+let cachedDeletedStore: Record<string, number> = {};
+let cachedHistoryRaw: string | null | undefined = undefined;
+let cachedHistoryStore: Record<string, PlaybackHistoryItem> = {};
+
+function normalizeHistoryMediaType(type?: string): 'movie' | 'series' {
+  return type === 'series' ? 'series' : 'movie';
+}
+
 function getDeletedStore(): Record<string, number> {
   try {
     const raw = localStorage.getItem(DELETED_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (raw === cachedDeletedRaw) return cachedDeletedStore;
+    const parsed = raw ? JSON.parse(raw) : {};
+    cachedDeletedRaw = raw;
+    cachedDeletedStore = parsed && typeof parsed === 'object' ? parsed : {};
+    return cachedDeletedStore;
   } catch {
+    cachedDeletedRaw = undefined;
+    cachedDeletedStore = {};
     return {};
   }
 }
 
 function saveDeletedStore(store: Record<string, number>) {
   try {
-    localStorage.setItem(DELETED_STORAGE_KEY, JSON.stringify(store));
+    const serialized = JSON.stringify(store);
+    localStorage.setItem(DELETED_STORAGE_KEY, serialized);
+    cachedDeletedRaw = serialized;
+    cachedDeletedStore = store;
   } catch (e) {
     console.warn("Erro ao salvar itens removidos do historico:", e);
   }
 }
 
-function markAsDeletedLocally(id: string | number) {
-  const store = getDeletedStore();
-  store[String(id)] = Date.now();
+function makeDeletedKey(id: string | number, type?: 'movie' | 'series'): string {
+  return type ? `${normalizeHistoryMediaType(type)}:${String(id)}` : String(id);
+}
+
+function markAsDeletedLocally(id: string | number, type?: 'movie' | 'series') {
+  const store = { ...getDeletedStore() };
+  const key = makeDeletedKey(id, type);
+  store[key] = Date.now();
   // Mantém apenas os últimos 50 registros de remoção
   const entries = Object.entries(store);
   if (entries.length > 50) {
@@ -163,25 +186,42 @@ function markAsDeletedLocally(id: string | number) {
   return store;
 }
 
-function unmarkAsDeletedLocally(id: string | number) {
-  const store = getDeletedStore();
-  const idStr = String(id);
-  if (store[idStr]) {
-    delete store[idStr];
+function unmarkAsDeletedLocally(id: string | number, type?: 'movie' | 'series') {
+  const current = getDeletedStore();
+  const typedKey = makeDeletedKey(id, type);
+  const legacyKey = String(id);
+  if (current[typedKey] || current[legacyKey]) {
+    const store = { ...current };
+    delete store[typedKey];
+    if (!type) {
+      delete store[legacyKey];
+    } else if (store[legacyKey]) {
+      // Remove tombstone legado genérico apenas para permitir reassistir item antes da migração
+      delete store[legacyKey];
+    }
     saveDeletedStore(store);
   }
 }
 
-function makeHistoryKey(id: string | number, type: 'movie' | 'series', season?: number, episode?: number): string {
-  return String(id);
+function makeHistoryKey(id: string | number, type: 'movie' | 'series' = 'movie', _season?: number, _episode?: number): string {
+  return `${normalizeHistoryMediaType(type)}:${String(id)}`;
 }
 
 function getStore(): Record<string, PlaybackHistoryItem> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
+    if (!raw) {
+      cachedHistoryRaw = raw;
+      cachedHistoryStore = {};
+      return cachedHistoryStore;
+    }
+    if (raw === cachedHistoryRaw) return cachedHistoryStore;
     const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return {};
+    if (!parsed || typeof parsed !== 'object') {
+      cachedHistoryRaw = raw;
+      cachedHistoryStore = {};
+      return cachedHistoryStore;
+    }
 
     // Purgar IDs fantasmas conhecidos (ex: 1101412) do store local
     let hasGhost = false;
@@ -193,10 +233,20 @@ function getStore(): Record<string, PlaybackHistoryItem> {
       }
     }
     if (hasGhost) {
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed)); } catch(e) {}
+      try {
+        const serialized = JSON.stringify(parsed);
+        localStorage.setItem(STORAGE_KEY, serialized);
+        cachedHistoryRaw = serialized;
+        cachedHistoryStore = parsed;
+        return cachedHistoryStore;
+      } catch {}
     }
-    return parsed;
+    cachedHistoryRaw = raw;
+    cachedHistoryStore = parsed;
+    return cachedHistoryStore;
   } catch {
+    cachedHistoryRaw = undefined;
+    cachedHistoryStore = {};
     return {};
   }
 }
@@ -337,10 +387,26 @@ export async function fetchHistoryFromCloud(): Promise<void> {
       saveDeletedStore(mergedDeleted);
 
       if (remoteHistory) {
-        const local = getStore();
-        const remoteMap: Record<string, PlaybackHistoryItem> = Array.isArray(remoteHistory)
-          ? Object.fromEntries((remoteHistory as PlaybackHistoryItem[]).map(item => [String(item.id), item]))
-          : remoteHistory as Record<string, PlaybackHistoryItem>;
+        const localRaw = getStore();
+        const local: Record<string, PlaybackHistoryItem> = {};
+        for (const item of Object.values(localRaw)) {
+          if (!item || !item.id) continue;
+          const k = makeHistoryKey(item.id, normalizeHistoryMediaType(item.type || item.mediaType));
+          if (!local[k] || (item.updatedAt || 0) >= (local[k].updatedAt || 0)) {
+            local[k] = item;
+          }
+        }
+        const remoteList: PlaybackHistoryItem[] = Array.isArray(remoteHistory)
+          ? (remoteHistory as PlaybackHistoryItem[])
+          : Object.values(remoteHistory as Record<string, PlaybackHistoryItem>);
+        const remoteMap: Record<string, PlaybackHistoryItem> = {};
+        for (const item of remoteList) {
+          if (!item || !item.id) continue;
+          const k = makeHistoryKey(item.id, normalizeHistoryMediaType(item.type || item.mediaType));
+          if (!remoteMap[k] || (item.updatedAt || 0) >= (remoteMap[k].updatedAt || 0)) {
+            remoteMap[k] = item;
+          }
+        }
 
         const merged: Record<string, PlaybackHistoryItem> = {};
         const allKeys = new Set([...Object.keys(local), ...Object.keys(remoteMap)]);
@@ -360,7 +426,11 @@ export async function fetchHistoryFromCloud(): Promise<void> {
           }
 
           // Se o item foi removido pelo usuário (em qualquer dispositivo) e não foi reassistido depois, ignora!
-          const deletedAt = mergedDeleted[String(item.id)] || 0;
+          const itemType = normalizeHistoryMediaType(item.type || item.mediaType);
+          const deletedAt = Math.max(
+            mergedDeleted[makeDeletedKey(item.id, itemType)] || 0,
+            mergedDeleted[String(item.id)] || 0
+          );
           if (deletedAt > 0 && deletedAt >= (item.updatedAt || 0)) {
             continue;
           }
@@ -374,7 +444,10 @@ export async function fetchHistoryFromCloud(): Promise<void> {
         }
 
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          const serialized = JSON.stringify(merged);
+          localStorage.setItem(STORAGE_KEY, serialized);
+          cachedHistoryRaw = serialized;
+          cachedHistoryStore = merged;
           window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: merged }));
         } catch (e) {
           console.error("Erro ao aplicar historico mesclado:", e);
@@ -388,7 +461,10 @@ export async function fetchHistoryFromCloud(): Promise<void> {
 
 function saveStore(store: Record<string, PlaybackHistoryItem>) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    const serialized = JSON.stringify(store);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    cachedHistoryRaw = serialized;
+    cachedHistoryStore = store;
     window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: store }));
     syncStoreToCloud(store);
   } catch (e) {
@@ -439,9 +515,18 @@ function maybeRemoveFinishedSeries(item: { id: string | number; tmdbId?: number;
     .then(finale => {
       if (!finale) return;
       if (season === finale.season && episode >= finale.episodeCount) {
-        const store = getStore();
+        const store = { ...getStore() };
+        const legacyKey = String(item.id);
+        let removed = false;
         if (store[key]) {
           delete store[key];
+          removed = true;
+        }
+        if (store[legacyKey] && normalizeHistoryMediaType(store[legacyKey].type || store[legacyKey].mediaType) === 'series') {
+          delete store[legacyKey];
+          removed = true;
+        }
+        if (removed) {
           saveStore(store);
         }
       }
@@ -475,9 +560,13 @@ export function savePlaybackProgress(item: {
     return;
   }
 
-  const effectiveType = item.type || item.mediaType || 'movie';
-  const store = getStore();
+  const effectiveType = normalizeHistoryMediaType(item.type || item.mediaType);
+  const store = { ...getStore() };
   const key = makeHistoryKey(item.id, effectiveType, item.season, item.episode);
+  const legacyKey = String(item.id);
+  const legacyEntry = store[legacyKey];
+  const legacyMatchesType =
+    legacyEntry && normalizeHistoryMediaType(legacyEntry.type || legacyEntry.mediaType) === effectiveType;
   const progressPercent = Math.min(100, Math.max(0, Math.round((item.currentTime / item.duration) * 100)));
 
   // Conteúdo finalizado (>96%):
@@ -487,8 +576,16 @@ export function savePlaybackProgress(item: {
   //   senão sumiria um item que o usuário ainda pode continuar.
   if (progressPercent >= 96) {
     if (effectiveType !== 'series') {
+      let removed = false;
       if (store[key]) {
         delete store[key];
+        removed = true;
+      }
+      if (legacyMatchesType) {
+        delete store[legacyKey];
+        removed = true;
+      }
+      if (removed) {
         saveStore(store);
       }
     } else {
@@ -497,8 +594,11 @@ export function savePlaybackProgress(item: {
     return;
   }
 
-  unmarkAsDeletedLocally(item.id);
-  const existing = store[key];
+  unmarkAsDeletedLocally(item.id, effectiveType);
+  const existing = store[key] || (legacyMatchesType ? legacyEntry : undefined);
+  if (legacyMatchesType && legacyKey !== key) {
+    delete store[legacyKey];
+  }
   const cleanTitle = effectiveType === 'series' ? (stripSeriesEpisodeSuffix(item.title) || item.title) : item.title;
   const resolvedCovers = resolveMediaCovers({
     id: item.id,
@@ -556,31 +656,33 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
   let updated = false;
 
   const rawItems = Object.values(store).map(item => {
-    if (item.type === 'series' || item.mediaType === 'series') {
+    const effectiveType = normalizeHistoryMediaType(item.type || item.mediaType);
+    if (effectiveType === 'series') {
       const cleaned = stripSeriesEpisodeSuffix(item.title);
       if (cleaned && cleaned !== item.title) {
-        item.title = cleaned;
-        store[makeHistoryKey(item.id, item.type, item.season, item.episode)] = item;
+        item = { ...item, title: cleaned };
         updated = true;
       }
     }
     if (isInvalidOrChairPhoto(item.imageUrl) || isInvalidOrChairPhoto(item.backdropUrl) || !item.imageUrl) {
       const fixed = resolveMediaCovers(item);
       if (fixed.imageUrl && fixed.imageUrl !== item.imageUrl) {
-        item.imageUrl = fixed.imageUrl;
-        item.backdropUrl = fixed.backdropUrl || item.backdropUrl;
-        item.posterUrl = fixed.posterUrl || item.posterUrl;
-        store[makeHistoryKey(item.id, item.type, item.season, item.episode)] = item;
+        item = {
+          ...item,
+          imageUrl: fixed.imageUrl,
+          backdropUrl: fixed.backdropUrl || item.backdropUrl,
+          posterUrl: fixed.posterUrl || item.posterUrl,
+        };
         updated = true;
       }
     }
     return item;
   });
 
-  // Deduplica por ID da mídia, mantendo apenas o registro mais recente (último episódio assistido)
+  // Deduplica por (tipo + ID da mídia), evitando colisão entre Filme e Série de mesmo ID TMDB
   const uniqueItemsMap = new Map<string, PlaybackHistoryItem>();
   for (const item of rawItems) {
-    const key = String(item.id);
+    const key = makeHistoryKey(item.id, normalizeHistoryMediaType(item.type || item.mediaType));
     const existing = uniqueItemsMap.get(key);
     if (!existing || item.updatedAt > existing.updatedAt) {
       uniqueItemsMap.set(key, item);
@@ -589,14 +691,19 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
 
   const items = Array.from(uniqueItemsMap.values());
 
-  // Se havia duplicatas (chaves antigas com S e E) ou atualizou imagens, limpa o store e salva limpo
-  if (updated || items.length < rawItems.length) {
+  // Se havia duplicatas (chaves antigas com S/E ou sem prefixo de tipo) ou atualizou imagens, normaliza e salva limpo
+  const hasLegacyKeys = Object.keys(store).some(k => !k.includes(':'));
+  if (updated || items.length < rawItems.length || hasLegacyKeys) {
     try {
       const cleanStore: Record<string, PlaybackHistoryItem> = {};
       items.forEach(item => {
-        cleanStore[String(item.id)] = item;
+        const k = makeHistoryKey(item.id, normalizeHistoryMediaType(item.type || item.mediaType));
+        cleanStore[k] = item;
       });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cleanStore));
+      const serialized = JSON.stringify(cleanStore);
+      localStorage.setItem(STORAGE_KEY, serialized);
+      cachedHistoryRaw = serialized;
+      cachedHistoryStore = cleanStore;
     } catch(e){console.warn("Silenced error:", e);}
   }
 
@@ -609,29 +716,41 @@ export function getPlaybackHistory(): PlaybackHistoryItem[] {
 export function getItemPlayback(id: string | number, type: 'movie' | 'series', season?: number, episode?: number): PlaybackHistoryItem | null {
   if (!id) return null;
   const store = getStore();
-  const key = makeHistoryKey(id, type, season, episode);
-  return store[key] || null;
+  const normalizedType = normalizeHistoryMediaType(type);
+  const key = makeHistoryKey(id, normalizedType, season, episode);
+  if (store[key]) return store[key];
+  const legacy = store[String(id)];
+  if (legacy && normalizeHistoryMediaType(legacy.type || legacy.mediaType) === normalizedType) {
+    return legacy;
+  }
+  return null;
 }
 
 /**
  * Remove um item do histórico de forma permanente, registrando tombstone e sincronizando com Firestore imediatamente
  */
-export function removePlaybackItem(id: string | number, type?: 'movie' | 'series', season?: number, episode?: number): void {
+export function removePlaybackItem(id: string | number, type?: 'movie' | 'series', _season?: number, _episode?: number): void {
   if (!id) return;
   const targetIdStr = String(id);
-  const updatedDeleted = markAsDeletedLocally(targetIdStr);
-  const store = getStore();
-  let changed = false;
+  const normalizedType = type ? normalizeHistoryMediaType(type) : undefined;
+  const targetKey = normalizedType ? makeHistoryKey(id, normalizedType) : null;
+  const updatedDeleted = markAsDeletedLocally(targetIdStr, normalizedType);
+  const store = { ...getStore() };
 
   for (const key of Object.keys(store)) {
-    if (key === targetIdStr || store[key]?.id?.toString() === targetIdStr) {
-      delete store[key];
-      changed = true;
-    }
+    const entry = store[key];
+    const entryType = entry ? normalizeHistoryMediaType(entry.type || entry.mediaType) : undefined;
+    const idMatches = key === targetIdStr || key === targetKey || entry?.id?.toString() === targetIdStr;
+    if (!idMatches) continue;
+    if (normalizedType && entryType && entryType !== normalizedType) continue;
+    delete store[key];
   }
 
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    const serialized = JSON.stringify(store);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    cachedHistoryRaw = serialized;
+    cachedHistoryStore = store;
     window.dispatchEvent(new CustomEvent("playinfinity:history_updated", { detail: store }));
     // Sincroniza imediatamente com o Firestore para que outros dispositivos (como o celular/app Android)
     // recebam a remoção imediatamente sem risco de ressuscitar o item

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Users, CreditCard, Tv, Clock, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronDown, Check, Copy, Search, Trash2, Key, User, ShieldCheck, Loader2, Pencil, X, Timer, Calendar, Plus, RotateCcw, AlertCircle, CheckCircle2, AlertTriangle, Server, Ban, Mail, Lock, Eye, EyeOff, Bug, Bell, Send, GitFork, Share2, Link as LinkIcon, DollarSign, Percent, Smartphone, Laptop, History } from "lucide-react";
 import { buildReferralLink, generateReferralCode, classifyReferralStatus, KNOWN_ACQUISITION_SOURCES, type AcquisitionSource } from "../services/referralService";
 import {
@@ -114,15 +114,25 @@ export function AdminPage({ onBack }: AdminPageProps) {
   }, [adminSection]);
 
   useEffect(() => {
+    let cancelled = false;
+    let unsubscribeAuth: (() => void) | null = null;
+
     const checkAuth = async () => {
       try {
         const { onAuthStateChanged } = await import("firebase/auth");
-        
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-          unsubscribe(); // Só queremos o estado inicial
-          
+        if (cancelled) return;
+
+        let fired = false;
+        const unsub = onAuthStateChanged(auth, (user) => {
+          fired = true;
+          if (unsubscribeAuth) {
+            unsubscribeAuth();
+            unsubscribeAuth = null;
+          }
+          if (cancelled) return;
+
           const adminEmails = ["naylanmoreira350@gmail.com", "cbeth761@gmail.com"];
-          
+
           if (user && user.email && adminEmails.includes(user.email)) {
             sessionStorage.setItem("adminEmail", user.email);
             sessionStorage.setItem("adminSessionToken", user.uid);
@@ -137,7 +147,14 @@ export function AdminPage({ onBack }: AdminPageProps) {
           }
           setIsCheckingAuth(false);
         });
+
+        if (fired || cancelled) {
+          unsub();
+        } else {
+          unsubscribeAuth = unsub;
+        }
       } catch (err) {
+        if (cancelled) return;
         sessionStorage.removeItem("adminSessionToken");
         sessionStorage.removeItem("adminEmail");
         sessionStorage.removeItem("isAdmin");
@@ -145,9 +162,19 @@ export function AdminPage({ onBack }: AdminPageProps) {
         setIsCheckingAuth(false);
       }
     };
-    
+
     checkAuth();
+
+    return () => {
+      cancelled = true;
+      if (unsubscribeAuth) {
+        unsubscribeAuth();
+        unsubscribeAuth = null;
+      }
+    };
   }, []);
+  const migratedExpiredIdsRef = useRef<Set<string>>(new Set());
+  const migratedFeeIdsRef = useRef<Set<string>>(new Set());
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -526,11 +553,17 @@ export function AdminPage({ onBack }: AdminPageProps) {
               });
               currentRawHistory = [...currentRawHistory, expiredEntry];
             }
-            updateDoc(doc(db, "usuarios", docSnap.id), {
-              assinatura: "EXPIRADA",
-              subscription: "INACTIVE",
-              subscriptionHistory: currentRawHistory,
-            });
+            if (!migratedExpiredIdsRef.current.has(docSnap.id)) {
+              migratedExpiredIdsRef.current.add(docSnap.id);
+              updateDoc(doc(db, "usuarios", docSnap.id), {
+                assinatura: "EXPIRADA",
+                subscription: "INACTIVE",
+                subscriptionHistory: currentRawHistory,
+              }).catch((err) => {
+                migratedExpiredIdsRef.current.delete(docSnap.id);
+                console.warn("Silenced error:", err);
+              });
+            }
           } catch(e){console.warn("Silenced error:", e);}
         }
 
@@ -562,13 +595,21 @@ export function AdminPage({ onBack }: AdminPageProps) {
           const assignedTxt = isLegacy ? "9,90" : "13,00";
           feeFormatted = assignedTxt;
           
-          // Grava automaticamente o campo no documento do cliente no Firestore
-          try {
-            updateDoc(doc(db, "usuarios", docSnap.id), {
-              valorMensalidade: assignedNum,
-              valor: assignedTxt
-            }).catch(() => {});
-          } catch(e){console.warn("Silenced error:", e);}
+          // Grava automaticamente o campo no documento do cliente no Firestore (uma vez por sessão/doc)
+          if (!migratedFeeIdsRef.current.has(docSnap.id)) {
+            migratedFeeIdsRef.current.add(docSnap.id);
+            try {
+              updateDoc(doc(db, "usuarios", docSnap.id), {
+                valorMensalidade: assignedNum,
+                valor: assignedTxt
+              }).catch(() => {
+                migratedFeeIdsRef.current.delete(docSnap.id);
+              });
+            } catch(e){
+              migratedFeeIdsRef.current.delete(docSnap.id);
+              console.warn("Silenced error:", e);
+            }
+          }
         }
 
         const fcmTokensCount = Array.isArray(data.fcmTokens)

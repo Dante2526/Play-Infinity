@@ -111,16 +111,27 @@ export const getCatalogByIdMap = (): Map<number, CatalogItem> => {
 // Inicialmente vazio para contas novas
 const DEFAULT_FAVORITE_IDS: number[] = [];
 
+let cachedFavRaw: string | null | undefined = undefined;
+let cachedFavIds: number[] = DEFAULT_FAVORITE_IDS;
+
 export const getFavoriteIds = (): number[] => {
   try {
     const saved = localStorage.getItem(FAVORITES_STORAGE_KEY);
-    if (saved) {
-      return JSON.parse(saved);
+    if (saved === cachedFavRaw) {
+      return [...cachedFavIds];
     }
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      cachedFavRaw = saved;
+      cachedFavIds = Array.isArray(parsed) ? parsed : DEFAULT_FAVORITE_IDS;
+      return [...cachedFavIds];
+    }
+    cachedFavRaw = saved;
+    cachedFavIds = DEFAULT_FAVORITE_IDS;
   } catch (e) {
     console.error("Erro ao carregar favoritos do localStorage:", e);
   }
-  return DEFAULT_FAVORITE_IDS;
+  return [...DEFAULT_FAVORITE_IDS];
 };
 
 // Timer para evitar spam de writes no Firestore (Debounce de 5s)
@@ -168,7 +179,10 @@ export async function fetchFavoritesFromCloud(): Promise<void> {
 
 export const saveFavoriteIds = (ids: number[]) => {
   try {
-    localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(ids));
+    const serialized = JSON.stringify(ids);
+    localStorage.setItem(FAVORITES_STORAGE_KEY, serialized);
+    cachedFavRaw = serialized;
+    cachedFavIds = [...ids];
     // Dispara evento para sincronizar em outros componentes
     window.dispatchEvent(new CustomEvent("playinfinity:favorites_updated", { detail: ids }));
     syncFavoritesToCloud(ids);

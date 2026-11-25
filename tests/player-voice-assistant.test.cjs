@@ -276,9 +276,12 @@ test('prevents phantom player controls popup on mobile while continuous voice as
   assert.match(hookSrc, /onSessionStarting\?: \(\) => void;/);
   assert.match(hookSrc, /if \(isMobileAudioFocusSensitive\(\) && isPlayingRef\.current\) \{\s*onSessionStartingRef\.current\?\.\(\);\s*\}/);
 
-  // 2. Skin pré-arma playLockUntilRef e suppressControlsUntilRef antes do rec.start() e ignora ciclos silenciosos de voz
+  // 2. Skin suprime apenas setControlsVisible(true) durante ciclos silenciosos (NUNCA pré-arma playLockUntilRef antes de rec.start(), o que matava o SpeechRecognizer no Android em 400ms!)
   assert.match(skinSrc, /const handleVoiceSessionStarting = useCallback/);
   assert.match(skinSrc, /onSessionStarting: handleVoiceSessionStarting/);
+  const startFnMatch = skinSrc.match(/const handleVoiceSessionStarting = useCallback\(\(\) => \{[\s\S]*?\}, \[\]\);/);
+  assert.ok(startFnMatch, 'handleVoiceSessionStarting must exist');
+  assert.ok(!startFnMatch[0].includes('playLockUntilRef.current ='), 'handleVoiceSessionStarting must NOT pre-arm playLockUntilRef');
   assert.match(skinSrc, /if \(!isVoiceSilentCycle\) \{\s*setControlsVisible\(true\);/);
 
   // 3. Ignora mousemove sintético em dispositivos touch (isTouchDevice) para não despertar os controles sozinho

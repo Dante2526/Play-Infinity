@@ -1075,3 +1075,133 @@ test('logs heard speech, wake status, understood action and rejection reason to 
     harness.unmount();
   }
 });
+
+test('Android mobile (APK/Chrome): uses zero-AudioFocus WebAudio engine, resumes suspended 16kHz AudioContext, catches soft AEC speech, and recovers ended mic track', async () => {
+  const ANDROID_APK_UA =
+    'Mozilla/5.0 (Linux; Android 14; SM-A546E Build/UP1A.231005.007; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36 PlayInfinityApp/1.4.92 (vc:124)';
+  const events = [];
+  const sttRequests = [];
+  let activeProcessor = null;
+  let resumeCalls = 0;
+  let getUserMediaCalls = 0;
+  let latestTrack = null;
+
+  class MockMobileAudioContext {
+    constructor() {
+      this.sampleRate = 16000; // Android VOICE_COMMUNICATION frequentemente opera em 16kHz
+      this.state = 'suspended';
+      this.destination = {};
+    }
+    async resume() {
+      resumeCalls++;
+      this.state = 'running';
+    }
+    createMediaStreamSource() {
+      return { connect() {}, disconnect() {} };
+    }
+    createScriptProcessor(bufferSize) {
+      this.bufferSize = bufferSize;
+      activeProcessor = {
+        bufferSize,
+        onaudioprocess: null,
+        connect() {},
+        disconnect() {}
+      };
+      return activeProcessor;
+    }
+    createGain() {
+      return { gain: { value: 1 }, connect() {}, disconnect() {} };
+    }
+    async close() {
+      this.state = 'closed';
+    }
+  }
+
+  const harness = await createVoiceHookHarness({
+    userAgent: ANDROID_APK_UA,
+    AudioContext: MockMobileAudioContext,
+    onGetUserMedia() {
+      getUserMediaCalls++;
+      latestTrack = {
+        readyState: 'live',
+        onended: null,
+        stop() { this.readyState = 'ended'; }
+      };
+      return {
+        getAudioTracks: () => [latestTrack],
+        getTracks: () => [latestTrack]
+      };
+    },
+    fetch: async (url, init) => {
+      sttRequests.push({ url, byteLength: init?.body?.byteLength || 0 });
+      return {
+        ok: true,
+        async json() {
+          return {
+            success: true,
+            alternatives: sttRequests.length === 1 ? ['Infinity'] : ['pular abertura']
+          };
+        }
+      };
+    },
+    initialStorage: {
+      playinfinity_mic_permission: 'granted',
+      playinfinity_voice_continuous: 'true'
+    },
+    hookProps: {
+      isPlaying: true,
+      onCommand: (action) => events.push(action),
+      onWakeWordDetected: () => events.push('WAKE_PAUSE')
+    }
+  });
+
+  try {
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+
+    // 1. No celular com WebAudio disponível, usa getUserMedia direto (0 instâncias de SpeechRecognition disputando AudioFocus!)
+    assert.equal(harness.instances.length, 0, 'Mobile with WebAudio must bypass SpeechRecognition AudioFocus conflict');
+    assert.equal(getUserMediaCalls, 1);
+    assert.ok(resumeCalls >= 1, 'Must call ctx.resume() on suspended mobile AudioContext');
+    assert.ok(activeProcessor && activeProcessor.bufferSize === 1024, '16kHz AudioContext must use 1024-sample (~64ms) buffer');
+    assert.equal(harness.getHook().isListening, true);
+
+    const feedFrames16k = (amplitude, count) => {
+      const buf = new Float32Array(1024); // 64ms por frame a 16kHz
+      buf.fill(amplitude);
+      for (let i = 0; i < count; i++) {
+        activeProcessor.onaudioprocess({
+          inputBuffer: { getChannelData: () => buf }
+        });
+      }
+    };
+
+    // 2. Fala suave com atenuação de AEC mobile (rms = 0.009, abaixo do antigo piso quebrado de 0.013!)
+    feedFrames16k(0.001, 4); // silêncio
+    feedFrames16k(0.009, 6); // ~384ms dizendo "Infinity"
+    feedFrames16k(0.001, 7); // ~448ms de silêncio -> dispara envio
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    assert.equal(sttRequests.length, 1, 'Soft mobile AEC voice (rms=0.009) must trigger /api/voice-stt');
+    assert.equal(harness.getHook().isAwake, true, 'Assistant must wake up and respond visually');
+    assert.match(harness.getHook().feedback.text, /Ouvindo comando/);
+    assert.deepEqual(events, ['WAKE_PAUSE']);
+
+    // 3. Comando subsequente "pular abertura" dentro da janela de 6s
+    feedFrames16k(0.011, 6);
+    feedFrames16k(0.001, 7);
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+
+    assert.equal(sttRequests.length, 2);
+    assert.equal(harness.getHook().isAwake, false);
+    assert.deepEqual(events, ['WAKE_PAUSE', 'SKIP_INTRO']);
+
+    // 4. Se o Android encerrar a track do microfone (notificação/chamada), reconecta automaticamente
+    latestTrack.readyState = 'ended';
+    if (latestTrack.onended) latestTrack.onended();
+    await harness.clock.advance(400);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    assert.equal(getUserMediaCalls, 2, 'Ended MediaStreamTrack must automatically reopen microphone session');
+  } finally {
+    harness.unmount();
+  }
+});

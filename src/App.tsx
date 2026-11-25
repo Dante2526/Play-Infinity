@@ -1,6 +1,6 @@
 import { PageLoading, PlayerLoading, DialogLoading, lazyWithRetry } from "./components/LoadingStates";
 import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS } from "./utils/mediaUtils";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { AnimatePresence } from "motion/react";
 import {
   Play,
@@ -212,17 +212,17 @@ export default function App() {
   const [liveChannelsList, setLiveChannelsList] = useState<LiveChannel[]>([]);
   const [pendingLiveEditChannelId, setPendingLiveEditChannelId] = useState<string | null>(null);
 
-  const openLiveChannel = (channel: LiveChannel, allChannels: LiveChannel[]) => {
+  const openLiveChannel = useCallback((channel: LiveChannel, allChannels: LiveChannel[]) => {
     setLiveChannelsList(allChannels);
     setActiveLiveChannel(channel);
-  };
+  }, []);
 
-  const closeLiveChannel = () => {
+  const closeLiveChannel = useCallback(() => {
     if (document.fullscreenElement) {
       document.exitFullscreen().catch(() => {});
     }
     setActiveLiveChannel(null);
-  };
+  }, []);
 
   const [webhookModalOpen, setWebhookModalOpen] = useState(false);
   const [notificationModalOpen, setNotificationModalOpen] = useState(false);
@@ -378,6 +378,20 @@ export default function App() {
   const userDocRetriesRef = useRef(0);
   const viewStateTypeRef = useRef(viewState.type);
   viewStateTypeRef.current = viewState.type;
+  const viewStateRef = useRef(viewState);
+  viewStateRef.current = viewState;
+  const subscriptionStateRef = useRef({
+    subscriptionLoading,
+    isPremium,
+    isTrialActive,
+    isDevEnvironment,
+  });
+  subscriptionStateRef.current = {
+    subscriptionLoading,
+    isPremium,
+    isTrialActive,
+    isDevEnvironment,
+  };
 
   useEffect(() => {
     userDocRetriesRef.current = 0;
@@ -606,7 +620,7 @@ export default function App() {
     document.body.scrollTop = 0;
   }, [viewState.type, viewState.id]);
 
-  const navigateTo = (newState: ViewState, replace = false) => {
+  const navigateTo = useCallback((newState: ViewState, replace = false) => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     document.documentElement.scrollTop = 0;
     document.body.scrollTop = 0;
@@ -616,38 +630,51 @@ export default function App() {
       window.history.pushState(newState, '');
     }
     setViewState(newState);
-  };
+  }, []);
 
-  const handleBack = () => {
+  const handleBack = useCallback(() => {
     if (window.history.length > 1) {
       window.history.back();
     } else {
-      navigateTo(viewState.previous || { type: 'home' }, true);
+      navigateTo(viewStateRef.current.previous || { type: 'home' }, true);
     }
-  };
+  }, [navigateTo]);
 
-  const handleToggleProfile = () => {
+  const handleToggleProfile = useCallback(() => {
     if (!currentUser && !isDevEnvironment) {
       setIsAuthModalOpen(true);
       return;
     }
-    
-    if (viewState.type === 'profile' || viewState.type === 'favorites') {
-      if (viewState.previous && viewState.previous.type !== 'profile' && viewState.previous.type !== 'favorites') {
-        navigateTo(viewState.previous);
+
+    const currentView = viewStateRef.current;
+    if (currentView.type === 'profile' || currentView.type === 'favorites') {
+      if (currentView.previous && currentView.previous.type !== 'profile' && currentView.previous.type !== 'favorites') {
+        navigateTo(currentView.previous);
       } else {
         navigateTo({ type: 'home' });
       }
     } else {
-      navigateTo({ type: 'profile', previous: viewState });
+      navigateTo({ type: 'profile', previous: currentView });
     }
-  };
+  }, [currentUser, isDevEnvironment, navigateTo]);
 
-  const navigateToDetails = (id: number, itemData?: CatalogItem) => {
-    navigateTo({ type: 'details', id: id.toString(), itemData, previous: viewState });
-  };
+  const navigateToDetails = useCallback((id: number, itemData?: CatalogItem) => {
+    navigateTo({ type: 'details', id: id.toString(), itemData, previous: viewStateRef.current });
+  }, [navigateTo]);
 
-  const openPlayer = (
+  const handleProviderSelect = useCallback((p: string) => {
+    navigateTo({ type: 'provider', id: p });
+  }, [navigateTo]);
+
+  const handleNavigateToLiveTv = useCallback(() => {
+    navigateTo({ type: 'live-tv' });
+  }, [navigateTo]);
+
+  const handleNavigateToSagas = useCallback(() => {
+    navigateTo({ type: 'sagas' });
+  }, [navigateTo]);
+
+  const openPlayer = useCallback((
     title: string, 
     url?: string,
     mediaType?: 'movie' | 'series',
@@ -665,7 +692,13 @@ export default function App() {
     isAnime?: boolean,
     serverKey?: string
   ) => {
-    if (!subscriptionLoading && !isPremium && !isTrialActive && !isDevEnvironment) {
+    const {
+      subscriptionLoading: subLoading,
+      isPremium: prem,
+      isTrialActive: trialActive,
+      isDevEnvironment: devEnv,
+    } = subscriptionStateRef.current;
+    if (!subLoading && !prem && !trialActive && !devEnv) {
       setIsPaywallOpen(true);
       return;
     }
@@ -756,7 +789,7 @@ export default function App() {
     } catch (err) {
       console.warn("[TrackPlay] Erro ao disparar registro:", err);
     }
-  };
+  }, []);
 
   if (!isAuthInitialized) {
     return (
@@ -1030,11 +1063,11 @@ export default function App() {
         
       ) : (
         <HomePage 
-          onProviderSelect={(p) => navigateTo({ type: 'provider', id: p })} 
+          onProviderSelect={handleProviderSelect} 
           onItemClick={navigateToDetails} 
           onPlay={openPlayer} 
-          onNavigateToLiveTv={() => navigateTo({ type: 'live-tv' })}
-          onNavigateToSagas={() => navigateTo({ type: 'sagas' })}
+          onNavigateToLiveTv={handleNavigateToLiveTv}
+          onNavigateToSagas={handleNavigateToSagas}
         />
       )}
       </React.Suspense>

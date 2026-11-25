@@ -100,9 +100,18 @@ function ContentRowInner({
     });
   };
 
+  const dragCleanupRef = React.useRef<(() => void) | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
   // Arraste com o mouse com listeners no window para movimentação contínua e natural
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || !rowRef.current) return; // Apenas botão esquerdo
+    dragCleanupRef.current?.();
     isMouseDownRef.current = true;
     hasDraggedRef.current = false;
     startXRef.current = e.clientX;
@@ -118,16 +127,22 @@ function ContentRowInner({
       rowRef.current.scrollLeft = scrollLeftRef.current - dx;
     };
 
-    const onWindowMouseUp = () => {
+    const cleanup = () => {
       isMouseDownRef.current = false;
-      setIsDragging(false);
       window.removeEventListener("mousemove", onWindowMouseMove);
       window.removeEventListener("mouseup", onWindowMouseUp);
+      dragCleanupRef.current = null;
+    };
+
+    const onWindowMouseUp = () => {
+      cleanup();
+      setIsDragging(false);
       setTimeout(() => {
         hasDraggedRef.current = false;
       }, 100);
     };
 
+    dragCleanupRef.current = cleanup;
     window.addEventListener("mousemove", onWindowMouseMove);
     window.addEventListener("mouseup", onWindowMouseUp);
   };
@@ -316,10 +331,13 @@ export const ContentCard = React.memo(ContentCardInner, (prev, next) => {
          prev.item.title === next.item.title &&
          prev.item.imageUrl === next.item.imageUrl &&
          prev.item.posterUrl === next.item.posterUrl &&
+         prev.item.quality === next.item.quality &&
+         prev.item.provider === next.item.provider &&
          prev.idx === next.idx &&
          prev.isTop10 === next.isTop10 &&
          prev.aspect === next.aspect &&
-         prev.startNumber === next.startNumber;
+         prev.startNumber === next.startNumber &&
+         prev.onItemClick === next.onItemClick;
 });
 
 export const ContentRow = React.memo(ContentRowInner, (prev, next) => {
@@ -327,5 +345,8 @@ export const ContentRow = React.memo(ContentRowInner, (prev, next) => {
          prev.items === next.items &&
          prev.isTop10 === next.isTop10 &&
          prev.aspect === next.aspect &&
-         prev.badge === next.badge;
+         prev.startNumber === next.startNumber &&
+         prev.badge === next.badge &&
+         prev.customHeader === next.customHeader &&
+         prev.onItemClick === next.onItemClick;
 });

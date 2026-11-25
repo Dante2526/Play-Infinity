@@ -362,14 +362,20 @@ export function HomePage({
     return []; // Remove fallbacks para dados mockados em contas novas
   });
 
-  const handleRemoveHistoryItem = (e: React.MouseEvent | React.TouchEvent, item: any) => {
+  const handleRemoveHistoryItem = React.useCallback((e: React.MouseEvent | React.TouchEvent, item: any) => {
     e.stopPropagation();
     if ('preventDefault' in e && typeof e.preventDefault === 'function') {
       e.preventDefault();
     }
-    removePlaybackItem(item.id, item.mediaType || item.type, item.season, item.episodeNumber);
-    setContinueWatchingList(prev => prev.filter(i => String(i.id) !== String(item.id)));
-  };
+    const targetType = (item.mediaType || item.type) === 'series' ? 'series' : 'movie';
+    removePlaybackItem(item.id, targetType, item.season, item.episodeNumber);
+    setContinueWatchingList(prev =>
+      prev.filter(i => {
+        const iType = (i.mediaType || i.type) === 'series' ? 'series' : 'movie';
+        return !(String(i.id) === String(item.id) && iType === targetType);
+      })
+    );
+  }, []);
 
   useEffect(() => {
     const syncHistory = () => {

@@ -40,6 +40,7 @@ const MAX_BACKOFF_MS = 30000;
 const POST_COMMAND_WAKE_COOLDOWN_MS = 2200;
 const PLAY_AUDIO_FOCUS_GUARD_MS = 800;
 const MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS = 2500;
+const MOBILE_ZOMBIE_RENEW_MS = 90000;
 
 function isMobileAudioFocusSensitive(): boolean {
   if (typeof navigator === 'undefined') return false;
@@ -182,9 +183,14 @@ export function usePlayerVoiceAssistant({
   const nextRetryAtRef = useRef(0);
   const oneShotPendingRef = useRef(false);
   const lastAudioFocusResumeAtRef = useRef(0);
-  const useWebAudioFallbackRef = useRef(false);
+  // Em celulares (Android WebView/APK, Chrome Mobile, Samsung Internet, iOS), o getUserMedia + WebAudio
+  // captura voz com echoCancellation sem disputar AudioFocus com o <video> (evitando pausas, bipes e morte em 400ms).
+  const useWebAudioFallbackRef = useRef(isMobileAudioFocusSensitive() && hasWebAudioSttSupport());
   const networkErrorStreakRef = useRef(0);
+  const sttErrorStreakRef = useRef(0);
   const webAudioSessionRef = useRef<{ stop: () => void } | null>(null);
+  const webAudioCtxRef = useRef<AudioContext | null>(null);
+  const webAudioStreamRef = useRef<MediaStream | null>(null);
   const prevIsPlayingRef = useRef(isPlaying);
   const onCommandRef = useRef(onCommand);
   const onWakeRef = useRef(onWakeWordDetected);
@@ -298,7 +304,7 @@ export function usePlayerVoiceAssistant({
       { frase: command.matchedText }
     );
 
-    if (command.action === 'PLAY' && isMobileAudioFocusSensitive()) {
+    if (command.action === 'PLAY' && isMobileAudioFocusSensitive() && !useWebAudioFallbackRef.current) {
       nextRetryAtRef.current = Math.max(nextRetryAtRef.current, now + MOBILE_PLAY_AUDIO_FOCUS_GUARD_MS);
       clearRestartTimer();
       safeStopCurrentRecognition();
@@ -440,19 +446,20 @@ export function usePlayerVoiceAssistant({
       now - lastCommandExecutedAtRef.current < POST_COMMAND_WAKE_COOLDOWN_MS;
 
     let wakeJustActivated = false;
+    const awakeWindowMs = useWebAudioFallbackRef.current ? 6000 : 4500;
 
     // 1. Acorda rapidamente mesmo no interim para pausar o filme na hora e abrir a janela de comando
     if (wakeDetected && !inPostPlayCooldown) {
       if (!isAwakeRef.current) {
         wakeJustActivated = true;
-        activateAwake(4500);
+        activateAwake(awakeWindowMs);
         // Não pausa o filme se a mesma transcrição já contém o comando PLAY!
         if (isPlayingRef.current && command?.action !== 'PLAY') {
           onWakeRef.current?.();
         }
-        showFeedback('🎤 Ouvindo comando...', 'listening', 4500);
+        showFeedback('🎤 Ouvindo comando...', 'listening', awakeWindowMs);
       } else {
-        activateAwake(4500);
+        activateAwake(awakeWindowMs);
       }
     }
 
@@ -462,7 +469,7 @@ export function usePlayerVoiceAssistant({
         pendingInterimRef.current = { command, resultIndex };
       }
       if (isAwakeRef.current && !wakeJustActivated) {
-        activateAwake(4500);
+        activateAwake(awakeWindowMs);
       }
       return;
     }
@@ -630,7 +637,7 @@ export function usePlayerVoiceAssistant({
     }
   }, [lang, handleTranscript, showFeedback, safeStopCurrentRecognition, registerFailure, scheduleSessionStart, flushPendingInterim]);
 
-  // Motor WebAudio + /api/voice-stt para Microsoft Edge / Firefox / Brave quando Web Speech nativa falha com 'network'
+  // Motor WebAudio + /api/voice-stt para Mobile (zero conflito de AudioFocus com o vídeo) e navegadores sem Web Speech nativa
   const startWebAudioSttSession = useCallback(async () => {
     if (!hasWebAudioSttSupport()) {
       setIsSupported(false);
@@ -640,6 +647,18 @@ export function usePlayerVoiceAssistant({
 
     isStartingRef.current = true;
     startingAtRef.current = Date.now();
+
+    const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    let preCreatedCtx: AudioContext | null = null;
+    try {
+      // Cria e resume o AudioContext ANTES do await getUserMedia para aproveitar o User Gesture ativo no mobile
+      preCreatedCtx = new AudioCtx();
+      if (preCreatedCtx && typeof preCreatedCtx.resume === 'function' && preCreatedCtx.state === 'suspended') {
+        preCreatedCtx.resume().catch(() => {});
+      }
+    } catch {
+      preCreatedCtx = null;
+    }
 
     let stream: MediaStream | null = null;
     try {
@@ -654,6 +673,9 @@ export function usePlayerVoiceAssistant({
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
     } catch (err: any) {
+      if (preCreatedCtx) {
+        try { if (preCreatedCtx.state !== 'closed') void preCreatedCtx.close(); } catch {}
+      }
       isStartingRef.current = false;
       if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
         syncMicrophonePermission('denied');
@@ -671,25 +693,37 @@ export function usePlayerVoiceAssistant({
 
     if (!isContinuousRef.current && !oneShotPendingRef.current) {
       try { stream.getTracks().forEach(t => t.stop()); } catch {}
+      if (preCreatedCtx) {
+        try { if (preCreatedCtx.state !== 'closed') void preCreatedCtx.close(); } catch {}
+      }
       isStartingRef.current = false;
       return;
     }
 
     try {
-      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-      const ctx: AudioContext = new AudioCtx();
+      const ctx: AudioContext = preCreatedCtx || new AudioCtx();
+      if (typeof ctx.resume === 'function' && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const sampleRate = ctx.sampleRate || 48000;
+      const bufferSize = sampleRate <= 24000 ? 1024 : 4096;
       const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
       const muteGain = ctx.createGain();
       muteGain.gain.value = 0;
 
       const preRoll: Int16Array[] = [];
+      const rmsHistory: number[] = [];
       let utteranceChunks: Int16Array[] = [];
-      let speechFrames = 0;
-      let silenceFrames = 0;
-      let noiseFloor = 0.006;
+      let speechMs = 0;
+      let silenceMs = 0;
+      let utteranceMs = 0;
+      let noiseFloor = 0.0025;
       let inFlightRequests = 0;
       let stopped = false;
+
+      const protocol = (window as any)?.location?.protocol || '';
+      const apiBase = protocol === 'capacitor:' || protocol === 'file:' ? 'https://play-infinity.stream' : '';
 
       const sendUtterance = (chunks: Int16Array[]) => {
         if (stopped || chunks.length === 0 || inFlightRequests >= 2) return;
@@ -704,19 +738,36 @@ export function usePlayerVoiceAssistant({
         }
         inFlightRequests++;
         const fetchFn = (window as any).fetch || fetch;
-        fetchFn(`/api/voice-stt?lang=${encodeURIComponent(lang)}&rate=16000`, {
+        fetchFn(`${apiBase}/api/voice-stt?lang=${encodeURIComponent(lang)}&rate=16000`, {
           method: 'POST',
           headers: { 'Content-Type': 'audio/l16; rate=16000' },
           body: new Uint8Array(merged.buffer, merged.byteOffset, merged.byteLength)
         })
-          .then((r: Response) => (r.ok ? r.json() : null))
+          .then((r: Response) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            sttErrorStreakRef.current = 0;
+            return r.json();
+          })
           .then((data: any) => {
             if (stopped || !data || !Array.isArray(data.alternatives) || data.alternatives.length === 0) return;
             lastResultAtRef.current = Date.now();
             consecutiveFailuresRef.current = 0;
             handleTranscript(data.alternatives, true, 0);
           })
-          .catch(() => {})
+          .catch(() => {
+            if (stopped) return;
+            sttErrorStreakRef.current += 1;
+            const SpeechClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            if (sttErrorStreakRef.current >= 3 && SpeechClass) {
+              console.warn('[VoiceAssistant] /api/voice-stt indisponível (3 falhas). Alternando para SpeechRecognition nativo.');
+              useWebAudioFallbackRef.current = false;
+              sttErrorStreakRef.current = 0;
+              safeStopCurrentRecognition();
+              if (isContinuousRef.current) {
+                scheduleSessionStart(250);
+              }
+            }
+          })
           .finally(() => {
             inFlightRequests = Math.max(0, inFlightRequests - 1);
           });
@@ -725,14 +776,23 @@ export function usePlayerVoiceAssistant({
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (stopped) return;
         const input = e.inputBuffer.getChannelData(0);
+        if (!input || input.length === 0) return;
         let sumSq = 0;
         for (let i = 0; i < input.length; i++) {
           sumSq += input[i] * input[i];
         }
-        const rms = Math.sqrt(sumSq / Math.max(1, input.length));
-        const pcm16 = downsampleTo16kPcm(input, ctx.sampleRate || 48000);
-        const threshold = Math.max(0.013, noiseFloor * 2.2);
+        const rms = Math.sqrt(sumSq / input.length);
+        const activeRate = ctx.sampleRate || sampleRate;
+        const frameMs = Math.max(16, (input.length / activeRate) * 1000);
+        const pcm16 = downsampleTo16kPcm(input, activeRate);
+
+        rmsHistory.push(rms);
+        if (rmsHistory.length > 28) rmsHistory.shift();
+
+        // Limiar calibrado para DSP mobile (AEC/NS atenua voz em ~12-18dB)
+        const threshold = Math.max(0.0055, Math.min(0.04, noiseFloor * 2.3));
         const isSpeech = rms > threshold;
+        const maxPreRollChunks = Math.max(4, Math.round(420 / frameMs));
 
         if (isSpeech) {
           if (utteranceChunks.length === 0) {
@@ -740,31 +800,47 @@ export function usePlayerVoiceAssistant({
             preRoll.length = 0;
           }
           utteranceChunks.push(pcm16);
-          speechFrames++;
-          silenceFrames = 0;
+          speechMs += frameMs;
+          utteranceMs += frameMs;
+          silenceMs = 0;
 
-          if (utteranceChunks.length >= 36) {
+          if (utteranceMs >= 2800) {
             const toSend = utteranceChunks;
+            // Preserva ~550ms finais como overlap para nunca partir "Infinity" ao meio durante som contínuo do filme
+            const overlapCount = Math.min(toSend.length, Math.max(4, Math.round(550 / frameMs)));
+            preRoll.length = 0;
+            for (let i = toSend.length - overlapCount; i < toSend.length; i++) {
+              preRoll.push(toSend[i]);
+            }
             utteranceChunks = [];
-            speechFrames = 0;
-            silenceFrames = 0;
+            speechMs = 0;
+            utteranceMs = 0;
+            silenceMs = 0;
+
+            if (rmsHistory.length >= 8) {
+              const sorted = [...rmsHistory].sort((a, b) => a - b);
+              const ambient = sorted[Math.floor(sorted.length * 0.25)];
+              noiseFloor = Math.max(0.002, Math.min(0.025, noiseFloor * 0.7 + ambient * 0.3));
+            }
             sendUtterance(toSend);
           }
         } else {
           if (utteranceChunks.length > 0) {
             utteranceChunks.push(pcm16);
-            silenceFrames++;
-            if (silenceFrames >= 5) {
-              const toSend = speechFrames >= 3 ? utteranceChunks : [];
+            utteranceMs += frameMs;
+            silenceMs += frameMs;
+            if (silenceMs >= 380) {
+              const toSend = speechMs >= 150 ? utteranceChunks : [];
               utteranceChunks = [];
-              speechFrames = 0;
-              silenceFrames = 0;
+              speechMs = 0;
+              utteranceMs = 0;
+              silenceMs = 0;
               if (toSend.length > 0) sendUtterance(toSend);
             }
           } else {
-            noiseFloor = Math.max(0.003, Math.min(0.035, noiseFloor * 0.95 + rms * 0.05));
+            noiseFloor = Math.max(0.0018, Math.min(0.028, noiseFloor * 0.94 + rms * 0.06));
             preRoll.push(pcm16);
-            if (preRoll.length > 5) preRoll.shift();
+            if (preRoll.length > maxPreRollChunks) preRoll.shift();
           }
         }
       };
@@ -776,14 +852,37 @@ export function usePlayerVoiceAssistant({
       const stopSession = () => {
         if (stopped) return;
         stopped = true;
+        if (webAudioCtxRef.current === ctx) webAudioCtxRef.current = null;
+        if (webAudioStreamRef.current === stream) webAudioStreamRef.current = null;
         try { processor.onaudioprocess = null as any; } catch {}
         try { source.disconnect(); } catch {}
         try { processor.disconnect(); } catch {}
         try { muteGain.disconnect(); } catch {}
-        try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+        try {
+          stream?.getTracks().forEach(t => {
+            t.onended = null;
+            t.stop();
+          });
+        } catch {}
         try { if (ctx.state !== 'closed') void ctx.close(); } catch {}
       };
 
+      try {
+        const tracks = typeof stream.getAudioTracks === 'function' ? stream.getAudioTracks() : stream.getTracks();
+        tracks.forEach((track: any) => {
+          track.onended = () => {
+            if (stopped) return;
+            console.info('[VoiceAssistant] Faixa de microfone encerrada pelo sistema; reagendando escuta...');
+            safeStopCurrentRecognition();
+            if (isContinuousRef.current) {
+              scheduleSessionStart(300);
+            }
+          };
+        });
+      } catch {}
+
+      webAudioCtxRef.current = ctx;
+      webAudioStreamRef.current = stream;
       webAudioSessionRef.current = { stop: stopSession };
       recognitionRef.current = { isWebAudioFallback: true, abort: stopSession };
       isStartingRef.current = false;
@@ -794,10 +893,13 @@ export function usePlayerVoiceAssistant({
       sessionStartedAtRef.current = Date.now();
     } catch (err) {
       try { stream?.getTracks().forEach(t => t.stop()); } catch {}
+      if (preCreatedCtx) {
+        try { if (preCreatedCtx.state !== 'closed') void preCreatedCtx.close(); } catch {}
+      }
       isStartingRef.current = false;
       registerFailure('start_error', false);
     }
-  }, [lang, handleTranscript, showFeedback, registerFailure, scheduleSessionStart]);
+  }, [lang, handleTranscript, showFeedback, registerFailure, scheduleSessionStart, safeStopCurrentRecognition]);
 
   // Inicia uma sessão de reconhecimento limpa respeitando cooldown pós-abort() e backoff
   const startRecognitionSession = useCallback((allowOneShot = false) => {
@@ -898,8 +1000,23 @@ export function usePlayerVoiceAssistant({
       }
     }
 
+    const handlePermChanged = (evt: any) => {
+      if (cancelled) return;
+      const status = evt?.detail?.status;
+      if (status === 'granted' && isContinuousVoiceEnabledByDefault() && !isContinuousRef.current) {
+        isContinuousRef.current = true;
+        setIsContinuous(true);
+      } else if (status === 'denied' && isContinuousRef.current) {
+        isContinuousRef.current = false;
+        setIsContinuous(false);
+        safeStopCurrentRecognition();
+      }
+    };
+    window.addEventListener('playinfinity:mic_permission_changed', handlePermChanged);
+
     return () => {
       cancelled = true;
+      window.removeEventListener('playinfinity:mic_permission_changed', handlePermChanged);
       if (feedbackTimeoutRef.current) clearTimeout(feedbackTimeoutRef.current);
       clearRestartTimer();
       if (awakeTimerRef.current) clearTimeout(awakeTimerRef.current);
@@ -938,6 +1055,25 @@ export function usePlayerVoiceAssistant({
       }
       if (now < nextRetryAtRef.current) return;
 
+      // Saúde do motor WebAudio (destrava AudioContext suspenso no mobile e recria stream encerrada pelo SO)
+      if (useWebAudioFallbackRef.current && webAudioSessionRef.current) {
+        if (
+          webAudioCtxRef.current &&
+          webAudioCtxRef.current.state === 'suspended' &&
+          typeof webAudioCtxRef.current.resume === 'function'
+        ) {
+          webAudioCtxRef.current.resume().catch(() => {});
+        }
+        const rawStream = webAudioStreamRef.current;
+        if (rawStream) {
+          const tracks = typeof rawStream.getAudioTracks === 'function' ? rawStream.getAudioTracks() : rawStream.getTracks();
+          if (tracks.length > 0 && tracks.every((t: any) => t.readyState === 'ended')) {
+            startSessionRef.current();
+            return;
+          }
+        }
+      }
+
       // 1. Se caiu fora de um agendamento ativo (ou start ficou preso > 2s), reanima
       const stuckStarting = isStartingRef.current && now - startingAtRef.current >= 2000;
       if (stuckStarting || ((!recognitionRef.current || !isListeningRef.current) && !restartTimerRef.current)) {
@@ -946,17 +1082,19 @@ export function usePlayerVoiceAssistant({
       }
 
       // 2. Renovação preventiva aos 45s (brecha de 600ms) ou teto duro aos 50s quando não acordado
-      // (Em mobile durante reprodução ou no motor WebAudio contínuo, preserva a sessão ativa sem abortar)
+      // (No mobile em SpeechRecognition durante reprodução, só renova se ficar zumbi >= 90s sem nenhum resultado)
       const sessionAge = now - sessionStartedAtRef.current;
-      const silenceAge = now - lastResultAtRef.current;
+      const silenceAge = lastResultAtRef.current > 0 ? now - lastResultAtRef.current : sessionAge;
+      const isMobilePlayingSpeech = isMobileAudioFocusSensitive() && isPlayingRef.current;
       if (
         isListeningRef.current &&
         !isAwakeRef.current &&
         !useWebAudioFallbackRef.current &&
-        !(isMobileAudioFocusSensitive() && isPlayingRef.current) &&
         sessionStartedAtRef.current > 0 &&
-        ((sessionAge >= PREVENTIVE_RENEW_MS && silenceAge > IDLE_GUARD_WHEN_SLEEPING_MS) ||
-          sessionAge >= HARD_RENEW_CAP_MS)
+        (isMobilePlayingSpeech
+          ? sessionAge >= MOBILE_ZOMBIE_RENEW_MS && silenceAge >= MOBILE_ZOMBIE_RENEW_MS
+          : (sessionAge >= PREVENTIVE_RENEW_MS && silenceAge > IDLE_GUARD_WHEN_SLEEPING_MS) ||
+            sessionAge >= HARD_RENEW_CAP_MS)
       ) {
         startSessionRef.current();
       }
@@ -989,6 +1127,13 @@ export function usePlayerVoiceAssistant({
   // se a escuta contínua estiver ativada mas a sessão estiver inativa/pendente, reativa na hora!
   useEffect(() => {
     const handleUserInteraction = () => {
+      if (
+        webAudioCtxRef.current &&
+        webAudioCtxRef.current.state === 'suspended' &&
+        typeof webAudioCtxRef.current.resume === 'function'
+      ) {
+        webAudioCtxRef.current.resume().catch(() => {});
+      }
       if (!isContinuousRef.current || !isSupported) return;
       if (recognitionRef.current && isListeningRef.current) return;
       if (isStartingRef.current) return;

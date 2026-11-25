@@ -215,6 +215,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Visibilidade dos controles (auto-hide após 2.8s)
   const [controlsVisible, setControlsVisible] = useState<boolean>(true);
+  const controlsVisibleRef = useRef<boolean>(true);
+  controlsVisibleRef.current = controlsVisible;
   const hideTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Autoplay mudo pelo navegador (política de autoplay) — sugere um clique para ativar o som
@@ -254,6 +256,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const lastSeekTimeRef = useRef<number>(0);
   const wasPlayingBeforeScrubRef = useRef<boolean>(false);
   const [isSeekingTransition, setIsSeekingTransition] = useState<boolean>(false);
+  const isSeekingTransitionRef = useRef<boolean>(false);
+  isSeekingTransitionRef.current = isSeekingTransition;
   const seekTransitionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [hoverTime, setHoverTime] = useState<number | null>(null);
   const [hoverPosPercent, setHoverPosPercent] = useState<number>(0);
@@ -317,6 +321,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const [vttLoadFailed, setVttLoadFailed] = useState<boolean>(false);
   const [activeCue, setActiveCue] = useState<string | null>(null);
   const [subtitleOffset, setSubtitleOffset] = useState<number>(0);
+  const hasActiveSubtitlesRef = useRef<boolean>(false);
+  hasActiveSubtitlesRef.current = selectedSubtitle === "on" && vttCues.length > 0;
 
   // Carrega e parseia o arquivo VTT quando subtitleUrl muda (zera offset ao trocar episódio)
   useEffect(() => {
@@ -830,7 +836,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (!isPausedRef.current) {
       playLockUntilRef.current = 0;
       pausedByWakeRef.current = true;
-      suppressControlsUntilRef.current = Date.now() + 5000;
+      suppressControlsUntilRef.current = Date.now() + 6500;
       sendCommand({ type: "PAUSE" });
       setPlayerStatus(p => ({ ...p, paused: true }));
     }
@@ -839,9 +845,10 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const handleVoiceSessionStarting = useCallback(() => {
     const now = Date.now();
     if (isPausedRef.current || now - manualPauseAtRef.current < 1500) return;
-    // Pré-arma o lock de reprodução antes do rec.start() no mobile para que a perda
-    // transitória de AudioFocus não faça playerStatus.paused piscar para true nem exibir os controles.
-    playLockUntilRef.current = Math.max(playLockUntilRef.current, now + 2600);
+    // Suprime apenas a abertura automática dos controles caso o SpeechRecognizer
+    // cause oscilação transitória no celular — NUNCA pré-arma playLockUntilRef aqui,
+    // pois disparar PLAY 400ms após rec.start() rouba o AudioFocus de volta no Android
+    // e mata o reconhecimento de voz em loop infinito.
     suppressControlsUntilRef.current = Math.max(suppressControlsUntilRef.current, now + 3000);
   }, []);
 
@@ -883,7 +890,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
       // Navegador bloqueou o autoplay com som e o embed iniciou mudo —
       // avisa a skin para sugerir um clique do usuário (gesto confiável) que ativa o som.
       if (msgType === "WATCHPLAY_AUTOPLAY_MUTED") {
-        setAutoplayMutedBanner(true);
+        setAutoplayMutedBanner((prev) => (prev ? prev : true));
         return;
       }
 
@@ -966,14 +973,14 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
           if (firstSyncAtRef.current === 0) {
             firstSyncAtRef.current = Date.now();
           }
-          setIsSyncStale(false);
+          setIsSyncStale((prev) => (prev ? false : prev));
           setHasEverSynced((prev) => (prev ? prev : true));
         }
 
         const incomingTime = typeof data.currentTime === "number" ? data.currentTime : null;
 
         // Se o player voltou a reproduzir normalmente no novo ponto após um seek, encerra a transição de seek imediatamente
-        if (isSeekingTransition && !data.paused && incomingTime !== null) {
+        if (isSeekingTransitionRef.current && !data.paused && incomingTime !== null) {
           if (incomingTime >= lastSeekTargetRef.current - 0.5) {
             setIsSeekingTransition(false);
             if (seekTransitionTimerRef.current) clearTimeout(seekTransitionTimerRef.current);
@@ -1016,23 +1023,52 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
             ? (data.paused && isPlayLocked ? false : data.paused)
             : prev.paused;
 
+          const nextDuration = typeof data.duration === "number" && data.duration > 0 ? data.duration : prev.duration;
+          const nextMuted = typeof data.muted === "boolean" ? data.muted : prev.muted;
+          const nextVolume = typeof data.volume === "number" ? data.volume : prev.volume;
+          const nextBuffered = typeof data.buffered === "number" ? data.buffered : prev.buffered;
+          const nextPlaybackRate = typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate;
+          const nextReadyState = typeof data.readyState === "number" ? data.readyState : prev.readyState;
+          const nextBuffering = data.buffering === true || (!(data.duration > 0 || prev.duration > 0 || data.currentTime > 0 || prev.currentTime > 0) && !(data.readyState >= 2));
+
+          // Evita re-renderizar toda a arvore da skin 4x-10x/s quando apenas
+          // fracoes de segundo mudam e nenhum estado discreto foi alterado.
+          const timeTolerance = (controlsVisibleRef.current || hasActiveSubtitlesRef.current) ? 0.25 : 0.9;
+          const isFirstNonZeroTick = prev.currentTime === 0 && updatedTime > 0;
+          const isUnchanged =
+            !isFirstNonZeroTick &&
+            !isSeekingTransitionRef.current &&
+            nextDuration === prev.duration &&
+            resolvedPaused === prev.paused &&
+            nextMuted === prev.muted &&
+            nextVolume === prev.volume &&
+            nextPlaybackRate === prev.playbackRate &&
+            nextReadyState === prev.readyState &&
+            nextBuffering === prev.buffering &&
+            Math.abs(nextBuffered - prev.buffered) < 0.5 &&
+            Math.abs(updatedTime - prev.currentTime) < timeTolerance;
+
+          if (isUnchanged) {
+            return prev;
+          }
+
           return {
             ...prev,
             currentTime: updatedTime,
-            duration: typeof data.duration === "number" && data.duration > 0 ? data.duration : prev.duration,
+            duration: nextDuration,
             paused: resolvedPaused,
-            muted: typeof data.muted === "boolean" ? data.muted : prev.muted,
-            volume: typeof data.volume === "number" ? data.volume : prev.volume,
-            buffered: typeof data.buffered === "number" ? data.buffered : prev.buffered,
-            playbackRate: typeof data.playbackRate === "number" ? data.playbackRate : prev.playbackRate,
-            readyState: typeof data.readyState === "number" ? data.readyState : prev.readyState,
-            buffering: data.buffering === true || (!(data.duration > 0 || prev.duration > 0 || data.currentTime > 0 || prev.currentTime > 0) && !(data.readyState >= 2)),
+            muted: nextMuted,
+            volume: nextVolume,
+            buffered: nextBuffered,
+            playbackRate: nextPlaybackRate,
+            readyState: nextReadyState,
+            buffering: nextBuffering,
           };
         });
 
         // Vídeo com som ativo → remove o aviso de som bloqueado
         if (typeof data.muted === "boolean" && data.muted === false) {
-          setAutoplayMutedBanner(false);
+          setAutoplayMutedBanner((prev) => (prev ? false : prev));
         }
       }
     };
@@ -1043,7 +1079,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     return () => {
       window.removeEventListener("message", handleMessage);
     };
-  }, [sendCommand, isTrustedMessageOrigin, isSeekingTransition]);
+  }, [sendCommand, isTrustedMessageOrigin]);
 
   // Ao trocar de episódio/temporada, reinicia o aviso de som bloqueado
   useEffect(() => {

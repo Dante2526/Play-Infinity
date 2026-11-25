@@ -48,7 +48,7 @@ interface ContinueWatchingRowProps {
   onPosterError: (e: React.SyntheticEvent<HTMLImageElement, Event>, fallbackUrl?: string) => void;
 }
 
-export function ContinueWatchingRow({
+function ContinueWatchingRowInner({
   items,
   onPlay,
   onItemClick,
@@ -118,9 +118,18 @@ export function ContinueWatchingRow({
     });
   };
 
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      dragCleanupRef.current?.();
+    };
+  }, []);
+
   // Arraste fluido com o mouse (Mouse Drag no Desktop)
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0 || !rowRef.current) return;
+    dragCleanupRef.current?.();
     isMouseDownRef.current = true;
     hasDraggedRef.current = false;
     startXRef.current = e.clientX;
@@ -136,16 +145,22 @@ export function ContinueWatchingRow({
       rowRef.current.scrollLeft = scrollLeftRef.current - dx;
     };
 
-    const onMouseUp = () => {
+    const cleanup = () => {
       isMouseDownRef.current = false;
-      setIsDragging(false);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
+      dragCleanupRef.current = null;
+    };
+
+    const onMouseUp = () => {
+      cleanup();
+      setIsDragging(false);
       setTimeout(() => {
         hasDraggedRef.current = false;
       }, 80);
     };
 
+    dragCleanupRef.current = cleanup;
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
   };
@@ -346,3 +361,5 @@ export function ContinueWatchingRow({
     </section>
   );
 }
+
+export const ContinueWatchingRow = React.memo(ContinueWatchingRowInner);

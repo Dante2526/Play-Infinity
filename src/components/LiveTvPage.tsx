@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { 
   Tv, 
   Search, 
@@ -52,6 +52,212 @@ interface LiveTvPageProps {
   pendingEditChannelId?: string | null;
   onPendingEditHandled?: () => void;
 }
+
+interface LiveChannelItemProps {
+  channel: LiveChannel;
+  isFav: boolean;
+  onPlay: (channel: LiveChannel) => void;
+  onToggleFav: (channelId: string, e: React.MouseEvent) => void;
+  onEdit: (channel: LiveChannel) => void;
+  onDelete: (channelId: string, e: React.MouseEvent) => void;
+}
+
+const LiveChannelListItem = React.memo(function LiveChannelListItemInner({
+  channel,
+  isFav,
+  onPlay,
+  onToggleFav,
+  onEdit,
+  onDelete,
+}: LiveChannelItemProps) {
+  return (
+    <div
+      tabIndex={0} role="button" onClick={() => onPlay(channel)}
+      className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all duration-200 flex items-center justify-between gap-2 sm:gap-3 cursor-pointer overflow-hidden shadow-sm active:scale-[0.99]"
+    >
+      <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
+        {/* Logo */}
+        <div className="w-11 h-9 sm:w-14 sm:h-11 rounded-lg bg-black/70 border border-white/10 p-1 flex items-center justify-center shrink-0 group-hover:border-orange-500/30 transition-all overflow-hidden">
+          <ChannelLogo
+            channel={channel}
+            size="sm"
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Informações */}
+        <div className="min-w-0 flex-1 space-y-0.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+            <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-orange-400 transition-colors truncate">
+              {channel.name}
+            </h4>
+            <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-red-600 text-white tracking-wider shrink-0">
+              <span className="w-1 h-1 rounded-full bg-white animate-ping"></span>
+              AO VIVO
+            </span>
+            <span className="text-[9px] font-bold px-1 sm:px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 shrink-0">
+              {channel.quality}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-neutral-400 truncate">
+            <span className="text-orange-400/90 font-medium shrink-0">{channel.category}</span>
+            <span className="w-1 h-1 rounded-full bg-neutral-700 shrink-0"></span>
+            <span className="truncate">{channel.currentProgram || channel.description || 'Programação contínua'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Ações */}
+      <div className="flex items-center gap-0.5 sm:gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={(e) => onToggleFav(channel.id, e)}
+          className={`p-2 rounded-lg sm:rounded-xl transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation ${
+            isFav
+              ? 'text-yellow-400 bg-yellow-400/10'
+              : 'text-neutral-500 hover:text-white hover:bg-white/10'
+          }`}
+          title={isFav ? 'Remover dos favoritos' : 'Favoritar canal'}
+        >
+          <Star className={`w-4 h-4 ${isFav ? 'fill-yellow-400' : ''}`} />
+        </button>
+
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onEdit(channel);
+          }}
+          className="p-2 rounded-lg sm:rounded-xl text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation"
+          title="Editar servidores deste canal"
+        >
+          <Settings2 className="w-4 h-4" />
+        </button>
+
+        {channel.isCustom && (
+          <button
+            type="button"
+            onClick={(e) => onDelete(channel.id, e)}
+            className="p-2 rounded-lg sm:rounded-xl bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
+            title="Excluir canal"
+          >
+            <Trash2 className="w-4 h-4 text-red-400" />
+          </button>
+        )}
+
+        <button
+          tabIndex={0} role="button" onClick={() => onPlay(channel)}
+          className="min-w-[44px] min-h-[44px] rounded-lg sm:rounded-xl bg-orange-600 hover:bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-600/30 active:scale-95 ml-0.5 sm:ml-1 cursor-pointer shrink-0 touch-manipulation"
+          title="Assistir agora"
+        >
+          <Play className="w-4 h-4 fill-white ml-0.5" />
+        </button>
+      </div>
+    </div>
+  );
+});
+
+const LiveChannelGridCard = React.memo(function LiveChannelGridCardInner({
+  channel,
+  isFav,
+  onPlay,
+  onToggleFav,
+  onEdit,
+  onDelete,
+}: LiveChannelItemProps) {
+  return (
+    <div
+      tabIndex={0} role="button" onClick={() => onPlay(channel)}
+      className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 transition-all duration-300 hover:shadow-xl hover:shadow-orange-600/10 flex flex-col justify-between cursor-pointer overflow-hidden active:scale-[0.98] min-w-0"
+    >
+      {/* Efeito sutil ao passar o mouse */}
+      <div className="absolute inset-0 bg-gradient-to-t from-orange-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+
+      {/* Topo do Card: Logo, Badge Ao Vivo e Favorito */}
+      <div className="min-w-0">
+        <div className="flex items-start justify-between gap-1 sm:gap-2 mb-2 sm:mb-3 min-w-0">
+          <div className="w-11 h-9 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl bg-black/70 border border-white/10 p-1 sm:p-1.5 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-orange-500/30 transition-all">
+            <ChannelLogo
+              channel={channel}
+              size="md"
+              className="w-full h-full"
+            />
+          </div>
+
+          <div className="flex items-center gap-0.5 sm:gap-1 shrink-0 -mr-1.5 -mt-1.5 sm:mr-0 sm:mt-0">
+            <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black uppercase px-1.5 sm:px-2 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-sm">
+              <span className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-white animate-ping"></span>
+              <span className="hidden xs:inline">AO VIVO</span>
+            </span>
+
+            <button
+              onClick={(e) => onToggleFav(channel.id, e)}
+              className={`rounded-lg transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center touch-manipulation ${
+                isFav
+                  ? 'text-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20'
+                  : 'text-neutral-500 hover:text-white hover:bg-white/10'
+              }`}
+              title={isFav ? 'Remover dos favoritos' : 'Favoritar canal'}
+            >
+              <Star className={`w-4 h-4 ${isFav ? 'fill-yellow-400' : ''}`} />
+            </button>
+
+            {channel.isCustom && (
+              <button
+                type="button"
+                onClick={(e) => onDelete(channel.id, e)}
+                className="rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[44px] min-h-[44px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
+                title="Excluir canal"
+              >
+                <Trash2 className="w-4 h-4 text-red-400" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Informações do Canal */}
+        <div className="space-y-0.5 sm:space-y-1 min-w-0">
+          <div className="flex items-center justify-between gap-1 sm:gap-2 min-w-0">
+            <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-orange-400 transition-colors truncate">
+              {channel.name}
+            </h4>
+            <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 shrink-0">
+              {channel.quality}
+            </span>
+          </div>
+
+          <p className="text-[10px] sm:text-xs text-neutral-400 line-clamp-1 sm:line-clamp-2 leading-relaxed h-4 sm:h-8">
+            {channel.currentProgram || channel.description || 'Programação contínua 24h'}
+          </p>
+        </div>
+      </div>
+
+      {/* Rodapé do Card */}
+      <div className="pt-2.5 sm:pt-4 mt-2 sm:mt-3 border-t border-white/5 flex items-center justify-between text-xs gap-1 min-w-0">
+        <span className="text-[10px] sm:text-[11px] font-medium text-neutral-500 truncate min-w-0">
+          {channel.category}
+        </span>
+
+        <div className="flex items-center gap-0.5 sm:gap-1.5 shrink-0">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(channel);
+            }}
+            className="min-w-[44px] min-h-[44px] -my-2 rounded-lg text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all flex items-center justify-center touch-manipulation"
+            title="Editar servidores deste canal"
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+          </button>
+
+          <span className="flex items-center gap-1 font-semibold text-orange-500 group-hover:translate-x-0.5 transition-transform text-[11px] sm:text-xs">
+            <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-orange-500" />
+            <span className="hidden xs:inline">Assistir</span>
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayChannel, onCloseActiveChannel, pendingEditChannelId, onPendingEditHandled }) => {
   const [channels, setChannels] = useState<LiveChannel[]>([]);
@@ -127,10 +333,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
   }, [showWarningModal, warningCountdown]);
 
   // Carrega canais e favoritos ao montar
-  const refreshChannels = () => {
+  const refreshChannels = useCallback(() => {
     setChannels(getAllChannels());
     setFavoriteIds(getFavoriteChannelIds());
-  };
+  }, []);
+
+  const channelsRef = useRef<LiveChannel[]>(channels);
+  channelsRef.current = channels;
+  const activeChannelIdRef = useRef<string | null>(activeChannel?.id ?? null);
+  activeChannelIdRef.current = activeChannel?.id ?? null;
+
+  const favoriteIdSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
   useEffect(() => {
     refreshChannels();
@@ -159,18 +372,20 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
 
   // Filtro de canais
   const filteredChannels = useMemo(() => {
+    const queryLower = searchQuery.toLowerCase();
     return channels.filter(ch => {
-      const matchesSearch = ch.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (ch.currentProgram && ch.currentProgram.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        ch.category.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = !queryLower ||
+        ch.name.toLowerCase().includes(queryLower) ||
+        (ch.currentProgram && ch.currentProgram.toLowerCase().includes(queryLower)) ||
+        ch.category.toLowerCase().includes(queryLower);
 
       if (!matchesSearch) return false;
 
       if (selectedCategory === 'Todos') return true;
-      if (selectedCategory === 'Favoritos') return favoriteIds.includes(ch.id);
+      if (selectedCategory === 'Favoritos') return favoriteIdSet.has(ch.id);
       return ch.category === selectedCategory;
     });
-  }, [channels, searchQuery, selectedCategory, favoriteIds]);
+  }, [channels, searchQuery, selectedCategory, favoriteIdSet]);
 
   // Performance Optimization: Progressive Rendering for large M3U playlists
   const [visibleCount, setVisibleCount] = useState(36);
@@ -199,7 +414,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
     return channels.find(c => c.id === 'premiere-1') || channels[0];
   }, [channels]);
 
-  const handlePlayChannel = (channel: LiveChannel) => {
+  const handlePlayChannel = useCallback((channel: LiveChannel) => {
     // Entra em tela cheia imediatamente após o clique do usuário
     try {
       if (document.documentElement.requestFullscreen) {
@@ -212,16 +427,16 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
     }
 
     setLastPlayedChannelId(channel.id);
-    onPlayChannel(channel, channels);
-  };
+    onPlayChannel(channel, channelsRef.current);
+  }, [onPlayChannel]);
 
-  const handleToggleFav = (channelId: string, e: React.MouseEvent) => {
+  const handleToggleFav = useCallback((channelId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     toggleFavoriteChannel(channelId);
     setFavoriteIds(getFavoriteChannelIds());
-  };
+  }, []);
 
-  const openAddModal = (channelToEdit?: LiveChannel) => {
+  const openAddModal = useCallback((channelToEdit?: LiveChannel) => {
     if (channelToEdit) {
       setEditingChannel(channelToEdit);
       setFormName(channelToEdit.name);
@@ -238,7 +453,7 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
       setFormQuality('720p');
     }
     setIsAddModalOpen(true);
-  };
+  }, []);
 
   // Atende pedidos de edição feitos a partir do player minimizado em outra página do app:
   // o App.tsx navega de volta para a Live TV e sinaliza qual canal deve abrir no modal de edição.
@@ -301,17 +516,17 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
     setTimeout(() => setToastMsg(''), 3000);
   };
 
-  const handleDeleteChannel = (channelId: string, e: React.MouseEvent) => {
+  const handleDeleteChannel = useCallback((channelId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     deleteCustomChannel(channelId);
     refreshChannels();
-    if (activeChannel?.id === channelId) {
+    if (activeChannelIdRef.current === channelId) {
       onCloseActiveChannel();
     }
     setToastMsg('Canal removido com sucesso!');
     setTimeout(() => setToastMsg(''), 2500);
-  };
+  }, [refreshChannels, onCloseActiveChannel]);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-white pt-14 sm:pt-20 pb-28 md:pb-16 px-3 sm:px-4 md:px-8 max-w-7xl mx-auto w-full overflow-x-hidden">
@@ -606,195 +821,32 @@ export const LiveTvPage: React.FC<LiveTvPageProps> = ({ activeChannel, onPlayCha
       ) : viewMode === 'list' ? (
         /* VISUALIZAÇÃO EM LISTA (EXTREMAMENTE RÁPIDA E ERGONÔMICA NO CELULAR) */
         <div className="space-y-2 sm:space-y-2.5">
-          {filteredChannels.slice(0, visibleCount).map((channel) => {
-            const isFav = favoriteIds.includes(channel.id);
-            return (
-              <div
-                key={channel.id}
-                tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
-                className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-3.5 transition-all duration-200 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer overflow-hidden shadow-sm active:scale-[0.99]"
-              >
-                <div className="flex items-center gap-2.5 sm:gap-3.5 min-w-0 flex-1">
-                  {/* Logo */}
-                  <div className="w-12 h-9 sm:w-14 sm:h-11 rounded-lg bg-black/70 border border-white/10 p-1 flex items-center justify-center shrink-0 group-hover:border-orange-500/30 transition-all overflow-hidden">
-                    <ChannelLogo 
-                      channel={channel} 
-                      size="sm" 
-                      className="w-full h-full" 
-                    />
-                  </div>
-
-                  {/* Informações */}
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                      <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-orange-400 transition-colors truncate">
-                        {channel.name}
-                      </h4>
-                      <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black uppercase px-1.5 py-0.2 rounded-full bg-red-600 text-white tracking-wider shrink-0">
-                        <span className="w-1 h-1 rounded-full bg-white animate-ping"></span>
-                        AO VIVO
-                      </span>
-                      <span className="text-[9px] font-bold px-1 sm:px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 shrink-0">
-                        {channel.quality}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[10px] sm:text-[11px] text-neutral-400 truncate">
-                      <span className="text-orange-400/90 font-medium shrink-0">{channel.category}</span>
-                      <span className="w-1 h-1 rounded-full bg-neutral-700 shrink-0"></span>
-                      <span className="truncate">{channel.currentProgram || channel.description || 'Programação contínua'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Ações */}
-                <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={(e) => handleToggleFav(channel.id, e)}
-                    className={`p-2 rounded-lg sm:rounded-xl transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center ${
-                      isFav 
-                        ? 'text-yellow-400 bg-yellow-400/10' 
-                        : 'text-neutral-500 hover:text-white hover:bg-white/10'
-                    }`}
-                    title={isFav ? 'Remover dos favoritos' : 'Favoritar canal'}
-                  >
-                    <Star className={`w-4 h-4 ${isFav ? 'fill-yellow-400' : ''}`} />
-                  </button>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openAddModal(channel);
-                    }}
-                    className="p-2 rounded-lg sm:rounded-xl text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all min-w-[36px] min-h-[36px] flex items-center justify-center"
-                    title="Editar servidores deste canal"
-                  >
-                    <Settings2 className="w-4 h-4" />
-                  </button>
-
-                  {channel.isCustom && (
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteChannel(channel.id, e)}
-                      className="p-2 rounded-lg sm:rounded-xl bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[36px] min-h-[36px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
-                      title="Excluir canal"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-400" />
-                    </button>
-                  )}
-
-                  <button
-                    tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
-                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-orange-600 hover:bg-orange-500 text-white flex items-center justify-center shadow-md shadow-orange-600/30 active:scale-95 ml-1 cursor-pointer shrink-0"
-                    title="Assistir agora"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+          {filteredChannels.slice(0, visibleCount).map((channel) => (
+            <LiveChannelListItem
+              key={channel.id}
+              channel={channel}
+              isFav={favoriteIdSet.has(channel.id)}
+              onPlay={handlePlayChannel}
+              onToggleFav={handleToggleFav}
+              onEdit={openAddModal}
+              onDelete={handleDeleteChannel}
+            />
+          ))}
         </div>
       ) : (
         /* VISUALIZAÇÃO EM GRADE (2 COLUNAS NO CELULAR, 3-4 NO DESKTOP) */
         <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-5">
-          {filteredChannels.slice(0, visibleCount).map((channel) => {
-            const isFav = favoriteIds.includes(channel.id);
-            return (
-              <div
-                key={channel.id}
-                tabIndex={0} role="button" onClick={() => handlePlayChannel(channel)}
-                className="group relative bg-neutral-900/60 hover:bg-neutral-900 border border-white/5 hover:border-orange-500/40 rounded-xl sm:rounded-2xl p-2.5 sm:p-4 transition-all duration-300 hover:shadow-xl hover:shadow-orange-600/10 flex flex-col justify-between cursor-pointer overflow-hidden active:scale-[0.98]"
-              >
-                {/* Efeito sutil ao passar o mouse */}
-                <div className="absolute inset-0 bg-gradient-to-t from-orange-600/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
-
-                {/* Topo do Card: Logo, Badge Ao Vivo e Favorito */}
-                <div>
-                  <div className="flex items-start justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                    <div className="w-12 h-9 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl bg-black/70 border border-white/10 p-1 sm:p-1.5 flex items-center justify-center overflow-hidden shrink-0 group-hover:border-orange-500/30 transition-all">
-                      <ChannelLogo 
-                        channel={channel} 
-                        size="md" 
-                        className="w-full h-full" 
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-1 sm:gap-1.5">
-                      <span className="flex items-center gap-1 text-[8px] sm:text-[9px] font-black uppercase px-1.5 sm:px-2 py-0.5 rounded-full bg-red-600 text-white tracking-widest shadow-sm">
-                        <span className="w-1 sm:w-1.5 h-1 sm:h-1.5 rounded-full bg-white animate-ping"></span>
-                        <span className="hidden xs:inline">AO VIVO</span>
-                      </span>
-
-                      <button
-                        onClick={(e) => handleToggleFav(channel.id, e)}
-                        className={`p-1 sm:p-1.5 rounded-lg transition-all cursor-pointer min-w-[28px] min-h-[28px] flex items-center justify-center ${
-                          isFav 
-                            ? 'text-yellow-400 bg-yellow-400/10 hover:bg-yellow-400/20' 
-                            : 'text-neutral-500 hover:text-white hover:bg-white/10'
-                        }`}
-                        title={isFav ? 'Remover dos favoritos' : 'Favoritar canal'}
-                      >
-                        <Star className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFav ? 'fill-yellow-400' : ''}`} />
-                      </button>
-
-                      {channel.isCustom && (
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteChannel(channel.id, e)}
-                          className="p-1.5 sm:p-2 rounded-lg bg-red-500/20 hover:bg-red-500/35 text-red-400 hover:text-red-300 border border-red-500/30 transition-all cursor-pointer min-w-[30px] min-h-[30px] flex items-center justify-center active:scale-90 z-20 touch-manipulation shadow-sm"
-                          title="Excluir canal"
-                        >
-                          <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Informações do Canal */}
-                  <div className="space-y-0.5 sm:space-y-1">
-                    <div className="flex items-center justify-between gap-1 sm:gap-2">
-                      <h4 className="font-bold text-xs sm:text-sm text-white group-hover:text-orange-400 transition-colors truncate">
-                        {channel.name}
-                      </h4>
-                      <span className="text-[9px] sm:text-[10px] font-bold px-1 sm:px-1.5 py-0.2 rounded bg-white/5 text-neutral-400 shrink-0">
-                        {channel.quality}
-                      </span>
-                    </div>
-
-                    <p className="text-[10px] sm:text-xs text-neutral-400 line-clamp-1 sm:line-clamp-2 leading-relaxed h-4 sm:h-8">
-                      {channel.currentProgram || channel.description || 'Programação contínua 24h'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Rodapé do Card */}
-                <div className="pt-2.5 sm:pt-4 mt-2 sm:mt-3 border-t border-white/5 flex items-center justify-between text-xs">
-                  <span className="text-[10px] sm:text-[11px] font-medium text-neutral-500 truncate max-w-[65px] sm:max-w-none">
-                    {channel.category}
-                  </span>
-
-                  <div className="flex items-center gap-1 sm:gap-1.5">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAddModal(channel);
-                      }}
-                      className="p-1 rounded text-neutral-500 hover:text-neutral-300 hover:bg-white/5 transition-all"
-                      title="Editar servidores deste canal"
-                    >
-                      <Settings2 className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-                    </button>
-
-                    <span className="flex items-center gap-1 font-semibold text-orange-500 group-hover:translate-x-0.5 transition-transform text-[11px] sm:text-xs">
-                      <Play className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-orange-500" />
-                      <span className="hidden xs:inline">Assistir</span>
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {filteredChannels.slice(0, visibleCount).map((channel) => (
+            <LiveChannelGridCard
+              key={channel.id}
+              channel={channel}
+              isFav={favoriteIdSet.has(channel.id)}
+              onPlay={handlePlayChannel}
+              onToggleFav={handleToggleFav}
+              onEdit={openAddModal}
+              onDelete={handleDeleteChannel}
+            />
+          ))}
         </div>
       )}
 

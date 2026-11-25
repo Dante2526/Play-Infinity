@@ -3,11 +3,20 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 
 const STORAGE_KEY = "playinfinity_watched_episodes";
 
+let cachedWatchedRaw: string | null | undefined = undefined;
+let cachedWatchedStore: Record<string, boolean> = {};
+
 function getStore(): Record<string, boolean> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : {};
+    if (raw === cachedWatchedRaw) return cachedWatchedStore;
+    const parsed = raw ? JSON.parse(raw) : {};
+    cachedWatchedRaw = raw;
+    cachedWatchedStore = parsed && typeof parsed === "object" ? parsed : {};
+    return cachedWatchedStore;
   } catch {
+    cachedWatchedRaw = undefined;
+    cachedWatchedStore = {};
     return {};
   }
 }
@@ -84,7 +93,10 @@ export async function fetchWatchedFromCloud(): Promise<void> {
 
 function saveStore(store: Record<string, boolean>) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    const serialized = JSON.stringify(store);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    cachedWatchedRaw = serialized;
+    cachedWatchedStore = store;
     window.dispatchEvent(new CustomEvent("playinfinity:watched_updated", { detail: store }));
     syncWatchedToCloud(store);
   } catch (e) {
@@ -104,7 +116,7 @@ export function isEpisodeWatched(seriesId: number | string, season: number, epis
 
 export function markEpisodeWatched(seriesId: number | string, season: number, episode: number, watched: boolean = true): void {
   if (!seriesId) return;
-  const store = getStore();
+  const store = { ...getStore() };
   const key = makeEpisodeKey(seriesId, season, episode);
   if (watched) {
     store[key] = true;
@@ -123,7 +135,7 @@ export function toggleEpisodeWatched(seriesId: number | string, season: number, 
 
 export function markSeasonWatched(seriesId: number | string, season: number, episodeCount: number, watched: boolean = true): void {
   if (!seriesId) return;
-  const store = getStore();
+  const store = { ...getStore() };
   for (let ep = 1; ep <= episodeCount; ep++) {
     const key = makeEpisodeKey(seriesId, season, ep);
     if (watched) {
