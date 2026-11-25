@@ -9,29 +9,44 @@ export type StartupInput = {
   name?: string;
   keys: string[];
   preferred?: string;
+  userPreferred?: boolean;
   nixId?: string;
   refresh?: boolean;
 };
 
 export type CatalogueHint = { listed: boolean; warm: boolean; audioPriority?: number };
 
-export function startupOrder(keys: string[], hints: Record<string, CatalogueHint>, preferred?: string) {
+export function startupOrder(
+  keys: string[],
+  hints: Record<string, CatalogueHint>,
+  preferred?: string,
+  userPreferred = false
+) {
   // An explicit protocol hint supersedes the legacy Saimo alias. If the
   // catalogue knows this title has only MP4, never manufacture an HLS retry.
   if (hints.srv_saimo?.listed) {
     const protocols = ['srv_saimo_hls', 'srv_saimo_mp4'].filter(k => hints[k]?.listed);
     if (protocols.length) keys = keys.filter(k => k === 'srv_saimo' ? !protocols.some(p => keys.includes(p)) : !k.startsWith('srv_saimo_') || protocols.includes(k));
   }
-  const listed = keys.filter(k => hints[k]?.listed);
+  const isUserTarget = (k: string) => Boolean(userPreferred && preferred && k === preferred);
+  const listed = keys.filter(k => hints[k]?.listed || isUserTarget(k));
   const eligible = listed.length ? listed : keys;
-  const usable = eligible.some(k => hints[k]?.audioPriority === 0) ? eligible.filter(k => hints[k]?.audioPriority !== 2) : eligible;
+  const effectiveAudioPriority = (k: string) =>
+    isUserTarget(k) && !hints[k]?.listed ? 0 : (hints[k]?.audioPriority ?? 1);
+  const usable = eligible.some(k => effectiveAudioPriority(k) === 0)
+    ? eligible.filter(k => effectiveAudioPriority(k) !== 2)
+    : eligible;
   return [...usable].sort((a, b) => {
-    // BYSE é o player primário SOMENTE quando está morno (stream já resolvido em
-    // cache, abre em ~1-2s). Frio, a resolução leva 20-30s: começa por outro
-    // servidor com a mesma prioridade de áudio e deixa o BYSE como fallback.
+    // Quando o usuário escolheu/retomou explicitamente um servidor (Continue Assistindo,
+    // preferência salva da série ou troca de episódio), respeita a escolha mesmo após o
+    // reload de 30m do catálogo (listed=false) ou expiração do cache warm.
     const byseWarm = !!hints.srv_byse?.warm;
-    const providerWeight = (k: string) => (k === 'srv_byse' ? (byseWarm ? 0 : 3) : k === preferred ? 1 : 2);
-    const score = (k: string) => (hints[k]?.audioPriority ?? 1) * 100 + providerWeight(k);
+    const providerWeight = (k: string) => {
+      if (isUserTarget(k)) return 0;
+      if (k === 'srv_byse') return byseWarm ? 0 : 3;
+      return k === preferred ? 1 : 2;
+    };
+    const score = (k: string) => effectiveAudioPriority(k) * 100 + providerWeight(k);
     return score(a) - score(b);
   });
 }
@@ -52,7 +67,8 @@ export async function preparePlaybackStartup(
     e: String(input.episode),
     name: input.name || '',
     nixId: input.nixId || '',
-    refresh: input.refresh ? '1' : '0'
+    refresh: input.refresh ? '1' : '0',
+    ...(input.userPreferred && input.preferred ? { preferred: input.preferred } : {})
   });
 
   let hints: Record<string, CatalogueHint> = {};
@@ -73,10 +89,13 @@ export async function preparePlaybackStartup(
 
   if (signal.aborted) throw new DOMException('Cancelled', 'AbortError');
 
-  const candidates = startupOrder(input.keys, hints, input.preferred);
+  const candidates = startupOrder(input.keys, hints, input.preferred, !!input.userPreferred);
 
-  // Fast-Path: se BYSE é o candidato #1 e está explicitamente listado, inicia direto nele sem disputa de probe com hosts lentos
-  if (candidates[0] === 'srv_byse' && hints.srv_byse?.listed === true) {
+  // Fast-Path: se BYSE é o candidato #1 (morno ou escolhido/retomado pelo usuário), inicia direto nele sem cair para Saimo
+  if (
+    candidates[0] === 'srv_byse' &&
+    (hints.srv_byse?.listed === true || input.userPreferred)
+  ) {
     return { selected: 'srv_byse', candidates, hints, urls: {} };
   }
 

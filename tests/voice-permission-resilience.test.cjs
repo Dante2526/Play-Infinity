@@ -1201,6 +1201,12 @@ test('Android mobile (APK/Chrome): uses zero-AudioFocus WebAudio engine, resumes
     await harness.clock.advance(400);
     for (let i = 0; i < 6; i++) await Promise.resolve();
     assert.equal(getUserMediaCalls, 2, 'Ended MediaStreamTrack must automatically reopen microphone session');
+
+    // 5. Se onaudioprocess congelar por >4s (ex: transição tela cheia / GC mobile aos ~10s), o watchdog reinicia a captura sozinho!
+    await harness.clock.advance(4600);
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+    assert.equal(getUserMediaCalls, 3, 'Frozen onaudioprocess (>4s without frames) must auto-heal via watchdog');
+    assert.equal(harness.instances.length, 0, 'Must never fall back to broken mobile SpeechRecognition');
   } finally {
     harness.unmount();
   }

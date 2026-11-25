@@ -628,10 +628,13 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
 
   // Salvamento contínuo do progresso para a fileira "Continue Assistindo"
   const lastSavedTimeRef = useRef<number>(0);
+  const lastSavedServerKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!mediaId || playerStatus.duration <= 0 || playerStatus.currentTime < 2) return;
-    if (Math.abs(playerStatus.currentTime - lastSavedTimeRef.current) >= 4) {
+    const serverChanged = Boolean(activeServerKey && activeServerKey !== lastSavedServerKeyRef.current);
+    if (Math.abs(playerStatus.currentTime - lastSavedTimeRef.current) >= 4 || serverChanged) {
       lastSavedTimeRef.current = playerStatus.currentTime;
+      lastSavedServerKeyRef.current = activeServerKey;
       savePlaybackProgress({
         id: mediaId,
         tmdbId,

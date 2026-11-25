@@ -191,6 +191,8 @@ export function usePlayerVoiceAssistant({
   const webAudioSessionRef = useRef<{ stop: () => void } | null>(null);
   const webAudioCtxRef = useRef<AudioContext | null>(null);
   const webAudioStreamRef = useRef<MediaStream | null>(null);
+  const webAudioNodesRef = useRef<any[]>([]);
+  const lastAudioFrameAtRef = useRef(0);
   const prevIsPlayingRef = useRef(isPlaying);
   const onCommandRef = useRef(onCommand);
   const onWakeRef = useRef(onWakeWordDetected);
@@ -653,7 +655,7 @@ export function usePlayerVoiceAssistant({
     try {
       // Cria e resume o AudioContext ANTES do await getUserMedia para aproveitar o User Gesture ativo no mobile
       preCreatedCtx = new AudioCtx();
-      if (preCreatedCtx && typeof preCreatedCtx.resume === 'function' && preCreatedCtx.state === 'suspended') {
+      if (preCreatedCtx && typeof preCreatedCtx.resume === 'function' && preCreatedCtx.state !== 'running') {
         preCreatedCtx.resume().catch(() => {});
       }
     } catch {
@@ -702,7 +704,7 @@ export function usePlayerVoiceAssistant({
 
     try {
       const ctx: AudioContext = preCreatedCtx || new AudioCtx();
-      if (typeof ctx.resume === 'function' && ctx.state === 'suspended') {
+      if (typeof ctx.resume === 'function' && ctx.state !== 'running') {
         ctx.resume().catch(() => {});
       }
       const sampleRate = ctx.sampleRate || 48000;
@@ -710,7 +712,9 @@ export function usePlayerVoiceAssistant({
       const source = ctx.createMediaStreamSource(stream);
       const processor = ctx.createScriptProcessor(bufferSize, 1, 1);
       const muteGain = ctx.createGain();
-      muteGain.gain.value = 0;
+      // Usa 1e-9 (-180dB, silêncio absoluto abaixo de 16/24-bit) em vez de 0 exato:
+      // evita que o otimizador propagatesSilence() do Chromium congele onaudioprocess após ~10s!
+      muteGain.gain.value = 1e-9;
 
       const preRoll: Int16Array[] = [];
       const rmsHistory: number[] = [];
@@ -718,6 +722,7 @@ export function usePlayerVoiceAssistant({
       let speechMs = 0;
       let silenceMs = 0;
       let utteranceMs = 0;
+      let windowPeakRms = 0;
       let noiseFloor = 0.0025;
       let inFlightRequests = 0;
       let stopped = false;
@@ -757,9 +762,16 @@ export function usePlayerVoiceAssistant({
           .catch(() => {
             if (stopped) return;
             sttErrorStreakRef.current += 1;
+            // NUNCA desliga o motor WebAudio no celular: voltar para SpeechRecognition no Android
+            // disputa AudioFocus com o <video> e mata a escuta permanentemente após 3 oscilações de rede/rate-limit!
             const SpeechClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-            if (sttErrorStreakRef.current >= 3 && SpeechClass) {
-              console.warn('[VoiceAssistant] /api/voice-stt indisponível (3 falhas). Alternando para SpeechRecognition nativo.');
+            if (
+              !isMobileAudioFocusSensitive() &&
+              !isEdgeBrowser() &&
+              sttErrorStreakRef.current >= 5 &&
+              SpeechClass
+            ) {
+              console.warn('[VoiceAssistant] /api/voice-stt indisponível (5 falhas desktop). Alternando para SpeechRecognition nativo.');
               useWebAudioFallbackRef.current = false;
               sttErrorStreakRef.current = 0;
               safeStopCurrentRecognition();
@@ -775,6 +787,7 @@ export function usePlayerVoiceAssistant({
 
       processor.onaudioprocess = (e: AudioProcessingEvent) => {
         if (stopped) return;
+        lastAudioFrameAtRef.current = Date.now();
         const input = e.inputBuffer.getChannelData(0);
         if (!input || input.length === 0) return;
         let sumSq = 0;
@@ -787,10 +800,16 @@ export function usePlayerVoiceAssistant({
         const pcm16 = downsampleTo16kPcm(input, activeRate);
 
         rmsHistory.push(rms);
-        if (rmsHistory.length > 28) rmsHistory.shift();
+        if (rmsHistory.length > 40) rmsHistory.shift();
+        if (rmsHistory.length >= 10) {
+          const sorted = [...rmsHistory].sort((a, b) => a - b);
+          const ambient = sorted[Math.floor(sorted.length * 0.2)];
+          // Teto estrito (0.012) impede que cenas altas do filme ceguem o limiar após minutos
+          noiseFloor = Math.max(0.0018, Math.min(0.012, noiseFloor * 0.92 + ambient * 0.08));
+        }
 
-        // Limiar calibrado para DSP mobile (AEC/NS atenua voz em ~12-18dB)
-        const threshold = Math.max(0.0055, Math.min(0.04, noiseFloor * 2.3));
+        // Limiar calibrado para DSP mobile (teto máx 0.024 garante captação mesmo após cenas barulhentas)
+        const threshold = Math.max(0.0055, Math.min(0.024, noiseFloor * 2.1));
         const isSpeech = rms > threshold;
         const maxPreRollChunks = Math.max(4, Math.round(420 / frameMs));
 
@@ -798,6 +817,9 @@ export function usePlayerVoiceAssistant({
           if (utteranceChunks.length === 0) {
             for (const p of preRoll) utteranceChunks.push(p);
             preRoll.length = 0;
+            windowPeakRms = rms;
+          } else if (rms > windowPeakRms) {
+            windowPeakRms = rms;
           }
           utteranceChunks.push(pcm16);
           speechMs += frameMs;
@@ -806,6 +828,7 @@ export function usePlayerVoiceAssistant({
 
           if (utteranceMs >= 2800) {
             const toSend = utteranceChunks;
+            const hadVoicePeak = isAwakeRef.current || windowPeakRms >= Math.max(0.0075, threshold * 1.3);
             // Preserva ~550ms finais como overlap para nunca partir "Infinity" ao meio durante som contínuo do filme
             const overlapCount = Math.min(toSend.length, Math.max(4, Math.round(550 / frameMs)));
             preRoll.length = 0;
@@ -816,29 +839,28 @@ export function usePlayerVoiceAssistant({
             speechMs = 0;
             utteranceMs = 0;
             silenceMs = 0;
+            windowPeakRms = 0;
 
-            if (rmsHistory.length >= 8) {
-              const sorted = [...rmsHistory].sort((a, b) => a - b);
-              const ambient = sorted[Math.floor(sorted.length * 0.25)];
-              noiseFloor = Math.max(0.002, Math.min(0.025, noiseFloor * 0.7 + ambient * 0.3));
+            if (hadVoicePeak) {
+              sendUtterance(toSend);
             }
-            sendUtterance(toSend);
           }
         } else {
           if (utteranceChunks.length > 0) {
             utteranceChunks.push(pcm16);
             utteranceMs += frameMs;
             silenceMs += frameMs;
-            if (silenceMs >= 380) {
-              const toSend = speechMs >= 150 ? utteranceChunks : [];
+            if (silenceMs >= 360) {
+              const toSend = speechMs >= 140 ? utteranceChunks : [];
               utteranceChunks = [];
               speechMs = 0;
               utteranceMs = 0;
               silenceMs = 0;
+              windowPeakRms = 0;
               if (toSend.length > 0) sendUtterance(toSend);
             }
           } else {
-            noiseFloor = Math.max(0.0018, Math.min(0.028, noiseFloor * 0.94 + rms * 0.06));
+            noiseFloor = Math.max(0.0018, Math.min(0.012, noiseFloor * 0.94 + rms * 0.06));
             preRoll.push(pcm16);
             if (preRoll.length > maxPreRollChunks) preRoll.shift();
           }
@@ -854,6 +876,8 @@ export function usePlayerVoiceAssistant({
         stopped = true;
         if (webAudioCtxRef.current === ctx) webAudioCtxRef.current = null;
         if (webAudioStreamRef.current === stream) webAudioStreamRef.current = null;
+        webAudioNodesRef.current = [];
+        lastAudioFrameAtRef.current = 0;
         try { processor.onaudioprocess = null as any; } catch {}
         try { source.disconnect(); } catch {}
         try { processor.disconnect(); } catch {}
@@ -881,8 +905,11 @@ export function usePlayerVoiceAssistant({
         });
       } catch {}
 
+      const nowStarted = Date.now();
       webAudioCtxRef.current = ctx;
       webAudioStreamRef.current = stream;
+      webAudioNodesRef.current = [source, processor, muteGain];
+      lastAudioFrameAtRef.current = nowStarted;
       webAudioSessionRef.current = { stop: stopSession };
       recognitionRef.current = { isWebAudioFallback: true, abort: stopSession };
       isStartingRef.current = false;
@@ -890,7 +917,7 @@ export function usePlayerVoiceAssistant({
       setIsListening(true);
       consecutiveFailuresRef.current = 0;
       nextRetryAtRef.current = 0;
-      sessionStartedAtRef.current = Date.now();
+      sessionStartedAtRef.current = nowStarted;
     } catch (err) {
       try { stream?.getTracks().forEach(t => t.stop()); } catch {}
       if (preCreatedCtx) {
@@ -1055,11 +1082,12 @@ export function usePlayerVoiceAssistant({
       }
       if (now < nextRetryAtRef.current) return;
 
-      // Saúde do motor WebAudio (destrava AudioContext suspenso no mobile e recria stream encerrada pelo SO)
+      // Saúde do motor WebAudio (destrava AudioContext suspenso/interrompido e recria captura se onaudioprocess congelar > 4s)
       if (useWebAudioFallbackRef.current && webAudioSessionRef.current) {
         if (
           webAudioCtxRef.current &&
-          webAudioCtxRef.current.state === 'suspended' &&
+          webAudioCtxRef.current.state !== 'running' &&
+          webAudioCtxRef.current.state !== 'closed' &&
           typeof webAudioCtxRef.current.resume === 'function'
         ) {
           webAudioCtxRef.current.resume().catch(() => {});
@@ -1071,6 +1099,11 @@ export function usePlayerVoiceAssistant({
             startSessionRef.current();
             return;
           }
+        }
+        if (lastAudioFrameAtRef.current > 0 && now - lastAudioFrameAtRef.current > 4000) {
+          console.info('[VoiceAssistant] ♻️ Captura WebAudio sem quadros há >4s; reiniciando sessão...');
+          startSessionRef.current();
+          return;
         }
       }
 
@@ -1129,7 +1162,8 @@ export function usePlayerVoiceAssistant({
     const handleUserInteraction = () => {
       if (
         webAudioCtxRef.current &&
-        webAudioCtxRef.current.state === 'suspended' &&
+        webAudioCtxRef.current.state !== 'running' &&
+        webAudioCtxRef.current.state !== 'closed' &&
         typeof webAudioCtxRef.current.resume === 'function'
       ) {
         webAudioCtxRef.current.resume().catch(() => {});

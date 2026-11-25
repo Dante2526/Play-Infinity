@@ -1715,11 +1715,11 @@ export function VideoPlayerModal({
   const serversRef = useRef(servers);
   serversRef.current = servers;
 
-  const prepareStartup = async (targetSeason:number,targetEpisode:number,epoch:number,preferred?:string,keys?:string[],refresh=false):Promise<string|null|undefined> => {
+  const prepareStartup = async (targetSeason:number,targetEpisode:number,epoch:number,preferred?:string,keys?:string[],refresh=false,userPreferred=false):Promise<string|null|undefined> => {
     startupControllerRef.current?.abort();const controller=new AbortController();startupControllerRef.current=controller;
     const id=String(effectiveMovieId||tmdbId||resolvedId),type=isSeries?'tv':'movie';
     const identity=`${type}:${id}:${type==='tv'?`${targetSeason}:${targetEpisode}`:''}`;
-    const result=await preparePlaybackStartup({id,type,season:targetSeason,episode:targetEpisode,keys:keys||serversRef.current.map(s=>s.key),preferred,name:title,nixId:nixplaySeriesId?String(nixplaySeriesId):undefined,refresh},controller.signal,health=>{
+    const result=await preparePlaybackStartup({id,type,season:targetSeason,episode:targetEpisode,keys:keys||serversRef.current.map(s=>s.key),preferred,userPreferred,name:title,nixId:nixplaySeriesId?String(nixplaySeriesId):undefined,refresh},controller.signal,health=>{
       if(epoch!==serverSelectionEpochRef.current||controller.signal.aborted)return;
       healthRef.current={identity,servers:health};setServerHealth({identity,servers:health});
       const plan=startupPlanRef.current;
@@ -1765,7 +1765,16 @@ export function VideoPlayerModal({
   const handleServerSwitch = useCallback(async (serverKey: string, automatic=false) => {
     const selectionEpoch = ++serverSelectionEpochRef.current;
     startupControllerRef.current?.abort();
-    if(!automatic)startupPlanRef.current=null;
+    if(!automatic){
+      startupPlanRef.current=null;
+      fallbackAttemptsRef.current.clear();
+      const persistableKey = normalizeVisibleServerKey(serverKey, servers);
+      if (isSeries && tmdbId && persistableKey) {
+        try {
+          localStorage.setItem(`preferred_server_${tmdbId}`, persistableKey);
+        } catch {}
+      }
+    }
     if (serverKey === 'srv_mixdrop') mixdropRoutingRef.current.reset(mixdropRoutingIdentity);
     hasSeekedInitialTimeRef.current = false; // Permite resumir do momento do erro
     setSelectedServerKey(serverKey);
@@ -2061,9 +2070,10 @@ export function VideoPlayerModal({
           } catch (e) { }
         }
 
-        // BYSE is the default; an explicit or saved choice still takes priority.
+        // BYSE is the default; an explicit or saved choice still takes priority even when BYSE cache cooled down.
+        const hasExplicitUserServer = Boolean(safeInitialServerKey || prefServer);
         let targetServerKey = preferredPlaybackServer(eligibleKeys, safeInitialServerKey, prefServer);
-        try {const chosen=await prepareStartup(targetSeason,targetEpisode,initialSelectionEpoch,targetServerKey,eligibleKeys);if(!chosen)return;targetServerKey=chosen;}catch{if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;}
+        try {const chosen=await prepareStartup(targetSeason,targetEpisode,initialSelectionEpoch,targetServerKey,eligibleKeys,false,hasExplicitUserServer);if(!chosen)return;targetServerKey=chosen;}catch{if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;}
         if(initialSelectionEpoch!==serverSelectionEpochRef.current)return;
         let targetUrl: string;
         if (!startupPlanRef.current && targetServerKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(targetSeason, targetEpisode));
@@ -2718,7 +2728,7 @@ export function VideoPlayerModal({
     startupExpandedRef.current=false;
 
     let targetKey=selectedServerKey;
-    try{const chosen=await prepareStartup(season,newEpisode,selectionEpoch,selectedServerKey);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
+    try{const chosen=await prepareStartup(season,newEpisode,selectionEpoch,selectedServerKey,undefined,false,true);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
     if(selectionEpoch!==serverSelectionEpochRef.current)return;setSelectedServerKey(targetKey);
     // Resolve o fileId do novo episódio para alimentar o cache de todos os servidores
     let fid: string | null = null;
@@ -2778,7 +2788,7 @@ export function VideoPlayerModal({
     startupExpandedRef.current=false;
 
     let targetKey=selectedServerKey;
-    try{const chosen=await prepareStartup(newSeason,1,selectionEpoch,selectedServerKey);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
+    try{const chosen=await prepareStartup(newSeason,1,selectionEpoch,selectedServerKey,undefined,false,true);if(!chosen)return;targetKey=chosen;}catch{if(selectionEpoch!==serverSelectionEpochRef.current)return;}
     if(selectionEpoch!==serverSelectionEpochRef.current)return;setSelectedServerKey(targetKey);
     if (!startupPlanRef.current && targetKey === "srv_streamtape" && tmdbId) await waitForPlayerLookup(lookupMixdropFileId(newSeason, 1));
 

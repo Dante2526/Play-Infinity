@@ -2472,11 +2472,19 @@ async function getCatalogueMediaSources(provider: 'streamtape' | 'mixdrop', id: 
 export const getStreamtapeSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('streamtape', id, season, episode, name, refresh);
 export const getMixdropSources = (id: number, season?: number, episode?: number, name?: string, refresh = false) => getCatalogueMediaSources('mixdrop', id, season, episode, name, refresh);
 
+/** Cache persistente em memória para fileIds descobertos via playerData em runtime (sobrevive ao reload de 30m dos catálogos .db/.json) */
+const _liveDiscoveredServers = new Map<string, { servers: Record<string, string>; server_audio: Record<string, string> }>();
+
 /** BYSE discovery keeps audio and exact episode identity independent of MixDrop. */
 export async function getByseSources(id: number, season?: number, episode?: number, name?: string, refresh = false) {
   loadCatalogs();
   const tv = season !== undefined && episode !== undefined;
   const key = `${id}:${season}:${episode}`;
+  const liveKey = tv ? `tv:${key}` : `movie:${id}`;
+  const cachedLive = !refresh ? _liveDiscoveredServers.get(liveKey) : undefined;
+  if (cachedLive?.servers?.byse) {
+    return [{ fileId: cachedLive.servers.byse, audio: cachedLive.server_audio?.byse || 'Dublado', source: 'encontrei' as const }];
+  }
   return (await Promise.all((['encontrei', 'vizer'] as const).map(async source => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const work = async () => {
@@ -2521,6 +2529,12 @@ export async function getByseSources(id: number, season?: number, episode?: numb
         const index=source==='encontrei'?(tv?_encontreiEpisodeIndex:_encontreiMovieIndex):(tv?_vizerEpisodeIndex:_vizerMovieIndex);
         const target=index as Map<any,any>,identity=tv?key:id,previous=target.get(identity)||{};
         target.set(identity,{...previous,tmdb_id:id,season,episode,servers:{...previous.servers,...liveServers},server_audio:{...previous.server_audio,...serverAudio}});
+        const prevLive=_liveDiscoveredServers.get(liveKey)||{servers:{},server_audio:{}};
+        if(_liveDiscoveredServers.size>=2000)_liveDiscoveredServers.delete(_liveDiscoveredServers.keys().next().value!);
+        _liveDiscoveredServers.set(liveKey,{
+          servers:{...prevLive.servers,...liveServers},
+          server_audio:{...prevLive.server_audio,...serverAudio}
+        });
       }
       for (const [field, audio] of [['servers_dub', 'Dublado'], ['servers_leg', 'Legendado']]) {
         const fileId = String(raw?.[field] || '').replace(/&amp;/g, '&').match(/(?:^|&)byse=([a-zA-Z0-9_-]+)/i)?.[1];
@@ -2538,7 +2552,8 @@ export async function getByseSources(id: number, season?: number, episode?: numb
 export function getPlaybackCataloguePresence(id: number, season?: number, episode?: number) {
   loadCatalogs();
   const tv=season!==undefined&&episode!==undefined,key=`${id}:${season}:${episode}`;
-  const entries=[tv?_encontreiEpisodeIndex.get(key):_encontreiMovieIndex.get(id),tv?_vizerEpisodeIndex.get(key):_vizerMovieIndex.get(id)].filter(Boolean);
+  const liveEntry=_liveDiscoveredServers.get(tv?`tv:${key}`:`movie:${id}`);
+  const entries=[tv?_encontreiEpisodeIndex.get(key):_encontreiMovieIndex.get(id),tv?_vizerEpisodeIndex.get(key):_vizerMovieIndex.get(id),liveEntry].filter(Boolean);
   const result: Record<string, any> = Object.fromEntries(['byse','streamtape','mixdrop'].map(provider=>['srv_'+provider,{audioPriority:Math.min(2,...entries.filter(e=>!!e.servers?.[provider]).map(e=>/dublad|nacional|portugu|pt[-_ ]?br/i.test(e.server_audio?.[provider]||e.audio||'')?0:(e.server_audio?.[provider]||e.audio)?2:1)),listed:entries.some(e=>!!e.servers?.[provider]),fileIds:[...new Set(entries.map(e=>String(e.servers?.[provider]||'')).filter(Boolean))]}]));
   const saimoStore = getSaimoStore();
   const saimoItem = saimoStore ? (tv ? saimoStore.findEpisode(id, season, episode) : saimoStore.findMovie(id)) : null;

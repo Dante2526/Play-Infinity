@@ -61,3 +61,46 @@ test('a HLS alias that resolved to the same MP4 is not retried as a fresh source
  health.srv_saimo_hls.mediaKind='hls';
  assert.equal(api.nextStartupKey(['srv_saimo_hls','srv_saimo_mp4'],new Set(['srv_saimo_hls']),health),'srv_saimo_mp4');
 });
+
+test('Continue Watching / saved BYSE preference stays on BYSE even hours later when warm cache expired (warm=false)',async()=>{
+ const resumeInput={
+  id:'84958',
+  type:'tv',
+  season:1,
+  episode:4,
+  keys:['srv_byse','srv_saimo_hls','srv_saimo_mp4','srv_mixdrop'],
+  preferred:'srv_byse',
+  userPreferred:true
+ };
+ const coldHoursLater=fixture(
+  {srv_byse:hint(true,false),srv_saimo_hls:hint(true,true),srv_saimo_mp4:hint(true,true),srv_mixdrop:hint(true,true)},
+  {}
+ );
+ const plan=await api.preparePlaybackStartup(resumeInput,new AbortController().signal,()=>{},coldHoursLater.fetch);
+ assert.equal(plan.selected,'srv_byse','Explicitly saved BYSE must NOT switch to Saimo when warm cache expires');
+ assert.equal(plan.candidates[0],'srv_byse');
+ // Cenário real dos ~30 minutos: reload do catálogo limpou o override em memória do BYSE
+ // (listed=false e audioPriority=2 vindo de Math.min(2) vazio), enquanto Saimo/MixDrop seguem listed=true com audioPriority=0!
+ const after30mCatalogReload=fixture(
+  {
+   srv_byse:{listed:false,warm:false,audioPriority:2},
+   srv_saimo_hls:{listed:true,warm:true,audioPriority:0},
+   srv_mixdrop:{listed:true,warm:true,audioPriority:0}
+  },
+  {srv_saimo_hls:{state:'available'}}
+ );
+ const planAfter30m=await api.preparePlaybackStartup(resumeInput,new AbortController().signal,()=>{},after30mCatalogReload.fetch);
+ assert.equal(planAfter30m.selected,'srv_byse','Must still open BYSE after 30m catalog reload when user saved BYSE');
+ assert.equal(planAfter30m.candidates[0],'srv_byse');
+ assert.equal(after30mCatalogReload.calls[0].searchParams.get('preferred'),'srv_byse');
+ // Mas se BYSE estiver explicitamente listado APENAS como legendado (listed=true, audioPriority=2) e houver dublado (audioPriority=0), respeita regra PT-BR
+ assert.deepEqual(
+  api.startupOrder(
+   ['srv_byse','srv_saimo_hls'],
+   {srv_byse:{listed:true,warm:true,audioPriority:2},srv_saimo_hls:{listed:true,warm:true,audioPriority:0}},
+   'srv_byse',
+   true
+  ),
+  ['srv_saimo_hls']
+ );
+});

@@ -18,8 +18,9 @@ router.get('/api/playback-candidates',async(req,res)=>{
   let hints=getPlaybackCataloguePresence(id,type==='tv'?s:undefined,type==='tv'?e:undefined);
   const name=String(req.query.name||'').slice(0,160),key=`${type}:${id}:${s}:${e}`;
   const forceRefresh=req.query.refresh==='1';
+  const preferredByse=req.query.preferred==='srv_byse'&&!hints.srv_byse?.listed;
   const hasCatalogueHoster=['srv_byse','srv_mixdrop','srv_streamtape'].some(k=>hints[k]?.listed);
-  if(name&&(forceRefresh||!hasCatalogueHoster)){
+  if(name&&(forceRefresh||!hasCatalogueHoster||preferredByse)){
     const cached=discovery.get(key);let task=!forceRefresh&&cached&&cached.expires>Date.now()?cached.promise:undefined;
     if(!task&&discovery.size<500&&activeDiscovery<4){
       activeDiscovery++;
