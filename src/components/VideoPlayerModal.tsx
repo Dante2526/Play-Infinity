@@ -1158,39 +1158,102 @@ export function VideoPlayerModal({
     };
   }, [isOpen]);
 
+  const isOpenRef = useRef<boolean>(isOpen);
+  isOpenRef.current = isOpen;
+  const isExpandedRef = useRef<boolean>(isExpanded);
+  isExpandedRef.current = isExpanded;
+  const enterExpandedLandscapeRef = useRef(enterExpandedLandscape);
+  enterExpandedLandscapeRef.current = enterExpandedLandscape;
+  const pipRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [isMiniPlaybackPaused, setIsMiniPlaybackPaused] = useState<boolean>(false);
+
   // Escuta o evento de Picture-in-Picture nativo do Android (emitido pelo MainActivity.java via Capacitor)
   useEffect(() => {
     const handlePiPChange = (e: any) => {
+      if (!isOpenRef.current) return;
+
       let isPiP = false;
       if (e?.detail?.isPiP !== undefined) {
-        isPiP = e.detail.isPiP;
+        isPiP = Boolean(e.detail.isPiP);
       } else if (e?.isPiP !== undefined) {
-        isPiP = e.isPiP;
+        isPiP = Boolean(e.isPiP);
+      }
+      const isDismissed = Boolean(e?.detail?.dismissed ?? e?.dismissed);
+
+      if (pipRestoreTimerRef.current) {
+        clearTimeout(pipRestoreTimerRef.current);
+        pipRestoreTimerRef.current = null;
       }
 
       setIsNativePiP(isPiP);
 
       if (isPiP) {
-        // Guarda se estava expandido antes de entrar no PiP nativo
-        wasExpandedBeforePiPRef.current = isFullscreen || isWidescreen;
+        // Guarda se estava expandido antes de entrar no PiP nativo (via ref atualizada, sem closure obsoleta)
+        wasExpandedBeforePiPRef.current = isExpandedRef.current;
         // Se entrou no PiP nativo do Android, desfaz a rotação forçada e tela cheia interna
-        // Isso evita que o vídeo fique "cortado" dentro da janela do PiP
+        // Isso evita que o vídeo fique "cortado" dentro da janela 16:9 do PiP
+        setIsMiniPlayer(false);
         setIsRotated(false);
         setIsWidescreen(false);
         setIsFullscreen(false);
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => { });
         }
-      } else {
-        // Ao retornar do PiP, restaura widescreen se estava expandido
-        if (wasExpandedBeforePiPRef.current) {
-          setIsWidescreen(true);
+        if (Capacitor.isNativePlatform()) {
+          ScreenOrientation.unlock().catch(() => { });
         }
+      } else {
+        if (isDismissed || (typeof document !== "undefined" && document.visibilityState === "hidden")) {
+          // Quando o usuário fecha a janela PiP no X, pausa a reprodução sem forçar rotação em background
+          window.dispatchEvent(new CustomEvent("pipControlAction", { detail: { action: "pause" } }));
+          setIsMiniPlaybackPaused(true);
+          return;
+        }
+
+        // Ao clicar no botão de Tela Cheia (Expandir) do PiP, volta direto para Tela Cheia Widescreen
+        setIsMiniPlayer(false);
+        setIsWidescreen(true);
+        void enterExpandedLandscapeRef.current();
+
+        // Reafirma paisagem + ocultação da barra de status após a transição de janela do Android concluir
+        pipRestoreTimerRef.current = setTimeout(() => {
+          pipRestoreTimerRef.current = null;
+          if (!isOpenRef.current) return;
+          if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+            setIsWidescreen(false);
+            setIsRotated(false);
+            if (Capacitor.isNativePlatform()) {
+              ScreenOrientation.unlock().catch(() => { });
+            }
+            window.dispatchEvent(new CustomEvent("pipControlAction", { detail: { action: "pause" } }));
+            setIsMiniPlaybackPaused(true);
+            return;
+          }
+          setIsWidescreen(true);
+          if (Capacitor.isNativePlatform()) {
+            StatusBar.hide().catch(() => { });
+            ScreenOrientation.lock({ orientation: "landscape" })
+              .then(() => setIsRotated(false))
+              .catch(() => {
+                if (typeof window !== "undefined" && window.innerHeight > window.innerWidth) {
+                  setIsRotated(true);
+                }
+              });
+          } else if (typeof window !== "undefined" && window.innerHeight > window.innerWidth) {
+            setIsRotated(true);
+          }
+        }, 180);
       }
     };
 
     window.addEventListener("pipModeChanged", handlePiPChange);
-    return () => window.removeEventListener("pipModeChanged", handlePiPChange);
+    return () => {
+      window.removeEventListener("pipModeChanged", handlePiPChange);
+      if (pipRestoreTimerRef.current) {
+        clearTimeout(pipRestoreTimerRef.current);
+        pipRestoreTimerRef.current = null;
+      }
+    };
   }, []);
 
   const availableSeasons = useMemo(() => {
@@ -3192,6 +3255,20 @@ export function VideoPlayerModal({
             <div className="flex items-center gap-1 shrink-0">
               <button
                 onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("pipControlAction", { detail: { action: "toggle" } }));
+                }}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                title={isMiniPlaybackPaused ? "Reproduzir" : "Pausar"}
+              >
+                {isMiniPlaybackPaused ? (
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                ) : (
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                )}
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={handleToggleMiniPlayer}
                 className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
                 title="Restaurar em Tela Cheia"
@@ -3656,6 +3733,7 @@ export function VideoPlayerModal({
                 onRetrySubtitle={handleRetrySubtitle}
                 nextMovieInfo={nextMovieInfo}
                 onPlayNextMovie={handlePlayNextMovie}
+                onPlaybackPausedChange={setIsMiniPlaybackPaused}
               />
             </div>
           </div>

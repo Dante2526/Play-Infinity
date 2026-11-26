@@ -115,6 +115,7 @@ interface NetflixPlayerSkinProps {
   onRetrySubtitle?: () => void;
   nextMovieInfo?: NextMovieInfo | null;
   onPlayNextMovie?: (movie: NextMovieInfo) => void;
+  onPlaybackPausedChange?: (paused: boolean) => void;
 }
 
 export interface NextMovieInfo {
@@ -195,6 +196,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   serversList,
   nextMovieInfo = null,
   onPlayNextMovie,
+  onPlaybackPausedChange,
 }) => {
   const isEffectiveExternal = Boolean(isExternalPlayer || passThroughClicks);
 
@@ -480,15 +482,29 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   }, [episode, season, mediaId]);
 
   useEffect(() => {
+    const currentlyPlaying = isEffectiveExternal ? true : !playerStatus.paused;
     if (Capacitor.isNativePlatform()) {
-      PiP.setPlayingStatus({ isPlaying: !playerStatus.paused }).catch(() => {});
+      PiP.setPlayingStatus({ isPlaying: currentlyPlaying }).catch(() => {});
     }
+    try {
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator && navigator.mediaSession) {
+        navigator.mediaSession.playbackState = currentlyPlaying ? "playing" : "paused";
+      }
+    } catch {}
+  }, [playerStatus.paused, isEffectiveExternal]);
+
+  useEffect(() => {
     return () => {
       if (Capacitor.isNativePlatform()) {
         PiP.setPlayingStatus({ isPlaying: false }).catch(() => {});
       }
+      try {
+        if (typeof navigator !== "undefined" && "mediaSession" in navigator && navigator.mediaSession) {
+          navigator.mediaSession.playbackState = "none";
+        }
+      } catch {}
     };
-  }, [playerStatus.paused]);
+  }, []);
 
 
   // Gestos Touch Mobile Verticais (Esquerda = Brilho, Direita = Volume)
@@ -605,7 +621,8 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (enable) {
       if (isMiniPlayer) return;
       if (Capacitor.isNativePlatform()) {
-        PiP.enter().catch(() => {
+        const currentlyPlaying = isEffectiveExternal ? true : !playerStatus.paused;
+        PiP.enter({ isPlaying: currentlyPlaying }).catch(() => {
           if (onSetMiniPlayer) onSetMiniPlayer(true);
           else onTogglePiP?.();
         });
@@ -620,7 +637,7 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
     if (!isMiniPlayer) return;
     if (onSetMiniPlayer) onSetMiniPlayer(false);
     else onTogglePiP?.();
-  }, [isMiniPlayer, onSetMiniPlayer, onTogglePiP]);
+  }, [isMiniPlayer, onSetMiniPlayer, onTogglePiP, isEffectiveExternal, playerStatus.paused]);
 
   const handleTogglePiP = () => {
     applyMiniPlayerState(!isMiniPlayer);
@@ -731,6 +748,67 @@ export const NetflixPlayerSkin: React.FC<NetflixPlayerSkinProps> = ({
   const suppressControlsUntilRef = useRef(0);
   const lastPlayRetryAtRef = useRef(0);
   const manualPauseAtRef = useRef(0);
+
+  useEffect(() => {
+    onPlaybackPausedChange?.(isEffectiveExternal ? false : playerStatus.paused);
+  }, [playerStatus.paused, isEffectiveExternal, onPlaybackPausedChange]);
+
+  // Escuta controles nativos Play/Pause do Picture-in-Picture Android (RemoteAction -> pipControlAction)
+  // e registra MediaSession para navegadores/fones Bluetooth
+  useEffect(() => {
+    const applyPiPPlay = () => {
+      const now = Date.now();
+      pausedByWakeRef.current = false;
+      playLockUntilRef.current = now + 1800;
+      lastPlayRetryAtRef.current = now;
+      sendCommand({ type: "PLAY" });
+      setPlayerStatus((p) => ({ ...p, paused: false }));
+    };
+
+    const applyPiPPause = () => {
+      const now = Date.now();
+      pausedByWakeRef.current = false;
+      manualPauseAtRef.current = now;
+      playLockUntilRef.current = 0;
+      lastVoicePlayAtRef.current = 0;
+      sendCommand({ type: "PAUSE" });
+      setPlayerStatus((p) => ({ ...p, paused: true }));
+    };
+
+    const handlePiPControlAction = (e: any) => {
+      const action = e?.detail?.action ?? e?.action;
+      if (action === "play") {
+        applyPiPPlay();
+      } else if (action === "pause") {
+        applyPiPPause();
+      } else if (action === "toggle") {
+        if (isPausedRef.current) {
+          applyPiPPlay();
+        } else {
+          applyPiPPause();
+        }
+      }
+    };
+
+    window.addEventListener("pipControlAction", handlePiPControlAction);
+
+    try {
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator && navigator.mediaSession) {
+        navigator.mediaSession.setActionHandler("play", applyPiPPlay);
+        navigator.mediaSession.setActionHandler("pause", applyPiPPause);
+      }
+    } catch {}
+
+    return () => {
+      window.removeEventListener("pipControlAction", handlePiPControlAction);
+      try {
+        if (typeof navigator !== "undefined" && "mediaSession" in navigator && navigator.mediaSession) {
+          navigator.mediaSession.setActionHandler("play", null);
+          navigator.mediaSession.setActionHandler("pause", null);
+        }
+      } catch {}
+    };
+  }, [sendCommand]);
 
   const resumeIfPausedByWake = useCallback(() => {
     if (pausedByWakeRef.current) {

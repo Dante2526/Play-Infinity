@@ -89,25 +89,49 @@ test('GlobalCatalogPage.tsx & tmdb.ts: reseta página ao trocar tipo e normaliza
   );
 });
 
-test('Capacitor PiP: PiPPlugin.java expõe setPlayingStatus e setVideoPlaying, e LivePlayerModal/VideoPlayerModal sincronizam status e StatusBar', () => {
+test('Capacitor PiP: PiPPlugin.java expõe setPlayingStatus e setVideoPlaying, MainActivity injeta RemoteAction Play/Pause e players restauram Tela Cheia Widescreen', () => {
   const pipJava = read('android/app/src/main/java/com/playinfinity/app/PiPPlugin.java');
+  const mainJava = read('android/app/src/main/java/com/playinfinity/app/MainActivity.java');
+  const playVec = read('android/app/src/main/res/drawable/ic_pip_play.xml');
+  const pauseVec = read('android/app/src/main/res/drawable/ic_pip_pause.xml');
   const liveSrc = read('src/components/LivePlayerModal.tsx');
   const vodSrc = read('src/components/VideoPlayerModal.tsx');
+  const skinSrc = read('src/components/NetflixPlayerSkin.tsx');
+
   assert.ok(
     pipJava.includes('public void setPlayingStatus(PluginCall call)') &&
-    pipJava.includes('public void setVideoPlaying(PluginCall call)'),
-    'PiPPlugin.java aceita tanto setPlayingStatus quanto setVideoPlaying'
+    pipJava.includes('public void setVideoPlaying(PluginCall call)') &&
+    pipJava.includes('refreshPictureInPictureParams') &&
+    pipJava.includes('buildPictureInPictureParams()'),
+    'PiPPlugin.java aceita setPlayingStatus/setVideoPlaying e atualiza os RemoteActions dinamicamente'
+  );
+  assert.ok(
+    mainJava.includes('ACTION_PIP_CONTROL') &&
+    mainJava.includes('new RemoteAction(') &&
+    mainJava.includes('R.drawable.ic_pip_pause') &&
+    mainJava.includes('R.drawable.ic_pip_play') &&
+    mainJava.includes('PendingIntent.FLAG_IMMUTABLE') &&
+    mainJava.includes('ContextCompat.RECEIVER_NOT_EXPORTED') &&
+    mainJava.includes('pipControlAction') &&
+    playVec.includes('<vector') &&
+    pauseVec.includes('<vector'),
+    'MainActivity.java configura RemoteAction Play/Pause nativo com PendingIntent imutável e BroadcastReceiver protegido'
   );
   assert.ok(
     liveSrc.includes('PiP.setPlayingStatus({ isPlaying: Boolean(isPlaying && !hasError) })') &&
     liveSrc.includes('PiP.setPlayingStatus({ isPlaying: false })') &&
     liveSrc.includes('StatusBar.hide()') &&
-    liveSrc.includes('StatusBar.show()'),
-    'LivePlayerModal sincroniza PiP.setPlayingStatus e StatusBar.hide/show no Android'
+    liveSrc.includes('StatusBar.show()') &&
+    liveSrc.includes('pipControlAction'),
+    'LivePlayerModal sincroniza PiP.setPlayingStatus, StatusBar.hide/show e escuta pipControlAction no Android'
   );
   assert.ok(
-    vodSrc.includes('PiP.setPlayingStatus({ isPlaying: false })'),
-    'VideoPlayerModal reseta PiP.setPlayingStatus({ isPlaying: false }) ao fechar'
+    vodSrc.includes('PiP.setPlayingStatus({ isPlaying: false })') &&
+    vodSrc.includes('wasExpandedBeforePiPRef.current = isExpandedRef.current') &&
+    vodSrc.includes('void enterExpandedLandscapeRef.current()') &&
+    !vodSrc.includes('wasExpandedBeforePiPRef.current = isFullscreen || isWidescreen') &&
+    skinSrc.includes('window.addEventListener("pipControlAction", handlePiPControlAction)'),
+    'VideoPlayerModal restaura Tela Cheia Widescreen (paisagem + StatusBar oculta) ao expandir do PiP sem closure obsoleta e NetflixPlayerSkin responde a pipControlAction'
   );
 });
 

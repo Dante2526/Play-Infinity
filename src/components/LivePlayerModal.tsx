@@ -121,25 +121,96 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   const cardDimensionsRef = useRef<{ width: number; height: number }>({ width: 300, height: 200 });
   const miniContainerRef = useRef<HTMLDivElement | null>(null);
 
-  // Escuta Picture-in-Picture nativo do Android
+  const pipRestoreTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Escuta Picture-in-Picture nativo do Android (mudança de modo + ações Play/Pause)
   useEffect(() => {
     const handlePiPChange = (e: any) => {
       let isPiP = false;
       if (e?.detail?.isPiP !== undefined) {
-        isPiP = e.detail.isPiP;
+        isPiP = Boolean(e.detail.isPiP);
       } else if (e?.isPiP !== undefined) {
-        isPiP = e.isPiP;
+        isPiP = Boolean(e.isPiP);
       }
+      const isDismissed = Boolean(e?.detail?.dismissed ?? e?.dismissed);
+
+      if (pipRestoreTimerRef.current) {
+        clearTimeout(pipRestoreTimerRef.current);
+        pipRestoreTimerRef.current = null;
+      }
+
       setIsNativePiP(isPiP);
       if (isPiP) {
+        setIsMiniPlayer(false);
         setIsFullscreen(false);
         if (document.fullscreenElement) {
           document.exitFullscreen().catch(() => {});
         }
+        if (Capacitor.isNativePlatform()) {
+          ScreenOrientation.unlock().catch(() => {});
+        }
+      } else {
+        if (isDismissed || (typeof document !== 'undefined' && document.visibilityState === 'hidden')) {
+          const video = videoRef.current;
+          if (video && !video.paused) {
+            video.pause();
+            setIsPlaying(false);
+          }
+          return;
+        }
+
+        // Ao expandir de volta do PiP pelo botão de Tela Cheia, restaura paisagem widescreen + barra oculta
+        setIsMiniPlayer(false);
+        if (Capacitor.isNativePlatform()) {
+          StatusBar.hide().catch(() => {});
+          ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
+          pipRestoreTimerRef.current = setTimeout(() => {
+            pipRestoreTimerRef.current = null;
+            if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+              const video = videoRef.current;
+              if (video && !video.paused) {
+                video.pause();
+                setIsPlaying(false);
+              }
+              ScreenOrientation.unlock().catch(() => {});
+              return;
+            }
+            StatusBar.hide().catch(() => {});
+            ScreenOrientation.lock({ orientation: 'landscape' }).catch(() => {});
+          }, 180);
+        }
       }
     };
+
+    const handlePiPControlAction = (e: any) => {
+      const action = e?.detail?.action ?? e?.action;
+      const video = videoRef.current;
+      if (!video) return;
+      if (action === 'pause') {
+        video.pause();
+        setIsPlaying(false);
+      } else if (action === 'play') {
+        video.play().then(() => setIsPlaying(true)).catch(() => {});
+      } else if (action === 'toggle') {
+        if (video.paused) {
+          video.play().then(() => setIsPlaying(true)).catch(() => {});
+        } else {
+          video.pause();
+          setIsPlaying(false);
+        }
+      }
+    };
+
     window.addEventListener('pipModeChanged', handlePiPChange);
-    return () => window.removeEventListener('pipModeChanged', handlePiPChange);
+    window.addEventListener('pipControlAction', handlePiPControlAction);
+    return () => {
+      window.removeEventListener('pipModeChanged', handlePiPChange);
+      window.removeEventListener('pipControlAction', handlePiPControlAction);
+      if (pipRestoreTimerRef.current) {
+        clearTimeout(pipRestoreTimerRef.current);
+        pipRestoreTimerRef.current = null;
+      }
+    };
   }, []);
 
   // Mantém o mini player contido na tela se a janela for redimensionada
@@ -280,8 +351,12 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
   };
 
   const handleToggleMiniPlayer = () => {
+    if (isMiniPlayer) {
+      toggleInAppMiniPlayer();
+      return;
+    }
     if (Capacitor.isNativePlatform()) {
-      PiP.enter().catch(() => {
+      PiP.enter({ isPlaying: Boolean(isPlaying && !hasError) }).catch(() => {
         toggleInAppMiniPlayer();
       });
       return;
@@ -1579,9 +1654,23 @@ export const LivePlayerModal: React.FC<LivePlayerModalProps> = ({
             <span className="text-white font-medium truncate text-xs">{channel.name}</span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {!currentServer?.isEmbed && (
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={togglePlay}
+                className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+                title={isPlaying ? 'Pausar' : 'Reproduzir'}
+              >
+                {isPlaying ? (
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                )}
+              </button>
+            )}
             <button
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={handleToggleMiniPlayer}
+              onClick={toggleInAppMiniPlayer}
               className="p-1.5 text-neutral-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
               title="Restaurar Player"
             >
