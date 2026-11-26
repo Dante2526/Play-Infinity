@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { Readable } from "node:stream";
 import { getSaimoStore } from "../services/saimoSqliteStore";
 import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
+import { buildPlayerAudioNormalizerScript } from "../utils/playerAudioBoost";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { isPrivateOrLocalHost, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 import { RedirectBlockedError, fetchWithValidatedRedirects, readTextWithCap } from "../utils/httpSecurity";
@@ -387,6 +388,7 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
       var fatalReported = false;
       var statusInterval = null;
       var hls = null;
+      ${buildPlayerAudioNormalizerScript("v")}
 
       function reportFatal(reason) {
         if (fatalReported) return;
@@ -453,7 +455,11 @@ export function handleSaimoProxyIframe(req: Request, res: Response): void | Resp
         if (hls) return;
         hls = new window.Hls({
           enableWorker: true,
-          lowLatencyMode: true,
+          lowLatencyMode: false,
+          capLevelToPlayerSize: false,
+          abrEwmaDefaultEstimate: 4000000,
+          abrBandWidthFactor: 0.85,
+          abrBandWidthUpFactor: 0.7,
           manifestLoadingTimeOut: 8000,
           levelLoadingTimeOut: 8000,
           fragLoadingTimeOut: 10000,

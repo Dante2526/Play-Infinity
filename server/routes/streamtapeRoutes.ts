@@ -4,6 +4,7 @@ import { createStreamtapeRecovery } from "../services/streamtapeRecovery";
 import { createStreamtapeResolver } from "../services/streamtapeResolver";
 import { createStreamtapeSourcePool } from "../services/streamtapeSources";
 import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
+import { buildPlayerAudioNormalizerScript } from "../utils/playerAudioBoost";
 import { getStreamtapeSources } from "./encontreiLookup";
 
 export const streamtapeRouter = Router();
@@ -214,6 +215,7 @@ streamtapeRouter.get("/api/streamtape-proxy-iframe", async (req: Request, res: R
         }
       }
       if (!engineAttached) v.src = streamUrl;
+      ${buildPlayerAudioNormalizerScript("v")}
 
       // Se foi passado timestamp inicial (ex: retomada após pausa longa ou Continuar Assistindo),
       // posiciona no segundo salvo assim que os metadados do vídeo estiverem prontos

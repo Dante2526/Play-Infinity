@@ -1,5 +1,6 @@
 import { solveBysePowAsync } from "./pow";
-import { buildSilentPlayerErrorPage } from "../playerErrorPage";
+import { buildSilentPlayerErrorPage } from "../playerErrorPage";
+import { buildPlayerAudioNormalizerScript } from "../../utils/playerAudioBoost";
 
 /**
 
@@ -955,7 +956,8 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
   (function() {
 
-    var v = document.getElementById("video");
+    var v = document.getElementById("video");
+    ${buildPlayerAudioNormalizerScript("v")}
 
     var streamUrl = ${JSON.stringify(streamUrl)};
 
@@ -1172,7 +1174,10 @@ export function buildByseWrapperHtml(streamUrl: string, fileId: string, initialT
 
           enableWorker: true,
           startPosition: initialSeek > 0 ? initialSeek : -1,
-          capLevelToPlayerSize: true,
+          capLevelToPlayerSize: false,
+          abrEwmaDefaultEstimate: 4000000,
+          abrBandWidthFactor: 0.85,
+          abrBandWidthUpFactor: 0.7,
           fragLoadingRetryDelay: 500,
 
           lowLatencyMode: false,

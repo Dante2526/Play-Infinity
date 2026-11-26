@@ -664,9 +664,15 @@ export function usePlayerVoiceAssistant({
 
     let stream: MediaStream | null = null;
     try {
+      const mobileAudioSafe = isMobileAudioFocusSensitive();
       try {
+        // No Android, echoCancellation:true força AudioManager.MODE_IN_COMMUNICATION
+        // (modo ligação VoIP), abafando o som do filme e cortando ~50% do volume máximo.
+        // Desligar AEC/NS/AGC no celular mantém MODE_NORMAL (estéreo Hi-Fi + volume 100%).
         stream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
+          audio: mobileAudioSafe
+            ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }
+            : { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
         });
       } catch (err: any) {
         if (err?.name === 'NotAllowedError' || err?.name === 'PermissionDeniedError') {
@@ -804,12 +810,12 @@ export function usePlayerVoiceAssistant({
         if (rmsHistory.length >= 10) {
           const sorted = [...rmsHistory].sort((a, b) => a - b);
           const ambient = sorted[Math.floor(sorted.length * 0.2)];
-          // Teto estrito (0.012) impede que cenas altas do filme ceguem o limiar após minutos
-          noiseFloor = Math.max(0.0018, Math.min(0.012, noiseFloor * 0.92 + ambient * 0.08));
+          // Teto calibrado (0.018) evita falsos envios com som Hi-Fi aberto sem cegar a voz
+          noiseFloor = Math.max(0.0018, Math.min(0.018, noiseFloor * 0.92 + ambient * 0.08));
         }
 
-        // Limiar calibrado para DSP mobile (teto máx 0.024 garante captação mesmo após cenas barulhentas)
-        const threshold = Math.max(0.0055, Math.min(0.024, noiseFloor * 2.1));
+        // Limiar calibrado para DSP/Hi-Fi mobile (teto máx 0.036 garante captação mesmo após cenas barulhentas)
+        const threshold = Math.max(0.0055, Math.min(0.036, noiseFloor * 2.1));
         const isSpeech = rms > threshold;
         const maxPreRollChunks = Math.max(4, Math.round(420 / frameMs));
 

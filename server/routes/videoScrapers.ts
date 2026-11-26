@@ -4,6 +4,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 import * as cheerio from "cheerio";
+import { ARTPLAYER_VOLUME_FIX_SNIPPET, buildPlayerAudioNormalizerScript } from "../utils/playerAudioBoost";
 import { isServerBlacklisted } from "../../src/data/serverBlacklist";
 import { validateSafeUrl, sanitizeString, isSuperflixDetected, isPrivateOrLocalIp, isPrivateOrLocalHost, isAllowedLiveStreamingDomain, signProxyUrl, verifyProxySignature } from "../utils/helpers";
 import { readTextWithCap } from "../utils/httpSecurity";
@@ -220,6 +221,7 @@ const router = Router();
               (function() {
                 var hlsUrl = "${proxiedStreamUrl}";
 
+                ${ARTPLAYER_VOLUME_FIX_SNIPPET}
                 var art = new Artplayer({
                   container: "#artplayer-container",
                   url: hlsUrl,
@@ -230,6 +232,8 @@ const router = Router();
                         if (artInstance.hls) artInstance.hls.destroy();
                         var hls = new Hls({
                           enableWorker: true,
+                          capLevelToPlayerSize: false,
+                          abrEwmaDefaultEstimate: 4000000,
                           maxBufferLength: 60,
                           maxMaxBufferLength: 120,
                           backBufferLength: 90
@@ -244,10 +248,13 @@ const router = Router();
                   },
                   autoplay: true,
                   muted: false,
+                  volume: 1,
                   playsInline: true,
                   controls: [],
                   theme: "#e50914"
                 });
+                try { art.volume = 1; if (art.video) art.video.volume = 1; } catch(e) {}
+                ${buildPlayerAudioNormalizerScript('art.video || document.querySelector("video")')}
 
                 window.artInstance = art;
 
@@ -761,6 +768,7 @@ const router = Router();
                     });
                   }
 
+                  ${ARTPLAYER_VOLUME_FIX_SNIPPET}
                   var art = new Artplayer({
                     container: "#artplayer-container",
                     url: hlsUrl,
@@ -771,6 +779,8 @@ const router = Router();
                           if (artInstance.hls) artInstance.hls.destroy();
                           var hls = new Hls({
                             enableWorker: true,
+                            capLevelToPlayerSize: false,
+                            abrEwmaDefaultEstimate: 4000000,
                             maxBufferLength: 60,
                             maxMaxBufferLength: 120,
                             backBufferLength: 90
@@ -785,11 +795,14 @@ const router = Router();
                     },
                     autoplay: true,
                     muted: false,
+                    volume: 1,
                     playsInline: true,
                     controls: [],
                     subtitle: subtitles.length > 0 ? subtitles[0] : undefined,
                     theme: "#e50914"
                   });
+                  try { art.volume = 1; if (art.video) art.video.volume = 1; } catch(e) {}
+                  ${buildPlayerAudioNormalizerScript('art.video || document.querySelector("video")')}
 
                   window.artInstance = art;
 
@@ -1451,7 +1464,9 @@ const router = Router();
 
       html = html.replace(
         /artInstance = new Artplayer\(\{/g,
-        `artInstance = new Artplayer({
+        `${ARTPLAYER_VOLUME_FIX_SNIPPET}
+          artInstance = new Artplayer({
+            volume: 1,
             controls: [],
             hotkey: false,
             gesture: false,
@@ -3557,6 +3572,7 @@ const router = Router();
 
       var hlsUrl = "${proxiedStreamUrl}";
 
+      ${ARTPLAYER_VOLUME_FIX_SNIPPET}
       var art = new Artplayer({
         container: "#artplayer-container",
         url: hlsUrl,
@@ -3567,6 +3583,8 @@ const router = Router();
               if (artInstance.hls) artInstance.hls.destroy();
               var hls = new Hls({
                 enableWorker: true,
+                capLevelToPlayerSize: false,
+                abrEwmaDefaultEstimate: 4000000,
                 maxBufferLength: 20,
                 maxMaxBufferLength: 40,
                 backBufferLength: 30,
@@ -3651,6 +3669,7 @@ const router = Router();
         },
         autoplay: true,
         muted: true,  // Inicia mudo para garantir autoplay (política do browser) — desmuta após canplay
+        volume: 1,
         playsInline: true,
         hotkey: false,
         gesture: false,
@@ -3661,6 +3680,8 @@ const router = Router();
       });
 
       window.artInstance = art;
+      try { art.volume = 1; if (art.video) art.video.volume = 1; } catch(e) {}
+      ${buildPlayerAudioNormalizerScript('art.video || document.querySelector("video")')}
 
       function sendStatus() {
         var v = art.video || document.querySelector("video");

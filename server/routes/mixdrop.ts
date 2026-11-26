@@ -8,6 +8,7 @@ import { createMixdropRecovery } from "../services/mixdropRecovery";
 import { createMediaSourcePool } from "../services/mediaSourcePool";
 import { buildSilentPlayerErrorPage } from "../services/playerErrorPage";
 import { readHealthPrefix } from "../services/playbackHealth";
+import { ARTPLAYER_VOLUME_FIX_SNIPPET, buildPlayerAudioNormalizerScript } from "../utils/playerAudioBoost";
 import { getMixdropSources } from "./encontreiLookup";
 
 const mixdropMemoryCache = new Map<string, { videoUrl: string; posterUrl: string; title: string; expiresAt: number }>();
@@ -288,6 +289,7 @@ const router = Router();
                 }
               };
 
+              ${ARTPLAYER_VOLUME_FIX_SNIPPET}
               var art = new Artplayer({
                 container: "#artplayer-container",
                 url: videoUrl,
@@ -310,6 +312,7 @@ const router = Router();
                 poster: posterUrl || "",
                 autoplay: ${req.query.paused !== '1'},
                 muted: false,
+                volume: 1,
                 playsInline: true,
                 controls: [],
                 theme: "#e50914",
@@ -319,6 +322,9 @@ const router = Router();
                   "webkit-playsinline": "true"
                 }
               });
+              try { art.volume = 1; if (art.video) art.video.volume = 1; } catch(e) {}
+              art.on("ready", function() { try { art.volume = 1; if (art.video) art.video.volume = 1; } catch(e) {} });
+              ${buildPlayerAudioNormalizerScript('art.video || document.querySelector("video")')}
 
               window.artInstance = art;
               var bufferRecovery = (${createMixdropRecovery.toString()})(art.video, {
