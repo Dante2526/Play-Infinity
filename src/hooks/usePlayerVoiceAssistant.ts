@@ -322,6 +322,19 @@ export function usePlayerVoiceAssistant({
     showFeedback(`✓ ${command.label}`, 'success', 2200);
     onCommandRef.current(command.action, command.label);
     deactivateAwake(0);
+    // Se o microfone ativo for um fone Bluetooth (HFP 8kHz mono), libera a faixa ao voltar a tocar
+    // para o fone retornar imediatamente ao perfil A2DP Estéreo Hi-Fi!
+    if (useWebAudioFallbackRef.current && command.action !== 'PAUSE') {
+      const tracks = webAudioStreamRef.current?.getTracks?.() || [];
+      const isBluetoothMic = tracks.some((t: any) =>
+        /bluetooth|airpods|buds|tws|headset|hands-free|\bbt\b/i.test(String(t?.label || ''))
+      );
+      if (isBluetoothMic) {
+        isContinuousRef.current = false;
+        setIsContinuous(false);
+        safeStopCurrentRecognition();
+      }
+    }
     return true;
   }, [showFeedback, deactivateAwake, clearRestartTimer, safeStopCurrentRecognition, scheduleSessionStart]);
 
@@ -651,10 +664,17 @@ export function usePlayerVoiceAssistant({
     startingAtRef.current = Date.now();
 
     const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+    const createPlaybackAudioCtx = (): AudioContext => {
+      try {
+        return new AudioCtx({ latencyHint: 'playback' });
+      } catch {
+        return new AudioCtx();
+      }
+    };
     let preCreatedCtx: AudioContext | null = null;
     try {
-      // Cria e resume o AudioContext ANTES do await getUserMedia para aproveitar o User Gesture ativo no mobile
-      preCreatedCtx = new AudioCtx();
+      // Cria com latencyHint:'playback' (evita fast-path AAudio que desativa Dolby Atmos no Android)
+      preCreatedCtx = createPlaybackAudioCtx();
       if (preCreatedCtx && typeof preCreatedCtx.resume === 'function' && preCreatedCtx.state !== 'running') {
         preCreatedCtx.resume().catch(() => {});
       }
@@ -666,12 +686,21 @@ export function usePlayerVoiceAssistant({
     try {
       const mobileAudioSafe = isMobileAudioFocusSensitive();
       try {
-        // No Android, echoCancellation:true força AudioManager.MODE_IN_COMMUNICATION
+        // No Android, echoCancellation:true (e flags goog* do WebRTC) força AudioManager.MODE_IN_COMMUNICATION
         // (modo ligação VoIP), abafando o som do filme e cortando ~50% do volume máximo.
-        // Desligar AEC/NS/AGC no celular mantém MODE_NORMAL (estéreo Hi-Fi + volume 100%).
+        // Desligar AEC/NS/AGC + goog* no celular mantém MODE_NORMAL (estéreo Hi-Fi + volume 100%).
         stream = await navigator.mediaDevices.getUserMedia({
           audio: mobileAudioSafe
-            ? { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }
+            ? ({
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                googEchoCancellation: false,
+                googNoiseSuppression: false,
+                googAutoGainControl: false,
+                googHighpassFilter: false,
+                channelCount: 1
+              } as any)
             : { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
         });
       } catch (err: any) {
@@ -709,7 +738,7 @@ export function usePlayerVoiceAssistant({
     }
 
     try {
-      const ctx: AudioContext = preCreatedCtx || new AudioCtx();
+      const ctx: AudioContext = preCreatedCtx || createPlaybackAudioCtx();
       if (typeof ctx.resume === 'function' && ctx.state !== 'running') {
         ctx.resume().catch(() => {});
       }

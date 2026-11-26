@@ -106,18 +106,17 @@ test('buildPlayerAudioNormalizerScript aplica EQ+Compressor+Gain+Limiter em same
     return { videoEl, nodes, connections };
   }
 
-  // 1. Same-origin (/api/byse-stream) -> conecta cadeia completa com makeup gain 1.45 e limiter
+  // 1. Same-origin (/api/byse-stream) -> conecta cadeia Hi-Fi transparente (Compressor + Gain 1.4x + Limiter, sem filtro telefônico)
   const sameOrigin = runHarness('/api/byse-stream?ticket=abc', 'running');
   assert.equal(sameOrigin.videoEl.__piAudioBoosted, true);
   assert.deepEqual(sameOrigin.connections, [
-    ['source', 'biquad'],
-    ['biquad', 'comp_dialogue'],
+    ['source', 'comp_dialogue'],
     ['comp_dialogue', 'gain'],
     ['gain', 'comp_limiter'],
     ['comp_limiter', 'destination'],
   ]);
   const gainNode = sameOrigin.nodes.find(n => n.kind === 'gain');
-  assert.equal(gainNode.gain.value, 1.45);
+  assert.equal(gainNode.gain.value, 1.4);
 
   // 2. Blob MSE (hls.js / mp4-mse-engine) -> também conecta com segurança
   const blobMse = runHarness('blob:https://play-infinity.stream/1234', 'running');
@@ -137,8 +136,8 @@ test('buildPlayerAudioNormalizerScript aplica EQ+Compressor+Gain+Limiter em same
 test('guards dos 4 pontos de áudio: Android MODE_NORMAL, Artplayer volume:1 e BYSE/Saimo ABR HD', () => {
   const voiceHook = fs.readFileSync(path.join(root, 'src/hooks/usePlayerVoiceAssistant.ts'), 'utf8');
   assert.ok(
-    voiceHook.includes('{ echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 1 }'),
-    'Microfone contínuo mobile deve desativar echoCancellation para não forçar MODE_IN_COMMUNICATION no Android'
+    voiceHook.includes('echoCancellation: false') && voiceHook.includes('googEchoCancellation: false'),
+    'Microfone contínuo mobile deve desativar echoCancellation e googEchoCancellation para não forçar MODE_IN_COMMUNICATION no Android'
   );
 
   const byseCore = fs.readFileSync(path.join(root, 'server/services/byse/core.ts'), 'utf8');
