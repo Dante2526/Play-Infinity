@@ -64,9 +64,9 @@ import {
 } from "./services/tmdb";
 
 import type { LiveChannel } from "./data/liveChannels";
-import { AuthModal } from "./components/AuthModal";
-import { PaywallModal } from "./components/PaywallModal";
 import { GlobalErrorModal } from "./components/GlobalErrorModal";
+const AuthModal = lazyWithRetry(() => import("./components/AuthModal").then(m => ({ default: m.AuthModal })));
+const PaywallModal = lazyWithRetry(() => import("./components/PaywallModal").then(m => ({ default: m.PaywallModal })));
 import { useSubscription } from "./hooks/useSubscription";
 import { onAuthStateChanged, User, signOut } from "firebase/auth";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -132,7 +132,12 @@ const handlePosterError = (e: React.SyntheticEvent<HTMLImageElement, Event>, bac
 };
 
 
-const HomePage = lazyWithRetry(() => import('./pages/HomePage').then(m => ({ default: m.HomePage })));
+const loadHomePage = () => import('./pages/HomePage').then(m => ({ default: m.HomePage }));
+// Preload imediato da HomePage no cold-boot para eliminar cascata App.js → HomePage.js
+if (typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '')) {
+  void loadHomePage();
+}
+const HomePage = lazyWithRetry(loadHomePage);
 const DetailsPage = lazyWithRetry(() => import('./pages/DetailsPage').then(m => ({ default: m.DetailsPage })));
 const GlobalSearchPage = lazyWithRetry(() => import('./pages/GlobalSearchPage').then(m => ({ default: m.GlobalSearchPage })));
 const UserProfilePage = lazyWithRetry(() => import('./pages/UserProfilePage').then(m => ({ default: m.UserProfilePage })));
@@ -144,7 +149,7 @@ const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage'
 const VideoPlayerModal = lazyWithRetry(() => import("./components/VideoPlayerModal").then(m => ({ default: m.VideoPlayerModal })), {player:true});
 import { NavItem } from './components/NavItem';
 import { FloatingDownloadWidget } from './components/FloatingDownloadWidget';
-import { WhatsNewModal } from './components/WhatsNewModal';
+const WhatsNewModal = lazyWithRetry(() => import('./components/WhatsNewModal').then(m => ({ default: m.WhatsNewModal })));
 import { AppUpdateBanner } from './components/AppUpdateBanner';
 
 const AdminPage = lazyWithRetry(() => import("./pages/AdminPage").then(m => ({ default: m.AdminPage })));
@@ -827,7 +832,9 @@ export default function App() {
 
         {/* Modal Fixado */}
         <div className="relative z-10 flex-1 w-full h-full">
-           <AuthModal isOpen={true} onClose={() => {}} isDismissible={false} />
+           <React.Suspense fallback={null}>
+             <AuthModal isOpen={true} onClose={() => {}} isDismissible={false} />
+           </React.Suspense>
         </div>
       </div>
     );
@@ -1178,13 +1185,23 @@ export default function App() {
         <VirtualRemote isHidden={playerModal.isOpen || !!activeLiveChannel} />
       )}
       
-      {/* Auth & Paywall Modals */}
-      <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
+      {/* Auth & Paywall Modals (Carregados sob demanda) */}
+      {isAuthModalOpen && (
+        <React.Suspense fallback={null}>
+          <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
+        </React.Suspense>
+      )}
+      {isPaywallOpen && (
+        <React.Suspense fallback={null}>
+          <PaywallModal isOpen={isPaywallOpen} onClose={() => setIsPaywallOpen(false)} />
+        </React.Suspense>
+      )}
       <GlobalErrorModal />
       {viewState.type !== 'admin' && viewState.type !== 'privacy' && (
         <>
-          <WhatsNewModal />
+          <React.Suspense fallback={null}>
+            <WhatsNewModal />
+          </React.Suspense>
           <FloatingDownloadWidget onNavigateToDownloads={() => navigateTo({ type: 'downloads' })} />
         </>
       )}

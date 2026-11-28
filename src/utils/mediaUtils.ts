@@ -250,6 +250,85 @@ export async function checkLiveAvailability(
 }
 
 /**
+ * Verifica disponibilidade em lote via 1 único POST /api/check-playable-batch
+ * (substituindo até 8+ requisições /api/encontrei-lookup no cold-boot da Home).
+ * Respeita blacklist, snapshot local e cache em memória de 1h, com fallback automático.
+ */
+export async function checkLiveAvailabilityBatch(
+  items: Array<{ id: number; type: 'tv' | 'movie' }>
+): Promise<Set<number>> {
+  const confirmed = new Set<number>();
+  if (!Array.isArray(items) || items.length === 0) return confirmed;
+
+  if (checkTimestamps.size > 100) {
+    cleanupExpiredLiveChecks();
+  }
+
+  const toFetch: Array<{ id: number; type: 'tv' | 'movie' }> = [];
+  const seen = new Set<number>();
+
+  for (const item of items) {
+    const id = Number(item.id);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+
+    if (UNAVAILABLE_TITLES_OR_IDS.includes(id)) continue;
+    if (availableTmdbIds.has(id) || liveCheckedAvailable.has(id)) {
+      confirmed.add(id);
+      continue;
+    }
+    if (liveCheckedUnavailable.has(id)) continue;
+
+    toFetch.push({ id, type: item.type });
+  }
+
+  if (toFetch.length === 0) return confirmed;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6500);
+    const res = await fetch('/api/check-playable-batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: toFetch }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (res.ok) {
+      const data = await res.json();
+      const playableSet = new Set<number>(
+        Array.isArray(data?.playableIds) ? data.playableIds.map(Number) : []
+      );
+      const now = Date.now();
+      for (const reqItem of toFetch) {
+        checkTimestamps.set(reqItem.id, now);
+        if (playableSet.has(reqItem.id)) {
+          liveCheckedAvailable.add(reqItem.id);
+          confirmed.add(reqItem.id);
+        } else {
+          liveCheckedUnavailable.add(reqItem.id);
+        }
+      }
+      return confirmed;
+    }
+  } catch {
+    // Fallback silencioso para checks unitários abaixo
+  }
+
+  const fallbackResults = await Promise.all(
+    toFetch.map(async (reqItem) => {
+      const ok = await checkLiveAvailability(reqItem.id, reqItem.type, 1, 1).catch(() => false);
+      return ok ? reqItem.id : null;
+    })
+  );
+  for (const id of fallbackResults) {
+    if (id !== null) confirmed.add(id);
+  }
+  return confirmed;
+}
+
+/**
  * Versão síncrona do check (não faz live lookup).
  * Retorna:
  *   - 'available': tá no snapshot, definitivamente tem

@@ -77,6 +77,8 @@ export interface TMDBDetails {
   imdb_id?: string;
   origin_country?: string[];
   original_language?: string;
+  videos?: { results?: any[] };
+  recommendations?: TMDBResponse;
 }
 
 // Map Genres
@@ -100,11 +102,41 @@ export const FALLBACK_BACKDROP_IMAGE = 'https://images.unsplash.com/photo-151870
 
 export const formatImageUrl = (path: string | null | undefined, size: string = 'w500') => {
   if (!path || typeof path !== 'string' || path.trim() === '' || path === 'null' || path === 'undefined') {
-    return size === 'original' ? FALLBACK_BACKDROP_IMAGE : FALLBACK_POSTER_IMAGE;
+    return size === 'original' || size === 'w1280' || size === 'w780' ? FALLBACK_BACKDROP_IMAGE : FALLBACK_POSTER_IMAGE;
   }
   if (path.startsWith('http')) return path;
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
   return `https://image.tmdb.org/t/p/${size}${cleanPath}`;
+};
+
+/**
+ * Escolhe a largura ideal de backdrop TMDB conforme o viewport atual:
+ * - Mobile (< 768px): w780 (~150–250 KB em vez de 2–4 MB do 'original' 4K)
+ * - Tablet/Desktop: w1280 (~350–550 KB, nítido até telas Full HD)
+ */
+export const getResponsiveBackdropSize = (viewportWidth?: number): 'w780' | 'w1280' => {
+  const width = typeof viewportWidth === 'number'
+    ? viewportWidth
+    : (typeof window !== 'undefined' ? window.innerWidth : 1280);
+  return width < 768 ? 'w780' : 'w1280';
+};
+
+export const formatResponsiveBackdropUrl = (path: string | null | undefined, viewportWidth?: number): string => {
+  return formatImageUrl(path, getResponsiveBackdropSize(viewportWidth));
+};
+
+export const buildBackdropSrcSet = (path: string | null | undefined): string | undefined => {
+  if (!path || typeof path !== 'string' || path.trim() === '' || path === 'null' || path === 'undefined') {
+    return undefined;
+  }
+  if (path.startsWith('http')) {
+    const match = path.match(/^https:\/\/image\.tmdb\.org\/t\/p\/[^/]+(\/.+)$/);
+    if (!match) return undefined;
+    const clean = match[1];
+    return `https://image.tmdb.org/t/p/w780${clean} 780w, https://image.tmdb.org/t/p/w1280${clean} 1280w`;
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `https://image.tmdb.org/t/p/w780${cleanPath} 780w, https://image.tmdb.org/t/p/w1280${cleanPath} 1280w`;
 };
 
 const isValidImagePath = (path: string | null | undefined): path is string =>
@@ -474,7 +506,8 @@ export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<D
     };
   }
 
-  const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?language=pt-BR`, { silent: true });
+  const detailsQuery = 'language=pt-BR&append_to_response=videos,recommendations&include_video_language=pt,pt-BR,en,null';
+  const outcome = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${type}/${id}?${detailsQuery}`, { silent: true });
 
   let crossType: 'movie' | 'tv' | null = null;
   let crossDetails: TMDBDetails | null = null;
@@ -485,7 +518,7 @@ export const lookupDetails = async (id: number, type: 'movie' | 'tv'): Promise<D
   // Quem consome decide se aceita o crossType (verifica similaridade de título).
   if (!outcome.ok && outcome.status === 404 && id && !isNaN(Number(id))) {
     const other: 'movie' | 'tv' = type === 'tv' ? 'movie' : 'tv';
-    const alt = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${other}/${id}?language=pt-BR`, { silent: true });
+    const alt = await fetchTmdbRaw<TMDBDetails>(`${BASE_URL}/${other}/${id}?${detailsQuery}`, { silent: true });
     if (alt.ok && alt.data && alt.data.id && alt.data.id !== 0) {
       crossType = other;
       crossDetails = alt.data;
@@ -1044,6 +1077,75 @@ export interface TrailerVideo {
   official?: boolean;
 }
 
+export function rankAndFormatTrailerVideos(rawVideos: any[]): TrailerVideo[] {
+  if (!Array.isArray(rawVideos) || rawVideos.length === 0) return [];
+
+  // Filtra estritamente vídeos do YouTube com chave válida
+  const youtubeVideos = rawVideos.filter(
+    v => v && v.site === 'YouTube' && typeof v.key === 'string' && v.key.trim().length >= 5
+  );
+
+  if (youtubeVideos.length === 0) return [];
+
+  // Deduplica por chave do YouTube (key), priorizando entradas PT-BR
+  const uniqueMap = new Map<string, any>();
+  for (const v of youtubeVideos) {
+    const existing = uniqueMap.get(v.key);
+    if (!existing) {
+      uniqueMap.set(v.key, v);
+    } else if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') {
+      uniqueMap.set(v.key, v);
+    }
+  }
+
+  const candidates = Array.from(uniqueMap.values());
+
+  const scoreVideo = (v: any) => {
+    let score = 0;
+    const lowerName = (v.name || '').toLowerCase();
+    const isDub = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br') || lowerName.includes('audio br');
+    const isLeg = lowerName.includes('legendado') || lowerName.includes('leg') || lowerName.includes('sub');
+    const isShort = lowerName.includes('#shorts') || lowerName.includes('shorts') || lowerName.includes('short');
+    const isBts = lowerName.includes('behind the scenes') || lowerName.includes('bastidores') || lowerName.includes('making of');
+
+    if (isDub) score += 3000;
+    if (isLeg) score += 2000;
+    if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') score += 1200;
+
+    if (v.type === 'Trailer') score += 800;
+    else if (v.type === 'Teaser') score += 400;
+    else if (v.type === 'Clip') score += 100;
+    else score += 50;
+
+    if (v.official) score += 300;
+
+    if (isShort) score -= 1500;
+    if (isBts) score -= 1000;
+
+    return score;
+  };
+
+  candidates.sort((a, b) => scoreVideo(b) - scoreVideo(a));
+
+  return candidates.map((v) => {
+    const lowerName = (v.name || '').toLowerCase();
+    const isDubbed = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br');
+    const isSubtitled = !isDubbed && (lowerName.includes('legendado') || lowerName.includes('leg') || v.iso_639_1 === 'pt');
+
+    return {
+      id: v.id,
+      key: v.key.trim(),
+      name: v.name || (v.type === 'Teaser' ? 'Teaser Oficial' : 'Trailer Oficial'),
+      site: v.site,
+      type: v.type || 'Trailer',
+      isDubbed,
+      isSubtitled,
+      language: v.iso_639_1 || 'pt',
+      official: Boolean(v.official)
+    };
+  });
+}
+
 /**
  * Busca todos os trailers e teasers oficiais disponíveis para um filme ou série no TMDB,
  * consultando simultaneamente as trilhas em Português (PT-BR) e Global,
@@ -1082,74 +1184,7 @@ export const getTrailerList = async (id: number, type: 'movie' | 'tv'): Promise<
       } catch(e){console.warn("Silenced error:", e);}
     }
 
-    // 2. Filtra estritamente vídeos do YouTube com chave válida
-    const youtubeVideos = rawVideos.filter(
-      v => v && v.site === 'YouTube' && typeof v.key === 'string' && v.key.trim().length >= 5
-    );
-
-    if (youtubeVideos.length === 0) return [];
-
-    // 3. Deduplica por chave do YouTube (key)
-    const uniqueMap = new Map<string, any>();
-    for (const v of youtubeVideos) {
-      const existing = uniqueMap.get(v.key);
-      if (!existing) {
-        uniqueMap.set(v.key, v);
-      } else {
-        // Se já existe, prefere a entrada que tiver mais informações ou marcação pt
-        if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') {
-          uniqueMap.set(v.key, v);
-        }
-      }
-    }
-
-    const candidates = Array.from(uniqueMap.values());
-
-    // 4. Sistema de pontuação refinado
-    const scoreVideo = (v: any) => {
-      let score = 0;
-      const lowerName = (v.name || '').toLowerCase();
-      const isDub = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br') || lowerName.includes('audio br');
-      const isLeg = lowerName.includes('legendado') || lowerName.includes('leg') || lowerName.includes('sub');
-      const isShort = lowerName.includes('#shorts') || lowerName.includes('shorts') || lowerName.includes('short');
-      const isBts = lowerName.includes('behind the scenes') || lowerName.includes('bastidores') || lowerName.includes('making of');
-
-      if (isDub) score += 3000;
-      if (isLeg) score += 2000;
-      if (v.iso_639_1 === 'pt' || v.iso_3166_1 === 'BR') score += 1200;
-
-      if (v.type === 'Trailer') score += 800;
-      else if (v.type === 'Teaser') score += 400;
-      else if (v.type === 'Clip') score += 100;
-      else score += 50;
-
-      if (v.official) score += 300;
-
-      if (isShort) score -= 1500;
-      if (isBts) score -= 1000;
-
-      return score;
-    };
-
-    candidates.sort((a, b) => scoreVideo(b) - scoreVideo(a));
-
-    return candidates.map((v) => {
-      const lowerName = (v.name || '').toLowerCase();
-      const isDubbed = lowerName.includes('dublado') || lowerName.includes('dub') || lowerName.includes('áudio br');
-      const isSubtitled = !isDubbed && (lowerName.includes('legendado') || lowerName.includes('leg') || v.iso_639_1 === 'pt');
-
-      return {
-        id: v.id,
-        key: v.key.trim(),
-        name: v.name || (v.type === 'Teaser' ? 'Teaser Oficial' : 'Trailer Oficial'),
-        site: v.site,
-        type: v.type || 'Trailer',
-        isDubbed,
-        isSubtitled,
-        language: v.iso_639_1 || 'pt',
-        official: Boolean(v.official)
-      };
-    });
+    return rankAndFormatTrailerVideos(rawVideos);
   } catch (err) {
     console.warn(`[getTrailerList] Erro ao buscar trailers para ${type}/${id}:`, err);
     return [];

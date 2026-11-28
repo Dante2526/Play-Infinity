@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { featured, featuredCarousel, providers, releases, newest, animes, doramas, mostWatched, continueWatching, kidsContent, lgbtContent, providerCatalogs } from "../data";;
-import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe, checkLiveAvailability, quickAvailabilityCheck } from "../utils/mediaUtils";;
+import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, WATCHPLAY_ANIME_IDS, UNAVAILABLE_TITLES_OR_IDS, isMediaAvailable, isKidsSafe, checkLiveAvailability, checkLiveAvailabilityBatch, quickAvailabilityCheck } from "../utils/mediaUtils";;
 import {
   buildDisplayedLgbtItems,
   getLgbtItemKey,
@@ -51,7 +51,9 @@ import {
   searchMulti, 
   getDetails, 
   getSeasonDetails, 
-  formatImageUrl, 
+  formatImageUrl,
+  formatResponsiveBackdropUrl,
+  buildBackdropSrcSet,
   getGenreNames, 
   getProviderSeries,
   getProviderMovies,
@@ -102,7 +104,7 @@ function releaseCards(items: TMDBItem[], type: 'movie' | 'tv') {
     id: item.id, tmdbId: item.id,
     title: (item.title || item.name || '').toUpperCase(),
     imageUrl: formatImageUrl(item.poster_path, 'w500'),
-    backdropUrl: formatImageUrl(item.backdrop_path, 'original'),
+    backdropUrl: formatResponsiveBackdropUrl(item.backdrop_path),
     type: type === 'movie' ? 'movie' as const : 'series' as const,
     quality: type === 'movie' && checkIsCam(item.title || item.name) ? 'CAM' as const : 'HD' as const,
     rating: item.vote_average ? item.vote_average.toFixed(1) : undefined,
@@ -441,27 +443,15 @@ export function HomePage({
             // 'unavailable' é descartado
           }
 
-          // 3. Check live em paralelo pra até 8 items não-no-snapshot
-          //    (limite pra não estressar API do encontrei + rate limit 600 req/min)
-          //    Carrie a Estranha (TMDB 288673), séries novas pós-snapshot, etc.
+          // 3. Check live em lote único (/api/check-playable-batch) pra até 8 items não-no-snapshot
           const itemsToCheck = needsLiveCheck.slice(0, 8);
-          const liveResults = await Promise.all(
-            itemsToCheck.map(async (item): Promise<TMDBItem | null> => {
+          const confirmedIds = await checkLiveAvailabilityBatch(
+            itemsToCheck.map((item) => {
               const isSeries = item.media_type === 'tv' || !!item.first_air_date || !!item.name;
-              try {
-                const available = await checkLiveAvailability(
-                  item.id,
-                  isSeries ? 'tv' : 'movie',
-                  1,
-                  1
-                );
-                return available ? item : null;
-              } catch {
-                return null;
-              }
+              return { id: item.id, type: isSeries ? 'tv' : 'movie' };
             })
           );
-          const liveConfirmed = liveResults.filter((x): x is TMDBItem => x !== null);
+          const liveConfirmed = itemsToCheck.filter((item) => confirmedIds.has(item.id));
 
           // 4. Junta: definitivos do snapshot + confirmados via live check
           //    Mantém ordem original (definitivos primeiro, depois live confirmed)
@@ -485,7 +475,7 @@ export function HomePage({
               quality: checkIsCam(rawTitle) ? "CAM" : "HD",
               genres: genres.length > 0 ? genres.slice(0, 3) : ["Em Alta", "Destaque"],
               description: item.overview,
-              imageUrl: formatImageUrl(item.backdrop_path, 'original'),
+              imageUrl: formatResponsiveBackdropUrl(item.backdrop_path),
               posterUrl: formatImageUrl(item.poster_path, 'w500'),
               logoText: rawTitle.toUpperCase(),
               playerUrl: isSeries
@@ -556,7 +546,7 @@ export function HomePage({
                 tmdbId: a.id,
                 title: (a.name || a.title || "").toUpperCase(),
                 imageUrl: formatImageUrl(a.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(a.backdrop_path, 'original'),
+                backdropUrl: formatResponsiveBackdropUrl(a.backdrop_path),
                 type: 'series' as const,
                 quality: "HD" as const,
                 isAnime: true,
@@ -579,7 +569,7 @@ export function HomePage({
                 tmdbId: d.id,
                 title: (d.name || d.title || "").toUpperCase(),
                 imageUrl: formatImageUrl(d.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(d.backdrop_path, 'original'),
+                backdropUrl: formatResponsiveBackdropUrl(d.backdrop_path),
                 type: 'series' as const,
                 quality: "HD" as const,
                 isDorama: true,
@@ -607,7 +597,7 @@ export function HomePage({
                 tmdbId: m.id,
                 title: (m.title || m.name || "").toUpperCase(),
                 imageUrl: formatImageUrl(m.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(m.backdrop_path, 'original'),
+                backdropUrl: formatResponsiveBackdropUrl(m.backdrop_path),
                 type: 'movie' as const,
                 quality: checkIsCam(m.title || m.name) ? "CAM" : "HD",
                 rating: m.vote_average ? m.vote_average.toFixed(1) : undefined,
@@ -634,7 +624,7 @@ export function HomePage({
                 tmdbId: s.id,
                 title: (s.name || s.title || "").toUpperCase(),
                 imageUrl: formatImageUrl(s.poster_path, 'w500'),
-                backdropUrl: formatImageUrl(s.backdrop_path, 'original'),
+                backdropUrl: formatResponsiveBackdropUrl(s.backdrop_path),
                 type: 'series' as const,
                 quality: "HD" as const,
                 rating: s.vote_average ? s.vote_average.toFixed(1) : undefined,
@@ -740,11 +730,28 @@ export function HomePage({
       }
     };
 
+    // Caminho crítico (acima da dobra): Hero + Mais Assistidos rodam imediatamente.
     fetchTopTrending();
-    fetchReleases();
     fetchMostWatched();
+
+    // Fileiras abaixo da dobra (Animes, Doramas, Kids, LGBT+ e hidratações) rodam
+    // após o primeiro paint/idle para não congestionar LCP e conexão mobile no boot.
+    let cancelDeferred: (() => void) | null = null;
+    if (typeof window !== 'undefined' && typeof (window as any).requestIdleCallback === 'function') {
+      const idleId = (window as any).requestIdleCallback(() => {
+        if (isMounted) void fetchReleases();
+      }, { timeout: 350 });
+      cancelDeferred = () => (window as any).cancelIdleCallback(idleId);
+    } else {
+      const timerId = setTimeout(() => {
+        if (isMounted) void fetchReleases();
+      }, 250);
+      cancelDeferred = () => clearTimeout(timerId);
+    }
+
     return () => {
       isMounted = false;
+      cancelDeferred?.();
     };
   }, []);
 
@@ -768,12 +775,21 @@ export function HomePage({
       } finally { running = false; }
     };
     const onVisible = () => { if (!document.hidden && Date.now() - lastAttempt >= 60000) void refresh(); };
-    void refresh();
+    // A fila inicial de lançamentos já começa hidratada pelo cache localStorage (readHomeReleases);
+    // atrasa o refresh de rede em ~300ms para priorizar o Hero LCP no cold-boot.
+    let cancelInitialRefresh: (() => void) | null = null;
+    if (typeof window !== 'undefined' && typeof (window as any).requestIdleCallback === 'function') {
+      const idleId = (window as any).requestIdleCallback(() => void refresh(), { timeout: 400 });
+      cancelInitialRefresh = () => (window as any).cancelIdleCallback(idleId);
+    } else {
+      const bootTimer = setTimeout(() => void refresh(), 300);
+      cancelInitialRefresh = () => clearTimeout(bootTimer);
+    }
     const interval = setInterval(() => void refresh(), 10 * 60 * 1000);
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
     return () => {
-      controller.abort(); clearInterval(interval); clearTimeout(retry);
+      controller.abort(); cancelInitialRefresh?.(); clearInterval(interval); clearTimeout(retry);
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
     };
@@ -830,12 +846,17 @@ export function HomePage({
           </div>
         ) : (
         <>
-        {/* Background Image with smooth transition */}
-        <div
+        {/* Background Image (LCP otimizado com <img>, fetchPriority="high" e srcSet responsivo) */}
+        <img
           key={heroItem!.id}
-          className="absolute inset-0 bg-cover bg-[center_top] md:bg-top bg-no-repeat transition-all duration-700 ease-out"
-          style={{ backgroundImage: `url(${heroItem!.imageUrl})` }}
-        ></div>
+          src={heroItem!.imageUrl}
+          srcSet={buildBackdropSrcSet(heroItem!.imageUrl)}
+          sizes="100vw"
+          alt={heroItem!.title}
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover object-top transition-all duration-700 ease-out pointer-events-none select-none"
+        />
         {/* Gradients to blend with background */}
         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/40 pointer-events-none"></div>
         <div className="absolute inset-0 bg-gradient-to-r from-[#0a0a0a]/90 via-[#0a0a0a]/40 to-transparent hidden md:block pointer-events-none"></div>

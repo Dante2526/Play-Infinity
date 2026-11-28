@@ -1,13 +1,35 @@
 // Tailwind v3 handled by PostCSS
 import react from '@vitejs/plugin-react';
+import fs from 'fs';
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
 import browserslist from 'browserslist';
 import { browserslistToTargets } from 'lightningcss';
 
+/**
+ * Impede que catálogos SQLite (.db/.db-wal/.db-shm) gerados localmente em
+ * public/data/ vazem para dist/data/ durante `vite build` (ex.: saimo-catalog.db ~104 MB).
+ */
+function excludePublicSqliteArtifacts(): Plugin {
+  return {
+    name: 'exclude-public-sqlite-artifacts',
+    closeBundle() {
+      const distDataDir = path.resolve(__dirname, 'dist', 'data');
+      if (!fs.existsSync(distDataDir)) return;
+      for (const entry of fs.readdirSync(distDataDir)) {
+        if (/\.db(-wal|-shm)?$/i.test(entry)) {
+          try {
+            fs.unlinkSync(path.join(distDataDir, entry));
+          } catch {}
+        }
+      }
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
-    plugins: [react()],
+    plugins: [react(), excludePublicSqliteArtifacts()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

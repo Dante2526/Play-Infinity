@@ -39,7 +39,6 @@ import {
 } from "lucide-react";
 import { isSeasonEpisodeReleased, formatEpisodeAirDate } from "../utils/playerIntegration";
 import { getApiBaseUrl } from "../utils/apiBaseUrl";
-import { ReportBugModal } from "../components/ReportBugModal";
 import { useVoiceSearch } from "../hooks/useVoiceSearch";
 import { getAvailableEpisodes, getAvailableSeasonsForSeries } from "../services/episodeAvailability";
 import type { EpisodeAvailabilityInfo } from "../services/episodeAvailability";
@@ -54,7 +53,9 @@ import { CatalogItem, checkIsCam, WATCHPLAY_DORAMA_IDS, isMediaAvailable, normal
 import { 
   resolveCardIdentity,
   getSeasonDetails, 
-  formatImageUrl, 
+  formatImageUrl,
+  formatResponsiveBackdropUrl,
+  rankAndFormatTrailerVideos,
   getGenreNames, 
   getProviderSeries,
   getProviderMovies,
@@ -76,7 +77,6 @@ import {
   getSimilarRecommendations,
   TrailerVideo
 } from "../services/tmdb";
-import { CastModal } from "../components/CastModal";
 
 function lazyWithRetry<T extends React.ComponentType<any>>(
   componentImport: () => Promise<any>
@@ -96,6 +96,9 @@ function lazyWithRetry<T extends React.ComponentType<any>>(
     }
   });
 }
+
+const CastModal = lazyWithRetry(() => import("../components/CastModal").then(m => ({ default: m.CastModal })));
+const ReportBugModal = lazyWithRetry(() => import("../components/ReportBugModal").then(m => ({ default: m.ReportBugModal })));
 
 const WebhookPanelModal = lazyWithRetry(() => import("../components/WebhookPanelModal"));
 const ReleaseCalendarPage = lazyWithRetry(() => import("../components/ReleaseCalendarPage"));
@@ -332,7 +335,7 @@ export function DetailsPage({
             ...prev,
             title: details.title || details.name || prev.title,
             synopsis: details.overview || prev.synopsis,
-            backdropUrl: details.backdrop_path ? formatImageUrl(details.backdrop_path, 'original') : prev.backdropUrl,
+            backdropUrl: details.backdrop_path ? formatResponsiveBackdropUrl(details.backdrop_path) : prev.backdropUrl,
             posterUrl: details.poster_path ? formatImageUrl(details.poster_path, 'w500') : prev.posterUrl,
             year: details.release_date ? parseInt(details.release_date.substring(0, 4)) : details.first_air_date ? parseInt(details.first_air_date.substring(0, 4)) : prev.year,
             rating: details.vote_average ? `${details.vote_average.toFixed(1)} ★` : prev.rating,
@@ -348,14 +351,25 @@ export function DetailsPage({
         }
         if (isMounted) setLoadingTmdb(false);
 
-        // Trailer/recomendações só no tipo que de fato existe — quando o card
-        // está quebrado (sem identidade utilizável) pula a chamada que daria 404.
+        // Trailer/recomendações: reaproveita append_to_response=videos,recommendations
+        // do mesmo RTT de resolveCardIdentity (3 RTTs → 1 RTT) e só faz fallback se ausentes.
         let trailers: any[] = [];
         let recommendations: any = null;
         if (identity.corrected || identity.detailsOk) {
+          const appendedVideos = Array.isArray(details?.videos?.results)
+            ? rankAndFormatTrailerVideos(details!.videos!.results!)
+            : null;
+          const appendedRecs = details?.recommendations && Array.isArray(details.recommendations.results)
+            ? details.recommendations
+            : null;
+
           const [t, r] = await Promise.all([
-            getTrailerList(identity.id, identity.type).catch(() => []),
-            getSimilarRecommendations(identity.id, identity.type).catch(() => null)
+            appendedVideos && appendedVideos.length > 0
+              ? Promise.resolve(appendedVideos)
+              : getTrailerList(identity.id, identity.type).catch(() => []),
+            appendedRecs
+              ? Promise.resolve(appendedRecs)
+              : getSimilarRecommendations(identity.id, identity.type).catch(() => null)
           ]);
           trailers = t;
           recommendations = r;
@@ -382,7 +396,7 @@ export function DetailsPage({
                 type: (r.media_type === 'tv' || item.type === 'series') ? 'series' : 'movie',
                 imageUrl: formatImageUrl(r.poster_path, 'w500'),
                 posterUrl: formatImageUrl(r.poster_path, 'w500'),
-                backdropUrl: r.backdrop_path ? formatImageUrl(r.backdrop_path, 'original') : formatImageUrl(r.poster_path, 'w500'),
+                backdropUrl: r.backdrop_path ? formatResponsiveBackdropUrl(r.backdrop_path) : formatImageUrl(r.poster_path, 'w500'),
                 synopsis: r.overview || '',
                 year: r.release_date ? parseInt(r.release_date.substring(0, 4)) : r.first_air_date ? parseInt(r.first_air_date.substring(0, 4)) : 2024,
                 rating: r.vote_average ? `${r.vote_average.toFixed(1)} ★` : '8.5 ★',
@@ -1542,22 +1556,28 @@ export function DetailsPage({
       )}
 
       {castUrl && (
-        <CastModal
-          onClose={() => { setCastUrl(null); setCastMediaDetails(undefined); }}
-          streamUrl={castUrl}
-        title={item.title}
-        mediaDetails={castMediaDetails}
-      />
-    )}
+        <React.Suspense fallback={null}>
+          <CastModal
+            onClose={() => { setCastUrl(null); setCastMediaDetails(undefined); }}
+            streamUrl={castUrl}
+            title={item.title}
+            mediaDetails={castMediaDetails}
+          />
+        </React.Suspense>
+      )}
 
-    <ReportBugModal
-      isOpen={isReportModalOpen}
-      onClose={() => setIsReportModalOpen(false)}
-      mediaId={String(item.tmdbId || item.id || itemId)}
-      mediaTitle={item.title}
-      mediaType={item.type === 'series' ? 'tv' : 'movie'}
-      episodeInfo={reportEpisodeInfo}
-    />
+      {isReportModalOpen && (
+        <React.Suspense fallback={null}>
+          <ReportBugModal
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            mediaId={String(item.tmdbId || item.id || itemId)}
+            mediaTitle={item.title}
+            mediaType={item.type === 'series' ? 'tv' : 'movie'}
+            episodeInfo={reportEpisodeInfo}
+          />
+        </React.Suspense>
+      )}
   </div>
 );
 }

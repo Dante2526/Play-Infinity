@@ -1360,7 +1360,16 @@ function tryLoadCatalog(
   }
 }
 
-function loadCatalogs() {
+const CATALOG_STAT_CHECK_INTERVAL_MS = 5000;
+let _lastCatalogCheckMs = 0;
+let _catalogsBootstrapped = false;
+
+function loadCatalogs(forceCheck: boolean = false) {
+  const now = Date.now();
+  if (!forceCheck && _catalogsBootstrapped && (now - _lastCatalogCheckMs) < CATALOG_STAT_CHECK_INTERVAL_MS) {
+    return;
+  }
+  _lastCatalogCheckMs = now;
   // Vizer: tenta SQLite primeiro (Node 24+, sem custo de RAM); se indisponível,
   // cai no JSON existente. Se antes estava em SQLite e o .db sumiu/quebrou,
   // reseta os índices pra Map fresco antes do caminho JSON.
@@ -1404,6 +1413,7 @@ function loadCatalogs() {
 
   // Aplica patches de catálogo (conteúdo novo demais para esperar o snapshot)
   applyCatalogPatches();
+  _catalogsBootstrapped = true;
 }
 
 /**

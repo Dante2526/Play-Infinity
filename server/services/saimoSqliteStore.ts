@@ -75,19 +75,47 @@ export interface SaimoSqliteStore {
   close(): void;
 }
 
-function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
-  if (Math.abs(m - n) > 2) return 99;
-  const d: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
-  for (let i = 0; i <= m; i++) d[i][0] = i;
-  for (let j = 0; j <= n; j++) d[0][j] = j;
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
-    }
+// Buffers reutilizáveis para Levenshtein com alocação zero por palavra (poupa GC na VPS de 384MB)
+let _levPrev = new Int32Array(64);
+let _levCurr = new Int32Array(64);
+
+export function levenshtein(a: string, b: string, maxDist: number = 2): number {
+  const m = a.length;
+  const n = b.length;
+  if (a === b) return 0;
+  if (Math.abs(m - n) > maxDist) return maxDist + 1;
+  if (m === 0) return n;
+  if (n === 0) return m;
+
+  if (_levPrev.length <= n) {
+    const nextLen = Math.max(n + 1, _levPrev.length * 2);
+    _levPrev = new Int32Array(nextLen);
+    _levCurr = new Int32Array(nextLen);
   }
-  return d[m][n];
+
+  let prev = _levPrev;
+  let curr = _levCurr;
+  for (let j = 0; j <= n; j++) prev[j] = j;
+
+  for (let i = 1; i <= m; i++) {
+    curr[0] = i;
+    const chA = a.charCodeAt(i - 1);
+    let rowMin = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = chA === b.charCodeAt(j - 1) ? 0 : 1;
+      const del = prev[j] + 1;
+      const ins = curr[j - 1] + 1;
+      const sub = prev[j - 1] + cost;
+      const val = del < ins ? (del < sub ? del : sub) : (ins < sub ? ins : sub);
+      curr[j] = val;
+      if (val < rowMin) rowMin = val;
+    }
+    if (rowMin > maxDist) return maxDist + 1;
+    const tmp = prev;
+    prev = curr;
+    curr = tmp;
+  }
+  return prev[n];
 }
 
 let _cachedStore: SaimoSqliteStore | null = null;
@@ -147,7 +175,7 @@ export function openSaimoSqlite(dbPath?: string): SaimoSqliteStore | null {
           }
         }
         for (const w of _cachedWords) {
-          if (Math.abs(w.length - norm.length) <= 1 && levenshtein(w, norm) <= 1) {
+          if (Math.abs(w.length - norm.length) <= 1 && levenshtein(w, norm, 1) <= 1) {
             return w;
           }
         }
